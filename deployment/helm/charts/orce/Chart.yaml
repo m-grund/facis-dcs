@@ -1,0 +1,5 @@
+apiVersion: v2
+name: orce
+description: XFSC Orchestration Engine (ORCE) – a Node-RED based workflow engine
+type: application
+version: 0.1.0

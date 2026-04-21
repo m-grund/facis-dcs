@@ -3,7 +3,7 @@ tmp
 .idea
 .vscode
 .DS_Store
-
+.claude/
 backend/gen
 
 frontend/node_modules
@@ -17,6 +17,7 @@ frontend/.DS_Store
 frontend/.eslintcache
 frontend/.prettiercache
 frontend/.cache
+frontend/ClientApp/.vite
 
 deployment/certs
 
