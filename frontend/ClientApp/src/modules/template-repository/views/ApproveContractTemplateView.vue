@@ -32,17 +32,18 @@
 import { ref, computed, watch, type Ref, useTemplateRef } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import TemplateManagerActions from '@/components/lists/template/TemplateManagerActions.vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { contractTemplateService } from '@/services/contract-template-service'
+import { useNavStore } from '@/stores/nav-store'
 
 const router = useRouter()
 const route = useRoute()
+const navStore = useNavStore()
 
 const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
@@ -123,7 +124,7 @@ async function approve() {
       updated_at: updatedAt,
       decision_notes: decisionNote.value ? [decisionNote.value] : [],
     })
-    router.push({ name: ROUTES.TEMPLATES.LIST })
+    navStore.goToPreviousRoute()
   } catch (error) {
     console.error('Approval failed', error)
   } finally {
@@ -154,7 +155,7 @@ async function resubmit() {
       updated_at: updatedAt,
       comments: decisionNote.value ? [decisionNote.value] : []
     })
-    router.push({ name: ROUTES.TEMPLATES.LIST })
+    navStore.goToPreviousRoute()
   } catch (error) {
     console.error('Resubmission failed', error)
   } finally {
@@ -189,7 +190,7 @@ async function reject() {
       updated_at: updatedAt,
       reason: decisionNote.value.trim(),
     })
-    router.push({ name: ROUTES.TEMPLATES.LIST })
+    navStore.goToPreviousRoute()
   } catch (error) {
     console.error('Rejection failed', error)
   } finally {

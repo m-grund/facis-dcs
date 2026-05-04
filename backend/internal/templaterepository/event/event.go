@@ -115,7 +115,7 @@ func (e VerifyEvent) GetDID() string {
 type UpdateEvent struct {
 	DID               string         `json:"did"`
 	UpdatedBy         string         `json:"updated_by"`
-	OldDocumentNumber *string        `json:"old_document_numbe,omitemptyr"`
+	OldDocumentNumber *string        `json:"old_document_number,omitempty"`
 	NewDocumentNumber *string        `json:"new_document_number,omitempty"`
 	OldVersion        *int           `json:"old_version,omitempty"`
 	NewVersion        *int           `json:"new_version,omitempty"`

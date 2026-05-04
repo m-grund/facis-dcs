@@ -78,7 +78,7 @@
                     class="badge badge-primary badge-outline gap-1 py-3">
                     <span>{{ getSubcontractTemplateName(item) }}</span>
                     <button type="button" @click="removeSubcontractTemplate(item)"
-                        :disabled="isSubcontractReferenced(item)"
+                        :disabled="isSubcontractReferenced(item) || !uiStore.isTemplateEditable"
                         :title="isSubcontractReferenced(item) ? 'Cannot remove: used in document' : undefined"
                         class="text-error hover:opacity-70 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">✕</button>
                 </div>
@@ -94,7 +94,7 @@ import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { TemplateType, isApprovedTemplateBlock } from '@template-repository/models/contract-templace'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useTemplateTable } from '@/views/contract-template-list/ContractTemplateListController'
+import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { TemplateState } from '@/types/contract-template-state'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 
@@ -106,7 +106,7 @@ interface SubcontractKey {
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { templates: allTemplates } = useTemplateTable()
+const { templates: allTemplates } = useTemplateList()
 const { templateType, documentBlocks, subTemplateSnapshots } = storeToRefs(store)
 
 const name = computed({

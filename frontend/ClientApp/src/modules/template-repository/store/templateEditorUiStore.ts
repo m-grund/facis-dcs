@@ -5,6 +5,7 @@ import type {
   BlockMovementPreview,
   ClausePlaceholderHighlight,
 } from '@template-repository/models/template-editor-ui-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { TemplateType, type TemplateTypeValue } from '../models/contract-templace'
 
 const storeId = 'templateEditorUi'
@@ -16,6 +17,7 @@ const defaultState: Readonly<TemplateEditorUiState> = {
     { id: 'clauses', label: 'Clauses' },
     { id: 'builder', label: 'Builder' },
     { id: 'meta', label: 'Meta Data' },
+    { id: 'audit', label: 'Audit History'},
   ],
   addBlockModalContext: null,
   blockMovementPreview: null,
@@ -54,8 +56,10 @@ export const useTemplateEditorUiStore = defineStore(storeId, {
       this.isPreviewDialogOpen = !this.isPreviewDialogOpen
     },
     availableTabs(templateType: TemplateTypeValue) {
-      if (templateType === TemplateType.subContract) return this.tabs
-      return this.tabs.filter(tab => !['semantic', 'clauses'].includes(tab.id))
+      const isManager = useAuthStore().user?.roles?.includes('TEMPLATE_MANAGER') ?? false
+      const tabs = this.tabs.filter(tab => tab.id !== 'audit' || isManager)
+      if (templateType === TemplateType.subContract) return tabs
+      return tabs.filter(tab => !['semantic', 'clauses'].includes(tab.id))
     },
     setTemplateEditable(isEditable: boolean) {
       this.isTemplateEditable = isEditable

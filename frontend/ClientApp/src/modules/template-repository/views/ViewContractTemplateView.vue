@@ -6,27 +6,39 @@
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
         <button class="btn btn-ghost md:w-32" @click="router.back()">Back</button>
-        <SubmitSelectionDialog
-          v-if="isCreator && state === TemplateState.draft"
-          dialog-type="template"
-          @submit="submitTemplate"
+        <template v-if="isCreator">
+          <SubmitSelectionDialog
+            v-if="state === TemplateState.draft"
+            dialog-type="template"
+            @submit="submitTemplate"
+            class="btn btn-primary flex-1"
+          />
+          <button
+            v-if="state === TemplateState.rejected"
+            class="btn btn-primary flex-1"
+            @click="submitRejectedTemplate"
+          >
+            Submit
+          </button>
+        </template>
+        <TemplateManagerActions
+          v-if="contractTemplate && isManager"
+          :item="contractTemplate"
           class="btn btn-primary flex-1"
         />
-        <button v-if="isCreator && state === TemplateState.rejected" class="btn btn-primary flex-1" @click="submitRejectedTemplate">Submit</button>
-        <TemplateManagerActions v-if="contractTemplate && isManager" :item="contractTemplate" class="btn btn-primary flex-1" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import TemplateManagerActions from '@/components/lists/template/TemplateManagerActions.vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
 import type { SelectedUserRole } from '@/models/user'
-import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useNavStore } from '@/stores/nav-store'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
@@ -37,6 +49,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
+const navStore = useNavStore()
 
 const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
@@ -56,44 +69,48 @@ const isManager = computed(() => {
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
 
-watch(hasDid, (hasDid) => {
-  templateEditorUiStore.reset()
-  if (!hasDid) return
+watch(
+  hasDid,
+  (hasDid) => {
+    templateEditorUiStore.reset()
+    if (!hasDid) return
 
-  hasChosenType.value = true
-  const did = `${route.params.did}`
-  contractTemplateService.retrieveById({ did })
-    .then(template => {
-      if (!template) {
-        draftStore.reset()
-        return
-      }
-      templateEditorUiStore.setTemplateEditable(false)
-      contractTemplate.value = template
+    hasChosenType.value = true
+    const did = `${route.params.did}`
+    contractTemplateService
+      .retrieveById({ did })
+      .then((template) => {
+        if (!template) {
+          draftStore.reset()
+          return
+        }
+        templateEditorUiStore.setTemplateEditable(false)
+        contractTemplate.value = template
 
-      draftStore.reset({
-        did: template.did,
-        name: template.name,
-        description: template.description,
-        templateDataVersion: template.template_data?.templateDataVersion ?? 1,
-        documentOutline: template.template_data?.documentOutline ?? [],
-        documentBlocks: template.template_data?.documentBlocks ?? [],
-        semanticConditions: template.template_data?.semanticConditions ?? [],
-        customMetaData: template.template_data?.customMetaData ?? [],
-        subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
-        templateType: template.template_type,
-        state: template.state,
-        version: template.version ?? null,
-        document_number: template.document_number ?? null,
-        updated_at: template.updated_at ?? null,
-        created_by: template.created_by
+        draftStore.reset({
+          did: template.did,
+          name: template.name,
+          description: template.description,
+          templateDataVersion: template.template_data?.templateDataVersion ?? 1,
+          documentOutline: template.template_data?.documentOutline ?? [],
+          documentBlocks: template.template_data?.documentBlocks ?? [],
+          semanticConditions: template.template_data?.semanticConditions ?? [],
+          customMetaData: template.template_data?.customMetaData ?? [],
+          subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
+          templateType: template.template_type,
+          state: template.state,
+          version: template.version ?? null,
+          document_number: template.document_number ?? null,
+          updated_at: template.updated_at ?? null,
+          created_by: template.created_by,
+        })
       })
-    })
-    .catch(error => {
-      console.error('Failed to load template for editing', error)
-    })
-
-}, { immediate: true })
+      .catch((error) => {
+        console.error('Failed to load template for editing', error)
+      })
+  },
+  { immediate: true },
+)
 
 const submitTemplate = async (result: SelectedUserRole[]) => {
   try {
@@ -107,7 +124,7 @@ const submitTemplate = async (result: SelectedUserRole[]) => {
       approver: approver,
     })
     if (response?.did) {
-      router.push({ name: ROUTES.TEMPLATES.LIST })
+      navStore.goToPreviousRoute()
     }
   } catch (error) {
     console.error('Template Submission failed', error)
@@ -119,10 +136,10 @@ const submitRejectedTemplate = async () => {
     if (!draftStore.did || !draftStore.updated_at) return
     const response = await contractTemplateService.submit({
       did: draftStore.did,
-      updated_at: draftStore.updated_at
+      updated_at: draftStore.updated_at,
     })
     if (response.did) {
-      router.push({ name: ROUTES.TEMPLATES.LIST })
+      navStore.goToPreviousRoute()
     }
   } catch (error) {
     console.error('Template Submission failed', error)

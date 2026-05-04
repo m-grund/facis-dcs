@@ -76,6 +76,11 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return fmt.Errorf("could not create negotiation: %w", err)
 	}
 
+	err = h.NTRepo.ReopenTasks(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not reopen negotiation: %w", err)
+	}
+
 	evt := contractevents.NegotiationEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,

@@ -1,23 +1,21 @@
 """Template API steps for executable BDD scenarios."""
 
-from behave import given, then, when
+from behave import then, when
 
+from steps.support.services.template_service import TemplateService
 from support.api_client import (
     contract_create_url,
     get_with_headers,
     post_json,
-    put_json,
     template_create_url,
     template_retrieve_by_id_url,
-    template_update_url,
 )
-from support.template_utils import template_type_for_category
 
 
 @when('I create a template "{template_name}" in category "{category}"')
 def step_when_create_template(context, template_name, category):
     payload = {
-        "template_type": template_type_for_category(category),
+        "template_type": TemplateService.template_type_for_category(category),
         "name": template_name,
         "description": "BDD executable template creation",
         "template_data": {

@@ -23,7 +23,7 @@ type Auditor struct {
 	ATrailReader base.AuditTrailReader
 }
 
-func (h *Auditor) Handle(ctx context.Context, cmd GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
+func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -31,15 +31,15 @@ func (h *Auditor) Handle(ctx context.Context, cmd GetAuditLogQry) ([]datatype.Au
 	}
 	defer tx.Rollback()
 
-	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, cmd.DID)
+	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, qry.DID)
 	if err != nil {
 		return nil, err
 	}
 
 	evt := templateevents.AuditEvt{
-		DID:           cmd.DID,
+		DID:           qry.DID,
 		ComponentType: componenttype.ContractTemplateRepo,
-		AuditedBy:     cmd.AuditedBy,
+		AuditedBy:     qry.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

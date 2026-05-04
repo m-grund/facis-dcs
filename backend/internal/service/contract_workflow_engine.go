@@ -285,10 +285,11 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		negotiation, ok := negotiations[item.ID]
 		if !ok {
 			negotiation = &contractworkflowengine.ContractNegotiationItem{
-				ID:            item.ID,
-				ChangeRequest: item.ChangeRequest,
-				CreatedBy:     item.CreatedBy,
-				CreatedAt:     item.CreatedAt.String(),
+				ID:              item.ID,
+				ContractVersion: item.ContractVersion,
+				ChangeRequest:   item.ChangeRequest,
+				CreatedBy:       item.CreatedBy,
+				CreatedAt:       item.CreatedAt.String(),
 			}
 			negotiations[item.ID] = negotiation
 		}
@@ -575,8 +576,14 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.TerminateCmd{
 		DID:          req.Did,
+		UpdatedAt:    updatedAt,
 		TerminatedBy: middleware.GetUsername(ctx),
 		Reason:       req.Reason,
 	}

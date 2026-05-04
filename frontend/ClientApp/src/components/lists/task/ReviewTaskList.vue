@@ -14,6 +14,7 @@ import { computed, onUnmounted, ref, type Ref } from 'vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
 import TaskListSearch from './TaskListSearch.vue'
+import { ContractState } from '@/types/contract-state'
 
 type ReviewTask = ContractTemplateReviewTask | ContractReviewTask
 
@@ -55,12 +56,16 @@ const filteredItems = computed(() => {
   return sortedItems.value
 })
 
-const getTemplateName = (item: ContractTemplateReviewTask) => {
-  return templatesStore.contractTemplates.find((template) => template.did === item.did)?.name ?? 'Nameless Template'
+const getTemplateName = (task: ContractTemplateReviewTask) => {
+  return templatesStore.contractTemplates.find((template) => template.did === task.did)?.name ?? 'Nameless Template'
 }
 
-const getContractName = (item: ContractReviewTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === item.did)?.name ?? 'Nameless Contract'
+const getContractName = (task: ContractReviewTask) => {
+  return contractsStore.contracts.find((contract) => contract.did === task.did)?.name ?? 'Nameless Contract'
+}
+
+const getContractState = (task: ContractReviewTask) => {
+  return contractsStore.contracts.find((contract) => contract.did === task.did)?.state
 }
 
 const canEdit = (item: ReviewTask) => {
@@ -82,7 +87,9 @@ const resolveViewRouteName = (item: ReviewTask) => {
     }
     return ROUTES.TEMPLATES.VIEW
   } else {
-    // TODO: contract view routes
+    if (item.state === ReviewTaskState.open && getContractState(item) === ContractState.submitted) {
+      return ROUTES.CONTRACTS.REVIEW
+    }
     return ROUTES.CONTRACTS.VIEW
   }
 }

@@ -30,17 +30,18 @@
 import { ref, computed, watch, type Ref, useTemplateRef } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import TemplateManagerActions from '@/components/lists/template/TemplateManagerActions.vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { contractTemplateService } from '@/services/contract-template-service'
+import { useNavStore } from '@/stores/nav-store'
 
 const router = useRouter()
 const route = useRoute()
+const navStore = useNavStore()
 
 const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
@@ -117,7 +118,7 @@ const forwardToApproval = async () => {
       comment.value = commentResult.data
     }
     await contractTemplateService.verify({
-      did,
+      did
     })
     await contractTemplateService.submit({
       did,
@@ -127,7 +128,7 @@ const forwardToApproval = async () => {
       approver: '',
       reviewers: [],
     })
-    router.push({ name: ROUTES.TEMPLATES.LIST })
+    navStore.goToPreviousRoute()
   } catch (error) {
     console.error('Submission failed', error)
   } finally {
@@ -161,7 +162,7 @@ const returnToDraft = async () => {
       approver: '',
       reviewers: [],
     })
-    router.push({ name: ROUTES.TEMPLATES.LIST })
+    navStore.goToPreviousRoute()
   } catch (error) {
     console.error('Rejection failed', error)
   } finally {

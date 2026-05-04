@@ -1,4 +1,4 @@
-import type { ContractActionFlag } from '@/types/action-flag'
+import type { ContractActionFlag } from '@/types/contract-action-flag'
 import type { ContractState } from '@/types/contract-state'
 import type { NegotiationActionFlag } from '@/types/negotiation-action-flag'
 import type { ContractChangeRequest } from '../contract/contract'
@@ -81,11 +81,11 @@ export interface ContractStoreRequest {
 
 export interface ContractTerminateRequest {
   did: string
+  updated_at: string
   /** Reason for terminating the contract */
   reason: string
 }
 
 export interface ContractAuditRequest {
   did: string
-  updated_at: string
 }

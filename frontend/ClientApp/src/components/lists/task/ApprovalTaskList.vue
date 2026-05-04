@@ -13,6 +13,7 @@ import { computed, onUnmounted, ref, type Ref } from 'vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
 import TaskListSearch from './TaskListSearch.vue'
+import { ContractState } from '@/types/contract-state'
 
 type ApprovalTask = ContractTemplateApprovalTask | ContractApprovalTask
 
@@ -65,6 +66,10 @@ const getTemplateState = (item: ContractTemplateApprovalTask) => {
   return templatesStore.contractTemplates.find((template) => template.did === item.did)?.state
 }
 
+const getContractState = (item: ContractApprovalTask) => {
+  return contractsStore.contracts.find(contract => contract.did === item.did)?.state
+}
+
 const canApprove = (item: ContractTemplateApprovalTask) => {
   return item.state === ApprovalTaskState.open && getTemplateState(item) === TemplateState.reviewed
 }
@@ -76,7 +81,9 @@ const resolveViewRouteName = (item: ApprovalTask) => {
     }
     return ROUTES.TEMPLATES.VIEW
   } else {
-    // TODO: contract view routes
+    if (item.state === ApprovalTaskState.open && getContractState(item) === ContractState.reviewed) {
+      return ROUTES.CONTRACTS.APPROVE
+    }
     return ROUTES.CONTRACTS.VIEW
   }
 }

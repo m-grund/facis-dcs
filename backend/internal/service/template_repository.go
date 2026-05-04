@@ -504,8 +504,14 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
 	cmd := command.RegisterCmd{
 		DID:           req.Did,
+		UpdatedAt:     updatedAt,
 		RegisteredBy:  middleware.GetUsername(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 		Token:         *req.Token,

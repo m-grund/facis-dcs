@@ -37,6 +37,14 @@ export const useContractsStore = defineStore('contracts', () => {
     return negotiationTasks.value.some((task) => task.did === contract.did)
   }
 
+  function hasReviewTask(contract: Contract) {
+    return reviewTasks.value.some((task) => task.did === contract.did)
+  }
+
+  function hasApprovalTask(contract: Contract) {
+    return approvalTasks.value.some((task) => task.did === contract.did)
+  }
+
   return {
     contracts,
     reviewTasks,
@@ -47,5 +55,7 @@ export const useContractsStore = defineStore('contracts', () => {
     loading,
     error,
     hasNegotiationTask,
+    hasReviewTask,
+    hasApprovalTask,
   }
 })

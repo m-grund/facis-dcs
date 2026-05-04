@@ -1,10 +1,9 @@
 """Contract workflow steps for negotiation, adjustment, and approval slices."""
 
-import os
-import re
 
 from behave import given, then, when
 
+from steps.support.services.contract_service import ContractService
 from support.api_client import (
     contract_approve_url,
     contract_create_url,
@@ -17,245 +16,26 @@ from support.api_client import (
     get_with_headers,
     post_json,
     put_json,
-    template_approve_url,
-    template_create_url,
-    template_submit_url,
-    template_verify_url,
 )
 
-from auth_steps import create_custom_jwt
-
-def _headers_for_role(context, role: str) -> dict:
-    client_id = "digital-contracting-service"
-    role_safe = re.sub(r"[^A-Za-z0-9]+", "-", role.lower()).strip("-")
-    username = f"bdd-{role_safe}"
-    
-    token = create_custom_jwt(client_id, username, role)
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-
-def _username_for_role(role: str) -> str:
-    role_safe = re.sub(r"[^A-Za-z0-9]+", "-", role.lower()).strip("-")
-    return f"bdd-{role_safe}"
-
-
-def _ensure_store(context, name, value):
-    if not hasattr(context, name) or getattr(context, name) is None:
-        setattr(context, name, value)
-
-
-def _template_submit_payload(context, did: str, updated_at: str) -> dict:
-    _headers_for_role(context, "Template Reviewer")
-    _headers_for_role(context, "Template Approver")
-    return {
-        "did": did,
-        "updated_at": updated_at,
-        "reviewers": [_username_for_role("Template Reviewer")],
-        "approver": _username_for_role("Template Approver"),
-    }
-
-
-def _template_reviewer_submit_payload(context, did: str, updated_at: str) -> dict:
-    _headers_for_role(context, "Template Approver")
-    return {
-        "did": did,
-        "updated_at": updated_at,
-        "approver": _username_for_role("Template Approver"),
-        "forward_to": "approval",
-    }
-
-
-def _contract_submit_payload(context, did: str, updated_at: str) -> dict:
-    _headers_for_role(context, "Contract Reviewer")
-    _headers_for_role(context, "Contract Approver")
-    return {
-        "did": did,
-        "updated_at": updated_at,
-        "reviewers": [_username_for_role("Contract Reviewer")],
-        "approver": _username_for_role("Contract Approver"),
-    }
-
-
-def _contract_reviewer_submit_payload(context, did: str, updated_at: str) -> dict:
-    _headers_for_role(context, "Contract Approver")
-    return {
-        "did": did,
-        "updated_at": updated_at,
-        "forward_to": "approval",
-        "approver": _username_for_role("Contract Approver"),
-    }
-
-
-def _create_approved_template_for_contract(context):
-    creator_h = _headers_for_role(context, "Template Creator")
-    create_resp = post_json(
-        context,
-        template_create_url(context),
-        {
-            "template_type": "FRAME_CONTRACT",
-            "name": "BDD Contract Source Template",
-            "description": "BDD template for contract workflows",
-            "template_data": {"title": "BDD Template", "clauses": [{"id": "c1", "text": "Base clause"}]},
-        },
-        headers=creator_h,
-    )
-    assert create_resp.status_code == 200, create_resp.text
-    t_did = create_resp.json().get("did")
-
-    retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=creator_h)
-    assert retrieve_resp.status_code == 200, retrieve_resp.text
-    updated_at = retrieve_resp.json().get("updated_at")
-
-    submit_resp = post_json(
-        context,
-        template_submit_url(context),
-        _template_submit_payload(context, t_did, updated_at),
-        headers=creator_h,
-    )
-    assert submit_resp.status_code == 200, submit_resp.text
-
-    reviewer_h = _headers_for_role(context, "Template Reviewer")
-    retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=reviewer_h)
-    updated_at = retrieve_resp.json().get("updated_at")
-
-    verify_resp = post_json(
-        context,
-        template_verify_url(context),
-        {"did": t_did, "updated_at": updated_at},
-        headers=reviewer_h,
-    )
-    assert verify_resp.status_code == 200, verify_resp.text
-
-    retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=reviewer_h)
-    updated_at = retrieve_resp.json().get("updated_at")
-
-    review_submit_resp = post_json(
-        context,
-        template_submit_url(context),
-        _template_reviewer_submit_payload(context, t_did, updated_at),
-        headers=reviewer_h,
-    )
-    assert review_submit_resp.status_code == 200, review_submit_resp.text
-
-    approver_h = _headers_for_role(context, "Template Approver")
-    retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=approver_h)
-    updated_at = retrieve_resp.json().get("updated_at")
-    approve_resp = post_json(
-        context,
-        template_approve_url(context),
-        {"did": t_did, "updated_at": updated_at},
-        headers=approver_h,
-    )
-    assert approve_resp.status_code == 200, approve_resp.text
-    return t_did
-
-
-def _create_contract_in_draft(context, contract_name: str):
-    t_did = _create_approved_template_for_contract(context)
-    creator_h = _headers_for_role(context, "Contract Creator")
-    create_resp = post_json(context, contract_create_url(context), {"did": t_did}, headers=creator_h)
-    assert create_resp.status_code == 200, create_resp.text
-    c_did = create_resp.json().get("did")
-    retrieve_resp = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
-    assert retrieve_resp.status_code == 200, retrieve_resp.text
-    updated_at = retrieve_resp.json().get("updated_at")
-
-    _ensure_store(context, "contract_dids", {})
-    _ensure_store(context, "contract_updated_at", {})
-    _ensure_store(context, "contract_seed_headers", {})
-    context.contract_dids[contract_name] = c_did
-    context.contract_updated_at[contract_name] = updated_at
-    context.contract_seed_headers[contract_name] = creator_h
-
-
-def _contract_data(context, contract_name: str):
-    did = context.contract_dids[contract_name]
-    updated_at = context.contract_updated_at[contract_name]
-    return did, updated_at
-
-
-def _refresh_contract(context, contract_name: str):
-    did = context.contract_dids[contract_name]
-    headers = None
-    if hasattr(context, "contract_seed_headers"):
-        headers = context.contract_seed_headers.get(contract_name)
-    resp = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
-    assert resp.status_code == 200, resp.text
-    context.contract_updated_at[contract_name] = resp.json().get("updated_at")
-    return resp.json()
-
-
-def _prepare_contract_under_review(context, contract_name: str):
-    did, updated_at = _contract_data(context, contract_name)
-    creator_h = context.contract_seed_headers[contract_name]
-    submit_to_negotiation = post_json(
-        context,
-        contract_submit_url(context),
-        _contract_submit_payload(context, did, updated_at),
-        headers=creator_h,
-    )
-    assert submit_to_negotiation.status_code == 200, submit_to_negotiation.text
-    _refresh_contract(context, contract_name)
-
-    # Backend workflow transitions Draft -> Negotiation on first submit,
-    # then Negotiation -> Submitted on a second creator submit.
-    did, updated_at = _contract_data(context, contract_name)
-    submit_to_submitted = post_json(
-        context,
-        contract_submit_url(context),
-        _contract_submit_payload(context, did, updated_at),
-        headers=creator_h,
-    )
-    assert submit_to_submitted.status_code == 200, submit_to_submitted.text
-    _refresh_contract(context, contract_name)
-
-
-def _prepare_contract_pending_approval(context, contract_name: str):
-    did, _ = _contract_data(context, contract_name)
-    _prepare_contract_under_review(context, contract_name)
-
-    reviewer_h = _headers_for_role(context, "Contract Reviewer")
-    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
-    assert retrieve.status_code == 200, retrieve.text
-    updated_at = retrieve.json().get("updated_at")
-
-    verify = post_json(
-        context,
-        contract_verify_url(context),
-        {"did": did, "updated_at": updated_at},
-        headers=reviewer_h,
-    )
-    assert verify.status_code == 200, verify.text
-
-    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
-    assert retrieve.status_code == 200, retrieve.text
-    updated_at = retrieve.json().get("updated_at")
-
-    review_submit = post_json(
-        context,
-        contract_submit_url(context),
-        _contract_reviewer_submit_payload(context, did, updated_at),
-        headers=reviewer_h,
-    )
-    assert review_submit.status_code == 200, review_submit.text
-    _refresh_contract(context, contract_name)
+from support.services.auth_service import AuthService
 
 
 @given('contract "{name}" is in "Draft" status')
 def step_given_contract_draft(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @given('contract "{name}" is in "Under Review" status')
 def step_given_contract_under_review(context, name):
-    _create_contract_in_draft(context, name)
-    _prepare_contract_under_review(context, name)
+    ContractService._create_contract_in_draft(context, name)
+    ContractService._prepare_contract_under_review(context, name)
 
 
 @given('contract "{name}" is pending approval')
 def step_given_contract_pending_approval(context, name):
-    _create_contract_in_draft(context, name)
-    _prepare_contract_pending_approval(context, name)
+    ContractService._create_contract_in_draft(context, name)
+    ContractService._prepare_contract_pending_approval(context, name)
 
 
 @given('contract "{name}" requires my approval')
@@ -265,29 +45,29 @@ def step_given_contract_requires_my_approval(context, name):
 
 @given('contract "{name}" is open for negotiation')
 def step_given_contract_open_for_negotiation(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @given('contract "{name}" negotiation is complete')
 def step_given_contract_negotiation_complete(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @given('contract "{name}" has completed multiple negotiation rounds')
 def step_given_contract_multiple_negotiation_rounds(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @when('I open contract "{name}" for negotiation')
 def step_when_open_for_negotiation(context, name):
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
 @when('I adjust clause "{clause}" with new text')
 def step_when_adjust_clause(context, clause):
     name = "Service Agreement"
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     payload = {
         "did": did,
         "updated_at": updated_at,
@@ -298,7 +78,7 @@ def step_when_adjust_clause(context, clause):
     }
     context.requests_response = put_json(context, contract_update_url(context), payload)
     if context.requests_response.status_code == 200:
-        _refresh_contract(context, name)
+        ContractService._refresh_contract(context, name)
 
 
 @when('I attempt to adjust clause "{clause}"')
@@ -308,27 +88,27 @@ def step_when_attempt_adjust_clause(context, clause):
 
 @when('I initiate the approval process for contract "{name}"')
 def step_when_initiate_approval(context, name):
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(
         context,
         contract_submit_url(context),
-        _contract_submit_payload(context, did, updated_at),
+        ContractService._contract_submit_payload(context, did, updated_at),
     )
     if context.requests_response.status_code == 200:
-        _refresh_contract(context, name)
+        ContractService._refresh_contract(context, name)
 
 
 @when('I approve contract "{name}"')
 def step_when_approve_contract(context, name):
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(context, contract_approve_url(context), {"did": did, "updated_at": updated_at})
     if context.requests_response.status_code == 200:
-        _refresh_contract(context, name)
+        ContractService._refresh_contract(context, name)
 
 
 @when('I reject contract "{name}" with reason "{reason}"')
 def step_when_reject_contract(context, name, reason):
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(
         context,
         contract_reject_url(context),
@@ -338,25 +118,25 @@ def step_when_reject_contract(context, name, reason):
 
 @when('I access the approval interface for contract "{name}"')
 def step_when_access_approval_interface(context, name):
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
 @when('I submit contract "{name}" for review')
 def step_when_submit_contract_for_review(context, name):
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(
         context,
         contract_submit_url(context),
-        _contract_submit_payload(context, did, updated_at),
+        ContractService._contract_submit_payload(context, did, updated_at),
     )
     if context.requests_response.status_code == 200:
-        _refresh_contract(context, name)
+        ContractService._refresh_contract(context, name)
 
 
 @when('I attempt to add a comment to contract "{name}"')
 def step_when_attempt_comment_contract(context, name):
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(
         context,
         contract_negotiate_url(context),
@@ -380,18 +160,18 @@ def step_when_attempt_approve_contract(context, name):
 
 @given('I have created contract "{name}" from a template')
 def step_given_created_contract_from_template(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @given('contract "{name}" has multiple negotiation edits')
 def step_given_contract_has_negotiation_edits(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @given('contract "{name}" has a pending redline proposal on clause "{clause}"')
 def step_given_contract_has_pending_redline(context, name, clause):
-    _create_contract_in_draft(context, name)
-    did, updated_at = _contract_data(context, name)
+    ContractService._create_contract_in_draft(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     creator_h = context.contract_seed_headers[name]
     post_json(
         context,
@@ -399,31 +179,31 @@ def step_given_contract_has_pending_redline(context, name, clause):
         {
             "did": did,
             "updated_at": updated_at,
-            "negotiated_by": _username_for_role("Contract Manager"),
+            "negotiated_by": AuthService.username_for_role("Contract Manager"),
             "change_request": f"Redline on {clause}: proposed replacement text",
         },
         headers=creator_h,
     )
-    _refresh_contract(context, name)
+    ContractService._refresh_contract(context, name)
 
 
 @given('contract "{name}" is assigned to reviewers "{r1}" and "{r2}"')
 def step_given_contract_assigned_reviewers(context, name, r1, r2):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 @given('contract "{name}" is in approval workflow')
 def step_given_contract_in_approval_workflow(context, name):
-    _create_contract_in_draft(context, name)
-    _prepare_contract_pending_approval(context, name)
+    ContractService._create_contract_in_draft(context, name)
+    ContractService._prepare_contract_pending_approval(context, name)
 
 
 @given('contract "{name}" has all required approvals')
 def step_given_contract_has_all_approvals(context, name):
-    _create_contract_in_draft(context, name)
-    _prepare_contract_pending_approval(context, name)
-    did, _ = _contract_data(context, name)
-    approver_h = _headers_for_role(context, "Contract Approver")
+    ContractService._create_contract_in_draft(context, name)
+    ContractService._prepare_contract_pending_approval(context, name)
+    did, _ = ContractService._contract_data(context, name)
+    approver_h = AuthService.headers_for_role("Contract Approver")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=approver_h)
     assert retrieve.status_code == 200, retrieve.text
     updated_at = retrieve.json().get("updated_at")
@@ -433,12 +213,12 @@ def step_given_contract_has_all_approvals(context, name):
         headers=approver_h,
     )
     assert approve.status_code == 200, approve.text
-    _refresh_contract(context, name)
+    ContractService._refresh_contract(context, name)
 
 
 @given('contract "{name}" is in "Active" status')
 def step_given_contract_active(context, name):
-    _create_contract_in_draft(context, name)
+    ContractService._create_contract_in_draft(context, name)
 
 
 # ---------------------------------------------------------------------------
@@ -447,13 +227,13 @@ def step_given_contract_active(context, name):
 
 @when('I view contract "{name}"')
 def step_when_view_contract(context, name):
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
 @when('I edit contract "{name}"')
 def step_when_edit_contract(context, name):
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     payload = {
         "did": did,
         "updated_at": updated_at,
@@ -461,7 +241,7 @@ def step_when_edit_contract(context, name):
     }
     context.requests_response = put_json(context, contract_update_url(context), payload)
     if context.requests_response.status_code == 200:
-        _refresh_contract(context, name)
+        ContractService._refresh_contract(context, name)
 
 
 @when('I generate a contract from template "{name}"')
@@ -485,19 +265,19 @@ def step_when_attempt_generate_contract(context, template_name):
 @when('I add comment "{comment}" to clause "{clause}"')
 def step_when_add_comment_to_clause(context, comment, clause):
     name = "Service Agreement"
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(
         context,
         contract_negotiate_url(context),
         {
             "did": did,
             "updated_at": updated_at,
-            "negotiated_by": _username_for_role("Contract Reviewer"),
+            "negotiated_by": AuthService.username_for_role("Contract Reviewer"),
             "change_request": f"[{clause}] {comment}",
         },
     )
     if context.requests_response.status_code == 200:
-        _refresh_contract(context, name)
+        ContractService._refresh_contract(context, name)
 
 
 @when('I propose a redline edit to clause "{clause}"')
@@ -508,8 +288,8 @@ def step_when_propose_redline(context, clause):
 @when("I approve the redline proposal")
 def step_when_approve_redline(context):
     name = "Service Agreement"
-    did, _ = _contract_data(context, name)
-    refresh = _refresh_contract(context, name)
+    did, _ = ContractService._contract_data(context, name)
+    refresh = ContractService._refresh_contract(context, name)
     negotiations = refresh.get("negotiations") or []
     if negotiations:
         negotiation_id = negotiations[-1].get("id") or negotiations[-1].get("did")
@@ -526,8 +306,8 @@ def step_when_approve_redline(context):
 @when('I reject the redline proposal with reason "{reason}"')
 def step_when_reject_redline(context, reason):
     name = "Service Agreement"
-    did, _ = _contract_data(context, name)
-    refresh = _refresh_contract(context, name)
+    did, _ = ContractService._contract_data(context, name)
+    refresh = ContractService._refresh_contract(context, name)
     negotiations = refresh.get("negotiations") or []
     if negotiations:
         negotiation_id = negotiations[-1].get("id") or negotiations[-1].get("did")
@@ -536,7 +316,7 @@ def step_when_reject_redline(context, reason):
                 context,
                 f"{context.base_url}/contract/respond",
                 {"id": str(negotiation_id), "action_flag": "reject",
-                 "rejected_by": _username_for_role("Contract Manager"), "rejection_reason": reason},
+                 "rejected_by": AuthService.username_for_role("Contract Manager"), "rejection_reason": reason},
             )
             return
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
@@ -544,19 +324,19 @@ def step_when_reject_redline(context, reason):
 
 @when('I view version history for contract "{name}"')
 def step_when_view_version_history(context, name):
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
 @when('I view the negotiation log for contract "{name}"')
 def step_when_view_negotiation_log(context, name):
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
 @when('I view approval status for contract "{name}"')
 def step_when_view_approval_status(context, name):
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
@@ -565,8 +345,8 @@ def step_when_approval_completes(context):
     # The Given "contract has all required approvals" already approved the contract.
     # This step confirms the outcome rather than triggering a second approval.
     name = "Service Agreement"
-    did, _ = _contract_data(context, name)
-    approver_h = _headers_for_role(context, "Contract Approver")
+    did, _ = ContractService._contract_data(context, name)
+    approver_h = AuthService.headers_for_role("Contract Approver")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=approver_h)
     assert retrieve.status_code == 200, retrieve.text
     state = str(retrieve.json().get("state", "")).upper()
@@ -579,7 +359,7 @@ def step_when_approval_completes(context):
             headers=approver_h,
         )
         if context.requests_response.status_code == 200:
-            _refresh_contract(context, name)
+            ContractService._refresh_contract(context, name)
     else:
         # Already approved — synthesise a success response so Then-assertions can inspect it.
         import types
@@ -594,8 +374,8 @@ def step_when_approval_completes(context):
 @when("I attempt to approve my own redline proposal")
 def step_when_attempt_approve_own_redline(context):
     name = "Service Agreement"
-    did, _ = _contract_data(context, name)
-    refresh = _refresh_contract(context, name)
+    did, _ = ContractService._contract_data(context, name)
+    refresh = ContractService._refresh_contract(context, name)
     negotiations = refresh.get("negotiations") or []
     if negotiations:
         negotiation_id = negotiations[-1].get("id") or negotiations[-1].get("did")
@@ -618,7 +398,7 @@ def step_when_attempt_access_contract_negotiation(context, name):
 @when('a representative of party "{party}" attempts to access the contract')
 def step_when_party_accesses_contract(context, party):
     name = "Service Agreement"
-    did, _ = _contract_data(context, name)
+    did, _ = ContractService._contract_data(context, name)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
@@ -631,7 +411,7 @@ def step_when_attempt_access_contract(context, name):
 @when("automated compliance checks are performed")
 def step_when_automated_compliance_checks(context):
     name = "Service Agreement"
-    did, updated_at = _contract_data(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
     context.requests_response = post_json(
         context, contract_verify_url(context), {"did": did, "updated_at": updated_at}
     )

@@ -1,6 +1,6 @@
-import type { TemplateType } from '@/types/template-type'
-import type { ContractTemplateActionFlag } from '../../types/action-flag'
 import type { ContractTemplateState } from '@/types/contract-template-state'
+import type { TemplateType } from '@/types/template-type'
+import type { ContractTemplateActionFlag } from '../../types/contract-template-action-flag'
 import type { ContractTemplateData } from '../contract-template'
 
 export interface ContractTemplateCreateRequest {
@@ -85,8 +85,10 @@ export interface ContractTemplateArchiveRequest {
 
 export interface ContractTemplateRegisterRequest {
   did: string
+  updated_at: string
 }
 
 export interface ContractTemplateAuditRequest {
   did: string
+  updated_at: string
 }

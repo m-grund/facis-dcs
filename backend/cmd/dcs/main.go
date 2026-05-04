@@ -22,6 +22,7 @@ import (
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/service"
+	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
@@ -123,6 +124,8 @@ func main() {
 	cweCronJob := contractworkflowengine2.CronJob{DB: db}
 	cweCronJob.Start()
 
+	smCRepo := smrepo.PostgresContractRepo{Ctx: ctx}
+
 	// Initialize IPFS client
 	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
 	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
@@ -146,7 +149,10 @@ func main() {
 
 	// Initialize the Federated Catalogue client.
 	fcURL := os.Getenv("FEDERATED_CATALOGUE_API_URL")
-	templateCatalogueClient := fcclient.NewFederatedCatalogueClient(fcURL)
+	var templateCatalogueClient *fcclient.FederatedCatalogueClient
+	if fcURL != "" {
+		templateCatalogueClient = fcclient.NewFederatedCatalogueClient(fcURL)
+	}
 
 	// Initialize the webhook platform (ORCE integration).
 	webhookStore := webhookplatform.NewSubscriptionStore()
@@ -185,7 +191,7 @@ func main() {
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader)
-		signatureManagementSvc = service.NewSignatureManagement(jwtAuth)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, webhookDispatcher)
 	}

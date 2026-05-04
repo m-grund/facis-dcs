@@ -18,6 +18,7 @@ type TerminateCmd struct {
 	DID          string
 	TerminatedBy string
 	Reason       string
+	UpdatedAt    time.Time
 }
 
 type Terminator struct {
@@ -40,6 +41,10 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
+	}
+
+	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		return errors.New("contract was updated elsewhere, please reload")
 	}
 
 	if processData.State == contractstate.Terminated.String() {

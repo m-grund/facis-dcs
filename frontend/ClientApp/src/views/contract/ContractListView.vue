@@ -3,18 +3,16 @@ import ContractList from '@/components/lists/contract/ContractList.vue'
 import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
+import { storeToRefs } from 'pinia'
 import { computed, onMounted } from 'vue'
 
 const contractsStore = useContractsStore()
 
-const loading = computed(() => contractsStore.loading)
-const error = computed(() => contractsStore.error)
-
-const contracts = computed(() => contractsStore.contracts)
+const { contracts, loading, error } = storeToRefs(contractsStore)
 
 const authStore = useAuthStore()
 
-async function loadContracts() {
+const loadContracts = async () => {
   await contractsStore.loadContracts()
 }
 

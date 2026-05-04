@@ -159,7 +159,7 @@ type AcceptNegotiationEvent struct {
 
 // EventType implements the Event interface.
 func (e AcceptNegotiationEvent) EventType() string {
-	return eventtype.Response.String()
+	return eventtype.AcceptRespond.String()
 }
 
 // GetDID implements the Event interface.
@@ -178,7 +178,7 @@ type RejectNegotiationEvent struct {
 
 // EventType implements the Event interface.
 func (e RejectNegotiationEvent) EventType() string {
-	return eventtype.Response.String()
+	return eventtype.RejectRespond.String()
 }
 
 // GetDID implements the Event interface.

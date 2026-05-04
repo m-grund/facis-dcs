@@ -3,16 +3,13 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import type { UserRole } from '@/types/user-role'
-import { computed, onMounted, ref, type Ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { onMounted, ref, type Ref } from 'vue'
 
-export function useTemplateTable() {
+export function useTemplateList() {
     const templatesStore = useContractTemplatesStore()
-    const templates = computed(() => templatesStore.contractTemplates)
-    const reviewTasks = computed(() => templatesStore.reviewTasks)
-    const approvalTasks = computed(() => templatesStore.approvalTasks)
+    const {contractTemplates: templates, reviewTasks, approvalTasks, loading, error} = storeToRefs(templatesStore)
     const roles: Ref<UserRole[]> = ref([])
-    const loading = computed(() => templatesStore.loading)
-    const error = computed(() => templatesStore.error)
     const authStore = useAuthStore()
 
     const loadTemplates = async () => {

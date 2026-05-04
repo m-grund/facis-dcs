@@ -164,6 +164,7 @@ var ContractNegotiationItem = Type("ContractNegotiationItem", func() {
 	Attribute("change_request", Any, "Change request")
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
+	Attribute("contract_version", Int, "Version of the contract for that the negotiation is")
 
 	Attribute("negotiation_decisions", ArrayOf(ContractNegotiationDecisionItem), "List with decisions for that negotiation")
 
@@ -351,8 +352,9 @@ var ContractTerminateRequest = Type("ContractTerminateRequest", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("reason", String, "Reason for terminating contract")
+	Attribute("updated_at", String, "Updated at")
 
-	Required("did", "reason")
+	Required("did", "reason", "updated_at")
 })
 
 var ContractTerminateResponse = Type("ContractTerminateResponse", func() {
