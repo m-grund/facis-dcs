@@ -4,6 +4,42 @@ import (
 	. "goa.design/goa/v3/dsl"
 )
 
+var PACAuditRequest = Type("PACAuditRequest", func() {
+	Description("Process audit request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("scope", String, "Scope that should be audited")
+
+	Required("scope")
+})
+
+var PACResourceAuditTrailEntry = Type("PACResourceAuditTrailEntry", func() {
+	Description("Resource audit trails entry")
+
+	Attribute("id", Int64, "Identifier for the outbox event")
+	Attribute("component", String, "Name of the component")
+	Attribute("event_type", String, "Type of the event")
+	Attribute("event_data", Any, "Data of the event")
+	Attribute("did", String, "Decentralized Identifier of the resource")
+	Attribute("created_at", String, "The creation date of the event")
+	Attribute("res_log_pred_cid", String, "Resource audit trail predecessor on the IPFS chain")
+	Attribute("global_log_pred_cid", String, "Global audit trail predecessor on the IPFS chain")
+
+	Required("id", "component", "event_type", "event_data", "created_at")
+})
+
+var PACAuditResponse = Type("PACAuditResponse", func() {
+	Description("Resource audit trail")
+
+	Attribute("did", String, "Decentralized Identifier of the resource")
+	Attribute("component", String, "Name of the component")
+	Attribute("created_at", String, "Creation date of the audit response")
+	Attribute("audit_trail", ArrayOfRequired(PACResourceAuditTrailEntry), "Resource audit trails entries")
+
+	Required("did", "component", "created_at", "audit_trail")
+})
+
 // Process Audit & Compliance Management Service  (/pac/...)
 var _ = Service("ProcessAuditAndCompliance", func() {
 	Description("Process Audit & Compliance Management APIs (/pac/...)")
