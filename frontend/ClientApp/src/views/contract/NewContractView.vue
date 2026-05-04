@@ -30,7 +30,7 @@ const router = useRouter()
 
 const errorStore = useErrorStore()
 const templatesStore = useContractTemplatesStore()
-const { approvedTemplates, hasApprovedTemplates } = storeToRefs(templatesStore)
+const { approvedOrRegisteredTemplates, hasApprovedOrRegisteredTemplates } = storeToRefs(templatesStore)
 const templateDraftStore = useTemplateDraftStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -49,7 +49,7 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 
 const contract: Ref<Contract | null> = ref(null)
 
-const canSubmit = computed(() => isEditMode.value || hasApprovedTemplates.value && selectedTemplate.value !== null)
+const canSubmit = computed(() => isEditMode.value || hasApprovedOrRegisteredTemplates.value && selectedTemplate.value !== null)
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
@@ -108,7 +108,7 @@ watch(
       } catch (err: any) {
         console.error('Failed to load contract', err)
       }
-    } else if (!hasApprovedTemplates.value) {
+    } else if (!hasApprovedOrRegisteredTemplates.value) {
       await templatesStore.loadTemplates()
     }
   },
@@ -172,9 +172,9 @@ function applyContractDataToDraft(contractData?: unknown) {
 <template>
   <div class="flex flex-col min-h-full -mx-4 md:-mx-8 -my-4 md:-my-8">
     <div v-if="!isEditMode" class="max-w-4xl mx-auto px-6 py-12">
-      <select v-model="selectedTemplate" class="select" :disabled="!hasApprovedTemplates">
-        <option :value="null" disabled selected>{{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}</option>
-        <option v-for="template in approvedTemplates" :key="template.did" :value="template">{{ template.name }}</option>
+      <select v-model="selectedTemplate" class="select" :disabled="!hasApprovedOrRegisteredTemplates">
+        <option :value="null" disabled selected>{{ hasApprovedOrRegisteredTemplates ? 'Pick a template' : 'No templates available' }}</option>
+        <option v-for="template in approvedOrRegisteredTemplates" :key="template.did" :value="template">{{ template.name }}</option>
       </select>
     </div>
     <div v-else-if="!!contract">

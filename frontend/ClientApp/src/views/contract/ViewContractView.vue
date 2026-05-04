@@ -134,6 +134,7 @@ const submitRejectedTemplate = async () => {
 }
 
 const verifySemanticValues = (): boolean => {
+
   const subTemplateSemanticConditions = templateDraftStore?.subTemplateSnapshots?.map((subTemplate) => {
     return {
       templateId: subTemplate.did,

@@ -5,6 +5,7 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { TemplateState } from '@/types/contract-template-state'
 import { defineStore } from 'pinia'
 import { computed, ref, type Ref } from 'vue'
+import {TemplateType} from "@template-repository/models/contract-templace.ts";
 
 export const useContractTemplatesStore = defineStore('contractTemplates', () => {
   const contractTemplates: Ref<PartialContractTemplate[]> = ref([])
@@ -15,11 +16,11 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
   const error = ref<string | null>(null)
 
   const hasTemplates = computed(() => contractTemplates.value.length > 0)
-  const hasApprovedTemplates = computed(() =>
-    contractTemplates.value.some((template) => template.state === TemplateState.approved),
+  const hasApprovedOrRegisteredTemplates = computed(() =>
+    contractTemplates.value.some((template) => (template.state === TemplateState.approved || template.state === TemplateState.registered) && template.template_type === TemplateType.frameContract),
   )
-  const approvedTemplates = computed(() =>
-    contractTemplates.value.filter((template) => template.state === TemplateState.approved),
+  const approvedOrRegisteredTemplates = computed(() =>
+    contractTemplates.value.filter((template) => (template.state === TemplateState.approved || template.state === TemplateState.registered) && template.template_type === TemplateType.frameContract),
   )
 
   async function loadTemplates() {
@@ -42,8 +43,8 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
     reviewTasks,
     approvalTasks,
     hasTemplates,
-    hasApprovedTemplates,
-    approvedTemplates,
+    hasApprovedOrRegisteredTemplates,
+    approvedOrRegisteredTemplates,
     loadTemplates,
     loading,
     error,

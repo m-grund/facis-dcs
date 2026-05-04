@@ -159,6 +159,25 @@ func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context
 	return exists, nil
 }
 
+func (r PostgresNegotiationRepo) HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) (bool, error) {
+
+	query := `
+        SELECT EXISTS (
+            SELECT 1
+            FROM contract_negotiations cn
+            JOIN contract_negotiation_decisions cnd ON cnd.negotiation_id = cn.id
+            WHERE cn.did = $1
+              AND (contract_version = $2 OR ($2 IS NULL AND contract_version IS NULL))
+        )
+    `
+	var exists bool
+	err := tx.GetContext(ctx, &exists, query, did, contractVersion)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (r PostgresNegotiationRepo) Delete(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         DELETE FROM contract_review_task

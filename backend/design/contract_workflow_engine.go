@@ -164,6 +164,7 @@ var ContractNegotiationItem = Type("ContractNegotiationItem", func() {
 	Attribute("change_request", Any, "Change request")
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
+	Attribute("contract_version", Int, "Version of the contract for that the negotiation is")
 
 	Attribute("negotiation_decisions", ArrayOf(ContractNegotiationDecisionItem), "List with decisions for that negotiation")
 

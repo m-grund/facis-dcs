@@ -177,37 +177,45 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 		if existOpenTasks == false {
 
-			err = contractworkflowengine.MergeChangeRequests(tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
+			hasNegotiations, err := h.NRepo.HasNegotiationForContractVersion(ctx, tx, cmd.DID, processData.ContractVersion)
 			if err != nil {
-				return fmt.Errorf("could not merge change requests: %w", err)
+				return fmt.Errorf("could not check if negotiation exists: %w", err)
 			}
 
-			newVersion := 1
-			if processData.ContractVersion != nil {
-				newVersion = *processData.ContractVersion + 1
-			}
+			if hasNegotiations {
+				err = contractworkflowengine.MergeChangeRequests(ctx, tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
+				if err != nil {
+					return fmt.Errorf("could not merge change requests: %w", err)
+				}
 
-			err = h.CRepo.Update(ctx, tx, db.ContractUpdateData{
-				DID:             cmd.DID,
-				ContractVersion: &newVersion,
-			})
-			if err != nil {
-				return fmt.Errorf("could not update contract version: %w", err)
-			}
+				newVersion := 1
+				if processData.ContractVersion != nil {
+					newVersion = *processData.ContractVersion + 1
+				}
 
-			evt := contractevents.IncreaseContractVersionEvent{
-				DID:                cmd.DID,
-				OldContractVersion: processData.ContractVersion,
-				NewContractVersion: &newVersion,
-				SubmittedBy:        cmd.SubmittedBy,
-				OccurredAt:         time.Now().UTC(),
-			}
-			err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-			if err != nil {
-				return fmt.Errorf("could not create event: %w", err)
-			}
+				err = h.CRepo.Update(ctx, tx, db.ContractUpdateData{
+					DID:             cmd.DID,
+					ContractVersion: &newVersion,
+				})
+				if err != nil {
+					return fmt.Errorf("could not update contract version: %w", err)
+				}
 
-			nextState = contractstate.Submitted
+				evt := contractevents.IncreaseContractVersionEvent{
+					DID:                cmd.DID,
+					OldContractVersion: processData.ContractVersion,
+					NewContractVersion: &newVersion,
+					SubmittedBy:        cmd.SubmittedBy,
+					OccurredAt:         time.Now().UTC(),
+				}
+				err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+				if err != nil {
+					return fmt.Errorf("could not create event: %w", err)
+				}
+
+			} else {
+				nextState = contractstate.Submitted
+			}
 		}
 
 	} else if processData.State == contractstate.Submitted.String() {
