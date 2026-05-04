@@ -2,6 +2,7 @@ package event
 
 import (
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/templaterepository/datatype/actionflag"
 	"digital-contracting-service/internal/templaterepository/datatype/eventtype"
 	"time"
@@ -114,7 +115,7 @@ func (e VerifyEvent) GetDID() string {
 type UpdateEvent struct {
 	DID               string         `json:"did"`
 	UpdatedBy         string         `json:"updated_by"`
-	OldDocumentNumber *string        `json:"old_document_numbe,omitemptyr"`
+	OldDocumentNumber *string        `json:"old_document_number,omitempty"`
 	NewDocumentNumber *string        `json:"new_document_number,omitempty"`
 	OldVersion        *int           `json:"old_version,omitempty"`
 	NewVersion        *int           `json:"new_version,omitempty"`
@@ -259,9 +260,10 @@ func (e RegisterEvent) GetDID() string {
 
 // AuditEvt is emitted when template data is registered.
 type AuditEvt struct {
-	DID        string    `json:"did"`
-	AuditedBy  string    `json:"audited_by"`
-	OccurredAt time.Time `json:"occurred_at"`
+	DID           string                      `json:"did"`
+	AuditedBy     string                      `json:"audited_by"`
+	OccurredAt    time.Time                   `json:"occurred_at"`
+	ComponentType componenttype.ComponentType `json:"component_type"`
 }
 
 // EventType implements the Event interface.

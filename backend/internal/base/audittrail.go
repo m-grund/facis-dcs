@@ -18,7 +18,7 @@ type AuditTrailReader struct {
 	IPFSClient *ipfs.APIClient
 }
 
-func (r AuditTrailReader) ReadAllAuditLogEntriesForDID(ctx context.Context, tx *sqlx.Tx, componentType componenttype.ComponentType, did string) ([]datatype.AuditLogEntry, error) {
+func (r AuditTrailReader) ReadAuditLogEntriesByComponentAndDID(ctx context.Context, tx *sqlx.Tx, componentType componenttype.ComponentType, did string) ([]datatype.AuditLogEntry, error) {
 
 	cid, err := r.ARepo.ReadLogCID(ctx, tx, componentType.String(), did)
 	if err != nil {
@@ -51,6 +51,44 @@ func (r AuditTrailReader) ReadAllAuditLogEntriesForDID(ctx context.Context, tx *
 	}
 
 	return logEntries, nil
+}
+
+func (r AuditTrailReader) ReadAuditLogEntriesByComponent(ctx context.Context, tx *sqlx.Tx, componentType componenttype.ComponentType) ([][]datatype.AuditLogEntry, error) {
+
+	cids, err := r.ARepo.ReadLogCIDs(ctx, tx, componentType.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([][]datatype.AuditLogEntry, 0)
+	for _, cid := range cids {
+		logEntries := make([]datatype.AuditLogEntry, 0)
+		if cid == nil {
+			return nil, nil
+		}
+
+		currentCID := *cid
+		for {
+			result, err := r.IPFSClient.FetchFile(currentCID)
+			if err != nil {
+				return nil, fmt.Errorf("read body: %w", err)
+			}
+			var logEntry datatype.AuditLogEntry
+			if err := json.Unmarshal(result.Data, &logEntry); err != nil {
+				return nil, fmt.Errorf("decode response: %w", err)
+			}
+
+			logEntries = append(logEntries, logEntry)
+
+			if logEntry.ResLogPredCID == nil {
+				break
+			}
+
+			currentCID = *logEntry.ResLogPredCID
+		}
+	}
+
+	return result, nil
 }
 
 func (r AuditTrailReader) ReadAllAuditLogEntries(ctx context.Context, tx *sqlx.Tx) ([]datatype.AuditLogEntry, error) {

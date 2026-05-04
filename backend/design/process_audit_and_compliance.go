@@ -13,17 +13,23 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		Meta("dcs:requirements", "DCS-IR-PACM-01")
 		Meta("dcs:ui", "Auditing Tool")
 		Meta("dcs:pacm:components", "")
+
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
+
+		Payload(PACAuditRequest)
+		Result(ArrayOfRequired(PACAuditResponse))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			POST("/pac/audit")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(String)
 	})
 
 	Method("audit_report", func() {

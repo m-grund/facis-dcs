@@ -1,8 +1,11 @@
+import type { ComponentType } from '@/types/component-type'
+import type { ContractTemplateEventType } from '@/types/contract-template-event-type'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
 import type { ContractTemplateData, PartialContractTemplate } from '../contract-template'
-import type { ContractTemplateReviewTask } from '../contract-template-review-task'
 import type { ContractTemplateApprovalTask } from '../contract-template-approval-task'
+import type { ContractTemplateEvent } from '../contract-template-event'
+import type { ContractTemplateReviewTask } from '../contract-template-review-task'
 
 export interface ContractTemplateCreateResponse {
   did: string
@@ -78,11 +81,11 @@ export interface ContractTemplateRegisterResponse {
   did: string
 }
 
-interface ContractTemplateAuditResponseItem {
+export interface ContractTemplateAuditResponseItem {
   id: number
-  component: string
-  event_type: string
-  event_data: unknown
+  component: ComponentType
+  event_type: ContractTemplateEventType
+  event_data: ContractTemplateEvent
   did?: string
   created_at: string
   res_log_pred_cid?: string

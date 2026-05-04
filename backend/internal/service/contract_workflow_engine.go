@@ -575,8 +575,14 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.TerminateCmd{
 		DID:          req.Did,
+		UpdatedAt:    updatedAt,
 		TerminatedBy: middleware.GetUsername(ctx),
 		Reason:       req.Reason,
 	}
@@ -603,13 +609,12 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	qry := contract.AuditLogQry{
+	qry := contract.GetAuditLogQry{
 		DID:       req.Did,
 		AuditedBy: middleware.GetUsername(ctx),
 	}
 	handler := contract.Auditor{
 		DB:           s.DB,
-		CRepo:        s.CRepo,
 		ATrailReader: s.ATrailReader,
 	}
 	auditLogHistory, err := handler.Handle(ctx, qry)

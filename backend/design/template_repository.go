@@ -321,7 +321,9 @@ var ContractTemplateRegisterRequest = Type("ContractTemplateRegisterRequest", fu
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 
-	Required("did")
+	Attribute("updated_at", String, "The timestamp when the contract template was updated")
+
+	Required("did", "updated_at")
 })
 
 var ContractTemplateRegisterResponse = Type("ContractTemplateRegisterResponse", func() {

@@ -126,7 +126,7 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		ID:               event.ID,
 		Component:        event.Component,
 		EventType:        event.EventType,
-		EventData:        string(event.EventData),
+		EventData:        event.EventData,
 		DID:              event.DID,
 		CreatedAt:        event.CreatedAt,
 		ResLogPredCID:    resLogPredCID,

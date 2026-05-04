@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { ContractEditorTabId, ContractEditorUiState } from '../models/contract-editor-ui-store'
 import type { ContractState as ContractStateType } from '@/types/contract-state'
 import { ContractState } from '@/types/contract-state'
+import { useAuthStore } from '@/stores/auth-store'
 
 const storeId = 'contractEditorUi'
 const defaultState: Readonly<ContractEditorUiState> = {
@@ -13,6 +14,7 @@ const defaultState: Readonly<ContractEditorUiState> = {
     { id: 'clauses', label: 'Clauses' },
     { id: 'builder', label: 'Builder' },
     { id: 'diff', label: 'Diff View' },
+    { id: 'audit', label: 'Audit History' },
   ],
 }
 
@@ -23,14 +25,16 @@ export const useContractEditorUiStore = defineStore(storeId, {
       this.activeTab = tab
     },
     availableTabs(contractState: ContractStateType) {
+      const isManager = useAuthStore().user?.roles?.includes('CONTRACT_MANAGER') ?? false
+
       switch (contractState) {
         case ContractState.draft:
           // Keep the edit page simple for now, same for the negotiation states
           return this.tabs.filter(tab => ['details', 'content'].includes(tab.id))
         case ContractState.negotiation:
-          return this.tabs.filter((tab) => ['details', 'content', 'diff'].includes(tab.id))
+          return this.tabs.filter((tab) => ['details', 'content', 'diff'].includes(tab.id) || isManager && tab.id === 'audit')
         default:
-          return this.tabs.filter(tab => ['details', 'content'].includes(tab.id))
+          return this.tabs.filter(tab => ['details', 'content'].includes(tab.id) || isManager && tab.id === 'audit')
       }
     },
     reset(overrides?: Partial<ContractEditorUiState>) {

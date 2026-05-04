@@ -1,199 +1,21 @@
 """Contract creation API steps for executable BDD scenarios."""
 
 import os
-import re
 
 import requests as _requests
 from behave import given, then, when
 
+from steps.support.services.contract_service import ContractService
 from support.api_client import (
     contract_approve_url,
     contract_create_url,
-    contract_reject_url,
     contract_retrieve_by_id_url,
     contract_update_url,
-    contract_submit_url,
     contract_verify_url,
     get_with_headers,
     post_json,
     put_json,
 )
-from auth_steps import create_custom_jwt
-
-
-def _headers_for_role(context, role: str, username_prefix: str = "bdd-service") -> dict:
-    client_id = "digital-contracting-service"
-    role_safe = re.sub(r"[^A-Za-z0-9]+", "-", role.lower()).strip("-")
-    username = f"{username_prefix}-{role_safe}"
-    
-    token = create_custom_jwt(client_id, username, role)
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-
-def _username_for_role(role: str, username_prefix: str = "bdd-service") -> str:
-    role_safe = re.sub(r"[^A-Za-z0-9]+", "-", role.lower()).strip("-")
-    return f"{username_prefix}-{role_safe}"
-
-
-def _ensure_store(context, name, value):
-    if not hasattr(context, name) or getattr(context, name) is None:
-        setattr(context, name, value)
-
-
-def _contract_submit_payload(did: str, updated_at: str) -> dict:
-    return {
-        "did": did,
-        "updated_at": updated_at,
-        "reviewers": [_username_for_role("Sys. Contract Reviewer")],
-        "approver": _username_for_role("Sys. Contract Approver"),
-    }
-
-
-def _contract_reviewer_submit_payload(did: str, updated_at: str) -> dict:
-    return {
-        "did": did,
-        "updated_at": updated_at,
-        "forward_to": "approval",
-        "approver": _username_for_role("Sys. Contract Approver"),
-    }
-
-
-def _create_contract_in_draft(context, contract_name: str):
-    from template_workflow_steps import _create_approved_template  # noqa: PLC0415
-
-    template_did, _ = _create_approved_template(context)
-    creator_h = _headers_for_role(context, "Sys. Contract Creator")
-    create_resp = post_json(context, contract_create_url(context), {"did": template_did}, headers=creator_h)
-    assert create_resp.status_code == 200, create_resp.text
-    contract_did = create_resp.json().get("did")
-    retrieve_resp = _retrieve_contract_readable(context, contract_did)
-
-    _ensure_store(context, "contract_dids", {})
-    _ensure_store(context, "contract_updated_at", {})
-    _ensure_store(context, "contract_seed_headers", {})
-    context.contract_dids[contract_name] = contract_did
-    context.contract_updated_at[contract_name] = retrieve_resp.json().get("updated_at")
-    context.contract_seed_headers[contract_name] = creator_h
-
-
-def _retrieve_contract_readable(context, did: str):
-    candidates = []
-    current_headers = getattr(context, "headers", None)
-    if current_headers:
-        candidates.append(current_headers)
-    candidates.extend(
-        [
-            _headers_for_role(context, "Sys. Contract Manager"),
-            _headers_for_role(context, "Sys. Contract Reviewer"),
-            _headers_for_role(context, "Sys. Contract Approver"),
-        ]
-    )
-    last_response = None
-    for headers in candidates:
-        response = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
-        last_response = response
-        if response.status_code == 200:
-            return response
-    assert last_response is not None
-    assert last_response.status_code == 200, last_response.text
-
-
-def _contract_data(context, contract_name: str):
-    return context.contract_dids[contract_name], context.contract_updated_at[contract_name]
-
-
-def _refresh_contract(context, contract_name: str, headers=None):
-    did = context.contract_dids[contract_name]
-    primary_headers = headers or context.contract_seed_headers.get(contract_name)
-    response = get_with_headers(
-        context,
-        contract_retrieve_by_id_url(context, did),
-        headers=primary_headers,
-    )
-    if response.status_code != 200:
-        response = _retrieve_contract_readable(context, did)
-    context.contract_updated_at[contract_name] = response.json().get("updated_at")
-    return response.json()
-
-
-def _prepare_contract_under_review(context, contract_name: str):
-    did, updated_at = _contract_data(context, contract_name)
-    creator_h = context.contract_seed_headers[contract_name]
-    first_submit = post_json(
-        context,
-        contract_submit_url(context),
-        _contract_submit_payload(did, updated_at),
-        headers=creator_h,
-    )
-    assert first_submit.status_code == 200, first_submit.text
-    _refresh_contract(context, contract_name, headers=creator_h)
-
-    did, updated_at = _contract_data(context, contract_name)
-    second_submit = post_json(
-        context,
-        contract_submit_url(context),
-        _contract_submit_payload(did, updated_at),
-        headers=creator_h,
-    )
-    assert second_submit.status_code == 200, second_submit.text
-    _refresh_contract(context, contract_name, headers=creator_h)
-
-
-def _prepare_contract_pending_approval(context, contract_name: str):
-    _prepare_contract_under_review(context, contract_name)
-    did, _ = _contract_data(context, contract_name)
-    reviewer_h = _headers_for_role(context, "Sys. Contract Reviewer")
-    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
-    assert retrieve.status_code == 200, retrieve.text
-    updated_at = retrieve.json().get("updated_at")
-    verify = post_json(
-        context,
-        contract_verify_url(context),
-        {"did": did, "updated_at": updated_at},
-        headers=reviewer_h,
-    )
-    assert verify.status_code == 200, verify.text
-    refreshed = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
-    assert refreshed.status_code == 200, refreshed.text
-    review_submit = post_json(
-        context,
-        contract_submit_url(context),
-        _contract_reviewer_submit_payload(did, refreshed.json().get("updated_at")),
-        headers=reviewer_h,
-    )
-    assert review_submit.status_code == 200, review_submit.text
-    _refresh_contract(context, contract_name, headers=reviewer_h)
-
-
-def _ensure_contract_state(context, name: str, target_state: str = "DRAFT") -> str:
-    """Ensure a named contract exists and is advanced to the requested workflow state."""
-    contract_dids = getattr(context, "contract_dids", None) or {}
-    if name not in contract_dids:
-        _create_contract_in_draft(context, name)
-
-    target = target_state.upper()
-    if target in ("UNDER REVIEW", "UNDER_REVIEW", "SUBMITTED"):
-        _prepare_contract_under_review(context, name)
-    elif target in ("APPROVED", "ACTIVE"):
-        _prepare_contract_pending_approval(context, name)
-        did = context.contract_dids[name]
-        approver_h = _headers_for_role(context, "Sys. Contract Approver")
-        retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=approver_h)
-        assert retrieve.status_code == 200, retrieve.text
-        updated_at = retrieve.json().get("updated_at")
-        approve = post_json(
-            context,
-            contract_approve_url(context),
-            {"did": did, "updated_at": updated_at},
-            headers=approver_h,
-        )
-        assert approve.status_code == 200, approve.text
-
-    return context.contract_dids[name]
-
-
-def _did_for_contract(context, name: str, target_state: str = "DRAFT") -> str:
-    return _ensure_contract_state(context, name, target_state=target_state)
 
 
 @when('the system sends a POST request to create contract with template "{template_name}"')
@@ -212,7 +34,7 @@ def step_when_create_contract_with_template(context, template_name):
 def step_when_create_contract_with_payload(context):
     template_did = os.getenv("BDD_TEMPLATE_DID_DEFAULT")
     if not template_did:
-        from template_workflow_steps import _create_approved_template  # noqa: PLC0415
+        from steps.template_management.template_workflow_steps import _create_approved_template  # noqa: PLC0415
 
         template_did, _ = _create_approved_template(context)
     context.requests_response = post_json(
@@ -316,7 +138,7 @@ def step_when_protected_endpoint_request(context, method, endpoint, payload_key)
 
 @when('the system sends a review request for contract "{name}"')
 def step_when_send_review_request(context, name):
-    did = _did_for_contract(context, name, target_state="DRAFT")
+    did = ContractService._did_for_contract(context, name, target_state="DRAFT")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did))
     assert retrieve.status_code == 200, retrieve.text
     updated_at = retrieve.json().get("updated_at")
@@ -328,7 +150,7 @@ def step_when_send_review_request(context, name):
 
 @when('the system sends approval request for contract "{name}"')
 def step_when_send_approval_request(context, name):
-    did = _did_for_contract(context, name, target_state="UNDER_REVIEW")
+    did = ContractService._did_for_contract(context, name, target_state="UNDER_REVIEW")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did))
     assert retrieve.status_code == 200, retrieve.text
     updated_at = retrieve.json().get("updated_at")
@@ -341,7 +163,7 @@ def step_when_send_approval_request(context, name):
 
 @when('the system queries contract "{name}" status')
 def step_when_query_contract_status(context, name):
-    did = _did_for_contract(context, name, target_state="DRAFT")
+    did = ContractService._did_for_contract(context, name, target_state="DRAFT")
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
@@ -354,7 +176,7 @@ def step_when_receive_review_results(context):
 
 @when("the system submits approval with condition data")
 def step_when_approval_with_condition(context):
-    did = _did_for_contract(context, "Service Agreement", target_state="UNDER_REVIEW")
+    did = ContractService._did_for_contract(context, "Service Agreement", target_state="UNDER_REVIEW")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did))
     assert retrieve.status_code == 200, retrieve.text
     updated_at = retrieve.json().get("updated_at")
@@ -368,7 +190,7 @@ def step_when_approval_with_condition(context):
 def step_when_attempt_approval_api(context):
     did = getattr(context, "non_approvable_contract_did", None)
     if did:
-        retrieve = _retrieve_contract_readable(context, did)
+        retrieve = ContractService._retrieve_contract_readable(context, did)
         updated_at = retrieve.json().get("updated_at")
         payload = {"did": did, "updated_at": updated_at}
     else:
@@ -381,7 +203,7 @@ def step_when_attempt_approval_api(context):
 
 @when("the system sends update request with new terms")
 def step_when_update_with_new_terms(context):
-    did = _did_for_contract(context, "Service Agreement", target_state="APPROVED")
+    did = ContractService._did_for_contract(context, "Service Agreement", target_state="APPROVED")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did))
     assert retrieve.status_code == 200, retrieve.text
     updated_at = retrieve.json().get("updated_at")
@@ -395,7 +217,7 @@ def step_when_update_with_new_terms(context):
 
 @when("the system requests performance metrics via API")
 def step_when_request_performance_metrics(context):
-    did = _did_for_contract(context, "Service Agreement", target_state="APPROVED")
+    did = ContractService._did_for_contract(context, "Service Agreement", target_state="APPROVED")
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
@@ -419,19 +241,19 @@ def step_service_without_review_perms(context):
 
 @given("approval requires specific conditions")
 def step_given_approval_requires_conditions(context):
-    did = _did_for_contract(context, "Service Agreement", target_state="UNDER_REVIEW")
+    did = ContractService._did_for_contract(context, "Service Agreement", target_state="UNDER_REVIEW")
     context.condition_contract_did = did
 
 
 @given("contract is not in approvable status")
 def step_given_contract_not_approvable(context):
-    did = _did_for_contract(context, "Service Agreement", target_state="DRAFT")
+    did = ContractService._did_for_contract(context, "Service Agreement", target_state="DRAFT")
     context.non_approvable_contract_did = did
 
 
 @given("contract has KPIs defined")
 def step_given_contract_has_kpis(context):
-    did = _did_for_contract(context, "Service Agreement", target_state="APPROVED")
+    did = ContractService._did_for_contract(context, "Service Agreement", target_state="APPROVED")
     context.kpi_contract_did = did
 
 
@@ -607,7 +429,7 @@ def step_then_metadata_populated(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert did, f"No DID in response: {body}"
-    retrieve = _retrieve_contract_readable(context, did)
+    retrieve = ContractService._retrieve_contract_readable(context, did)
     assert retrieve.status_code == 200, retrieve.text
     contract = retrieve.json()
     assert contract.get("created_at"), f"Missing created_at timestamp in contract metadata: {contract}"
@@ -636,7 +458,7 @@ def step_then_contract_status_draft(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert did, f"No DID in create response: {body}"
-    retrieve = _retrieve_contract_readable(context, did)
+    retrieve = ContractService._retrieve_contract_readable(context, did)
     assert retrieve.status_code == 200, retrieve.text
     state = str(retrieve.json().get("state", "")).upper()
     assert state == "DRAFT", f"Expected DRAFT state for new API contract, got '{state}'"
@@ -663,7 +485,7 @@ def step_then_creation_logged_timestamp(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert did, f"No DID in create response: {body}"
-    retrieve = _retrieve_contract_readable(context, did)
+    retrieve = ContractService._retrieve_contract_readable(context, did)
     assert retrieve.status_code == 200, retrieve.text
     contract = retrieve.json()
     assert contract.get("created_at"), (
@@ -676,7 +498,7 @@ def step_then_generated_contract_exposes_formats(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert did, f"No DID in create response: {body}"
-    retrieve = _retrieve_contract_readable(context, did)
+    retrieve = ContractService._retrieve_contract_readable(context, did)
     assert retrieve.status_code == 200, retrieve.text
     contract = retrieve.json()
     assert contract.get("contract_data") is not None, f"Missing machine-readable contract data: {contract}"

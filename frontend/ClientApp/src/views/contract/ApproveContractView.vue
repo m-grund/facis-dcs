@@ -6,6 +6,7 @@ import { useScrollStore } from '@/core/store/scroll'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
 import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
+import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import {
@@ -19,6 +20,7 @@ import TemplatePreview from '@/modules/template-repository/components/builder-ed
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
+import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
 import { storeToRefs } from 'pinia'
@@ -27,6 +29,7 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const navStore = useNavStore()
+const authStore = useAuthStore()
 
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -46,6 +49,8 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
+
+const isManager = computed(() => authStore.user?.roles?.includes('CONTRACT_MANAGER') ?? false)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
@@ -264,6 +269,17 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
                   </div>
                 </div>
               </div>
+
+              <template v-if="isManager">
+                <div v-show="activeTab === 'audit'">
+                  <div class="card bg-base-100 border border-base-300 shadow-sm">
+                    <div class="card-body">
+                      <h2 class="card-title text-sm">Audit History</h2>
+                      <AuditView />
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>

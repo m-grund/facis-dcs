@@ -504,8 +504,14 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
 	cmd := command.RegisterCmd{
 		DID:           req.Did,
+		UpdatedAt:     updatedAt,
 		RegisteredBy:  middleware.GetUsername(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 		Token:         *req.Token,
@@ -565,13 +571,12 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	qry := contracttemplate.AuditLogQry{
+	qry := contracttemplate.GetAuditLogQry{
 		DID:       req.Did,
 		AuditedBy: middleware.GetUsername(ctx),
 	}
 	handler := contracttemplate.Auditor{
 		DB:           s.DB,
-		CTRepo:       s.CTRepo,
 		ATrailReader: s.ATrailReader,
 	}
 	auditLogHistory, err := handler.Handle(ctx, qry)

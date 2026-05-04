@@ -1,10 +1,13 @@
+import type { ComponentType } from '@/types/component-type'
+import type { ContractEventType } from '@/types/contract-event-type'
 import type { ContractState } from '@/types/contract-state'
+import type { ContractData } from '../contract-data'
 import type { Contract } from '../contract/contract'
 import type { ContractApprovalTask } from '../contract/contract-approval-task'
-import type { ContractReviewTask } from '../contract/contract-review-task'
+import type { ContractEvent } from '../contract/contract-event'
 import type { ContractNegotiation } from '../contract/contract-negotiation'
 import type { ContractNegotiationTask } from '../contract/contract-negotiation-task'
-import type { ContractData } from '../contract-data'
+import type { ContractReviewTask } from '../contract/contract-review-task'
 
 export interface ContractCreateResponse {
   did: string
@@ -79,11 +82,11 @@ export interface ContractTerminateResponse {
   did: string
 }
 
-interface ContractAuditResponseItem {
+export interface ContractAuditResponseItem {
   id: number
-  component: string
-  event_type: string
-  event_data: string
+  component: ComponentType
+  event_type: ContractEventType
+  event_data: ContractEvent
   did?: string
   created_at: string
   res_log_pred_cid?: string

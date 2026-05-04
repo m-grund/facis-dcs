@@ -10,7 +10,6 @@ import (
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 	"digital-contracting-service/internal/templaterepository/selfdescription"
 	"encoding/json"
-
 	"fmt"
 	"net/http"
 	"net/url"

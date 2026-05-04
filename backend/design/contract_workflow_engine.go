@@ -351,8 +351,9 @@ var ContractTerminateRequest = Type("ContractTerminateRequest", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("reason", String, "Reason for terminating contract")
+	Attribute("updated_at", String, "Updated at")
 
-	Required("did", "reason")
+	Required("did", "reason", "updated_at")
 })
 
 var ContractTerminateResponse = Type("ContractTerminateResponse", func() {
