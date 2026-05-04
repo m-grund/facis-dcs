@@ -1,6 +1,7 @@
 import type { ContractActionFlag } from '@/types/contract-action-flag'
 import type { ContractState } from '@/types/contract-state'
 import type { NegotiationActionFlag } from '@/types/negotiation-action-flag'
+import type { ContractData } from '../contract-data'
 import type { ContractChangeRequest } from '../contract/contract'
 
 export interface ContractCreateRequest {
@@ -15,7 +16,7 @@ export interface ContractUpdateRequest {
   name?: string
   description?: string
   /** The data of the contract */
-  contract_data?: unknown
+  contract_data?: ContractData
 }
 
 export interface ContractSubmitRequest {
