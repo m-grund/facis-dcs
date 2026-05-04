@@ -11,7 +11,8 @@ const (
 	Create                  EventType = "CREATE_CONTRACT"
 	Submit                  EventType = "SUBMIT_CONTRACT"
 	Negotiation             EventType = "NEGOTIATE_CONTRACT"
-	Response                EventType = "RESPONSE_CONTRACT"
+	AcceptRespond           EventType = "ACCEPT_RESPOND_CONTRACT"
+	RejectRespond           EventType = "REJECT_RESPOND_CONTRACT"
 	IncreaseContractVersion EventType = "INCREASE_CONTRACT_VERSION"
 	Approve                 EventType = "APPROVE_CONTRACT"
 	Reject                  EventType = "REJECT_CONTRACT"
@@ -30,7 +31,8 @@ var validStates = map[EventType]bool{
 	Create:                  true,
 	Submit:                  true,
 	Negotiation:             true,
-	Response:                true,
+	AcceptRespond:           true,
+	RejectRespond:           true,
 	IncreaseContractVersion: true,
 	Approve:                 true,
 	Reject:                  true,

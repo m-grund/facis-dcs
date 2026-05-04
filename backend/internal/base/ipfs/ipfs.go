@@ -3,6 +3,7 @@ package ipfs
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +32,7 @@ type IPFSResult struct {
 		Format string `json:"Format"`
 		Value  string `json:"Value"`
 	} `json:"identifier"`
-	Data any `json:"data"`
+	Data json.RawMessage `json:"data"`
 }
 
 func (c *APIClient) CreateFile(ctx context.Context, data any) (*IPFSResult, error) {
@@ -79,22 +80,41 @@ func (c *APIClient) CreateFile(ctx context.Context, data any) (*IPFSResult, erro
 	return &result, nil
 }
 
-func (c *APIClient) FetchFile(cid string) ([]byte, error) {
-
+func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 	url := fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)
-
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	return body, nil
+	var result IPFSResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if len(result.Data) > 0 {
+		var dataStr string
+		if err := json.Unmarshal(result.Data, &dataStr); err == nil {
+			decoded, err := base64.RawStdEncoding.DecodeString(dataStr)
+			if err != nil {
+				decoded, _ = base64.StdEncoding.DecodeString(dataStr)
+			}
+			result.Data = json.RawMessage(decoded)
+		}
+	}
+
+	return &result, nil
 }
 
 func (c *APIClient) DeleteFile(cid string) error {

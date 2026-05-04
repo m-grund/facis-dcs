@@ -110,6 +110,12 @@ export const contractWorkflowService: ContractWorkflowService = {
   },
 
   async audit(request: ContractAuditRequest) {
-    return http.post<ContractAuditResponse>('/contract/audit', request).then((res) => res.data)
+    return http
+      .post<ContractAuditResponse>('/contract/audit', request)
+      .then((res) => res.data)
+      .catch((err) => {
+        console.error('Audit Error:', err)
+        return []
+      })
   },
 }

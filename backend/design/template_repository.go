@@ -321,7 +321,9 @@ var ContractTemplateRegisterRequest = Type("ContractTemplateRegisterRequest", fu
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 
-	Required("did")
+	Attribute("updated_at", String, "The timestamp when the contract template was updated")
+
+	Required("did", "updated_at")
 })
 
 var ContractTemplateRegisterResponse = Type("ContractTemplateRegisterResponse", func() {
@@ -347,9 +349,16 @@ var ContractTemplateAuditRequest = Type("ContractTemplateAuditRequest", func() {
 var ContractTemplateAuditResponse = Type("ContractTemplateAuditResponse", func() {
 	Description("Result for auditing a contract template")
 
+	Attribute("id", Int64, "Identifier for the outbox event")
+	Attribute("component", String, "Name of the component")
+	Attribute("event_type", String, "Type of the event")
+	Attribute("event_data", Any, "Data of the event")
 	Attribute("did", String, "Decentralized Identifier of the contract template")
+	Attribute("created_at", String, "The creation date of the event")
+	Attribute("res_log_pred_cid", String, "Resource audit trail predecessor on the IPFS chain")
+	Attribute("global_log_pred_cid", String, "Global audit trail predecessor on the IPFS chain")
 
-	Required("did")
+	Required("id", "component", "event_type", "event_data", "created_at")
 })
 
 // Template Repository Service  (/template/...)
@@ -690,7 +699,7 @@ var _ = Service("TemplateRepository", func() {
 		})
 
 		Payload(ContractTemplateAuditRequest)
-		Result(ContractTemplateAuditResponse)
+		Result(ArrayOfRequired(ContractTemplateAuditResponse))
 
 		Error("bad_request", ErrorResult, "Bad request")
 		Error("internal_error", ErrorResult, "Internal server error")

@@ -19,7 +19,10 @@ const username = computed(() => authStore.user?.username)
 
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
-const negotiations = computed(() => props.contract.negotiations ?? [])
+const negotiations = computed(() => {
+    const activeNegotiations = props.contract.negotiations?.filter(negotiation => negotiation.contract_version === props.contract.contract_version)
+    return activeNegotiations ?? []
+})
 
 const sortedNegotiations = computed(() =>
   negotiations.value.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),

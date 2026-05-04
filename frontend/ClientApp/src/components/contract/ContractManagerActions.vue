@@ -43,6 +43,7 @@ const terminate = async () => {
     if (!isCanceled) {
       const response = await contractWorkflowService.terminate({
         did: props.contract.did,
+        updated_at: props.contract.updated_at,
         reason: reason,
       })
       if (response.did) {
@@ -53,21 +54,9 @@ const terminate = async () => {
     console.error('Termination failed:', err)
   }
 }
-
-const audit = async () => {
-  try {
-    await contractWorkflowService.audit({
-      did: props.contract.did,
-      updated_at: props.contract.updated_at,
-    })
-  } catch (err) {
-    console.error('Audit failed:', err)
-  }
-}
 </script>
 
 <template>
   <button v-if="canTerminate" :class="[$attrs.class, 'hover:btn-error']" @click="terminate">Terminate</button>
-  <button v-if="isManager" :class="$attrs.class" @click="audit">Audit</button>
   <ConfirmationModal ref="confirmation-modal" />
 </template>

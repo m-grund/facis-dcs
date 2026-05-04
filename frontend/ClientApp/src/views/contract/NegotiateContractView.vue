@@ -5,6 +5,7 @@ import { useScrollStore } from '@/core/store/scroll'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract, ContractChangeRequest } from '@/models/contract/contract'
 import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
+import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import DiffView from '@/modules/contract-workflow-engine/components/DiffView.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -47,6 +48,8 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
+
+const isManager = computed(() => useAuthStore().user?.roles?.includes('CONTRACT_MANAGER') ?? false)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
@@ -301,18 +304,30 @@ const currentContractData = computed<ContractData | undefined>(() => {
               <div v-show="activeTab === 'diff'">
                 <DiffView :prior-contract-data="priorContractData" :current-contract-data="currentContractData" />
               </div>
+
+              <template v-if="isManager">
+                <div v-show="activeTab === 'audit'">
+                  <div class="card bg-base-100 border border-base-300 shadow-sm">
+                    <div class="card-body">
+                      <h2 class="card-title text-sm">Audit History</h2>
+                      <AuditView />
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
       </div>
-      <div class="divider"></div>
-      <div class="max-w-4xl mx-auto p-6" v-if="(contract.negotiations?.length ?? -1) > 0">
-        <div class="text-lg">Active negotiations</div>
-        <NegotiationList
-          :contract="contract"
-          @selected-negotiation="(negotiation) => handleSelectedNegotiation(negotiation, contract)"
-        />
-      </div>
+      <template v-if="activeTab !== 'audit'">
+        <div class="divider"></div>
+        <div class="max-w-4xl mx-auto p-6" v-if="(contract.negotiations?.length ?? -1) > 0">
+          <div class="text-lg">Active negotiations</div>
+          <NegotiationList
+            :contract="contract"
+            @selected-negotiation="(negotiation) => handleSelectedNegotiation(negotiation, contract)"
+          /></div
+      ></template>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">

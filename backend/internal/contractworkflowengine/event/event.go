@@ -2,6 +2,7 @@ package event
 
 import (
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"time"
@@ -158,7 +159,7 @@ type AcceptNegotiationEvent struct {
 
 // EventType implements the Event interface.
 func (e AcceptNegotiationEvent) EventType() string {
-	return eventtype.Response.String()
+	return eventtype.AcceptRespond.String()
 }
 
 // GetDID implements the Event interface.
@@ -177,7 +178,7 @@ type RejectNegotiationEvent struct {
 
 // EventType implements the Event interface.
 func (e RejectNegotiationEvent) EventType() string {
-	return eventtype.Response.String()
+	return eventtype.RejectRespond.String()
 }
 
 // GetDID implements the Event interface.
@@ -261,10 +262,10 @@ func (e RecordEvidenceEvent) GetDID() string {
 
 // AuditEvent is emitted when the contract is audited
 type AuditEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion *int      `json:"contract_version,omitempty"`
-	AuditedBy       string    `json:"audited_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
+	DID           string                      `json:"did"`
+	AuditedBy     string                      `json:"audited_by"`
+	OccurredAt    time.Time                   `json:"occurred_at"`
+	ComponentType componenttype.ComponentType `json:"component_type"`
 }
 
 // EventType implements the Event interface.

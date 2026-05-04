@@ -86,6 +86,17 @@
           </div>
         </div>
 
+        <template v-if="isManager">
+          <div v-show="activeTab === 'audit'">
+            <div class="card bg-base-100 border border-base-300 shadow-sm">
+              <div class="card-body">
+                <h2 class="card-title text-sm">Audit History</h2>
+                <AuditView />
+              </div>
+            </div>
+          </div>
+        </template>
+
       </div>
     </div>
   </div>
@@ -94,6 +105,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth-store'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
@@ -104,6 +116,7 @@ import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import { storeToRefs } from 'pinia'
+import AuditView from './AuditView.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -113,11 +126,14 @@ const props = withDefaults(
   {}
 )
 
+const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { activeTab } = storeToRefs(templateEditorUiStore)
 const { state, templateType } = storeToRefs(draftStore)
 const { setActiveTab, togglePreviewDialog } = templateEditorUiStore
 const tabs = computed(() => templateEditorUiStore.availableTabs(templateType.value))
+
+const isManager = computed(() => authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
 
 </script>

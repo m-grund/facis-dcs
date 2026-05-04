@@ -13,6 +13,7 @@ import (
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
 	"digital-contracting-service/internal/base/event"
@@ -21,6 +22,7 @@ import (
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/service"
+	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/migrations"
@@ -121,7 +123,15 @@ func main() {
 	cweCronJob := contractworkflowengine2.CronJob{DB: db}
 	cweCronJob.Start()
 
-	ipfsAPIClient := ipfs.NewClient("http://localhost:8000/v1/tenants/tenant_space", "http://localhost:5001")
+	smCRepo := smrepo.PostgresContractRepo{Ctx: ctx}
+
+	// Initialize IPFS client
+	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
+	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
+	if oidcIssuerURL == "" || oidcClientID == "" {
+		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
+	}
+	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
 	aRepo := pq.PostgresAuditTrailRepository{}
 	outboxProcessor := event.OutboxProcessor{
 		DB:         db,
@@ -131,9 +141,17 @@ func main() {
 	}
 	outboxProcessor.Start(ctx)
 
+	auditTrailReader := base.AuditTrailReader{
+		IPFSClient: ipfsAPIClient,
+		ARepo:      &aRepo,
+	}
+
 	// Initialize the Federated Catalogue client.
 	fcURL := os.Getenv("FEDERATED_CATALOGUE_API_URL")
-	templateCatalogueClient := fcclient.NewFederatedCatalogueClient(fcURL)
+	var templateCatalogueClient *fcclient.FederatedCatalogueClient
+	if fcURL != "" {
+		templateCatalogueClient = fcclient.NewFederatedCatalogueClient(fcURL)
+	}
 
 	// Initialize the service.
 	var (
@@ -151,14 +169,14 @@ func main() {
 	{
 		authSvc = service.NewAuth()
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
-		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(jwtAuth)
-		signatureManagementSvc = service.NewSignatureManagement(jwtAuth)
+		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
-		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient)
+		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}
 
 	// Wrap the service in endpoints that can be invoked from other service

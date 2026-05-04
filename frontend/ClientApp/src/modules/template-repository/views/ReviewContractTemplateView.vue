@@ -118,7 +118,7 @@ const forwardToApproval = async () => {
       comment.value = commentResult.data
     }
     await contractTemplateService.verify({
-      did,
+      did
     })
     await contractTemplateService.submit({
       did,

@@ -78,7 +78,7 @@
                     class="badge badge-primary badge-outline gap-1 py-3">
                     <span>{{ getSubcontractTemplateName(item) }}</span>
                     <button type="button" @click="removeSubcontractTemplate(item)"
-                        :disabled="isSubcontractReferenced(item)"
+                        :disabled="isSubcontractReferenced(item) || !uiStore.isTemplateEditable"
                         :title="isSubcontractReferenced(item) ? 'Cannot remove: used in document' : undefined"
                         class="text-error hover:opacity-70 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">✕</button>
                 </div>

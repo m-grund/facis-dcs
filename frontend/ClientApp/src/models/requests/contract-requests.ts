@@ -81,11 +81,11 @@ export interface ContractStoreRequest {
 
 export interface ContractTerminateRequest {
   did: string
+  updated_at: string
   /** Reason for terminating the contract */
   reason: string
 }
 
 export interface ContractAuditRequest {
   did: string
-  updated_at: string
 }

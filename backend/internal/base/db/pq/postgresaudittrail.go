@@ -31,6 +31,22 @@ func (r *PostgresAuditTrailRepository) UpdateLogCID(ctx context.Context, tx *sql
 	return err
 }
 
+func (r *PostgresAuditTrailRepository) ReadLogCIDs(ctx context.Context, tx *sqlx.Tx, component string) ([]*string, error) {
+	query := `
+        SELECT last_log_cid
+        FROM audit_trail_log WHERE component = $1;
+    `
+	var result []*string
+	err := tx.SelectContext(ctx, &result, query, component)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
 func (r *PostgresAuditTrailRepository) ReadLogCID(ctx context.Context, tx *sqlx.Tx, component string, did string) (*string, error) {
 	query := `
         SELECT last_log_cid
