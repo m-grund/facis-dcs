@@ -1,0 +1,5 @@
+apiVersion: v2
+name: mongodb
+description: Lightweight MongoDB for local development
+type: application
+version: 0.1.0

@@ -15,6 +15,8 @@
 #   Neo4j Bolt : localhost:30687
 #   FC service : localhost:30081
 #   ORCE       : localhost:30180
+#   Policy Agent: localhost:30380
+#   MongoDB     : intern (kein NodePort nötig)
 
 # In development, don't deploy the DCS container since we run it locally
 replicaCount: 0
@@ -104,6 +106,27 @@ orce:
   service:
     type: NodePort
     nodePort: 30180
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: false
+
+customPolicyAgent:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30380
+  nats:
+    addr: "nats://dcs-nats:4222"
+  mongo:
+    addr: "mongodb://dcs-mongodb-0.dcs-mongodb-headless.default.svc.cluster.local:27017/?replicaSet=rs0"
+    user: "policy"
+    pass: "policy"
+  externalServices:
+    ocmAddr: "http://localhost:9999"
+  logging:
+    level: "DEBUG"
 
 route:
   basePath: "/api"
