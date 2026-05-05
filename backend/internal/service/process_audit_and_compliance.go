@@ -9,6 +9,8 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/processauditandcompliance/query"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -25,14 +27,29 @@ func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, au
 	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader}
 }
 
+func auditScopeToComponentType(scope string) (componenttype.ComponentType, error) {
+	switch strings.ToLower(scope) {
+	case "templates":
+		return componenttype.ContractTemplateRepo, nil
+	case "contracts":
+		return componenttype.ContractWorkflowEngine, nil
+	case "signatures":
+		return componenttype.SignatureManagement, nil
+	case "archive":
+		return componenttype.ContractStorageArchive, nil
+	default:
+		return "", fmt.Errorf("invalid audit scope: %s", scope)
+	}
+}
+
 func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processauditandcompliance.PACAuditRequest) (res []*processauditandcompliance.PACAuditResponse, err error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	scope, err := componenttype.NewComponentType(req.Scope)
+	scope, err := auditScopeToComponentType(req.Scope)
 	if err != nil {
-		return nil, err
+		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
 
 	qry := query.GetAuditLogQry{
@@ -72,9 +89,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		}
 
 		result = append(result, &processauditandcompliance.PACAuditResponse{
-			Component: req.Scope,
-			Did:       did,
-			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			Component:  scope.String(),
+			Did:        did,
+			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+			AuditTrail: history,
 		})
 	}
 
