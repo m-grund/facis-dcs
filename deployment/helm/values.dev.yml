@@ -14,6 +14,7 @@
 #   Neo4j HTTP : localhost:30474
 #   Neo4j Bolt : localhost:30687
 #   FC service : localhost:30081
+#   ORCE       : localhost:30180
 
 # In development, don't deploy the DCS container since we run it locally
 replicaCount: 0
@@ -95,6 +96,14 @@ oidc:
   logoutRedirectURI: "http://localhost:5173/api/auth/logout-complete"
   realm: "gaia-x"
   keycloakScheme: "http"
+
+orce:
+  enabled: false
+  persistence:
+    enabled: false
+  service:
+    type: NodePort
+    nodePort: 30180
 
 route:
   basePath: "/api"
