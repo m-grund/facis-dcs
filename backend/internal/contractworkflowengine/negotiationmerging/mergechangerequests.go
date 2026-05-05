@@ -43,7 +43,9 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 
 		if change.ContractData != nil {
 
-			UpdateContractData(&contractData, change.ContractData)
+			for _, value := range change.ContractData.SemanticConditionValues {
+				upsertSemanticConditionValue(&contractData, value)
+			}
 
 			newContractData, err := datatype.NewJSON(contractData)
 			if err != nil {
@@ -65,16 +67,9 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 	return nil
 }
 
-func UpdateContractData(contractData *ContractData, updateData *ContractData) {
-
-	for _, value := range updateData.SemanticConditionValues {
-		upsertSemanticConditionValue(contractData, value)
-	}
-}
-
 func upsertSemanticConditionValue(contract *ContractData, newValue SemanticConditionValue) {
 	for i, existing := range contract.SemanticConditionValues {
-		if existing.ConditionID == newValue.ConditionID && existing.ParameterName == newValue.ParameterName {
+		if existing.BlockID == newValue.BlockID && existing.ParameterName == newValue.ParameterName {
 			contract.SemanticConditionValues[i] = newValue // update
 			return
 		}

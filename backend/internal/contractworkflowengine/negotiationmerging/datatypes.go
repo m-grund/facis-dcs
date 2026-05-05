@@ -1,5 +1,7 @@
 package negotiationmerging
 
+import "encoding/json"
+
 type ChangeRequest struct {
 	Name         *string       `json:"name"`
 	Description  *string       `json:"description"`
@@ -47,10 +49,10 @@ type ConditionParameter struct {
 }
 
 type SemanticConditionValue struct {
-	BlockID        string `json:"blockId"`
-	ConditionID    string `json:"conditionId"`
-	ParameterName  string `json:"parameterName"`
-	ParameterValue string `json:"parameterValue"`
+	BlockID        string          `json:"blockId"`
+	ConditionID    string          `json:"conditionId"`
+	ParameterName  string          `json:"parameterName"`
+	ParameterValue json.RawMessage `json:"parameterValue"`
 }
 
 type SubTemplateSnapshot struct {
