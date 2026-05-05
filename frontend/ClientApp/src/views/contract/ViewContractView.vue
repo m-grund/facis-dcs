@@ -19,11 +19,12 @@ import { useTemplateDraftStore } from '@/modules/template-repository/store/templ
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { ErrorTypes, useRoute } from 'vue-router'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -37,6 +38,8 @@ const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueV
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 const { setActiveTab } = contractEditorUiStore
+
+const errorStore = useErrorStore()
 
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
@@ -152,6 +155,8 @@ const verifySemanticValues = (): boolean => {
   verificationResult.value = result
   if (result.isValid) {
     return true
+  } else {
+    result.errors.forEach(error => errorStore.add(error.message))
   }
   // go to content tab and highlight semantic inconsistencies
   setActiveTab('content')

@@ -6,5 +6,6 @@ export interface ContractNegotiation {
   change_request: ContractChangeRequest
   created_by: string
   created_at: string
+  contract_version?: number
   negotiation_decisions: ContractNegotiationDecision[]
 }

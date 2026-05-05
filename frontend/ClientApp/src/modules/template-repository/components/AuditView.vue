@@ -16,12 +16,11 @@ const isLoading = ref(false)
 const loadAudit = async () => {
   const did = store.did
   const updated_at = store.updated_at
-
-  if (!did) return
+  if (!did || !updated_at) return
 
   try {
     isLoading.value = true
-    data.value = await contractTemplateService.audit({ did, updated_at: updated_at ?? "" })
+    data.value = await contractTemplateService.audit({ did, updated_at })
   } catch (err) {
     console.error('Audit failed', err)
   } finally {
