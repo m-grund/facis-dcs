@@ -40,9 +40,9 @@ var PACAuditResponse = Type("PACAuditResponse", func() {
 	Required("did", "component", "created_at", "audit_trail")
 })
 
-// Process Audit & Compliance Management Service  (/processauditandcompliance/...)
+// Process Audit & Compliance Management Service  (/pac/...)
 var _ = Service("ProcessAuditAndCompliance", func() {
-	Description("Process Audit & Compliance Management APIs (/processauditandcompliance/...)")
+	Description("Process Audit & Compliance Management APIs (/pac/...)")
 
 	Method("audit", func() {
 		Description("trigger an audit on selected scope.")
@@ -61,7 +61,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			POST("/processauditandcompliance/audit")
+			POST("/pac/audit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -80,7 +80,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 			Token("token", String, "JWT token")
 		})
 		HTTP(func() {
-			GET("/processauditandcompliance/report")
+			GET("/pac/report")
 			Response(StatusOK)
 		})
 		Result(Any)
@@ -98,7 +98,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 			Token("token", String, "JWT token")
 		})
 		HTTP(func() {
-			GET("/processauditandcompliance/monitor")
+			GET("/pac/monitor")
 			Response(StatusOK)
 		})
 		Result(Any)
@@ -116,7 +116,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 			Token("token", String, "JWT token")
 		})
 		HTTP(func() {
-			POST("/processauditandcompliance/report")
+			POST("/pac/report")
 			Response(StatusOK)
 		})
 		Result(Any)
