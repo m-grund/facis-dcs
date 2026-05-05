@@ -27,3 +27,13 @@ dependencies:
     repository: "file://charts/federated-catalogue"
     condition: federatedCatalogue.enabled
     alias: federatedCatalogue
+  - name: custom-policy-agent
+    version: "0.1.0"
+    repository: "file://charts/custom-policy-agent"
+    condition: customPolicyAgent.enabled
+    alias: customPolicyAgent
+  - name: mongodb
+    version: "0.1.0"
+    repository: "file://charts/mongodb"
+    condition: mongodb.enabled
+    alias: mongodb

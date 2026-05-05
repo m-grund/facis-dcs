@@ -145,6 +145,25 @@ neo4j:
 # See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
   enabled: false
+
+# XFSC Custom Policy Agent (OPA-based policy evaluation)
+# See charts/custom-policy-agent/values.yaml for all configurable fields.
+mongodb:
+  enabled: false
+
+customPolicyAgent:
+  enabled: false
+  mongo:
+    uri: ""
+    database: "policy"
+    collectionName: "policy"
+  nats:
+    url: ""
+  auth:
+    jwkURL: ""
+  logging:
+    level: "info"
+    format: "json"
   # URL the DCS backend uses to reach the Federated Catalogue API
   apiURL: ""
   secretRef:
