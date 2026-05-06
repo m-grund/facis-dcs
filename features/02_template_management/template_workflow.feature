@@ -15,14 +15,7 @@ Feature: Template Approval Workflow
     Given I am authenticated with roles: "Template Reviewer"
     And template "Standard NDA" is in "Submitted" status
     When I submit template "Standard NDA" with flag "Approval"
-    And all review tasks are not in "Open, Verified" states
-    Then the template status is "Reviewed"
-
-  Scenario: Review and recommend template for approval
-    Given I am authenticated with roles: "Template Reviewer"
-    And template "Standard NDA" is in "Submitted" status
-    When I review template "Standard NDA"
-    And I recommend template "Standard NDA" for approval
+    And all other review tasks are not in "Open, Verified" states
     Then the template status is "Reviewed"
 
   Scenario: Approve reviewed template
