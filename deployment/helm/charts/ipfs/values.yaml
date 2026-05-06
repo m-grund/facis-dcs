@@ -1,0 +1,24 @@
+image:
+  repository: ipfs/kubo
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  # IPFS HTTP Gateway (read)
+  gatewayPort: 8080
+  gatewayNodePort: null
+  # IPFS RPC API (write)
+  apiPort: 5001
+  apiNodePort: null
+  # Swarm (peer-to-peer) – usually not needed for dev
+  swarmPort: 4001
+  swarmNodePort: null
+
+persistence:
+  enabled: false
+  size: 5Gi
+  accessModes:
+    - ReadWriteOnce
+
+resources: {}

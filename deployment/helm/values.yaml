@@ -151,6 +151,18 @@ federatedCatalogue:
 mongodb:
   enabled: false
 
+ipfs:
+  enabled: false
+
+ipfsDocumentManager:
+  enabled: false
+
+# IPFS Document Manager client – auto-wired when sub-charts are enabled
+ipfsClient:
+  tenantName: "tenant_space"  # tenant identifier in the Document Manager URL path
+  tenantBaseURL: ""            # IPFS_TENANT_BASE_URL explicit override
+  mfsBaseURL: ""               # IPFS_MFS_BASE_URL explicit override (Kubo RPC API)
+
 customPolicyAgent:
   enabled: false
   mongo:

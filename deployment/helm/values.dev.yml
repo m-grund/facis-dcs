@@ -17,6 +17,9 @@
 #   ORCE       : localhost:30180
 #   Policy Agent: localhost:30380
 #   MongoDB     : intern (kein NodePort nötig)
+#   IPFS Gateway: localhost:30480
+#   IPFS API    : localhost:30501
+#   IPFS DocMgr : localhost:30481
 
 # In development, don't deploy the DCS container since we run it locally
 replicaCount: 0
@@ -127,6 +130,34 @@ customPolicyAgent:
     ocmAddr: "http://localhost:9999"
   logging:
     level: "DEBUG"
+
+ipfs:
+  enabled: true
+  persistence:
+    enabled: false
+  service:
+    type: NodePort
+    gatewayNodePort: 30480
+    apiNodePort: 30501
+
+ipfsDocumentManager:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30481
+  ipfs:
+    host: "dcs-ipfs"
+    apiGatewayURL: "http://dcs-ipfs:8080/ipfs"
+    rpcApiPort: 5001
+    logLevel: "debug"
+  config:
+    serverMode: "debug"
+
+# IPFS client env vars are not used when replicaCount=0 (backend runs locally).
+# For local dev, set in backend/.env.dev:
+#   IPFS_TENANT_BASE_URL=http://localhost:30481/v1/tenants/tenant_space
+#   IPFS_MFS_BASE_URL=http://localhost:30501
+# In-cluster, these are auto-wired from the ipfsDocumentManager and ipfs sub-charts.
 
 route:
   basePath: "/api"

@@ -20,5 +20,11 @@ dependencies:
 - name: mongodb
   repository: file://charts/mongodb
   version: 0.1.0
-digest: sha256:e4bcac554f5731581fdc79d84d32703d86de70c6f7c35588df5d89f8451712d1
-generated: "2026-05-05T14:17:26.6414069+02:00"
+- name: ipfs
+  repository: file://charts/ipfs
+  version: 0.1.0
+- name: ipfs-document-manager
+  repository: file://charts/ipfs-document-manager
+  version: 0.1.0
+digest: sha256:53b4bd4474059e298eea0f993f33f5b1a68770e18724b1c29a068af38f6de2cf
+generated: "2026-05-06T16:02:20.7193678+02:00"

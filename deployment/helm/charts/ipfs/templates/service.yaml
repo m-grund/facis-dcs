@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-ipfs
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  ports:
+    - name: gateway
+      port: {{ .Values.service.gatewayPort | default 8080 }}
+      targetPort: gateway
+      protocol: TCP
+      {{- if and (eq (.Values.service.type | default "ClusterIP") "NodePort") .Values.service.gatewayNodePort }}
+      nodePort: {{ .Values.service.gatewayNodePort }}
+      {{- end }}
+    - name: api
+      port: {{ .Values.service.apiPort | default 5001 }}
+      targetPort: api
+      protocol: TCP
+      {{- if and (eq (.Values.service.type | default "ClusterIP") "NodePort") .Values.service.apiNodePort }}
+      nodePort: {{ .Values.service.apiNodePort }}
+      {{- end }}
+    - name: swarm-tcp
+      port: {{ .Values.service.swarmPort | default 4001 }}
+      targetPort: swarm-tcp
+      protocol: TCP
+      {{- if and (eq (.Values.service.type | default "ClusterIP") "NodePort") .Values.service.swarmNodePort }}
+      nodePort: {{ .Values.service.swarmNodePort }}
+      {{- end }}
+  selector:
+    app.kubernetes.io/name: ipfs
+    app.kubernetes.io/instance: {{ .Release.Name }}

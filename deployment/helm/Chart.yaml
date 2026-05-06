@@ -37,3 +37,13 @@ dependencies:
     repository: "file://charts/mongodb"
     condition: mongodb.enabled
     alias: mongodb
+  - name: ipfs
+    version: "0.1.0"
+    repository: "file://charts/ipfs"
+    condition: ipfs.enabled
+    alias: ipfs
+  - name: ipfs-document-manager
+    version: "0.1.0"
+    repository: "file://charts/ipfs-document-manager"
+    condition: ipfsDocumentManager.enabled
+    alias: ipfsDocumentManager
