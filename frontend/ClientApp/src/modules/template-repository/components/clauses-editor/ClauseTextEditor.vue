@@ -127,10 +127,8 @@ function clearHighlight() {
  *  or if it's required and currently unused.
  */
 function onInsertPlaceholderFromPanel(conditionId: string, parameterName: string) {
-  const ruleUsedInText = usedConditionIds.value.has(conditionId)
-  const insertFromNotUsed = !ruleUsedInText
-  const insertFromUsedRequiredUnused = ruleUsedInText && isParamRequiredAndUnused(conditionId, parameterName)
-  if (insertFromNotUsed || insertFromUsedRequiredUnused) {
+  const paramNotUsedInText = !isParamUsedInText(conditionId, parameterName)
+  if (paramNotUsedInText) {
     insertPlaceholderFromPanel(conditionId, parameterName)
   }
 }
