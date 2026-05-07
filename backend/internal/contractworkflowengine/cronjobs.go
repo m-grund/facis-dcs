@@ -3,6 +3,7 @@ package contractworkflowengine
 import (
 	"context"
 	"digital-contracting-service/internal/contractworkflowengine/conf"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"fmt"
@@ -51,6 +52,12 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo db.ContractRepo
 				policy = &p
 			} else {
 				fmt.Errorf("unknown expiration policy for expired contract with DID %s\n", expiredContract.DID)
+				continue
+			}
+
+			err = repo.UpdateState(ctx, tx, expiredContract.DID, contractstate.Expired.String())
+			if err != nil {
+				fmt.Errorf("could not update expired contract with DID %s: %w", expiredContract.DID, err)
 				continue
 			}
 

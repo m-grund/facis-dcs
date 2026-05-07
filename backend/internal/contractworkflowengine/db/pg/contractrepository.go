@@ -107,6 +107,7 @@ func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx
     FROM contracts
     WHERE exp_date IS NOT NULL
     AND exp_date < NOW()
+    AND state NOT IN ('TERMINATED', 'REJECTED', 'EXPIRED')
 `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
