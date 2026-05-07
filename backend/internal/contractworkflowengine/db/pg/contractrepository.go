@@ -38,7 +38,7 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, exp_date, exp_policy, exp_notice_period
-        FROM contracts WHERE did = $1
+        FROM contracts_effective WHERE did = $1
     `
 	var ct db.Contract
 	err := tx.GetContext(ctx, &ct, query, did)
@@ -54,7 +54,7 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, exp_date, exp_policy, exp_notice_period
-        FROM contracts
+        FROM contracts_effective_metadata
     `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
@@ -67,7 +67,7 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx)
 func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, exp_date, exp_policy, exp_notice_period
-        FROM contracts
+        FROM contracts_effective_metadata
     `
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
@@ -88,7 +88,7 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
         SELECT did, state, updated_at, created_by, contract_version, exp_date, exp_policy, exp_notice_period
-        FROM contracts WHERE did = $1
+        FROM contracts_effective_process_data WHERE did = $1
     `
 	var processData db.ContractProcessData
 	err := tx.GetContext(ctx, &processData, query, did)

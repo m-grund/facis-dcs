@@ -34,7 +34,10 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo db.ContractRepo
 		if err != nil {
 			return fmt.Errorf("could not read expired contracts: %w", err)
 		}
-		log.Printf("%d contracts expried", len(expiredContracts))
+
+		if len(expiredContracts) > 0 {
+			log.Printf("%d contracts expired", len(expiredContracts))
+		}
 
 		for _, expiredContract := range expiredContracts {
 
@@ -47,7 +50,7 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo db.ContractRepo
 				}
 				policy = &p
 			} else {
-				fmt.Errorf("unknown expiration policy expired contract with DID %s\n", expiredContract.DID)
+				fmt.Errorf("unknown expiration policy for expired contract with DID %s\n", expiredContract.DID)
 				continue
 			}
 

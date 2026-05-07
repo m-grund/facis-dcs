@@ -1,32 +1,85 @@
 CREATE TYPE contract_state AS ENUM ('DRAFT', 'NEGOTIATION', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'TERMINATED', 'EXPIRED');
 CREATE TYPE contract_expiration_policy AS ENUM ('RENEWAL', 'TERMINATION', 'ARCHIVING');
 
+------------------------------------------------------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS contracts (
-    did             VARCHAR(255),
+CREATE OR REPLACE VIEW contracts_effective AS
+SELECT
+    did,
+    created_by,
+    created_at,
+    updated_at,
+    exp_date,
+    exp_policy,
+    exp_notice_period,
+    CASE
+        WHEN exp_date <= CURRENT_TIMESTAMP
+            AND state NOT IN ('TERMINATED', 'REJECTED', 'EXPIRED')
+            THEN 'EXPIRED'::contract_state
+        ELSE state
+        END AS state,
+    contract_version,
+    name,
+    description,
+    contract_data,
+    search_vector
+FROM contracts;
 
-    created_by      VARCHAR(255)   NOT NULL,
-    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+------------------------------------------------------------------------------------------------------------------------
 
-    exp_date TIMESTAMP,
-    exp_policy contract_expiration_policy,
-    exp_notice_period INT,
+CREATE OR REPLACE VIEW contracts_effective_metadata AS
+SELECT
+    did,
+    created_by,
+    created_at,
+    updated_at,
+    exp_date,
+    exp_policy,
+    exp_notice_period,
+    CASE
+        WHEN exp_date <= CURRENT_TIMESTAMP
+            AND state NOT IN ('TERMINATED', 'REJECTED', 'EXPIRED')
+            THEN 'EXPIRED'::contract_state
+        ELSE state
+        END AS state,
+    contract_version,
+    name,
+    description
+FROM contracts;
 
-    state           contract_state NOT NULL,
+------------------------------------------------------------------------------------------------------------------------
 
-    contract_version         INT,
-    name            VARCHAR(255),
-    description     TEXT,
-    contract_data   JSONB DEFAULT '{}'::jsonb,
-    search_vector   tsvector GENERATED ALWAYS AS (
-        to_tsvector('english', contract_data::text)
-        ) STORED,
+CREATE OR REPLACE VIEW contracts_effective_process_data AS
+SELECT
+    did,
+    created_by,
+    created_at,
+    updated_at,
+    exp_date,
+    exp_policy,
+    exp_notice_period,
+    CASE
+        WHEN exp_date <= CURRENT_TIMESTAMP
+            AND state NOT IN ('TERMINATED', 'REJECTED', 'EXPIRED')
+            THEN 'EXPIRED'::contract_state
+        ELSE state
+        END AS state,
+    contract_version
+FROM contracts;
 
-    CONSTRAINT pk_contracts PRIMARY KEY (did),
-    CONSTRAINT chk_did_not_empty    CHECK (did <> '')
-);
+------------------------------------------------------------------------------------------------------------------------
 
+CREATE OR REPLACE VIEW contracts_effective AS
+SELECT *,
+       CASE
+           WHEN exp_date <= CURRENT_TIMESTAMP
+               AND state NOT IN ('TERMINATED', 'REJECTED', 'EXPIRED')
+               THEN 'EXPIRED'::contract_state
+           ELSE state
+           END AS effective_state
+FROM contracts;
+
+------------------------------------------------------------------------------------------------------------------------
 
 CREATE INDEX idx_contract_contracts_search ON contracts
     USING GIN (search_vector);
