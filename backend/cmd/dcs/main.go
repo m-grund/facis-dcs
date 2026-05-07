@@ -122,9 +122,9 @@ func main() {
 	cweNRepo := cwerepo.PostgresNegotiationRepo{}
 	cweCTRepo := cwerepo.PostgresContractTemplateRepo{}
 	cweCronJob := contractworkflowengine2.CronJob{DB: db}
-	cweCronJob.Start()
+	cweCronJob.Start(ctx, db)
 
-	smCRepo := smrepo.PostgresContractRepo{Ctx: ctx}
+	smCRepo := smrepo.PostgresContractRepo{}
 
 	// Initialize IPFS client
 	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")

@@ -2,12 +2,14 @@ package contract
 
 import (
 	"context"
+	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -32,6 +34,9 @@ type MetadataItem struct {
 	UpdatedAt       time.Time
 	MetaData        datatype.JSON
 	CreatedBy       string
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
 }
 
 type ReviewTaskItem struct {
@@ -127,6 +132,15 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			return nil, fmt.Errorf("could not create contract state: %w", err)
 		}
 
+		var expPolicy *expirationpolicy.ExpirationPolicy
+		if data.ExpPolicy != nil {
+			policy, err := expirationpolicy.NewExpirationPolicy(*data.ExpPolicy)
+			if err != nil {
+				return nil, contractworkflowengine.MakeInternalError(err)
+			}
+			expPolicy = &policy
+		}
+
 		metadata := MetadataItem{
 			DID:             data.DID,
 			ContractVersion: data.ContractVersion,
@@ -136,6 +150,9 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			CreatedBy:       data.CreatedBy,
 			CreatedAt:       data.CreatedAt,
 			UpdatedAt:       data.UpdatedAt,
+			ExpDate:         data.ExpDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: data.ExpNoticePeriod,
 		}
 		contractItems = append(contractItems, metadata)
 

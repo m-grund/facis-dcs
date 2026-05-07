@@ -5,6 +5,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -20,7 +21,9 @@ type UpdateCmd struct {
 	ContractVersion *int
 	UpdatedAt       time.Time
 	UpdatedBy       string
-	ExpirationDate  *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
 	Name            *string
 	Description     *string
 	ContractData    *datatype.JSON
@@ -56,12 +59,20 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("invalid contract state")
 	}
 
+	var expPolicy *string
+	if cmd.ExpPolicy != nil {
+		s := cmd.ExpPolicy.String()
+		expPolicy = &s
+	}
+
 	newData := db.ContractUpdateData{
 		DID:             cmd.DID,
 		ContractVersion: cmd.ContractVersion,
 		Name:            cmd.Name,
 		Description:     cmd.Description,
-		ExpirationDate:  cmd.ExpirationDate,
+		ExpDate:         cmd.ExpDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: cmd.ExpNoticePeriod,
 		ContractData:    cmd.ContractData,
 	}
 	err = h.CRepo.Update(ctx, tx, newData)
@@ -79,8 +90,12 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewDescription:     cmd.Description,
 		OldContractData:    oldData.ContractData,
 		NewContractData:    cmd.ContractData,
-		OldExpirationDate:  cmd.ExpirationDate,
-		NewExpirationDate:  cmd.ExpirationDate,
+		OldExpDate:         cmd.ExpDate,
+		NewExpDate:         cmd.ExpDate,
+		OldExpPolicy:       cmd.ExpPolicy,
+		NewExpPolicy:       cmd.ExpPolicy,
+		OldExpNoticePeriod: cmd.ExpNoticePeriod,
+		NewExpNoticePeriod: cmd.ExpNoticePeriod,
 		UpdatedBy:          cmd.UpdatedBy,
 		OccurredAt:         time.Now().UTC(),
 	}

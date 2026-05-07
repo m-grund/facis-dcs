@@ -17,8 +17,9 @@ type PostgresContractRepo struct {
 }
 
 func (r *PostgresContractRepo) ExpireOutdatedContracts(ctx context.Context, tx *sqlx.Tx) (int64, error) {
-	//TODO implement me
-	panic("implement me")
+	fmt.Println("ToDo: ExpireOutdatedContracts")
+
+	return 0, nil
 }
 
 func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) (*time.Time, error) {
@@ -42,8 +43,8 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version, contract_data
-        FROM contracts_effective WHERE did = $1
+               created_by, created_at, updated_at, contract_version, contract_data, exp_date, exp_policy, exp_notice_period
+        FROM contracts WHERE did = $1
     `
 	var ct db.Contract
 	err := tx.GetContext(ctx, &ct, query, did)
@@ -58,8 +59,8 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
-        FROM contracts_effective
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, exp_date, exp_policy, exp_notice_period
+        FROM contracts
     `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
@@ -71,8 +72,8 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx)
 
 func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
-        FROM contracts_effective
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, exp_date, exp_policy, exp_notice_period
+        FROM contracts
     `
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
@@ -92,8 +93,8 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 
 func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
-        SELECT did, state, updated_at, created_by, contract_version
-        FROM contracts_effective WHERE did = $1
+        SELECT did, state, updated_at, created_by, contract_version, exp_date, exp_policy, exp_notice_period
+        FROM contracts WHERE did = $1
     `
 	var processData db.ContractProcessData
 	err := tx.GetContext(ctx, &processData, query, did)
@@ -108,7 +109,7 @@ func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx,
 
 func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
-        UPDATE contracts_effective SET state = $2
+        UPDATE contracts SET state = $2
         WHERE did = $1
     `
 	_, err := tx.ExecContext(ctx, statement, did, state)
@@ -170,7 +171,7 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 }
 
 func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
-	queryBase := `UPDATE contracts_effective SET `
+	queryBase := `UPDATE contracts SET `
 	var columns []string
 	var params []interface{}
 
@@ -193,6 +194,15 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	}
 	if data.ContractVersion != nil {
 		addParam("contract_version", data.ContractVersion)
+	}
+	if data.ExpDate != nil {
+		addParam("exp_date", data.ExpDate)
+	}
+	if data.ExpPolicy != nil {
+		addParam("exp_policy", data.ExpPolicy)
+	}
+	if data.ExpNoticePeriod != nil {
+		addParam("exp_notice_period", data.ExpNoticePeriod)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")

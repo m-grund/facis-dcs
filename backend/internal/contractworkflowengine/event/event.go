@@ -5,6 +5,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"time"
 )
 
@@ -31,19 +32,23 @@ func (e CreateEvent) GetDID() string {
 
 // UpdateEvent is emitted when contract data is updated.
 type UpdateEvent struct {
-	DID                string         `json:"did"`
-	UpdatedBy          string         `json:"updated_by"`
-	OldContractVersion *int           `json:"old_contract_version,omitempty"`
-	NewContractVersion *int           `json:"new_contract_version,omitempty"`
-	OldName            *string        `json:"old_name,omitempty"`
-	NewName            *string        `json:"new_name,omitempty"`
-	OldDescription     *string        `json:"old_description,omitempty"`
-	NewDescription     *string        `json:"new_description,omitempty"`
-	OldContractData    *datatype.JSON `json:"old_contract_data,omitempty"`
-	NewContractData    *datatype.JSON `json:"new_contract_data,omitempty"`
-	OccurredAt         time.Time      `json:"occurred_at"`
-	OldExpirationDate  *time.Time     `json:"old_expiration_date,omitempty"`
-	NewExpirationDate  *time.Time     `json:"new_expiration_date,omitempty"`
+	DID                string                             `json:"did"`
+	UpdatedBy          string                             `json:"updated_by"`
+	OldContractVersion *int                               `json:"old_contract_version,omitempty"`
+	NewContractVersion *int                               `json:"new_contract_version,omitempty"`
+	OldName            *string                            `json:"old_name,omitempty"`
+	NewName            *string                            `json:"new_name,omitempty"`
+	OldDescription     *string                            `json:"old_description,omitempty"`
+	NewDescription     *string                            `json:"new_description,omitempty"`
+	OldContractData    *datatype.JSON                     `json:"old_contract_data,omitempty"`
+	NewContractData    *datatype.JSON                     `json:"new_contract_data,omitempty"`
+	OccurredAt         time.Time                          `json:"occurred_at"`
+	OldExpDate         *time.Time                         `json:"old_exp_date,omitempty"`
+	NewExpDate         *time.Time                         `json:"new_exp_date,omitempty"`
+	OldExpPolicy       *expirationpolicy.ExpirationPolicy `json:"old_exp_policy,omitempty"`
+	NewExpPolicy       *expirationpolicy.ExpirationPolicy `json:"new_exp_policy,omitempty"`
+	OldExpNoticePeriod *int                               `json:"old_exp_notice_period,omitempty"`
+	NewExpNoticePeriod *int                               `json:"new_exp_notice_period,omitempty"`
 }
 
 // EventType implements the Event interface.

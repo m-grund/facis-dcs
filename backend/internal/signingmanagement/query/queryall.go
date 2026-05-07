@@ -50,7 +50,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	}
 	defer tx.Rollback()
 
-	contractsMetadata, err := h.CRepo.ReadAllMetaData(tx)
+	contractsMetadata, err := h.CRepo.ReadAllMetaData(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all contracts: %w", err)
 	}

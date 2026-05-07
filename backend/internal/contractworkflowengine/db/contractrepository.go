@@ -15,7 +15,9 @@ type Contract struct {
 	CreatedBy       string         `db:"created_by"`
 	CreatedAt       time.Time      `db:"created_at"`
 	UpdatedAt       time.Time      `db:"updated_at"`
-	ExpirationDate  *time.Time     `db:"expiration_date"`
+	ExpDate         *time.Time     `db:"exp_date"`
+	ExpPolicy       *string        `db:"exp_policy"`
+	ExpNoticePeriod *int           `db:"exp_notice_period"`
 	Name            *string        `db:"name"`
 	Description     *string        `db:"description"`
 	ContractData    *datatype.JSON `db:"contract_data"`
@@ -28,7 +30,9 @@ type ContractMetadata struct {
 	CreatedBy       string     `db:"created_by"`
 	CreatedAt       time.Time  `db:"created_at"`
 	UpdatedAt       time.Time  `db:"updated_at"`
-	ExpirationDate  *time.Time `db:"expiration_date"`
+	ExpDate         *time.Time `db:"exp_date"`
+	ExpPolicy       *string    `db:"exp_policy"`
+	ExpNoticePeriod *int       `db:"exp_notice_period"`
 	Name            *string    `db:"name"`
 	Description     *string    `db:"description"`
 }
@@ -39,7 +43,9 @@ type ContractProcessData struct {
 	State           string     `db:"state"`
 	CreatedBy       string     `db:"created_by"`
 	UpdatedAt       time.Time  `db:"updated_at"`
-	ExpirationDate  *time.Time `db:"expiration_date"`
+	ExpDate         *time.Time `db:"exp_date"`
+	ExpPolicy       *string    `db:"exp_policy"`
+	ExpNoticePeriod *int       `db:"exp_notice_period"`
 }
 
 type ContractUpdateData struct {
@@ -49,7 +55,9 @@ type ContractUpdateData struct {
 	Name            *string        `db:"name"`
 	Description     *string        `db:"description"`
 	ContractData    *datatype.JSON `db:"contract_data"`
-	ExpirationDate  *time.Time     `db:"expiration_date"`
+	ExpDate         *time.Time     `db:"exp_date"`
+	ExpPolicy       *string        `db:"exp_policy"`
+	ExpNoticePeriod *int           `db:"exp_notice_period"`
 }
 
 type SearchValues struct {

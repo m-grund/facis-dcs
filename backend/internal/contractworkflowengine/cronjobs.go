@@ -2,6 +2,7 @@ package contractworkflowengine
 
 import (
 	"context"
+	"digital-contracting-service/internal/contractworkflowengine/conf"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"fmt"
 	"log"
@@ -12,12 +13,11 @@ import (
 
 type CronJob struct {
 	DB    *sqlx.DB
-	Ctx   context.Context
 	CRepo db.ContractRepo
 }
 
-func (j CronJob) Start() {
-	// go startExpiryScheduler(j.DB, j.Ctx, j.CRepo, conf.ExpirationCronJobTimeOut())
+func (j CronJob) Start(ctx context.Context, db *sqlx.DB) {
+	go startExpiryScheduler(ctx, db, j.CRepo, conf.ExpirationCronJobTimeOut())
 }
 
 func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo db.ContractRepo, interval time.Duration) {
@@ -33,7 +33,6 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo db.ContractRepo
 		if err != nil {
 			return fmt.Errorf("could not set contract state to EXPIRED: %w", err)
 		}
-
 		log.Printf("%d contracts expried", affected)
 
 		return tx.Commit()
