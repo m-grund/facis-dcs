@@ -49,6 +49,8 @@ const sortedItems = computed(() => {
   return displayedItems.value.slice().sort((taskA, taskB) => compareValues(taskA, taskB, sortBy.value, sortOrder.value))
 })
 
+const hasTasks = computed(() => filteredItems.value.length > 0)
+
 const filteredItems = computed(() => {
   if (stateFilterStore.hasFilters) {
     return sortedItems.value.filter((item) => stateFilterStore.hasFilter(item.state))
@@ -105,13 +107,13 @@ onUnmounted(() => stateFilterStore.reset())
 <template>
   <ul class="list">
     <li class="tracking-wide w-full px-4 flex justify-end flex-col sm:flex-row">
-      <ListStateFilter label="Review Task" :filters="reviewTaskStates" store-type="reviewTasks" />
       <TaskListSearch class="flex-1" :items="items" @search-result="applySearchResult" />
-      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" />
+      <ListStateFilter label="Review Task" :filters="reviewTaskStates" store-type="reviewTasks" :disabled="!hasTasks" />
+      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasTasks" />
     </li>
     <template v-if="filteredItems.length > 0">
       <li v-for="item in filteredItems" :key="item.did" class="list-row">
-        <div class="list-col-grow card bg-base-200 card-border hover:bg-base-300">
+        <div class="list-col-grow card bg-base-100 card-border hover:bg-base-300 border-base-content/10">
           <div class="card-body">
             <h2 class="card-title flex-wrap justify-between">
               <div v-if="item.type === 'template'">Review Task for Template: {{ getTemplateName(item) }}</div>
@@ -137,7 +139,7 @@ onUnmounted(() => stateFilterStore.reset())
                     name: resolveViewRouteName(item),
                     params: { did: item.did },
                   }"
-                  class="btn btn-sm btn-primary rounded-box"
+                  class="btn btn-sm btn-primary"
                 >
                   View
                 </RouterLink>
@@ -147,7 +149,7 @@ onUnmounted(() => stateFilterStore.reset())
                     name: ROUTES.TEMPLATES.EDIT,
                     params: { did: item.did },
                   }"
-                  class="btn btn-sm btn-secondary rounded-box gap-2"
+                  class="btn btn-sm btn-primary gap-2"
                 >
                   Edit
                 </RouterLink>

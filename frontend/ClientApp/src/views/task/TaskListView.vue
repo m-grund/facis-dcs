@@ -70,12 +70,12 @@ watch(
 </script>
 
 <template>
-  <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight p-4 mb-4">
+  <h2 class="bg-base-100 border-b border-base-content/10 text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight p-4 mb-4">
     {{ $route.meta.name }}
   </h2>
 
-  <div v-if="loading">Loading Tasks...</div>
-  <div v-else-if="error">{{ error }}</div>
+  <div v-if="loading" class="pl-4">Loading Tasks...</div>
+  <div v-else-if="error" class="pl-4">{{ error }}</div>
   <template v-else>
     <template v-if="$route.name === ROUTES.TASKS.REVIEWS">
       <ReviewTaskList :items="reviewTasks" />

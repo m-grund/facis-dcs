@@ -25,7 +25,7 @@
           <div v-if="initiatorLoading || loading" class="py-4">Loading...</div>
           <div v-else-if="initiatorError || error" class="alert flex items-start justify-between gap-4">
             <div class="text-sm">Unable to load parties information right now.</div>
-            <button type="button" class="btn btn-sm rounded-box self-start" @click="retryLoadParties">Retry</button>
+            <button type="button" class="btn btn-sm self-start" @click="retryLoadParties">Retry</button>
           </div>
           <NegotiationPartiesTabView v-else :initiator="initiator" :participants="participants"
             :selected-responder-indexes="selectedResponderIndexes" :selected-responders="selectedResponders"
@@ -44,7 +44,7 @@
 
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
         <button class="btn btn-primary flex-1" disabled>Create</button>
       </div>
     </div>

@@ -5,12 +5,26 @@ import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { TemplateState, type ContractTemplateState } from '@/types/contract-template-state'
-import { computed, useTemplateRef } from 'vue'
+import { computed, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({
   inheritAttrs: false,
 })
+
+const attrs = useAttrs()
+
+const filteredClass = computed(() =>
+  String(attrs.class || '')
+    .split(' ')
+    .filter(
+      (cls) =>
+        !['btn-primary', 'btn-secondary', 'btn-accent', 'btn-success', 'btn-warning', 'btn-error', 'btn-info'].includes(
+          cls,
+        ),
+    )
+    .join(' '),
+)
 
 const props = defineProps<{
   item: PartialContractTemplate
@@ -59,18 +73,10 @@ const register = async () => {
     console.error('Registration failed:', err)
   }
 }
-
-const audit = async () => {
-  try {
-    await contractTemplateService.audit({ did: props.item.did, updated_at: props.item.updated_at })
-  } catch (err) {
-    console.error('Audit failed:', err)
-  }
-}
 </script>
 
 <template>
   <button v-if="canRegister" :class="$attrs.class" @click="register">Register</button>
-  <button v-if="canArchive" :class="[$attrs.class, 'hover:btn-error']" @click="archive">Archive</button>
+  <button v-if="canArchive" :class="[filteredClass, 'btn-error']" @click="archive">Archive</button>
   <ConfirmationModal ref="confirmation-modal" />
 </template>

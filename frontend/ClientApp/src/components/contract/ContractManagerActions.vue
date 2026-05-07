@@ -5,12 +5,26 @@ import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { ContractState } from '@/types/contract-state'
-import { computed, useTemplateRef } from 'vue'
+import { computed, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({
   inheritAttrs: false,
 })
+
+const attrs = useAttrs()
+
+const filteredClass = computed(() =>
+  String(attrs.class || '')
+    .split(' ')
+    .filter(
+      (cls) =>
+        !['btn-primary', 'btn-secondary', 'btn-accent', 'btn-success', 'btn-warning', 'btn-error', 'btn-info'].includes(
+          cls,
+        ),
+    )
+    .join(' '),
+)
 
 const props = defineProps<{
   contract: Contract
@@ -57,6 +71,6 @@ const terminate = async () => {
 </script>
 
 <template>
-  <button v-if="canTerminate" :class="[$attrs.class, 'hover:btn-error']" @click="terminate">Terminate</button>
+  <button v-if="canTerminate" :class="[filteredClass, 'btn-error']" @click="terminate">Terminate</button>
   <ConfirmationModal ref="confirmation-modal" />
 </template>
