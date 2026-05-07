@@ -16,12 +16,6 @@ import (
 type PostgresContractRepo struct {
 }
 
-func (r *PostgresContractRepo) ExpireOutdatedContracts(ctx context.Context, tx *sqlx.Tx) (int64, error) {
-	fmt.Println("ToDo: ExpireOutdatedContracts")
-
-	return 0, nil
-}
-
 func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) (*time.Time, error) {
 	statement := `
         INSERT INTO contracts (
@@ -86,7 +80,7 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 	var cts []db.ContractMetadata
 	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
-		return []db.ContractMetadata{}, err
+		return nil, err
 	}
 	return cts, nil
 }
@@ -105,6 +99,22 @@ func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx,
 		return nil, err
 	}
 	return &processData, nil
+}
+
+func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	query := `
+    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, exp_date, exp_policy, exp_notice_period
+    FROM contracts
+    WHERE exp_date IS NOT NULL
+    AND exp_date < NOW()
+`
+	var cts []db.ContractMetadata
+	err := tx.SelectContext(ctx, &cts, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return cts, nil
 }
 
 func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {

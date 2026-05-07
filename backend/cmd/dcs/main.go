@@ -121,7 +121,7 @@ func main() {
 	cweNTRepo := cwerepo.PostgresNegotiationTaskRepo{}
 	cweNRepo := cwerepo.PostgresNegotiationRepo{}
 	cweCTRepo := cwerepo.PostgresContractTemplateRepo{}
-	cweCronJob := contractworkflowengine2.CronJob{DB: db}
+	cweCronJob := contractworkflowengine2.CronJob{DB: db, CRepo: &cweRepo}
 	cweCronJob.Start(ctx, db)
 
 	smCRepo := smrepo.PostgresContractRepo{}

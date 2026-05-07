@@ -3,6 +3,7 @@ package contractworkflowengine
 import (
 	"context"
 	"digital-contracting-service/internal/contractworkflowengine/conf"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"fmt"
 	"log"
@@ -29,11 +30,37 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo db.ContractRepo
 		}
 		defer tx.Rollback()
 
-		affected, err := repo.ExpireOutdatedContracts(ctx, nil)
+		expiredContracts, err := repo.ReadExpiredContacts(ctx, tx)
 		if err != nil {
-			return fmt.Errorf("could not set contract state to EXPIRED: %w", err)
+			return fmt.Errorf("could not read expired contracts: %w", err)
 		}
-		log.Printf("%d contracts expried", affected)
+		log.Printf("%d contracts expried", len(expiredContracts))
+
+		for _, expiredContract := range expiredContracts {
+
+			var policy *expirationpolicy.ExpirationPolicy
+			if expiredContract.ExpPolicy != nil {
+				p, err := expirationpolicy.NewExpirationPolicy(*expiredContract.ExpPolicy)
+				if err != nil {
+					fmt.Errorf("could not create expiration policy: %w", err)
+					continue
+				}
+				policy = &p
+			} else {
+				fmt.Errorf("unknown expiration policy expired contract with DID %s\n", expiredContract.DID)
+				continue
+			}
+
+			switch *policy {
+			case expirationpolicy.Renewal:
+				fmt.Printf("ToDo: call renewal logic for expired contract with DID %s\n", expiredContract.DID)
+			case expirationpolicy.Archiving:
+				fmt.Printf("ToDo: call archiving logic for expired contract with DID %s\n", expiredContract.DID)
+			case expirationpolicy.Termination:
+				fmt.Printf("ToDo: call termination logic for expired contract with DID %s\n", expiredContract.DID)
+			}
+
+		}
 
 		return tx.Commit()
 	}
