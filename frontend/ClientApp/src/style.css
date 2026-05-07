@@ -64,7 +64,6 @@
 
 @plugin "daisyui" {
   themes:
-    nord,
     dark --prefersdark,
     facis --default;
   root: true;
