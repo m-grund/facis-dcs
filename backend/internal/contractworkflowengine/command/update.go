@@ -59,6 +59,13 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("invalid contract state")
 	}
 
+	if cmd.ExpDate != nil {
+		tomorrow := time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
+		if cmd.ExpDate.Before(tomorrow) {
+			return fmt.Errorf("expiration date must be at least one day in the future")
+		}
+	}
+
 	var expPolicy *string
 	if cmd.ExpPolicy != nil {
 		s := cmd.ExpPolicy.String()

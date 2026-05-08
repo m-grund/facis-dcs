@@ -2,7 +2,7 @@ import type { ContractActionFlag } from '@/types/contract-action-flag'
 import type { ContractState } from '@/types/contract-state'
 import type { NegotiationActionFlag } from '@/types/negotiation-action-flag'
 import type { ContractData } from '../contract-data'
-import type { ContractChangeRequest } from '../contract/contract'
+import type { ContractChangeRequest, ExpirationPolicy } from '../contract/contract'
 
 export interface ContractCreateRequest {
   did: string
@@ -11,7 +11,9 @@ export interface ContractCreateRequest {
 export interface ContractUpdateRequest {
   did: string
   updated_at: string
-  expiration_date?: string
+  exp_date?: string
+  exp_notice_period?: number,
+  exp_policy?: ExpirationPolicy
   contract_version?: number
   name?: string
   description?: string
