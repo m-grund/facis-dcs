@@ -27,7 +27,7 @@ Feature: External System Contract Execution
     And the proof includes status confirmations
 
   Scenario: Contract Manager views execution proof
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Executed" status
     When I view execution proof for contract "Service Agreement"
     Then I see the cryptographic proof with hash references
@@ -44,7 +44,7 @@ Feature: External System Contract Execution
   Scenario: Execution proof stored for audit
     Given contract "Service Agreement" is in "Executed" status
     And cryptographic proof of execution has been generated
-    When I am authenticated with role "Auditor"
+    When I am authenticated with roles: "Auditor"
     And I access execution records for contract "Service Agreement"
     Then I see the proof of execution
     And I see the target system transaction ID

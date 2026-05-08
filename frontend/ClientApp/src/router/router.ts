@@ -17,11 +17,11 @@ import ViewContractView from '@/views/contract/ViewContractView.vue'
 import TaskListView from '@/views/task/TaskListView.vue'
 import TemplateCatalogueAdminView from '@/views/template-repository/TemplateCatalogueAdminView.vue'
 import {
-  ChatBubbleLeftRightIcon,
-  DocumentCheckIcon,
-  DocumentDuplicateIcon,
-  DocumentMagnifyingGlassIcon,
+  ArrowsRightLeftIcon,
+  CheckCircleIcon,
   DocumentTextIcon,
+  EyeIcon,
+  SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
@@ -71,7 +71,7 @@ const routes: RouteRecordRaw[] = [
     component: ContractTemplateListView,
     meta: {
       name: 'Templates',
-      icon: DocumentTextIcon,
+      icon: SquaresPlusIcon,
       requiresAuth: true,
       title: 'DCS - Templates',
       order: 1,
@@ -143,7 +143,7 @@ const routes: RouteRecordRaw[] = [
     component: TaskListView,
     meta: {
       name: 'Review Tasks',
-      icon: DocumentMagnifyingGlassIcon,
+      icon: EyeIcon,
       requiresAuth: true,
       title: 'DCS - Review Tasks',
       order: 3.1,
@@ -156,7 +156,7 @@ const routes: RouteRecordRaw[] = [
     component: TaskListView,
     meta: {
       name: 'Approval Tasks',
-      icon: DocumentCheckIcon,
+      icon: CheckCircleIcon,
       requiresAuth: true,
       title: 'DCS - Approval Tasks',
       order: 3.2,
@@ -169,7 +169,7 @@ const routes: RouteRecordRaw[] = [
     component: TaskListView,
     meta: {
       name: 'Negotiation Tasks',
-      icon: ChatBubbleLeftRightIcon,
+      icon: ArrowsRightLeftIcon,
       requiresAuth: true,
       title: 'DCS - Negotiation Tasks',
       order: 3.3,
@@ -195,7 +195,7 @@ const routes: RouteRecordRaw[] = [
     component: ContractListView,
     meta: {
       name: 'Contracts',
-      icon: DocumentDuplicateIcon,
+      icon: DocumentTextIcon,
       requiresAuth: true,
       title: 'DCS - Contracts',
       order: 2,
@@ -272,7 +272,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Approve Contract',
       roles: ['CONTRACT_APPROVER'],
-    }
+    },
   },
   {
     path: '/auth/success',

@@ -3,14 +3,14 @@
     <input :id="pageSidebarId" type="checkbox" class="drawer-toggle" />
     <div :class="[drawerClasses.header, 'flex flex-col h-screen overflow-hidden bg-base-100']">
       <!-- Navbar -->
-      <header class="navbar w-full bg-base-200 border-b border-base-content/10 sticky top-0 z-30">
+      <header class="navbar w-full bg-base-100 border-b border-base-content/10 sticky top-0 z-30">
         <slot name="navbar">
           <PageNavBar />
         </slot>
       </header>
 
       <!-- Main Content -->
-      <main class="grow overflow-y-auto" ref="scroll-container">
+      <main class="grow overflow-y-auto bg-base-200" ref="scroll-container">
         <slot>
           <RouterView />
         </slot>

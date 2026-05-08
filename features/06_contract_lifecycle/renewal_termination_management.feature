@@ -6,7 +6,7 @@ Feature: Contract Renewal and Termination Management
   and VC revocation.
 
   Scenario: Renew contract with retained metadata and signatures
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is approaching expiration
     When I renew contract "Service Agreement"
     Then a new contract instance is created
@@ -15,7 +15,7 @@ Feature: Contract Renewal and Termination Management
     And the new instance has reference links to the original contract
 
   Scenario: Renewal workflow with template reuse
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is eligible for renewal
     When I initiate the renewal workflow for contract "Service Agreement"
     Then the original template is reused
@@ -23,7 +23,7 @@ Feature: Contract Renewal and Termination Management
     And involved parties are notified about the renewal deadline
 
   Scenario: Monitor contract expiration timelines
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     When I view the expiration management interface
     Then I see contracts ordered by expiration date
     And I see renewal status for each contract
@@ -58,7 +58,7 @@ Feature: Contract Renewal and Termination Management
     And the contract cannot be used for new transactions
 
   Scenario: Create extension contract linked to original
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is archived
     When I create an extension contract for "Service Agreement"
     Then the extension is linked to the archived original
@@ -66,14 +66,14 @@ Feature: Contract Renewal and Termination Management
     And the extension retains references to the original signatures
 
   Scenario: Termination triggers VC revocation
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has associated metadata VCs
     When I terminate contract "Service Agreement"
     Then the associated metadata VCs are revoked
     And the revocation is logged
 
   Scenario: Unauthorized role cannot terminate contract
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is in "Active" status
     When I attempt to terminate contract "Service Agreement"
     Then the request is denied with an authorization error

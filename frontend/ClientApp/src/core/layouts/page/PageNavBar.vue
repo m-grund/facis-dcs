@@ -20,6 +20,15 @@
   </div>
 
   <AuthButton class="flex-none" />
+  <div class="flex items-center gap-3 px-2">
+    <div class="avatar">
+      <div class="w-10 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+        <img
+          src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80"
+          alt="Profile" />
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">

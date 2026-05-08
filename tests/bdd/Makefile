@@ -196,3 +196,16 @@ run_bdd_kind_ci: build_dcs_image run_bdd_kind_dev
 
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
+
+
+# Nur Deployment hochfahren (ohne Tests)
+kind_up: build_dcs_image kind_deploy
+
+# Nur Tests ausführen gegen ein bereits laufendes Deployment
+run_bdd_kind_once: setup_dev ensure_k8s_tools
+	@$(MAKE) run_bdd_helm_dev \
+		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
+		HELM_RELEASE="$(HELM_RELEASE)"
+
+# Deployment wieder runterfahren + Cluster löschen
+kind_down: kind_uninstall kind_delete

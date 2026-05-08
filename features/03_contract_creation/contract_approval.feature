@@ -7,7 +7,7 @@ Feature: Contract Approval
 
   @skip
   Scenario: Initiate approval process for finalized contract
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Under Review" status
     When I initiate the approval process for contract "Service Agreement"
     Then the contract is routed to required approvers
@@ -15,7 +15,7 @@ Feature: Contract Approval
 
   @skip
   Scenario: Approve contract via approval interface
-    Given I am authenticated with role "Contract Approver"
+    Given I am authenticated with roles: "Contract Approver"
     And contract "Service Agreement" requires my approval
     When I access the approval interface for contract "Service Agreement"
     And I approve contract "Service Agreement"
@@ -24,7 +24,7 @@ Feature: Contract Approval
     And the approval status is updated
 
   Scenario: Reject contract with comments
-    Given I am authenticated with role "Contract Approver"
+    Given I am authenticated with roles: "Contract Approver"
     And contract "Service Agreement" requires my approval
     When I reject contract "Service Agreement" with reason "Missing compliance clause"
     Then the rejection is logged with comments and timestamp
@@ -43,7 +43,7 @@ Feature: Contract Approval
 
   @skip
   Scenario: Contract transitions to signing phase upon approval
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has all required approvals
     When the approval process completes
     Then the contract is marked as "Approved"
@@ -51,7 +51,7 @@ Feature: Contract Approval
 
   @skip
   Scenario: Approval interface supports highlighting and comments
-    Given I am authenticated with role "Contract Approver"
+    Given I am authenticated with roles: "Contract Approver"
     And contract "Service Agreement" requires my approval
     When I access the approval interface for contract "Service Agreement"
     Then I can highlight sections for attention
@@ -60,7 +60,7 @@ Feature: Contract Approval
 
   @skip
   Scenario: Automated compliance check during approval
-    Given I am authenticated with role "Contract Approver"
+    Given I am authenticated with roles: "Contract Approver"
     And contract "Service Agreement" is pending approval
     When automated compliance checks are performed
     Then the system validates against regulatory frameworks
@@ -77,7 +77,7 @@ Feature: Contract Approval
 
   @skip
   Scenario: Track approval routing status
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in approval workflow
     When I view approval status for contract "Service Agreement"
     Then I see pending approvals
@@ -85,7 +85,7 @@ Feature: Contract Approval
     And I see the overall approval progress
 
   Scenario: Unauthorized role cannot approve contracts
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is pending approval
     When I attempt to approve contract "Service Agreement"
     Then the request is denied with an authorization error

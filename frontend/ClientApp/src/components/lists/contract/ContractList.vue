@@ -37,6 +37,8 @@ const sortedItems = computed(() => {
     .sort((contractA, contractB) => compareValues(contractA, contractB, sortBy.value, sortOrder.value))
 })
 
+const hasContracts = computed(() => filteredItems.value.length > 0)
+
 const filteredItems = computed(() => {
   if (stateFilterStore.hasFilters) {
     return sortedItems.value.filter((item) => stateFilterStore.hasFilter(item.state))
@@ -54,14 +56,9 @@ onUnmounted(() => stateFilterStore.reset())
 <template>
   <ul class="list">
     <li class="tracking-wide px-4 flex justify-between flex-col sm:flex-row">
-      <ListStateFilter label="Contract" :filters="contractStates" store-type="contracts" />
       <ContractListSearch :items="items" class="flex-1" @search-result="applySearchResult" />
-      <ListSort
-        :class="{ 'btn-disabled': sortedItems.length === 0 }"
-        :sorter="sorter"
-        v-model:sort-by="sortBy"
-        v-model:sort-order="sortOrder"
-      />
+      <ListStateFilter label="Contract" :filters="contractStates" store-type="contracts" :disabled="!hasContracts" />
+      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasContracts" />
     </li>
     <template v-if="filteredItems.length > 0">
       <ContractListItem v-for="item in filteredItems" :key="`${item.did}|${item.contract_version}`" :item="item" />

@@ -6,14 +6,14 @@ Feature: Contract Performance Monitoring
   milestones, and compliance alerts.
 
   Scenario: View contract lifecycle dashboard
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     When I open the contract lifecycle dashboard
     Then I see contracts across all lifecycle states
     And I see filtering options for contract search
     And the dashboard displays live updates
 
   Scenario: View real-time contract status
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Active" status
     When I view contract "Service Agreement" on the dashboard
     Then I see the current lifecycle stage
@@ -21,7 +21,7 @@ Feature: Contract Performance Monitoring
     And I see the action history
 
   Scenario: Track contract KPIs and milestones
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has defined KPIs
     When I view performance metrics for contract "Service Agreement"
     Then I see delivery timeline status
@@ -43,32 +43,32 @@ Feature: Contract Performance Monitoring
     And the alert is logged with timestamp
 
   Scenario: Monitor SLA compliance
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has SLA obligations
     When I view SLA compliance for contract "Service Agreement"
     Then I see SLA violation flags if any
     And compliance rules are displayed
 
   Scenario: Configure alert notifications
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Active" status
     When I configure alert notifications for contract "Service Agreement"
     Then I can set notification channels as UI, email, or API
     And the notification preferences are saved
 
   Scenario: Contract Observer views dashboard with read-only access
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     When I open the contract lifecycle dashboard
     Then I see contracts across all lifecycle states
     And I cannot modify contract data
 
   Scenario: Dashboard supports bulk actions
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And multiple contracts are approaching renewal
     When I select multiple contracts on the dashboard
     Then I can perform bulk actions on selected contracts
 
   Scenario: Unauthorized role cannot access lifecycle dashboard
-    Given I am authenticated with role "Template Creator"
+    Given I am authenticated with roles: "Template Creator"
     When I attempt to open the contract lifecycle dashboard
     Then the request is denied with an authorization error

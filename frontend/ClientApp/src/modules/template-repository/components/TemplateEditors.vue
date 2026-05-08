@@ -25,7 +25,7 @@
             <div class="card-body gap-5">
               <h2 class="card-title text-sm justify-between">
                 <div class="flex gap-2">
-                  <span class="badge badge-sm badge-primary">01</span> Template Details
+                  <span class="badge badge-sm badge-primary w-8">0{{ currentTabNumber }}</span> Template Details
                 </div>
                 <div v-if="state" class="badge badge-sm badge-secondary">{{ state }}</div>
               </h2>
@@ -39,7 +39,7 @@
           <div class="card bg-base-100 border border-base-300 shadow-sm">
             <div class="card-body gap-5">
               <h2 class="card-title text-sm">
-                <span class="badge badge-secondary">02</span> Semantic Rules
+                <span class="badge badge-sm badge-primary w-8">0{{ currentTabNumber }}</span> Semantic Rules
               </h2>
               <SemanticRulesEditor />
             </div>
@@ -52,7 +52,7 @@
           <div class="card bg-base-100 border border-base-300 shadow-sm">
             <div class="card-body gap-5">
               <h2 class="card-title text-sm">
-                <span class="badge badge-primary">03</span> Clauses
+                <span class="badge badge-sm badge-primary w-8">0{{ currentTabNumber }}</span> Clauses
               </h2>
               <ClausesEditor />
             </div>
@@ -63,8 +63,10 @@
         <div v-show="activeTab === 'builder'">
           <div class="card bg-base-100 border border-base-300 shadow-sm">
             <div class="card-body">
-              <div class="flex items-center justify-between mb-2">
-                <h2 class="card-title text-sm">Builder</h2>
+              <div class="flex items-start justify-between mb-2">
+                <h2 class="card-title text-sm">
+                  <span class="badge badge-sm badge-primary w-8">0{{ currentTabNumber }}</span> Builder
+                </h2>
                 <button type="button" class="btn btn-sm btn-secondary" @click="togglePreviewDialog">
                   Preview
                 </button>
@@ -80,7 +82,9 @@
         <div v-show="activeTab === 'meta'">
           <div class="card bg-base-100 border border-base-300 shadow-sm">
             <div class="card-body">
-              <h2 class="card-title text-sm">Meta Data</h2>
+              <h2 class="card-title text-sm">
+                <span class="badge badge-sm badge-primary w-8">0{{ currentTabNumber }}</span> Meta Data
+              </h2>
               <MetaDataEditor />
             </div>
           </div>
@@ -90,7 +94,9 @@
           <div v-show="activeTab === 'audit'">
             <div class="card bg-base-100 border border-base-300 shadow-sm">
               <div class="card-body">
-                <h2 class="card-title text-sm">Audit History</h2>
+                <h2 class="card-title text-sm">
+                  <span class="badge badge-sm badge-primary w-8">0{{ currentTabNumber }}</span> Audit History
+                </h2>
                 <AuditView />
               </div>
             </div>
@@ -133,6 +139,7 @@ const { activeTab } = storeToRefs(templateEditorUiStore)
 const { state, templateType } = storeToRefs(draftStore)
 const { setActiveTab, togglePreviewDialog } = templateEditorUiStore
 const tabs = computed(() => templateEditorUiStore.availableTabs(templateType.value))
+const currentTabNumber = computed(() => 1 + tabs.value.map(tab => tab.id).indexOf(activeTab.value))
 
 const isManager = computed(() => authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
 
