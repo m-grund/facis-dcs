@@ -23,7 +23,7 @@
             <p class="text-sm text-base-content/70 mb-2">Unused Clauses:</p>
             <div class="flex flex-col gap-2 max-h-64 overflow-y-auto">
               <button v-for="clause in unusedClauses" :key="clause.blockId" type="button"
-                class="text-left min-h-[44px] flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
+                class="text-left min-h-11 flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
                 @click="handleAddClause(clause.blockId)">
                 <span class="text-sm font-medium text-base-content">{{ clause.title || 'Untitled clause' }}</span>
                 <p class="text-xs text-base-content/70 mt-0.5 leading-relaxed line-clamp-2">
@@ -35,7 +35,7 @@
         </template>
 
         <div class="flex justify-end pt-2">
-          <button type="button" class="btn btn-ghost btn-sm" @click="handleCancel">Cancel</button>
+          <button type="button" class="btn btn-outline btn-sm" @click="handleCancel">Cancel</button>
         </div>
       </div>
     </div>

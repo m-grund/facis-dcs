@@ -83,7 +83,7 @@
     </div>
 
     <div class="flex justify-between items-center">
-      <button v-if="isEditMode" type="button" class="btn btn-ghost btn-xs" @click="$emit('cancel')">Cancel</button>
+      <button v-if="isEditMode" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">Cancel</button>
       <span v-else />
       <button type="button" class="btn btn-secondary btn-sm" :disabled="!canSubmitRule" @click="submitRule">
         {{ submitLabel }}

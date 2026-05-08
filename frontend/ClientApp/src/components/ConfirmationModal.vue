@@ -60,7 +60,7 @@ defineExpose({ reveal: reveal as (data: ModalData) => Promise<ConfirmData> })
     <div class="modal-box">
       <h3 class="text-lg font-bold">Confirmation</h3>
       <p class="text-md py-4">{{ modalData.message }}</p>
-      <div v-if="modalData.editor" class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
+      <div v-if="modalData.editor" class="max-w-4xl mx-auto py-3 flex flex-col md:flex-row gap-3">
         <textarea
           v-model="inputText"
           class="textarea textarea-ghost textarea-sm w-full mt-0.5 text-sm min-h-10 resize-y border border-base-300/50 rounded-lg"
@@ -70,13 +70,13 @@ defineExpose({ reveal: reveal as (data: ModalData) => Promise<ConfirmData> })
       </div>
       <div class="modal-action flex-col" :class="{ 'flex-row-reverse justify-start': hasEditor }">
         <button
-          class="btn btn-soft btn-sm btn-primary"
+          class="btn btn-primary btn-sm"
           :class="{ 'btn-disabled': inputRequired }"
           @click="handleConfirm"
         >
           {{ hasEditor ? 'Submit' : 'Confirm' }}
         </button>
-        <button class="btn btn-soft btn-sm btn-error" @click="cancel">Cancel</button>
+        <button class="btn btn-outline btn-sm" @click="cancel">Cancel</button>
       </div>
     </div>
     <div v-if="!hasEditor" class="modal-backdrop" @click="cancel"></div>

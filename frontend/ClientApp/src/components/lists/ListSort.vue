@@ -4,6 +4,7 @@ import { useTemplateRef } from 'vue'
 
 const props = defineProps<{
   sorter: Map<string, string>
+  disabled?: boolean
 }>()
 
 const sortPopover = useTemplateRef('sortPopover')
@@ -20,7 +21,13 @@ function sortItemsBy(key: string) {
 </script>
 
 <template>
-  <button id="list-btn-sort" class="btn btn-neutral m-2" :class="$attrs.class" popovertarget="list-popover-sort">
+  <button
+    id="list-btn-sort"
+    class="btn btn-primary m-2"
+    :class="[$attrs.class, !!disabled ? 'btn-disabled' : '']"
+    popovertarget="list-popover-sort"
+    :disabled="!!disabled"
+  >
     <span>Sort by</span> <ChevronUpDownIcon class="w-6 h-6" />
   </button>
   <ul

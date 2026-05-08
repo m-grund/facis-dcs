@@ -37,7 +37,7 @@ const resolveViewRouteName = computed(() => {
 
 <template>
   <li class="list-row min-w-0 w-full">
-    <div class="list-col-grow card bg-base-200 card-border hover:bg-base-300 min-w-0 w-full">
+    <div class="list-col-grow card bg-base-100 card-border hover:bg-base-300 min-w-0 w-full border-base-content/10">
       <div class="card-body min-w-0">
         <h2 class="card-title flex-wrap sm:justify-between">
           <div class="flex gap-8 sm:h-full">
@@ -56,7 +56,7 @@ const resolveViewRouteName = computed(() => {
           <div class="card-actions justify-end">
             <RouterLink
               :to="{ name: resolveViewRouteName, params: { did: item.did } }"
-              class="btn btn-sm btn-primary rounded-box"
+              class="btn btn-sm btn-primary "
             >
               View
             </RouterLink>
@@ -69,7 +69,7 @@ const resolveViewRouteName = computed(() => {
                     }
                   : '#'
               "
-              class="btn btn-sm btn-primary rounded-box gap-2"
+              class="btn btn-sm btn-primary gap-2"
               :class="{ 'btn-disabled': !canEdit }"
             >
               Edit

@@ -2,7 +2,7 @@
   <div class="clause-text-editor space-y-4">
     <div class="relative">
       <div ref="editorRef"
-        class="clause-editor textarea textarea-bordered textarea-sm w-full min-h-24 text-sm whitespace-pre-wrap break-words"
+        class="clause-editor textarea textarea-bordered textarea-sm w-full min-h-24 text-sm whitespace-pre-wrap wrap-break-word"
         contenteditable="true" data-placeholder="" @input="onEditorInput" @paste="onEditorPaste" @blur="onEditorBlur"
         @keydown="onEditorKeydown" @click="onEditorClick"></div>
       <!-- placeholder suggestions -->

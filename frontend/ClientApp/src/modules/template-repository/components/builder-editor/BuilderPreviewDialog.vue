@@ -4,7 +4,7 @@
       role="dialog" aria-modal="true" aria-labelledby="builder-preview-title" @click.self="close">
       <div class="bg-base-100 rounded-2xl shadow-xl w-full max-w-6xl mx-4 flex flex-col max-h-[90vh]" @click.stop>
         <!-- Header -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-base-300 flex-shrink-0">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-base-300 shrink-0">
           <h2 id="builder-preview-title" class="text-sm font-semibold"> Preview </h2>
           <button type="button" class="btn btn-ghost btn-xs" aria-label="Close preview" @click="close">
             ✕
@@ -15,7 +15,7 @@
         <div class="flex-1 min-h-0 overflow-auto p-4 flex justify-center">
           <div class="w-full max-w-4xl flex justify-center">
             <!-- Display in A4 aspect ratio -->
-            <div class="bg-base-100 border border-base-300 shadow-sm rounded-md overflow-hidden w-full max-w-[900px]"
+            <div class="bg-base-100 border border-base-300 shadow-sm rounded-md overflow-hidden w-full max-w-225"
               style="aspect-ratio: 210 / 297">
               <div :class="previewContainerClasses">
                 <TemplatePreview :document-outline="documentOutline" :document-blocks="documentBlocks"
