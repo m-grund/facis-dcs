@@ -1,4 +1,4 @@
-import type { DocumentBlock, DocumentOutline, MetaData, PolicyReference, SchemaReferenceSet, SemanticCondition, ValidationProfile } from "@/modules/template-repository/models/contract-templace"
+import type { DocumentBlock, DocumentOutline, MetaData, PolicyReference, SchemaReferenceSet, SemanticCondition, ValidationProfile } from "@/modules/template-repository/models/contract-template"
 import type { TemplateDataVersion } from "@/modules/template-repository/models/template-draft-store"
 import type { ContractTemplateState } from "@/types/contract-template-state"
 import type { TemplateType } from "@/types/template-type"

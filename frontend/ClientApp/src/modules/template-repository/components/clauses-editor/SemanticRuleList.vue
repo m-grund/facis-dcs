@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import RuleParamRow from './RuleParamRow.vue'
 
 const props = withDefaults(

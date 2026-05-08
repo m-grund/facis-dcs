@@ -106,7 +106,7 @@ import {
   type DomainSemanticPath,
   FACIS_DOMAIN_FIELDS,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
-} from '@template-repository/models/contract-templace'
+} from '@/modules/template-repository/models/contract-template'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
 

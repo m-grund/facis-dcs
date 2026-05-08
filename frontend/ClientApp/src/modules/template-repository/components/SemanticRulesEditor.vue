@@ -52,7 +52,7 @@ import { useTemplateDraftStore } from '@template-repository/store/templateDraftS
 import {
   type SemanticCondition,
   isClauseBlock,
-} from '@template-repository/models/contract-templace'
+} from '@/modules/template-repository/models/contract-template'
 import type { SubTemplateReference } from '@template-repository/models/template-draft-store'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import SemanticRuleForm from '@template-repository/components/semantic-rules-editor/SemanticRuleForm.vue'

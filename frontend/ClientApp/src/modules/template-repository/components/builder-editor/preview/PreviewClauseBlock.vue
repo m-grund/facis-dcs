@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SemanticCondition, SemanticParameterType } from '@template-repository/models/contract-templace'
+import type { SemanticCondition, SemanticParameterType } from '@/modules/template-repository/models/contract-template'
 import { parseSegments, isText, isPlaceholder, type Segment, isNewline } from '@template-repository/composables/useClauseTextChips'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'

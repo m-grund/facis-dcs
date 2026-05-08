@@ -82,7 +82,7 @@ import {
   isTextBlock,
   isClauseBlock,
   isApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+} from '@/modules/template-repository/models/contract-template'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'

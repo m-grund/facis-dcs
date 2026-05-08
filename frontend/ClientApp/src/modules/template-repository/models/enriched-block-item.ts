@@ -1,4 +1,4 @@
-import type { DocumentBlock, MergedApprovedTemplateBlock } from './contract-templace'
+import type { DocumentBlock, MergedApprovedTemplateBlock } from './contract-template'
 
 /**
  * One block row in the editor list: 

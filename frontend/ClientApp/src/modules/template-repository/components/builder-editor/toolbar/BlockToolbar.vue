@@ -51,7 +51,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
-import { isApprovedTemplateBlock, isSectionBlock } from '@template-repository/models/contract-templace'
+import { isApprovedTemplateBlock, isSectionBlock } from '@/modules/template-repository/models/contract-template'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import IconInsertAbove from './icons/IconInsertAbove.vue'
 import IconInsertBelow from './icons/IconInsertBelow.vue'

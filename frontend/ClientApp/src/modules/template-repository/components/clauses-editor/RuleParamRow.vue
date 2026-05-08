@@ -9,7 +9,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { SemanticConditionParameter } from '@template-repository/models/contract-templace'
+import type { SemanticConditionParameter } from '@/modules/template-repository/models/contract-template'
 
 const props = defineProps<{
   param: SemanticConditionParameter

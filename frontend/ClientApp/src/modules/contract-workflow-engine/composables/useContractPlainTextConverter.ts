@@ -10,14 +10,14 @@ import type {
   SectionBlock,
   SemanticCondition,
   TextBlock
-} from '@template-repository/models/contract-templace'
+} from '@/modules/template-repository/models/contract-template'
 import {
   isApprovedTemplateBlock,
   isClauseBlock,
   isMergedApprovedTemplateBlock,
   isSectionBlock,
   isTextBlock
-} from '@template-repository/models/contract-templace'
+} from '@/modules/template-repository/models/contract-template'
 import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'

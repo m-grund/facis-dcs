@@ -24,7 +24,7 @@ import AddBlockModal from '@template-repository/components/builder-editor/AddBlo
 import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
-import { FACIS_CONTRACT_POLICY_REFS, FACIS_CONTRACT_VALIDATION_PROFILE, FACIS_SCHEMA_REFS } from '@template-repository/models/contract-templace'
+import { FACIS_CONTRACT_POLICY_REFS, FACIS_CONTRACT_VALIDATION_PROFILE, FACIS_SCHEMA_REFS } from '@/modules/template-repository/models/contract-template'
 
 const route = useRoute()
 const router = useRouter()

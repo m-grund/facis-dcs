@@ -10,7 +10,7 @@ import type {
   PolicyReference,
   SchemaReferenceSet,
   ValidationProfile,
-} from "@template-repository/models/contract-templace"
+} from "@/modules/template-repository/models/contract-template"
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const
 export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]

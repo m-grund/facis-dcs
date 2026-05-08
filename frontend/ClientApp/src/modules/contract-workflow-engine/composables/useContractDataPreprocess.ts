@@ -1,13 +1,13 @@
 import type { ContractData } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { ApprovedTemplateBlock, DocumentBlock, DocumentOutlineBlock } from '@template-repository/models/contract-templace'
-import { DocumentBlockType, isApprovedTemplateBlock, isMergedApprovedTemplateBlock } from '@template-repository/models/contract-templace'
+import type { ApprovedTemplateBlock, DocumentBlock, DocumentOutlineBlock } from '@/modules/template-repository/models/contract-template'
+import { DocumentBlockType, isApprovedTemplateBlock, isMergedApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import {
   TEMPLATE_DATA_VERSIONS,
   type TemplateDataVersion,
 } from '@template-repository/models/template-draft-store'
-import { FACIS_CONTRACT_POLICY_REFS, FACIS_CONTRACT_VALIDATION_PROFILE, FACIS_SCHEMA_REFS } from '@template-repository/models/contract-templace'
+import { FACIS_CONTRACT_POLICY_REFS, FACIS_CONTRACT_VALIDATION_PROFILE, FACIS_SCHEMA_REFS } from '@/modules/template-repository/models/contract-template'
 
 const CURRENT_TEMPLATE_DATA_VERSION: TemplateDataVersion = TEMPLATE_DATA_VERSIONS[0]
 

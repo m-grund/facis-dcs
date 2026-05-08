@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { TemplateDraftState, AddBlockPayload, AddBlockOptions, SubTemplateReference } from "@template-repository/models/template-draft-store"
-import type { DocumentOutline, DocumentOutlineBlock, DocumentBlock, TemplateTypeValue, SemanticCondition, MetaData } from "@template-repository/models/contract-templace"
-import { DocumentBlockType, FACIS_SCHEMA_REFS, FACIS_TEMPLATE_POLICY_REFS, FACIS_TEMPLATE_VALIDATION_PROFILE, TemplateType, isClauseBlock, isSectionBlock, isApprovedTemplateBlock } from "@template-repository/models/contract-templace"
+import type { DocumentOutline, DocumentOutlineBlock, DocumentBlock, TemplateTypeValue, SemanticCondition, MetaData } from "@/modules/template-repository/models/contract-template"
+import { DocumentBlockType, FACIS_SCHEMA_REFS, FACIS_TEMPLATE_POLICY_REFS, FACIS_TEMPLATE_VALIDATION_PROFILE, TemplateType, isClauseBlock, isSectionBlock, isApprovedTemplateBlock } from "@/modules/template-repository/models/contract-template"
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'

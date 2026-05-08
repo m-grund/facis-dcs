@@ -13,7 +13,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { SemanticParameterType } from '@template-repository/models/contract-templace'
+import type { SemanticParameterType } from '@/modules/template-repository/models/contract-template'
 
 const props = defineProps<{
   type: SemanticParameterType

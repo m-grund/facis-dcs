@@ -1,6 +1,6 @@
 import type { SemanticConditionValue } from "@/models/contract-data";
 import type { SubTemplateSnapshot } from "@/models/contract-template";
-import { isClauseBlock, isMergedApprovedTemplateBlock, type DocumentBlock, type SemanticCondition } from "@/modules/template-repository/models/contract-templace";
+import { isClauseBlock, isMergedApprovedTemplateBlock, type DocumentBlock, type SemanticCondition } from "@/modules/template-repository/models/contract-template";
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
