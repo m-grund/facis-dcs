@@ -78,13 +78,13 @@ watch(
   <div v-else-if="error" class="pl-4">{{ error }}</div>
   <template v-else>
     <template v-if="$route.name === ROUTES.TASKS.REVIEWS">
-      <ReviewTaskList :items="reviewTasks" />
+      <ReviewTaskList :tasks="reviewTasks" />
     </template>
     <template v-else-if="$route.name === ROUTES.TASKS.APPROVALS">
-      <ApprovalTaskList :items="approvalTasks" />
+      <ApprovalTaskList :tasks="approvalTasks" />
     </template>
     <template v-else-if="$route.name === ROUTES.TASKS.NEGOTIATIONS">
-      <NegotiationTaskList :items="negotiationTasks" />
+      <NegotiationTaskList :tasks="negotiationTasks" />
     </template>
   </template>
 </template>

@@ -18,7 +18,7 @@
     <div v-if="loading" class="pl-4">Loading Templates...</div>
     <div v-else-if="error" class="pl-4">{{ error }}</div>
     <div v-else>
-      <TemplateList :items="templates" :has-review-task="hasReviewTask" :has-approval-task="hasApprovalTask" />
+      <TemplateList :templates="templates" :has-review-task="hasReviewTask" :has-approval-task="hasApprovalTask" />
     </div>
   </div>
 </template>

@@ -5,7 +5,7 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import ListSearch from '../ListSearch.vue'
 
 const props = defineProps<{
-  items: PartialContractTemplate[]
+  templates: PartialContractTemplate[]
 }>()
 
 const emit = defineEmits<{
@@ -52,7 +52,7 @@ const responseMapper = (response: ContractTemplateSearchResponse) =>
 
 <template>
   <ListSearch
-    :items="items"
+    :items="templates"
     :filter-labels="filterLabels"
     :empty-item="emptyTemplate"
     :search-fn="async (request) => responseMapper(await contractTemplateService.search(request))"

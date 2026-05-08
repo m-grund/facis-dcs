@@ -41,7 +41,7 @@ onMounted(loadContracts)
     <div v-if="loading" class="pl-4">Loading Contracts...</div>
     <div v-else-if="error" class="pl-4">{{ error }}</div>
     <div v-else>
-      <ContractList :items="contracts" />
+      <ContractList :contracts="contracts" />
     </div>
   </div>
 </template>

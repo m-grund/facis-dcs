@@ -208,7 +208,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
           <div class="max-w-4xl mx-auto px-6 pt-3">
-            <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Review Contract</p>
+            <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">View Contract</p>
             <div role="tablist" class="tabs tabs-lift tabs-lg">
               <a
                 v-for="tab in tabs"

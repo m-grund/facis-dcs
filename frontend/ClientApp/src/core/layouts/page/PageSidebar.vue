@@ -1,7 +1,7 @@
 <template>
   <div class="flex items-center justify-center h-16 px-4 overflow-hidden border-b border-base-content/10">
     <RouterLink :to="{ name: ROUTES.HOME }" class="font-bold text-2xl tracking-tight text-base-content uppercase">
-      <img :src="facisLogo" alt="Logo" class="h-10" />
+      <img :src="facisLogo" alt="Home" class="h-10" />
     </RouterLink>
   </div>
 

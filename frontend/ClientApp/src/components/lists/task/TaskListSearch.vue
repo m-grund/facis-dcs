@@ -9,7 +9,7 @@ import ListSearch from '../ListSearch.vue'
 type Searchable = PartialContractTemplate | Contract
 
 const props = defineProps<{
-  items: T[]
+  tasks: T[]
   placeholder?: string
 }>()
 
@@ -40,7 +40,7 @@ const searchableItems = computed(() => {
   const items: Searchable[] = []
   const seenDids = new Set<string>()
 
-  for (const task of props.items) {
+  for (const task of props.tasks) {
     if (seenDids.has(task.did)) continue
     seenDids.add(task.did)
 
@@ -71,10 +71,11 @@ const search = async (request: Record<string, any>): Promise<Searchable[]> => {
 
 const handleSearchResult = (searchResults: Searchable[]) => {
   const resultDids = new Set(searchResults.map((item) => item.did))
-  const filteredTasks = props.items.filter((task) => resultDids.has(task.did))
+  const filteredTasks = props.tasks.filter((task) => resultDids.has(task.did))
   emit('searchResult', filteredTasks)
 }
 </script>
+
 <template>
   <ListSearch
     :items="searchableItems"
