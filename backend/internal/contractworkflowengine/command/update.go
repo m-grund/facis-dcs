@@ -66,6 +66,15 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		}
 	}
 
+	var oldExpPolicy *expirationpolicy.ExpirationPolicy
+	if oldData.ExpPolicy != nil {
+		policy, err := expirationpolicy.NewExpirationPolicy(*oldData.ExpPolicy)
+		if err != nil {
+			return fmt.Errorf("could not parse expiration policy: %w", err)
+		}
+		oldExpPolicy = &policy
+	}
+
 	var expPolicy *string
 	if cmd.ExpPolicy != nil {
 		s := cmd.ExpPolicy.String()
@@ -97,11 +106,11 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewDescription:     cmd.Description,
 		OldContractData:    oldData.ContractData,
 		NewContractData:    cmd.ContractData,
-		OldExpDate:         cmd.ExpDate,
+		OldExpDate:         oldData.ExpDate,
 		NewExpDate:         cmd.ExpDate,
-		OldExpPolicy:       cmd.ExpPolicy,
+		OldExpPolicy:       oldExpPolicy,
 		NewExpPolicy:       cmd.ExpPolicy,
-		OldExpNoticePeriod: cmd.ExpNoticePeriod,
+		OldExpNoticePeriod: oldData.ExpNoticePeriod,
 		NewExpNoticePeriod: cmd.ExpNoticePeriod,
 		UpdatedBy:          cmd.UpdatedBy,
 		OccurredAt:         time.Now().UTC(),
