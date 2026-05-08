@@ -1,4 +1,4 @@
-import type { DocumentBlock, DocumentOutline, SemanticCondition } from "@/modules/template-repository/models/contract-templace"
+import type { DocumentBlock, DocumentOutline, PolicyReference, SchemaReferenceSet, SemanticCondition, ValidationProfile } from "@/modules/template-repository/models/contract-templace"
 import type { TemplateDataVersion } from "@/modules/template-repository/models/template-draft-store"
 import type { SubTemplateSnapshot } from "./contract-template"
 
@@ -8,6 +8,14 @@ export interface ContractData {
   semanticConditions: SemanticCondition[]
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateDataVersion: TemplateDataVersion
+  schemaRefs?: SchemaReferenceSet
+  policyRefs?: PolicyReference[]
+  validation?: ValidationProfile
+  sourceTemplate?: {
+    did: string
+    version?: number
+    document_number?: string
+  }
   semanticConditionValues: SemanticConditionValue[]
 }
 

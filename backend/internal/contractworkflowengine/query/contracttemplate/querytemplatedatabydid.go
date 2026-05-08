@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"encoding/json"
@@ -47,7 +48,7 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 	if err != nil {
 		return nil, err
 	}
-	return convertTemplateDataToContractData(templateData)
+	return convertTemplateDataToContractData(templateData, qry.DID)
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {
@@ -148,7 +149,7 @@ func (h *GetTemplateDataByDIDHandler) getTemplateDataFromFC(qry GetTemplateDataB
 	return &templateData, nil
 }
 
-func convertTemplateDataToContractData(raw *datatype.JSON) (*datatype.JSON, error) {
+func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string) (*datatype.JSON, error) {
 	if raw == nil || !raw.IsNotNullValue() {
 		return raw, nil
 	}
@@ -164,10 +165,13 @@ func convertTemplateDataToContractData(raw *datatype.JSON) (*datatype.JSON, erro
 			contractDataMap[key] = value
 		}
 	}
+	contractDataMap["sourceTemplate"] = map[string]interface{}{
+		"did": templateDID,
+	}
 
 	contractData, err := datatype.NewJSON(contractDataMap)
 	if err != nil {
 		return nil, fmt.Errorf("marshal converted contract data failed: %w", err)
 	}
-	return &contractData, nil
+	return validation.NormalizeContractData(&contractData, false)
 }

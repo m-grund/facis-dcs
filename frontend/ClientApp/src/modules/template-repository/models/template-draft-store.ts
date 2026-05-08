@@ -7,6 +7,9 @@ import type {
   MetaData,
   TemplateTypeValue,
   DocumentBlockType,
+  PolicyReference,
+  SchemaReferenceSet,
+  ValidationProfile,
 } from "@template-repository/models/contract-templace"
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const
@@ -21,6 +24,9 @@ interface TemplateDraftState {
   documentBlocks: DocumentBlock[]
   semanticConditions: SemanticCondition[]
   customMetaData: MetaData[]
+  schemaRefs: SchemaReferenceSet
+  policyRefs: PolicyReference[]
+  validation: ValidationProfile
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue
   state: ContractTemplateState | null
@@ -39,6 +45,9 @@ export interface AddBlockPayload {
   // #### For Clause ####
   clauseBlockId?: string
   conditionIds?: string[]
+  blockCatalogueId?: string
+  schemaRef?: string
+  semanticPath?: string
   // #### For ApprovedTemplate ####
   templateId?: string
   version?: number

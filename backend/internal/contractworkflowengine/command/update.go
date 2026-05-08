@@ -5,6 +5,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -32,6 +33,13 @@ type Updater struct {
 }
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
+	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
+		normalizedContractData, err := validation.NormalizeContractData(cmd.ContractData, true)
+		if err != nil {
+			return fmt.Errorf("contract data validation failed: %w", err)
+		}
+		cmd.ContractData = normalizedContractData
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {

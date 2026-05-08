@@ -24,6 +24,7 @@ import AddBlockModal from '@template-repository/components/builder-editor/AddBlo
 import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
+import { FACIS_CONTRACT_POLICY_REFS, FACIS_CONTRACT_VALIDATION_PROFILE, FACIS_SCHEMA_REFS } from '@template-repository/models/contract-templace'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +73,13 @@ const submit = async () => {
         semanticConditions: templateDraftStore.semanticConditions,
         subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
         templateDataVersion: templateDraftStore.templateDataVersion,
+        schemaRefs: {
+          documentStructure: FACIS_SCHEMA_REFS.documentStructure,
+          semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
+          contractData: FACIS_SCHEMA_REFS.contractData,
+        },
+        policyRefs: FACIS_CONTRACT_POLICY_REFS,
+        validation: FACIS_CONTRACT_VALIDATION_PROFILE,
         semanticConditionValues: contractContentValuesStore.semanticConditionValues,
       }
       await contractWorkflowService.update({
@@ -163,6 +171,13 @@ function applyContractDataToDraft(contractData?: unknown) {
     semanticConditions: cd.semanticConditions ?? [],
     subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
     templateDataVersion: cd.templateDataVersion,
+    schemaRefs: {
+      documentStructure: cd.schemaRefs?.documentStructure ?? FACIS_SCHEMA_REFS.documentStructure,
+      semanticCondition: cd.schemaRefs?.semanticCondition ?? FACIS_SCHEMA_REFS.semanticCondition,
+      contractData: cd.schemaRefs?.contractData ?? FACIS_SCHEMA_REFS.contractData,
+    },
+    policyRefs: cd.policyRefs ?? FACIS_CONTRACT_POLICY_REFS,
+    validation: cd.validation ?? FACIS_CONTRACT_VALIDATION_PROFILE,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null

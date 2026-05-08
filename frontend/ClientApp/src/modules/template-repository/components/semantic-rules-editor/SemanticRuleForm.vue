@@ -19,12 +19,16 @@
         <p class="md:col-span-12 text-xs font-medium text-base-content/70 mb-2">New parameter</p>
         <div class="md:col-span-4 flex flex-col gap-1">
           <label class="label py-0 min-h-0">
-            <span class="label-text text-xs text-base-content/60">Parameter name
+            <span class="label-text text-xs text-base-content/60">Domain field
               <RequiredIndicator />
             </span>
           </label>
-          <input v-model="draftParameter.parameterName" type="text" class="input input-bordered input-sm w-full h-9"
-            :class="{ 'input-error': isParameterNameDuplicate }" placeholder="Label" />
+          <select v-model="selectedDomainPath" class="select select-bordered select-sm w-full h-9">
+            <option value="" disabled>Select field</option>
+            <option v-for="field in FACIS_DOMAIN_FIELDS" :key="field.semanticPath" :value="field.semanticPath">
+              {{ field.label }}
+            </option>
+          </select>
           <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
         </div>
         <div class="md:col-span-3 flex flex-col gap-1">
@@ -33,7 +37,7 @@
               <RequiredIndicator />
             </span>
           </label>
-          <select v-model="draftParameter.type" class="select select-bordered select-sm w-full h-9">
+          <select v-model="draftParameter.type" class="select select-bordered select-sm w-full h-9" disabled>
             <option value="date">Date</option>
             <option value="string">Text</option>
             <option value="decimal">Decimal</option>
@@ -73,6 +77,7 @@
             class="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-base-100 border border-base-300">
             <span class="font-mono text-sm font-medium border border-base-300 rounded px-2 py-0.5 bg-base-200/50">{{
               param.parameterName }}</span>
+            <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
             <span class="badge badge-ghost badge-sm">{{ param.type }}</span>
             <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
             <button type="button" class="btn btn-ghost btn-xs text-error ml-auto shrink-0" aria-label="Delete parameter"
@@ -98,6 +103,8 @@ import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import {
   type SemanticCondition,
   type SemanticConditionParameter,
+  type DomainSemanticPath,
+  FACIS_DOMAIN_FIELDS,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@template-repository/models/contract-templace'
 
@@ -116,9 +123,12 @@ const emit = defineEmits<{
 }>()
 
 function defaultParam(): SemanticConditionParameter {
+  const defaultField = FACIS_DOMAIN_FIELDS[0]
   return {
     parameterName: '',
-    type: 'string',
+    type: defaultField.type,
+    schemaRef: defaultField.schemaRef,
+    semanticPath: defaultField.semanticPath,
     isRequired: true,
     operators: [],
     value: undefined,
@@ -135,6 +145,7 @@ function getDefaultNewCondition(): NewConditionPayload {
 
 const newCondition = ref<NewConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
+const selectedDomainPath = ref<DomainSemanticPath | ''>('')
 const isEditMode = computed(() => props.mode === 'edit')
 const formTitle = computed(() => (isEditMode.value ? 'Edit rule' : 'New rule'))
 const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rule'))
@@ -145,6 +156,7 @@ watch(
     if (!isEditMode.value || !props.initialCondition) {
       newCondition.value = getDefaultNewCondition()
       draftParameter.value = defaultParam()
+      selectedDomainPath.value = ''
       return
     }
     newCondition.value = {
@@ -153,9 +165,25 @@ watch(
       parameters: props.initialCondition.parameters.map((p) => ({ ...p })),
     }
     draftParameter.value = defaultParam()
+    selectedDomainPath.value = ''
   },
   { immediate: true },
 )
+
+watch(selectedDomainPath, (path) => {
+  const field = FACIS_DOMAIN_FIELDS.find((item) => item.semanticPath === path)
+  if (!field) {
+    draftParameter.value = defaultParam()
+    return
+  }
+  draftParameter.value = {
+    ...draftParameter.value,
+    parameterName: field.semanticPath.split('.').join('_'),
+    schemaRef: field.schemaRef,
+    semanticPath: field.semanticPath,
+    type: field.type,
+  }
+})
 
 const isParameterNameDuplicate = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
@@ -201,6 +229,7 @@ function addParameter() {
     parameterName: name,
   })
   draftParameter.value = defaultParam()
+  selectedDomainPath.value = ''
 }
 
 function deleteParameter(index: number) {

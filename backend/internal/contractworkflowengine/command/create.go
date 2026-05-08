@@ -5,6 +5,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
@@ -28,6 +29,11 @@ type Creator struct {
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
+	normalizedContractData, err := validation.NormalizeContractData(cmd.ContractData, false)
+	if err != nil {
+		return fmt.Errorf("contract data validation failed: %w", err)
+	}
+	cmd.ContractData = normalizedContractData
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {

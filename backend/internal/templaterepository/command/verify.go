@@ -4,6 +4,7 @@ import (
 	"context"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/db"
@@ -48,6 +49,9 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 	fullTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read template data: %w", err)
+	}
+	if _, err := validation.NormalizeTemplateData(fullTemplate.TemplateData); err != nil {
+		return fmt.Errorf("template data validation failed: %w", err)
 	}
 
 	if h.FCClient != nil {

@@ -19,6 +19,22 @@
             </div>
           </div>
 
+          <div class="border-t border-base-300 pt-4">
+            <p class="text-sm text-base-content/70 mb-2">FACIS blocks:</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                v-for="block in domainBlockCatalogue"
+                :key="block.blockCatalogueId"
+                type="button"
+                class="text-left min-h-[44px] flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
+                @click="handleAddCatalogueBlock(block)"
+              >
+                <span class="text-sm font-medium text-base-content">{{ block.label }}</span>
+                <span class="text-xs text-base-content/50">{{ block.semanticPath }}</span>
+              </button>
+            </div>
+          </div>
+
           <div v-if="unusedClauses.length" class="border-t border-base-300 pt-4">
             <p class="text-sm text-base-content/70 mb-2">Unused Clauses:</p>
             <div class="flex flex-col gap-2 max-h-64 overflow-y-auto">
@@ -47,7 +63,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { DocumentBlockType, isClauseBlock, isApprovedTemplateBlock, TemplateType, type ClauseBlock } from '@template-repository/models/contract-templace'
+import { DocumentBlockType, FACIS_BLOCK_CATALOGUE, isClauseBlock, isApprovedTemplateBlock, TemplateType, type ClauseBlock } from '@template-repository/models/contract-templace'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { parseSegments, getPlaceholderLabelFromConditions, type Segment } from '@template-repository/composables/useClauseTextChips'
@@ -64,6 +80,7 @@ const paletteBlockTypes = [
   { blockType: DocumentBlockType.Section, label: 'Section' },
   { blockType: DocumentBlockType.Text, label: 'Text' },
 ] as const
+const domainBlockCatalogue = FACIS_BLOCK_CATALOGUE.filter((block) => !block.blockCatalogueId.startsWith('facis.block.document.') && !block.blockCatalogueId.startsWith('facis.block.text.'))
 
 const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
 
@@ -102,6 +119,21 @@ function handleAddBlock(blockType: DocumentBlockType) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, { blockType, text: '' })
+  uiStore.closeAddBlockModal()
+}
+
+function handleAddCatalogueBlock(block: (typeof FACIS_BLOCK_CATALOGUE)[number]) {
+  const ctx = addBlockModalContext.value
+  if (ctx === null) return
+  draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
+    blockType: DocumentBlockType.Clause,
+    title: block.label,
+    text: '',
+    conditionIds: [],
+    blockCatalogueId: block.blockCatalogueId,
+    schemaRef: block.schemaRef,
+    semanticPath: block.semanticPath,
+  })
   uiStore.closeAddBlockModal()
 }
 
