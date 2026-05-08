@@ -104,9 +104,9 @@ function getExpirationBadgeClass(days: number, noticePeriod?: number): string {
             </RouterLink>
           </div>
         </div>
-        <div v-if="item.state !== ContractState.draft" class="flex justify-between">
-            <div v-if="item.exp_date">Expiration date: {{ new Date(item.exp_date ?? '').toLocaleDateString() }}</div>
-            <div :class="getExpirationBadgeClass(daysUntil(item.exp_date), item.exp_notice_period)" v-if="(item.exp_date && item.exp_notice_period) && daysUntil(item.exp_date) > 0">Contract expires in {{daysUntil(item.exp_date) }} days</div>
+        <div v-if="contract?.state !== ContractState.draft" class="flex justify-between">
+            <div v-if="contract?.exp_date">Expiration date: {{ new Date(contract?.exp_date ?? '').toLocaleDateString() }}</div>
+            <div :class="getExpirationBadgeClass(daysUntil(contract?.exp_date), contract?.exp_notice_period)" v-if="(contract?.exp_date && contract?.exp_notice_period) && daysUntil(contract?.exp_date) > 0">Contract expires in {{daysUntil(contract?.exp_date) }} days</div>
         </div>
       </div>
     </div>
