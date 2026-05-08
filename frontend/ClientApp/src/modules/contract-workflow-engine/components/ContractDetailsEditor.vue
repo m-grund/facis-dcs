@@ -47,6 +47,7 @@
           type="datetime-local"
           class="input w-full"
           :disabled="disabled"
+          :min="minExpDate"
           @change="onExpDateChange"
         />
       </fieldset>
@@ -80,7 +81,7 @@
 
 <script setup lang="ts">
 import type { Contract, ExpirationPolicy } from '@/models/contract/contract'
-import { ref, watch } from 'vue'
+import { ref, watch, computed} from 'vue'
 
 const props = defineProps<{
   contract: Contract
@@ -122,6 +123,13 @@ interface ContractDetailData {
   exp_notice_period?: number
   exp_policy?: ExpirationPolicy
 }
+
+const minExpDate = computed(() => {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(0, 0, 0, 0)
+  return tomorrow.toISOString().slice(0, 16) // "2026-05-09T00:00"
+})
 
 const originalContract = ref(Object.assign({}, props.contract))
 </script>

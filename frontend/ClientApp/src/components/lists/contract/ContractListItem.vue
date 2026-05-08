@@ -124,11 +124,11 @@ function expirationMessage(timeUtil: TimeUntil): string {
             </RouterLink>
           </div>
         </div>
-        <div v-if="contract?.state !== ContractState.draft" class="flex justify-between">
+        <div  class="flex justify-between">
             <div v-if="contract?.exp_date">Expiration date: {{ new Date(contract?.exp_date ?? '').toLocaleString() }}</div>
             <div 
-              :class="expirationBadgeClass(timeUntil(contract?.exp_date), contract?.exp_notice_period)"
-              v-if="timeUntil(contract?.exp_date).totalDays > 0">{{expirationMessage(timeUntil(contract?.exp_date))}}</div>
+              v-if="contract?.state !== ContractState.draft && timeUntil(contract?.exp_date).totalDays > 0"
+              :class="expirationBadgeClass(timeUntil(contract?.exp_date), contract?.exp_notice_period)">{{expirationMessage(timeUntil(contract?.exp_date))}}</div>
         </div>
       </div>
     </div>
