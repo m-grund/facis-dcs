@@ -27,7 +27,7 @@ const filteredClass = computed(() =>
 )
 
 const props = defineProps<{
-  item: PartialContractTemplate
+  template: PartialContractTemplate
 }>()
 
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
@@ -41,11 +41,11 @@ const isManager = computed(() => {
 
 const canArchive = computed(() => {
   const archiveStates: ContractTemplateState[] = [TemplateState.deleted, TemplateState.deprecated]
-  return isManager.value && !archiveStates.includes(props.item.state)
+  return isManager.value && !archiveStates.includes(props.template.state)
 })
 
 const canRegister = computed(() => {
-  return isManager.value && props.item.state === TemplateState.approved
+  return isManager.value && props.template.state === TemplateState.approved
 })
 
 const archive = async () => {
@@ -53,7 +53,7 @@ const archive = async () => {
     if (!confirmationModal.value) return
     const { isCanceled } = await confirmationModal.value.reveal({ message: 'Proceed with archiving?' })
     if (!isCanceled) {
-      await contractTemplateService.archive({ did: props.item.did, updated_at: props.item.updated_at })
+      await contractTemplateService.archive({ did: props.template.did, updated_at: props.template.updated_at })
       router.push({ name: ROUTES.TEMPLATES.LIST })
     }
   } catch (err) {
@@ -66,7 +66,7 @@ const register = async () => {
     if (!confirmationModal.value) return
     const { isCanceled } = await confirmationModal.value.reveal({ message: 'Proceed with registration?' })
     if (!isCanceled) {
-      await contractTemplateService.register({ did: props.item.did, updated_at: props.item.updated_at })
+      await contractTemplateService.register({ did: props.template.did, updated_at: props.template.updated_at })
       router.push({ name: ROUTES.TEMPLATES.LIST })
     }
   } catch (err) {
