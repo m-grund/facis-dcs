@@ -19,7 +19,7 @@ import { ContractState } from '@/types/contract-state'
 type ReviewTask = ContractTemplateReviewTask | ContractReviewTask
 
 const props = defineProps<{
-  items: ReviewTask[]
+  tasks: ReviewTask[]
 }>()
 
 const templatesStore = useContractTemplatesStore()
@@ -35,27 +35,27 @@ const defaultSort = sorter.keys().next().value!
 const sortBy = ref(defaultSort)
 const sortOrder = ref(1)
 
-const searchedItems: Ref<ReviewTask[]> = ref([])
+const searchedTasks: Ref<ReviewTask[]> = ref([])
 const isSearchActive = ref(false)
 
-const displayedItems = computed(() => {
-  return isSearchActive.value ? searchedItems.value : props.items
+const displayedTasks = computed(() => {
+  return isSearchActive.value ? searchedTasks.value : props.tasks
 })
 
-const sortedItems = computed(() => {
+const sortedTasks = computed(() => {
   if (!sorter.has(sortBy.value)) {
-    return displayedItems.value
+    return displayedTasks.value
   }
-  return displayedItems.value.slice().sort((taskA, taskB) => compareValues(taskA, taskB, sortBy.value, sortOrder.value))
+  return displayedTasks.value.slice().sort((taskA, taskB) => compareValues(taskA, taskB, sortBy.value, sortOrder.value))
 })
 
-const hasTasks = computed(() => filteredItems.value.length > 0)
+const hasTasks = computed(() => props.tasks.length > 0)
 
-const filteredItems = computed(() => {
+const filteredTasks = computed(() => {
   if (stateFilterStore.hasFilters) {
-    return sortedItems.value.filter((item) => stateFilterStore.hasFilter(item.state))
+    return sortedTasks.value.filter((task) => stateFilterStore.hasFilter(task.state))
   }
-  return sortedItems.value
+  return sortedTasks.value
 })
 
 const getTemplateName = (task: ContractTemplateReviewTask) => {
@@ -70,10 +70,10 @@ const getContractState = (task: ContractReviewTask) => {
   return contractsStore.contracts.find((contract) => contract.did === task.did)?.state
 }
 
-const canEdit = (item: ReviewTask) => {
-  if (item.type === 'contract') return false
+const canEdit = (task: ReviewTask) => {
+  if (task.type === 'contract') return false
 
-  const template = templatesStore.contractTemplates.find((template) => template.did === item.did)
+  const template = templatesStore.contractTemplates.find((template) => template.did === task.did)
   const state = template?.state
   return (
     (template?.created_by === authStore.user?.username &&
@@ -82,14 +82,14 @@ const canEdit = (item: ReviewTask) => {
   )
 }
 
-const resolveViewRouteName = (item: ReviewTask) => {
-  if (item.type === 'template') {
-    if (item.state === ReviewTaskState.open) {
+const resolveViewRouteName = (task: ReviewTask) => {
+  if (task.type === 'template') {
+    if (task.state === ReviewTaskState.open) {
       return ROUTES.TEMPLATES.REVIEW
     }
     return ROUTES.TEMPLATES.VIEW
   } else {
-    if (item.state === ReviewTaskState.open && getContractState(item) === ContractState.submitted) {
+    if (task.state === ReviewTaskState.open && getContractState(task) === ContractState.submitted) {
       return ROUTES.CONTRACTS.REVIEW
     }
     return ROUTES.CONTRACTS.VIEW
@@ -97,8 +97,8 @@ const resolveViewRouteName = (item: ReviewTask) => {
 }
 
 const applySearchResult = (searchResult: ReviewTask[]) => {
-  isSearchActive.value = searchResult.length !== props.items.length
-  searchedItems.value = searchResult
+  isSearchActive.value = searchResult.length !== props.tasks.length
+  searchedTasks.value = searchResult
 }
 
 onUnmounted(() => stateFilterStore.reset())
@@ -107,47 +107,47 @@ onUnmounted(() => stateFilterStore.reset())
 <template>
   <ul class="list">
     <li class="tracking-wide w-full px-4 flex justify-end flex-col sm:flex-row">
-      <TaskListSearch class="flex-1" :items="items" @search-result="applySearchResult" />
+      <TaskListSearch class="flex-1" :tasks="tasks" @search-result="applySearchResult" />
       <ListStateFilter label="Review Task" :filters="reviewTaskStates" store-type="reviewTasks" :disabled="!hasTasks" />
       <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasTasks" />
     </li>
-    <template v-if="filteredItems.length > 0">
-      <li v-for="item in filteredItems" :key="item.did" class="list-row">
+    <template v-if="filteredTasks.length > 0">
+      <li v-for="task in filteredTasks" :key="task.did" class="list-row">
         <div class="list-col-grow card bg-base-100 card-border hover:bg-base-300 border-base-content/10">
           <div class="card-body">
             <h2 class="card-title flex-wrap justify-between">
-              <div v-if="item.type === 'template'">Review Task for Template: {{ getTemplateName(item) }}</div>
-              <div v-else>Review Task for Contract: {{ getContractName(item) }}</div>
+              <div v-if="task.type === 'template'">Review Task for Template: {{ getTemplateName(task) }}</div>
+              <div v-else>Review Task for Contract: {{ getContractName(task) }}</div>
               <div class="flex-1"></div>
-              <div class="badge badge-accent">{{ toProperCase(item.type) }} Task</div>
-              <div class="badge badge-secondary">{{ item.state }}</div>
+              <div class="badge badge-accent">{{ toProperCase(task.type) }} Task</div>
+              <div class="badge badge-secondary">{{ task.state }}</div>
             </h2>
             <div class="flex justify-between">
-              <div v-if="item.type === 'template' && item.document_number">
-                Document number: {{ item.document_number }}
+              <div v-if="task.type === 'template' && task.document_number">
+                Document number: {{ task.document_number }}
               </div>
-              <div v-if="item.type === 'template' && item.version">Version: {{ item.version }}</div>
-              <div v-else-if="item.type === 'contract' && item.contract_version">
-                Version: {{ item.contract_version }}
+              <div v-if="task.type === 'template' && task.version">Version: {{ task.version }}</div>
+              <div v-else-if="task.type === 'contract' && task.contract_version">
+                Version: {{ task.contract_version }}
               </div>
             </div>
             <div class="flex justify-between">
-              <div>Creation date: {{ new Date(item.created_at).toLocaleDateString() }}</div>
+              <div>Creation date: {{ new Date(task.created_at).toLocaleDateString() }}</div>
               <div class="card-actions justify-end">
                 <RouterLink
                   :to="{
-                    name: resolveViewRouteName(item),
-                    params: { did: item.did },
+                    name: resolveViewRouteName(task),
+                    params: { did: task.did },
                   }"
                   class="btn btn-sm btn-primary"
                 >
                   View
                 </RouterLink>
                 <RouterLink
-                  v-if="canEdit(item)"
+                  v-if="canEdit(task)"
                   :to="{
                     name: ROUTES.TEMPLATES.EDIT,
-                    params: { did: item.did },
+                    params: { did: task.did },
                   }"
                   class="btn btn-sm btn-primary gap-2"
                 >

@@ -19,7 +19,7 @@
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
           Forward to approval
         </button>
-        <TemplateManagerActions v-if="contractTemplate && isManager" :item="contractTemplate" class="btn btn-primary flex-1" />
+        <TemplateManagerActions v-if="contractTemplate && isManager" :template="contractTemplate" class="btn btn-primary flex-1" />
       </div>
     </div>
 

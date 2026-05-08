@@ -23,7 +23,7 @@
         </template>
         <TemplateManagerActions
           v-if="contractTemplate && isManager"
-          :item="contractTemplate"
+          :template="contractTemplate"
           class="btn btn-primary flex-1"
         />
       </div>

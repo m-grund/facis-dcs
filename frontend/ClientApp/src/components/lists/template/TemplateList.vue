@@ -10,7 +10,7 @@ import TemplateListItem from './TemplateListItem.vue'
 import TemplateListSearch from './TemplateListSearch.vue'
 
 const props = defineProps<{
-  items: PartialContractTemplate[]
+  templates: PartialContractTemplate[]
   hasReviewTask: (template: PartialContractTemplate) => boolean
   hasApprovalTask: (template: PartialContractTemplate) => boolean
 }>()
@@ -28,28 +28,28 @@ const sortOrder = ref(1)
 
 const stateFilterStore = useTemplateStateFilterStore()
 
-const searchedItems: Ref<PartialContractTemplate[]> = ref(props.items)
+const searchedTemplates: Ref<PartialContractTemplate[]> = ref(props.templates)
 
-const sortedItems = computed(() => {
+const sortedTemplates = computed(() => {
   if (!sorter.has(sortBy.value)) {
-    return searchedItems.value
+    return searchedTemplates.value
   }
-  return searchedItems.value
+  return searchedTemplates.value
     .slice()
     .sort((templateA, templateB) => compareValues(templateA, templateB, sortBy.value, sortOrder.value))
 })
 
-const hasTemplates = computed(() => filteredItems.value.length > 0)
+const hasTemplates = computed(() => props.templates.length > 0)
 
-const filteredItems = computed(() => {
+const filteredTemplates = computed(() => {
   if (stateFilterStore.hasFilters) {
-    return sortedItems.value.filter((item) => stateFilterStore.hasFilter(item.state))
+    return sortedTemplates.value.filter((template) => stateFilterStore.hasFilter(template.state))
   }
-  return sortedItems.value
+  return sortedTemplates.value
 })
 
 const applySearchResult = (searchResult: PartialContractTemplate[]) => {
-  searchedItems.value = searchResult
+  searchedTemplates.value = searchResult
 }
 
 onUnmounted(() => stateFilterStore.reset())
@@ -58,7 +58,7 @@ onUnmounted(() => stateFilterStore.reset())
 <template>
   <ul class="list">
     <li class="tracking-wide px-4 flex justify-between flex-col sm:flex-row">
-      <TemplateListSearch :items="items" class="flex-1" @search-result="applySearchResult" />
+      <TemplateListSearch :templates="templates" class="flex-1" @search-result="applySearchResult" />
       <ListStateFilter
         label="Template"
         :filters="contractTemplateStates"
@@ -68,12 +68,12 @@ onUnmounted(() => stateFilterStore.reset())
       <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasTemplates" />
     </li>
     <TemplateListItem
-      v-for="item in filteredItems"
-      :key="`${item.did}|${item.document_number}|${item.version}`"
-      :item="item"
-      :has-review-task="props.hasReviewTask(item)"
-      :has-approval-task="props.hasApprovalTask(item)"
+      v-for="template in filteredTemplates"
+      :key="`${template.did}|${template.document_number}|${template.version}`"
+      :template="template"
+      :has-review-task="props.hasReviewTask(template)"
+      :has-approval-task="props.hasApprovalTask(template)"
     />
-    <li v-if="filteredItems.length < 1" class="px-4">No templates found</li>
+    <li v-if="filteredTemplates.length < 1" class="px-4">No templates found</li>
   </ul>
 </template>
