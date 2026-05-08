@@ -33,6 +33,34 @@ const resolveViewRouteName = computed(() => {
   }
   return ROUTES.CONTRACTS.VIEW
 })
+
+function daysUntil(date: string | Date): number {
+  const target = new Date(date)
+  const now = new Date()
+  
+  // Beide auf Mitternacht normalisieren für reine Tagesberechnung
+  target.setHours(0, 0, 0, 0)
+  now.setHours(0, 0, 0, 0)
+  
+  const diffMs = target.getTime() - now.getTime()
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+}
+
+function getExpirationBadgeClass(days: number, noticePeriod?: number): string {
+  if (!noticePeriod) {
+    return "flex"
+  }
+
+  const threshold = Math.floor(noticePeriod/3)
+  if (days > noticePeriod) {
+    return "flex"
+  } else if (days <= noticePeriod && days > threshold) {
+    return "flex badge badge-warning"
+  } else {
+    return "flex badge badge-error"
+  }
+}
+
 </script>
 
 <template>
@@ -76,6 +104,10 @@ const resolveViewRouteName = computed(() => {
             </RouterLink>
           </div>
         </div>
+        <div class="flex">
+            <div v-if="item.exp_date">Expiration date: {{ new Date(item.exp_date ?? '').toLocaleDateString() }}</div>
+        </div>
+        <div :class="getExpirationBadgeClass(daysUntil(item.exp_date), item.exp_notice_period)" v-if="(item.exp_date && item.exp_notice_period) && daysUntil(item.exp_date) > 0">Contract expires in {{daysUntil(item.exp_date) }} days</div>
       </div>
     </div>
   </li>
