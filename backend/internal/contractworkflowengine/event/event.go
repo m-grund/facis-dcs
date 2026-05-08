@@ -4,6 +4,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"time"
@@ -316,5 +317,24 @@ func (e IncreaseContractVersionEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e IncreaseContractVersionEvent) GetDID() string {
+	return e.DID
+}
+
+// ContractExpired is emitted when change requests for contract merged
+type ContractExpired struct {
+	DID             string                             `json:"did"`
+	ContractVersion *int                               `json:"old_contract_version,omitempty"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	State           contractstate.ContractState        `json:"state"`
+}
+
+// EventType implements the Event interface.
+func (e ContractExpired) EventType() string {
+	return eventtype.ContractExpired.String()
+}
+
+// GetDID implements the Event interface.
+func (e ContractExpired) GetDID() string {
 	return e.DID
 }

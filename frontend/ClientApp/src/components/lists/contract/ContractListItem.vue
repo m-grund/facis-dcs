@@ -3,7 +3,7 @@ import type { Contract } from '@/models/contract/contract'
 import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
-import { ContractState } from '@/types/contract-state'
+import { ContractState, contractStates } from '@/types/contract-state'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -104,10 +104,10 @@ function getExpirationBadgeClass(days: number, noticePeriod?: number): string {
             </RouterLink>
           </div>
         </div>
-        <div class="flex">
+        <div v-if="item.state !== ContractState.draft" class="flex justify-between">
             <div v-if="item.exp_date">Expiration date: {{ new Date(item.exp_date ?? '').toLocaleDateString() }}</div>
+            <div :class="getExpirationBadgeClass(daysUntil(item.exp_date), item.exp_notice_period)" v-if="(item.exp_date && item.exp_notice_period) && daysUntil(item.exp_date) > 0">Contract expires in {{daysUntil(item.exp_date) }} days</div>
         </div>
-        <div :class="getExpirationBadgeClass(daysUntil(item.exp_date), item.exp_notice_period)" v-if="(item.exp_date && item.exp_notice_period) && daysUntil(item.exp_date) > 0">Contract expires in {{daysUntil(item.exp_date) }} days</div>
       </div>
     </div>
   </li>

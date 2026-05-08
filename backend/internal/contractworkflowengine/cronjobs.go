@@ -2,10 +2,13 @@ package contractworkflowengine
 
 import (
 	"context"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/conf"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	database "digital-contracting-service/internal/contractworkflowengine/db"
+	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"fmt"
 	"log"
 	"time"
@@ -66,6 +69,23 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo database.Contra
 		err = repo.UpdateState(ctx, tx, expiredContract.DID, contractstate.Expired.String())
 		if err != nil {
 			return fmt.Errorf("could not update expired contract with DID %s: %w", expiredContract.DID, err)
+		}
+
+		state, err := contractstate.NewContractState(expiredContract.State)
+		if err != nil {
+			return fmt.Errorf("could not create state for expired contract with DID %s: %w", expiredContract.DID, err)
+		}
+
+		evt := contractevents.ContractExpired{
+			DID:             expiredContract.DID,
+			ContractVersion: expiredContract.ContractVersion,
+			State:           state,
+			ExpPolicy:       policy,
+			OccurredAt:      time.Now().UTC(),
+		}
+		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+		if err != nil {
+			return fmt.Errorf("could not create event: %w", err)
 		}
 
 		switch *policy {
