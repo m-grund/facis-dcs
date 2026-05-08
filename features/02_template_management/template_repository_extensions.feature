@@ -4,7 +4,7 @@ Feature: Template Repository Extensions
   Advanced repository features for interoperability, governance, and dependencies.
 
   Background:
-    Given I am authenticated with role "Template Manager"
+    Given I am authenticated with roles: "Template Manager"
     And the template repository is operational
 
   Scenario: Maintain durable links with cryptographic checksums
@@ -38,7 +38,7 @@ Feature: Template Repository Extensions
     Then a graph relates contributors, approvals, artefact hashes, and upstream dependencies
 
   Scenario: Subscription mechanism for template changes
-    Given I am authenticated with role "Template User"
+    Given I am authenticated with roles: "Template User"
     And I am subscribed to template "Standard NDA"
     When template "Standard NDA" is updated
     Then I receive notification of the change

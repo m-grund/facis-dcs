@@ -8,14 +8,16 @@ from steps.support.services.template_service import TemplateService
 from support.services.auth_service import AuthService
 
 
-@given('I am authenticated with role "{role}"')
-def step_given_authenticated_with_role(context, role):
-    AuthService.set_headers_for_role(context, role)
+@given('I am authenticated with roles: "{roles}"')
+def step_given_authenticated_with_roles(context, roles):
+    role_list = [role.strip() for role in roles.split(",")]
+    AuthService.set_headers_for_roles(context, role_list)
 
 
-@given('a system service is authenticated via API with role "{role}"')
-def step_given_authenticated_service_with_role(context, role):
-    AuthService.set_headers_for_role(context, role, username_prefix="bdd-service")
+@given('a system service is authenticated via API with roles: "{roles}"')
+def step_given_authenticated_service_with_role(context, roles):
+    role_list = [role.strip() for role in roles.split(",")]
+    AuthService.set_headers_for_roles(context, role_list, username_prefix="bdd-service")
 
 
 @given("a system service is authenticated via API")

@@ -5,7 +5,7 @@ Feature: Update Contract Template
   with full version history preserved.
 
   Background:
-    Given I am authenticated with role "Template Creator"
+    Given I am authenticated with roles: "Template Creator"
 
   Scenario: Update an existing template
     And template "Standard NDA" version "1.0" exists
@@ -14,7 +14,7 @@ Feature: Update Contract Template
     And the previous version remains accessible
 
   Scenario: Unauthorized role cannot update template
-    Given I am authenticated with role "Template Reviewer"
+    Given I am authenticated with roles: "Template Reviewer"
     And template "Standard NDA" version "1.0" exists
     When I attempt to update template "Standard NDA"
     Then the request is denied with an authorization error

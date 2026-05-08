@@ -179,7 +179,7 @@ def step_given_contract_has_pending_redline(context, name, clause):
         {
             "did": did,
             "updated_at": updated_at,
-            "negotiated_by": AuthService.username_for_role("Contract Manager"),
+            "negotiated_by": AuthService.username_for_roles(["Contract Manager"]),
             "change_request": f"Redline on {clause}: proposed replacement text",
         },
         headers=creator_h,
@@ -203,7 +203,7 @@ def step_given_contract_has_all_approvals(context, name):
     ContractService._create_contract_in_draft(context, name)
     ContractService._prepare_contract_pending_approval(context, name)
     did, _ = ContractService._contract_data(context, name)
-    approver_h = AuthService.headers_for_role("Contract Approver")
+    approver_h = AuthService.get_headers_for_roles(["Contract Approver"])
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=approver_h)
     assert retrieve.status_code == 200, retrieve.text
     updated_at = retrieve.json().get("updated_at")
@@ -272,7 +272,7 @@ def step_when_add_comment_to_clause(context, comment, clause):
         {
             "did": did,
             "updated_at": updated_at,
-            "negotiated_by": AuthService.username_for_role("Contract Reviewer"),
+            "negotiated_by": AuthService.username_for_roles(["Contract Reviewer"]),
             "change_request": f"[{clause}] {comment}",
         },
     )
@@ -316,7 +316,7 @@ def step_when_reject_redline(context, reason):
                 context,
                 f"{context.base_url}/contract/respond",
                 {"id": str(negotiation_id), "action_flag": "reject",
-                 "rejected_by": AuthService.username_for_role("Contract Manager"), "rejection_reason": reason},
+                 "rejected_by": AuthService.username_for_roles(["Contract Manager"]), "rejection_reason": reason},
             )
             return
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
@@ -346,7 +346,7 @@ def step_when_approval_completes(context):
     # This step confirms the outcome rather than triggering a second approval.
     name = "Service Agreement"
     did, _ = ContractService._contract_data(context, name)
-    approver_h = AuthService.headers_for_role("Contract Approver")
+    approver_h = AuthService.get_headers_for_roles(["Contract Approver"])
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=approver_h)
     assert retrieve.status_code == 200, retrieve.text
     state = str(retrieve.json().get("state", "")).upper()

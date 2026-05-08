@@ -6,7 +6,7 @@ Feature: Secure Contract Archive Storage
   component management.
 
   Scenario: Store signed contract in secure archive
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Signed" status
     When I store contract "Service Agreement" in the secure archive
     Then the system validates the contract
@@ -16,7 +16,7 @@ Feature: Secure Contract Archive Storage
     And an archive ID is returned
 
   Scenario: Archived contract includes signature metadata
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has completed signature workflow
     When I store contract "Service Agreement" in the secure archive
     Then the archive entry includes the finalized contract
@@ -37,7 +37,7 @@ Feature: Secure Contract Archive Storage
     And the attempt is logged with full traceability
 
   Scenario: Store contracts in hierarchical structure
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Frame Agreement" exists as a parent contract
     And contract "Sub-Contract A" is linked to "Frame Agreement"
     When I store contract "Sub-Contract A" in the secure archive
@@ -45,7 +45,7 @@ Feature: Secure Contract Archive Storage
     And the relationship to "Frame Agreement" is preserved
 
   Scenario: Store machine-readable alongside human-readable versions
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has both JSON-LD and PDF versions
     When I store contract "Service Agreement" in the secure archive
     Then the machine-readable version is stored
@@ -53,7 +53,7 @@ Feature: Secure Contract Archive Storage
     And the system validates synchronization between both formats
 
   Scenario: Archive multi-party contract with per-party sections
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Partnership Agreement" involves parties "Alpha Corp" and "Beta Inc"
     And each party has assigned sections in the contract
     When I store contract "Partnership Agreement" in the secure archive
@@ -68,7 +68,7 @@ Feature: Secure Contract Archive Storage
     And all verifiable metadata is preserved
 
   Scenario: Unauthorized role cannot store contracts in archive
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is in "Signed" status
     When I attempt to store contract "Service Agreement" in the secure archive
     Then the request is denied with an authorization error

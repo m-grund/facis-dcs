@@ -6,7 +6,7 @@ Feature: Template Customization with Dynamic Placeholders
   manual input errors and enhancing efficiency.
 
   Background:
-    Given I am authenticated with role "Template Manager"
+    Given I am authenticated with roles: "Template Manager"
 
   Scenario: Create template with dynamic placeholders
     Given I create a template "SLA Service Contract"
@@ -86,7 +86,7 @@ Feature: Template Customization with Dynamic Placeholders
     And a generation report shows successful and failed populations
 
   Scenario: Unauthorized role cannot modify SLA rules
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     When I attempt to modify SLA rules for template "SLA Service Contract"
     Then the request is denied with an authorization error
 

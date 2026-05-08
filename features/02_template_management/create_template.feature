@@ -4,7 +4,7 @@ Feature: Create Contract Template
   that serve as the basis for contract generation.
 
   Background:
-    Given I am authenticated with role "Template Creator"
+    Given I am authenticated with roles: "Template Creator"
 
   Scenario: Create a new contract template
     When I create a template "Standard NDA" in category "Legal"
@@ -12,6 +12,6 @@ Feature: Create Contract Template
     And the template is assigned version "1.0"
 
   Scenario: Unauthorized role cannot create template
-    Given I am authenticated with role "Template Reviewer"
+    Given I am authenticated with roles: "Template Reviewer"
     When I attempt to create a template
     Then the request is denied with an authorization error
