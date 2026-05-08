@@ -561,7 +561,7 @@ var _ = Service("TemplateRepository", func() {
 		})
 	})
 
-	// GET /template/verify/{did}
+	// POST /template/verify
 	Method("verify", func() {
 		Description("run policy, schema, and semantic validations; return findings.")
 		Meta("dcs:requirements", "DCS-IR-TR-03")
@@ -579,8 +579,7 @@ var _ = Service("TemplateRepository", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			GET("/template/verify/{did}")
-			Param("did")
+			POST("/template/verify")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

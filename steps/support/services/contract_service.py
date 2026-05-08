@@ -24,49 +24,49 @@ class ContractService:
 
     @staticmethod
     def _template_submit_payload(context, did: str, updated_at: str) -> dict:
-        AuthService.headers_for_role("Template Reviewer")
-        AuthService.headers_for_role("Template Approver")
+        AuthService.get_headers_for_roles(["Template Reviewer"])
+        AuthService.get_headers_for_roles(["Template Approver"])
         return {
             "did": did,
             "updated_at": updated_at,
-            "reviewers": [AuthService.username_for_role("Template Reviewer")],
-            "approver": AuthService.username_for_role("Template Approver"),
+            "reviewers": [AuthService.username_for_roles(["Template Reviewer"])],
+            "approver": AuthService.username_for_roles(["Template Approver"]),
         }
 
     @staticmethod
     def _template_reviewer_submit_payload(context, did: str, updated_at: str) -> dict:
-        AuthService.headers_for_role("Template Approver")
+        AuthService.get_headers_for_roles(["Template Approver"])
         return {
             "did": did,
             "updated_at": updated_at,
-            "approver": AuthService.username_for_role("Template Approver"),
+            "approver": AuthService.username_for_roles(["Template Approver"]),
             "forward_to": "approval",
         }
 
     @staticmethod
     def _contract_submit_payload(context, did: str, updated_at: str) -> dict:
-        AuthService.headers_for_role("Contract Reviewer")
-        AuthService.headers_for_role("Contract Approver")
+        AuthService.get_headers_for_roles(["Contract Reviewer"])
+        AuthService.get_headers_for_roles(["Contract Approver"])
         return {
             "did": did,
             "updated_at": updated_at,
-            "reviewers": [AuthService.username_for_role("Contract Reviewer")],
-            "approver": AuthService.username_for_role("Contract Approver"),
+            "reviewers": [AuthService.username_for_roles(["Contract Reviewer"])],
+            "approver": AuthService.username_for_roles(["Contract Approver"]),
         }
 
     @staticmethod
     def _contract_reviewer_submit_payload(context, did: str, updated_at: str) -> dict:
-        AuthService.headers_for_role("Contract Approver")
+        AuthService.get_headers_for_roles(["Contract Approver"])
         return {
             "did": did,
             "updated_at": updated_at,
             "forward_to": "approval",
-            "approver": AuthService.username_for_role("Contract Approver"),
+            "approver": AuthService.username_for_roles(["Contract Approver"]),
         }
 
     @staticmethod
     def _create_approved_template_for_contract(context):
-        creator_h = AuthService.headers_for_role("Template Creator")
+        creator_h = AuthService.get_headers_for_roles(["Template Creator"])
         create_resp = post_json(
             context,
             template_create_url(context),
@@ -93,7 +93,7 @@ class ContractService:
         )
         assert submit_resp.status_code == 200, submit_resp.text
 
-        reviewer_h = AuthService.headers_for_role("Template Reviewer")
+        reviewer_h = AuthService.get_headers_for_roles(["Template Reviewer"])
         retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=reviewer_h)
         updated_at = retrieve_resp.json().get("updated_at")
 
@@ -116,7 +116,7 @@ class ContractService:
         )
         assert review_submit_resp.status_code == 200, review_submit_resp.text
 
-        approver_h = AuthService.headers_for_role("Template Approver")
+        approver_h = AuthService.get_headers_for_roles(["Template Approver"])
         retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=approver_h)
         updated_at = retrieve_resp.json().get("updated_at")
         approve_resp = post_json(
@@ -132,7 +132,7 @@ class ContractService:
     @staticmethod
     def _create_contract_in_draft(context, contract_name: str):
         t_did = ContractService._create_approved_template_for_contract(context)
-        creator_h = AuthService.headers_for_role("Contract Creator")
+        creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
         create_resp = post_json(context, contract_create_url(context), {"did": t_did}, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text
         c_did = create_resp.json().get("did")
@@ -194,7 +194,7 @@ class ContractService:
         did, _ = ContractService._contract_data(context, contract_name)
         ContractService._prepare_contract_under_review(context, contract_name)
 
-        reviewer_h = AuthService.headers_for_role("Contract Reviewer")
+        reviewer_h = AuthService.get_headers_for_roles(["Contract Reviewer"])
         retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
         assert retrieve.status_code == 200, retrieve.text
         updated_at = retrieve.json().get("updated_at")

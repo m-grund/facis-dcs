@@ -5,13 +5,18 @@ Feature: Search and Retrieve Contract Templates
   filtered by role-based access rights.
 
   Scenario: Search templates by keyword
-    Given I am authenticated with role "Template Manager"
+    Given I am authenticated with roles: "Template Manager"
     And templates exist in the system
     When I search for templates with keyword "NDA"
     Then the results are filtered by my access rights
 
   Scenario: Retrieve template details
-    Given I am authenticated with role "Template Reviewer"
+    Given I am authenticated with roles: "Template Reviewer"
     When I retrieve template "Standard NDA"
     Then I see the template version and status
     And I see the template provenance
+
+  Scenario: Retrieve unauthorized
+    Given I am authenticated with roles: "Contract Creator"
+    When I retrieve template "Standard NDA"
+    Then the request is denied with an authorization error

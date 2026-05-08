@@ -5,7 +5,7 @@ Feature: Revocation Compliance Viewer
   and metadata for audit and compliance purposes.
 
   Scenario: View revoked signature status in compliance viewer
-    Given I am authenticated with role "Compliance Officer"
+    Given I am authenticated with roles: "Compliance Officer"
     And contract "Service Agreement" has a revoked signature
     When I view signature compliance status for contract "Service Agreement"
     Then I see the revoked signature with signer identity
@@ -13,20 +13,20 @@ Feature: Revocation Compliance Viewer
     And I see the revocation reason
 
   Scenario: View signature credential chain for revoked signature
-    Given I am authenticated with role "Auditor"
+    Given I am authenticated with roles: "Auditor"
     And contract "Data Processing Agreement" has a revoked signature
     When I view signature compliance status for contract "Data Processing Agreement"
     Then I see the credential chain for the revoked signer
     And I see which credential in the chain was invalidated
 
   Scenario: Filter contracts by revocation status
-    Given I am authenticated with role "Compliance Officer"
+    Given I am authenticated with roles: "Compliance Officer"
     And multiple contracts exist with different signature statuses
     When I filter contracts by signature status "Revoked"
     Then I see only contracts with revoked signatures
 
   Scenario: Generate revocation audit report
-    Given I am authenticated with role "Auditor"
+    Given I am authenticated with roles: "Auditor"
     And contracts have been revoked in the current period
     When I generate revocation audit report for period "2024-Q1"
     Then I receive a report listing all revocation events
@@ -34,7 +34,7 @@ Feature: Revocation Compliance Viewer
     And the report includes revocation reasons
 
   Scenario: Unauthorized role cannot view revocation compliance details
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And contract "Service Agreement" has a revoked signature
     When I attempt to view signature compliance status for contract "Service Agreement"
     Then the request is denied with an authorization error
