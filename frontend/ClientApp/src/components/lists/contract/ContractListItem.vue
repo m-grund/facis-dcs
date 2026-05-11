@@ -125,6 +125,9 @@ function expirationMessage(timeUtil: TimeUntil): string {
           </div>
         </div>
         <div  class="flex justify-between">
+            <div v-if="contract?.start_date">Start date: {{ new Date(contract?.start_date ?? '').toLocaleString() }}</div>
+        </div>
+        <div  class="flex justify-between">
             <div v-if="contract?.exp_date">Expiration date: {{ new Date(contract?.exp_date ?? '').toLocaleString() }}</div>
             <div 
               v-if="timeUntil(contract?.exp_date).totalDays > 0"

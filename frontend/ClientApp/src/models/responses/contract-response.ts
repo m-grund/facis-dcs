@@ -2,7 +2,7 @@ import type { ComponentType } from '@/types/component-type'
 import type { ContractEventType } from '@/types/contract-event-type'
 import type { ContractState } from '@/types/contract-state'
 import type { ContractData } from '../contract-data'
-import type { Contract } from '../contract/contract'
+import type { Contract, ExpirationPolicy } from '../contract/contract'
 import type { ContractApprovalTask } from '../contract/contract-approval-task'
 import type { ContractEvent } from '../contract/contract-event'
 import type { ContractNegotiation } from '../contract/contract-negotiation'
@@ -37,6 +37,10 @@ export interface ContractRetrieveByIdResponse {
   created_by: string
   created_at: string
   updated_at: string
+  start_date?: string
+  exp_date?: string
+  exp_notice_period?: number,
+  exp_policy?: ExpirationPolicy,
   /** The data of that contract */
   contract_data: ContractData
   negotiations: ContractNegotiation[]

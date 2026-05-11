@@ -66,6 +66,7 @@ const hasChangeRequest = computed(() => {
   return changedName.value ||
          changedDescription.value ||
          changedContractData.value ||
+         changedStartDate.value ||
          changeExpDate.value ||
          changeExpNoticePeriod.value ||
          changeExpPolicy.value
@@ -73,6 +74,7 @@ const hasChangeRequest = computed(() => {
 
 const changedName = computed(() => editedContract.value?.name !== contract.value?.name)
 const changedDescription = computed(() => editedContract.value?.description !== contract.value?.description)
+const changedStartDate = computed(() => editedContract.value?.start_date != contract.value?.start_date)
 const changeExpDate = computed(() => editedContract.value?.exp_date != contract.value?.exp_date)
 const changeExpNoticePeriod = computed(() => editedContract.value?.exp_notice_period != contract.value?.exp_notice_period)
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
@@ -141,6 +143,9 @@ const negotiateContractChange = async () => {
     }
     if (changedDescription.value) {
       changeRequest.description = editedContract.value.description
+    }
+    if (changedStartDate.value) {
+      changeRequest.start_date = editedContract.value.start_date
     }
     if (changeExpDate.value) {
       changeRequest.exp_date = editedContract.value.exp_date
@@ -240,6 +245,9 @@ const handleSelectedNegotiation = async (
         name: negotiation.change_request.name
           ? `${contract.value.name} -> ${negotiation.change_request.name}`
           : contract.value.name,
+        start_date: negotiation.change_request.start_date
+          ? `${contract.value.start_date?.slice(0, 16)} -> ${negotiation.change_request.start_date?.slice(0, 16)}`
+          : contract.value.start_date,
         exp_date: negotiation.change_request.exp_date
           ? `${contract.value.exp_date?.slice(0, 16)} -> ${negotiation.change_request.exp_date?.slice(0, 16)}`
           : contract.value.exp_date,
@@ -373,6 +381,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
                   :inserted="{ 
                     name: compareChangesData?.name, 
                     description: compareChangesData?.description,
+                    start_date: compareChangesData?.start_date,
                     exp_date: compareChangesData?.exp_date,
                     exp_notice_period: compareChangesData?.exp_notice_period_str,
                     exp_policy: compareChangesData?.exp_policy_str

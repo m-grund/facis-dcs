@@ -41,6 +41,26 @@
         
       </fieldset>
       <fieldset class="fieldset p-0 border-none">
+        <legend class="fieldset-legend">Start Date</legend>
+        <input
+          v-if="!inserted?.start_date"
+          v-model="startDateLocal"
+          type="datetime-local"
+          class="input input-bordered w-full"
+          :min="minStartDate"
+          @change="onStartDateChange"
+          :disabled="disabled"
+        />
+        <input
+          v-else
+          type="text"
+          v-model="inserted.start_date"
+          class="input input-bordered w-full"
+           :class="{ 'text-red-400': inserted.start_date !== contract.start_date }"
+          disabled
+        />
+      </fieldset>
+      <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Date</legend>
         <input
           v-if="!inserted?.exp_date"
@@ -60,7 +80,6 @@
           disabled
         />
       </fieldset>
-
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Notice Period (in days)</legend>
         <input
@@ -80,7 +99,6 @@
           disabled
         />
       </fieldset>
-
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Policy</legend>
         <select
@@ -107,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Contract, ExpirationPolicy } from '@/models/contract/contract'
+import type { Contract } from '@/models/contract/contract'
 import { ref, watch, computed} from 'vue'
 
 const props = defineProps<{
@@ -117,6 +135,7 @@ const props = defineProps<{
 }>()
 
 const expDateLocal = ref<string>('')
+const startDateLocal = ref<string>('')
 
 watch(
   () => props.contract.exp_date,
@@ -124,6 +143,16 @@ watch(
     if (!val) return
     // "2026-05-09T11:24:00Z" → "2026-05-09T11:24"
     expDateLocal.value = val.slice(0, 16)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.contract.start_date,
+  (val) => {
+    if (!val) return
+    // "2026-05-09T11:24:00Z" → "2026-05-09T11:24"
+    startDateLocal.value = val.slice(0, 16)
   },
   { immediate: true }
 )
@@ -137,6 +166,15 @@ function onExpDateChange() {
   props.contract.exp_date = new Date(expDateLocal.value + ':00Z').toISOString()
 }
 
+function onStartDateChange() {
+  if (!startDateLocal.value) {
+    props.contract.start_date = undefined
+    return
+  }
+  // "2026-05-09T11:24" → "2026-05-09T11:24:00Z"
+  props.contract.start_date = new Date(startDateLocal.value + ':00Z').toISOString()
+}
+
 const expirationPolicies = [
   { name: 'Renewal', value: 'RENEWAL' },
   { name: 'Archiving', value: 'ARCHIVING' },
@@ -146,10 +184,18 @@ const expirationPolicies = [
 interface ContractDetailData {
   name?: string
   description?: string
+  start_date?: string
   exp_date?: string
   exp_notice_period?: string
   exp_policy?: string
 }
+
+const minStartDate = computed(() => {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(0, 0, 0, 0)
+  return tomorrow.toISOString().slice(0, 16) // "2026-05-09T00:00"
+})
 
 const minExpDate = computed(() => {
   const tomorrow = new Date()
