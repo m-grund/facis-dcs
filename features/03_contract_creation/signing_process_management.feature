@@ -6,14 +6,14 @@ Feature: Contract Signing Process Management
   signatories, enforces order and deadlines, and integrates identity checks.
 
   Scenario: Initiate contract signing workflow
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Approved" status
     When I initiate the signing workflow for contract "Service Agreement"
     Then the signing workflow is started
     And the workflow is logged with timestamp
 
   Scenario: Configure signers and sequence
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" requires signatures
     When I configure signers "Alice", "Bob", and "Charlie" for contract "Service Agreement"
     And I set the signing sequence as "Alice" then "Bob" then "Charlie"
@@ -21,7 +21,7 @@ Feature: Contract Signing Process Management
     And the signing order is enforced
 
   Scenario: System schedules signing steps
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has configured signers
     When the signing workflow is initiated
     Then the system schedules signing steps for each signer
@@ -35,7 +35,7 @@ Feature: Contract Signing Process Management
     And the reminder is logged
 
   Scenario: Track signing status for all parties
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has multiple signers
     When I view signing status for contract "Service Agreement"
     Then I see which signers have completed
@@ -73,13 +73,13 @@ Feature: Contract Signing Process Management
     And the completion is logged
 
   Scenario: Unauthorized role cannot manage signing process
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is in "Approved" status
     When I attempt to initiate the signing workflow for contract "Service Agreement"
     Then the request is denied with an authorization error
 
   Scenario: Designated signatory with required role can sign contract
-    Given I am authenticated with role "Contract Signer"
+    Given I am authenticated with roles: "Contract Signer"
     And contract "Service Agreement" designates me as signatory
     And I hold the required credential for this signing position
     When I initiate signing for contract "Service Agreement"
@@ -88,7 +88,7 @@ Feature: Contract Signing Process Management
     And the signature is applied to the contract
 
   Scenario: Non-designated signer cannot sign contract even with system role
-    Given I am authenticated with role "Contract Signer"
+    Given I am authenticated with roles: "Contract Signer"
     And contract "Service Agreement" is in "Approved" status
     And I am not designated as a signatory for contract "Service Agreement"
     When I attempt to sign contract "Service Agreement"
@@ -96,7 +96,7 @@ Feature: Contract Signing Process Management
     And the rejection is logged
 
   Scenario: Enforce role-specific signing permissions within workflow
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Multi-Party Agreement" requires distinct roles at each position
     And position 1 requires role "CFO"
     And position 2 requires role "Legal Officer"
@@ -106,7 +106,7 @@ Feature: Contract Signing Process Management
     And only users with matching credentials can sign each position
 
   Scenario: Signer without required role credential cannot sign contract
-    Given I am authenticated with role "Contract Signer"
+    Given I am authenticated with roles: "Contract Signer"
     And I hold a PoA credential from "Authority A"
     And contract "Procurement Agreement" requires PoA from "Authority B"
     And I am designated as a signatory on the contract

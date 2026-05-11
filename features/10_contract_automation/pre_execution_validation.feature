@@ -6,7 +6,7 @@ Feature: Pre-Execution Contract Validation
   legal rules and internal policies.
 
   Scenario: Validator triggers compliance check before deployment
-    Given I am authenticated with role "Validator"
+    Given I am authenticated with roles: "Validator"
     And contract "Service Agreement" is ready for deployment
     When I trigger a compliance check for contract "Service Agreement"
     Then the system reviews contract content
@@ -15,7 +15,7 @@ Feature: Pre-Execution Contract Validation
     And a validation report is generated
 
   Scenario: Contract passes compliance validation
-    Given I am authenticated with role "Validator"
+    Given I am authenticated with roles: "Validator"
     And contract "Service Agreement" complies with all regulatory frameworks
     And contract "Service Agreement" complies with internal policies
     When I trigger a compliance check for contract "Service Agreement"
@@ -23,7 +23,7 @@ Feature: Pre-Execution Contract Validation
     And the contract is cleared for deployment
 
   Scenario: Contract failing eIDAS compliance is blocked
-    Given I am authenticated with role "Validator"
+    Given I am authenticated with roles: "Validator"
     And contract "High-Security Agreement" requires eIDAS compliance
     And contract "High-Security Agreement" has a signature not meeting eIDAS requirements
     When I trigger a compliance check for contract "High-Security Agreement"
@@ -31,7 +31,7 @@ Feature: Pre-Execution Contract Validation
     And the contract is blocked from deployment
 
   Scenario: Contract failing GDPR compliance is flagged for review
-    Given I am authenticated with role "Validator"
+    Given I am authenticated with roles: "Validator"
     And contract "Data Processing Agreement" requires GDPR compliance
     And contract "Data Processing Agreement" is missing required data protection clauses
     When I trigger a compliance check for contract "Data Processing Agreement"
@@ -39,7 +39,7 @@ Feature: Pre-Execution Contract Validation
     And the contract is flagged for manual review
 
   Scenario: Contract failing internal policy is blocked
-    Given I am authenticated with role "Validator"
+    Given I am authenticated with roles: "Validator"
     And contract "Partner Agreement" is subject to internal approval policy
     And contract "Partner Agreement" is missing required approvals
     When I trigger a compliance check for contract "Partner Agreement"
@@ -47,7 +47,7 @@ Feature: Pre-Execution Contract Validation
     And the contract is blocked from deployment
 
   Scenario: Validation report is stored with contract
-    Given I am authenticated with role "Validator"
+    Given I am authenticated with roles: "Validator"
     And contract "Service Agreement" has completed compliance validation
     When I view validation history for contract "Service Agreement"
     Then I see the detailed validation report
@@ -62,7 +62,7 @@ Feature: Pre-Execution Contract Validation
     And the validation result is logged
 
   Scenario: Unauthorized role cannot trigger compliance validation
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is ready for deployment
     When I attempt to trigger a compliance check for contract "Service Agreement"
     Then the request is denied with an authorization error

@@ -73,8 +73,8 @@ func TestSearch_SearchContractTemplatesByDID(t *testing.T) {
 	name := "Test Contract Template"
 	description := "Test Description"
 
-	templateData := map[string]interface{}{}
-	jsonMetaData, err := datatype.NewJSON(templateData)
+	templateDataMap := map[string]interface{}{}
+	templateData, err := datatype.NewJSON(templateDataMap)
 	if err != nil {
 		t.Fatalf("Failed to create JSON data: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSearch_SearchContractTemplatesByDID(t *testing.T) {
 		TemplateType: contracttemplatetype.FrameContract,
 		Name:         &name,
 		Description:  &description,
-		TemplateData: &jsonMetaData,
+		TemplateData: &templateData,
 	}
 	createHandler := command.Creator{
 		DB:     db,
@@ -280,10 +280,10 @@ func TestSearch_SearchContractTemplatesByTemplateData(t *testing.T) {
 	did, _ = base.GetDID()
 	createTestContractTemplateWithData(t, db, repo, did, contracttemplatestate.Reviewed, creator, "-- test2.3 --", "a long test4 description", templateData)
 
-	filter := "Test2.2" // The search is case-insensitive
+	templateDataFilter := "Test2.2" // The search is case-insensitive
 	qry := contracttemplate.GetAllMetadataByFilterQry{
-		RetrievedBy: creator,
-		Filter:      &filter,
+		RetrievedBy:  creator,
+		TemplateData: &templateDataFilter,
 	}
 	queryHandler := contracttemplate.GetAllMetaDataByFilterHandler{
 		DB:     db,

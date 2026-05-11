@@ -453,7 +453,7 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		RetrievedBy:     middleware.GetUsername(ctx),
 		Name:            req.Name,
 		Description:     req.Description,
-		Filter:          req.Filter,
+		ContractData:    req.ContractData,
 	}
 	queryHandler := contract.GetAllMetaDataByFilterHandler{
 		DB:    s.DB,

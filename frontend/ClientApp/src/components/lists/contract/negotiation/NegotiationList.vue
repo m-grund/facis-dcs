@@ -109,7 +109,7 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
 <template>
   <ul class="list">
     <li v-for="negotiation in sortedNegotiations" :key="negotiation.id" class="list-row px-0">
-      <div class="card bg-base-200 shadow-sm card-border">
+      <div class="card bg-base-100 shadow-sm card-border border-base-content/10">
         <div class="card-body">
           <h2 class="card-title">Change request proposed by: {{ negotiation.created_by }}</h2>
           <ul class="list">
@@ -139,7 +139,7 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
             </button>
             <button
               v-if="!disabled && isNegotiationShown.get(negotiation.id)"
-              class="btn btn-sm btn-secondary"
+              class="btn btn-sm btn-primary"
               :disabled="isSubmitting || isBtnDisabled(negotiation)"
               @click="rejectNegotiation(negotiation)"
             >

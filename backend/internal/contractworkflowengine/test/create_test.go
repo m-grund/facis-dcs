@@ -27,7 +27,7 @@ func TestCreate_CreateNewContract(t *testing.T) {
 	description := "Test Description"
 
 	contractData := map[string]interface{}{}
-	jsonMetaData, err := datatype.NewJSON(contractData)
+	templateData, err := datatype.NewJSON(contractData)
 	if err != nil {
 		t.Fatalf("Failed to create JSON data: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestCreate_CreateNewContract(t *testing.T) {
 		CreatedBy:    creator,
 		Name:         &name,
 		Description:  &description,
-		ContractData: &jsonMetaData,
+		ContractData: &templateData,
 	}
 	createHandler := command.Creator{
 		DB:    db,

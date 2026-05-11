@@ -21,7 +21,7 @@ type GetAllMetadataByFilterQry struct {
 	State           *contractstate.ContractState
 	Name            *string
 	Description     *string
-	Filter          *string
+	ContractData    *string
 }
 
 type GetAllMetadataByFilterResult struct {
@@ -59,7 +59,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		State:           state,
 		Name:            query.Name,
 		Description:     query.Description,
-		Filter:          query.Filter,
+		ContractData:    query.ContractData,
 	}
 
 	contracts, err := h.CRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues)

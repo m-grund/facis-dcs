@@ -22,9 +22,10 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
-import { ErrorTypes, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -53,7 +54,10 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isManager = computed(() => authStore.user?.roles?.includes('CONTRACT_MANAGER') ?? false)
+
+const isAuditingAuthorized = computed(() => 
+  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
@@ -204,7 +208,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
           <div class="max-w-4xl mx-auto px-6 pt-3">
-            <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Review Contract</p>
+            <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">View Contract</p>
             <div role="tablist" class="tabs tabs-lift tabs-lg">
               <a
                 v-for="tab in tabs"
@@ -245,7 +249,7 @@ function applyContractDataToDraft(contractData?: unknown) {
                 </div>
               </div>
 
-              <template v-if="isManager">
+              <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
                   <div class="card bg-base-100 border border-base-300 shadow-sm">
                     <div class="card-body">
@@ -262,7 +266,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <template v-if="isCreator">
           <SubmitSelectionDialog
             v-if="contract?.state === ContractState.draft"
