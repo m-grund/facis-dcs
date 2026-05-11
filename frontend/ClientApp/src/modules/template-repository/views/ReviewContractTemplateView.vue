@@ -8,7 +8,7 @@
       <!-- Comments container -->
       <ConfirmationModal ref="comment-dialog" />
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
         <!-- Return to draft / request changes -->
         <button @click="returnToDraft" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
@@ -19,7 +19,7 @@
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
           Forward to approval
         </button>
-        <TemplateManagerActions v-if="contractTemplate && isManager" :item="contractTemplate" class="btn btn-primary flex-1" />
+        <TemplateManagerActions v-if="contractTemplate && isManager" :template="contractTemplate" class="btn btn-primary flex-1" />
       </div>
     </div>
 

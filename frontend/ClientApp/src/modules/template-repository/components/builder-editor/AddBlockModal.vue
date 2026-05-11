@@ -63,7 +63,7 @@
         </template>
 
         <div class="flex justify-end pt-2">
-          <button type="button" class="btn btn-ghost btn-sm" @click="handleCancel">Cancel</button>
+          <button type="button" class="btn btn-outline btn-sm" @click="handleCancel">Cancel</button>
         </div>
       </div>
     </div>

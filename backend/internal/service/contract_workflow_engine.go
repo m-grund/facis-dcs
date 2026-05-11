@@ -11,6 +11,7 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationactionflag"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
@@ -115,6 +116,35 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	var startDate *time.Time
+	if req.StartDate != nil {
+		startD, err := time.Parse(time.RFC3339, *req.StartDate)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+
+		startDate = &startD
+	}
+
+	var expDate *time.Time
+	if req.ExpDate != nil {
+		expD, err := time.Parse(time.RFC3339, *req.ExpDate)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+
+		expDate = &expD
+	}
+
+	var expPolicy *expirationpolicy.ExpirationPolicy
+	if req.ExpPolicy != nil {
+		policy, err := expirationpolicy.NewExpirationPolicy(*req.ExpPolicy)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+		expPolicy = &policy
+	}
+
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
 		ContractVersion: req.ContractVersion,
@@ -123,6 +153,10 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		Name:            req.Name,
 		Description:     req.Description,
 		ContractData:    &metaData,
+		StartDate:       startDate,
+		ExpDate:         expDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: req.ExpNoticePeriod,
 	}
 	handler := command.Updater{
 		DB:    s.DB,
@@ -207,15 +241,39 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 
 	var contracts []*contractworkflowengine.ContractItem
 	for _, item := range result.Contracts {
+
+		var startDate *string
+		if item.StartDate != nil {
+			s := item.StartDate.Format(time.RFC3339)
+			startDate = &s
+		}
+
+		var expDate *string
+		if item.ExpDate != nil {
+			s := item.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if item.ExpPolicy != nil {
+			s := item.ExpPolicy.String()
+			expPolicy = &s
+		}
+
 		contracts = append(contracts, &contractworkflowengine.ContractItem{
-			Did:             item.DID,
-			ContractVersion: item.ContractVersion,
-			State:           item.State.String(),
-			Name:            item.Name,
-			Description:     item.Description,
-			CreatedBy:       item.CreatedBy,
-			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			Did:                item.DID,
+			ContractVersion:    item.ContractVersion,
+			State:              item.State.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedBy:          item.CreatedBy,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			StartDate:          startDate,
+			ExpDate:            expDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    item.ExpNoticePeriod,
+			ResponsiblePersons: item.ResponsiblePersons,
 		})
 	}
 
@@ -303,17 +361,40 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 
 	negotiationList := slices.Collect(maps.Values(negotiations))
 
+	var startDate *string
+	if contractResult.StartDate != nil {
+		s := contractResult.StartDate.Format(time.RFC3339)
+		startDate = &s
+	}
+
+	var expDate *string
+	if contractResult.ExpDate != nil {
+		s := contractResult.ExpDate.Format(time.RFC3339)
+		expDate = &s
+	}
+
+	var expPolicy *string
+	if contractResult.ExpPolicy != nil {
+		s := contractResult.ExpPolicy.String()
+		expPolicy = &s
+	}
+
 	return &contractworkflowengine.ContractRetrieveByIDResponse{
-		Did:             contractResult.DID,
-		ContractVersion: contractResult.ContractVersion,
-		State:           contractResult.State.String(),
-		Name:            contractResult.Name,
-		Description:     contractResult.Description,
-		CreatedBy:       contractResult.CreatedBy,
-		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       contractResult.UpdatedAt.Format(time.RFC3339),
-		ContractData:    contractResult.ContractData,
-		Negotiations:    negotiationList,
+		Did:                contractResult.DID,
+		ContractVersion:    contractResult.ContractVersion,
+		State:              contractResult.State.String(),
+		Name:               contractResult.Name,
+		Description:        contractResult.Description,
+		CreatedBy:          contractResult.CreatedBy,
+		CreatedAt:          contractResult.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:          contractResult.UpdatedAt.Format(time.RFC3339),
+		ContractData:       contractResult.ContractData,
+		Negotiations:       negotiationList,
+		StartDate:          startDate,
+		ExpDate:            expDate,
+		ExpPolicy:          expPolicy,
+		ExpNoticePeriod:    contractResult.ExpNoticePeriod,
+		ResponsiblePersons: contractResult.ResponsiblePersons,
 	}, nil
 }
 
@@ -453,7 +534,7 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		RetrievedBy:     middleware.GetUsername(ctx),
 		Name:            req.Name,
 		Description:     req.Description,
-		Filter:          req.Filter,
+		ContractData:    req.ContractData,
 	}
 	queryHandler := contract.GetAllMetaDataByFilterHandler{
 		DB:    s.DB,
@@ -466,14 +547,31 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 
 	var contracts []*contractworkflowengine.ContractSearchResponse
 	for _, item := range result {
+
+		var expDate *string
+		if item.ExpDate != nil {
+			s := item.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if item.ExpPolicy != nil {
+			s := item.ExpPolicy.String()
+			expPolicy = &s
+		}
+
 		contracts = append(contracts, &contractworkflowengine.ContractSearchResponse{
-			Did:             item.DID,
-			ContractVersion: item.ContractVersion,
-			State:           item.State.String(),
-			Name:            item.Name,
-			Description:     item.Description,
-			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			Did:                item.DID,
+			ContractVersion:    item.ContractVersion,
+			State:              item.State.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			ExpDate:            expDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    item.ExpNoticePeriod,
+			ResponsiblePersons: item.ResponsiblePersons,
 		})
 	}
 

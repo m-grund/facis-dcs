@@ -120,11 +120,11 @@ var ContractTemplateSearchRequest = Type("ContractTemplateSearchRequest", func()
 	Attribute("state", String, "The state of the contract template")
 	Attribute("name", String, "The name of the contract template")
 	Attribute("description", String, "A description for that template")
-	Attribute("filter", String, "Search value for full text search in template data")
+	Attribute("template_data", String, "Search value for full text search in template data")
 })
 
 var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func() {
-	Description("Result for searching a contract templates by filter")
+	Description("Result for searching a contract templates")
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 
@@ -138,6 +138,8 @@ var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func
 	Attribute("created_at", String, "The timestamp when the contract template was created")
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
+
+	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_at", "updated_at")
 })
@@ -159,6 +161,7 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("created_by", String, "Created by")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at")
 })
@@ -226,6 +229,7 @@ var ContractTemplateRetrieveByIDResponse = Type("ContractTemplateRetrieveByIDRes
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
+	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data")
@@ -496,7 +500,7 @@ var _ = Service("TemplateRepository", func() {
 			Param("state")
 			Param("name")
 			Param("description")
-			Param("filter")
+			Param("template_data")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -561,7 +565,7 @@ var _ = Service("TemplateRepository", func() {
 		})
 	})
 
-	// GET /template/verify/{did}
+	// POST /template/verify
 	Method("verify", func() {
 		Description("run policy, schema, and semantic validations; return findings.")
 		Meta("dcs:requirements", "DCS-IR-TR-03")
@@ -579,8 +583,7 @@ var _ = Service("TemplateRepository", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			GET("/template/verify/{did}")
-			Param("did")
+			POST("/template/verify")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -695,7 +698,9 @@ var _ = Service("TemplateRepository", func() {
 		Meta("dcs:ui", "Template Management Dashboard")
 
 		Security(JWTAuth, func() {
-			Scope("Template Manager")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+			Scope("System Administrator")
 		})
 
 		Payload(ContractTemplateAuditRequest)

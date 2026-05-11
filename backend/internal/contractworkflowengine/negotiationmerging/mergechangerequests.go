@@ -6,6 +6,7 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -40,6 +41,17 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 
 		updateData.Name = change.Name
 		updateData.Description = change.Description
+
+		if change.ExpDate != nil {
+			eDate, err := time.Parse(time.RFC3339, *change.ExpDate)
+			if err != nil {
+				return err
+			}
+			updateData.ExpDate = &eDate
+		}
+
+		updateData.ExpNoticePeriod = change.ExpNoticePeriod
+		updateData.ExpPolicy = change.ExpPolicy
 
 		if change.ContractData != nil {
 

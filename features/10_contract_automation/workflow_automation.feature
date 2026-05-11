@@ -6,7 +6,7 @@ Feature: Contract Workflow Automation
   and maintains end-to-end traceability.
 
   Scenario: Orchestrator triggers external action from contract milestone
-    Given I am authenticated with role "Process Orchestrator"
+    Given I am authenticated with roles: "Process Orchestrator"
     And contract "Service Agreement" has milestone "payment_due"
     And external system "ERP Gateway" is configured for milestone triggers
     When milestone "payment_due" is reached on contract "Service Agreement"
@@ -22,7 +22,7 @@ Feature: Contract Workflow Automation
     And the milestone status is updated to "Executed"
 
   Scenario: End-to-end workflow trace is visible
-    Given I am authenticated with role "Process Orchestrator"
+    Given I am authenticated with roles: "Process Orchestrator"
     And contract "Service Agreement" has completed multiple milestones
     When I view the workflow trace for contract "Service Agreement"
     Then I see ordered events from initiation to completion
@@ -30,7 +30,7 @@ Feature: Contract Workflow Automation
     And the trace shows external system interactions
 
   Scenario: Orchestrator initiates synchronized execution with AI platform
-    Given I am authenticated with role "Process Orchestrator"
+    Given I am authenticated with roles: "Process Orchestrator"
     And contract "AI Service Agreement" is configured for AI platform integration
     When I initiate synchronized execution for contract "AI Service Agreement"
     Then the system connects with the configured AI platform
@@ -53,7 +53,7 @@ Feature: Contract Workflow Automation
     And an alert is generated for review
 
   Scenario: Unauthorized role cannot initiate workflow automation
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" has milestone "payment_due"
     When I attempt to trigger external action for contract "Service Agreement"
     Then the request is denied with an authorization error

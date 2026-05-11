@@ -58,7 +58,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
-	jsonMetaData, err := datatype.NewJSON(req.TemplateData)
+	templateData, err := datatype.NewJSON(req.TemplateData)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
@@ -74,7 +74,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 		TemplateType: templateType,
 		Name:         req.Name,
 		Description:  req.Description,
-		TemplateData: &jsonMetaData,
+		TemplateData: &templateData,
 	}
 	createHandler := command.Creator{
 		DB:     s.DB,
@@ -117,7 +117,7 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 		SubmittedBy: middleware.GetUsername(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
-		Reviewer:    req.Reviewers,
+		Reviewers:   req.Reviewers,
 		Approver:    req.Approver,
 	}
 	handler := command.Submitter{
@@ -276,7 +276,7 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 		State:          state,
 		Name:           req.Name,
 		Description:    req.Description,
-		Filter:         req.Filter,
+		TemplateData:   req.TemplateData,
 	}
 	queryHandler := contracttemplate.GetAllMetaDataByFilterHandler{
 		DB:     s.DB,
@@ -290,15 +290,16 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 	var contractTemplates []*templaterepository.ContractTemplateSearchResponse
 	for _, item := range result {
 		contractTemplates = append(contractTemplates, &templaterepository.ContractTemplateSearchResponse{
-			Did:            item.DID,
-			DocumentNumber: item.DocumentNumber,
-			Version:        item.Version,
-			State:          item.State.String(),
-			TemplateType:   item.TemplateType.String(),
-			Name:           item.Name,
-			Description:    item.Description,
-			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
+			Did:                item.DID,
+			DocumentNumber:     item.DocumentNumber,
+			Version:            item.Version,
+			State:              item.State.String(),
+			TemplateType:       item.TemplateType.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			ResponsiblePersons: item.ResponsiblePersons,
 		})
 	}
 
@@ -328,16 +329,17 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 	var contractTemplates []*templaterepository.ContractTemplateItem
 	for _, item := range result.ContractTemplates {
 		contractTemplates = append(contractTemplates, &templaterepository.ContractTemplateItem{
-			Did:            item.DID,
-			DocumentNumber: item.DocumentNumber,
-			Version:        item.Version,
-			State:          item.State.String(),
-			TemplateType:   item.TemplateType.String(),
-			Name:           item.Name,
-			Description:    item.Description,
-			CreatedBy:      item.CreatedBy,
-			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
+			Did:                item.DID,
+			DocumentNumber:     item.DocumentNumber,
+			Version:            item.Version,
+			State:              item.State.String(),
+			TemplateType:       item.TemplateType.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedBy:          item.CreatedBy,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			ResponsiblePersons: item.ResponsiblePersons,
 		})
 	}
 
@@ -392,17 +394,18 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 	}
 
 	return &templaterepository.ContractTemplateRetrieveByIDResponse{
-		Did:            contractTemplate.DID,
-		DocumentNumber: contractTemplate.DocumentNumber,
-		Version:        contractTemplate.Version,
-		State:          contractTemplate.State.String(),
-		TemplateType:   contractTemplate.TemplateType.String(),
-		Name:           contractTemplate.Name,
-		Description:    contractTemplate.Description,
-		CreatedBy:      contractTemplate.CreatedBy,
-		CreatedAt:      contractTemplate.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      contractTemplate.UpdatedAt.Format(time.RFC3339),
-		TemplateData:   contractTemplate.TemplateData,
+		Did:                contractTemplate.DID,
+		DocumentNumber:     contractTemplate.DocumentNumber,
+		Version:            contractTemplate.Version,
+		State:              contractTemplate.State.String(),
+		TemplateType:       contractTemplate.TemplateType.String(),
+		Name:               contractTemplate.Name,
+		Description:        contractTemplate.Description,
+		CreatedBy:          contractTemplate.CreatedBy,
+		CreatedAt:          contractTemplate.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:          contractTemplate.UpdatedAt.Format(time.RFC3339),
+		TemplateData:       contractTemplate.TemplateData,
+		ResponsiblePersons: contractTemplate.ResponsiblePersons,
 	}, nil
 }
 

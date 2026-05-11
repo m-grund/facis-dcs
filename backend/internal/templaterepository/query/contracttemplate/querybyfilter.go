@@ -24,20 +24,21 @@ type GetAllMetadataByFilterQry struct {
 	TemplateType   *contracttemplatetype.ContractTemplateType
 	Name           *string
 	Description    *string
-	Filter         *string
+	TemplateData   *string
 }
 
 type GetAllMetadataByFilterResult struct {
-	DID            string
-	DocumentNumber *string
-	Version        *int
-	State          contracttemplatestate.ContractTemplateState
-	TemplateType   contracttemplatetype.ContractTemplateType
-	Name           *string
-	Description    *string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	MetaData       datatype.JSON
+	DID                string
+	DocumentNumber     *string
+	Version            *int
+	State              contracttemplatestate.ContractTemplateState
+	TemplateType       contracttemplatetype.ContractTemplateType
+	Name               *string
+	Description        *string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ResponsiblePersons *db.ResponsiblePersons
+	MetaData           datatype.JSON
 }
 
 type GetAllMetaDataByFilterHandler struct {
@@ -71,7 +72,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		TemplateType:   templateType,
 		Name:           query.Name,
 		Description:    query.Description,
-		Filter:         query.Filter,
+		TemplateData:   query.TemplateData,
 	}
 
 	contractTemplates, err := h.CTRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues)
@@ -107,15 +108,16 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		}
 
 		result[i] = GetAllMetadataByFilterResult{
-			DID:            data.DID,
-			DocumentNumber: data.DocumentNumber,
-			Version:        data.Version,
-			State:          ctState,
-			TemplateType:   ctType,
-			Name:           data.Name,
-			Description:    data.Description,
-			CreatedAt:      data.CreatedAt,
-			UpdatedAt:      data.UpdatedAt,
+			DID:                data.DID,
+			DocumentNumber:     data.DocumentNumber,
+			Version:            data.Version,
+			State:              ctState,
+			TemplateType:       ctType,
+			Name:               data.Name,
+			Description:        data.Description,
+			CreatedAt:          data.CreatedAt,
+			UpdatedAt:          data.UpdatedAt,
+			ResponsiblePersons: data.ResponsiblePersons,
 		}
 	}
 

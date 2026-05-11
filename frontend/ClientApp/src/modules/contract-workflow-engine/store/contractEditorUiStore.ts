@@ -3,6 +3,7 @@ import type { ContractEditorTabId, ContractEditorUiState } from '../models/contr
 import type { ContractState as ContractStateType } from '@/types/contract-state'
 import { ContractState } from '@/types/contract-state'
 import { useAuthStore } from '@/stores/auth-store'
+import type { UserRole } from '@/types/user-role'
 
 const storeId = 'contractEditorUi'
 const defaultState: Readonly<ContractEditorUiState> = {
@@ -25,16 +26,13 @@ export const useContractEditorUiStore = defineStore(storeId, {
       this.activeTab = tab
     },
     availableTabs(contractState: ContractStateType) {
-      const isManager = useAuthStore().user?.roles?.includes('CONTRACT_MANAGER') ?? false
+      const isAuditingAuthorized = (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => useAuthStore().user?.roles?.includes(role)) ?? false
 
       switch (contractState) {
-        case ContractState.draft:
-          // Keep the edit page simple for now, same for the negotiation states
-          return this.tabs.filter(tab => ['details', 'content'].includes(tab.id))
         case ContractState.negotiation:
-          return this.tabs.filter((tab) => ['details', 'content', 'diff'].includes(tab.id) || isManager && tab.id === 'audit')
+          return this.tabs.filter((tab) => ['details', 'content', 'diff'].includes(tab.id) || isAuditingAuthorized && tab.id === 'audit')
         default:
-          return this.tabs.filter(tab => ['details', 'content'].includes(tab.id) || isManager && tab.id === 'audit')
+          return this.tabs.filter(tab => ['details', 'content'].includes(tab.id) || isAuditingAuthorized && tab.id === 'audit')
       }
     },
     reset(overrides?: Partial<ContractEditorUiState>) {

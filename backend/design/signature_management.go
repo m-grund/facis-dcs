@@ -357,8 +357,9 @@ var _ = Service("SignatureManagement", func() {
 		Meta("dcs:sm:components", "")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+			Scope("System Administrator")
 		})
 
 		Payload(SMContractAuditRequest)

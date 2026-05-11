@@ -27,8 +27,8 @@ func TestCreate_CreateNewContractTemplate(t *testing.T) {
 	name := "Test Contract Template"
 	description := "Test Description"
 
-	templateData := map[string]interface{}{}
-	jsonMetaData, err := datatype.NewJSON(templateData)
+	templateDataMap := map[string]interface{}{}
+	templateData, err := datatype.NewJSON(templateDataMap)
 	if err != nil {
 		t.Fatalf("Failed to create JSON template data: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestCreate_CreateNewContractTemplate(t *testing.T) {
 		TemplateType: contracttemplatetype.FrameContract,
 		Name:         &name,
 		Description:  &description,
-		TemplateData: &jsonMetaData,
+		TemplateData: &templateData,
 	}
 	createHandler := command.Creator{
 		DB:     db,
@@ -72,5 +72,5 @@ func TestCreate_CreateNewContractTemplate(t *testing.T) {
 	assert.Equal(t, *did, contractTemplate.DID)
 	assert.Equal(t, name, *contractTemplate.Name)
 	assert.Equal(t, description, *contractTemplate.Description)
-	assert.Equal(t, jsonMetaData, *contractTemplate.TemplateData)
+	assert.Equal(t, templateData, *contractTemplate.TemplateData)
 }

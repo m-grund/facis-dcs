@@ -31,15 +31,16 @@ func (e CreateEvent) GetDID() string {
 
 // SubmitEvent is emitted when a template is submitted
 type SubmitEvent struct {
-	DID            string                 `json:"did"`
-	DocumentNumber *string                `json:"document_number,omitempty"`
-	Version        *int                   `json:"version,omitempty"`
-	PreviousState  string                 `json:"previous_state"`
-	NewState       string                 `json:"new_state"`
-	SubmittedBy    string                 `json:"submitted_by"`
-	ActionFlag     *actionflag.ActionFlag `json:"action_flag"`
-	Comments       []string               `json:"comments,omitempty"`
-	OccurredAt     time.Time              `json:"occurred_at"`
+	DID                string                 `json:"did"`
+	DocumentNumber     *string                `json:"document_number,omitempty"`
+	Version            *int                   `json:"version,omitempty"`
+	PreviousState      string                 `json:"previous_state"`
+	NewState           string                 `json:"new_state"`
+	SubmittedBy        string                 `json:"submitted_by"`
+	ActionFlag         *actionflag.ActionFlag `json:"action_flag"`
+	Comments           []string               `json:"comments,omitempty"`
+	OccurredAt         time.Time              `json:"occurred_at"`
+	ResponsiblePersons *any                   `json:"responsible_persons,omitempty"`
 }
 
 // EventType implements the Event interface.

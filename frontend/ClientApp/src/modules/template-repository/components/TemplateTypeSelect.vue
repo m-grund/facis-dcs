@@ -1,7 +1,7 @@
 <template>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <button type="button"
-      class="text-left rounded-2xl border-2 p-8 min-h-[200px] flex flex-col justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      class="text-left rounded-2xl border-2 p-8 min-h-50 flex flex-col justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       :class="modelValue === TemplateType.frameContract
         ? 'border-primary bg-primary/10 shadow-lg'
         : 'border-base-300 hover:border-primary/50 hover:bg-base-200/50'"
@@ -12,7 +12,7 @@
       </p>
     </button>
     <button type="button"
-      class="text-left rounded-2xl border-2 p-8 min-h-[200px] flex flex-col justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      class="text-left rounded-2xl border-2 p-8 min-h-50 flex flex-col justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       :class="modelValue === TemplateType.subContract
         ? 'border-primary bg-primary/10 shadow-lg'
         : 'border-base-300 hover:border-primary/50 hover:bg-base-200/50'"

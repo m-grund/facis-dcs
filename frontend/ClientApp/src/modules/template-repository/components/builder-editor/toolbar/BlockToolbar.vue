@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col items-start gap-1 flex-shrink-0" role="toolbar" aria-label="Block actions">
+  <div class="flex flex-col items-start gap-1 shrink-0" role="toolbar" aria-label="Block actions">
     <div class="flex items-center gap-0.5">
       <button type="button" :class="btnIcon" title="Insert above" aria-label="Insert block above"
         @click="onInsertAbove">
@@ -38,7 +38,7 @@
       </button>
     </div>
     <div v-if="isDirty" class="flex items-center gap-1 w-full">
-      <button type="button" class="btn btn-ghost btn-xs flex-1" @click="onCancel">
+      <button type="button" class="btn btn-outline btn-xs flex-1" @click="onCancel">
         Cancel
       </button>
       <button type="button" class="btn btn-primary btn-xs flex-1" @click="onConfirm">

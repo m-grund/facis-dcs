@@ -104,7 +104,7 @@ export const contractTemplateService: ContractTemplateService = {
   },
 
   async verify(request: ContractTemplateVerifyRequest) {
-    return http.get<ContractTemplateVerifyResponse>(`/template/verify/${request.did}`).then((res) => res.data)
+    return http.post<ContractTemplateVerifyResponse>(`/template/verify`, request).then((res) => res.data)
   },
 
   async archive(request: ContractTemplateArchiveRequest) {

@@ -17,7 +17,7 @@
         @update:model-value="localText = $event" />
     </div>
     <div class="flex justify-between items-center">
-      <button v-if="mode === 'edit'" type="button" class="btn btn-ghost btn-xs" @click="$emit('cancel')">
+      <button v-if="mode === 'edit'" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">
         Cancel
       </button>
       <span v-else />

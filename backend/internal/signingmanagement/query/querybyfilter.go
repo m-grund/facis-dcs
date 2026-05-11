@@ -57,10 +57,10 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		ContractVersion: query.ContractVersion,
 		Name:            query.Name,
 		Description:     query.Description,
-		Filter:          query.Filter,
+		ContractData:    query.Filter,
 	}
 
-	contracts, err := h.CRepo.ReadAllMetaDataByFilter(tx, searchValues)
+	contracts, err := h.CRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all contract: %w", err)
 	}

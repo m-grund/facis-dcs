@@ -5,13 +5,13 @@ Feature: Template Management Dashboard
   and usage metrics.
 
   Scenario: View dashboard with template metrics
-    Given I am authenticated with role "Template Manager"
+    Given I am authenticated with roles: "Template Manager"
     When I open the template management dashboard
     Then I see template lifecycle status
     And I see usage metrics
     And I see recent modifications
 
   Scenario: Unauthorized role cannot access dashboard
-    Given I am authenticated with role "Template Reviewer"
+    Given I am authenticated with roles: "Template Reviewer"
     When I attempt to open the template management dashboard
     Then the request is denied with an authorization error

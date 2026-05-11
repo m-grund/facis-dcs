@@ -31,7 +31,10 @@ var ContractUpdateRequest = Type("ContractUpdateRequest", func() {
 
 	Attribute("updated_at", String, "The timestamp when the contract was updated")
 
-	Attribute("expiration_date", String, "The timestamp when the contract expired")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
 	Attribute("contract_version", Int, "The version of the contract")
 
@@ -92,6 +95,11 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
 
 	Required("did", "state", "created_by", "created_at", "updated_at")
 })
@@ -182,6 +190,13 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
+
 	Attribute("contract_data", Any, "The data of that contract")
 
 	Attribute("negotiations", ArrayOf(ContractNegotiationItem), "List with negotiations for that contract")
@@ -217,7 +232,7 @@ var ContractSearchRequest = Type("ContractSearchRequest", func() {
 	Attribute("state", String, "The state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
-	Attribute("filter", String, "Search value for full text search in contract data")
+	Attribute("contract_data", String, "Search value for full text search in contract data")
 })
 
 var ContractSearchResponse = Type("ContractSearchResponse", func() {
@@ -229,6 +244,13 @@ var ContractSearchResponse = Type("ContractSearchResponse", func() {
 	Attribute("state", String, "The state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
+
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
 
 	Attribute("created_at", String, "The timestamp when the contract template was created")
 
@@ -644,7 +666,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Param("state")
 			Param("name")
 			Param("description")
-			Param("filter")
+			Param("contract_data")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -760,8 +782,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Meta("dcs:ui", "Contract Management Dashboard")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+			Scope("System Administrator")
 		})
 
 		Payload(ContractAuditRequest)

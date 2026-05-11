@@ -6,7 +6,7 @@ Feature: Contract Term Adjustment
   integrity and full audit history.
 
   Scenario: Adjust specific contract clause
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Draft" status
     When I adjust clause "Payment Terms" with new text
     Then only the targeted clause is changed
@@ -14,14 +14,14 @@ Feature: Contract Term Adjustment
     And the document integrity is maintained
 
   Scenario: Integrity check passes after clause adjustment
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has been adjusted
     When the system performs integrity checks
     Then the integrity checks pass
     And the contract structure is valid
 
   Scenario: Audit trail updated after adjustment
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Draft" status
     When I adjust clause "Liability" with new text
     Then the audit trail is updated
@@ -30,7 +30,7 @@ Feature: Contract Term Adjustment
     And the previous clause text is preserved in history
 
   Scenario: Side-by-side version comparison
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" has multiple versions
     When I compare version "1.0" with version "2.0"
     Then I see a side-by-side comparison
@@ -38,7 +38,7 @@ Feature: Contract Term Adjustment
     And I can identify which clauses changed
 
   Scenario: Redline view of adjustments
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" has pending adjustments
     When I view the redline for contract "Service Agreement"
     Then I see additions highlighted
@@ -46,14 +46,14 @@ Feature: Contract Term Adjustment
     And I can accept or reject individual changes
 
   Scenario: Automated check for missing fields after adjustment
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has been adjusted
     When the system performs automated checks
     Then missing fields are flagged
     And inconsistencies are identified
 
   Scenario: Rollback to previous version
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has version "2.0" with unwanted changes
     When I rollback contract "Service Agreement" to version "1.0"
     Then the contract is restored to version "1.0"
@@ -61,7 +61,7 @@ Feature: Contract Term Adjustment
     And the rolled-back version becomes the current version
 
   Scenario: Unauthorized role cannot adjust contracts
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is in "Draft" status
     When I attempt to adjust clause "Payment Terms"
     Then the request is denied with an authorization error

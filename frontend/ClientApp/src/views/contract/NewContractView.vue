@@ -85,7 +85,10 @@ const submit = async () => {
       await contractWorkflowService.update({
         did: contract.value.did,
         updated_at: contract.value.updated_at,
-        expiration_date: contract.value.expiration_date,
+        start_date: contract.value.start_date,
+        exp_date: contract.value.exp_date,
+        exp_notice_period: contract.value.exp_notice_period,
+        exp_policy: contract.value.exp_policy,
         contract_version: contract.value.contract_version,
         name: contract.value.name,
         description: contract.value.description,
@@ -274,7 +277,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button @click="submit" class="btn btn-primary flex-1" :disabled="isSubmitting || !canSubmit">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
           {{ isEditMode ? 'Update Contract' : 'Create' }}

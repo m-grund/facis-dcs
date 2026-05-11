@@ -23,6 +23,7 @@ import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -49,7 +50,9 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isManager = computed(() => useAuthStore().user?.roles?.includes('CONTRACT_MANAGER') ?? false)
+const isAuditingAuthorized = computed(() => 
+  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
@@ -57,14 +60,24 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 
 const contract: Ref<Contract | null> = ref(null)
 const editedContract: Ref<Contract | null> = ref(null)
-const compareChangesData: Ref<Contract | null> = ref(null)
+const compareChangesData: Ref<Contract & { exp_notice_period_str: string, exp_policy_str: string} | null> = ref(null)
 
 const hasChangeRequest = computed(() => {
-  return changedName.value || changedDescription.value || changedContractData.value
+  return changedName.value ||
+         changedDescription.value ||
+         changedContractData.value ||
+         changedStartDate.value ||
+         changeExpDate.value ||
+         changeExpNoticePeriod.value ||
+         changeExpPolicy.value
 })
 
 const changedName = computed(() => editedContract.value?.name !== contract.value?.name)
 const changedDescription = computed(() => editedContract.value?.description !== contract.value?.description)
+const changedStartDate = computed(() => editedContract.value?.start_date != contract.value?.start_date)
+const changeExpDate = computed(() => editedContract.value?.exp_date != contract.value?.exp_date)
+const changeExpNoticePeriod = computed(() => editedContract.value?.exp_notice_period != contract.value?.exp_notice_period)
+const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
   return (
     contract.value?.contract_data &&
@@ -130,6 +143,18 @@ const negotiateContractChange = async () => {
     }
     if (changedDescription.value) {
       changeRequest.description = editedContract.value.description
+    }
+    if (changedStartDate.value) {
+      changeRequest.start_date = editedContract.value.start_date
+    }
+    if (changeExpDate.value) {
+      changeRequest.exp_date = editedContract.value.exp_date
+    }
+    if (changeExpNoticePeriod.value) {
+      changeRequest.exp_notice_period = editedContract.value.exp_notice_period
+    }
+    if (changeExpPolicy.value) {
+      changeRequest.exp_policy = editedContract.value.exp_policy
     }
     if (changedContractData.value) {
       changeRequest.contract_data = { semanticConditionValues: contractContentValuesStore.semanticConditionValues }
@@ -212,6 +237,7 @@ const handleSelectedNegotiation = async (
   negotiation: ContractNegotiation | null,
   selectedContract: Contract | null,
 ) => {
+
   if (!contract.value || !selectedContract) return
   compareChangesData.value = !!negotiation
     ? {
@@ -219,6 +245,18 @@ const handleSelectedNegotiation = async (
         name: negotiation.change_request.name
           ? `${contract.value.name} -> ${negotiation.change_request.name}`
           : contract.value.name,
+        start_date: negotiation.change_request.start_date
+          ? `${contract.value.start_date?.slice(0, 16)} -> ${negotiation.change_request.start_date?.slice(0, 16)}`
+          : contract.value.start_date,
+        exp_date: negotiation.change_request.exp_date
+          ? `${contract.value.exp_date?.slice(0, 16)} -> ${negotiation.change_request.exp_date?.slice(0, 16)}`
+          : contract.value.exp_date,
+        exp_notice_period_str: negotiation.change_request.exp_notice_period
+          ? `${contract.value.exp_notice_period} -> ${negotiation.change_request.exp_notice_period}`
+          : contract.value.exp_notice_period?.toString() ?? '',
+        exp_policy_str: negotiation.change_request.exp_policy
+          ? `${contract.value.exp_policy} -> ${negotiation.change_request.exp_policy}`
+          : contract.value.exp_policy ?? '',
         description: negotiation.change_request.description
           ? `${contract.value.description} -> ${negotiation.change_request.description}`
           : contract.value.description,
@@ -340,7 +378,14 @@ const currentContractData = computed<ContractData | undefined>(() => {
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor
                   :contract="shownData"
-                  :inserted="{ name: compareChangesData?.name, description: compareChangesData?.description }"
+                  :inserted="{ 
+                    name: compareChangesData?.name, 
+                    description: compareChangesData?.description,
+                    start_date: compareChangesData?.start_date,
+                    exp_date: compareChangesData?.exp_date,
+                    exp_notice_period: compareChangesData?.exp_notice_period_str,
+                    exp_policy: compareChangesData?.exp_policy_str
+                  }"
                 />
               </div>
 
@@ -366,7 +411,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
                 <DiffView :prior-contract-data="priorContractData" :current-contract-data="currentContractData" />
               </div>
 
-              <template v-if="isManager">
+              <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
                   <div class="card bg-base-100 border border-base-300 shadow-sm">
                     <div class="card-body">
@@ -392,7 +437,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"

@@ -28,7 +28,7 @@
           @click="onConfirm">
           Add
         </button>
-        <button v-if="isEditing" type="button" class="btn btn-ghost btn-xs" @click="onCancel">
+        <button v-if="isEditing" type="button" class="btn btn-outline btn-xs" @click="onCancel">
           Cancel
         </button>
       </div>
@@ -42,18 +42,18 @@
           <button type="button" class="btn btn-primary btn-xs" :disabled="!canConfirm" @click="onConfirm">
             Confirm
           </button>
-          <button type="button" class="btn btn-ghost btn-xs" @click="onCancel">
+          <button type="button" class="btn btn-outline btn-xs" @click="onCancel">
             Cancel
           </button>
-          <button type="button" class="btn btn-ghost btn-xs text-error" @click="onDelete">
+          <button type="button" class="btn btn-outline btn-xs text-error" @click="onDelete">
             Delete
           </button>
         </template>
         <template v-else>
-          <button type="button" class="btn btn-ghost btn-xs" @click="startEdit">
+          <button type="button" class="btn btn-outline btn-xs" @click="startEdit">
             Edit
           </button>
-          <button type="button" class="btn btn-ghost btn-xs text-error" @click="onDelete">
+          <button type="button" class="btn btn-outline btn-xs text-error" @click="onDelete">
             Delete
           </button>
         </template>

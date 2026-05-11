@@ -13,10 +13,9 @@ import (
 )
 
 type PostgresContractRepo struct {
-	Ctx context.Context
 }
 
-func (r *PostgresContractRepo) ReadDataByID(tx *sqlx.Tx, did string) (*db.Contract, error) {
+func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version
@@ -25,7 +24,7 @@ func (r *PostgresContractRepo) ReadDataByID(tx *sqlx.Tx, did string) (*db.Contra
          AND state = 'APPROVED'
     `
 	var ct db.Contract
-	err := tx.GetContext(r.Ctx, &ct, query, did)
+	err := tx.GetContext(ctx, &ct, query, did)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("contract with DID %s not found", did)
@@ -35,21 +34,21 @@ func (r *PostgresContractRepo) ReadDataByID(tx *sqlx.Tx, did string) (*db.Contra
 	return &ct, nil
 }
 
-func (r *PostgresContractRepo) ReadAllMetaData(tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
         FROM contracts
         WHERE state = 'APPROVED'
     `
 	var cts []db.ContractMetadata
-	err := tx.SelectContext(r.Ctx, &cts, query)
+	err := tx.SelectContext(ctx, &cts, query)
 	if err != nil {
 		return []db.ContractMetadata{}, err
 	}
 	return cts, nil
 }
 
-func (r *PostgresContractRepo) ReadAllMetaDataByFilter(tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
+func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
         FROM contracts
@@ -64,14 +63,14 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(tx *sqlx.Tx, values db.Se
 	}
 
 	var cts []db.ContractMetadata
-	err = tx.SelectContext(r.Ctx, &cts, query, params...)
+	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
 		return []db.ContractMetadata{}, err
 	}
 	return cts, nil
 }
 
-func (r *PostgresContractRepo) ReadProcessData(tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
+func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
         SELECT did, state, updated_at, created_by, contract_version
         FROM contracts
@@ -79,7 +78,7 @@ func (r *PostgresContractRepo) ReadProcessData(tx *sqlx.Tx, did string) (*db.Con
          AND  state = 'APPROVED'
     `
 	var processData db.ContractProcessData
-	err := tx.GetContext(r.Ctx, &processData, query, did)
+	err := tx.GetContext(ctx, &processData, query, did)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("contract with DID %s", did)
@@ -89,22 +88,22 @@ func (r *PostgresContractRepo) ReadProcessData(tx *sqlx.Tx, did string) (*db.Con
 	return &processData, nil
 }
 
-func (r *PostgresContractRepo) UpdateState(tx *sqlx.Tx, did string, state string) error {
+func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
         UPDATE contracts SET state = $2
         WHERE did = $1
          AND  state = 'APPROVED'
     `
-	_, err := tx.ExecContext(r.Ctx, statement, did, state)
+	_, err := tx.ExecContext(ctx, statement, did, state)
 	return err
 }
 
-func (r *PostgresContractRepo) Update(tx *sqlx.Tx, data db.ContractUpdateData) error {
+func (r *PostgresContractRepo) Update(ctx context.Context, tx *sqlx.Tx, data db.ContractUpdateData) error {
 	query, params, err := createQuery(data)
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(r.Ctx, *query, params...)
+	_, err = tx.ExecContext(ctx, *query, params...)
 	return err
 }
 
@@ -133,9 +132,9 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, "%"+*values.Description+"%")
 		paramIndex++
 	}
-	if values.Filter != nil {
+	if values.ContractData != nil {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, *values.Filter)
+		params = append(params, *values.ContractData)
 		paramIndex++
 	}
 

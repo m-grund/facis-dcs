@@ -161,8 +161,8 @@ const roleInfoText = computed(() => {
           <span v-else-if="!allSelectedUsersHaveRoles">Assign a role to all selected users</span>
           <span v-else>{{ roleInfoText }}</span>
         </div>
+        <button @click="onModalClose" class="btn btn-outline">Cancel</button>
         <button @click="onModalSubmit" :disabled="isSubmitDisabled" class="btn btn-primary">Apply</button>
-        <button @click="onModalClose" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
   </dialog>
