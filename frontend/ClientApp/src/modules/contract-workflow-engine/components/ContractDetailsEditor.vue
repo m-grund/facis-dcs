@@ -43,29 +43,48 @@
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Date</legend>
         <input
+          v-if="!inserted?.exp_date"
           v-model="expDateLocal"
           type="datetime-local"
-          class="input w-full"
-          :disabled="disabled"
+          class="input input-bordered w-full"
           :min="minExpDate"
           @change="onExpDateChange"
+          :disabled="disabled"
+        />
+        <input
+          v-else
+          type="text"
+          v-model="expDateLocal"
+          class="input input-bordered w-full"
+           :class="{ 'text-red-400': inserted.exp_date !== contract.exp_date }"
+          disabled
         />
       </fieldset>
 
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Notice Period (in days)</legend>
         <input
+          v-if="!inserted?.exp_notice_period"
           v-model="contract.exp_notice_period"
           type="number"
           min="0"
           class="input w-full"
           :disabled="disabled"
         />
+        <input
+          v-else
+          type="text"
+          v-model="inserted.exp_notice_period"
+          class="input input-bordered w-full"
+           :class="{ 'text-red-400': inserted.exp_notice_period !== contract.exp_notice_period?.toString() }"
+          disabled
+        />
       </fieldset>
 
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Policy</legend>
         <select
+          v-if="!inserted?.exp_policy"
           v-model="contract.exp_policy"
           class="select w-full"
           :disabled="disabled"
@@ -74,6 +93,14 @@
             {{ policy.name }}
           </option>
         </select>
+        <input
+          v-else
+          type="text"
+          v-model="inserted.exp_policy"
+          class="input input-bordered w-full"
+           :class="{ 'text-red-400': inserted.exp_policy !== contract.exp_policy }"
+          disabled
+        />
       </fieldset>
     </div>
   </div>
@@ -120,8 +147,8 @@ interface ContractDetailData {
   name?: string
   description?: string
   exp_date?: string
-  exp_notice_period?: number
-  exp_policy?: ExpirationPolicy
+  exp_notice_period?: string
+  exp_policy?: string
 }
 
 const minExpDate = computed(() => {

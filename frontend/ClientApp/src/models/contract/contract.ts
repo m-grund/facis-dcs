@@ -21,9 +21,9 @@ export interface Contract {
   updated_at: string
   exp_date?: string
   exp_notice_period?: number
-  exp_policy: ExpirationPolicy
+  exp_policy?: ExpirationPolicy
   contract_data?: ContractData
   negotiations?: ContractNegotiation[]
 }
 
-export type ContractChangeRequest = Pick<Contract, 'name' | 'description'> & { contract_data?: Partial<Contract['contract_data']> }
+export type ContractChangeRequest = Pick<Contract, 'name' | 'description' | 'exp_date' | 'exp_notice_period' | 'exp_policy'> & { contract_data?: Partial<Contract['contract_data']> }

@@ -127,7 +127,7 @@ function expirationMessage(timeUtil: TimeUntil): string {
         <div  class="flex justify-between">
             <div v-if="contract?.exp_date">Expiration date: {{ new Date(contract?.exp_date ?? '').toLocaleString() }}</div>
             <div 
-              v-if="contract?.state !== ContractState.draft && timeUntil(contract?.exp_date).totalDays > 0"
+              v-if="timeUntil(contract?.exp_date).totalDays > 0"
               :class="expirationBadgeClass(timeUntil(contract?.exp_date), contract?.exp_notice_period)">{{expirationMessage(timeUntil(contract?.exp_date))}}</div>
         </div>
       </div>

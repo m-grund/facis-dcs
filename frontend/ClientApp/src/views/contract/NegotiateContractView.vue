@@ -60,14 +60,22 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 
 const contract: Ref<Contract | null> = ref(null)
 const editedContract: Ref<Contract | null> = ref(null)
-const compareChangesData: Ref<Contract | null> = ref(null)
+const compareChangesData: Ref<Contract & { exp_notice_period_str: string, exp_policy_str: string} | null> = ref(null)
 
 const hasChangeRequest = computed(() => {
-  return changedName.value || changedDescription.value || changedContractData.value
+  return changedName.value ||
+         changedDescription.value ||
+         changedContractData.value ||
+         changeExpDate.value ||
+         changeExpNoticePeriod.value ||
+         changeExpPolicy.value
 })
 
 const changedName = computed(() => editedContract.value?.name !== contract.value?.name)
 const changedDescription = computed(() => editedContract.value?.description !== contract.value?.description)
+const changeExpDate = computed(() => editedContract.value?.exp_date != contract.value?.exp_date)
+const changeExpNoticePeriod = computed(() => editedContract.value?.exp_notice_period != contract.value?.exp_notice_period)
+const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
   return (
     contract.value?.contract_data &&
@@ -133,6 +141,15 @@ const negotiateContractChange = async () => {
     }
     if (changedDescription.value) {
       changeRequest.description = editedContract.value.description
+    }
+    if (changeExpDate.value) {
+      changeRequest.exp_date = editedContract.value.exp_date
+    }
+    if (changeExpNoticePeriod.value) {
+      changeRequest.exp_notice_period = editedContract.value.exp_notice_period
+    }
+    if (changeExpPolicy.value) {
+      changeRequest.exp_policy = editedContract.value.exp_policy
     }
     if (changedContractData.value) {
       changeRequest.contract_data = { semanticConditionValues: contractContentValuesStore.semanticConditionValues }
@@ -222,6 +239,15 @@ const handleSelectedNegotiation = async (
         name: negotiation.change_request.name
           ? `${contract.value.name} -> ${negotiation.change_request.name}`
           : contract.value.name,
+        exp_date: negotiation.change_request.exp_date
+          ? `${contract.value.exp_date} -> ${negotiation.change_request.exp_date}`
+          : contract.value.exp_date,
+        exp_notice_period_str: negotiation.change_request.exp_notice_period
+          ? `${contract.value.exp_notice_period} -> ${negotiation.change_request.exp_notice_period}`
+          : contract.value.exp_notice_period?.toString() ?? '',
+        exp_policy_str: negotiation.change_request.exp_policy
+          ? `${contract.value.exp_policy} -> ${negotiation.change_request.exp_policy}`
+          : contract.value.exp_policy ?? '',
         description: negotiation.change_request.description
           ? `${contract.value.description} -> ${negotiation.change_request.description}`
           : contract.value.description,
@@ -343,7 +369,13 @@ const currentContractData = computed<ContractData | undefined>(() => {
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor
                   :contract="shownData"
-                  :inserted="{ name: compareChangesData?.name, description: compareChangesData?.description }"
+                  :inserted="{ 
+                    name: compareChangesData?.name, 
+                    description: compareChangesData?.description,
+                    exp_date: compareChangesData?.exp_date,
+                    exp_notice_period: compareChangesData?.exp_notice_period_str,
+                    exp_policy: compareChangesData?.exp_policy_str
+                  }"
                 />
               </div>
 
