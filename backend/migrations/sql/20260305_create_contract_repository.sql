@@ -10,16 +10,19 @@ CREATE TABLE IF NOT EXISTS contracts
     created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    start_date          TIMESTAMP,
     exp_date          TIMESTAMP,
     exp_policy        contract_expiration_policy,
     exp_notice_period INT,
+
+    responsible_persons     JSONB DEFAULT '{}'::jsonb,
 
     state             contract_state NOT NULL,
 
     contract_version  INT,
     name              VARCHAR(255),
     description       TEXT,
-    contract_data     JSONB                   DEFAULT '{}'::jsonb,
+    contract_data     JSONB DEFAULT '{}'::jsonb,
     search_vector     tsvector GENERATED ALWAYS AS (
         to_tsvector('english', contract_data::text)
         ) STORED,
@@ -36,6 +39,7 @@ SELECT
     created_by,
     created_at,
     updated_at,
+    start_date,
     exp_date,
     exp_policy,
     exp_notice_period,
@@ -49,7 +53,8 @@ SELECT
     name,
     description,
     contract_data,
-    search_vector
+    search_vector,
+    responsible_persons
 FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -60,6 +65,7 @@ SELECT
     created_by,
     created_at,
     updated_at,
+    start_date,
     exp_date,
     exp_policy,
     exp_notice_period,
@@ -71,7 +77,8 @@ SELECT
         END AS state,
     contract_version,
     name,
-    description
+    description,
+    responsible_persons
 FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -82,6 +89,7 @@ SELECT
     created_by,
     created_at,
     updated_at,
+    start_date,
     exp_date,
     exp_policy,
     exp_notice_period,

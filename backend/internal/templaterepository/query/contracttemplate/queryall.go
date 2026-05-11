@@ -22,17 +22,18 @@ type GetAllMetadataQry struct {
 }
 
 type MetadataItem struct {
-	DID            string
-	DocumentNumber *string
-	Version        *int
-	State          contracttemplatestate.ContractTemplateState
-	TemplateType   contracttemplatetype.ContractTemplateType
-	Name           *string
-	Description    *string
-	CreatedBy      string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	MetaData       datatype.JSON
+	DID                string
+	DocumentNumber     *string
+	Version            *int
+	State              contracttemplatestate.ContractTemplateState
+	TemplateType       contracttemplatetype.ContractTemplateType
+	Name               *string
+	Description        *string
+	CreatedBy          string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ResponsiblePersons *db.ResponsiblePersons
+	MetaData           datatype.JSON
 }
 
 type ReviewTaskItem struct {
@@ -118,16 +119,17 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata := MetadataItem{
-			DID:            data.DID,
-			DocumentNumber: data.DocumentNumber,
-			Version:        data.Version,
-			State:          state,
-			TemplateType:   templateType,
-			Name:           data.Name,
-			Description:    data.Description,
-			CreatedBy:      data.CreatedBy,
-			CreatedAt:      data.CreatedAt,
-			UpdatedAt:      data.UpdatedAt,
+			DID:                data.DID,
+			DocumentNumber:     data.DocumentNumber,
+			Version:            data.Version,
+			State:              state,
+			TemplateType:       templateType,
+			Name:               data.Name,
+			Description:        data.Description,
+			CreatedBy:          data.CreatedBy,
+			CreatedAt:          data.CreatedAt,
+			UpdatedAt:          data.UpdatedAt,
+			ResponsiblePersons: data.ResponsiblePersons,
 		}
 		contractTemplatesItems = append(contractTemplatesItems, metadata)
 

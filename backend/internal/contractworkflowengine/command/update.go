@@ -21,6 +21,7 @@ type UpdateCmd struct {
 	ContractVersion *int
 	UpdatedAt       time.Time
 	UpdatedBy       string
+	StartDate       *time.Time
 	ExpDate         *time.Time
 	ExpPolicy       *expirationpolicy.ExpirationPolicy
 	ExpNoticePeriod *int
@@ -66,6 +67,19 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		}
 	}
 
+	if cmd.StartDate != nil {
+		tomorrow := time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
+		if cmd.StartDate.Before(tomorrow) {
+			return fmt.Errorf("start date must be at least one day in the future")
+		}
+	}
+
+	if cmd.StartDate != nil && cmd.ExpDate != nil {
+		if !cmd.ExpDate.After(*cmd.StartDate) {
+			return fmt.Errorf("expiration date must be after start date")
+		}
+	}
+
 	var oldExpPolicy *expirationpolicy.ExpirationPolicy
 	if oldData.ExpPolicy != nil {
 		policy, err := expirationpolicy.NewExpirationPolicy(*oldData.ExpPolicy)
@@ -86,6 +100,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		ContractVersion: cmd.ContractVersion,
 		Name:            cmd.Name,
 		Description:     cmd.Description,
+		StartDate:       cmd.StartDate,
 		ExpDate:         cmd.ExpDate,
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: cmd.ExpNoticePeriod,
@@ -106,6 +121,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewDescription:     cmd.Description,
 		OldContractData:    oldData.ContractData,
 		NewContractData:    cmd.ContractData,
+		OldStartDate:       oldData.StartDate,
+		NewStartDate:       newData.StartDate,
 		OldExpDate:         oldData.ExpDate,
 		NewExpDate:         cmd.ExpDate,
 		OldExpPolicy:       oldExpPolicy,

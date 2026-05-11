@@ -50,6 +50,8 @@ type UpdateEvent struct {
 	NewExpPolicy       *expirationpolicy.ExpirationPolicy `json:"new_exp_policy,omitempty"`
 	OldExpNoticePeriod *int                               `json:"old_exp_notice_period,omitempty"`
 	NewExpNoticePeriod *int                               `json:"new_exp_notice_period,omitempty"`
+	OldStartDate       *time.Time                         `json:"old_start_date,omitempty"`
+	NewStartDate       *time.Time                         `json:"new_start_date,omitempty"`
 }
 
 // EventType implements the Event interface.
@@ -64,14 +66,15 @@ func (e UpdateEvent) GetDID() string {
 
 // SubmitEvent is emitted when a contract is submitted
 type SubmitEvent struct {
-	DID             string                 `json:"did"`
-	PreviousState   string                 `json:"previous_state"`
-	NewState        string                 `json:"new_state"`
-	SubmittedBy     string                 `json:"submitted_by"`
-	OccurredAt      time.Time              `json:"occurred_at"`
-	ContractVersion *int                   `json:"contract_version,omitempty"`
-	ActionFlag      *actionflag.ActionFlag `json:"action_flag,omitempty"`
-	Comments        []string               `json:"comments"`
+	DID                string                 `json:"did"`
+	PreviousState      string                 `json:"previous_state"`
+	NewState           string                 `json:"new_state"`
+	SubmittedBy        string                 `json:"submitted_by"`
+	OccurredAt         time.Time              `json:"occurred_at"`
+	ContractVersion    *int                   `json:"contract_version,omitempty"`
+	ActionFlag         *actionflag.ActionFlag `json:"action_flag,omitempty"`
+	Comments           []string               `json:"comments"`
+	ResponsiblePersons *any                   `json:"responsible_persons,omitempty"`
 }
 
 // EventType implements the Event interface.

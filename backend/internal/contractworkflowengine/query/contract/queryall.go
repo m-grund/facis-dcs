@@ -25,18 +25,20 @@ type GetAllMetadataQry struct {
 }
 
 type MetadataItem struct {
-	DID             string
-	ContractVersion *int
-	Name            *string
-	Description     *string
-	State           contractstate.ContractState
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	MetaData        datatype.JSON
-	CreatedBy       string
-	ExpDate         *time.Time
-	ExpPolicy       *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod *int
+	DID                string
+	ContractVersion    *int
+	Name               *string
+	Description        *string
+	State              contractstate.ContractState
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	MetaData           datatype.JSON
+	CreatedBy          string
+	StartDate          *time.Time
+	ExpDate            *time.Time
+	ExpPolicy          *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod    *int
+	ResponsiblePersons *db.ResponsiblePersons
 }
 
 type ReviewTaskItem struct {
@@ -142,17 +144,19 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata := MetadataItem{
-			DID:             data.DID,
-			ContractVersion: data.ContractVersion,
-			State:           state,
-			Name:            data.Name,
-			Description:     data.Description,
-			CreatedBy:       data.CreatedBy,
-			CreatedAt:       data.CreatedAt,
-			UpdatedAt:       data.UpdatedAt,
-			ExpDate:         data.ExpDate,
-			ExpPolicy:       expPolicy,
-			ExpNoticePeriod: data.ExpNoticePeriod,
+			DID:                data.DID,
+			ContractVersion:    data.ContractVersion,
+			State:              state,
+			Name:               data.Name,
+			Description:        data.Description,
+			CreatedBy:          data.CreatedBy,
+			CreatedAt:          data.CreatedAt,
+			UpdatedAt:          data.UpdatedAt,
+			StartDate:          data.StartDate,
+			ExpDate:            data.ExpDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    data.ExpNoticePeriod,
+			ResponsiblePersons: data.ResponsiblePersons,
 		}
 		contractItems = append(contractItems, metadata)
 
