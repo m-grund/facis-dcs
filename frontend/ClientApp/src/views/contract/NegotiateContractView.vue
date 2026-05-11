@@ -232,6 +232,7 @@ const handleSelectedNegotiation = async (
   negotiation: ContractNegotiation | null,
   selectedContract: Contract | null,
 ) => {
+
   if (!contract.value || !selectedContract) return
   compareChangesData.value = !!negotiation
     ? {
@@ -240,7 +241,7 @@ const handleSelectedNegotiation = async (
           ? `${contract.value.name} -> ${negotiation.change_request.name}`
           : contract.value.name,
         exp_date: negotiation.change_request.exp_date
-          ? `${contract.value.exp_date} -> ${negotiation.change_request.exp_date}`
+          ? `${contract.value.exp_date?.slice(0, 16)} -> ${negotiation.change_request.exp_date?.slice(0, 16)}`
           : contract.value.exp_date,
         exp_notice_period_str: negotiation.change_request.exp_notice_period
           ? `${contract.value.exp_notice_period} -> ${negotiation.change_request.exp_notice_period}`

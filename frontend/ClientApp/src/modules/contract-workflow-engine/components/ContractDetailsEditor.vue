@@ -54,7 +54,7 @@
         <input
           v-else
           type="text"
-          v-model="expDateLocal"
+          v-model="inserted.exp_date"
           class="input input-bordered w-full"
            :class="{ 'text-red-400': inserted.exp_date !== contract.exp_date }"
           disabled
