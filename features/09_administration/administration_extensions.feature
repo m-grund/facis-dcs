@@ -4,7 +4,7 @@ Feature: Administration Extensions
   Recommended logging practices for authentication and authorization events.
 
   Background:
-    Given I am authenticated with role "System Administrator"
+    Given I am authenticated with roles: "System Administrator"
     And I have access to the administration dashboard
 
   Scenario: Log all authentication and authorization events

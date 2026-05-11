@@ -39,6 +39,8 @@ const sortedItems = computed(() => {
     .sort((templateA, templateB) => compareValues(templateA, templateB, sortBy.value, sortOrder.value))
 })
 
+const hasTemplates = computed(() => filteredItems.value.length > 0)
+
 const filteredItems = computed(() => {
   if (stateFilterStore.hasFilters) {
     return sortedItems.value.filter((item) => stateFilterStore.hasFilter(item.state))
@@ -56,9 +58,14 @@ onUnmounted(() => stateFilterStore.reset())
 <template>
   <ul class="list">
     <li class="tracking-wide px-4 flex justify-between flex-col sm:flex-row">
-      <ListStateFilter label="Template" :filters="contractTemplateStates" store-type="templates" />
       <TemplateListSearch :items="items" class="flex-1" @search-result="applySearchResult" />
-      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" />
+      <ListStateFilter
+        label="Template"
+        :filters="contractTemplateStates"
+        store-type="templates"
+        :disabled="!hasTemplates"
+      />
+      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasTemplates" />
     </li>
     <TemplateListItem
       v-for="item in filteredItems"

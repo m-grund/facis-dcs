@@ -6,14 +6,14 @@ Feature: Contract Negotiation
   redline proposals and full audit logs.
 
   Scenario: Open draft contract for negotiation
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Draft" status
     When I open contract "Service Agreement" for negotiation
     Then the negotiation interface is displayed
     And I can view all contract clauses
 
   Scenario: Add comment to contract clause
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" is open for negotiation
     When I add comment "Clarify payment terms" to clause "Payment Terms"
     Then the comment is added to the negotiation log
@@ -22,7 +22,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Propose redline edit to contract clause
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" is open for negotiation
     When I propose a redline edit to clause "Liability"
     Then the proposed change is tracked
@@ -31,7 +31,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Track version history during negotiation
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has multiple negotiation edits
     When I view version history for contract "Service Agreement"
     Then I see all versions with timestamps
@@ -40,7 +40,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Approve proposed change during negotiation
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has a pending redline proposal on clause "Liability"
     When I approve the redline proposal
     Then the change is applied to the contract
@@ -49,7 +49,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Reject proposed change during negotiation
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has a pending redline proposal on clause "Liability"
     When I reject the redline proposal with reason "Not acceptable"
     Then the proposal is marked as rejected
@@ -58,7 +58,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: View negotiation log
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has completed multiple negotiation rounds
     When I view the negotiation log for contract "Service Agreement"
     Then I see all comments and proposals
@@ -67,7 +67,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Submit contract for review after negotiation
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" negotiation is complete
     When I submit contract "Service Agreement" for review
     Then the contract is routed to assigned reviewers
@@ -75,14 +75,14 @@ Feature: Contract Negotiation
     And the submission is logged
 
   Scenario: Unauthorized role cannot negotiate contracts
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is in "Draft" status
     When I attempt to add a comment to contract "Service Agreement"
     Then the request is denied with an authorization error
 
   @skip
   Scenario: Only parties to contract can negotiate terms
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" involves parties "Acme Corp" and "TechVendor Inc"
     And I am a representative of party "Acme Corp"
     When I open contract "Service Agreement" for negotiation
@@ -92,7 +92,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Non-party reviewer cannot negotiate contract not assigned to them
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" involves parties "Acme Corp" and "TechVendor Inc"
     And I am a representative of organization "UnrelatedCorp"
     When I attempt to access contract "Service Agreement" for negotiation
@@ -101,7 +101,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Contract Creator and assigned Reviewers can negotiate
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is assigned to reviewers "Alice" and "Bob"
     And I am listed as an assigned reviewer
     When I open contract "Service Agreement" for negotiation
@@ -111,7 +111,7 @@ Feature: Contract Negotiation
 
   @skip
   Scenario: Reviewer cannot approve own redline proposals
-    Given I am authenticated with role "Contract Reviewer"
+    Given I am authenticated with roles: "Contract Reviewer"
     And contract "Service Agreement" is open for negotiation
     And I have proposed a redline edit to clause "Liability"
     When I attempt to approve my own redline proposal

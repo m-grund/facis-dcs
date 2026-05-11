@@ -151,7 +151,8 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	}
 	if len(values.State) > 0 {
 		conditions += ` state = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, values.State)
+		state := strings.ToUpper(values.State)
+		params = append(params, state)
 		paramIndex++
 	}
 	if len(values.TemplateType) > 0 {
@@ -169,9 +170,9 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, "%"+*values.Description+"%")
 		paramIndex++
 	}
-	if values.Filter != nil {
+	if values.TemplateData != nil {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, *values.Filter)
+		params = append(params, *values.TemplateData)
 		paramIndex++
 	}
 

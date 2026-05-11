@@ -16,13 +16,13 @@ Feature: User Authentication & Authorization
     And the attempt is logged for audit
 
   Scenario: Role enforcement prevents unauthorized actions
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     When I attempt to access admin functions
     Then the request is denied with an authorization error
     And the denial is logged with timestamp and actor identity
 
   Scenario: PoA credential validation for signing
-    Given I am authenticated with role "Contract Signer"
+    Given I am authenticated with roles: "Contract Signer"
     And I hold a valid PoA credential for organization "Example Corp"
     When I initiate a signing process
     Then the PoA credential is validated
@@ -51,14 +51,14 @@ Feature: User Authentication & Authorization
 
   Scenario: Administrator can unlock a locked account
     Given user "locked.user@example.com" has a locked account
-    And I am authenticated with role "System Administrator"
+    And I am authenticated with roles: "System Administrator"
     When I unlock the account for user "locked.user@example.com"
     Then the account is unlocked
     And the user can authenticate with valid credentials
     And the unlock action is logged with timestamp and actor identity
 
   Scenario: Wallet integration failure allows retry
-    Given I am authenticated with role "Contract Signer"
+    Given I am authenticated with roles: "Contract Signer"
     And my wallet integration encounters a temporary failure
     When I attempt to sign a contract
     Then the system notifies me of the wallet failure

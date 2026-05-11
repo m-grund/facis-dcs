@@ -106,7 +106,9 @@ var _ = Service("ContractStorageArchive", func() {
 		Meta("dcs:ui", "Archive Manager Dashboard")
 		Meta("dcs:csa:components", "")
 		Security(JWTAuth, func() {
-			Scope("Archive Manager")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+			Scope("System Administrator")
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")

@@ -13,9 +13,11 @@ const emit = defineEmits<{
 }>()
 
 const filterLabels: Partial<Record<keyof Contract, string>> = {
+  did: 'DID',
   name: 'Name',
   description: 'Description',
   contract_version: 'Version',
+  contract_data: 'Contract Data'
 }
 
 const responseMapper = (response: ContractSearchResponse) =>

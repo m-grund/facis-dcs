@@ -17,7 +17,7 @@ export interface ContractTemplate {
     updated_at: string
 }
 
-export type PartialContractTemplate = Omit<ContractTemplate, 'template_data'>
+export type PartialContractTemplate = ContractTemplate
 
 export interface ContractTemplateData {
     documentOutline: DocumentOutline

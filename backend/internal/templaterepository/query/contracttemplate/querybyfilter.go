@@ -24,7 +24,7 @@ type GetAllMetadataByFilterQry struct {
 	TemplateType   *contracttemplatetype.ContractTemplateType
 	Name           *string
 	Description    *string
-	Filter         *string
+	TemplateData   *string
 }
 
 type GetAllMetadataByFilterResult struct {
@@ -71,7 +71,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		TemplateType:   templateType,
 		Name:           query.Name,
 		Description:    query.Description,
-		Filter:         query.Filter,
+		TemplateData:   query.TemplateData,
 	}
 
 	contractTemplates, err := h.CTRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues)

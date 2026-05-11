@@ -13,11 +13,12 @@ const emit = defineEmits<{
 }>()
 
 const filterLabels: Partial<Record<keyof PartialContractTemplate, string>> = {
+  did: 'DID',
   name: 'Name',
   description: 'Description',
   document_number: 'Document number',
   version: 'Version',
-  // filter: 'Filter',
+  template_data: 'Template Data'
 }
 
 const emptyTemplate: PartialContractTemplate = {

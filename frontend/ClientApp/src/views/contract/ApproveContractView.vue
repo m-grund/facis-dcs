@@ -23,6 +23,7 @@ import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -50,7 +51,9 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isManager = computed(() => authStore.user?.roles?.includes('CONTRACT_MANAGER') ?? false)
+const isAuditingAuthorized = computed(() => 
+  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
@@ -270,7 +273,7 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
                 </div>
               </div>
 
-              <template v-if="isManager">
+              <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
                   <div class="card bg-base-100 border border-base-300 shadow-sm">
                     <div class="card-body">
@@ -296,7 +299,7 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button
           v-if="contract?.state === ContractState.reviewed"
           @click="reject"

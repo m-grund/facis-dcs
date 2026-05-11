@@ -217,7 +217,7 @@ var ContractSearchRequest = Type("ContractSearchRequest", func() {
 	Attribute("state", String, "The state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
-	Attribute("filter", String, "Search value for full text search in contract data")
+	Attribute("contract_data", String, "Search value for full text search in contract data")
 })
 
 var ContractSearchResponse = Type("ContractSearchResponse", func() {
@@ -644,7 +644,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Param("state")
 			Param("name")
 			Param("description")
-			Param("filter")
+			Param("contract_data")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -760,8 +760,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Meta("dcs:ui", "Contract Management Dashboard")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+			Scope("System Administrator")
 		})
 
 		Payload(ContractAuditRequest)

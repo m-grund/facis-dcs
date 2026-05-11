@@ -2,7 +2,7 @@
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
 import NegotiationList from '@/components/lists/contract/negotiation/NegotiationList.vue'
 import { useScrollStore } from '@/core/store/scroll'
-import type { ContractData } from '@/models/contract-data'
+import type { ContractData, SemanticConditionValue } from '@/models/contract-data'
 import type { Contract, ContractChangeRequest } from '@/models/contract/contract'
 import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
@@ -23,8 +23,9 @@ import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -49,7 +50,9 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isManager = computed(() => useAuthStore().user?.roles?.includes('CONTRACT_MANAGER') ?? false)
+const isAuditingAuthorized = computed(() => 
+  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
@@ -204,7 +207,14 @@ function applyContractDataToDraft(contractData?: unknown) {
   verificationResult.value = null
 }
 
-const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, selectedContract: Contract | null) => {
+const tabContent = useTemplateRef<HTMLElement>('tabContent')
+
+const originalSemanticConditionValues = ref<SemanticConditionValue[]>([])
+
+const handleSelectedNegotiation = async (
+  negotiation: ContractNegotiation | null,
+  selectedContract: Contract | null,
+) => {
   if (!contract.value || !selectedContract) return
   compareChangesData.value = !!negotiation
     ? {
@@ -215,11 +225,65 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
         description: negotiation.change_request.description
           ? `${contract.value.description} -> ${negotiation.change_request.description}`
           : contract.value.description,
-        contract_data: contract.value.contract_data, // TODO
+        contract_data: contract.value.contract_data,
       }
     : null
-  if (compareChangesData.value) {
+
+  if (compareChangesData.value && negotiation) {
+    originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+    const negotiationValues = negotiation.change_request.contract_data?.semanticConditionValues ?? []
+
+    const originalValuesMap = new Map(
+      contract.value.contract_data?.semanticConditionValues?.map((value) => [
+        `${value.blockId}|${value.conditionId}|${value.parameterName}`,
+        String(value.parameterValue),
+      ]) ?? [],
+    )
+    const negotiationValuesMap = new Map(
+      negotiationValues.map((value) => [
+        `${value.blockId}|${value.conditionId}|${value.parameterName}`,
+        String(value.parameterValue),
+      ]),
+    )
+    negotiationValues.forEach((value) => contractContentValuesStore.setSemanticConditionValue(value))
+
+    await nextTick()
+
+    requestAnimationFrame(() => {
+      const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
+
+      const highlightedValues = new Set<string>()
+      for (const [key, negotiationValue] of negotiationValuesMap.entries()) {
+        const originalValue = originalValuesMap.get(key)
+        if (negotiationValue !== originalValue) {
+          highlightedValues.add(negotiationValue)
+        }
+      }
+
+      inputs.forEach((input) => {
+        if (highlightedValues.has(input.value)) {
+          input.classList.add('!border-warning', '!border-2')
+          input.style.setProperty('border-color', '#f59e0b', 'important')
+          input.style.setProperty('border-width', '2px', 'important')
+        } else {
+          input.classList.remove('!border-warning', '!border-2')
+          input.style.removeProperty('border-color')
+          input.style.removeProperty('border-width')
+        }
+      })
+    })
+
     scrollStore.scrollToTop()
+  } else {
+    contractContentValuesStore.reset({ semanticConditionValues: originalSemanticConditionValues.value })
+    requestAnimationFrame(() => {
+      const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
+      inputs.forEach((input) => {
+        input.classList.remove('!border-warning', '!border-2')
+        input.style.removeProperty('border-color')
+        input.style.removeProperty('border-width')
+      })
+    })
   }
 }
 
@@ -286,7 +350,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
               <div v-show="activeTab === 'content'">
                 <div class="card bg-base-100 border border-base-300 shadow-sm">
                   <div class="card-body gap-5">
-                    <div>
+                    <div ref="tabContent">
                       <TemplatePreview
                         :document-outline="templateDraftStore.documentOutline"
                         :document-blocks="templateDraftStore.documentBlocks"
@@ -305,7 +369,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
                 <DiffView :prior-contract-data="priorContractData" :current-contract-data="currentContractData" />
               </div>
 
-              <template v-if="isManager">
+              <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
                   <div class="card bg-base-100 border border-base-300 shadow-sm">
                     <div class="card-body">
@@ -331,11 +395,11 @@ const currentContractData = computed<ContractData | undefined>(() => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || !hasChangeRequest"
+          :disabled="isSubmitting || !hasChangeRequest || !!compareChangesData"
           @click="negotiateContractChange"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>

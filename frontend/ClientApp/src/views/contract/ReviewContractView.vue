@@ -8,7 +8,6 @@ import ContractDetailsEditor from '@/modules/contract-workflow-engine/components
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import {
   useSemanticValueVerification,
-  type VerificationResult,
 } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
@@ -18,8 +17,10 @@ import { useTemplateDraftStore } from '@/modules/template-repository/store/templ
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -27,6 +28,8 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const navStore = useNavStore()
 const authStore = useAuthStore()
+
+const errorStore = useErrorStore()
 
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -46,11 +49,27 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isManager = computed(() => authStore.user?.roles?.includes('CONTRACT_MANAGER') ?? false)
+const isAuditingAuthorized = computed(() => 
+  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+)
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
-const verificationResult: Ref<VerificationResult | null> = ref(null)
+const verificationResult = computed(() => {
+  const subTemplateSemanticConditions = templateDraftStore.subTemplateSnapshots.map((subTemplate) => ({
+    templateId: subTemplate.did,
+    version: subTemplate.version,
+    document_number: subTemplate.document_number,
+    semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
+  }))
+  const result = verifySemanticValue(
+    templateDraftStore.semanticConditions,
+    subTemplateSemanticConditions,
+    contractContentValuesStore.semanticConditionValues,
+    templateDraftStore.documentBlocks,
+  )
+  return result
+})
 
 const contract: Ref<Contract | null> = ref(null)
 
@@ -93,8 +112,22 @@ watch(
   { deep: true },
 )
 
+const verifyContract = async () => {
+  if (!contract.value || !verificationResult?.value?.isValid) {
+    verificationResult?.value?.errors.forEach(error => errorStore.add(error.message))
+    setActiveTab('content')
+  } else {
+    errorStore.add("Contract is valid", 'info')
+  }
+}
+
 const forwardToApproval = async () => {
-  if (!contract.value || !isSemanticValueValid.value) return
+  if (!contract.value || !verificationResult?.value?.isValid) {
+    verificationResult?.value?.errors.forEach(error => errorStore.add(error.message))
+    setActiveTab('content')
+    return
+  }
+
   try {
     const confirmationResult = await confirmationDialog.value?.reveal({
       message: 'Add comment?',
@@ -148,7 +181,6 @@ onUnmounted(() => {
   contractContentValuesStore.reset()
   contractEditorUiStore.reset()
   templateEditorUiStore.reset({ workflow: 'contract' })
-  verificationResult.value = null
 })
 
 // Contract data includes the template data used to fill the contract template
@@ -156,7 +188,6 @@ function applyContractDataToDraft(contractData?: unknown) {
   if (contractData == null) {
     templateDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
-    verificationResult.value = null
     return
   }
   const cd = preprocessContractData(contractData as ContractData)
@@ -169,29 +200,8 @@ function applyContractDataToDraft(contractData?: unknown) {
     templateDataVersion: cd.templateDataVersion,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
-  verificationResult.value = null
 }
 
-const isSemanticValueValid = computed(() => {
-  const subTemplateSemanticConditions = templateDraftStore.subTemplateSnapshots.map((subTemplate) => ({
-    templateId: subTemplate.did,
-    version: subTemplate.version,
-    document_number: subTemplate.document_number,
-    semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
-  }))
-  const result = verifySemanticValue(
-    templateDraftStore.semanticConditions,
-    subTemplateSemanticConditions,
-    contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
-  )
-  verificationResult.value = result
-  if (result.isValid) {
-    return true
-  }
-  setActiveTab('content')
-  return false
-})
 </script>
 
 <template>
@@ -242,7 +252,7 @@ const isSemanticValueValid = computed(() => {
                 </div>
               </div>
 
-              <template v-if="isManager">
+              <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
                   <div class="card bg-base-100 border border-base-300 shadow-sm">
                     <div class="card-body">
@@ -259,7 +269,16 @@ const isSemanticValueValid = computed(() => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-ghost md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
+        <button
+          v-if="contract?.state === ContractState.submitted"
+          class="btn btn-primary flex-1"
+          :disabled="isSubmitting"
+          @click="verifyContract"
+        >
+          <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
+          Verify
+        </button>
         <button
           v-if="contract?.state === ContractState.submitted"
           @click="returnToNegotiation"
@@ -272,7 +291,7 @@ const isSemanticValueValid = computed(() => {
         <button
           v-if="contract?.state === ContractState.submitted"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || !isSemanticValueValid"
+          :disabled="isSubmitting || !verificationResult.isValid"
           @click="forwardToApproval"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>

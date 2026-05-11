@@ -2,7 +2,7 @@ import type { ContractData } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { ApprovedTemplateBlock, DocumentBlock, DocumentOutlineBlock } from '@template-repository/models/contract-templace'
 import { DocumentBlockType, isApprovedTemplateBlock, isMergedApprovedTemplateBlock } from '@template-repository/models/contract-templace'
-import { MERGED_BLOCK_ID_SEPARATOR, buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
+import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import {
   TEMPLATE_DATA_VERSIONS,
   type TemplateDataVersion,

@@ -63,7 +63,7 @@ type SearchValues struct {
 	TemplateType   string
 	Name           *string
 	Description    *string
-	Filter         *string
+	TemplateData   *string
 }
 
 type ContractTemplateRepo interface {

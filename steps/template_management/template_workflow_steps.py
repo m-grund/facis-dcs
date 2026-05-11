@@ -69,7 +69,7 @@ def step_given_template_approved_available(context, name):
     did, updated_at = TemplateService.create_fresh_template(context)
     updated_at = TemplateService.do_submit(context, did, updated_at)
     updated_at = TemplateService.do_recommend_for_approval(context, did, updated_at)
-    headers = AuthService.headers_for_role(context, "Template Approver")
+    headers = AuthService.get_headers_for_roles(["Template Approver"])
     resp = post_json(context, template_approve_url(context), {"did": did, "updated_at": updated_at}, headers=headers)
     assert resp.status_code == 200, f"Template approve failed: {resp.text}"
     updated_at = TemplateService.fetch_template(context, did, headers=headers).get("updated_at")
@@ -89,7 +89,7 @@ def step_given_template_deprecated_status(context, name):
     did, updated_at = TemplateService.create_fresh_template(context)
     updated_at = TemplateService.do_submit(context, did, updated_at)
     updated_at = TemplateService.do_recommend_for_approval(context, did, updated_at)
-    approver_headers = AuthService.headers_for_role(context, "Template Approver")
+    approver_headers = AuthService.get_headers_for_roles(["Template Approver"])
     approve_resp = post_json(
         context,
         template_approve_url(context),
@@ -99,7 +99,7 @@ def step_given_template_deprecated_status(context, name):
     assert approve_resp.status_code == 200, f"Template approve failed: {approve_resp.text}"
     updated_at = TemplateService.fetch_template(context, did, headers=approver_headers).get("updated_at")
 
-    manager_headers = AuthService.headers_for_role(context, "Template Manager")
+    manager_headers = AuthService.get_headers_for_roles(["Template Manager"])
     archive_resp = post_json(
         context,
         template_archive_url(context),
@@ -280,7 +280,7 @@ def step_given_template_exists_with_uuid(context, name):
 @given('template "{name}" has a DID assigned')
 def step_given_template_has_did(context, name):
     did, updated_at = TemplateService.create_approved_template(context)
-    manager_headers = AuthService.headers_for_role(context, "Template Manager")
+    manager_headers = AuthService.get_headers_for_roles(["Template Manager"])
     register_resp = post_json(
         context,
         template_register_url(context),

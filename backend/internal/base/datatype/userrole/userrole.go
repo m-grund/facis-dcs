@@ -20,7 +20,7 @@ const (
 	// Human User Roles - System Administration
 	ArchiveManager      UserRole = "Archive Manager"
 	Auditor             UserRole = "Auditor"
-	SystemAdministrator UserRole = "System Admin"
+	SystemAdministrator UserRole = "System Administrator"
 	ComplianceOfficer   UserRole = "Compliance Officer"
 	IntegrationManager  UserRole = "Ingestion Manager"
 

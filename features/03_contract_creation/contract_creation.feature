@@ -6,7 +6,7 @@ Feature: Contract Creation
   from reusable clauses and contract package bundling.
 
   Scenario: Create contract from template
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And template "Service Agreement Template" is approved and available
     When I create a contract from template "Service Agreement Template"
     Then a draft contract is generated
@@ -15,14 +15,14 @@ Feature: Contract Creation
     And the creation is logged and traceable to the template version
 
   Scenario: Created contract renders in both machine-readable and human-readable views
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Service Agreement" from a template
     When I view contract "Service Agreement"
     Then the machine-readable view renders correctly
     And the human-readable view renders correctly
 
   Scenario: Draft contract is editable and versioned
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And contract "Service Agreement" is in "Draft" status
     When I edit contract "Service Agreement"
     Then the changes are saved
@@ -30,7 +30,7 @@ Feature: Contract Creation
 
   @skip
   Scenario: Assemble contract from reusable clauses
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And reusable clauses "Payment Terms", "Liability", and "Confidentiality" exist
     When I assemble a contract using clauses "Payment Terms", "Liability", and "Confidentiality"
     Then the assembly process validates structure
@@ -40,7 +40,7 @@ Feature: Contract Creation
 
   @skip
   Scenario: Create contract with hierarchical structure
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And master agreement template "Framework Agreement" exists
     When I create a contract with sub-agreements and annexes
     Then the hierarchical structure is established
@@ -49,7 +49,7 @@ Feature: Contract Creation
 
   @skip
   Scenario: Bundle multiple contracts into a package
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contracts "Service Agreement" and "SLA Addendum" exist
     When I bundle contracts "Service Agreement" and "SLA Addendum" into package "Service Bundle"
     Then a contract package is created
@@ -59,20 +59,20 @@ Feature: Contract Creation
 
   @skip
   Scenario: Auto-fill metadata from template
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And template "NDA Template" has predefined metadata fields
     When I create a contract from template "NDA Template"
     Then the contract inherits metadata from the template
     And I can override specific metadata values
 
   Scenario: Unauthorized role cannot create contracts
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     When I attempt to create a contract from template "Service Agreement Template"
     Then the request is denied with an authorization error
 
   @skip
   Scenario: Contract Creator can only create contracts for authorized parties
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And I am authorized to create contracts involving party "Acme Corp"
     When I create a contract from template "Service Agreement Template"
     And I specify party "Acme Corp" as a contract party
@@ -81,7 +81,7 @@ Feature: Contract Creation
 
   @skip
   Scenario: Contract Creator cannot create contracts involving unauthorized parties
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And I am not authorized to create contracts with party "RestrictedVendor Inc"
     When I attempt to create a contract involving party "RestrictedVendor Inc"
     Then the request is denied with an "Not authorized to create contracts with this party" error
@@ -90,7 +90,7 @@ Feature: Contract Creation
 
   @skip
   Scenario: Created contract is accessible only to authorized parties
-    Given I am authenticated with role "Contract Creator"
+    Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Service Agreement" with parties "Acme Corp" and "TechVendor Inc"
     When a representative of party "Acme Corp" attempts to access the contract
     Then the contract is accessible and visible
@@ -99,7 +99,7 @@ Feature: Contract Creation
 
   @skip
   Scenario: Unauthorized party cannot access created contract
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is created with parties "Acme Corp" and "TechVendor Inc"
     And I do not have authorization for either party
     When I attempt to access contract "Service Agreement"

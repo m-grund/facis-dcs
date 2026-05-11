@@ -6,14 +6,14 @@ Feature: API-Based Contract Workflows
   interactions for traceability.
 
   Scenario: Create contract via API
-    Given I am authenticated with role "Integration Manager" via API
+    Given I am authenticated with roles "Integration Manager" via API
     When I invoke the contract creation API with valid payload
     Then the system creates a new contract
     And the API returns HTTP 2xx status
     And the interaction is logged with timestamp and actor identity
 
   Scenario: Update contract metadata via API
-    Given I am authenticated with role "Integration Manager" via API
+    Given I am authenticated with roles "Integration Manager" via API
     And contract "Service Agreement" exists
     When I invoke the metadata update API for contract "Service Agreement"
     Then the metadata is updated
@@ -21,14 +21,14 @@ Feature: API-Based Contract Workflows
     And the interaction is logged with timestamp and actor identity
 
   Scenario: Query contract via API
-    Given I am authenticated with role "Integration Manager" via API
+    Given I am authenticated with roles "Integration Manager" via API
     And contract "Service Agreement" exists
     When I invoke the contract query API for contract "Service Agreement"
     Then the API returns the contract data
     And the response includes contract metadata
 
   Scenario: Archive contract via API
-    Given I am authenticated with role "Integration Manager" via API
+    Given I am authenticated with roles "Integration Manager" via API
     And contract "Expired Agreement" is in "Completed" status
     When I invoke the contract archival API for contract "Expired Agreement"
     Then the contract is archived
@@ -36,7 +36,7 @@ Feature: API-Based Contract Workflows
     And the action is logged with timestamp and actor identity
 
   Scenario: Trigger automated signature via API
-    Given I am authenticated with role "Integration Manager" via API
+    Given I am authenticated with roles "Integration Manager" via API
     And contract "Automation Agreement" requires a system signature
     And pre-authorized credentials are configured for signing
     When I invoke the automated signature API for contract "Automation Agreement"

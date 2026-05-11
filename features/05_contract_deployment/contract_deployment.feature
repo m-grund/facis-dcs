@@ -5,7 +5,7 @@ Feature: Contract Deployment
   upon completion of the signing process.
 
   Scenario: Deploy signed contract to target system
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Signed" status
     And target system "ERP Gateway" is configured
     When I deploy contract "Service Agreement" to target system "ERP Gateway"
@@ -14,7 +14,7 @@ Feature: Contract Deployment
     And a correlation ID is assigned and archived
 
   Scenario: Deployment payload includes signed contract and metadata
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Signed" status
     When I deploy contract "Service Agreement" to target system "ERP Gateway"
     Then the deployment payload includes the signed contract
@@ -34,14 +34,14 @@ Feature: Contract Deployment
     And the event is logged with timestamp
 
   Scenario: Deployment logs proof of delivery
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has been deployed to target system "ERP Gateway"
     When I view deployment status for contract "Service Agreement"
     Then I see proof of delivery with target acknowledgement
     And I see the deployment timestamp and correlation ID
 
   Scenario: Deployment fails when target system is unavailable
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" is in "Signed" status
     And target system "ERP Gateway" is unavailable
     When I deploy contract "Service Agreement" to target system "ERP Gateway"
@@ -50,14 +50,14 @@ Feature: Contract Deployment
     And the contract status remains "Signed"
 
   Scenario: Cannot deploy unsigned contract
-    Given I am authenticated with role "Contract Manager"
+    Given I am authenticated with roles: "Contract Manager"
     And contract "Draft Agreement" is in "Draft" status
     When I attempt to deploy contract "Draft Agreement" to target system "ERP Gateway"
     Then the request is denied
     And I receive error "Contract must be signed before deployment"
 
   Scenario: Unauthorized role cannot deploy contracts
-    Given I am authenticated with role "Contract Observer"
+    Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is in "Signed" status
     When I attempt to deploy contract "Service Agreement" to target system "ERP Gateway"
     Then the request is denied with an authorization error

@@ -58,7 +58,7 @@ type SearchValues struct {
 	State           string
 	Name            *string
 	Description     *string
-	Filter          *string
+	ContractData    *string
 }
 
 type ContractRepo interface {

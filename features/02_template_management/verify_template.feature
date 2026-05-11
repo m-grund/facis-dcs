@@ -5,7 +5,7 @@ Feature: Verify Template and Provenance
   including metadata, semantics, and authenticity.
 
   Background:
-    Given I am authenticated with role "Template Reviewer"
+    Given I am authenticated with roles: "Template Reviewer"
 
   Scenario: Verify template with valid provenance
     And template "Standard NDA" has provenance metadata
@@ -15,7 +15,7 @@ Feature: Verify Template and Provenance
     And the digital signatures are verified
 
   Scenario: Unauthorized role cannot verify template
-    Given I am authenticated with role "Template Approver"
+    Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" has provenance metadata
     When I attempt to verify template "Standard NDA"
     Then the request is denied with an authorization error

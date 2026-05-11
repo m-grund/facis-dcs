@@ -17,7 +17,7 @@
         @update:model-value="localText = $event" />
     </div>
     <div class="flex justify-between items-center">
-      <button v-if="mode === 'edit'" type="button" class="btn btn-ghost btn-xs" @click="$emit('cancel')">
+      <button v-if="mode === 'edit'" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">
         Cancel
       </button>
       <span v-else />
@@ -34,6 +34,7 @@ import { computed, ref, watch } from 'vue'
 import type { SemanticCondition } from '@template-repository/models/contract-templace'
 import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import ClauseTextEditor from '@template-repository/components/clauses-editor/ClauseTextEditor.vue'
+import { conditionIdsInText, isPlaceholder, parseSegments } from '@template-repository/composables/useClauseTextChips'
 
 const props = defineProps<{
   mode: 'create' | 'edit'
@@ -58,8 +59,27 @@ watch(
   }
 )
 
-const canSubmit = computed(
-  () => !!localTitle.value.trim() && !!localText.value.trim()
+// Check if there is any required parameter in used rule panel that is not used in the text
+const hasRequiredUnusedParamInUsedRules = computed(() => {
+  const usedConditionIds = conditionIdsInText(localText.value)
+  if (!usedConditionIds.size) return false
+
+  const usedParams = new Set<string>()
+  parseSegments(localText.value, props.semanticConditions)
+    .filter((segment) => isPlaceholder(segment))
+    .forEach((segment) => {
+      usedParams.add(`${segment.conditionId}.${segment.parameterName}`)
+    })
+
+  return props.semanticConditions
+    .filter((c) => usedConditionIds.has(c.conditionId))
+    .some((c) => c.parameters.some((p) => p.isRequired && !usedParams.has(`${c.conditionId}.${p.parameterName}`)))
+})
+
+const canSubmit = computed(() =>
+  !!localTitle.value.trim() &&
+  !!localText.value.trim() &&
+  !hasRequiredUnusedParamInUsedRules.value
 )
 
 function handleSubmit() {
