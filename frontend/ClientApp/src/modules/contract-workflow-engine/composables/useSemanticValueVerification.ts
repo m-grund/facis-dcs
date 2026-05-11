@@ -1,6 +1,12 @@
 import type { SemanticConditionValue } from "@/models/contract-data";
 import type { SubTemplateSnapshot } from "@/models/contract-template";
-import { isClauseBlock, isMergedApprovedTemplateBlock, type DocumentBlock, type SemanticCondition } from "@/modules/template-repository/models/contract-template";
+import {
+  isClauseBlock,
+  isMergedApprovedTemplateBlock,
+  type DocumentBlock,
+  type SemanticCondition,
+  type SemanticValueConstraint,
+} from "@/modules/template-repository/models/contract-template";
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
@@ -122,6 +128,29 @@ export function useSemanticValueVerification() {
     }
   }
 
+  function validateValueConstraint(value: string | number, constraint?: SemanticValueConstraint): string | null {
+    if (!constraint) return null
+    if (constraint.allowedValues?.length) {
+      if (typeof value !== 'string' || !constraint.allowedValues.includes(value)) {
+        return `Expected one of: ${constraint.allowedValues.join(', ')}.`
+      }
+    }
+    if (constraint.pattern) {
+      if (typeof value !== 'string' || !new RegExp(constraint.pattern).test(value)) {
+        return `Expected format ${constraint.allowedValuesRef ?? constraint.format ?? constraint.pattern}.`
+      }
+    }
+    if (typeof value === 'number') {
+      if (constraint.min !== undefined && value < constraint.min) {
+        return `Expected a value greater than or equal to ${constraint.min}.`
+      }
+      if (constraint.max !== undefined && value > constraint.max) {
+        return `Expected a value less than or equal to ${constraint.max}.`
+      }
+    }
+    return null
+  }
+
   function verifySemanticValue(
     semanticConditions: SemanticCondition[],
     subTemplateSemanticConditions: subTemplateSemanticCondition[],
@@ -200,6 +229,16 @@ export function useSemanticValueVerification() {
             conditionId: value.conditionId,
             parameterName: value.parameterName,
             message: `"${fieldName}" has an invalid value type. Expected ${parameter.type}.`,
+          })
+          return
+        }
+        const constraintError = validateValueConstraint(value.parameterValue, parameter.valueConstraint)
+        if (constraintError) {
+          errors.push({
+            blockId: value.blockId,
+            conditionId: value.conditionId,
+            parameterName: value.parameterName,
+            message: `"${fieldName}" has an invalid value. ${constraintError}`,
           })
           return
         }

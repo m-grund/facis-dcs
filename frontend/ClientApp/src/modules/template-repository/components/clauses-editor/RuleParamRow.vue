@@ -4,6 +4,7 @@
       @mouseleave="$emit('mouseleave')">{{ param.parameterName }}</span>
     <span class="text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
     <span class="text-base-content/40">({{ param.type }})</span>
+    <span v-if="constraintLabel" class="text-base-content/40">{{ constraintLabel }}</span>
   </li>
 </template>
 
@@ -27,4 +28,14 @@ const rowClass = computed(() => ({
   'text-primary font-medium': props.isUsed,
   'text-error cursor-pointer hover:bg-base-200': props.isRequiredAndUnused,
 }))
+
+const constraintLabel = computed(() => {
+  const constraint = props.param.valueConstraint
+  if (!constraint) return ''
+  if (constraint.allowedValuesRef) return constraint.allowedValuesRef
+  if (constraint.format) return constraint.format
+  if (constraint.allowedValues?.length) return constraint.allowedValues.join(', ')
+  if (constraint.min !== undefined || constraint.max !== undefined) return `${constraint.min ?? '-'}-${constraint.max ?? '-'}`
+  return ''
+})
 </script>

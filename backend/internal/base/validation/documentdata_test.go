@@ -90,3 +90,93 @@ func TestNormalizeContractDataAcceptsTypedSemanticValues(t *testing.T) {
 	_, err = NormalizeContractData(&raw, true)
 	require.NoError(t, err)
 }
+
+func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	condition := conditions[0].(map[string]any)
+	params := condition["parameters"].([]any)
+	params[0] = map[string]any{
+		"parameterName": "country",
+		"type":          "string",
+		"schemaRef":     SchemaPartyV1,
+		"semanticPath":  "company.location.country",
+		"isRequired":    true,
+		"operators":     []any{},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeTemplateData(&raw)
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	normalizedCondition := result["semanticConditions"].([]any)[0].(map[string]any)
+	normalizedParam := normalizedCondition["parameters"].([]any)[0].(map[string]any)
+	constraint := normalizedParam["valueConstraint"].(map[string]any)
+	require.Equal(t, "iso-3166-1-alpha-3", constraint["format"])
+	require.Contains(t, constraint["allowedValues"], "DEU")
+}
+
+func TestNormalizeContractDataRejectsSemanticValueOutsideConstraint(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	condition := conditions[0].(map[string]any)
+	params := condition["parameters"].([]any)
+	params[0] = map[string]any{
+		"parameterName": "country",
+		"type":          "string",
+		"schemaRef":     SchemaPartyV1,
+		"semanticPath":  "company.location.country",
+		"isRequired":    true,
+		"operators":     []any{},
+	}
+	decoded["semanticConditionValues"] = []any{
+		map[string]any{
+			"blockId":        "clause-1",
+			"conditionId":    "cond-1",
+			"parameterName":  "country",
+			"parameterValue": "Germany",
+		},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(&raw, true)
+	require.ErrorContains(t, err, "violates constraint")
+}
+
+func TestNormalizeContractDataAcceptsSemanticValueInsideConstraint(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	condition := conditions[0].(map[string]any)
+	params := condition["parameters"].([]any)
+	params[0] = map[string]any{
+		"parameterName": "country",
+		"type":          "string",
+		"schemaRef":     SchemaPartyV1,
+		"semanticPath":  "company.location.country",
+		"isRequired":    true,
+		"operators":     []any{},
+	}
+	decoded["semanticConditionValues"] = []any{
+		map[string]any{
+			"blockId":        "clause-1",
+			"conditionId":    "cond-1",
+			"parameterName":  "country",
+			"parameterValue": "DEU",
+		},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(&raw, true)
+	require.NoError(t, err)
+}

@@ -1,0 +1,972 @@
+@prefix dcs: <https://w3id.org/facis/dcs/ontology#> .
+@prefix dcst: <https://w3id.org/facis/dcs/taxonomy#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<https://w3id.org/facis/dcs/ontology>
+  a owl:Ontology ;
+  owl:versionIRI <https://w3id.org/facis/dcs/ontology/1.0.0> ;
+  owl:versionInfo "1.0.0" ;
+  dcterms:title "FACIS Digital Contracting Service Ontology"@en ;
+  dcterms:description "Ontology for machine-readable FACIS DCS templates, contracts, semantic rules, domain fields, policies, audit trails, signatures, and archive records."@en ;
+  dcterms:created "2026-05-11"^^xsd:date ;
+  dcterms:license <https://creativecommons.org/licenses/by/4.0/> .
+
+#################################################################
+# Core concepts
+#################################################################
+
+dcs:DigitalContractingService a owl:Class ;
+  rdfs:label "Digital Contracting Service"@en ;
+  rdfs:comment "System providing template repository, contract workflow, signing, archive, and process audit capabilities."@en .
+
+dcs:DCSComponent a owl:Class ;
+  rdfs:label "DCS component"@en .
+
+dcs:TemplateRepository a owl:Class ;
+  rdfs:subClassOf dcs:DCSComponent ;
+  rdfs:label "Template Repository"@en .
+
+dcs:ContractWorkflowEngine a owl:Class ;
+  rdfs:subClassOf dcs:DCSComponent ;
+  rdfs:label "Contract Workflow Engine"@en .
+
+dcs:SignatureManagement a owl:Class ;
+  rdfs:subClassOf dcs:DCSComponent ;
+  rdfs:label "Signature Management"@en .
+
+dcs:ContractStorageArchive a owl:Class ;
+  rdfs:subClassOf dcs:DCSComponent ;
+  rdfs:label "Contract Storage and Archive"@en .
+
+dcs:ProcessAuditCompliance a owl:Class ;
+  rdfs:subClassOf dcs:DCSComponent ;
+  rdfs:label "Process Audit and Compliance"@en .
+
+dcs:IdentityProvider a owl:Class ;
+  rdfs:label "Identity Provider"@en .
+
+dcs:PolicyDecisionPoint a owl:Class ;
+  rdfs:label "Policy Decision Point"@en .
+
+dcs:PolicyEnforcementPoint a owl:Class ;
+  rdfs:label "Policy Enforcement Point"@en .
+
+dcs:Actor a owl:Class ;
+  rdfs:label "Actor"@en .
+
+dcs:Role a owl:Class ;
+  rdfs:label "Role"@en .
+
+dcs:Permission a owl:Class ;
+  rdfs:label "Permission"@en .
+
+dcs:LifecycleState a owl:Class ;
+  rdfs:label "Lifecycle state"@en .
+
+dcs:LifecycleTransition a owl:Class ;
+  rdfs:label "Lifecycle transition"@en .
+
+#################################################################
+# Template and document model
+#################################################################
+
+dcs:DocumentArtifact a owl:Class ;
+  rdfs:label "Document artifact"@en .
+
+dcs:ContractTemplate a owl:Class ;
+  rdfs:subClassOf dcs:DocumentArtifact ;
+  rdfs:label "Contract template"@en .
+
+dcs:SubContractTemplate a owl:Class ;
+  rdfs:subClassOf dcs:ContractTemplate ;
+  rdfs:label "Sub-contract template"@en .
+
+dcs:FrameContractTemplate a owl:Class ;
+  rdfs:subClassOf dcs:ContractTemplate ;
+  rdfs:label "Frame-contract template"@en .
+
+dcs:Contract a owl:Class ;
+  rdfs:subClassOf dcs:DocumentArtifact ;
+  rdfs:label "Contract"@en .
+
+dcs:ContractDraft a owl:Class ;
+  rdfs:subClassOf dcs:Contract ;
+  rdfs:label "Contract draft"@en .
+
+dcs:SignedContract a owl:Class ;
+  rdfs:subClassOf dcs:Contract ;
+  rdfs:label "Signed contract"@en .
+
+dcs:DocumentStructure a owl:Class ;
+  rdfs:label "Document structure"@en .
+
+dcs:DocumentOutline a owl:Class ;
+  rdfs:label "Document outline"@en .
+
+dcs:DocumentOutlineNode a owl:Class ;
+  rdfs:label "Document outline node"@en .
+
+dcs:DocumentBlock a owl:Class ;
+  rdfs:label "Document block"@en .
+
+dcs:SectionBlock a owl:Class ;
+  rdfs:subClassOf dcs:DocumentBlock ;
+  rdfs:label "Section block"@en .
+
+dcs:TextBlock a owl:Class ;
+  rdfs:subClassOf dcs:DocumentBlock ;
+  rdfs:label "Text block"@en .
+
+dcs:ClauseBlock a owl:Class ;
+  rdfs:subClassOf dcs:DocumentBlock ;
+  rdfs:label "Clause block"@en .
+
+dcs:ApprovedTemplateBlock a owl:Class ;
+  rdfs:subClassOf dcs:DocumentBlock ;
+  rdfs:label "Approved template block"@en .
+
+dcs:MergedApprovedTemplateBlock a owl:Class ;
+  rdfs:subClassOf dcs:DocumentBlock ;
+  rdfs:label "Merged approved template block"@en .
+
+dcs:BlockCatalogueEntry a owl:Class ;
+  rdfs:label "Block catalogue entry"@en .
+
+dcs:TemplateSnapshot a owl:Class ;
+  rdfs:label "Template snapshot"@en ;
+  rdfs:comment "Immutable template data captured for embedding into a contract or frame template."@en .
+
+dcs:CustomMetadataEntry a owl:Class ;
+  rdfs:label "Custom metadata entry"@en .
+
+#################################################################
+# Semantic rules, domain schema, and constraints
+#################################################################
+
+dcs:SchemaReference a owl:Class ;
+  rdfs:label "Schema reference"@en .
+
+dcs:ValidationProfile a owl:Class ;
+  rdfs:label "Validation profile"@en .
+
+dcs:SemanticCondition a owl:Class ;
+  rdfs:label "Semantic condition"@en .
+
+dcs:SemanticParameter a owl:Class ;
+  rdfs:label "Semantic parameter"@en .
+
+dcs:SemanticOperator a owl:Class ;
+  rdfs:label "Semantic operator"@en .
+
+dcs:SemanticValue a owl:Class ;
+  rdfs:label "Semantic value"@en ;
+  rdfs:comment "Concrete value supplied for a semantic parameter in a contract clause."@en .
+
+dcs:DomainSchema a owl:Class ;
+  rdfs:label "Domain schema"@en .
+
+dcs:DomainField a owl:Class ;
+  rdfs:label "Domain field"@en ;
+  rdfs:comment "Canonical semantic field such as company.location.country or contract.payment.currency."@en .
+
+dcs:ValueConstraint a owl:Class ;
+  rdfs:label "Value constraint"@en .
+
+dcs:ControlledVocabulary a owl:Class ;
+  rdfs:label "Controlled vocabulary"@en .
+
+dcs:VocabularyTerm a owl:Class ;
+  rdfs:label "Vocabulary term"@en .
+
+dcs:CountryCode a owl:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "ISO 3166-1 alpha-3 country code"@en .
+
+dcs:CurrencyCode a owl:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "ISO 4217 currency code"@en .
+
+dcs:SignatureLevelCode a owl:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "eIDAS signature level code"@en .
+
+dcs:ContractTypeCode a owl:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Contract type code"@en .
+
+#################################################################
+# Business domain
+#################################################################
+
+dcs:Party a owl:Class ;
+  rdfs:label "Party"@en .
+
+dcs:Company a owl:Class ;
+  rdfs:subClassOf dcs:Party ;
+  rdfs:label "Company"@en .
+
+dcs:Representative a owl:Class ;
+  rdfs:label "Representative"@en .
+
+dcs:ContactPoint a owl:Class ;
+  rdfs:label "Contact point"@en .
+
+dcs:Location a owl:Class ;
+  rdfs:label "Location"@en .
+
+dcs:Service a owl:Class ;
+  rdfs:label "Service"@en .
+
+dcs:Deliverable a owl:Class ;
+  rdfs:label "Deliverable"@en .
+
+dcs:ServiceLevelAgreement a owl:Class ;
+  rdfs:label "Service level agreement"@en .
+
+dcs:PaymentTerms a owl:Class ;
+  rdfs:label "Payment terms"@en .
+
+dcs:ValidityPeriod a owl:Class ;
+  rdfs:label "Validity period"@en .
+
+dcs:RenewalTerms a owl:Class ;
+  rdfs:label "Renewal terms"@en .
+
+dcs:TerminationTerms a owl:Class ;
+  rdfs:label "Termination terms"@en .
+
+dcs:LiabilityTerms a owl:Class ;
+  rdfs:label "Liability terms"@en .
+
+dcs:InsuranceTerms a owl:Class ;
+  rdfs:label "Insurance terms"@en .
+
+dcs:ConfidentialityTerms a owl:Class ;
+  rdfs:label "Confidentiality terms"@en .
+
+dcs:DataProtectionTerms a owl:Class ;
+  rdfs:label "Data protection terms"@en .
+
+dcs:AuditRights a owl:Class ;
+  rdfs:label "Audit rights"@en .
+
+dcs:IntellectualPropertyTerms a owl:Class ;
+  rdfs:label "Intellectual property terms"@en .
+
+dcs:ForceMajeureTerms a owl:Class ;
+  rdfs:label "Force majeure terms"@en .
+
+dcs:DisputeResolutionTerms a owl:Class ;
+  rdfs:label "Dispute resolution terms"@en .
+
+#################################################################
+# Workflow, policy, audit, signatures, archive
+#################################################################
+
+dcs:WorkflowTask a owl:Class ;
+  rdfs:label "Workflow task"@en .
+
+dcs:ReviewTask a owl:Class ;
+  rdfs:subClassOf dcs:WorkflowTask ;
+  rdfs:label "Review task"@en .
+
+dcs:ApprovalTask a owl:Class ;
+  rdfs:subClassOf dcs:WorkflowTask ;
+  rdfs:label "Approval task"@en .
+
+dcs:Negotiation a owl:Class ;
+  rdfs:label "Negotiation"@en .
+
+dcs:NegotiationProposal a owl:Class ;
+  rdfs:label "Negotiation proposal"@en .
+
+dcs:Comment a owl:Class ;
+  rdfs:label "Comment"@en .
+
+dcs:Finding a owl:Class ;
+  rdfs:label "Finding"@en .
+
+dcs:ValidationFinding a owl:Class ;
+  rdfs:subClassOf dcs:Finding ;
+  rdfs:label "Validation finding"@en .
+
+dcs:Policy a owl:Class ;
+  rdfs:label "Policy"@en .
+
+dcs:PolicyReference a owl:Class ;
+  rdfs:label "Policy reference"@en .
+
+dcs:PolicyCheck a owl:Class ;
+  rdfs:label "Policy check"@en .
+
+dcs:ComplianceCheck a owl:Class ;
+  rdfs:label "Compliance check"@en .
+
+dcs:AuditEvent a owl:Class ;
+  rdfs:label "Audit event"@en .
+
+dcs:AuditTrail a owl:Class ;
+  rdfs:label "Audit trail"@en .
+
+dcs:AuditReport a owl:Class ;
+  rdfs:label "Audit report"@en .
+
+dcs:NonComplianceCase a owl:Class ;
+  rdfs:label "Non-compliance case"@en .
+
+dcs:SignatureRequest a owl:Class ;
+  rdfs:label "Signature request"@en .
+
+dcs:Signature a owl:Class ;
+  rdfs:label "Signature"@en .
+
+dcs:SignatureValidationResult a owl:Class ;
+  rdfs:label "Signature validation result"@en .
+
+dcs:TrustAnchor a owl:Class ;
+  rdfs:label "Trust anchor"@en .
+
+dcs:Evidence a owl:Class ;
+  rdfs:label "Evidence"@en .
+
+dcs:CredentialEvidence a owl:Class ;
+  rdfs:subClassOf dcs:Evidence ;
+  rdfs:label "Credential evidence"@en .
+
+dcs:PowerOfAttorneyEvidence a owl:Class ;
+  rdfs:subClassOf dcs:Evidence ;
+  rdfs:label "Power of attorney evidence"@en .
+
+dcs:ArchiveRecord a owl:Class ;
+  rdfs:label "Archive record"@en .
+
+dcs:RetentionPolicy a owl:Class ;
+  rdfs:subClassOf dcs:Policy ;
+  rdfs:label "Retention policy"@en .
+
+dcs:TimestampProof a owl:Class ;
+  rdfs:label "Timestamp proof"@en .
+
+dcs:HashDigest a owl:Class ;
+  rdfs:label "Hash digest"@en .
+
+#################################################################
+# Object properties
+#################################################################
+
+dcs:hasComponent a owl:ObjectProperty ;
+  rdfs:domain dcs:DigitalContractingService ;
+  rdfs:range dcs:DCSComponent ;
+  rdfs:label "has component"@en .
+
+dcs:hasRole a owl:ObjectProperty ;
+  rdfs:domain dcs:Actor ;
+  rdfs:range dcs:Role ;
+  rdfs:label "has role"@en .
+
+dcs:hasPermission a owl:ObjectProperty ;
+  rdfs:domain dcs:Role ;
+  rdfs:range dcs:Permission ;
+  rdfs:label "has permission"@en .
+
+dcs:createdBy a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentArtifact ;
+  rdfs:range dcs:Actor ;
+  rdfs:label "created by"@en .
+
+dcs:updatedBy a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentArtifact ;
+  rdfs:range dcs:Actor ;
+  rdfs:label "updated by"@en .
+
+dcs:approvedBy a owl:ObjectProperty ;
+  rdfs:range dcs:Actor ;
+  rdfs:label "approved by"@en .
+
+dcs:reviewedBy a owl:ObjectProperty ;
+  rdfs:range dcs:Actor ;
+  rdfs:label "reviewed by"@en .
+
+dcs:basedOnTemplate a owl:ObjectProperty ;
+  rdfs:domain dcs:Contract ;
+  rdfs:range dcs:ContractTemplate ;
+  rdfs:label "based on template"@en .
+
+dcs:hasSnapshot a owl:ObjectProperty ;
+  rdfs:range dcs:TemplateSnapshot ;
+  rdfs:label "has snapshot"@en .
+
+dcs:hasDocumentStructure a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentArtifact ;
+  rdfs:range dcs:DocumentStructure ;
+  rdfs:label "has document structure"@en .
+
+dcs:hasOutline a owl:ObjectProperty ;
+  rdfs:range dcs:DocumentOutline ;
+  rdfs:label "has outline"@en .
+
+dcs:hasOutlineNode a owl:ObjectProperty ;
+  rdfs:range dcs:DocumentOutlineNode ;
+  rdfs:label "has outline node"@en .
+
+dcs:hasChildNode a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentOutlineNode ;
+  rdfs:range dcs:DocumentOutlineNode ;
+  rdfs:label "has child node"@en .
+
+dcs:referencesBlock a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentOutlineNode ;
+  rdfs:range dcs:DocumentBlock ;
+  rdfs:label "references block"@en .
+
+dcs:hasBlock a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentStructure ;
+  rdfs:range dcs:DocumentBlock ;
+  rdfs:label "has block"@en .
+
+dcs:usesBlockCatalogueEntry a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentBlock ;
+  rdfs:range dcs:BlockCatalogueEntry ;
+  rdfs:label "uses block catalogue entry"@en .
+
+dcs:hasSemanticCondition a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentArtifact ;
+  rdfs:range dcs:SemanticCondition ;
+  rdfs:label "has semantic condition"@en .
+
+dcs:hasParameter a owl:ObjectProperty ;
+  rdfs:domain dcs:SemanticCondition ;
+  rdfs:range dcs:SemanticParameter ;
+  rdfs:label "has parameter"@en .
+
+dcs:referencesSemanticCondition a owl:ObjectProperty ;
+  rdfs:domain dcs:ClauseBlock ;
+  rdfs:range dcs:SemanticCondition ;
+  rdfs:label "references semantic condition"@en .
+
+dcs:usesDomainField a owl:ObjectProperty ;
+  rdfs:domain dcs:SemanticParameter ;
+  rdfs:range dcs:DomainField ;
+  rdfs:label "uses domain field"@en .
+
+dcs:hasValueConstraint a owl:ObjectProperty ;
+  rdfs:domain dcs:DomainField ;
+  rdfs:range dcs:ValueConstraint ;
+  rdfs:label "has value constraint"@en .
+
+dcs:conformsToSchema a owl:ObjectProperty ;
+  rdfs:range dcs:SchemaReference ;
+  rdfs:label "conforms to schema"@en .
+
+dcs:usesValidationProfile a owl:ObjectProperty ;
+  rdfs:range dcs:ValidationProfile ;
+  rdfs:label "uses validation profile"@en .
+
+dcs:hasPolicyReference a owl:ObjectProperty ;
+  rdfs:range dcs:PolicyReference ;
+  rdfs:label "has policy reference"@en .
+
+dcs:referencesPolicy a owl:ObjectProperty ;
+  rdfs:domain dcs:PolicyReference ;
+  rdfs:range dcs:Policy ;
+  rdfs:label "references policy"@en .
+
+dcs:producesFinding a owl:ObjectProperty ;
+  rdfs:range dcs:Finding ;
+  rdfs:label "produces finding"@en .
+
+dcs:hasAuditTrail a owl:ObjectProperty ;
+  rdfs:range dcs:AuditTrail ;
+  rdfs:label "has audit trail"@en .
+
+dcs:hasAuditEvent a owl:ObjectProperty ;
+  rdfs:domain dcs:AuditTrail ;
+  rdfs:range dcs:AuditEvent ;
+  rdfs:label "has audit event"@en .
+
+dcs:auditsArtifact a owl:ObjectProperty ;
+  rdfs:domain dcs:AuditEvent ;
+  rdfs:range dcs:DocumentArtifact ;
+  rdfs:label "audits artifact"@en .
+
+dcs:hasSignature a owl:ObjectProperty ;
+  rdfs:domain dcs:Contract ;
+  rdfs:range dcs:Signature ;
+  rdfs:label "has signature"@en .
+
+dcs:hasEvidence a owl:ObjectProperty ;
+  rdfs:range dcs:Evidence ;
+  rdfs:label "has evidence"@en .
+
+dcs:hasArchiveRecord a owl:ObjectProperty ;
+  rdfs:domain dcs:DocumentArtifact ;
+  rdfs:range dcs:ArchiveRecord ;
+  rdfs:label "has archive record"@en .
+
+#################################################################
+# Datatype properties
+#################################################################
+
+dcs:identifier a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "identifier"@en .
+
+dcs:did a owl:DatatypeProperty ;
+  rdfs:subPropertyOf dcs:identifier ;
+  rdfs:range xsd:string ;
+  rdfs:label "DID"@en .
+
+dcs:version a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "version"@en .
+
+dcs:documentNumber a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "document number"@en .
+
+dcs:name a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "name"@en .
+
+dcs:description a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "description"@en .
+
+dcs:title a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "title"@en .
+
+dcs:text a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "text"@en .
+
+dcs:semanticPath a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "semantic path"@en .
+
+dcs:schemaRef a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "schema reference id"@en .
+
+dcs:blockCatalogueId a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "block catalogue id"@en .
+
+dcs:parameterName a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "parameter name"@en .
+
+dcs:parameterType a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "parameter type"@en .
+
+dcs:isRequired a owl:DatatypeProperty ;
+  rdfs:range xsd:boolean ;
+  rdfs:label "is required"@en .
+
+dcs:pattern a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "pattern"@en .
+
+dcs:format a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "format"@en .
+
+dcs:allowedValue a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "allowed value"@en .
+
+dcs:allowedValuesRef a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "allowed values reference"@en .
+
+dcs:minInclusive a owl:DatatypeProperty ;
+  rdfs:range xsd:decimal ;
+  rdfs:label "minimum inclusive"@en .
+
+dcs:maxInclusive a owl:DatatypeProperty ;
+  rdfs:range xsd:decimal ;
+  rdfs:label "maximum inclusive"@en .
+
+dcs:parameterValue a owl:DatatypeProperty ;
+  rdfs:label "parameter value"@en .
+
+dcs:createdAt a owl:DatatypeProperty ;
+  rdfs:range xsd:dateTime ;
+  rdfs:label "created at"@en .
+
+dcs:updatedAt a owl:DatatypeProperty ;
+  rdfs:range xsd:dateTime ;
+  rdfs:label "updated at"@en .
+
+dcs:eventType a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "event type"@en .
+
+dcs:severity a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "severity"@en .
+
+dcs:hashAlgorithm a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "hash algorithm"@en .
+
+dcs:hashValue a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:label "hash value"@en .
+
+#################################################################
+# Schema references and validation profiles
+#################################################################
+
+dcst:schema-document-structure-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  rdfs:label "FACIS DCS document structure schema v1"@en .
+
+dcst:schema-template-data-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.template-data.v1" ;
+  rdfs:label "FACIS DCS template data schema v1"@en .
+
+dcst:schema-contract-data-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.contract-data.v1" ;
+  rdfs:label "FACIS DCS contract data schema v1"@en .
+
+dcst:schema-semantic-condition-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.semantic-condition.v1" ;
+  rdfs:label "FACIS DCS semantic condition schema v1"@en .
+
+dcst:schema-party-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  rdfs:label "FACIS DCS party schema v1"@en .
+
+dcst:schema-contract-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  rdfs:label "FACIS DCS contract domain schema v1"@en .
+
+dcst:schema-service-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  rdfs:label "FACIS DCS service schema v1"@en .
+
+dcst:schema-signature-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  rdfs:label "FACIS DCS signature schema v1"@en .
+
+dcst:validation-template-v1 a dcs:ValidationProfile ;
+  dcs:identifier "FACIS_DCS_TEMPLATE_V1" ;
+  dcs:version "v1" ;
+  rdfs:label "FACIS DCS template validation profile v1"@en .
+
+dcst:validation-contract-v1 a dcs:ValidationProfile ;
+  dcs:identifier "FACIS_DCS_CONTRACT_V1" ;
+  dcs:version "v1" ;
+  rdfs:label "FACIS DCS contract validation profile v1"@en .
+
+#################################################################
+# Policies and enforcement points
+#################################################################
+
+dcst:policy-template-structure-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.template.structure" ;
+  dcs:version "v1" ;
+  rdfs:label "Template structure policy v1"@en .
+
+dcst:policy-template-semantic-conditions-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.template.semantic-conditions" ;
+  dcs:version "v1" ;
+  rdfs:label "Template semantic conditions policy v1"@en .
+
+dcst:policy-contract-structure-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.contract.structure" ;
+  dcs:version "v1" ;
+  rdfs:label "Contract structure policy v1"@en .
+
+dcst:policy-contract-semantic-values-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.contract.semantic-values" ;
+  dcs:version "v1" ;
+  rdfs:label "Contract semantic values policy v1"@en .
+
+dcst:enforcement-template-create a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "template:create" ;
+  rdfs:label "Template create enforcement point"@en .
+
+dcst:enforcement-template-verify a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "template:verify" ;
+  rdfs:label "Template verify enforcement point"@en .
+
+dcst:enforcement-contract-create a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "contract:create" ;
+  rdfs:label "Contract create enforcement point"@en .
+
+dcst:enforcement-contract-update a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "contract:update" ;
+  rdfs:label "Contract update enforcement point"@en .
+
+#################################################################
+# Value constraints
+#################################################################
+
+dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
+  dcs:format "iso-3166-1-alpha-3" ;
+  dcs:pattern "^[A-Z]{3}$" ;
+  dcs:allowedValuesRef "ISO 3166-1 alpha-3" ;
+  dcs:allowedValue "DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA" ;
+  rdfs:label "ISO 3166-1 alpha-3 country constraint"@en .
+
+dcst:constraint-iso4217-currency a dcs:ValueConstraint ;
+  dcs:format "iso-4217" ;
+  dcs:pattern "^[A-Z]{3}$" ;
+  dcs:allowedValuesRef "ISO 4217" ;
+  dcs:allowedValue "EUR", "USD", "GBP", "CHF", "PLN", "CZK" ;
+  rdfs:label "ISO 4217 currency constraint"@en .
+
+dcst:constraint-eidas-signature-level a dcs:ValueConstraint ;
+  dcs:format "eidas-signature-level" ;
+  dcs:allowedValue "SES", "AES", "QES" ;
+  rdfs:label "eIDAS signature level constraint"@en .
+
+dcst:constraint-sla-availability-percent a dcs:ValueConstraint ;
+  dcs:minInclusive 0 ;
+  dcs:maxInclusive 100 ;
+  rdfs:label "SLA availability percentage constraint"@en .
+
+dcst:constraint-contract-type a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "frameworkAgreement", "serviceAgreement", "dataProcessingAgreement", "nda", "leaseAgreement", "purchaseAgreement" ;
+  rdfs:label "Contract type vocabulary constraint"@en .
+
+dcst:constraint-gdpr-role a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "controller", "processor", "jointController", "subProcessor" ;
+  rdfs:label "GDPR role vocabulary constraint"@en .
+
+dcst:constraint-dispute-method a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "court", "arbitration", "mediation" ;
+  rdfs:label "Dispute resolution method vocabulary constraint"@en .
+
+dcst:constraint-audit-frequency a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "onDemand", "annual", "semiAnnual", "quarterly" ;
+  rdfs:label "Audit frequency vocabulary constraint"@en .
+
+#################################################################
+# Canonical domain fields
+#################################################################
+
+dcst:field-company-legalName a dcs:DomainField ;
+  dcs:semanticPath "company.legalName" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company legal name"@en .
+
+dcst:field-company-registrationNumber a dcs:DomainField ;
+  dcs:semanticPath "company.registrationNumber" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company registration number"@en .
+
+dcst:field-company-vatId a dcs:DomainField ;
+  dcs:semanticPath "company.vatId" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company VAT ID"@en .
+
+dcst:field-company-location-country a dcs:DomainField ;
+  dcs:semanticPath "company.location.country" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
+  rdfs:label "Company country"@en .
+
+dcst:field-contract-type a dcs:DomainField ;
+  dcs:semanticPath "contract.type" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-contract-type ;
+  rdfs:label "Contract type"@en .
+
+dcst:field-contract-jurisdiction a dcs:DomainField ;
+  dcs:semanticPath "contract.jurisdiction" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
+  rdfs:label "Contract jurisdiction"@en .
+
+dcst:field-contract-validity-startDate a dcs:DomainField ;
+  dcs:semanticPath "contract.validity.startDate" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Validity start date"@en .
+
+dcst:field-contract-validity-endDate a dcs:DomainField ;
+  dcs:semanticPath "contract.validity.endDate" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Validity end date"@en .
+
+dcst:field-contract-payment-amount a dcs:DomainField ;
+  dcs:semanticPath "contract.payment.amount" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "decimal" ;
+  rdfs:label "Payment amount"@en .
+
+dcst:field-contract-payment-currency a dcs:DomainField ;
+  dcs:semanticPath "contract.payment.currency" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-iso4217-currency ;
+  rdfs:label "Payment currency"@en .
+
+dcst:field-contract-dataProtection-role a dcs:DomainField ;
+  dcs:semanticPath "contract.dataProtection.role" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-gdpr-role ;
+  rdfs:label "Data protection role"@en .
+
+dcst:field-contract-disputeResolution-method a dcs:DomainField ;
+  dcs:semanticPath "contract.disputeResolution.method" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-dispute-method ;
+  rdfs:label "Dispute resolution method"@en .
+
+dcst:field-service-sla-availability a dcs:DomainField ;
+  dcs:semanticPath "service.sla.availability" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "decimal" ;
+  dcs:hasValueConstraint dcst:constraint-sla-availability-percent ;
+  rdfs:label "SLA availability"@en .
+
+dcst:field-service-sla-responseTime a dcs:DomainField ;
+  dcs:semanticPath "service.sla.responseTime" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "SLA response time"@en .
+
+dcst:field-signature-requiredLevel a dcs:DomainField ;
+  dcs:semanticPath "signature.requiredLevel" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-eidas-signature-level ;
+  rdfs:label "Required signature level"@en .
+
+#################################################################
+# Block catalogue entries
+#################################################################
+
+dcst:block-document-section a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.document.section" ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  dcs:semanticPath "document.section" ;
+  rdfs:label "Document section"@en .
+
+dcst:block-text-free a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.text.free" ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  dcs:semanticPath "document.freeText" ;
+  rdfs:label "Free text"@en .
+
+dcst:block-clause-custom a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.clause.custom" ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  dcs:semanticPath "document.clause" ;
+  rdfs:label "Custom clause"@en .
+
+dcst:block-party-company-location a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.party.company.location" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:semanticPath "company.location" ;
+  rdfs:label "Company location"@en .
+
+dcst:block-contract-payment a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.payment" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.payment" ;
+  rdfs:label "Payment terms"@en .
+
+dcst:block-service-sla-availability a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.sla.availability" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.sla.availability" ;
+  rdfs:label "SLA availability"@en .
+
+dcst:block-signature-requirement a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.signature.requirement" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:semanticPath "signature.requiredLevel" ;
+  rdfs:label "Signature requirement"@en .
+
+#################################################################
+# Roles and lifecycle states
+#################################################################
+
+dcst:role-template-creator a dcs:Role ;
+  dcs:identifier "TEMPLATE_CREATOR" ;
+  rdfs:label "Template Creator"@en .
+
+dcst:role-template-reviewer a dcs:Role ;
+  dcs:identifier "TEMPLATE_REVIEWER" ;
+  rdfs:label "Template Reviewer"@en .
+
+dcst:role-template-approver a dcs:Role ;
+  dcs:identifier "TEMPLATE_APPROVER" ;
+  rdfs:label "Template Approver"@en .
+
+dcst:role-contract-creator a dcs:Role ;
+  dcs:identifier "CONTRACT_CREATOR" ;
+  rdfs:label "Contract Creator"@en .
+
+dcst:role-contract-reviewer a dcs:Role ;
+  dcs:identifier "CONTRACT_REVIEWER" ;
+  rdfs:label "Contract Reviewer"@en .
+
+dcst:role-contract-approver a dcs:Role ;
+  dcs:identifier "CONTRACT_APPROVER" ;
+  rdfs:label "Contract Approver"@en .
+
+dcst:role-auditor a dcs:Role ;
+  dcs:identifier "AUDITOR" ;
+  rdfs:label "Auditor"@en .
+
+dcst:role-compliance-officer a dcs:Role ;
+  dcs:identifier "COMPLIANCE_OFFICER" ;
+  rdfs:label "Compliance Officer"@en .
+
+dcst:state-draft a dcs:LifecycleState ;
+  dcs:identifier "DRAFT" ;
+  rdfs:label "Draft"@en .
+
+dcst:state-submitted a dcs:LifecycleState ;
+  dcs:identifier "SUBMITTED" ;
+  rdfs:label "Submitted"@en .
+
+dcst:state-reviewed a dcs:LifecycleState ;
+  dcs:identifier "REVIEWED" ;
+  rdfs:label "Reviewed"@en .
+
+dcst:state-approved a dcs:LifecycleState ;
+  dcs:identifier "APPROVED" ;
+  rdfs:label "Approved"@en .
+
+dcst:state-rejected a dcs:LifecycleState ;
+  dcs:identifier "REJECTED" ;
+  rdfs:label "Rejected"@en .
+
+dcst:state-archived a dcs:LifecycleState ;
+  dcs:identifier "ARCHIVED" ;
+  rdfs:label "Archived"@en .
+
+dcst:state-negotiation a dcs:LifecycleState ;
+  dcs:identifier "NEGOTIATION" ;
+  rdfs:label "Negotiation"@en .
+
+dcst:state-signed a dcs:LifecycleState ;
+  dcs:identifier "SIGNED" ;
+  rdfs:label "Signed"@en .
+

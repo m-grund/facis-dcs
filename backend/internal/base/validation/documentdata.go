@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -36,8 +37,19 @@ var (
 )
 
 type domainField struct {
-	SchemaRef string
-	Type      string
+	SchemaRef  string
+	Type       string
+	Constraint *valueConstraint
+}
+
+type valueConstraint struct {
+	Format           string
+	Pattern          string
+	AllowedValues    []string
+	AllowedValuesRef string
+	Min              *float64
+	Max              *float64
+	Description      string
 }
 
 type blockDefinition struct {
@@ -45,31 +57,217 @@ type blockDefinition struct {
 	SemanticPath string
 }
 
+func numberPtr(value float64) *float64 {
+	return &value
+}
+
+func (constraint *valueConstraint) asMap() map[string]any {
+	result := map[string]any{}
+	if constraint.Format != "" {
+		result["format"] = constraint.Format
+	}
+	if constraint.Pattern != "" {
+		result["pattern"] = constraint.Pattern
+	}
+	if len(constraint.AllowedValues) > 0 {
+		values := make([]any, len(constraint.AllowedValues))
+		for i, value := range constraint.AllowedValues {
+			values[i] = value
+		}
+		result["allowedValues"] = values
+	}
+	if constraint.AllowedValuesRef != "" {
+		result["allowedValuesRef"] = constraint.AllowedValuesRef
+	}
+	if constraint.Min != nil {
+		result["min"] = *constraint.Min
+	}
+	if constraint.Max != nil {
+		result["max"] = *constraint.Max
+	}
+	if constraint.Description != "" {
+		result["description"] = constraint.Description
+	}
+	return result
+}
+
 var domainFields = map[string]domainField{
 	"company.legalName":           {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.registrationNumber":  {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.vatId":               {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.representative.name": {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.representative.role": {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.contact.email":       {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.contact.phone":       {SchemaRef: SchemaPartyV1, Type: "string"},
 	"company.location.street":     {SchemaRef: SchemaPartyV1, Type: "string"},
 	"company.location.postalCode": {SchemaRef: SchemaPartyV1, Type: "string"},
 	"company.location.city":       {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.location.country":    {SchemaRef: SchemaPartyV1, Type: "string"},
-	"contract.jurisdiction":       {SchemaRef: SchemaContractV1, Type: "string"},
-	"contract.validity.startDate": {SchemaRef: SchemaContractV1, Type: "date"},
-	"contract.validity.endDate":   {SchemaRef: SchemaContractV1, Type: "date"},
-	"service.sla.availability":    {SchemaRef: SchemaServiceV1, Type: "decimal"},
-	"service.sla.responseTime":    {SchemaRef: SchemaServiceV1, Type: "integer"},
-	"signature.requiredLevel":     {SchemaRef: SchemaSignatureV1, Type: "string"},
+	"company.location.region":     {SchemaRef: SchemaPartyV1, Type: "string"},
+	"company.location.country": {
+		SchemaRef: SchemaPartyV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:           "iso-3166-1-alpha-3",
+			Pattern:          "^[A-Z]{3}$",
+			AllowedValuesRef: "ISO 3166-1 alpha-3",
+			AllowedValues:    []string{"DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA"},
+			Description:      "Use ISO 3166-1 alpha-3 country codes, for example DEU instead of Germany.",
+		},
+	},
+	"contract.title": {SchemaRef: SchemaContractV1, Type: "string"},
+	"contract.type": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "controlled-vocabulary",
+			AllowedValues: []string{"frameworkAgreement", "serviceAgreement", "dataProcessingAgreement", "nda", "leaseAgreement", "purchaseAgreement"},
+			Description:   "Use the FACIS contract type vocabulary.",
+		},
+	},
+	"contract.jurisdiction": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:           "iso-3166-1-alpha-3",
+			Pattern:          "^[A-Z]{3}$",
+			AllowedValuesRef: "ISO 3166-1 alpha-3",
+			AllowedValues:    []string{"DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA"},
+			Description:      "Use ISO 3166-1 alpha-3 jurisdiction codes.",
+		},
+	},
+	"contract.governingLaw": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "controlled-vocabulary",
+			AllowedValues: []string{"DE", "AT", "CH", "FR", "NL", "BE", "EU"},
+			Description:   "Use the agreed governing-law code vocabulary.",
+		},
+	},
+	"contract.disputeResolution.venue": {SchemaRef: SchemaContractV1, Type: "string"},
+	"contract.disputeResolution.method": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "controlled-vocabulary",
+			AllowedValues: []string{"court", "arbitration", "mediation"},
+			Description:   "Use the FACIS dispute resolution vocabulary.",
+		},
+	},
+	"contract.validity.startDate":           {SchemaRef: SchemaContractV1, Type: "date"},
+	"contract.validity.endDate":             {SchemaRef: SchemaContractV1, Type: "date"},
+	"contract.effectiveDate":                {SchemaRef: SchemaContractV1, Type: "date"},
+	"contract.renewal.noticePeriodDays":     {SchemaRef: SchemaContractV1, Type: "integer"},
+	"contract.termination.noticePeriodDays": {SchemaRef: SchemaContractV1, Type: "integer"},
+	"contract.payment.amount":               {SchemaRef: SchemaContractV1, Type: "decimal"},
+	"contract.payment.currency": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:           "iso-4217",
+			Pattern:          "^[A-Z]{3}$",
+			AllowedValuesRef: "ISO 4217",
+			AllowedValues:    []string{"EUR", "USD", "GBP", "CHF", "PLN", "CZK"},
+			Description:      "Use ISO 4217 currency codes.",
+		},
+	},
+	"contract.payment.dueDate":                {SchemaRef: SchemaContractV1, Type: "date"},
+	"contract.payment.dueDays":                {SchemaRef: SchemaContractV1, Type: "integer"},
+	"contract.liability.capAmount":            {SchemaRef: SchemaContractV1, Type: "decimal"},
+	"contract.liability.currency":             {SchemaRef: SchemaContractV1, Type: "string"},
+	"contract.insurance.minimumCoverage":      {SchemaRef: SchemaContractV1, Type: "decimal"},
+	"contract.confidentiality.durationMonths": {SchemaRef: SchemaContractV1, Type: "integer"},
+	"contract.dataProtection.role": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "controlled-vocabulary",
+			AllowedValues: []string{"controller", "processor", "jointController", "subProcessor"},
+			Description:   "Use the GDPR role vocabulary.",
+		},
+	},
+	"contract.auditRights.frequency": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "controlled-vocabulary",
+			AllowedValues: []string{"onDemand", "annual", "semiAnnual", "quarterly"},
+			Description:   "Use the FACIS audit frequency vocabulary.",
+		},
+	},
+	"contract.ipRights.ownership": {
+		SchemaRef: SchemaContractV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "controlled-vocabulary",
+			AllowedValues: []string{"customer", "supplier", "joint", "preExistingRetained"},
+			Description:   "Use the FACIS IP ownership vocabulary.",
+		},
+	},
+	"contract.forceMajeure.noticeDays":       {SchemaRef: SchemaContractV1, Type: "integer"},
+	"service.description":                    {SchemaRef: SchemaServiceV1, Type: "string"},
+	"service.scope":                          {SchemaRef: SchemaServiceV1, Type: "string"},
+	"service.deliverable.name":               {SchemaRef: SchemaServiceV1, Type: "string"},
+	"service.deliverable.acceptanceCriteria": {SchemaRef: SchemaServiceV1, Type: "string"},
+	"service.sla.availability": {
+		SchemaRef: SchemaServiceV1,
+		Type:      "decimal",
+		Constraint: &valueConstraint{
+			Min:         numberPtr(0),
+			Max:         numberPtr(100),
+			Description: "Availability percentage from 0 to 100.",
+		},
+	},
+	"service.sla.responseTime":   {SchemaRef: SchemaServiceV1, Type: "integer"},
+	"service.sla.resolutionTime": {SchemaRef: SchemaServiceV1, Type: "integer"},
+	"service.sla.supportHours":   {SchemaRef: SchemaServiceV1, Type: "string"},
+	"signature.requiredLevel": {
+		SchemaRef: SchemaSignatureV1,
+		Type:      "string",
+		Constraint: &valueConstraint{
+			Format:        "eidas-signature-level",
+			AllowedValues: []string{"SES", "AES", "QES"},
+			Description:   "Use eIDAS signature level codes.",
+		},
+	},
+	"signature.requiredSignerRole": {SchemaRef: SchemaSignatureV1, Type: "string"},
+	"signature.deadline":           {SchemaRef: SchemaSignatureV1, Type: "date"},
 }
 
 var blockCatalogue = map[string]blockDefinition{
-	"facis.block.document.section":         {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.section"},
-	"facis.block.text.free":                {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.freeText"},
-	"facis.block.clause.custom":            {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.clause"},
-	"facis.block.party.company":            {SchemaRef: SchemaPartyV1, SemanticPath: "company"},
-	"facis.block.party.company.location":   {SchemaRef: SchemaPartyV1, SemanticPath: "company.location"},
-	"facis.block.sla.availability":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.availability"},
-	"facis.block.contract.validity":        {SchemaRef: SchemaContractV1, SemanticPath: "contract.validity"},
-	"facis.block.signature.requirement":    {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.requiredLevel"},
-	"facis.block.template.approved-embed":  {SchemaRef: SchemaTemplateDataV1, SemanticPath: "template.approvedEmbed"},
-	"facis.block.template.merged-approved": {SchemaRef: SchemaTemplateDataV1, SemanticPath: "template.mergedApproved"},
+	"facis.block.document.section":            {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.section"},
+	"facis.block.text.free":                   {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.freeText"},
+	"facis.block.clause.custom":               {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.clause"},
+	"facis.block.party.company":               {SchemaRef: SchemaPartyV1, SemanticPath: "company"},
+	"facis.block.party.company.location":      {SchemaRef: SchemaPartyV1, SemanticPath: "company.location"},
+	"facis.block.party.representative":        {SchemaRef: SchemaPartyV1, SemanticPath: "company.representative"},
+	"facis.block.party.contact":               {SchemaRef: SchemaPartyV1, SemanticPath: "company.contact"},
+	"facis.block.contract.basics":             {SchemaRef: SchemaContractV1, SemanticPath: "contract"},
+	"facis.block.contract.jurisdiction":       {SchemaRef: SchemaContractV1, SemanticPath: "contract.jurisdiction"},
+	"facis.block.sla.availability":            {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.availability"},
+	"facis.block.sla.response-time":           {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.responseTime"},
+	"facis.block.sla.resolution-time":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.resolutionTime"},
+	"facis.block.sla.support":                 {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.supportHours"},
+	"facis.block.contract.validity":           {SchemaRef: SchemaContractV1, SemanticPath: "contract.validity"},
+	"facis.block.contract.renewal":            {SchemaRef: SchemaContractV1, SemanticPath: "contract.renewal"},
+	"facis.block.contract.termination":        {SchemaRef: SchemaContractV1, SemanticPath: "contract.termination"},
+	"facis.block.contract.payment":            {SchemaRef: SchemaContractV1, SemanticPath: "contract.payment"},
+	"facis.block.contract.liability":          {SchemaRef: SchemaContractV1, SemanticPath: "contract.liability"},
+	"facis.block.contract.insurance":          {SchemaRef: SchemaContractV1, SemanticPath: "contract.insurance"},
+	"facis.block.contract.confidentiality":    {SchemaRef: SchemaContractV1, SemanticPath: "contract.confidentiality"},
+	"facis.block.contract.data-protection":    {SchemaRef: SchemaContractV1, SemanticPath: "contract.dataProtection"},
+	"facis.block.contract.audit-rights":       {SchemaRef: SchemaContractV1, SemanticPath: "contract.auditRights"},
+	"facis.block.contract.ip-rights":          {SchemaRef: SchemaContractV1, SemanticPath: "contract.ipRights"},
+	"facis.block.contract.force-majeure":      {SchemaRef: SchemaContractV1, SemanticPath: "contract.forceMajeure"},
+	"facis.block.contract.dispute-resolution": {SchemaRef: SchemaContractV1, SemanticPath: "contract.disputeResolution"},
+	"facis.block.service.description":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.description"},
+	"facis.block.service.scope":               {SchemaRef: SchemaServiceV1, SemanticPath: "service.scope"},
+	"facis.block.service.deliverable":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.deliverable"},
+	"facis.block.signature.requirement":       {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.requiredLevel"},
+	"facis.block.signature.signer-role":       {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.requiredSignerRole"},
+	"facis.block.signature.deadline":          {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.deadline"},
+	"facis.block.template.approved-embed":     {SchemaRef: SchemaTemplateDataV1, SemanticPath: "template.approvedEmbed"},
+	"facis.block.template.merged-approved":    {SchemaRef: SchemaTemplateDataV1, SemanticPath: "template.mergedApproved"},
 }
 
 type documentData map[string]any
@@ -418,13 +616,20 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 			return fmt.Errorf("semantic value references unknown block/condition pair %q/%q", blockID, conditionID)
 		}
 		condition := conditionByID[conditionID]
-		paramType, found := findParameterType(condition, parameterName)
+		param, found := findParameter(condition, parameterName)
 		if !found {
 			return fmt.Errorf("semantic value references unknown parameter %q on condition %q", parameterName, conditionID)
 		}
+		paramType, _ := param["type"].(string)
 		if rawValue, ok := value["parameterValue"]; ok && rawValue != nil {
 			if !valueMatchesType(rawValue, paramType) {
 				return fmt.Errorf("semantic value %q on condition %q does not match type %q", parameterName, conditionID, paramType)
+			}
+			semanticPath, _ := param["semanticPath"].(string)
+			if field, ok := domainFields[semanticPath]; ok && field.Constraint != nil {
+				if err := valueMatchesConstraint(rawValue, field.Constraint); err != nil {
+					return fmt.Errorf("semantic value %q on condition %q violates constraint: %w", parameterName, conditionID, err)
+				}
 			}
 			provided[semanticValueKey(blockID, conditionID, parameterName)] = true
 		}
@@ -546,6 +751,9 @@ func validateDomainParameter(conditionID string, param map[string]any) error {
 	if paramType != field.Type {
 		return fmt.Errorf("semantic condition %q parameter %q type must be %q for semanticPath %q", conditionID, param["parameterName"], field.Type, semanticPath)
 	}
+	if field.Constraint != nil {
+		param["valueConstraint"] = field.Constraint.asMap()
+	}
 	return nil
 }
 
@@ -554,15 +762,15 @@ func isTrue(value any) bool {
 	return ok && v
 }
 
-func findParameterType(condition map[string]any, parameterName string) (string, bool) {
+func findParameter(condition map[string]any, parameterName string) (map[string]any, bool) {
 	parameters, _ := asArray(condition["parameters"])
 	for _, rawParam := range parameters {
 		param := rawParam.(map[string]any)
 		if param["parameterName"] == parameterName {
-			return param["type"].(string), true
+			return param, true
 		}
 	}
-	return "", false
+	return nil, false
 }
 
 func valueMatchesType(value any, paramType string) bool {
@@ -579,6 +787,50 @@ func valueMatchesType(value any, paramType string) bool {
 	default:
 		return false
 	}
+}
+
+func valueMatchesConstraint(value any, constraint *valueConstraint) error {
+	if len(constraint.AllowedValues) > 0 {
+		text, ok := value.(string)
+		if !ok || !containsString(constraint.AllowedValues, text) {
+			return fmt.Errorf("expected one of %s", strings.Join(constraint.AllowedValues, ", "))
+		}
+	}
+	if constraint.Pattern != "" {
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected value matching %s", constraint.Pattern)
+		}
+		matched, err := regexp.MatchString(constraint.Pattern, text)
+		if err != nil {
+			return fmt.Errorf("invalid constraint pattern %q: %w", constraint.Pattern, err)
+		}
+		if !matched {
+			return fmt.Errorf("expected value matching %s", constraint.Pattern)
+		}
+	}
+	if constraint.Min != nil || constraint.Max != nil {
+		number, ok := value.(float64)
+		if !ok {
+			return errors.New("expected numeric constrained value")
+		}
+		if constraint.Min != nil && number < *constraint.Min {
+			return fmt.Errorf("expected value greater than or equal to %v", *constraint.Min)
+		}
+		if constraint.Max != nil && number > *constraint.Max {
+			return fmt.Errorf("expected value less than or equal to %v", *constraint.Max)
+		}
+	}
+	return nil
+}
+
+func containsString(values []string, candidate string) bool {
+	for _, value := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func semanticValueKey(blockID, conditionID, parameterName string) string {

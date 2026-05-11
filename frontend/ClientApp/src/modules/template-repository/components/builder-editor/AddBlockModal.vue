@@ -35,10 +35,19 @@
             </div>
           </div>
 
-          <div v-if="unusedClauses.length" class="border-t border-base-300 pt-4">
-            <p class="text-sm text-base-content/70 mb-2">Unused Clauses:</p>
+          <div class="border-t border-base-300 pt-4">
+            <div class="flex flex-col gap-2 mb-2">
+              <p class="text-sm text-base-content/70">Defined clauses:</p>
+              <input
+                v-model="clauseSearch"
+                type="search"
+                class="input input-bordered input-sm w-full"
+                placeholder="Search clauses"
+                autocomplete="off"
+              />
+            </div>
             <div class="flex flex-col gap-2 max-h-64 overflow-y-auto">
-              <button v-for="clause in unusedClauses" :key="clause.blockId" type="button"
+              <button v-for="clause in filteredUnusedClauses" :key="clause.blockId" type="button"
                 class="text-left min-h-[44px] flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
                 @click="handleAddClause(clause.blockId)">
                 <span class="text-sm font-medium text-base-content">{{ clause.title || 'Untitled clause' }}</span>
@@ -46,6 +55,9 @@
                   <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
                 </p>
               </button>
+              <p v-if="!filteredUnusedClauses.length" class="text-sm text-base-content/50 py-2">
+                {{ unusedClauses.length ? 'No matching clauses.' : 'No unplaced clauses from the Clauses tab.' }}
+              </p>
             </div>
           </div>
         </template>
@@ -59,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
@@ -79,6 +91,7 @@ const isContractWorkflow = computed(() => uiStore.workflow === 'contract')
 const paletteBlockTypes = [
   { blockType: DocumentBlockType.Section, label: 'Section' },
   { blockType: DocumentBlockType.Text, label: 'Text' },
+  { blockType: DocumentBlockType.Clause, label: 'Clause' },
 ] as const
 const domainBlockCatalogue = FACIS_BLOCK_CATALOGUE.filter((block) => !block.blockCatalogueId.startsWith('facis.block.document.') && !block.blockCatalogueId.startsWith('facis.block.text.'))
 
@@ -101,6 +114,24 @@ const unusedClauses = computed((): ClauseBlock[] => {
   const clauses = documentBlocks.value.filter((b): b is ClauseBlock => isClauseBlock(b))
   const unused = clauses.filter((c) => !inOutline.has(c.blockId))
   return [...unused].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''))
+})
+const clauseSearch = ref('')
+const filteredUnusedClauses = computed((): ClauseBlock[] => {
+  const query = clauseSearch.value.trim().toLowerCase()
+  if (!query) return unusedClauses.value
+  return unusedClauses.value.filter((clause) =>
+    [
+      clause.title ?? '',
+      clause.text ?? '',
+      clause.conditionIds.join(' '),
+      clause.semanticPath ?? '',
+      clause.schemaRef ?? '',
+    ].some((value) => value.toLowerCase().includes(query)),
+  )
+})
+
+watch(addBlockModalContext, () => {
+  clauseSearch.value = ''
 })
 
 function getSegments(clause: ClauseBlock): Segment[] {

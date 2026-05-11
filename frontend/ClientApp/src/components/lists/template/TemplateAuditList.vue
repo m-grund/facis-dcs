@@ -8,18 +8,53 @@ defineProps<{
 }>()
 
 const eventType = useContractTemplateEventType()
+
+type TemplateAuditItem = ContractTemplateAuditResponse[number]
+
+const isPolicyFinding = (audit: TemplateAuditItem) => String(audit.event_type) === 'TEMPLATE_POLICY_AUDIT_FINDING'
+
+const policyField = (audit: TemplateAuditItem, key: string) => {
+  const data = audit.event_data as unknown
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return ''
+  const value = (data as Record<string, unknown>)[key]
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+}
+
+const policyBadgeClass = (audit: TemplateAuditItem) => {
+  const severity = policyField(audit, 'severity').toLowerCase()
+  if (severity === 'error') return 'badge-error'
+  if (severity === 'warning') return 'badge-warning'
+  return 'badge-info'
+}
 </script>
 
 <template>
   <ul class="list">
     <li v-for="audit in audits" :key="audit.id" class="list-row grid-cols-1">
       <div class="flex justify-between">
-        <div>{{ new Date(audit.event_data.occurred_at).toLocaleString() }}</div>
-        <div class="badge badge-secondary badge-outline badge-sm">{{ toProperCase(audit.event_type) }}</div>
+        <div>{{ new Date(audit.created_at).toLocaleString() }}</div>
+        <div v-if="isPolicyFinding(audit)" class="badge badge-outline badge-sm" :class="policyBadgeClass(audit)">
+          {{ policyField(audit, 'severity') || 'finding' }}
+        </div>
+        <div v-else class="badge badge-secondary badge-outline badge-sm">{{ toProperCase(audit.event_type) }}</div>
         <div class="text-xs">{{ toProperCase(audit.component) }}</div>
       </div>
       <div class="list-col-wrap">
-        <div v-if="eventType.isCreateEvent(audit)">
+        <div v-if="isPolicyFinding(audit)" class="space-y-1">
+          <div v-if="policyField(audit, 'objectName')" class="text-xs font-medium opacity-70">
+            {{ policyField(audit, 'objectName') }}
+            <span v-if="policyField(audit, 'state')"> · {{ policyField(audit, 'state') }}</span>
+            <span v-if="policyField(audit, 'templateType')"> · {{ policyField(audit, 'templateType') }}</span>
+          </div>
+          <div class="font-medium">{{ policyField(audit, 'title') || 'Policy finding' }}</div>
+          <div class="text-sm opacity-80">{{ policyField(audit, 'message') }}</div>
+          <div class="text-xs opacity-60">
+            {{ policyField(audit, 'ruleId') }}
+            <span v-if="policyField(audit, 'semanticPath')"> · {{ policyField(audit, 'semanticPath') }}</span>
+            <span v-if="policyField(audit, 'requirement')"> · {{ policyField(audit, 'requirement') }}</span>
+          </div>
+        </div>
+        <div v-else-if="eventType.isCreateEvent(audit)">
           <div>Created by: {{ audit.event_data.created_by }}</div>
         </div>
         <div v-else-if="eventType.isSubmitEvent(audit)" class="flex justify-between">

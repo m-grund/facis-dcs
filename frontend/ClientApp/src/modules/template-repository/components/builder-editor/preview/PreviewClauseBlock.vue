@@ -6,6 +6,7 @@
       :type="seg.paramType"
       :label="seg.label"
       :value="seg.value"
+      :value-constraint="seg.valueConstraint"
       :is-invalid="seg.isInvalid"
       :invalid-tip="seg.invalidTip"
       @update:value="(val) => onParamValueChange(seg, val)"
@@ -17,7 +18,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SemanticCondition, SemanticParameterType } from '@/modules/template-repository/models/contract-template'
+import type { SemanticCondition, SemanticParameterType, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
 import { parseSegments, isText, isPlaceholder, type Segment, isNewline } from '@template-repository/composables/useClauseTextChips'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
@@ -43,6 +44,7 @@ type PreviewSegment =
     paramType: SemanticParameterType
     label: string
     value?: string | number
+    valueConstraint?: SemanticValueConstraint
     isInvalid?: boolean
     invalidTip?: string
   }
@@ -68,6 +70,7 @@ const segments = computed<PreviewSegment[]>(() => {
         paramType,
         label: seg.parameterName,
         value: findSemanticValue(seg.conditionId, seg.parameterName),
+        valueConstraint: param?.valueConstraint,
         isInvalid: !!findVerificationError(seg.conditionId, seg.parameterName),
         invalidTip: findVerificationError(seg.conditionId, seg.parameterName)?.message,
       })

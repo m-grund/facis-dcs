@@ -72,7 +72,7 @@ const formatTimestamp = (timestamp: string) => {
   }).format(date)
 }
 
-const formatLabel = (value: string) => value.replaceAll('_', ' ')
+const formatLabel = (value: string) => value.split('_').join(' ')
 
 const reportText = computed(() => {
   if (!report.value) {
@@ -166,6 +166,7 @@ const reportText = computed(() => {
             <td>{{ finding.status ?? '-' }}</td>
             <td>{{ finding.did ?? '-' }}</td>
             <td class="min-w-72 max-w-xl">
+              <div v-if="finding.object_name" class="text-xs font-medium opacity-70">{{ finding.object_name }}</div>
               <div class="font-medium">{{ finding.title ?? 'Audit finding' }}</div>
               <div class="text-sm opacity-80 whitespace-pre-wrap break-words">{{ finding.description }}</div>
             </td>

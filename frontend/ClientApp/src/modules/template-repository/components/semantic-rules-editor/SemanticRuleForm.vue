@@ -23,12 +23,51 @@
               <RequiredIndicator />
             </span>
           </label>
-          <select v-model="selectedDomainPath" class="select select-bordered select-sm w-full h-9">
-            <option value="" disabled>Select field</option>
-            <option v-for="field in FACIS_DOMAIN_FIELDS" :key="field.semanticPath" :value="field.semanticPath">
-              {{ field.label }}
-            </option>
-          </select>
+          <div class="relative">
+            <input
+              v-model="domainFieldSearch"
+              type="search"
+              class="input input-bordered input-sm w-full h-9"
+              :class="{ 'input-primary': selectedDomainPath }"
+              placeholder="Search domain fields"
+              autocomplete="off"
+              @focus="showDomainFieldOptions = true"
+              @input="handleDomainFieldInput"
+              @keydown.escape="showDomainFieldOptions = false"
+              @blur="hideDomainFieldOptions"
+            />
+            <div
+              v-if="showDomainFieldOptions"
+              class="absolute z-30 mt-1 w-full rounded-lg border border-base-300 bg-base-100 shadow-lg max-h-64 overflow-y-auto"
+            >
+              <template v-if="groupedDomainFields.length">
+                <section v-for="group in groupedDomainFields" :key="group.name">
+                  <div class="sticky top-0 z-10 bg-base-100 px-3 py-1 border-b border-base-200">
+                    <p class="text-xs font-semibold uppercase text-base-content/50">{{ group.name }}</p>
+                  </div>
+                  <button
+                    v-for="field in group.fields"
+                    :key="field.semanticPath"
+                    type="button"
+                    class="w-full text-left px-3 py-2 hover:bg-base-200 transition-colors border-b border-base-200 last:border-b-0"
+                    :class="{ 'bg-primary/10': selectedDomainPath === field.semanticPath }"
+                    @mousedown.prevent="selectDomainField(field.semanticPath)"
+                  >
+                    <span class="block text-sm font-medium text-base-content">{{ field.label }}</span>
+                    <span class="block text-xs text-base-content/50">{{ field.semanticPath }}</span>
+                    <span v-if="field.valueConstraint" class="block text-xs text-base-content/50">
+                      {{ formatValueConstraint(field.valueConstraint) }}
+                    </span>
+                  </button>
+                </section>
+              </template>
+              <p v-else class="p-3 text-sm text-base-content/50">No matching domain fields.</p>
+            </div>
+          </div>
+          <p v-if="selectedDomainField" class="text-xs text-base-content/50">{{ selectedDomainField.semanticPath }}</p>
+          <p v-if="selectedDomainField?.valueConstraint" class="text-xs text-base-content/50">
+            {{ formatValueConstraint(selectedDomainField.valueConstraint) }}
+          </p>
           <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
         </div>
         <div class="md:col-span-3 flex flex-col gap-1">
@@ -78,6 +117,9 @@
             <span class="font-mono text-sm font-medium border border-base-300 rounded px-2 py-0.5 bg-base-200/50">{{
               param.parameterName }}</span>
             <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
+            <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
+              {{ formatValueConstraint(param.valueConstraint) }}
+            </span>
             <span class="badge badge-ghost badge-sm">{{ param.type }}</span>
             <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
             <button type="button" class="btn btn-ghost btn-xs text-error ml-auto shrink-0" aria-label="Delete parameter"
@@ -104,6 +146,7 @@ import {
   type SemanticCondition,
   type SemanticConditionParameter,
   type DomainSemanticPath,
+  type SemanticValueConstraint,
   FACIS_DOMAIN_FIELDS,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
@@ -123,12 +166,13 @@ const emit = defineEmits<{
 }>()
 
 function defaultParam(): SemanticConditionParameter {
-  const defaultField = FACIS_DOMAIN_FIELDS[0]
+  const defaultField = FACIS_DOMAIN_FIELDS[0]!
   return {
     parameterName: '',
     type: defaultField.type,
     schemaRef: defaultField.schemaRef,
     semanticPath: defaultField.semanticPath,
+    valueConstraint: cloneValueConstraint(defaultField.valueConstraint),
     isRequired: true,
     operators: [],
     value: undefined,
@@ -146,9 +190,42 @@ function getDefaultNewCondition(): NewConditionPayload {
 const newCondition = ref<NewConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
 const selectedDomainPath = ref<DomainSemanticPath | ''>('')
+const domainFieldSearch = ref('')
+const showDomainFieldOptions = ref(false)
 const isEditMode = computed(() => props.mode === 'edit')
 const formTitle = computed(() => (isEditMode.value ? 'Edit rule' : 'New rule'))
 const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rule'))
+const selectedDomainField = computed(() =>
+  FACIS_DOMAIN_FIELDS.find((field) => field.semanticPath === selectedDomainPath.value),
+)
+const groupedDomainFields = computed(() => {
+  const query = domainFieldSearch.value.trim().toLowerCase()
+  const filtered = FACIS_DOMAIN_FIELDS.filter((field) => {
+    if (!query) return true
+    return [
+      field.label,
+      field.semanticPath,
+      field.schemaRef,
+      field.type,
+      field.group,
+      field.valueConstraint?.format ?? '',
+      field.valueConstraint?.allowedValuesRef ?? '',
+      field.valueConstraint?.allowedValues?.join(' ') ?? '',
+    ].some((value) =>
+      value.toLowerCase().includes(query),
+    )
+  })
+  const byGroup = new Map<string, typeof filtered>()
+  for (const field of filtered) {
+    byGroup.set(field.group, [...(byGroup.get(field.group) ?? []), field])
+  }
+  return [...byGroup.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, fields]) => ({
+      name,
+      fields: [...fields].sort((left, right) => left.label.localeCompare(right.label)),
+    }))
+})
 
 watch(
   () => [props.mode, props.initialCondition] as const,
@@ -157,6 +234,8 @@ watch(
       newCondition.value = getDefaultNewCondition()
       draftParameter.value = defaultParam()
       selectedDomainPath.value = ''
+      domainFieldSearch.value = ''
+      showDomainFieldOptions.value = false
       return
     }
     newCondition.value = {
@@ -166,6 +245,8 @@ watch(
     }
     draftParameter.value = defaultParam()
     selectedDomainPath.value = ''
+    domainFieldSearch.value = ''
+    showDomainFieldOptions.value = false
   },
   { immediate: true },
 )
@@ -181,9 +262,51 @@ watch(selectedDomainPath, (path) => {
     parameterName: field.semanticPath.split('.').join('_'),
     schemaRef: field.schemaRef,
     semanticPath: field.semanticPath,
+    valueConstraint: cloneValueConstraint(field.valueConstraint),
     type: field.type,
   }
+  domainFieldSearch.value = formatDomainFieldLabel(field)
 })
+
+function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
+  if (!constraint) return undefined
+  return {
+    ...constraint,
+    allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+  }
+}
+
+function formatValueConstraint(constraint: SemanticValueConstraint) {
+  if (constraint.allowedValuesRef) return constraint.allowedValuesRef
+  if (constraint.format) return constraint.format
+  if (constraint.allowedValues?.length) return `Allowed: ${constraint.allowedValues.join(', ')}`
+  if (constraint.min !== undefined || constraint.max !== undefined) {
+    return `Range: ${constraint.min ?? '-'} - ${constraint.max ?? '-'}`
+  }
+  return constraint.description ?? 'Constrained value'
+}
+
+function formatDomainFieldLabel(field: (typeof FACIS_DOMAIN_FIELDS)[number]) {
+  return `${field.label} (${field.semanticPath})`
+}
+
+function selectDomainField(path: DomainSemanticPath) {
+  selectedDomainPath.value = path
+  showDomainFieldOptions.value = false
+}
+
+function handleDomainFieldInput() {
+  showDomainFieldOptions.value = true
+  if (!selectedDomainField.value) return
+  if (domainFieldSearch.value === formatDomainFieldLabel(selectedDomainField.value)) return
+  selectedDomainPath.value = ''
+}
+
+function hideDomainFieldOptions() {
+  window.setTimeout(() => {
+    showDomainFieldOptions.value = false
+  }, 100)
+}
 
 const isParameterNameDuplicate = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
@@ -230,6 +353,8 @@ function addParameter() {
   })
   draftParameter.value = defaultParam()
   selectedDomainPath.value = ''
+  domainFieldSearch.value = ''
+  showDomainFieldOptions.value = false
 }
 
 function deleteParameter(index: number) {
@@ -258,5 +383,8 @@ function submitRule() {
   }
   newCondition.value = getDefaultNewCondition()
   draftParameter.value = defaultParam()
+  selectedDomainPath.value = ''
+  domainFieldSearch.value = ''
+  showDomainFieldOptions.value = false
 }
 </script>

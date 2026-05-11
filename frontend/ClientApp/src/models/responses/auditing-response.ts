@@ -8,6 +8,8 @@ export interface AuditFinding {
   component?: string
   status?: string
   did?: string
+  object_name?: string
+  object_type?: string
   created_at: string
   details?: unknown
 }

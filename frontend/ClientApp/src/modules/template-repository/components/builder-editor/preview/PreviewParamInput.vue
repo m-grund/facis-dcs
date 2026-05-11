@@ -1,6 +1,11 @@
 <template>
   <span class="tooltip tooltip-top inline-flex items-baseline" :data-tip="tipText">
-    <input v-if="type === 'string'" v-model="stringValue" type="text" @input="emitStringValue"
+    <select v-if="type === 'string' && valueConstraint?.allowedValues?.length" v-model="stringValue" @change="emitStringValue"
+      :class="inputClass" :aria-label="label">
+      <option value="" disabled>Select</option>
+      <option v-for="option in valueConstraint.allowedValues" :key="option" :value="option">{{ option }}</option>
+    </select>
+    <input v-else-if="type === 'string'" v-model="stringValue" type="text" @input="emitStringValue"
       :class="inputClass" :aria-label="label" />
     <input v-else-if="type === 'integer'" v-model="numberValue" type="text" inputmode="numeric" @keydown="onIntegerKeyDown" @input="emitIntegerValue"
       :class="inputClass" :aria-label="label" />
@@ -13,12 +18,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { SemanticParameterType } from '@/modules/template-repository/models/contract-template'
+import type { SemanticParameterType, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
 
 const props = defineProps<{
   type: SemanticParameterType
   label?: string
   value?: string | number
+  valueConstraint?: SemanticValueConstraint
   isInvalid?: boolean
   invalidTip?: string
 }>()
@@ -29,7 +35,7 @@ const emit = defineEmits<{
 const stringValue = ref('')
 const numberValue = ref('')
 const dateValue = ref('')
-const tipText = computed(() => props.invalidTip || props.label || '')
+const tipText = computed(() => props.invalidTip || props.valueConstraint?.description || props.label || '')
 const inputClass = computed(() =>
   `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
 )
@@ -55,7 +61,7 @@ watch(
 )
 
 function emitStringValue(event: Event) {
-  const next = (event.target as HTMLInputElement | null)?.value ?? ''
+  const next = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value ?? ''
   emit('update:value', next)
 }
 

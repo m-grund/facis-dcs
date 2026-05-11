@@ -7,8 +7,10 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/processauditandcompliance/query"
+	templatedb "digital-contracting-service/internal/templaterepository/db"
 	"fmt"
 	"strings"
 	"time"
@@ -20,11 +22,12 @@ import (
 type processAuditAndCompliancesrvc struct {
 	DB           *sqlx.DB
 	ATrailReader base.AuditTrailReader
+	CTRepo       templatedb.ContractTemplateRepo
 	auth.JWTAuthenticator
 }
 
-func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, auditTrailReader base.AuditTrailReader) processauditandcompliance.Service {
-	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader}
+func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, auditTrailReader base.AuditTrailReader, ctRepo templatedb.ContractTemplateRepo) processauditandcompliance.Service {
+	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader, CTRepo: ctRepo}
 }
 
 func auditScopeToComponentType(scope string) (componenttype.ComponentType, error) {
@@ -75,6 +78,12 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			if entry.DID != nil {
 				did = *entry.DID
 			}
+			if scope == componenttype.ContractTemplateRepo {
+				continue
+			}
+			if !base.IsAuditVisibleEventType(entry.EventType) {
+				continue
+			}
 
 			history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
 				ID:               entry.ID,
@@ -87,6 +96,16 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 				ResLogPredCid:    entry.ResLogPredCID,
 			})
 		}
+		if scope == componenttype.ContractTemplateRepo && s.CTRepo != nil && did != "" {
+			policyEntries, err := s.auditTemplatePolicyTrailEntries(ctx, did)
+			if err != nil {
+				return nil, processauditandcompliance.MakeInternalError(err)
+			}
+			history = append(history, policyEntries...)
+		}
+		if len(history) == 0 {
+			continue
+		}
 
 		result = append(result, &processauditandcompliance.PACAuditResponse{
 			Component:  scope.String(),
@@ -97,6 +116,44 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	return result, nil
+}
+
+func (s *processAuditAndCompliancesrvc) auditTemplatePolicyTrailEntries(ctx context.Context, did string) ([]*processauditandcompliance.PACResourceAuditTrailEntry, error) {
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	template, err := s.CTRepo.ReadDataByID(ctx, tx, did)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	findings, err := validation.AuditTemplatePolicies(template.TemplateData, validation.TemplatePolicyAuditMetadata{
+		DID:          template.DID,
+		TemplateType: template.TemplateType,
+		State:        template.State,
+	})
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]*processauditandcompliance.PACResourceAuditTrailEntry, 0, len(findings))
+	for i, finding := range findings {
+		templateDID := did
+		entries = append(entries, &processauditandcompliance.PACResourceAuditTrailEntry{
+			ID:        int64(-1 - i),
+			Component: componenttype.ContractTemplateRepo.String(),
+			EventType: "TEMPLATE_POLICY_AUDIT_FINDING",
+			EventData: templatePolicyFindingEventData(finding, template),
+			Did:       &templateDID,
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	return entries, nil
 }
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {
