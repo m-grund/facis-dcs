@@ -4,7 +4,9 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"time"
 )
 
@@ -31,19 +33,25 @@ func (e CreateEvent) GetDID() string {
 
 // UpdateEvent is emitted when contract data is updated.
 type UpdateEvent struct {
-	DID                string         `json:"did"`
-	UpdatedBy          string         `json:"updated_by"`
-	OldContractVersion *int           `json:"old_contract_version,omitempty"`
-	NewContractVersion *int           `json:"new_contract_version,omitempty"`
-	OldName            *string        `json:"old_name,omitempty"`
-	NewName            *string        `json:"new_name,omitempty"`
-	OldDescription     *string        `json:"old_description,omitempty"`
-	NewDescription     *string        `json:"new_description,omitempty"`
-	OldContractData    *datatype.JSON `json:"old_contract_data,omitempty"`
-	NewContractData    *datatype.JSON `json:"new_contract_data,omitempty"`
-	OccurredAt         time.Time      `json:"occurred_at"`
-	OldExpirationDate  *time.Time     `json:"old_expiration_date,omitempty"`
-	NewExpirationDate  *time.Time     `json:"new_expiration_date,omitempty"`
+	DID                string                             `json:"did"`
+	UpdatedBy          string                             `json:"updated_by"`
+	OldContractVersion *int                               `json:"old_contract_version,omitempty"`
+	NewContractVersion *int                               `json:"new_contract_version,omitempty"`
+	OldName            *string                            `json:"old_name,omitempty"`
+	NewName            *string                            `json:"new_name,omitempty"`
+	OldDescription     *string                            `json:"old_description,omitempty"`
+	NewDescription     *string                            `json:"new_description,omitempty"`
+	OldContractData    *datatype.JSON                     `json:"old_contract_data,omitempty"`
+	NewContractData    *datatype.JSON                     `json:"new_contract_data,omitempty"`
+	OccurredAt         time.Time                          `json:"occurred_at"`
+	OldExpDate         *time.Time                         `json:"old_exp_date,omitempty"`
+	NewExpDate         *time.Time                         `json:"new_exp_date,omitempty"`
+	OldExpPolicy       *expirationpolicy.ExpirationPolicy `json:"old_exp_policy,omitempty"`
+	NewExpPolicy       *expirationpolicy.ExpirationPolicy `json:"new_exp_policy,omitempty"`
+	OldExpNoticePeriod *int                               `json:"old_exp_notice_period,omitempty"`
+	NewExpNoticePeriod *int                               `json:"new_exp_notice_period,omitempty"`
+	OldStartDate       *time.Time                         `json:"old_start_date,omitempty"`
+	NewStartDate       *time.Time                         `json:"new_start_date,omitempty"`
 }
 
 // EventType implements the Event interface.
@@ -58,14 +66,15 @@ func (e UpdateEvent) GetDID() string {
 
 // SubmitEvent is emitted when a contract is submitted
 type SubmitEvent struct {
-	DID             string                 `json:"did"`
-	PreviousState   string                 `json:"previous_state"`
-	NewState        string                 `json:"new_state"`
-	SubmittedBy     string                 `json:"submitted_by"`
-	OccurredAt      time.Time              `json:"occurred_at"`
-	ContractVersion *int                   `json:"contract_version,omitempty"`
-	ActionFlag      *actionflag.ActionFlag `json:"action_flag,omitempty"`
-	Comments        []string               `json:"comments"`
+	DID                string                 `json:"did"`
+	PreviousState      string                 `json:"previous_state"`
+	NewState           string                 `json:"new_state"`
+	SubmittedBy        string                 `json:"submitted_by"`
+	OccurredAt         time.Time              `json:"occurred_at"`
+	ContractVersion    *int                   `json:"contract_version,omitempty"`
+	ActionFlag         *actionflag.ActionFlag `json:"action_flag,omitempty"`
+	Comments           []string               `json:"comments"`
+	ResponsiblePersons *any                   `json:"responsible_persons,omitempty"`
 }
 
 // EventType implements the Event interface.
@@ -311,5 +320,24 @@ func (e IncreaseContractVersionEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e IncreaseContractVersionEvent) GetDID() string {
+	return e.DID
+}
+
+// ContractExpired is emitted when change requests for contract merged
+type ContractExpired struct {
+	DID             string                             `json:"did"`
+	ContractVersion *int                               `json:"old_contract_version,omitempty"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	State           contractstate.ContractState        `json:"state"`
+}
+
+// EventType implements the Event interface.
+func (e ContractExpired) EventType() string {
+	return eventtype.ContractExpired.String()
+}
+
+// GetDID implements the Event interface.
+func (e ContractExpired) GetDID() string {
 	return e.DID
 }

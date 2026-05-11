@@ -45,7 +45,7 @@ func TestSubmit_SubmitContractTemplateInDraftState(t *testing.T) {
 		SubmittedBy: creator,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewer: []string{
+		Reviewers: []string{
 			"Test User 2",
 			"Test User 3",
 			"Test User 4",
@@ -96,7 +96,7 @@ func TestSubmit_SubmitContractTemplateInDraftState(t *testing.T) {
 	for _, reviewTask := range reviewTasks {
 		assert.Equal(t, reviewtaskstate.Open, reviewTask.State)
 
-		if !slices.Contains(cmd.Reviewer, reviewTask.Reviewer) {
+		if !slices.Contains(cmd.Reviewers, reviewTask.Reviewer) {
 			t.Fatalf("Reviewer not found in review tasks: %v", reviewTask)
 		}
 	}
@@ -135,7 +135,7 @@ func TestSubmit_SubmitContractTemplateInDraftStateWithInvalidUser(t *testing.T) 
 		SubmittedBy: "Test User 6",
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 		Approver:    &approver,
 	}
 	handler := command.Submitter{
@@ -773,7 +773,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: creator,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 		Approver:    &approver,
 	}
 	handler := command.Submitter{
@@ -823,7 +823,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 	for _, reviewTask := range reviewTasks {
 		assert.Equal(t, reviewtaskstate.Open, reviewTask.State)
 
-		if !slices.Contains(cmd.Reviewer, reviewTask.Reviewer) {
+		if !slices.Contains(cmd.Reviewers, reviewTask.Reviewer) {
 			t.Fatalf("Reviewer not found in review tasks: %v", reviewTask)
 		}
 	}
@@ -985,7 +985,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		ActionFlag:  nil,
 		Comments:    nil,
 		Approver:    &approver,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 	}
 	handler = command.Submitter{
 
@@ -1086,7 +1086,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: approver,
 		ActionFlag:  nil,
 		Comments:    []string{"Test Comment"},
-		Reviewer:    nil,
+		Reviewers:   nil,
 	}
 	handler = command.Submitter{
 
@@ -1188,7 +1188,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: approver,
 		ActionFlag:  nil,
 		Comments:    []string{"Test Comment"},
-		Reviewer:    nil,
+		Reviewers:   nil,
 	}
 	handler = command.Submitter{
 
@@ -1256,7 +1256,7 @@ func TestSubmit_SubmitContractTemplateWithApproving(t *testing.T) {
 		SubmittedBy: creator,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 		Approver:    &approver,
 	}
 	handler := command.Submitter{
@@ -1307,7 +1307,7 @@ func TestSubmit_SubmitContractTemplateWithApproving(t *testing.T) {
 	for _, reviewTask := range reviewTasks {
 		assert.Equal(t, reviewtaskstate.Open, reviewTask.State)
 
-		if !slices.Contains(cmd.Reviewer, reviewTask.Reviewer) {
+		if !slices.Contains(cmd.Reviewers, reviewTask.Reviewer) {
 			t.Fatalf("Reviewer not found in review tasks: %v", reviewTask)
 		}
 	}
@@ -1470,7 +1470,7 @@ func TestSubmit_SubmitContractTemplateWithApproving(t *testing.T) {
 		ActionFlag:  nil,
 		Comments:    nil,
 		Approver:    &approver,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 	}
 	handler = command.Submitter{
 
@@ -1571,7 +1571,7 @@ func TestSubmit_SubmitContractTemplateWithApproving(t *testing.T) {
 		SubmittedBy: approver,
 		ActionFlag:  nil,
 		Comments:    []string{"Test Comment"},
-		Reviewer:    nil,
+		Reviewers:   nil,
 	}
 	handler = command.Submitter{
 
@@ -1753,7 +1753,7 @@ func TestSubmit_SubmitContractTemplateWithRejecting(t *testing.T) {
 		SubmittedBy: submittedBy,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 		Approver:    &approver,
 	}
 	handler := command.Submitter{
@@ -1805,7 +1805,7 @@ func TestSubmit_SubmitContractTemplateWithRejecting(t *testing.T) {
 	for _, reviewTask := range reviewTasks {
 		assert.Equal(t, reviewtaskstate.Open, reviewTask.State)
 
-		if !slices.Contains(cmd.Reviewer, reviewTask.Reviewer) {
+		if !slices.Contains(cmd.Reviewers, reviewTask.Reviewer) {
 			t.Fatalf("Reviewer not found in review tasks: %v", reviewTask)
 		}
 	}
@@ -1984,7 +1984,7 @@ func TestSubmit_SubmitContractTemplateWithRejecting(t *testing.T) {
 		ActionFlag:  nil,
 		Comments:    nil,
 		Approver:    &approver,
-		Reviewer:    reviewers,
+		Reviewers:   reviewers,
 	}
 	handler = command.Submitter{
 
@@ -2089,7 +2089,7 @@ func TestSubmit_SubmitContractTemplateWithRejecting(t *testing.T) {
 		SubmittedBy: approver,
 		ActionFlag:  nil,
 		Comments:    []string{"Test Comment"},
-		Reviewer:    nil,
+		Reviewers:   nil,
 	}
 	handler = command.Submitter{
 
@@ -2252,7 +2252,7 @@ func TestSubmit_SubmitContractTemplateAfterUpdate(t *testing.T) {
 		SubmittedBy: submittedBy,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewer: []string{
+		Reviewers: []string{
 			"Test User 2",
 			"Test User 3",
 			"Test User 4",

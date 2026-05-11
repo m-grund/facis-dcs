@@ -38,7 +38,7 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplate, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type
+               created_by, created_at, updated_at, template_data, template_type, responsible_persons
         FROM contract_templates WHERE did = $1
     `
 	var ct db.ContractTemplate
@@ -54,7 +54,7 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at
+        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible_persons
         FROM contract_templates
     `
 	var cts []db.ContractTemplateMetadata
@@ -67,7 +67,7 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at
+        SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible_persons
         FROM contract_templates
     `
 	conditions, params, err := createSearchConditions(values)
@@ -175,7 +175,6 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, *values.TemplateData)
 		paramIndex++
 	}
-
 	l := len(" AND")
 	if len(conditions) > l {
 		conditions = conditions[:len(conditions)-l]
@@ -214,6 +213,9 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 	}
 	if len(data.TemplateType) > 0 {
 		addParam("template_type", data.TemplateType)
+	}
+	if data.ResponsiblePersons != nil {
+		addParam("responsible_persons", data.ResponsiblePersons)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")

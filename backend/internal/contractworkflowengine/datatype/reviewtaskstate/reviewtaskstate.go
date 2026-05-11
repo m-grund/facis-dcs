@@ -67,7 +67,7 @@ func (s *ReviewTaskState) Scan(value interface{}) error {
 // Value implements the driver.Valuer interface
 func (s ReviewTaskState) Value() (driver.Value, error) {
 	if !s.IsValid() {
-		return nil, fmt.Errorf("invalid review stask state: %s", s)
+		return nil, fmt.Errorf("invalid review task state: %s", s)
 	}
 	return string(s), nil
 }

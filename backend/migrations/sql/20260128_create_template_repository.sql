@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS contract_templates
     state           contract_template_state NOT NULL,
     template_type   contract_template_type  NOT NULL,
 
+    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+
     document_number VARCHAR(255),
     version         INT,
     name            VARCHAR(255),

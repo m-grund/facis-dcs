@@ -2,10 +2,12 @@ package contract
 
 import (
 	"context"
+	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"fmt"
@@ -20,16 +22,21 @@ type GetByIDQry struct {
 }
 
 type GetByIDResult struct {
-	DID             string
-	ContractVersion *int
-	State           contractstate.ContractState
-	Name            *string
-	Description     *string
-	CreatedBy       string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	ContractData    *datatype.JSON
-	Negotiations    []db.NegotiationData
+	DID                string
+	ContractVersion    *int
+	State              contractstate.ContractState
+	Name               *string
+	Description        *string
+	CreatedBy          string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ContractData       *datatype.JSON
+	Negotiations       []db.NegotiationData
+	StartDate          *time.Time
+	ExpDate            *time.Time
+	ExpPolicy          *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod    *int
+	ResponsiblePersons *db.ResponsiblePersons
 }
 
 type GetByIDHandler struct {
@@ -77,16 +84,30 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		return nil, fmt.Errorf("could not create contract state: %w", err)
 	}
 
+	var expPolicy *expirationpolicy.ExpirationPolicy
+	if data.ExpPolicy != nil {
+		policy, err := expirationpolicy.NewExpirationPolicy(*data.ExpPolicy)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+		expPolicy = &policy
+	}
+
 	return &GetByIDResult{
-		DID:             query.DID,
-		ContractVersion: data.ContractVersion,
-		State:           state,
-		Name:            data.Name,
-		Description:     data.Description,
-		CreatedBy:       data.CreatedBy,
-		CreatedAt:       data.CreatedAt,
-		UpdatedAt:       data.UpdatedAt,
-		ContractData:    data.ContractData,
-		Negotiations:    negotiations,
+		DID:                query.DID,
+		ContractVersion:    data.ContractVersion,
+		State:              state,
+		Name:               data.Name,
+		Description:        data.Description,
+		CreatedBy:          data.CreatedBy,
+		CreatedAt:          data.CreatedAt,
+		UpdatedAt:          data.UpdatedAt,
+		ContractData:       data.ContractData,
+		Negotiations:       negotiations,
+		StartDate:          data.StartDate,
+		ExpDate:            data.ExpDate,
+		ExpPolicy:          expPolicy,
+		ExpNoticePeriod:    data.ExpNoticePeriod,
+		ResponsiblePersons: data.ResponsiblePersons,
 	}, nil
 }

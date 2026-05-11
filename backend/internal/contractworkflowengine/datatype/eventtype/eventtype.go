@@ -25,6 +25,7 @@ const (
 	Audit                   EventType = "AUDIT_CONTRACT"
 	Terminate               EventType = "TERMINATE_CONTRACT"
 	RecordEvidence          EventType = "RECORD_EVIDENCE"
+	ContractExpired         EventType = "CONTRACT_EXPIRED"
 )
 
 var validStates = map[EventType]bool{
@@ -45,6 +46,7 @@ var validStates = map[EventType]bool{
 	Audit:                   true,
 	Terminate:               true,
 	RecordEvidence:          true,
+	ContractExpired:         true,
 }
 
 func NewEventType(s string) (EventType, error) {
