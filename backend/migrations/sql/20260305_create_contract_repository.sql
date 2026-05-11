@@ -104,18 +104,6 @@ FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
 
-CREATE OR REPLACE VIEW contracts_effective AS
-SELECT *,
-       CASE
-           WHEN exp_date <= CURRENT_TIMESTAMP
-               AND state NOT IN ('TERMINATED', 'REJECTED', 'EXPIRED')
-               THEN 'EXPIRED'::contract_state
-           ELSE state
-           END AS effective_state
-FROM contracts;
-
-------------------------------------------------------------------------------------------------------------------------
-
 CREATE INDEX idx_contract_contracts_search ON contracts
     USING GIN (search_vector);
 
