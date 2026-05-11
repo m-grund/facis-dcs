@@ -20,11 +20,7 @@ import TemplateCatalogueAdminView from '@/views/template-repository/TemplateCata
 import {
   ArrowsRightLeftIcon,
   CheckCircleIcon,
-  ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
-  DocumentCheckIcon,
-  DocumentDuplicateIcon,
-  DocumentMagnifyingGlassIcon,
   DocumentTextIcon,
   EyeIcon,
   SquaresPlusIcon,
