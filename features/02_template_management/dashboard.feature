@@ -13,5 +13,5 @@ Feature: Template Management Dashboard
 
   Scenario: Unauthorized role cannot access dashboard
     Given I am authenticated with roles: "Template Reviewer"
-    When I attempt to open the template management dashboard
+    When I open the template management dashboard
     Then the request is denied with an authorization error

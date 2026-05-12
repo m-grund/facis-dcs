@@ -31,7 +31,7 @@ def step_when_create_template(context, template_name, category):
 
 @when("I attempt to create a template")
 def step_when_attempt_create_template(context):
-    # Uses whatever role headers are currently on context (set by Given "I am authenticated with role X").
+    # Uses whatever role headers are currently on context (set by Given "I am authenticated with roles: X").
     payload = {
         "template_type": "FRAME_CONTRACT",
         "name": "BDD Unauthorized Template",
