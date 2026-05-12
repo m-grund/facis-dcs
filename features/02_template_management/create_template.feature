@@ -13,5 +13,5 @@ Feature: Create Contract Template
 
   Scenario: Unauthorized role cannot create template
     Given I am authenticated with roles: "Template Reviewer"
-    When I attempt to create a template
+    When I create a template "Standard NDA" in category "Legal"
     Then the request is denied with an authorization error

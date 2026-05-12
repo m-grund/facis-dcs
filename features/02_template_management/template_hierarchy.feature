@@ -30,7 +30,7 @@ Feature: Hierarchical Contract Templates
     Given I am authenticated with roles: "Template Manager"
     And template "Master Service Agreement" exists
     And template "Data Protection Annex" exists
-    When I define dependency from "Master Service Agreement" to "Data Protection Annex"
+    When I define dependency "Master Service Agreement" requires "Data Protection Annex"
     Then the dependency is recorded
     And contracts using "Master Service Agreement" require "Data Protection Annex"
 
