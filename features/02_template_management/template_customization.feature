@@ -31,29 +31,29 @@ Feature: Template Customization with Dynamic Placeholders
       | Gold tier uptime           | service_level equals "Gold" | uptime_guarantee  | 99.9%       |
       | Silver tier response time  | service_level equals "Silver" | response_time   | 4 hours     |
       | Silver tier uptime         | service_level equals "Silver" | uptime_guarantee | 99.5%       |
-    When I generate a contract with service_level "Gold"
+    When I generate a contract with "service_level" "Gold"
     Then placeholder "{{response_time}}" is auto-populated with "1 hour"
     And placeholder "{{uptime_guarantee}}" is auto-populated with "99.9%"
 
   Scenario: Cascading SLA rules populate dependent placeholders
     Given template "Enterprise Agreement" has cascading SLA rules
     And placeholder "{{support_tier}}" affects "{{support_hours}}" and "{{escalation_time}}"
-    When I generate a contract with support_tier "Premium"
-    Then "{{support_hours}}" is auto-populated with "24/7"
-    And "{{escalation_time}}" is auto-populated with "15 minutes"
+    When I generate a contract with "support_tier" "Premium"
+    Then placeholder "{{support_hours}}" is auto-populated with "24/7"
+    And placeholder "{{escalation_time}}" is auto-populated with "15 minutes"
 
   Scenario: Placeholder validation prevents invalid values
     Given template "SLA Service Contract" has placeholder "{{uptime_guarantee}}" with type "percentage"
     And the placeholder has validation rule "minimum: 90%, maximum: 100%"
-    When I attempt to generate a contract with uptime_guarantee "85%"
+    When I generate a contract with "uptime_guarantee" "85%"
     Then the generation fails with error "Value 85% is below minimum threshold 90%"
 
   Scenario: Dynamic placeholder supports conditional visibility
     Given template "Conditional Contract" has placeholder "{{penalty_clause}}"
     And the placeholder has visibility rule "show when uptime_guarantee > 99%"
-    When I generate a contract with uptime_guarantee "99.5%"
+    When I generate a contract with "uptime_guarantee" "99.5%"
     Then the penalty clause section is included in the contract
-    When I generate a contract with uptime_guarantee "98%"
+    When I generate a contract with "uptime_guarantee" "98%"
     Then the penalty clause section is excluded from the contract
 
   Scenario: Template preview shows placeholder resolution
@@ -81,12 +81,12 @@ Feature: Template Customization with Dynamic Placeholders
 
   Scenario: Batch contract generation with dynamic placeholders
     Given template "Batch Contract Template" has placeholders for customer-specific data
-    When I batch generate contracts for 10 customers
+    When I batch generate contracts for "10" customers
     Then each contract has placeholders populated based on customer-specific SLA rules
     And a generation report shows successful and failed populations
 
   Scenario: Unauthorized role cannot modify SLA rules
     Given I am authenticated with roles: "Contract Observer"
-    When I attempt to modify SLA rules for template "SLA Service Contract"
+    When I modify SLA rules for template "SLA Service Contract"
     Then the request is denied with an authorization error
 

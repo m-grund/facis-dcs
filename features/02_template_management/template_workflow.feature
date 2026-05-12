@@ -33,8 +33,8 @@ Feature: Template Approval Workflow
     And my approval task is in "Rejected" status
     And the rejection reason is recorded
 
-  Scenario: Resubmit reviewd template
-    Given I am authenticated with role "Template Approver"
+  Scenario: Resubmit reviewed template
+    Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" is in "Reviewed" status
     When I resubmit template "Standard NDA"
     Then the template status is "Submitted"
@@ -58,6 +58,6 @@ Feature: Template Approval Workflow
   Scenario: Unauthorized role cannot approve template
     Given I am authenticated with roles: "Template Creator"
     And template "Standard NDA" is in "Reviewed" status
-    When I attempt to approve template "Standard NDA"
+    When I approve template "Standard NDA"
     Then the request is denied with an authorization error
 
