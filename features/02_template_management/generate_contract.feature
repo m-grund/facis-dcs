@@ -13,5 +13,5 @@ Feature: Generate Contract from Template
   Scenario: Unauthorized role cannot generate contract
     Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" is in "Approved" status
-    When I attempt to generate a contract from template "Standard NDA"
+    When I generate a contract from template "Standard NDA"
     Then the request is denied with an authorization error

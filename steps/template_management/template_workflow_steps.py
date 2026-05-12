@@ -23,6 +23,7 @@ from support.services.auth_service import AuthService
 
 
 # Given
+# TODO: Refactor to reduce duplication in template creation and state transitions, e.g. by having a helper that creates a template and advances it to a specified state.
 
 @given('template "{name}" is in "Draft" status')
 def step_given_template_draft(context, name):
@@ -45,7 +46,7 @@ def step_given_template_reviewed(context, name):
     TemplateService.store_named(context, name, did, updated_at)
 
 
-@given('template "{name}" version "{version}" exists')
+@given('template "{name}" with version "{version}" exists')
 def step_given_template_version_exists(context, name, version):
     # Version tracking is internal; we create a fresh Draft to represent it.
     did, updated_at = TemplateService.create_fresh_template(context)

@@ -7,7 +7,7 @@ Feature: Hierarchical Contract Templates
   Scenario: Create frame agreement template
     Given I am authenticated with roles: "Template Creator"
     When I create a template "Master Service Agreement" of type "Frame Agreement"
-    Then the template is created in "Draft" status
+    Then the template status is "Draft" status
     And the template type is "Frame Agreement"
 
   Scenario: Create sub-agreement linked to frame
@@ -30,7 +30,7 @@ Feature: Hierarchical Contract Templates
     Given I am authenticated with roles: "Template Manager"
     And template "Master Service Agreement" exists
     And template "Data Protection Annex" exists
-    When I define dependency from "Master Service Agreement" to "Data Protection Annex"
+    When I define dependency "Master Service Agreement" requires "Data Protection Annex"
     Then the dependency is recorded
     And contracts using "Master Service Agreement" require "Data Protection Annex"
 
