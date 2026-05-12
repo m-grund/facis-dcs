@@ -130,10 +130,10 @@
               </p>
               <div class="pt-2 flex flex-col gap-2">
                 <RouterLink class="btn btn-sm btn-primary rounded-box"
-                  :to="{ name: ROUTES.TEMPLATE_CATALOGUES.NEGOTIATION_CREATE, params: { did } }">
+                  :to="{ name: 'ROUTES.TEMPLATE_CATALOGUES.NEGOTIATION_CREATE', params: { did } }">
                   Create Negotiation
                 </RouterLink>
-                <button class="btn btn-sm btn-ghost rounded-box" @click="router.back()">
+                <button class="btn btn-sm btn-outline rounded-box" @click="router.back()">
                   Back
                 </button>
               </div>
@@ -149,7 +149,6 @@
 <script setup lang="ts">
 import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
 import type { TemplateResource } from '@/modules/template-catalogue/models/template-resource'
-import { ROUTES } from '@/router/router'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

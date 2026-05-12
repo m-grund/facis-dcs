@@ -96,6 +96,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
+	var responsiblePersons *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
@@ -115,7 +116,25 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approver provided")
 		}
 
-		err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
+		respPersons := db.ResponsiblePersons{
+			Creator:     processData.CreatedBy,
+			Reviewers:   cmd.Reviewers,
+			Approver:    *cmd.Approver,
+			Negotiators: cmd.Negotiators,
+		}
+		anyRespPerson := any(respPersons)
+		responsiblePersons = &anyRespPerson
+
+		updateData := db.ContractUpdateData{
+			DID:                cmd.DID,
+			ResponsiblePersons: &respPersons,
+		}
+		err := h.CRepo.Update(ctx, tx, updateData)
+		if err != nil {
+			return fmt.Errorf("could not update contract: %w", err)
+		}
+
+		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
 		if err != nil {
 			return err
 		}
@@ -304,14 +323,15 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		evt := contractevents.SubmitEvent{
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			SubmittedBy:     cmd.SubmittedBy,
-			PreviousState:   processData.State,
-			NewState:        nextState.String(),
-			ActionFlag:      cmd.ActionFlag,
-			Comments:        cmd.Comments,
-			OccurredAt:      time.Now().UTC(),
+			DID:                cmd.DID,
+			ContractVersion:    processData.ContractVersion,
+			SubmittedBy:        cmd.SubmittedBy,
+			PreviousState:      processData.State,
+			NewState:           nextState.String(),
+			ActionFlag:         cmd.ActionFlag,
+			Comments:           cmd.Comments,
+			OccurredAt:         time.Now().UTC(),
+			ResponsiblePersons: responsiblePersons,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 		if err != nil {

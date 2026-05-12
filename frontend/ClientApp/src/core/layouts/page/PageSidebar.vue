@@ -1,7 +1,7 @@
 <template>
-  <div class="flex items-center h-16 px-4 overflow-hidden">
-    <RouterLink :to="{ name: ROUTES.HOME }" #default="{ route }" class="font-bold text-2xl tracking-tight text-base-content uppercase">
-      {{ route.meta.name }}
+  <div class="flex items-center justify-center h-16 px-4 overflow-hidden border-b border-base-content/10">
+    <RouterLink :to="{ name: ROUTES.HOME }" class="font-bold text-2xl tracking-tight text-base-content uppercase">
+      <img :src="facisLogo" alt="Home" class="h-10" />
     </RouterLink>
   </div>
 
@@ -20,27 +20,10 @@
       </li>
     </ul>
   </nav>
-
-  <div class="flex-1"></div>
-
-  <div class="p-4 border-t border-base-content/10 bg-base-300/20">
-    <div :class="['flex items-center gap-3', isSidebarCollapsed ? 'justify-center' : 'px-2']">
-      <div class="avatar">
-        <div class="w-10 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
-          <img
-            src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80"
-            alt="Profile" />
-        </div>
-      </div>
-      <div v-if="!isSidebarCollapsed && user" class="overflow-hidden">
-        <p class="text-sm font-bold truncate">{{ user.name }}</p>
-        <p class="text-xs opacity-60">{{ user.username }}</p>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
+import facisLogo from '@/assets/FACIS_color.svg'
 import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePageStore } from '@core/store/page'

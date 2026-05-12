@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import type { ContractContentValuesState } from '../models/contract-content-values-store'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import { MERGED_BLOCK_ID_SEPARATOR } from '@template-repository/utils/template-data-ref'
 
 const storeId = 'contractContentValues'
 const SEPARATOR = '::'

@@ -22,7 +22,7 @@ type SubmitCmd struct {
 	SubmittedBy string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
-	Reviewer    []string
+	Reviewers   []string
 	Approver    *string
 }
 
@@ -34,7 +34,7 @@ type Submitter struct {
 }
 
 func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, cmd SubmitCmd) error {
-	for _, reviewer := range cmd.Reviewer {
+	for _, reviewer := range cmd.Reviewers {
 		reviewTask := db.ReviewTaskData{
 			DID:       cmd.DID,
 			Reviewer:  reviewer,
@@ -78,6 +78,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
+	var responsiblePersons *any
 	var nextTemplateState contracttemplatestate.ContractTemplateState
 	if processData.State == contracttemplatestate.Draft.String() {
 
@@ -85,7 +86,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user")
 		}
 
-		if len(cmd.Reviewer) == 0 {
+		if len(cmd.Reviewers) == 0 {
 			return errors.New("no reviewer provided")
 		}
 
@@ -93,7 +94,24 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approver provided")
 		}
 
-		err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, cmd)
+		respPersons := db.ResponsiblePersons{
+			Creator:   processData.CreatedBy,
+			Reviewers: cmd.Reviewers,
+			Approver:  *cmd.Approver,
+		}
+		anyRespPerson := any(respPersons)
+		responsiblePersons = &anyRespPerson
+
+		updateData := db.ContractTemplateUpdateData{
+			DID:                cmd.DID,
+			ResponsiblePersons: &respPersons,
+		}
+		err := h.CTRepo.Update(ctx, tx, updateData)
+		if err != nil {
+			return fmt.Errorf("could not update contract template: %w", err)
+		}
+
+		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, cmd)
 		if err != nil {
 			return err
 		}
@@ -207,15 +225,16 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		evt := templateevents.SubmitEvent{
-			DID:            cmd.DID,
-			DocumentNumber: processData.DocumentNumber,
-			Version:        processData.Version,
-			SubmittedBy:    cmd.SubmittedBy,
-			PreviousState:  processData.State,
-			NewState:       nextTemplateState.String(),
-			ActionFlag:     cmd.ActionFlag,
-			Comments:       cmd.Comments,
-			OccurredAt:     time.Now().UTC(),
+			DID:                cmd.DID,
+			DocumentNumber:     processData.DocumentNumber,
+			Version:            processData.Version,
+			SubmittedBy:        cmd.SubmittedBy,
+			PreviousState:      processData.State,
+			NewState:           nextTemplateState.String(),
+			ActionFlag:         cmd.ActionFlag,
+			Comments:           cmd.Comments,
+			OccurredAt:         time.Now().UTC(),
+			ResponsiblePersons: responsiblePersons,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 		if err != nil {

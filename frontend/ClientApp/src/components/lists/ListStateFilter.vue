@@ -36,6 +36,7 @@ const props = defineProps<{
   filters: FilterMap[StoreType][]
   label: string
   storeType: StoreType
+  disabled?: boolean
 }>()
 
 const filterStore = storeMap[props.storeType]() as unknown as FilterStore<FilterMap[StoreType]>
@@ -74,29 +75,37 @@ const isSelected = (type: FilterMap[typeof props.storeType]) => {
 </script>
 
 <template>
-  <button id="popover-btn" popovertarget="filter-popover" class="select select-secondary w-fit gap-2 m-2">
+  <button
+    id="popover-btn"
+    popovertarget="filter-popover"
+    class="select select-secondary w-fit gap-2 m-2"
+    :class="{ 'btn-disabled': disabled }"
+    :disabled="!!disabled"
+  >
     Filter
   </button>
   <ul id="filter-popover" popover class="dropdown menu rounded-box rounded-md bg-base-300 shadow-sm">
-    <li>
+    <li class="menu-title pointer-events-none">
       <label class="label">{{ label }}</label>
-      <ul>
-        <li
-          v-for="filter in shownFilters"
-          :key="filter"
-          class="flex justify-between transition-colors"
-          @click="setFilter(filter)"
-        >
-          <label class="label flex-1" :class="{ 'font-bold': isSelected(filter) }">{{ filter }}</label>
-        </li>
-        <li v-if="hasFilters" class="text-sm w-full opacity-60 px-4 py-2 border-t border-base-300">
-          <label class="link cursor-pointer" @click="showAll = !showAll">
-            <div v-if="!showAll">See all</div>
-            <div v-else>See less</div>
-          </label>
-        </li>
-      </ul>
     </li>
+    <ul>
+      <li
+        v-for="filter in shownFilters"
+        :key="filter"
+        class="flex justify-between transition-colors"
+        @click="setFilter(filter)"
+      >
+        <label class="label flex-1" :class="{ 'bg-primary text-primary-content mt-1': isSelected(filter) }">{{
+          filter
+        }}</label>
+      </li>
+      <li v-if="hasFilters" class="text-sm w-full opacity-60 px-4 py-2 border-t border-base-300">
+        <label class="link cursor-pointer" @click="showAll = !showAll">
+          <div v-if="!showAll">See all</div>
+          <div v-else>See less</div>
+        </label>
+      </li>
+    </ul>
   </ul>
 </template>
 

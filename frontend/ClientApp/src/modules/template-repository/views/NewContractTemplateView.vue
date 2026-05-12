@@ -5,7 +5,7 @@
             <h1 class="text-2xl font-bold text-base-content">Choose contract type</h1>
             <TemplateTypeSelect :model-value="templateType" @update:model-value="onTemplateTypeChosen($event)" />
             <div class="flex justify-end pt-4">
-                <button type="button" class="btn btn-ghost" @click="router.back()">Cancel</button>
+                <button type="button" class="btn btn-outline" @click="router.back()">Cancel</button>
             </div>
         </div>
         <template v-else>
@@ -14,7 +14,7 @@
             <!-- Pinned Footer -->
             <div v-if="templateEditorUiStore.isTemplateEditable" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
                 <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-                    <button class="btn btn-ghost md:w-32" @click="router.back()">Cancel</button>
+                    <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
                     <button @click="submit" class="btn btn-primary flex-1" :disabled="isSubmitting">
                         <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
                         {{ isEditMode ? 'Update Template' : 'Create' }}

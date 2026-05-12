@@ -10,7 +10,7 @@ import ContractListItem from './ContractListItem.vue'
 import ContractListSearch from './ContractListSearch.vue'
 
 const props = defineProps<{
-  items: Contract[]
+  contracts: Contract[]
 }>()
 
 const sorter = new Map<keyof Contract, string>([
@@ -26,26 +26,28 @@ const sortOrder = ref(1)
 
 const stateFilterStore = useContractStateFilterStore()
 
-const searchedItems: Ref<Contract[]> = ref(props.items)
+const searchedContracts: Ref<Contract[]> = ref(props.contracts)
 
-const sortedItems = computed(() => {
+const sortedContracts = computed(() => {
   if (!sorter.has(sortBy.value)) {
-    return searchedItems.value
+    return searchedContracts.value
   }
-  return searchedItems.value
+  return searchedContracts.value
     .slice()
     .sort((contractA, contractB) => compareValues(contractA, contractB, sortBy.value, sortOrder.value))
 })
 
-const filteredItems = computed(() => {
+const hasContracts = computed(() => props.contracts.length > 0)
+
+const filteredContracts = computed(() => {
   if (stateFilterStore.hasFilters) {
-    return sortedItems.value.filter((item) => stateFilterStore.hasFilter(item.state))
+    return sortedContracts.value.filter((contract) => stateFilterStore.hasFilter(contract.state))
   }
-  return sortedItems.value
+  return sortedContracts.value
 })
 
 const applySearchResult = (searchResult: Contract[]) => {
-  searchedItems.value = searchResult
+  searchedContracts.value = searchResult
 }
 
 onUnmounted(() => stateFilterStore.reset())
@@ -54,17 +56,12 @@ onUnmounted(() => stateFilterStore.reset())
 <template>
   <ul class="list">
     <li class="tracking-wide px-4 flex justify-between flex-col sm:flex-row">
-      <ListStateFilter label="Contract" :filters="contractStates" store-type="contracts" />
-      <ContractListSearch :items="items" class="flex-1" @search-result="applySearchResult" />
-      <ListSort
-        :class="{ 'btn-disabled': sortedItems.length === 0 }"
-        :sorter="sorter"
-        v-model:sort-by="sortBy"
-        v-model:sort-order="sortOrder"
-      />
+      <ContractListSearch :contracts="contracts" class="flex-1" @search-result="applySearchResult" />
+      <ListStateFilter label="Contract" :filters="contractStates" store-type="contracts" :disabled="!hasContracts" />
+      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasContracts" />
     </li>
-    <template v-if="filteredItems.length > 0">
-      <ContractListItem v-for="item in filteredItems" :key="`${item.did}|${item.contract_version}`" :item="item" />
+    <template v-if="filteredContracts.length > 0">
+      <ContractListItem v-for="contract in filteredContracts" :key="`${contract.did}|${contract.contract_version}`" :contract="contract" />
     </template>
     <li v-else class="px-4">No contracts found.</li>
   </ul>

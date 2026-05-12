@@ -36,7 +36,7 @@
                   </div>
                   <div class="card-actions justify-end flex-none">
                     <RouterLink :to="{ name: 'template.catalogues.view', params: { did: item.did } }"
-                      class="btn btn-sm btn-primary rounded-box">
+                      class="btn btn-sm btn-primary">
                       View
                     </RouterLink>
                   </div>
