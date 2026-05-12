@@ -4,7 +4,7 @@ import requests
 from behave import given, then, when
 
 from steps.support.services.template_service import TemplateService
-from support.api_client import (
+from steps.support.api_client import (
     template_archive_url,
     get_with_headers,
     post_json,
@@ -19,7 +19,7 @@ from support.api_client import (
     template_update_url,
     template_verify_url,
 )
-from support.services.auth_service import AuthService
+from steps.support.services.auth_service import AuthService
 
 
 # Given
