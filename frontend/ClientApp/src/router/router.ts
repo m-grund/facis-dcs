@@ -1,4 +1,5 @@
 import { getUIBasePath } from '@/config'
+import { useScrollStore } from '@/core/store/scroll'
 import ApproveContractTemplateView from '@/modules/template-repository/views/ApproveContractTemplateView.vue'
 import ReviewContractTemplateView from '@/modules/template-repository/views/ReviewContractTemplateView.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
@@ -321,6 +322,15 @@ router.beforeEach((to) => {
     return { name: ROUTES.HOME }
   }
 })
+
+  router.beforeEach((to) => {
+    const scrollStore = useScrollStore()
+    if (to.matched.some(r => r.path.includes(':'))) {
+      scrollStore.scrollContainer?.classList.add('scrollbar-gutter-stable')
+    } else {
+      scrollStore.scrollContainer?.classList.remove('scrollbar-gutter-stable')
+    }
+  })
 
 router.beforeEach((_, from) => {
   const navStore = useNavStore()

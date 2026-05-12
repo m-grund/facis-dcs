@@ -85,6 +85,33 @@
             </div>
             <p v-else class="fieldset-label mt-2">No subcontract templates selected yet.</p>
         </fieldset>
+
+        <fieldset v-if="state !== TemplateState.draft" class="fieldset p-0 border-none">
+            <div class="collapse collapse-arrow [&>input~.collapse-title::after]:scale-75">
+                <input type="checkbox" name="responsibles" />
+                <legend class="fieldset-legend collapse-title font-semibold pl-0">Responsible Persons</legend>
+                <div class="collapse-content grid px-0">
+                    <ul class="list col-start-1 row-start-1">
+                        <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Creator</li>
+                        <li class="list-row py-0">{{ responsible_persons?.creator }}</li>
+                    </ul>
+                    <ul class="list col-start-2 row-start-1">
+                        <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Approver</li>
+                        <li class="list-row py-0">{{ responsible_persons?.approver }}</li>
+                    </ul>
+                    <ul class="list col-start-1 row-start-2">
+                        <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Reviewers</li>
+                        <li
+                            v-for="(reviewer, i) in responsible_persons?.reviewers"
+                            :key="i + reviewer"
+                            class="list-row py-0"
+                        >
+                            {{ reviewer }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </fieldset>
     </div>
 </template>
 
@@ -107,7 +134,7 @@ interface SubcontractKey {
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots } = storeToRefs(store)
+const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons } = storeToRefs(store)
 
 const name = computed({
   get: () => store.name,

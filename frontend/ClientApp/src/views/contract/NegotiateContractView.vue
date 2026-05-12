@@ -354,16 +354,16 @@ const currentContractData = computed<ContractData | undefined>(() => {
     <div v-if="!!contract && !!editedContract && !!shownData">
       <div class="flex-1 flex flex-col">
         <!-- Tabs -->
-        <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
+        <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
           <div class="max-w-4xl mx-auto px-6 pt-3">
             <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Negotiate Contract</p>
-            <div role="tablist" class="tabs tabs-lift tabs-lg">
+            <div role="tablist" class="tabs tabs-border tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
                 class="tab"
-                :class="{ 'tab-active': activeTab === tab.id }"
+                :class="{ 'tab-active text-primary': activeTab === tab.id }"
                 @click="setActiveTab(tab.id)"
               >
                 {{ tab.label }}
