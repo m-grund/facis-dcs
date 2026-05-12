@@ -39,8 +39,8 @@ Feature: Template Customization with Dynamic Placeholders
     Given template "Enterprise Agreement" has cascading SLA rules
     And placeholder "{{support_tier}}" affects "{{support_hours}}" and "{{escalation_time}}"
     When I generate a contract with "support_tier" "Premium"
-    Then "{{support_hours}}" is auto-populated with "24/7"
-    And "{{escalation_time}}" is auto-populated with "15 minutes"
+    Then placeholder "{{support_hours}}" is auto-populated with "24/7"
+    And placeholder "{{escalation_time}}" is auto-populated with "15 minutes"
 
   Scenario: Placeholder validation prevents invalid values
     Given template "SLA Service Contract" has placeholder "{{uptime_guarantee}}" with type "percentage"
