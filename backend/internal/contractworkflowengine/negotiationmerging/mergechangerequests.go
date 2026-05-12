@@ -39,8 +39,21 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 			return fmt.Errorf("could not unmarshal change request: %w", err)
 		}
 
-		updateData.Name = change.Name
-		updateData.Description = change.Description
+		if change.Name != nil {
+			updateData.Name = change.Name
+		}
+
+		if change.Description != nil {
+			updateData.Description = change.Description
+		}
+
+		if change.StartDate != nil {
+			sDate, err := time.Parse(time.RFC3339, *change.StartDate)
+			if err != nil {
+				return err
+			}
+			updateData.StartDate = &sDate
+		}
 
 		if change.ExpDate != nil {
 			eDate, err := time.Parse(time.RFC3339, *change.ExpDate)
@@ -50,8 +63,13 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 			updateData.ExpDate = &eDate
 		}
 
-		updateData.ExpNoticePeriod = change.ExpNoticePeriod
-		updateData.ExpPolicy = change.ExpPolicy
+		if change.ExpNoticePeriod != nil {
+			updateData.ExpNoticePeriod = change.ExpNoticePeriod
+		}
+
+		if change.ExpPolicy != nil {
+			updateData.ExpPolicy = change.ExpPolicy
+		}
 
 		if change.ContractData != nil {
 
@@ -81,7 +99,10 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 
 func upsertSemanticConditionValue(contract *ContractData, newValue SemanticConditionValue) {
 	for i, existing := range contract.SemanticConditionValues {
-		if existing.BlockID == newValue.BlockID && existing.ParameterName == newValue.ParameterName {
+		if existing.BlockID == newValue.BlockID &&
+			existing.ParameterName == newValue.ParameterName &&
+			existing.ConditionID == newValue.ConditionID {
+
 			contract.SemanticConditionValues[i] = newValue // update
 			return
 		}
