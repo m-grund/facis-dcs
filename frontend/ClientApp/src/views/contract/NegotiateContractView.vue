@@ -9,10 +9,7 @@ import AuditView from '@/modules/contract-workflow-engine/components/AuditView.v
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import ContractHistoryDiffView from '@/modules/contract-workflow-engine/components/ContractHistoryDiffView.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import {
-  useSemanticValueVerification,
-  type VerificationResult,
-} from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
+import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
@@ -35,7 +32,7 @@ const authStore = useAuthStore()
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
-const { hasConditionParameterForValue } = useSemanticValueVerification()
+const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 const { setActiveTab } = contractEditorUiStore
@@ -56,7 +53,20 @@ const isAuditingAuthorized = computed(() =>
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
-const verificationResult: Ref<VerificationResult | null> = ref(null)
+const verificationResult = computed(() => {
+  const subTemplateSemanticConditions = templateDraftStore.subTemplateSnapshots.map((subTemplate) => ({
+    templateId: subTemplate.did,
+    version: subTemplate.version,
+    document_number: subTemplate.document_number,
+    semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
+  }))
+  return verifySemanticValue(
+    templateDraftStore.semanticConditions,
+    subTemplateSemanticConditions,
+    contractContentValuesStore.semanticConditionValues,
+    templateDraftStore.documentBlocks,
+  )
+})
 
 const contract: Ref<Contract | null> = ref(null)
 const editedContract: Ref<Contract | null> = ref(null)
@@ -205,7 +215,6 @@ onUnmounted(() => {
   contractContentValuesStore.reset()
   contractEditorUiStore.reset()
   templateEditorUiStore.reset({ workflow: 'contract' })
-  verificationResult.value = null
 })
 
 // Contract data includes the template data used to fill the contract template
@@ -213,7 +222,6 @@ function applyContractDataToDraft(contractData?: unknown) {
   if (contractData == null) {
     templateDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
-    verificationResult.value = null
     return
   }
   const cd = preprocessContractData(contractData as ContractData)
@@ -226,7 +234,6 @@ function applyContractDataToDraft(contractData?: unknown) {
     templateDataVersion: cd.templateDataVersion,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
-  verificationResult.value = null
 }
 
 const tabContent = useTemplateRef<HTMLElement>('tabContent')

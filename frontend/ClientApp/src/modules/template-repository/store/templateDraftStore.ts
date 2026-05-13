@@ -114,6 +114,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
       if (payload.text !== undefined) block.text = payload.text
       if (isClauseBlock(block)) block.conditionIds = payload.conditionIds ?? []
 
+      for (const b of this.documentBlocks) if (isClauseBlock(b)) b.conditionIds = b.conditionIds ?? []
     },
     /**
      * Moves a block to a new position under the same or another parent.
@@ -306,6 +307,7 @@ function addBlock(
     if (!block || !isClauseBlock(block)) {
       throw new Error(`addBlock: clause block not found: ${clauseBlockId}`)
     }
+    if (isClauseBlock(block)) block.conditionIds = block.conditionIds ?? []
     const inOutline = collectBlockIdsInOutline(outline)
     if (inOutline.has(clauseBlockId)) {
       return clauseBlockId
@@ -320,6 +322,7 @@ function addBlock(
 
   const blockId = crypto.randomUUID()
   const block = createBlockFromPayload(blockId, payload)
+  if (isClauseBlock(block)) block.conditionIds = block.conditionIds ?? []
 
   if (isClauseBlock(block) && !addToOutline) {
     blocks.push(block)
