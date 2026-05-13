@@ -12,7 +12,7 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-const emit = defineEmits<{ selectedNegotiation: [value: ContractNegotiation | null] }>()
+const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
 
 const authStore = useAuthStore()
 const username = computed(() => authStore.user?.username)
