@@ -21,6 +21,7 @@ import { useTemplateDraftStore } from '@/modules/template-repository/store/templ
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
@@ -32,6 +33,8 @@ const route = useRoute()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
+const errorStore = useErrorStore()
+
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
@@ -100,21 +103,24 @@ const arrayEqual = (a: unknown[], b: unknown[]) => {
   return a.every((value, i) => value === b[i])
 }
 
+const loadContract = async () => {
+  try {
+    const id = route.params.did
+    if (id && !Array.isArray(id)) {
+      contract.value = await contractWorkflowService.retrieveById({ did: id })
+      editedContract.value = !!contract.value ? { ...contract.value } : null
+      applyContractDataToDraft(contract.value?.contract_data)
+    }
+  } catch (err: any) {
+    console.error('Failed to load contract', err)
+  }
+}
+
 watch(
   () => !!route.params.did,
   async (value) => {
-    if (value) {
-      try {
-        const id = route.params.did
-        if (id && !Array.isArray(id)) {
-          contract.value = await contractWorkflowService.retrieveById({ did: id })
-          editedContract.value = !!contract.value ? { ...contract.value } : null
-          applyContractDataToDraft(contract.value?.contract_data)
-        }
-      } catch (err: any) {
-        console.error('Failed to load contract', err)
-      }
-    }
+    if (!value) return
+    await loadContract()
   },
   { immediate: true },
 )
@@ -173,7 +179,7 @@ const negotiateContractChange = async () => {
       change_request: changeRequest,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await loadContract()
     }
   } catch (err) {
     console.error('Failed to submit change request', err)
@@ -184,16 +190,29 @@ const negotiateContractChange = async () => {
 
 const submitContract = async () => {
   if (!contract.value) return
+  isSubmitting.value = true
   try {
+    const state = contract.value.state
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await loadContract()
+      if (state !== contract.value.state) {
+        navStore.goToPreviousRoute()
+      } else {
+        const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
+        errorStore.add(
+          `Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`,
+          'info',
+        )
+      }
     }
   } catch (err) {
     console.error('Failed to submit', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -450,7 +469,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || !hasOpenDecisions"
+          :disabled="isSubmitting || hasChangeRequest || !hasOpenDecisions"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
