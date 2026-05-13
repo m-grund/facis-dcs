@@ -647,8 +647,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Meta("dcs:ui", "Contract Review", "Contract Management Dashboard")
 
 		Security(JWTAuth, func() {
+			Scope("Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
 		})
