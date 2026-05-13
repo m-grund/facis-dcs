@@ -202,9 +202,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			}
 
 			if hasNegotiations {
-				err = negotiationmerging.MergeChangeRequests(ctx, tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
+
+				err = h.CRepo.CreateHistoryEntryForDID(ctx, tx, processData.DID)
 				if err != nil {
-					return fmt.Errorf("could not merge change requests: %w", err)
+					return fmt.Errorf("could not create history entry for did %s: %w", cmd.DID, err)
 				}
 
 				newVersion := 1
@@ -212,10 +213,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					newVersion = *processData.ContractVersion + 1
 				}
 
-				err = h.CRepo.Update(ctx, tx, db.ContractUpdateData{
-					DID:             cmd.DID,
-					ContractVersion: &newVersion,
-				})
+				updatedData, err := negotiationmerging.MergeChangeRequests(ctx, tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
+				if err != nil {
+					return fmt.Errorf("could not merge change requests: %w", err)
+				}
+
+				updatedData.ContractVersion = &newVersion
+				err = h.CRepo.Update(ctx, tx, *updatedData)
 				if err != nil {
 					return fmt.Errorf("could not update contract version: %w", err)
 				}

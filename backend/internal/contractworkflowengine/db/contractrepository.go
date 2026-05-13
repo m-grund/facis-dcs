@@ -126,6 +126,7 @@ type SearchValues struct {
 
 type ContractRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data Contract) (*time.Time, error)
+	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractHistory, error)
 	ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*Contract, error)
 	ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)

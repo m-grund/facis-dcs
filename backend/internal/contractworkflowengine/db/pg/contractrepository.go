@@ -34,6 +34,23 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 	return &createdAt, nil
 }
 
+func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
+	statement := `
+        INSERT INTO contract_history 
+            (did, state, name, description, created_by, created_at, updated_at, 
+             contract_version, contract_data, start_date, exp_date, exp_policy, 
+             exp_notice_period, responsible_persons)
+        SELECT 
+            did, state, name, description, created_by, created_at, updated_at, 
+            contract_version, contract_data, start_date, exp_date, exp_policy, 
+            exp_notice_period, responsible_persons
+        FROM contracts_effective 
+        WHERE did = $1
+    `
+	_, err := tx.ExecContext(ctx, statement, did)
+	return err
+}
+
 func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractHistory, error) {
 	query := `
         SELECT did, state, name, description,

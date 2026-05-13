@@ -11,24 +11,23 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo, nRepo db.NegotiationRepo, did string, contractVersion *int) error {
+func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo, nRepo db.NegotiationRepo, did string, contractVersion *int) (*db.ContractUpdateData, error) {
 	changeRequests, err := nRepo.ReadAllAcceptedByContractDIDAndVersion(ctx, tx, did, contractVersion)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	contract, err := cRepo.ReadDataByID(ctx, tx, did)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var contractData ContractData
 	err = json.Unmarshal(*contract.ContractData, &contractData)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal contract data: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal contract data: %w", err)
 	}
 
-	mergedChanges := false
 	updateData := db.ContractUpdateData{
 		DID: contract.DID,
 	}
@@ -36,7 +35,7 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 
 		var change ChangeRequest
 		if err := json.Unmarshal(*changeRequest.ChangeRequest, &change); err != nil {
-			return fmt.Errorf("could not unmarshal change request: %w", err)
+			return nil, fmt.Errorf("could not unmarshal change request: %w", err)
 		}
 
 		if change.Name != nil {
@@ -50,7 +49,7 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 		if change.StartDate != nil {
 			sDate, err := time.Parse(time.RFC3339, *change.StartDate)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			updateData.StartDate = &sDate
 		}
@@ -58,7 +57,7 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 		if change.ExpDate != nil {
 			eDate, err := time.Parse(time.RFC3339, *change.ExpDate)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			updateData.ExpDate = &eDate
 		}
@@ -79,22 +78,13 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 
 			newContractData, err := datatype.NewJSON(contractData)
 			if err != nil {
-				return fmt.Errorf("failed to marshal contract data: %w", err)
+				return nil, fmt.Errorf("failed to marshal contract data: %w", err)
 			}
 			updateData.ContractData = &newContractData
 		}
-
-		mergedChanges = true
 	}
 
-	if mergedChanges {
-		err = cRepo.Update(ctx, tx, updateData)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return &updateData, nil
 }
 
 func upsertSemanticConditionValue(contract *ContractData, newValue SemanticConditionValue) {
