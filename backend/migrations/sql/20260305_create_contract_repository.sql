@@ -33,6 +33,38 @@ CREATE TABLE IF NOT EXISTS contracts
 
 ------------------------------------------------------------------------------------------------------------------------
 
+CREATE TABLE IF NOT EXISTS contract_history
+(
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    did               VARCHAR(255),
+
+    created_by        VARCHAR(255)   NOT NULL,
+    created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    start_date          TIMESTAMP,
+    exp_date          TIMESTAMP,
+    exp_policy        contract_expiration_policy,
+    exp_notice_period INT,
+
+    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+
+    state             contract_state NOT NULL,
+
+    contract_version  INT,
+    name              VARCHAR(255),
+    description       TEXT,
+    contract_data     JSONB DEFAULT '{}'::jsonb,
+    search_vector     tsvector GENERATED ALWAYS AS (
+        to_tsvector('english', contract_data::text)
+        ) STORED,
+
+    CONSTRAINT chk_did_not_empty CHECK (did <> '')
+);
+
+------------------------------------------------------------------------------------------------------------------------
+
 CREATE OR REPLACE VIEW contracts_effective AS
 SELECT
     did,

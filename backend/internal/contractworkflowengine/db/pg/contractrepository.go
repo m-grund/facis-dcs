@@ -34,6 +34,42 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 	return &createdAt, nil
 }
 
+func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractHistory, error) {
+	query := `
+        SELECT did, state, name, description,
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contract_history WHERE did = $1
+        ORDER BY contract_version DESC NULLS LAST
+    	LIMIT 1
+    `
+	var ct db.ContractHistory
+	err := tx.GetContext(ctx, &ct, query, did)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("contract with DID %s not found", did)
+		}
+		return nil, err
+	}
+	return &ct, nil
+}
+
+func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
+	query := `
+        SELECT did, state, name, description,
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contract_history WHERE did = $1
+    `
+	var ct []db.ContractHistory
+	err := tx.SelectContext(ctx, &ct, query, did)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []db.ContractHistory{}, fmt.Errorf("contract with DID %s not found", did)
+		}
+		return []db.ContractHistory{}, err
+	}
+	return ct, nil
+}
+
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,

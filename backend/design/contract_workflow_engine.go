@@ -80,6 +80,35 @@ var ContractSubmitResponse = Type("ContractSubmitResponse", func() {
 	Required("did")
 })
 
+var ContractHistoryRetrieveRequest = Type("ContractHistoryRetrieveRequest", func() {
+	Description("Contract history retrieve request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Required("did")
+})
+
+var ContractHistoryItem = Type("ContractHistoryItem", func() {
+	Attribute("did", String, "DID of the contract")
+	Attribute("contract_version", Int, "The version of the contract")
+	Attribute("state", String, "Current state of the contract")
+	Attribute("name", String, "The name of the contract")
+	Attribute("description", String, "The description of the contract")
+	Attribute("created_by", String, "Identifier of who created the contract negotiation")
+	Attribute("created_at", String, "Created at")
+	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
+	Attribute("contract_data", Any, "The data of that contract")
+
+	Required("did", "state", "created_by", "created_at", "updated_at")
+})
+
 var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
@@ -632,6 +661,37 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			GET("/contract/retrieve/{did}")
+			Param("did")
+
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// GET /contract/history/{did}
+	Method("retrieve_history_by_did", func() {
+		Description("fetch history of a contract")
+		Meta("dcs:cwe:components", "")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+		})
+
+		Payload(ContractHistoryRetrieveRequest)
+		Result(ArrayOfRequired(ContractHistoryItem))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/history/{did}")
 			Param("did")
 
 			Response(StatusOK)
