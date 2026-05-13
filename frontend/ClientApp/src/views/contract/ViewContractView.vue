@@ -59,7 +59,11 @@ const isAuditingAuthorized = computed(() =>
   (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
 )
 
-const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
+
+const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft).filter(tab => {
+  // Don't show diff tab in the contract view.
+  return tab.id !== 'diff'
+}))
 
 watch(
   () => !!route.params.did,
