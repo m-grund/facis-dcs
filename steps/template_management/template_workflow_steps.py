@@ -313,6 +313,7 @@ def step_when_recommend_template(context, name):
         template_submit_url(context),
         TemplateService.template_reviewer_submit_payload(context, t["did"], verified_updated_at),
     )
+
     if context.requests_response.status_code == 200:
         ua = TemplateService.fetch_template(context, t["did"]).get("updated_at")
         TemplateService.store_named(context, name, t["did"], ua)
