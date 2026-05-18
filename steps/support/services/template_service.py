@@ -117,13 +117,13 @@ class TemplateService:
         }
 
     @staticmethod
-    def template_reviewer_submit_payload(context, did: str, updated_at: str) -> dict:
+    def template_reviewer_submit_payload(context, did: str, updated_at: str, flag="approval") -> dict:
         AuthService.get_headers_for_roles(["Template Approver"])
         return {
             "did": did,
             "updated_at": updated_at,
             "approver": AuthService.username_for_roles(["Template Approver"]),
-            "forward_to": "approval",
+            "forward_to": flag,
         }
 
     @staticmethod
@@ -157,6 +157,21 @@ class TemplateService:
             context,
             template_submit_url(context),
             TemplateService.template_reviewer_submit_payload(context, did, updated_at),
+            headers=headers,
+        )
+        assert resp.status_code == 200, f"Template review submit failed: {resp.text}"
+        return TemplateService.fetch_template(context, did, headers=headers).get("updated_at")
+
+    @staticmethod
+    def do_recommend_for_rejected(context, did: str, updated_at: str) -> str:
+        """Submit reviewer recommendation and advance review workflow."""
+        # Backend requires verification before reviewer recommendation submit.
+        updated_at = TemplateService.do_verify(context, did, updated_at)
+        headers = AuthService.get_headers_for_roles(["Template Reviewer"])
+        resp = post_json(
+            context,
+            template_submit_url(context),
+            TemplateService.template_reviewer_submit_payload(context, did, updated_at, "draft"),
             headers=headers,
         )
         assert resp.status_code == 200, f"Template review submit failed: {resp.text}"

@@ -104,8 +104,26 @@ def step_then_rejection_reason_recorded(context):
     retrieve = get_with_headers(context, template_retrieve_by_id_url(context, did))
     assert retrieve.status_code == 200, retrieve.text
     state = str(retrieve.json().get("state", "")).upper()
-    assert state == "DRAFT", (
-        f"Expected template to revert to DRAFT after rejection, got '{state}'"
+    assert state == "REJECTED", (
+        f"Expected template to revert to REJECTED after rejection, got '{state}'"
+    )
+
+# ---------------------------------------------------------------------------
+# Resubmit
+# ---------------------------------------------------------------------------
+
+
+@then("the comments is recorded")
+def step_then_resubmit_comments_recorded(context):
+    body = context.requests_response.json()
+    did = body.get("did")
+    assert did, f"No DID in reject response: {body}"
+    # After rejection the template should return to Draft.
+    retrieve = get_with_headers(context, template_retrieve_by_id_url(context, did))
+    assert retrieve.status_code == 200, retrieve.text
+    state = str(retrieve.json().get("state", "")).upper()
+    assert state == "REJECTED", (
+        f"Expected template to revert to REJECTED after rejection, got '{state}'"
     )
 
 
@@ -123,7 +141,6 @@ def step_then_result_name_contains(context, name):
     assert len(body) == 1, f"Expect one template as result, got: {len(body)}"
     for item in body:
         assert name in (item.get("name") or ""), f"Expected '{name}' in name, got: {item.get('name')}"
-
 
 @then('the result is one template with "{name}" and status "{state}"')
 def step_then_result_name_contains(context, name, state):

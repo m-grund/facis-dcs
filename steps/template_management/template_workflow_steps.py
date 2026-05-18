@@ -45,6 +45,13 @@ def step_given_template_reviewed(context, name):
     updated_at = TemplateService.do_recommend_for_approval(context, did, updated_at)
     TemplateService.store_named(context, name, did, updated_at)
 
+@given('template "{name}" is in "Rejected" status')
+def step_given_template_reviewed(context, name):
+    did, updated_at = TemplateService.create_fresh_template(context)
+    updated_at = TemplateService.do_submit(context, did, updated_at)
+    updated_at = TemplateService.do_recommend_for_rejected(context, did, updated_at)
+    TemplateService.store_named(context, name, did, updated_at)
+
 
 @given('template "{name}" with version "{version}" exists')
 def step_given_template_version_exists(context, name, version):
@@ -143,7 +150,7 @@ def step_when_submit_template(context, name):
         ua = TemplateService.fetch_template(context, t["did"]).get("updated_at")
         TemplateService.store_named(context, name, t["did"], ua)
 
-@when('I submit template "{name}" with approval flag')
+@when('I submit template "{name}" with flag=approval')
 def step_when_submit_template(context, name):
     t = TemplateService.named(context, name)
     context.requests_response = post_json(
@@ -155,13 +162,25 @@ def step_when_submit_template(context, name):
         ua = TemplateService.fetch_template(context, t["did"]).get("updated_at")
         TemplateService.store_named(context, name, t["did"], ua)
 
-@when('I submit template "{name}" with draft flag')
+@when('I submit template "{name}" with flag=draft')
 def step_when_submit_template(context, name):
     t = TemplateService.named(context, name)
     context.requests_response = post_json(
         context,
         template_submit_url(context),
         TemplateService.template_submit_payload_with_flag(context, t["did"], t["updated_at"], "draft"),
+    )
+    if context.requests_response.status_code == 200:
+        ua = TemplateService.fetch_template(context, t["did"]).get("updated_at", "draft")
+        TemplateService.store_named(context, name, t["did"], ua)
+
+@when('I resubmit template "{name}"')
+def step_when_submit_template(context, name):
+    t = TemplateService.named(context, name)
+    context.requests_response = post_json(
+        context,
+        template_submit_url(context),
+        TemplateService.template_submit_payload(context, t["did"], t["updated_at"]),
     )
     if context.requests_response.status_code == 200:
         ua = TemplateService.fetch_template(context, t["did"]).get("updated_at", "draft")
@@ -441,10 +460,10 @@ def step_when_assign_did(context, name):
     )
 
 
-@when('I retrieve template by UUID')
-def step_when_retrieve_template_by_uuid(context):
-    # API retrieval key is DID; UUID requirement is validated by successful template retrieval.
-    t = TemplateService.named(context, "Standard NDA")
+@when('I retrieve template "{name}" by did')
+def step_when_retrieve_template_by_did(context, name):
+    # API retrieval key is DID; DID requirement is validated by successful template retrieval.
+    t = TemplateService.named(context, name)
     context.requests_response = get_with_headers(
         context, template_retrieve_by_id_url(context, t["did"])
     )
@@ -563,3 +582,12 @@ def step_then_did_linked_metadata(context):
 def step_then_receive_correct_template(context):
     body = context.requests_response.json()
     assert body.get("did"), f"No template identifier in response: {body}"
+
+@then('I search for templates with name "{name}"')
+def step_then_search_templates(context, name):
+    context.requests_response = requests.get(
+        template_search_url(context),
+        params={"name": name},
+        headers=getattr(context, "headers", {}),
+        timeout=context.http_timeout_seconds,
+    )
