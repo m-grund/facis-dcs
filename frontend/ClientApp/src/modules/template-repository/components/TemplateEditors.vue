@@ -110,31 +110,30 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useAuthStore } from '@/stores/auth-store'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
-import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
-import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
+import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
+import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AuditView from './AuditView.vue'
 
 const props = withDefaults(
   defineProps<{
     title: string
-
   }>(),
   {}
 )
 
 const route = useRoute()
-const authStore = useAuthStore()
+
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { activeTab } = storeToRefs(templateEditorUiStore)
@@ -146,7 +145,5 @@ const tabs = computed(() => {
   })
 })
 const currentTabNumber = computed(() => 1 + tabs.value.map((tab) => tab.id).indexOf(activeTab.value))
-
-const isManager = computed(() => authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
-
+const { isManager } = useTemplatePermissions()
 </script>

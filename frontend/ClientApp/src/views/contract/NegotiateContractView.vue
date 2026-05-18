@@ -206,14 +206,12 @@ const submitContract = async () => {
   if (!contract.value) return
   isSubmitting.value = true
   try {
-    const state = contract.value.state
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
     })
     if (response.did) {
-      await loadContract()
-      if (state !== contract.value.state) {
+      if (response.current_state !== contract.value.state) {
         navStore.goToPreviousRoute()
       } else {
         const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
