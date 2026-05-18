@@ -410,6 +410,7 @@ const currentContractData = computed<ContractData | undefined>(() => {
                 <ContractHistoryDiffView
                   v-if="contract"
                   :contract-did="contract.did"
+                  :contract-state="contract.state"
                   :current-contract-data="currentContractData"
                 />
               </div>

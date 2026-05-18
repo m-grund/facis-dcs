@@ -99,12 +99,14 @@ import type { ContractHistoryItem } from '@/models/responses/contract-response'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import DiffView from '@/modules/contract-workflow-engine/components/DiffView.vue'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
+import { ContractState, type ContractState as ContractStateType } from '@/types/contract-state'
 import { computed, ref, watch } from 'vue'
 
 const DRAFT_ID = 'draft'
 
 const props = defineProps<{
   contractDid: string
+  contractState: ContractStateType
   currentContractData?: ContractData
 }>()
 
@@ -138,14 +140,24 @@ const sortedHistory = computed(() => {
   return list
 })
 
+const showCurrentDraft = computed(
+  () =>
+    props.contractState === ContractState.draft ||
+    props.contractState === ContractState.rejected ||
+    props.contractState === ContractState.negotiation,
+)
+
 const compareOptions = computed<CompareOption[]>(() => {
-  const opts: CompareOption[] = [
-    {
+  const opts: CompareOption[] = []
+
+  if (showCurrentDraft.value) {
+    opts.push({
       id: DRAFT_ID,
       kind: 'draft',
       label: 'Current draft',
-    },
-  ]
+    })
+  }
+
   for (const row of sortedHistory.value) {
     opts.push({
       id: historyOptionId(row),
@@ -203,7 +215,7 @@ const rightContractData = computed((): ContractData | undefined => resolveData(r
 
 function firstPickExcluding(exclude: string): string {
   const first = compareOptions.value.find((o) => o.id !== exclude)
-  return first?.id ?? DRAFT_ID
+  return first?.id ?? compareOptions.value[0]?.id ?? DRAFT_ID
 }
 
 function ensureDistinctPicks() {
@@ -243,8 +255,8 @@ function normalizePicksAfterHistoryChange() {
   const optionIds = new Set(opts.map((o) => o.id))
 
   if (opts.length < 2) {
-    leftPick.value = DRAFT_ID
-    rightPick.value = DRAFT_ID
+    leftPick.value = opts[0]?.id ?? DRAFT_ID 
+    rightPick.value = opts[0]?.id ?? DRAFT_ID
     return
   }
 
@@ -271,7 +283,7 @@ function normalizePicksAfterHistoryChange() {
   ensureDistinctPicks()
 }
 
-watch(historyItems, () => normalizePicksAfterHistoryChange(), { immediate: true })
+watch([historyItems, showCurrentDraft], () => normalizePicksAfterHistoryChange(), { immediate: true })
 
 watch([leftPick, rightPick], () => ensureDistinctPicks())
 </script>
