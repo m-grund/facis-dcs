@@ -105,3 +105,23 @@ export interface ContractAuditResponseItem {
 }
 
 export type ContractAuditResponse = ContractAuditResponseItem[]
+
+
+export interface ContractHistoryItem {
+  did: string
+  contract_version?: number
+  state: ContractState
+  name?: string
+  description?: string
+  created_by: string
+  created_at: string
+  updated_at: string
+  start_date?: string
+  exp_date?: string
+  exp_policy?: ExpirationPolicy
+  exp_notice_period?: number
+  responsible_persons?: unknown
+  contract_data?: ContractData
+}
+
+export type ContractHistoryResponse = ContractHistoryItem[]

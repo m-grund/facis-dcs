@@ -77,7 +77,9 @@ var ContractSubmitResponse = Type("ContractSubmitResponse", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 
-	Required("did")
+	Attribute("current_state", String, "The current state of the contract")
+
+	Required("did", "current_state")
 })
 
 var ContractHistoryRetrieveRequest = Type("ContractHistoryRetrieveRequest", func() {

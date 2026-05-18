@@ -22,7 +22,6 @@ import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId, isSameTemplateDataRe
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'
 const NEWLINE = '\n'
-const LEADING_WHITESPACE_WITH_NBSP = /^[\s\u00A0]+/
 
 export type ContractPlainTextInput = Partial<ContractData> | null | undefined
 
@@ -210,8 +209,7 @@ function writeChildBlocks(cxt: ContractContext, parentBlockId: string, level: nu
 }
 
 function writeClauseText(text: string, blockId: string, semanticConditions: SemanticCondition[], semanticConditionValues: SemanticConditionValue[], writer: PlainTextWriter): void {
-  const normalizedText = (text ?? '').replace(LEADING_WHITESPACE_WITH_NBSP, '')
-  const segments = parseSegments(normalizedText, semanticConditions)
+  const segments = parseSegments(text ?? '', semanticConditions)
 
   for (const segment of segments) {
     if (isText(segment)) {
