@@ -114,7 +114,7 @@
           disabled
         />
       </fieldset>
-      <fieldset v-if="contract.state !== ContractState.draft" class="fieldset p-0 border-none">
+      <fieldset v-if="showResponsiblities" class="fieldset p-0 border-none">
         <div class="collapse collapse-arrow [&>input~.collapse-title::after]:scale-75">
           <input type="checkbox" name="responsibles" />
           <legend class="fieldset-legend collapse-title font-semibold pl-0">Responsible Persons</legend>
@@ -236,4 +236,6 @@ const minExpDate = computed(() => {
 })
 
 const originalContract = ref(Object.assign({}, props.contract))
+
+const showResponsiblities = computed(() => !([ContractState.draft, ContractState.terminated] as ContractState[]).includes(props.contract.state))
 </script>
