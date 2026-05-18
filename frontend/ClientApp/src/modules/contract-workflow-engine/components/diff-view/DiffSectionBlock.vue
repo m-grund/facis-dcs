@@ -1,6 +1,6 @@
 <template>
   <p
-    class="m-0 leading-6 font-semibold text-base-content"
+    class="m-0 leading-6 font-semibold text-base-content whitespace-pre-wrap break-words"
     :class="sectionTextClass"
   >
     <template v-if="highlightSegments && hasSegments">
