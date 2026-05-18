@@ -3,7 +3,7 @@ import type { Contract } from '@/models/contract/contract'
 import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
-import { ContractState, contractStates } from '@/types/contract-state'
+import { ContractState } from '@/types/contract-state'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -43,9 +43,9 @@ interface TimeUntil {
 
 function timeUntil(date: string | Date | undefined): TimeUntil {
   if (!date) return { days: 0, hours: 0, minutes: 0, totalDays: 0 }
-  
+
   const diffMs = new Date(date).getTime() - new Date().getTime()
-  
+
   if (diffMs <= 0) return { days: 0, hours: 0, minutes: 0, totalDays: 0 }
 
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
@@ -58,29 +58,27 @@ function timeUntil(date: string | Date | undefined): TimeUntil {
 
 function expirationBadgeClass(timeUtil: TimeUntil, noticePeriod?: number): string {
   if (!noticePeriod) {
-    return "flex"
+    return 'flex'
   }
 
   if (timeUtil.days > noticePeriod) {
-    return "flex"
+    return 'flex'
   } else if (timeUtil.days > 0) {
-    return "flex badge badge-warning"
+    return 'flex badge badge-warning'
   } else {
-    return "flex badge badge-error"
+    return 'flex badge badge-error'
   }
 }
 
 function expirationMessage(timeUtil: TimeUntil): string {
   if (timeUtil.days > 0) {
-    return `Contract expires in ${timeUtil.days} days` 
+    return `Contract expires in ${timeUtil.days} days`
   } else if (timeUtil.hours > 0) {
-    return `Contract expires in ${timeUtil.hours} hours` 
+    return `Contract expires in ${timeUtil.hours} hours`
   } else {
-    return `Contract expires in ${timeUtil.minutes} minutes` 
+    return `Contract expires in ${timeUtil.minutes} minutes`
   }
 }
-
-
 </script>
 
 <template>
@@ -93,7 +91,7 @@ function expirationMessage(timeUtil: TimeUntil): string {
           </div>
           <div class="badge badge-secondary">{{ contract.state }}</div>
         </h2>
-        <div class="flex justify-end">
+        <div class="flex justify-start">
           <div v-if="contract.contract_version">Version: {{ contract.contract_version }}</div>
         </div>
         <div class="flex justify-between min-w-0">
@@ -124,14 +122,17 @@ function expirationMessage(timeUtil: TimeUntil): string {
             </RouterLink>
           </div>
         </div>
-        <div  class="flex justify-between">
-            <div v-if="contract?.start_date">Start date: {{ new Date(contract?.start_date ?? '').toLocaleString() }}</div>
+        <div v-if="contract?.start_date" class="flex justify-between">
+          <div>Start date: {{ new Date(contract?.start_date ?? '').toLocaleString() }}</div>
         </div>
-        <div  class="flex justify-between">
-            <div v-if="contract?.exp_date">Expiration date: {{ new Date(contract?.exp_date ?? '').toLocaleString() }}</div>
-            <div 
-              v-if="timeUntil(contract?.exp_date).totalDays > 0"
-              :class="expirationBadgeClass(timeUntil(contract?.exp_date), contract?.exp_notice_period)">{{expirationMessage(timeUntil(contract?.exp_date))}}</div>
+        <div v-if="contract?.exp_date" class="flex justify-between">
+          <div>Expiration date: {{ new Date(contract?.exp_date ?? '').toLocaleString() }}</div>
+          <div
+            v-if="timeUntil(contract?.exp_date).totalDays > 0"
+            :class="expirationBadgeClass(timeUntil(contract?.exp_date), contract?.exp_notice_period)"
+          >
+            {{ expirationMessage(timeUntil(contract?.exp_date)) }}
+          </div>
         </div>
       </div>
     </div>

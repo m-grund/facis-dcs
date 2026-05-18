@@ -417,9 +417,11 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByDid(ctx context.Context, r
 	defer cancel()
 
 	qry := contract.GetHistoryByIDQry{
+		DID:         req.Did,
 		RetrievedBy: middleware.GetUsername(ctx),
 	}
 	queryHandler := contract.GetHistoryByIDHandler{
+		Ctx:   ctx,
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}

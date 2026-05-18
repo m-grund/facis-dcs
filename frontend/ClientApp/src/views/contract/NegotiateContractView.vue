@@ -7,13 +7,10 @@ import type { Contract, ContractChangeRequest } from '@/models/contract/contract
 import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
-import DiffView from '@/modules/contract-workflow-engine/components/DiffView.vue'
+import ContractHistoryDiffView from '@/modules/contract-workflow-engine/components/ContractHistoryDiffView.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
-import {
-  useSemanticValueVerification,
-  type VerificationResult,
-} from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
+import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
@@ -24,6 +21,7 @@ import { useTemplateDraftStore } from '@/modules/template-repository/store/templ
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
@@ -35,10 +33,12 @@ const route = useRoute()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
+const errorStore = useErrorStore()
+
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
-const { hasConditionParameterForValue } = useSemanticValueVerification()
+const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 const { setActiveTab } = contractEditorUiStore
@@ -54,33 +54,53 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isAuditingAuthorized = computed(() => 
-  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+const isAuditingAuthorized = computed(
+  () =>
+    (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some((role) =>
+      authStore.user?.roles?.includes(role),
+    ) ?? false,
 )
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
-const verificationResult: Ref<VerificationResult | null> = ref(null)
+const verificationResult = computed(() => {
+  const subTemplateSemanticConditions = templateDraftStore.subTemplateSnapshots.map((subTemplate) => ({
+    templateId: subTemplate.did,
+    version: subTemplate.version,
+    document_number: subTemplate.document_number,
+    semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
+  }))
+  return verifySemanticValue(
+    templateDraftStore.semanticConditions,
+    subTemplateSemanticConditions,
+    contractContentValuesStore.semanticConditionValues,
+    templateDraftStore.documentBlocks,
+  )
+})
 
 const contract: Ref<Contract | null> = ref(null)
 const editedContract: Ref<Contract | null> = ref(null)
-const compareChangesData: Ref<Contract & { exp_notice_period_str: string, exp_policy_str: string} | null> = ref(null)
+const compareChangesData: Ref<(Contract & { exp_notice_period_str: string; exp_policy_str: string }) | null> = ref(null)
 
 const hasChangeRequest = computed(() => {
-  return changedName.value ||
-         changedDescription.value ||
-         changedContractData.value ||
-         changedStartDate.value ||
-         changeExpDate.value ||
-         changeExpNoticePeriod.value ||
-         changeExpPolicy.value
+  return (
+    changedName.value ||
+    changedDescription.value ||
+    changedContractData.value ||
+    changedStartDate.value ||
+    changeExpDate.value ||
+    changeExpNoticePeriod.value ||
+    changeExpPolicy.value
+  )
 })
 
 const changedName = computed(() => editedContract.value?.name !== contract.value?.name)
 const changedDescription = computed(() => editedContract.value?.description !== contract.value?.description)
 const changedStartDate = computed(() => editedContract.value?.start_date != contract.value?.start_date)
 const changeExpDate = computed(() => editedContract.value?.exp_date != contract.value?.exp_date)
-const changeExpNoticePeriod = computed(() => editedContract.value?.exp_notice_period != contract.value?.exp_notice_period)
+const changeExpNoticePeriod = computed(
+  () => editedContract.value?.exp_notice_period != contract.value?.exp_notice_period,
+)
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
   return (
@@ -97,21 +117,24 @@ const arrayEqual = (a: unknown[], b: unknown[]) => {
   return a.every((value, i) => value === b[i])
 }
 
+const loadContract = async () => {
+  try {
+    const id = route.params.did
+    if (id && !Array.isArray(id)) {
+      contract.value = await contractWorkflowService.retrieveById({ did: id })
+      editedContract.value = !!contract.value ? { ...contract.value } : null
+      applyContractDataToDraft(contract.value?.contract_data)
+    }
+  } catch (err: any) {
+    console.error('Failed to load contract', err)
+  }
+}
+
 watch(
   () => !!route.params.did,
   async (value) => {
-    if (value) {
-      try {
-        const id = route.params.did
-        if (id && !Array.isArray(id)) {
-          contract.value = await contractWorkflowService.retrieveById({ did: id })
-          editedContract.value = !!contract.value ? { ...contract.value } : null
-          applyContractDataToDraft(contract.value?.contract_data)
-        }
-      } catch (err: any) {
-        console.error('Failed to load contract', err)
-      }
-    }
+    if (!value) return
+    await loadContract()
   },
   { immediate: true },
 )
@@ -170,7 +193,7 @@ const negotiateContractChange = async () => {
       change_request: changeRequest,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await loadContract()
     }
   } catch (err) {
     console.error('Failed to submit change request', err)
@@ -181,16 +204,26 @@ const negotiateContractChange = async () => {
 
 const submitContract = async () => {
   if (!contract.value) return
+  isSubmitting.value = true
   try {
+    const state = contract.value.state
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await loadContract()
+      if (state !== contract.value.state) {
+        navStore.goToPreviousRoute()
+      } else {
+        const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
+        errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
+      }
     }
   } catch (err) {
     console.error('Failed to submit', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -209,7 +242,6 @@ onUnmounted(() => {
   contractContentValuesStore.reset()
   contractEditorUiStore.reset()
   templateEditorUiStore.reset({ workflow: 'contract' })
-  verificationResult.value = null
 })
 
 // Contract data includes the template data used to fill the contract template
@@ -217,7 +249,6 @@ function applyContractDataToDraft(contractData?: unknown) {
   if (contractData == null) {
     templateDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
-    verificationResult.value = null
     return
   }
   const cd = preprocessContractData(contractData as ContractData)
@@ -230,19 +261,14 @@ function applyContractDataToDraft(contractData?: unknown) {
     templateDataVersion: cd.templateDataVersion,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
-  verificationResult.value = null
 }
 
 const tabContent = useTemplateRef<HTMLElement>('tabContent')
 
 const originalSemanticConditionValues = ref<SemanticConditionValue[]>([])
 
-const handleSelectedNegotiation = async (
-  negotiation: ContractNegotiation | null,
-  selectedContract: Contract | null,
-) => {
-
-  if (!contract.value || !selectedContract) return
+const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null) => {
+  if (!contract.value) return
   compareChangesData.value = !!negotiation
     ? {
         ...contract.value,
@@ -257,10 +283,10 @@ const handleSelectedNegotiation = async (
           : contract.value.exp_date,
         exp_notice_period_str: negotiation.change_request.exp_notice_period
           ? `${contract.value.exp_notice_period} -> ${negotiation.change_request.exp_notice_period}`
-          : contract.value.exp_notice_period?.toString() ?? '',
+          : (contract.value.exp_notice_period?.toString() ?? ''),
         exp_policy_str: negotiation.change_request.exp_policy
           ? `${contract.value.exp_policy} -> ${negotiation.change_request.exp_policy}`
-          : contract.value.exp_policy ?? '',
+          : (contract.value.exp_policy ?? ''),
         description: negotiation.change_request.description
           ? `${contract.value.description} -> ${negotiation.change_request.description}`
           : contract.value.description,
@@ -333,14 +359,6 @@ const shownData = computed(() => {
   return contract.value
 })
 
-// TODO: The historical contract data function is not ready yet.
-// So we just return the current contract and draft data for now.
-const priorContractData = computed<ContractData | undefined>(() => {
-  const data = contract.value?.contract_data
-  if (!data) return undefined
-  return preprocessContractData(data)
-})
-
 const currentContractData = computed<ContractData | undefined>(() => {
   const data = contract.value?.contract_data
   if (!data) return undefined
@@ -350,6 +368,14 @@ const currentContractData = computed<ContractData | undefined>(() => {
     ...preprocessedContractData,
     semanticConditionValues: [...contractContentValuesStore.semanticConditionValues],
   }
+})
+
+const hasActiveNegotiations = computed(() => {
+  return (
+    contract.value?.negotiations?.some(
+      (negotiation) => negotiation.contract_version === contract.value?.contract_version,
+    ) ?? false
+  )
 })
 
 const exportPdf = async () => {
@@ -370,16 +396,16 @@ const exportPdf = async () => {
     <div v-if="!!contract && !!editedContract && !!shownData">
       <div class="flex-1 flex flex-col">
         <!-- Tabs -->
-        <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
+        <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
           <div class="max-w-4xl mx-auto px-6 pt-3">
             <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Negotiate Contract</p>
-            <div role="tablist" class="tabs tabs-lift tabs-lg">
+            <div role="tablist" class="tabs tabs-border tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
                 class="tab"
-                :class="{ 'tab-active': activeTab === tab.id }"
+                :class="{ 'tab-active text-primary': activeTab === tab.id }"
                 @click="setActiveTab(tab.id)"
               >
                 {{ tab.label }}
@@ -394,13 +420,13 @@ const exportPdf = async () => {
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor
                   :contract="shownData"
-                  :inserted="{ 
-                    name: compareChangesData?.name, 
+                  :inserted="{
+                    name: compareChangesData?.name,
                     description: compareChangesData?.description,
                     start_date: compareChangesData?.start_date,
                     exp_date: compareChangesData?.exp_date,
                     exp_notice_period: compareChangesData?.exp_notice_period_str,
-                    exp_policy: compareChangesData?.exp_policy_str
+                    exp_policy: compareChangesData?.exp_policy_str,
                   }"
                 />
               </div>
@@ -424,7 +450,12 @@ const exportPdf = async () => {
               </div>
 
               <div v-show="activeTab === 'diff'">
-                <DiffView :prior-contract-data="priorContractData" :current-contract-data="currentContractData" />
+                <ContractHistoryDiffView
+                  v-if="contract"
+                  :contract-did="contract.did"
+                  :contract-state="contract.state"
+                  :current-contract-data="currentContractData"
+                />
               </div>
 
               <template v-if="isAuditingAuthorized">
@@ -441,15 +472,13 @@ const exportPdf = async () => {
           </div>
         </div>
       </div>
-      <template v-if="activeTab !== 'audit'">
+      <template v-if="activeTab !== 'audit' && hasActiveNegotiations">
         <div class="divider"></div>
-        <div class="max-w-4xl mx-auto p-6" v-if="(contract.negotiations?.length ?? -1) > 0">
+        <div class="max-w-4xl mx-auto p-6">
           <div class="text-lg">Active negotiations</div>
-          <NegotiationList
-            :contract="contract"
-            @selected-negotiation="(negotiation) => handleSelectedNegotiation(negotiation, contract)"
-          /></div
-      ></template>
+          <NegotiationList :contract="contract" @selected-negotiation="handleSelectedNegotiation" />
+        </div>
+      </template>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
@@ -467,7 +496,7 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || !hasOpenDecisions"
+          :disabled="isSubmitting || hasChangeRequest || !hasOpenDecisions"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
