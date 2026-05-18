@@ -6,6 +6,7 @@
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
         <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <CopyTemplateButton v-if="isCreator || isManager" class="btn btn-primary flex-1" />
         <template v-if="isCreator">
           <SubmitSelectionDialog
             v-if="state === TemplateState.draft"
@@ -32,26 +33,26 @@
 </template>
 
 <script setup lang="ts">
-import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
 import type { SelectedUserRole } from '@/models/user'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
 const router = useRouter()
 const route = useRoute()
 const navStore = useNavStore()
 
-const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { state } = storeToRefs(draftStore)
@@ -59,13 +60,8 @@ const { state } = storeToRefs(draftStore)
 const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const isCreator = computed(() => {
-  return draftStore.created_by === authStore.user?.username
-})
-
-const isManager = computed(() => {
-  return hasDid.value && (authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
-})
+const { isCreator, isManager: isManagerBase } = useTemplatePermissions()
+const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
 

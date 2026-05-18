@@ -1,7 +1,10 @@
 <template>
   <div class="card bg-base-100 border border-base-300 shadow-sm h-full min-h-0">
     <div class="card-body p-4 min-h-0">
-      <div class="font-semibold text-sm text-base-content/70 mb-2">
+      <div
+        v-if="title.trim()"
+        class="font-semibold text-sm text-base-content/70 mb-2"
+      >
         {{ title }}
       </div>
       <div class="overflow-y-auto min-h-0 flex-1">
@@ -15,7 +18,7 @@
           <div
             v-for="(block, index) in blocks"
             :key="`${block.type}-${index}`"
-            class="flex items-start"
+            class="flex min-h-2 items-start"
             :class="getRowBackgroundClass(index + 1)"
           >
             <div

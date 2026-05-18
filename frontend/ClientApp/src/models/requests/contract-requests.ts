@@ -93,3 +93,7 @@ export interface ContractTerminateRequest {
 export interface ContractAuditRequest {
   did: string
 }
+
+export interface ContractHistoryRetrieveRequest {
+  did: string
+}
