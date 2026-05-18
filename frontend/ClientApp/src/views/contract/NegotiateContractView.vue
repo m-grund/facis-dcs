@@ -9,6 +9,7 @@ import AuditView from '@/modules/contract-workflow-engine/components/AuditView.v
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import DiffView from '@/modules/contract-workflow-engine/components/DiffView.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
+import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
 import {
   useSemanticValueVerification,
   type VerificationResult,
@@ -16,6 +17,8 @@ import {
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
+import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
+import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
@@ -44,6 +47,7 @@ const { activeTab } = storeToRefs(contractEditorUiStore)
 const { setActiveTab } = contractEditorUiStore
 const contractContentValuesStore = useContractContentValuesStore()
 const scrollStore = useScrollStore()
+const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 
 const username = computed(() => authStore.user?.username)
 const isSubmitting = ref(false)
@@ -374,6 +378,18 @@ const hasActiveNegotiations = computed(() => {
     ) ?? false
   )
 })
+
+const exportPdf = async () => {
+  const id = route.params.did
+  if (!id || Array.isArray(id)) return
+  const contract = await contractWorkflowService.retrieveById({ did: id })
+  if (!contract) return
+  const blocks = convertContractToPlainTextBlocks(contract.contract_data)
+  const pdfData = toPdfData(blocks)
+  const title = `${contract.name ?? 'contract'}`
+  const filename = `${title}.pdf`
+  downloadContractPdf(pdfData, filename, title, { displayTitleInContent: true })
+}
 </script>
 
 <template>
@@ -463,6 +479,7 @@ const hasActiveNegotiations = computed(() => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"

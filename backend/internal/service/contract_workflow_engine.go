@@ -398,6 +398,69 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 	}, nil
 }
 
+func (s *contractWorkflowEnginesrvc) RetrieveHistoryByDid(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveRequest) (res []*contractworkflowengine.ContractHistoryItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := contract.GetHistoryByIDQry{
+		RetrievedBy: middleware.GetUsername(ctx),
+	}
+	queryHandler := contract.GetHistoryByIDHandler{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	result, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	var contracts []*contractworkflowengine.ContractHistoryItem
+	for _, item := range result {
+
+		var startDate *string
+		if item.StartDate != nil {
+			s := item.StartDate.Format(time.RFC3339)
+			startDate = &s
+		}
+
+		var expDate *string
+		if item.ExpDate != nil {
+			s := item.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if item.ExpPolicy != nil {
+			s := item.ExpPolicy.String()
+			expPolicy = &s
+		}
+
+		contracts = append(contracts, &contractworkflowengine.ContractHistoryItem{
+			Did:                item.DID,
+			ContractVersion:    item.ContractVersion,
+			State:              item.State.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedBy:          item.CreatedBy,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			StartDate:          startDate,
+			ExpDate:            expDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    item.ExpNoticePeriod,
+			ResponsiblePersons: item.ResponsiblePersons,
+			ContractData:       item.ContractData,
+		})
+	}
+
+	return contracts, nil
+}
+
+func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveRequest) (res []*contractworkflowengine.ContractItem, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contractworkflowengine.ContractNegotiationRequest) (res *contractworkflowengine.ContractNegotiationResponse, err error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
