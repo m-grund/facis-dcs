@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
+import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
+import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
+import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
@@ -13,6 +16,7 @@ defineOptions({
 })
 
 const attrs = useAttrs()
+const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 
 const filteredClass = computed(() =>
   String(attrs.class || '')
@@ -73,9 +77,20 @@ const register = async () => {
     console.error('Registration failed:', err)
   }
 }
+
+const exportPdf = async() => {
+  const template = await contractTemplateService.retrieveById({ did: props.template.did })
+  if (!template) return
+  const blocks = convertContractToPlainTextBlocks(template.template_data)
+  const pdfData = toPdfData(blocks)
+  const title = `${template.name ?? 'contract-template'}`
+  const filename = `${title}.pdf`
+  downloadContractPdf(pdfData, filename, title)
+}
 </script>
 
 <template>
+  <button :class="$attrs.class" @click="exportPdf">Export PDF</button>
   <button v-if="canRegister" :class="$attrs.class" @click="register">Register</button>
   <button v-if="canArchive" :class="[filteredClass, 'btn-error']" @click="archive">Archive</button>
   <ConfirmationModal ref="confirmation-modal" />
