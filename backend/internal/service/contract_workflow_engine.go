@@ -214,8 +214,22 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	qry := contract.GetProcessDataByIDQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetUsername(ctx),
+	}
+	queryHandler := contract.GetProcessDataByIDHandler{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	processData, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	return &contractworkflowengine.ContractSubmitResponse{
-		Did: req.Did,
+		Did:          req.Did,
+		CurrentState: processData.State.String(),
 	}, nil
 }
 
