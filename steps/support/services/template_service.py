@@ -1,5 +1,6 @@
 import re
 
+from docutils.nodes import description
 from requests import get
 
 from steps.support.api_client import get_with_headers, post_json, template_approve_url, template_create_url, template_retrieve_by_id_url, template_retrieve_url, template_submit_url, template_verify_url
@@ -82,6 +83,16 @@ class TemplateService:
             "updated_at": updated_at,
             "reviewers": [AuthService.username_for_roles(["Template Reviewer"])],
             "approver": AuthService.username_for_roles(["Template Approver"]),
+        }
+
+    @staticmethod
+    def template_update_payload(context, did: str, updated_at: str, name=None, description=None) -> dict:
+        AuthService.get_headers_for_roles(["Template Creator"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "name": name,
+            "description": description,
         }
 
     @staticmethod

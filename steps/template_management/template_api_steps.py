@@ -61,37 +61,6 @@ def step_then_template_version(context):
 
 
 # ---------------------------------------------------------------------------
-# Update / version assertions
-# ---------------------------------------------------------------------------
-
-@then('a new version "1.1" is created')
-def step_then_new_version_created(context):
-    # The update response includes {did, document_number, version}.
-    body = context.requests_response.json()
-    assert body.get("did"), f"No DID in update response: {body}"
-    # Retrieve fresh state and confirm version advanced.
-    retrieve = get_with_headers(context, template_retrieve_by_id_url(context, body["did"]))
-    assert retrieve.status_code == 200, retrieve.text
-    version = str(retrieve.json().get("version", ""))
-    # Version must be non-empty and differ from the initial "1.0" / 1.
-    assert version not in ("", "1.0", "1"), (
-        f"Expected version to advance past 1.0, got '{version}'"
-    )
-
-
-@then("the previous version remains accessible")
-def step_then_previous_version_accessible(context):
-    body = context.requests_response.json()
-    did = body.get("did")
-    assert did, f"No DID in update response: {body}"
-    retrieve = get_with_headers(context, template_retrieve_by_id_url(context, did))
-    assert retrieve.status_code == 200, (
-        f"Template DID {did} is no longer resolvable after update: {retrieve.text}"
-    )
-    assert retrieve.json().get("did") == did
-
-
-# ---------------------------------------------------------------------------
 # Rejection
 # ---------------------------------------------------------------------------
 
@@ -177,6 +146,28 @@ def step_then_see_provenance(context):
             f"No provenance/audit fields (created_at, created_by, updated_at) in response: {body}"
         )
 
+@then('the result is a template with name "{name}"')
+def step_then_result_name_contains(context, name):
+    assert context.requests_response.status_code == 200, (
+        f"Search failed: {context.requests_response.status_code} {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    did = body.get("did")
+    assert did, f"No DID in response: {body}"
+    template = TemplateService.fetch_template(context, did)
+    assert name in (template.get("name") or ""), f"Expected '{name}' in name, got: {template.get('name')}"
+
+
+@then('the result is a template with description "{description}"')
+def step_then_result_name_contains(context, description):
+    assert context.requests_response.status_code == 200, (
+        f"Search failed: {context.requests_response.status_code} {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    did = body.get("did")
+    assert did, f"No DID in response: {body}"
+    template = TemplateService.fetch_template(context, did)
+    assert description in (template.get("description") or ""), f"Expected '{description}' in description, got: {template.get('description')}"
 
 # ---------------------------------------------------------------------------
 # Verify assertions

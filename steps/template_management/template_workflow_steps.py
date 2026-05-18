@@ -37,6 +37,11 @@ def step_given_template_submitted(context, name):
     updated_at = TemplateService.do_submit(context, did, updated_at)
     TemplateService.store_named(context, name, did, updated_at)
 
+@given('template "{orgname}" is in "Submitted" status with name "{name}" and description "{description}"')
+def step_given_template_submitted(context, orgname, name, description):
+    did, updated_at = TemplateService.create_fresh_template(context, name, description)
+    updated_at = TemplateService.do_submit(context, did, updated_at)
+    TemplateService.store_named(context, name, did, updated_at)
 
 @given('template "{name}" is in "Reviewed" status')
 def step_given_template_reviewed(context, name):
@@ -220,10 +225,35 @@ def step_when_submit_template(context, name):
         template_submit_url(context),
         TemplateService.template_submit_payload(context, t["did"], t["updated_at"]),
     )
+    
     if context.requests_response.status_code == 200:
         ua = TemplateService.fetch_template(context, t["did"]).get("updated_at", "draft")
         TemplateService.store_named(context, name, t["did"], ua)
 
+
+@when('I update template "{orgname}" name to "{name}"')
+def step_when_submit_template(context, orgname, name):
+    t = TemplateService.named(context, orgname)
+    context.requests_response = put_json(
+        context,
+        template_update_url(context),
+        TemplateService.template_update_payload(context, t["did"], t["updated_at"], name),
+    )
+    if context.requests_response.status_code == 200:
+        ua = TemplateService.fetch_template(context, t["did"]).get("updated_at", "draft")
+        TemplateService.store_named(context, orgname, t["did"], ua)
+
+@when('I update template "{name}" description to "{description}"')
+def step_when_submit_template(context, name, description):
+    t = TemplateService.named(context, name)
+    context.requests_response = put_json(
+        context,
+        template_update_url(context),
+        TemplateService.template_update_payload(context, t["did"], t["updated_at"], description=description),
+    )
+    if context.requests_response.status_code == 200:
+        ua = TemplateService.fetch_template(context, t["did"]).get("updated_at", "draft")
+        TemplateService.store_named(context, name, t["did"], ua)
 
 @when('I submit template "{name}" for review without reviewers')
 def step_when_submit_template(context, name):
