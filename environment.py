@@ -47,9 +47,16 @@ def _scenario_has_skip_tag(scenario):
 
 def cleanup_database(context):
 	cursor = context.db.cursor()
+
+	cursor.execute("DELETE FROM contract_negotiation_task")
+	cursor.execute("DELETE FROM contract_approval_task")
+	cursor.execute("DELETE FROM contract_review_task")
+	cursor.execute("DELETE FROM contracts")
+
 	cursor.execute("DELETE FROM contract_templates_approval_task")
 	cursor.execute("DELETE FROM contract_templates_review_task")
 	cursor.execute("DELETE FROM contract_templates")
+
 	context.db.commit()
 	cursor.close()
 

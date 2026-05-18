@@ -1,4 +1,3 @@
-@skip
 @UC-03-01 @FR-CWE-13 @FR-CWE-03 @FR-CWE-30 @FR-CWE-07
 Feature: Contract Creation
   Contract Creators generate contracts from predefined templates with
@@ -14,6 +13,7 @@ Feature: Contract Creation
     And metadata is auto-filled including parties, jurisdiction, and applicable schemas
     And the creation is logged and traceable to the template version
 
+  @skip
   Scenario: Created contract renders in both machine-readable and human-readable views
     Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Service Agreement" from a template
