@@ -69,7 +69,7 @@ class TemplateService:
 
     @staticmethod
     def fetch_all_templates(context, headers=None) -> dict:
-        resp = get_with_headers(context, template_retrieve_url(), headers=headers)
+        resp = get_with_headers(context, template_retrieve_url(context), headers=headers)
         assert resp.status_code == 200, f"Template retrieve failed: {resp.text}"
         return resp.json()
 
@@ -82,6 +82,18 @@ class TemplateService:
             "updated_at": updated_at,
             "reviewers": [AuthService.username_for_roles(["Template Reviewer"])],
             "approver": AuthService.username_for_roles(["Template Approver"]),
+        }
+
+    @staticmethod
+    def template_submit_payload_with_flag(context, did: str, updated_at: str, flag: str) -> dict:
+        AuthService.get_headers_for_roles(["Template Reviewer"])
+        AuthService.get_headers_for_roles(["Template Approver"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "reviewers": [AuthService.username_for_roles(["Template Reviewer"])],
+            "approver": AuthService.username_for_roles(["Template Approver"]),
+            "forward_to": flag
         }
 
     @staticmethod

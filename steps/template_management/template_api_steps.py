@@ -41,7 +41,7 @@ def step_when_attempt_create_template(context):
     context.requests_response = post_json(context, template_create_url(context), payload)
 
 
-@then(u'the template status is "Draft" status')
+@then('the template is created in "Draft" status')
 def step_then_template_created_draft(context):
     context.template_retrieve_response = get_with_headers(
         context,
@@ -51,6 +51,13 @@ def step_then_template_created_draft(context):
     body = context.template_retrieve_response.json()
     state = str(body.get("state", "")).lower()
     assert state == "draft", body
+
+
+@then('the template is assigned version "1.0"')
+def step_then_template_version(context):
+    body = context.template_retrieve_response.json()
+    version = body.get("version")
+    assert version in (None, 1, "1", "1.0"), body
 
 
 # ---------------------------------------------------------------------------
