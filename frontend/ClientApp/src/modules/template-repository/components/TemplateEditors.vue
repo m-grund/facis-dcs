@@ -1,13 +1,13 @@
 <template>
 
-  <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
+  <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
     <div class="max-w-4xl mx-auto px-6 pt-3">
       <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">
         {{ title }}
       </p>
-      <div role="tablist" class="tabs tabs-lift tabs-lg">
+      <div role="tablist" class="tabs tabs-border tabs-lg">
         <a v-for="(tab, _index) in tabs" :key="tab.id" role="tab" class="tab"
-          :class="{ 'tab-active': activeTab === tab.id }" @click="setActiveTab(tab.id)">
+          :class="{ 'tab-active text-primary': activeTab === tab.id }" @click="setActiveTab(tab.id)">
           {{ tab.label }}
         </a>
       </div>
@@ -122,6 +122,7 @@ import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import { storeToRefs } from 'pinia'
+import { useRoute } from 'vue-router'
 import AuditView from './AuditView.vue'
 
 const props = withDefaults(
@@ -132,14 +133,19 @@ const props = withDefaults(
   {}
 )
 
+const route = useRoute()
 const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { activeTab } = storeToRefs(templateEditorUiStore)
 const { state, templateType } = storeToRefs(draftStore)
 const { setActiveTab, togglePreviewDialog } = templateEditorUiStore
-const tabs = computed(() => templateEditorUiStore.availableTabs(templateType.value))
-const currentTabNumber = computed(() => 1 + tabs.value.map(tab => tab.id).indexOf(activeTab.value))
+const tabs = computed(() => {
+  return templateEditorUiStore.availableTabs(templateType.value).filter((tab) => {
+    return tab.id !== 'audit' || !!route.params.did
+  })
+})
+const currentTabNumber = computed(() => 1 + tabs.value.map((tab) => tab.id).indexOf(activeTab.value))
 
 const isManager = computed(() => authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
 

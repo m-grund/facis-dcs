@@ -58,7 +58,6 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-
 const isAuditingAuthorized = computed(() => 
   (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
 )
@@ -225,16 +224,16 @@ const exportPdf = async () => {
     <div v-if="!!contract">
       <div class="flex-1 flex flex-col">
         <!-- Tabs -->
-        <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
+        <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
           <div class="max-w-4xl mx-auto px-6 pt-3">
             <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">View Contract</p>
-            <div role="tablist" class="tabs tabs-lift tabs-lg">
+            <div role="tablist" class="tabs tabs-border tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
                 class="tab"
-                :class="{ 'tab-active': activeTab === tab.id }"
+                :class="{ 'tab-active text-primary': activeTab === tab.id }"
                 @click="setActiveTab(tab.id)"
               >
                 {{ tab.label }}
@@ -285,7 +284,7 @@ const exportPdf = async () => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
         <template v-if="isCreator">
           <SubmitSelectionDialog
