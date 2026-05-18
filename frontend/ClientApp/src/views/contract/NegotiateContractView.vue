@@ -203,10 +203,7 @@ const submitContract = async () => {
         navStore.goToPreviousRoute()
       } else {
         const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
-        errorStore.add(
-          `Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`,
-          'info',
-        )
+        errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
       }
     }
   } catch (err) {
@@ -369,6 +366,14 @@ const currentContractData = computed<ContractData | undefined>(() => {
     semanticConditionValues: [...contractContentValuesStore.semanticConditionValues],
   }
 })
+
+const hasActiveNegotiations = computed(() => {
+  return (
+    contract.value?.negotiations?.some(
+      (negotiation) => negotiation.contract_version === contract.value?.contract_version,
+    ) ?? false
+  )
+})
 </script>
 
 <template>
@@ -447,12 +452,13 @@ const currentContractData = computed<ContractData | undefined>(() => {
           </div>
         </div>
       </div>
-      <template v-if="activeTab !== 'audit' && (contract.negotiations?.length ?? -1) > 0">
+      <template v-if="activeTab !== 'audit' && hasActiveNegotiations">
         <div class="divider"></div>
         <div class="max-w-4xl mx-auto p-6">
           <div class="text-lg">Active negotiations</div>
-          <NegotiationList :contract="contract" @selected-negotiation="handleSelectedNegotiation" /></div
-      ></template>
+          <NegotiationList :contract="contract" @selected-negotiation="handleSelectedNegotiation" />
+        </div>
+      </template>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">

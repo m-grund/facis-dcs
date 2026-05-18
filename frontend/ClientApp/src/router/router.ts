@@ -323,14 +323,14 @@ router.beforeEach((to) => {
   }
 })
 
-  router.beforeEach((to) => {
-    const scrollStore = useScrollStore()
-    if (to.matched.some(r => r.path.includes(':'))) {
-      scrollStore.scrollContainer?.classList.add('scrollbar-gutter-stable')
-    } else {
-      scrollStore.scrollContainer?.classList.remove('scrollbar-gutter-stable')
-    }
-  })
+router.beforeEach((to) => {
+  const scrollStore = useScrollStore()
+  if (to.matched.some((r) => r.path.includes(':'))) {
+    scrollStore.scrollContainer?.classList.add('scrollbar-gutter-stable')
+  } else {
+    scrollStore.scrollContainer?.classList.remove('scrollbar-gutter-stable')
+  }
+})
 
 router.beforeEach((_, from) => {
   const navStore = useNavStore()
