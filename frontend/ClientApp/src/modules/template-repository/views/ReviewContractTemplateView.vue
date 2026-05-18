@@ -88,6 +88,7 @@ watch(hasDid, (hasDidVal) => {
         version: template.version ?? null,
         document_number: template.document_number ?? null,
         updated_at: template.updated_at ?? null,
+        responsible_persons: template.responsible_persons ?? null,
       })
     })
     .catch(error => {
