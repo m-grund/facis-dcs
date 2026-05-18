@@ -67,16 +67,17 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	qry := contracttemplatequery.GetTemplateDataByDIDQry{
+		Token: *req.Token,
+		DID:   req.Did,
+	}
 	queryHandler := contracttemplatequery.GetTemplateDataByDIDHandler{
 		Ctx:      ctx,
 		DB:       s.DB,
 		CTRepo:   s.CTRepo,
 		FCClient: s.FCClient,
 	}
-	contractData, err := queryHandler.Handle(ctx, contracttemplatequery.GetTemplateDataByDIDQry{
-		Token: *req.Token,
-		DID:   req.Did,
-	})
+	contractData, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
