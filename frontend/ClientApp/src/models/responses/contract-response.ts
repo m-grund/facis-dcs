@@ -20,6 +20,7 @@ export interface ContractUpdateResponse {
 
 export interface ContractSubmitResponse {
   did: string
+  current_state: ContractState
 }
 
 export interface ContractRetrieveResponse {
