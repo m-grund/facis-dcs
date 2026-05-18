@@ -2,7 +2,7 @@ import re
 
 from requests import get
 
-from steps.support.api_client import get_with_headers, post_json, template_approve_url, template_create_url, template_retrieve_by_id_url, template_submit_url, template_verify_url
+from steps.support.api_client import get_with_headers, post_json, template_approve_url, template_create_url, template_retrieve_by_id_url, template_retrieve_url, template_submit_url, template_verify_url
 from steps.support.services.auth_service import AuthService
 
 
@@ -25,15 +25,15 @@ class TemplateService:
 
 
     @staticmethod
-    def create_fresh_template(context) -> tuple:
+    def create_fresh_template(context, name="Standard Template", description="BDD auto-created template", title="BDD Standard NDA") -> tuple:
         """Create a Draft template as Template Creator; return (did, updated_at)."""
         headers = AuthService.get_headers_for_roles(["Template Creator"])
         payload = {
-            "template_type": TemplateService.template_type_for_category("Legal"),
-            "name": "BDD Standard NDA",
-            "description": "BDD auto-created template",
+            "template_type": TemplateService.template_type_for_category("legal"),
+            "name": name,
+            "description": description,
             "template_data": {
-                "title": "BDD Standard NDA",
+                "title": title,
                 "clauses": [{"id": "c1", "text": "Confidentiality clause"}],
             },
         }
@@ -68,6 +68,12 @@ class TemplateService:
         return resp.json()
 
     @staticmethod
+    def fetch_all_templates(context, headers=None) -> dict:
+        resp = get_with_headers(context, template_retrieve_url(), headers=headers)
+        assert resp.status_code == 200, f"Template retrieve failed: {resp.text}"
+        return resp.json()
+
+    @staticmethod
     def template_submit_payload(context, did: str, updated_at: str) -> dict:
         AuthService.get_headers_for_roles(["Template Reviewer"])
         AuthService.get_headers_for_roles(["Template Approver"])
@@ -76,6 +82,26 @@ class TemplateService:
             "updated_at": updated_at,
             "reviewers": [AuthService.username_for_roles(["Template Reviewer"])],
             "approver": AuthService.username_for_roles(["Template Approver"]),
+        }
+
+    @staticmethod
+    def template_submit_payload_without_reviewers(context, did: str, updated_at: str) -> dict:
+        AuthService.get_headers_for_roles(["Template Reviewer"])
+        AuthService.get_headers_for_roles(["Template Approver"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "approver": AuthService.username_for_roles(["Template Approver"]),
+        }
+
+    @staticmethod
+    def template_submit_payload_without_approver(context, did: str, updated_at: str) -> dict:
+        AuthService.get_headers_for_roles(["Template Reviewer"])
+        AuthService.get_headers_for_roles(["Template Approver"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "reviewers": [AuthService.username_for_roles(["Template Reviewer"])]
         }
 
     @staticmethod

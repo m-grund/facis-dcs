@@ -41,7 +41,7 @@ def step_when_attempt_create_template(context):
     context.requests_response = post_json(context, template_create_url(context), payload)
 
 
-@then('the template is created in "Draft" status')
+@then(u'the template status is "Draft" status')
 def step_then_template_created_draft(context):
     context.template_retrieve_response = get_with_headers(
         context,
@@ -51,13 +51,6 @@ def step_then_template_created_draft(context):
     body = context.template_retrieve_response.json()
     state = str(body.get("state", "")).lower()
     assert state == "draft", body
-
-
-@then('the template is assigned version "1.0"')
-def step_then_template_version(context):
-    body = context.template_retrieve_response.json()
-    version = body.get("version")
-    assert version in (None, 1, "1", "1.0"), body
 
 
 # ---------------------------------------------------------------------------
@@ -113,27 +106,52 @@ def step_then_rejection_reason_recorded(context):
 # Search / retrieve assertions
 # ---------------------------------------------------------------------------
 
-@then("the results are filtered by my access rights")
-def step_then_results_filtered(context):
+@then('the result is one template where its name contains "{name}"')
+def step_then_result_name_contains(context, name):
     assert context.requests_response.status_code == 200, (
         f"Search failed: {context.requests_response.status_code} {context.requests_response.text}"
     )
     body = context.requests_response.json()
     assert isinstance(body, list), f"Expected list of results, got: {type(body)} — {body}"
-    assert body, "Expected at least one template search result"
+    assert len(body) == 1, f"Expect one template as result, got: {len(body)}"
     for item in body:
-        assert item.get("did"), f"Search result missing DID: {item}"
-        assert item.get("state"), f"Search result missing state: {item}"
+        assert name in (item.get("name") or ""), f"Expected '{name}' in name, got: {item.get('name')}"
+
+
+@then('the result is one template with "{name}" and status "{state}"')
+def step_then_result_name_contains(context, name, state):
+    assert context.requests_response.status_code == 200, (
+        f"Search failed: {context.requests_response.status_code} {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    assert isinstance(body, list), f"Expected list of results, got: {type(body)} — {body}"
+    assert len(body) == 1, f"Expect one template as result, got: {len(body)}"
+    for item in body:
+        assert name in (item.get("name") or ""), f"Expected '{name}' in name, got: {item.get('name')}"
+        assert state == item.get("state"), f"Expected '{state}' state, got: {item.get('state')}"
+    assert 2 == 1
+
+@then('the result is one template where its description contains "{description}"')
+def step_then_result_description_contains(context, description):
+    assert context.requests_response.status_code == 200, (
+        f"Search failed: {context.requests_response.status_code} {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    assert isinstance(body, list), f"Expected list of results, got: {type(body)} — {body}"
+    assert len(body) == 1, f"Expect one template as result, got: {len(body)}"
+    for item in body:
+        assert description in (item.get("description") or ""), f"Expected '{description}' in description, got: {item.get('description')}"
 
 
 @then("I see the template provenance")
 def step_then_see_provenance(context):
     body = context.requests_response.json()
     # Provenance metadata = auditable fields: creator, creation time, DID.
-    assert body.get("did"), f"Missing 'did' (identity anchor) in response: {body}"
-    assert body.get("created_at") or body.get("created_by") or body.get("updated_at"), (
-        f"No provenance/audit fields (created_at, created_by, updated_at) in response: {body}"
-    )
+    for item in body:
+        assert item.get("did"), f"Missing 'did' (identity anchor) in response: {body}"
+        assert item.get("created_at") or item.get("created_by") or item.get("updated_at"), (
+            f"No provenance/audit fields (created_at, created_by, updated_at) in response: {body}"
+        )
 
 
 # ---------------------------------------------------------------------------

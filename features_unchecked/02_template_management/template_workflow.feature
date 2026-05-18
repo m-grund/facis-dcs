@@ -9,7 +9,7 @@ Feature: Template Approval Workflow
     And template "Standard NDA" is in "Draft" status
     When I submit template "Standard NDA" for review
     Then the template status is "Submitted"
-    And review and approval tasks are created
+    And review and approval tasks for "Standard NDA" template are created
 
   Scenario: Review template
     Given I am authenticated with roles: "Template Reviewer"
