@@ -55,6 +55,17 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
 
+	if isStaticContractAudit(req) {
+		if scope != componenttype.ContractWorkflowEngine {
+			return nil, processauditandcompliance.MakeBadRequest(fmt.Errorf("static contract audits require scope %q", "contracts"))
+		}
+		result, err := s.auditStaticContractContent(ctx, req)
+		if err != nil {
+			return nil, processauditandcompliance.MakeBadRequest(err)
+		}
+		return result, nil
+	}
+
 	qry := query.GetAuditLogQry{
 		Scope:     scope,
 		AuditedBy: middleware.GetUsername(ctx),
@@ -116,6 +127,57 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	return result, nil
+}
+
+func isStaticContractAudit(req *processauditandcompliance.PACAuditRequest) bool {
+	if req == nil {
+		return false
+	}
+	if req.ContractDocument != nil {
+		return true
+	}
+	return req.AuditMode != nil && strings.EqualFold(strings.TrimSpace(*req.AuditMode), "static_contract")
+}
+
+func (s *processAuditAndCompliancesrvc) auditStaticContractContent(ctx context.Context, req *processauditandcompliance.PACAuditRequest) ([]*processauditandcompliance.PACAuditResponse, error) {
+	if req.ContractDocument == nil {
+		return nil, fmt.Errorf("contract_document is required for static contract audits")
+	}
+	contractDID := stringPtrValue(req.ContractDid)
+	if contractDID == "" {
+		contractDID = "inline-contract"
+	}
+	metadata := validation.ContractContentAuditMetadata{
+		ContractDID:     contractDID,
+		ContractVersion: stringPtrValue(req.ContractVersion),
+		PolicyVersion:   stringPtrValue(req.PolicyVersion),
+		AuditedBy:       middleware.GetUsername(ctx),
+	}
+	findings, err := validation.AuditContractContent(req.ContractDocument, req.Policy, metadata)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]*processauditandcompliance.PACResourceAuditTrailEntry, 0, len(findings))
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i, finding := range findings {
+		did := contractDID
+		entries = append(entries, &processauditandcompliance.PACResourceAuditTrailEntry{
+			ID:        int64(-1000 - i),
+			Component: componenttype.ContractWorkflowEngine.String(),
+			EventType: "CONTRACT_CONTENT_POLICY_AUDIT_FINDING",
+			EventData: contractContentPolicyFindingEventData(finding, metadata),
+			Did:       &did,
+			CreatedAt: now,
+		})
+	}
+	return []*processauditandcompliance.PACAuditResponse{
+		{
+			Component:  componenttype.ContractWorkflowEngine.String(),
+			Did:        contractDID,
+			CreatedAt:  now,
+			AuditTrail: entries,
+		},
+	}, nil
 }
 
 func (s *processAuditAndCompliancesrvc) auditTemplatePolicyTrailEntries(ctx context.Context, did string) ([]*processauditandcompliance.PACResourceAuditTrailEntry, error) {

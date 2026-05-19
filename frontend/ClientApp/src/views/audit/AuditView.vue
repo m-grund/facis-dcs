@@ -1,17 +1,161 @@
 <script setup lang="ts">
-import type { AuditScope } from '@/models/requests/auditing-request'
+import type { AuditMode, AuditScope } from '@/models/requests/auditing-request'
 import type { AuditFinding } from '@/models/responses/auditing-response'
 import { auditingService } from '@/services/auditing-service'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const findings = ref<AuditFinding[]>([])
+const selectedFindingId = ref<number | string | null>(null)
 const report = ref<unknown>(null)
 const auditLoading = ref(false)
 const reportLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedScope = ref<AuditScope>('templates')
-const selectedCategory = ref('All')
+const selectedAuditMode = ref<AuditMode>('repository_trail')
 const hasExecutedAudit = ref(false)
+type TableFilterKey = 'category' | 'status' | 'component' | 'did'
+
+const emptyValueLabel = '-'
+const tableFilters = ref<Record<TableFilterKey, Record<string, boolean>>>({
+  category: {},
+  status: {},
+  component: {},
+  did: {},
+})
+const contractDid = ref('urn:facis:dcs:contract:sla:example-001')
+const contractVersion = ref('v1')
+const policyVersion = ref('2026-05-18')
+const contractDocumentText = ref(`{
+  "@context": [
+    "https://w3id.org/facis/sla/ontology"
+  ],
+  "@id": "urn:facis:dcs:contract:sla:example-001",
+  "@type": [
+    "dcs:Contract",
+    "sla:ServiceLevelAgreement"
+  ],
+  "provider": {
+    "@id": "urn:facis:party:provider-001",
+    "@type": "dcs:Company",
+    "company": {
+      "legalName": "Example Provider GmbH",
+      "location": {
+        "country": "RUS"
+      }
+    }
+  },
+  "customer": {
+    "@id": "urn:facis:party:customer-001",
+    "@type": "dcs:Company",
+    "company": {
+      "legalName": "Example Customer AG",
+      "location": {
+        "country": "DEU"
+      }
+    }
+  },
+  "contract": {
+    "type": "serviceAgreement",
+    "jurisdiction": "DEU",
+    "governingLaw": "DE"
+  },
+  "service": {
+    "sla": {
+      "availability": 99.72,
+      "responseTime": 20,
+      "resolutionTime": 180,
+      "supportHours": "24x7"
+    }
+  },
+  "signature": {
+    "requiredLevel": "AES"
+  }
+}`)
+const policyText = ref(`{
+  "policySetId": "facis.dcs.contract.content.static",
+  "version": "2026-05-18",
+  "rules": [
+    {
+      "id": "FACIS-CONTRACT-STATIC-000",
+      "title": "Provider country is present",
+      "builtin": "required_field",
+      "semanticPath": "provider.company.location.country",
+      "ontologyTerm": "dcs:CountryCode",
+      "requirement": "DCS-FR-PACM-03"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-000",
+      "title": "Customer country is present",
+      "builtin": "required_field",
+      "semanticPath": "customer.company.location.country",
+      "ontologyTerm": "dcs:CountryCode",
+      "requirement": "DCS-FR-PACM-03"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-001",
+      "title": "Provider country must not be blacklisted",
+      "builtin": "value_not_in",
+      "semanticPath": "provider.company.location.country",
+      "values": ["RUS", "BLR"],
+      "ontologyTerm": "dcs:CountryCode",
+      "requirement": "DCS-FR-PACM-03"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-001",
+      "title": "Customer country must not be blacklisted",
+      "builtin": "value_not_in",
+      "semanticPath": "customer.company.location.country",
+      "values": ["RUS", "BLR"],
+      "ontologyTerm": "dcs:CountryCode",
+      "requirement": "DCS-FR-PACM-03"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-002",
+      "title": "Contract jurisdiction must be allowed",
+      "builtin": "value_in",
+      "semanticPath": "contract.jurisdiction",
+      "values": ["DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA"],
+      "ontologyTerm": "dcs:Contract",
+      "requirement": "DCS-FR-PACM-03"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-003",
+      "title": "Service availability must satisfy policy minimum",
+      "builtin": "min_number",
+      "semanticPath": "service.sla.availability",
+      "min": 99.9,
+      "ontologyTerm": "sla:AvailabilityMetric",
+      "requirement": "DCS-FR-CWE-09"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-004",
+      "title": "Service response time must satisfy policy maximum",
+      "builtin": "max_number",
+      "semanticPath": "service.sla.responseTime",
+      "max": 15,
+      "ontologyTerm": "sla:ResponseTimeMetric",
+      "requirement": "DCS-FR-CWE-09"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-005",
+      "title": "Service resolution time must satisfy policy maximum",
+      "builtin": "max_number",
+      "semanticPath": "service.sla.resolutionTime",
+      "max": 240,
+      "ontologyTerm": "sla:ResolutionTimeMetric",
+      "requirement": "DCS-FR-CWE-09"
+    },
+    {
+      "id": "FACIS-CONTRACT-STATIC-006",
+      "title": "Signature level must satisfy policy",
+      "builtin": "signature_level_at_least",
+      "semanticPath": "signature.requiredLevel",
+      "required": "AES",
+      "ontologyTerm": "dcs:SignatureLevelCode",
+      "requirement": "DCS-FR-PACM-03"
+    }
+  ]
+}`)
 
 const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'templates', label: 'Templates' },
@@ -20,17 +164,85 @@ const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'archive', label: 'Archive' },
 ]
 
-const categoryOptions = ['violation', 'inconsistency', 'compliance_check']
+const auditModeOptions: { value: AuditMode; label: string }[] = [
+  { value: 'repository_trail', label: 'Repository Trail' },
+  { value: 'static_contract', label: 'Static Contract' },
+]
+
+watch(selectedAuditMode, (mode) => {
+  if (mode === 'static_contract') {
+    selectedScope.value = 'contracts'
+  }
+})
 
 const filteredFindings = computed(() => {
   return findings.value.filter((finding) => {
-    return selectedCategory.value === 'All' || finding.category === selectedCategory.value
+    return tableFilterEnabled('category', finding.category)
+      && tableFilterEnabled('status', finding.status)
+      && tableFilterEnabled('component', finding.component)
+      && tableFilterEnabled('did', finding.did)
   })
+})
+const selectedFinding = computed(() => {
+  return findings.value.find((finding) => String(finding.id) === String(selectedFindingId.value)) ?? null
+})
+const selectedFindingEventData = computed(() => {
+  if (!selectedFinding.value) {
+    return null
+  }
+  if (isObjectRecord(selectedFinding.value.details)) {
+    const eventData = selectedFinding.value.details.event_data ?? selectedFinding.value.details.eventData
+    return isObjectRecord(eventData) ? eventData : null
+  }
+  return null
+})
+const selectedFindingDetailRows = computed(() => {
+  const finding = selectedFinding.value
+  const eventData = selectedFindingEventData.value
+  if (!finding) {
+    return []
+  }
+  return [
+    { label: 'Rule ID', value: stringDetail(eventData?.ruleId) },
+    { label: 'Policy Set', value: stringDetail(eventData?.policySetId) },
+    { label: 'Policy Version', value: stringDetail(eventData?.policyVersion) },
+    { label: 'Requirement', value: stringDetail(eventData?.requirement) },
+    { label: 'Semantic Path', value: stringDetail(eventData?.semanticPath) },
+    { label: 'Ontology Term', value: stringDetail(eventData?.ontologyTerm) },
+    { label: 'Object Type', value: stringDetail(eventData?.objectType ?? finding.object_type) },
+    { label: 'Contract Version', value: stringDetail(eventData?.contractVersion) },
+    { label: 'Audited By', value: stringDetail(eventData?.auditedBy) },
+    { label: 'Component', value: stringDetail(finding.component) },
+    { label: 'DID', value: stringDetail(finding.did) },
+  ].filter((row) => row.value !== emptyValueLabel)
 })
 
 const violationCount = computed(() => findings.value.filter((finding) => finding.category === 'violation').length)
 const inconsistencyCount = computed(() => findings.value.filter((finding) => finding.category === 'inconsistency').length)
 const complianceCheckCount = computed(() => findings.value.filter((finding) => finding.category === 'compliance_check').length)
+const tableFilterGroups: { key: TableFilterKey; label: string }[] = [
+  { key: 'category', label: 'Finding' },
+  { key: 'status', label: 'Status' },
+  { key: 'component', label: 'Component' },
+  { key: 'did', label: 'DID' },
+]
+const tableFilterOptions = computed<Record<TableFilterKey, string[]>>(() => ({
+  category: uniqueTableValues(findings.value.map((finding) => finding.category)),
+  status: uniqueTableValues(findings.value.map((finding) => finding.status)),
+  component: uniqueTableValues(findings.value.map((finding) => finding.component)),
+  did: uniqueTableValues(findings.value.map((finding) => finding.did)),
+}))
+
+watch(tableFilterOptions, (options) => {
+  for (const group of tableFilterGroups) {
+    const current = tableFilters.value[group.key]
+    const next: Record<string, boolean> = {}
+    for (const option of options[group.key]) {
+      next[option] = current[option] ?? true
+    }
+    tableFilters.value[group.key] = next
+  }
+}, { immediate: true })
 
 const executeAudit = async () => {
   auditLoading.value = true
@@ -38,11 +250,22 @@ const executeAudit = async () => {
   report.value = null
   hasExecutedAudit.value = true
   try {
-    findings.value = await auditingService.audit({ scope: selectedScope.value })
-    selectedCategory.value = 'All'
+    const request = selectedAuditMode.value === 'static_contract'
+      ? {
+          scope: selectedScope.value,
+          audit_mode: selectedAuditMode.value,
+          contract_document: parseJSONInput(contractDocumentText.value, 'Contract document'),
+          policy: parseJSONInput(policyText.value, 'Policy'),
+          contract_did: contractDid.value.trim() || undefined,
+          contract_version: contractVersion.value.trim() || undefined,
+          policy_version: policyVersion.value.trim() || undefined,
+        }
+      : { scope: selectedScope.value, audit_mode: selectedAuditMode.value }
+    findings.value = await auditingService.audit(request)
+    selectedFindingId.value = null
   } catch (err) {
     console.error('Audit Error:', err)
-    error.value = 'Audit could not be executed.'
+    error.value = err instanceof Error ? err.message : 'Audit could not be executed.'
   } finally {
     auditLoading.value = false
   }
@@ -61,18 +284,15 @@ const generateReport = async () => {
   }
 }
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) {
-    return timestamp
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date)
-}
-
 const formatLabel = (value: string) => value.split('_').join(' ')
+
+const parseJSONInput = (value: string, label: string) => {
+  try {
+    return JSON.parse(value)
+  } catch {
+    throw new Error(`${label} is not valid JSON.`)
+  }
+}
 
 const reportText = computed(() => {
   if (!report.value) {
@@ -80,6 +300,54 @@ const reportText = computed(() => {
   }
   return typeof report.value === 'string' ? report.value : JSON.stringify(report.value, null, 2)
 })
+const selectedFindingRawDetails = computed(() => {
+  if (!selectedFinding.value?.details) {
+    return ''
+  }
+  return JSON.stringify(selectedFinding.value.details, null, 2)
+})
+
+function tableValue(value?: string) {
+  const trimmed = value?.trim()
+  return trimmed || emptyValueLabel
+}
+
+function uniqueTableValues(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map(tableValue))).sort((a, b) => a.localeCompare(b))
+}
+
+function tableFilterEnabled(key: TableFilterKey, value?: string) {
+  const normalized = tableValue(value)
+  return tableFilters.value[key][normalized] ?? true
+}
+
+function checkedTableFilterCount(key: TableFilterKey) {
+  return tableFilterOptions.value[key].filter((option) => tableFilters.value[key][option]).length
+}
+
+function setAllTableFilters(key: TableFilterKey, enabled: boolean) {
+  for (const option of tableFilterOptions.value[key]) {
+    tableFilters.value[key][option] = enabled
+  }
+}
+
+function selectFinding(finding: AuditFinding) {
+  selectedFindingId.value = finding.id
+}
+
+function stringDetail(value: unknown) {
+  if (typeof value === 'string' && value.trim()) {
+    return value
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return emptyValueLabel
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 </script>
 
 <template>
@@ -109,7 +377,7 @@ const reportText = computed(() => {
       <div class="flex flex-col gap-3 sm:flex-row">
         <label class="form-control w-full sm:w-48">
           <span class="label-text mb-1">Scope</span>
-          <select v-model="selectedScope" class="select select-bordered rounded-box" :disabled="auditLoading || reportLoading">
+          <select v-model="selectedScope" class="select select-bordered rounded-box" :disabled="auditLoading || reportLoading || selectedAuditMode === 'static_contract'">
             <option v-for="scope in scopeOptions" :key="scope.value" :value="scope.value">
               {{ scope.label }}
             </option>
@@ -117,11 +385,14 @@ const reportText = computed(() => {
         </label>
 
         <label class="form-control w-full sm:w-48">
-          <span class="label-text mb-1">Finding</span>
-          <select v-model="selectedCategory" class="select select-bordered rounded-box" :disabled="auditLoading || reportLoading">
-            <option>All</option>
-            <option v-for="category in categoryOptions" :key="category" :value="category">
-              {{ formatLabel(category) }}
+          <span class="label-text mb-1">Mode</span>
+          <select
+            v-model="selectedAuditMode"
+            class="select select-bordered rounded-box"
+            :disabled="auditLoading || reportLoading"
+          >
+            <option v-for="mode in auditModeOptions" :key="mode.value" :value="mode.value">
+              {{ mode.label }}
             </option>
           </select>
         </label>
@@ -142,42 +413,160 @@ const reportText = computed(() => {
       </div>
     </div>
 
+    <div v-if="selectedAuditMode === 'static_contract'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div class="space-y-3">
+        <div class="grid gap-3 sm:grid-cols-3">
+          <label class="form-control">
+            <span class="label-text mb-1">Contract DID</span>
+            <input v-model="contractDid" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Contract Version</span>
+            <input v-model="contractVersion" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Policy Version</span>
+            <input v-model="policyVersion" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
+          </label>
+        </div>
+        <label class="form-control">
+          <span class="label-text mb-1">Contract JSON-LD</span>
+          <textarea
+            v-model="contractDocumentText"
+            class="textarea textarea-bordered rounded-box min-h-96 font-mono text-xs leading-5"
+            spellcheck="false"
+            :disabled="auditLoading || reportLoading"
+          ></textarea>
+        </label>
+      </div>
+      <label class="form-control">
+        <span class="label-text mb-1">Static Policy JSON</span>
+        <textarea
+          v-model="policyText"
+          class="textarea textarea-bordered rounded-box min-h-96 font-mono text-xs leading-5"
+          spellcheck="false"
+          :disabled="auditLoading || reportLoading"
+        ></textarea>
+      </label>
+    </div>
+
     <div v-if="auditLoading" class="p-4">Executing audit...</div>
     <div v-else-if="error" class="alert alert-error rounded-box">{{ error }}</div>
 
-    <div v-else class="overflow-x-auto border border-base-content/10 rounded-box">
-      <table class="table table-zebra">
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Finding</th>
-            <th>Status</th>
-            <th>DID</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="finding in filteredFindings" :key="finding.id">
-            <td class="whitespace-nowrap">{{ formatTimestamp(finding.created_at) }}</td>
-            <td>
-              <div class="font-medium capitalize">{{ formatLabel(finding.category) }}</div>
-              <div v-if="finding.component" class="text-xs opacity-60">{{ finding.component }}</div>
-            </td>
-            <td>{{ finding.status ?? '-' }}</td>
-            <td>{{ finding.did ?? '-' }}</td>
-            <td class="min-w-72 max-w-xl">
-              <div v-if="finding.object_name" class="text-xs font-medium opacity-70">{{ finding.object_name }}</div>
-              <div class="font-medium">{{ finding.title ?? 'Audit finding' }}</div>
-              <div class="text-sm opacity-80 whitespace-pre-wrap break-words">{{ finding.description }}</div>
-            </td>
-          </tr>
-          <tr v-if="filteredFindings.length === 0">
-            <td colspan="5" class="text-center py-8 opacity-70">
-              {{ hasExecutedAudit ? 'No findings match the selected filters.' : 'Select a scope and execute an audit.' }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-else class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div class="overflow-x-auto border border-base-content/10 rounded-box">
+        <div class="flex flex-wrap items-center gap-2 border-b border-base-content/10 px-4 py-3">
+          <span class="text-sm font-medium opacity-70">Table filters</span>
+          <details v-for="group in tableFilterGroups" :key="group.key" class="dropdown">
+            <summary class="btn btn-sm btn-outline rounded-box">
+              {{ group.label }}
+              <span class="badge badge-sm">{{ checkedTableFilterCount(group.key) }}/{{ tableFilterOptions[group.key].length }}</span>
+            </summary>
+            <div class="dropdown-content z-10 mt-2 w-72 rounded-box border border-base-content/10 bg-base-100 p-3 shadow">
+              <div class="mb-2 flex justify-between gap-2">
+                <button type="button" class="btn btn-xs btn-ghost" @click="setAllTableFilters(group.key, true)">All</button>
+                <button type="button" class="btn btn-xs btn-ghost" @click="setAllTableFilters(group.key, false)">None</button>
+              </div>
+              <div class="max-h-64 overflow-auto space-y-1">
+                <label
+                  v-for="option in tableFilterOptions[group.key]"
+                  :key="option"
+                  class="flex min-h-8 items-center gap-2 rounded px-2 hover:bg-base-200"
+                >
+                  <input
+                    v-model="tableFilters[group.key][option]"
+                    type="checkbox"
+                    class="checkbox checkbox-sm checkbox-primary"
+                  />
+                  <span class="text-sm break-all">{{ group.key === 'category' ? formatLabel(option) : option }}</span>
+                </label>
+              </div>
+            </div>
+          </details>
+        </div>
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Finding</th>
+              <th>Status</th>
+              <th>DID</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="finding in filteredFindings"
+              :key="finding.id"
+              class="cursor-pointer"
+              :class="String(selectedFindingId) === String(finding.id) ? 'bg-primary/10' : ''"
+              tabindex="0"
+              @click="selectFinding(finding)"
+              @keydown.enter.prevent="selectFinding(finding)"
+              @keydown.space.prevent="selectFinding(finding)"
+            >
+              <td>
+                <div class="font-medium capitalize">{{ formatLabel(finding.category) }}</div>
+              </td>
+              <td>{{ finding.status ?? '-' }}</td>
+              <td>{{ finding.did ?? '-' }}</td>
+              <td class="min-w-72 max-w-xl">
+                <div class="font-medium">{{ finding.title ?? 'Audit finding' }}</div>
+              </td>
+            </tr>
+            <tr v-if="filteredFindings.length === 0">
+              <td colspan="4" class="text-center py-8 opacity-70">
+                {{ hasExecutedAudit ? 'No findings match the selected filters.' : 'Select a scope and execute an audit.' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="border border-base-content/10 rounded-box bg-base-100 min-h-80 xl:sticky xl:top-4 xl:self-start">
+        <div class="flex items-center justify-between border-b border-base-content/10 px-4 py-3">
+          <h3 class="font-bold">Finding Details</h3>
+          <button
+            v-if="selectedFinding"
+            type="button"
+            class="btn btn-xs btn-ghost"
+            @click="selectedFindingId = null"
+          >
+            Close
+          </button>
+        </div>
+        <div v-if="!selectedFinding" class="p-4 text-sm opacity-70">
+          Select a finding row to inspect policy, requirement, semantic path, and raw audit evidence.
+        </div>
+        <div v-else class="p-4 space-y-4">
+          <div>
+            <div class="text-xs uppercase opacity-60">{{ formatLabel(selectedFinding.category) }}</div>
+            <h4 class="font-bold leading-snug">{{ selectedFinding.title ?? 'Audit finding' }}</h4>
+            <div class="mt-2 badge" :class="selectedFinding.category === 'violation' ? 'badge-error' : selectedFinding.category === 'inconsistency' ? 'badge-warning' : 'badge-info'">
+              {{ selectedFinding.status ?? selectedFinding.category }}
+            </div>
+          </div>
+
+          <p class="text-sm whitespace-pre-wrap break-words opacity-80">{{ selectedFinding.description }}</p>
+
+          <dl class="divide-y divide-base-content/10 text-sm">
+            <div
+              v-for="row in selectedFindingDetailRows"
+              :key="row.label"
+              class="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 py-2"
+            >
+              <dt class="font-medium opacity-70">{{ row.label }}</dt>
+              <dd class="break-words">{{ row.value }}</dd>
+            </div>
+          </dl>
+
+          <details v-if="selectedFindingRawDetails" class="collapse collapse-arrow border border-base-content/10 rounded-box">
+            <summary class="collapse-title text-sm font-medium">Raw Details</summary>
+            <div class="collapse-content">
+              <pre class="text-xs whitespace-pre-wrap break-words">{{ selectedFindingRawDetails }}</pre>
+            </div>
+          </details>
+        </div>
+      </aside>
     </div>
 
     <div v-if="report" class="border border-base-content/10 rounded-box p-4 bg-base-200">

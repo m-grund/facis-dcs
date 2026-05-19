@@ -3,7 +3,7 @@ import type { Contract } from '@/models/contract/contract'
 import { ROUTES } from '@/router/router'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
-import { ContractState, contractStates } from '@/types/contract-state'
+import { ContractState } from '@/types/contract-state'
 import { computed } from 'vue'
 
 const props = defineProps<{

@@ -39,6 +39,26 @@ func templatePolicyFindingEventData(finding validation.PolicyFinding, template *
 	return data
 }
 
+func contractContentPolicyFindingEventData(finding validation.PolicyFinding, metadata validation.ContractContentAuditMetadata) map[string]any {
+	data := map[string]any{
+		"policySetId":     finding.PolicySetID,
+		"policyVersion":   finding.PolicyVersion,
+		"ruleId":          finding.RuleID,
+		"title":           finding.Title,
+		"severity":        finding.Severity,
+		"message":         finding.Message,
+		"path":            finding.Path,
+		"semanticPath":    finding.SemanticPath,
+		"ontologyTerm":    finding.OntologyTerm,
+		"requirement":     finding.Requirement,
+		"objectType":      "contract",
+		"objectDid":       metadata.ContractDID,
+		"contractVersion": metadata.ContractVersion,
+		"auditedBy":       metadata.AuditedBy,
+	}
+	return data
+}
+
 func stringPtrValue(value *string) string {
 	if value == nil {
 		return ""
