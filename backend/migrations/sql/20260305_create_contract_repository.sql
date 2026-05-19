@@ -31,6 +31,24 @@ CREATE TABLE IF NOT EXISTS contracts
     CONSTRAINT chk_did_not_empty CHECK (did <> '')
 );
 
+
+CREATE INDEX idx_contract_contracts_search ON contracts
+    USING GIN (search_vector);
+
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER contract_contracts_update_updated_at
+    BEFORE UPDATE ON contracts
+    FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
 ------------------------------------------------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS contract_history
@@ -133,25 +151,6 @@ SELECT
         END AS state,
     contract_version
 FROM contracts;
-
-------------------------------------------------------------------------------------------------------------------------
-
-CREATE INDEX idx_contract_contracts_search ON contracts
-    USING GIN (search_vector);
-
-
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-    RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER contract_contracts_update_updated_at
-    BEFORE UPDATE ON contracts
-    FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
 
 ------------------------------------------------------------------------------------------------------------------------
 
