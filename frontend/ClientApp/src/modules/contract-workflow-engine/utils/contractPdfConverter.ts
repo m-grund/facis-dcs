@@ -1,6 +1,6 @@
 import type { ContractPlainTextBlock } from '../composables/useContractPlainTextConverter'
 import { isSectionPlainTextBlock, isTextPlainTextBlock } from '../composables/useContractPlainTextConverter'
-import type { ContentText, StyleDictionary, StyleReference, TDocumentDefinitions } from 'pdfmake/interfaces'
+import type { ContentText, Style, StyleDictionary, StyleReference, TDocumentDefinitions } from 'pdfmake/interfaces'
 
 type PdfStyles = StyleDictionary
 type PdfContent = ContentText[]
@@ -15,30 +15,40 @@ export interface PdfDataResult {
   displayTitle: boolean
 }
 
+/** Do not strip leading, trailing, or repeated spaces */
+const preserveWhitespace: Style = {
+  preserveLeadingSpaces: true,
+  preserveTrailingSpaces: true
+} as const
+
 const pdfStyles: PdfStyles = {
   section1: {
     fontSize: 16,
     bold: true,
     color: '#1f2937',
-    margin: [0, 0, 0, 6]
+    margin: [0, 0, 0, 6],
+    ...preserveWhitespace
   },
   section2: {
     fontSize: 14,
     bold: true,
     color: '#1f2937',
-    margin: [0, 0, 0, 6]
+    margin: [0, 0, 0, 6],
+    ...preserveWhitespace
   },
   section3: {
     fontSize: 12,
     bold: true,
     color: '#1f2937',
-    margin: [0, 0, 0, 6]
+    margin: [0, 0, 0, 6],
+    ...preserveWhitespace
   },
   text: {
     fontSize: 12,
     color: '#374151',
-    margin: [0, 0, 0, 6]
-  }
+    margin: [0, 0, 0, 6],
+    ...preserveWhitespace
+  },
 }
 
 export function toPdfData(blocks: ContractPlainTextBlock[]): PdfDataResult {
