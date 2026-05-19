@@ -180,7 +180,7 @@ def step_when_submit_template(context, name):
         TemplateService.store_named(context, name, t["did"], ua)
 
 @when('I resubmit template "{name}"')
-def step_when_submit_template(context, name):
+def step_when_resubmit_template(context, name):
     t = TemplateService.named(context, name)
     context.requests_response = post_json(
         context,
@@ -199,7 +199,7 @@ def step_when_approve_template(context, name):
     )
 
 @when('I register template "{name}"')
-def step_when_approve_template(context, name):
+def step_when_register_template(context, name):
     t = TemplateService.named(context, name)
     context.requests_response = post_json(
         context, template_register_url(context), {"did": t["did"], "updated_at": t["updated_at"]}
