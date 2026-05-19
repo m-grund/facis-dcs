@@ -117,7 +117,7 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
     <li v-for="negotiation in sortedNegotiations" :key="negotiation.id" class="list-row px-0">
       <div class="card bg-base-100 shadow-sm card-border border-base-content/10">
         <div class="card-body">
-          <h2 class="card-title">Change request proposed by: {{ negotiation.created_by }}</h2>
+          <h2 class="card-title">Change proposal by: {{ negotiation.created_by }}</h2>
           <ul class="list">
             <li
               v-for="decision in sortedDecisions(negotiation.negotiation_decisions)"

@@ -1,6 +1,7 @@
 import pdfMake from 'pdfmake/build/pdfmake'
 import pdfFonts from 'pdfmake/build/vfs_fonts'
-import type { ContentText, TDocumentDefinitions } from 'pdfmake/interfaces'
+import type { Attachment, ContentText, TDocumentDefinitions } from 'pdfmake/interfaces'
+import { ContractPdfArchiveFileNames, PdfArchiveMediaTypes, type ContractPdfArchive, type PdfArchiveMediaType } from '@/types/contract-pdf-archive'
 import type { PdfDataResult } from './contractPdfConverter'
 
 type PdfMakeWithVfs = typeof pdfMake & {
@@ -10,6 +11,8 @@ type PdfMakeWithVfs = typeof pdfMake & {
 
 interface ExportOptions {
   displayTitleInContent?: boolean
+  /** Embedded JSON attachments */
+  archive?: ContractPdfArchive
 }
 
 let isPdfMakeConfigured = false
@@ -40,7 +43,8 @@ function toPdfDocumentDefinition(pdfData: PdfDataResult, title = 'Contract Docum
     version: pdfData.version,
     subset: pdfData.subset,
     tagged: pdfData.tagged,
-    displayTitle: pdfData.displayTitle
+    displayTitle: pdfData.displayTitle,
+    files: options?.archive ? getAttachments(options.archive) : undefined
   }
 }
 
@@ -59,4 +63,35 @@ function getTitleNode(title: string): ContentText {
     alignment: 'center',
     margin: [0, 0, 0, 12]
   }
+}
+/**
+ *  Maps archive bytes to embedded files
+ */
+function getAttachments(archive: ContractPdfArchive): Record<string, Attachment> {
+  return {
+    [ContractPdfArchiveFileNames.contractJson]: {
+      src: bytesToDataUri(archive.contractBytes, PdfArchiveMediaTypes.applicationJson),
+      name: ContractPdfArchiveFileNames.contractJson,
+      description: 'Machine-readable contract',
+    },
+    [ContractPdfArchiveFileNames.manifestJson]: {
+      src: bytesToDataUri(archive.manifestBytes, PdfArchiveMediaTypes.applicationJson),
+      name: ContractPdfArchiveFileNames.manifestJson,
+      description: 'PDF archive manifest',
+    },
+  }
+}
+
+function bytesToDataUri(bytes: Uint8Array, mimeType: PdfArchiveMediaType): string {
+  return `data:${mimeType};base64,${uint8ArrayToBase64(bytes)}`
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  // Convert binary string to base64
+  return btoa(binary)
 }

@@ -82,7 +82,7 @@ var ContractSubmitResponse = Type("ContractSubmitResponse", func() {
 	Required("did", "current_state")
 })
 
-var ContractHistoryRetrieveRequest = Type("ContractHistoryRetrieveRequest", func() {
+var ContractHistoryRetrieveByIDRequest = Type("ContractHistoryRetrieveByIDRequest", func() {
 	Description("Contract history retrieve request")
 
 	Token("token", String, "JWT token")
@@ -92,7 +92,7 @@ var ContractHistoryRetrieveRequest = Type("ContractHistoryRetrieveRequest", func
 	Required("did")
 })
 
-var ContractHistoryItem = Type("ContractHistoryItem", func() {
+var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDResponse", func() {
 	Attribute("did", String, "DID of the contract")
 	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "Current state of the contract")
@@ -672,7 +672,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	// GET /contract/history/{did}
-	Method("retrieve_history_by_did", func() {
+	Method("retrieve_history_by_id", func() {
 		Description("fetch history of a contract")
 		Meta("dcs:cwe:components", "")
 
@@ -686,8 +686,8 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Manager")
 		})
 
-		Payload(ContractHistoryRetrieveRequest)
-		Result(ArrayOfRequired(ContractHistoryItem))
+		Payload(ContractHistoryRetrieveByIDRequest)
+		Result(ArrayOfRequired(ContractHistoryRetrieveByIDResponse))
 
 		Error("bad_request", ErrorResult, "Bad request")
 		Error("internal_error", ErrorResult, "Internal server error")

@@ -16,7 +16,7 @@
         </button>
         <button @click="resubmit" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Resubmission
+          Resubmit
         </button>
         <button @click="approve" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>

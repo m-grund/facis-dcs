@@ -316,7 +316,7 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
           @click="resubmit"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Resubmission
+          Resubmit
         </button>
         <button
           v-if="contract?.state === ContractState.reviewed"

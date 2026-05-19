@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
@@ -299,6 +300,46 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
 			ResponsiblePersons: item.ResponsiblePersons,
+		})
+	}
+
+	return contractTemplates, nil
+}
+
+func (s *templateRepositorysrvc) RetrieveHistoryByID(ctx context.Context, req *templaterepository.ContractTemplateHistoryRetrieveByIDRequest) (res []*templaterepository.ContractTemplateHistoryRetrieveByIDResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := contracttemplate.GetHistoryByIDQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetUsername(ctx),
+	}
+	queryHandler := contracttemplate.GetHistoryByIDHandler{
+		Ctx:    ctx,
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+	result, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	var contractTemplates []*templaterepository.ContractTemplateHistoryRetrieveByIDResponse
+	for _, item := range result {
+
+		contractTemplates = append(contractTemplates, &templaterepository.ContractTemplateHistoryRetrieveByIDResponse{
+			Did:                item.DID,
+			DocumentNumber:     item.DocumentNumber,
+			Version:            item.Version,
+			State:              item.State.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedBy:          item.CreatedBy,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			ResponsiblePersons: item.ResponsiblePersons,
+			TemplateData:       item.TemplateData,
+			TemplateType:       item.TemplateType.String(),
 		})
 	}
 

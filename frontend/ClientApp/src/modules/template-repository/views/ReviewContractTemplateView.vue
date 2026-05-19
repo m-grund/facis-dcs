@@ -13,12 +13,12 @@
         <!-- Return to draft / request changes -->
         <button @click="returnToDraft" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Return to draft
+          Reject
         </button>
         <!-- Complete review (verify then forward to approval) -->
         <button @click="forwardToApproval" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Forward to approval
+          Approve
         </button>
         <TemplateManagerActions v-if="contractTemplate && isManager" :template="contractTemplate" class="btn btn-primary flex-1" />
       </div>
