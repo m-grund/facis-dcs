@@ -11,5 +11,13 @@ export const useScrollStore = defineStore('scroll', () => {
     })
   }
 
-  return { scrollContainer, scrollToTop }
+  function addGutter() {
+    scrollContainer.value?.classList.add('scrollbar-gutter-stable')
+  }
+
+  function removeGutter() {
+    scrollContainer.value?.classList.remove('scrollbar-gutter-stable')
+  }
+
+  return { scrollContainer, scrollToTop, addGutter, removeGutter }
 })
