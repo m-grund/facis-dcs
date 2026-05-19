@@ -15,6 +15,8 @@ import NegotiateContractView from '@/views/contract/NegotiateContractView.vue'
 import NewContractView from '@/views/contract/NewContractView.vue'
 import ReviewContractView from '@/views/contract/ReviewContractView.vue'
 import ViewContractView from '@/views/contract/ViewContractView.vue'
+import SecureContractViewerView from '@/views/signature/SecureContractViewerView.vue'
+import SignatureManagementListView from '@/views/signature/SignatureManagementListView.vue'
 import TaskListView from '@/views/task/TaskListView.vue'
 import TemplateCatalogueAdminView from '@/views/template-repository/TemplateCatalogueAdminView.vue'
 import {
@@ -22,6 +24,7 @@ import {
   CheckCircleIcon,
   DocumentTextIcon,
   EyeIcon,
+  PencilSquareIcon,
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
@@ -56,6 +59,12 @@ const ROUTES = {
     NEGOTIATE: 'contracts.negotiate',
     REVIEW: 'contracts.review',
     APPROVE: 'contracts.approve',
+  },
+  SIGNATURE_MANAGEMENT: {
+    LIST: 'signature.management.list',
+    VIEW: {
+      CONTRACT: 'signature.management.view',
+    },
   },
 } as const
 
@@ -274,6 +283,32 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Approve Contract',
       roles: ['CONTRACT_APPROVER'],
+    },
+  },
+  {
+    path: '/signatures',
+    name: ROUTES.SIGNATURE_MANAGEMENT.LIST,
+    component: SignatureManagementListView,
+    meta: {
+      name: 'Signature Management',
+      icon: PencilSquareIcon,
+      requiresAuth: true,
+      title: 'DCS - Signature Management',
+      order: 5,
+      roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER'],
+    },
+  },
+  {
+    path: '/signatures/view/contract/:did',
+    name: ROUTES.SIGNATURE_MANAGEMENT.VIEW.CONTRACT,
+    component: SecureContractViewerView,
+    props: true,
+    meta: {
+      name: 'Secure Contract Viewer',
+      hideInSidebar: true,
+      requiresAuth: true,
+      title: 'DCS - Secure Contract Viewer',
+      roles: ['CONTRACT_SIGNER'],
     },
   },
   {
