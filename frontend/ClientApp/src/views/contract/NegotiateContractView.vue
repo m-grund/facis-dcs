@@ -489,7 +489,7 @@ const exportPdf = async () => {
           @click="negotiateContractChange"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Submit change request
+          Change Proposal
         </button>
         <button
           v-if="contract?.state === ContractState.negotiation"
@@ -498,7 +498,7 @@ const exportPdf = async () => {
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Submit contract
+          Submit
         </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn btn-primary flex-1" />
       </div>

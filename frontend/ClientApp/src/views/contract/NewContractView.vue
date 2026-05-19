@@ -265,7 +265,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button @click="submit" class="btn btn-primary flex-1" :disabled="isSubmitting || !canSubmit">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          {{ isEditMode ? 'Update Contract' : 'Create' }}
+          {{ isEditMode ? 'Update' : 'Create' }}
         </button>
       </div>
     </div>
