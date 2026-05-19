@@ -295,7 +295,7 @@ function applyContractDataToDraft(contractData?: unknown) {
           @click="forwardToApproval"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Forward to approval
+          Approve
         </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn btn-primary flex-1" />
       </div>
