@@ -1,5 +1,4 @@
 @UC-02-03
-
 Feature: Generate Contract from Template
   Contract Creators generate contract instances
   by populating approved templates with data.

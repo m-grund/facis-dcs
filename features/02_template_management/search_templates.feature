@@ -22,7 +22,7 @@ Feature: Search and Retrieve Contract Templates
     Then the result is one template where its description contains "3-3"
 
   @clean_db
-  Scenario: Search template details
+  Scenario: Search in template details
     Given I am authenticated with roles: "Template Reviewer"
     And template with name "Test template version 1A" and template_data title "Test description 1-1" exists
     And template with name "Test template version 2A" and template_data title "Test description 2-2" exists
