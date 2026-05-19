@@ -60,7 +60,7 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 	}
-	err = event.Create(h.Ctx, tx, evt, componenttype.ContractWorkflowEngine)
+	err = event.Create(h.Ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
 		return nil, fmt.Errorf("could not create event: %w", err)
 	}
