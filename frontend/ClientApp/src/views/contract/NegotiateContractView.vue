@@ -14,6 +14,7 @@ import { useSemanticValueVerification } from '@/modules/contract-workflow-engine
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
+import { buildContractPdfArchive } from '@/modules/contract-workflow-engine/utils/buildContractPdfArchive'
 import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
 import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
@@ -383,9 +384,10 @@ const exportPdf = async () => {
   if (!contract) return
   const blocks = convertContractToPlainTextBlocks(contract.contract_data)
   const pdfData = toPdfData(blocks)
+  const archive = await buildContractPdfArchive(contract)
   const title = `${contract.name ?? 'contract'}`
   const filename = `${title}.pdf`
-  downloadContractPdf(pdfData, filename, title, { displayTitleInContent: true })
+  downloadContractPdf(pdfData, filename, title, { displayTitleInContent: true, archive })
 }
 </script>
 
