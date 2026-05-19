@@ -198,6 +198,12 @@ def step_when_approve_template(context, name):
         context, template_approve_url(context), {"did": t["did"], "updated_at": t["updated_at"]}
     )
 
+@when('I register template "{name}"')
+def step_when_approve_template(context, name):
+    t = TemplateService.named(context, name)
+    context.requests_response = post_json(
+        context, template_register_url(context), {"did": t["did"], "updated_at": t["updated_at"]}
+    )
 
 @when('I reject template "{name}" with reason "{reason}"')
 def step_when_reject_template(context, name, reason):

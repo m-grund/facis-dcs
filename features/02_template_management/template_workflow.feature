@@ -50,6 +50,20 @@ Feature: Template Approval Workflow
     Then the template status is "Submitted"
 
   @clean_db
+  Scenario: Approve reviewed template
+    Given I am authenticated with roles: "Template Approver"
+    And template "Standard NDA" is in "Reviewed" status
+    When I approve template "Standard NDA"
+    Then the template status is "Approved"
+
+  @clean_db
+  Scenario: Register approved template
+    Given I am authenticated with roles: "Template Manager"
+    And template "Standard NDA" is in "Approved" status
+    When I register template "Standard NDA"
+    Then the template status is "Registered"
+
+  @clean_db
   Scenario: Resubmit template for review
     Given I am authenticated with roles: "Template Creator"
     And template "Standard NDA" is in "Rejected" status
@@ -57,9 +71,22 @@ Feature: Template Approval Workflow
     Then the template status is "Submitted"
 
   @clean_db
+  Scenario: Archive submitted template
+    Given I am authenticated with roles: "Template Manager"
+    And template "Standard NDA" is in "Submitted" status
+    When I delete template "Standard NDA"
+    Then the template status is "Deleted"
+
+  @clean_db
+  Scenario: Archive approved template
+    Given I am authenticated with roles: "Template Manager"
+    And template "Standard NDA" is in "Approved" status
+    When I delete template "Standard NDA"
+    Then the template status is "Deprecated"
+
+  @clean_db
   Scenario: Unauthorized role cannot approve template
     Given I am authenticated with roles: "Template Creator"
     And template "Standard NDA" is in "Reviewed" status
     When I approve template "Standard NDA"
     Then the request is denied with an authorization error
-
