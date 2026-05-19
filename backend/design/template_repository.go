@@ -200,6 +200,41 @@ var ContractTemplateRetrieveResponse = Type("ContractTemplateRetrieveResponse", 
 	Required("contract_templates", "review_tasks", "approval_tasks")
 })
 
+var ContractTemplateHistoryRetrieveByIDRequest = Type("ContractTemplateHistoryRetrieveByIDRequest", func() {
+	Description("Contract template retrieve by id request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "DID of the contract template")
+
+	Required("did")
+})
+
+var ContractTemplateHistoryRetrieveByIDResponse = Type("ContractTemplateHistoryRetrieveByIDResponse", func() {
+	Description("Result for retrieving a contract template by id")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template")
+
+	Attribute("document_number", String, "The document number of the contract template")
+	Attribute("version", Int, "The version number of the contract template")
+
+	Attribute("state", String, "The state of the contract template")
+	Attribute("template_type", String, "The type of the template")
+
+	Attribute("name", String, "The name of the contract template")
+	Attribute("description", String, "A description for that template")
+
+	Attribute("created_by", String, "Identifier of who created the contract template")
+	Attribute("created_at", String, "The timestamp when the contract template was created")
+
+	Attribute("updated_at", String, "The timestamp when the contract template was updated")
+
+	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("template_data", Any, "The template data of the contract template")
+
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data")
+})
+
 var ContractTemplateRetrieveByIDRequest = Type("ContractTemplateRetrieveByIDRequest", func() {
 	Description("Contract template retrieve by id request")
 
@@ -525,6 +560,32 @@ var _ = Service("TemplateRepository", func() {
 
 		Payload(ContractTemplateRetrieveRequest)
 		Result(ContractTemplateRetrieveResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/template/retrieve")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// GET /template/history/{did}
+	Method("retrieve_history_by_id", func() {
+		Description("fetch history of a contract template")
+		Meta("dcs:tr:components", "Template Versioning")
+
+		Security(JWTAuth, func() {
+			Scope("Template Creator")
+			Scope("Template Reviewer")
+			Scope("Template Approver")
+			Scope("Template Manager")
+		})
+
+		Payload(ContractTemplateHistoryRetrieveByIDRequest)
+		Result(ArrayOfRequired(ContractTemplateHistoryRetrieveByIDResponse))
 
 		Error("bad_request", ErrorResult, "Bad request")
 		Error("internal_error", ErrorResult, "Internal server error")
