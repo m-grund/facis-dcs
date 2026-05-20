@@ -13,7 +13,7 @@ export type ExpirationPolicy = (typeof ExpirationPolicy)[keyof typeof Expiration
 
 export interface Contract {
   did: string
-  contract_version?: number
+  contract_version: number
   state: ContractState
   name?: string
   description?: string

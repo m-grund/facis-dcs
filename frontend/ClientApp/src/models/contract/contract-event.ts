@@ -17,8 +17,6 @@ export interface ContractCreateEvent {
 export interface ContractUpdateEvent {
   did: string
   updated_at: string
-  old_contract_version?: number
-  new_contract_version?: number
   old_name?: string
   new_name?: string
   old_description?: string
@@ -36,7 +34,7 @@ export interface ContractSubmitEvent {
   new_state: ContractState
   submitted_by: string
   occurred_at: string
-  contract_version?: number
+  contract_version: number
   action_flag: ContractActionFlag
   comments: string[]
 }
@@ -54,14 +52,14 @@ export interface ContractRetrieveAllEvent {
 
 export interface ContractVerifyEvent {
   did: string
-  contract_version?: number
+  contract_version: number
   verified_by: string
   occurred_at: string
 }
 
 export interface ContractNegotiationEvent {
   did: string
-  contract_version?: number
+  contract_version: number
   change_request?: ContractChangeRequest
   negotiated_by: string
   occurred_at: string
@@ -70,14 +68,14 @@ export interface ContractNegotiationEvent {
 
 export interface ContractAcceptNegotiationEvent {
   did: string
-  contract_version?: number
+  contract_version: number
   accepted_by: string
   occurred_at: string
 }
 
 export interface ContractRejectNegotiationEvent {
   did: string
-  contract_version?: number
+  contract_version: number
   rejected_by: string
   rejection_reason?: string
   occurred_at: string
@@ -85,14 +83,14 @@ export interface ContractRejectNegotiationEvent {
 
 export interface ContractApproveEvent {
   did: string
-  contract_version?: number
+  contract_version: number
   approved_by: string
   occurred_at: string
 }
 
 export interface ContractRejectEvent {
   did: string
-  contract_version?: string
+  contract_version: string
   rejected_by: string
   reason: string
   occurred_at: string
@@ -100,7 +98,7 @@ export interface ContractRejectEvent {
 
 export interface ContractTerminateEvent {
   did: string
-  contract_version?: string
+  contract_version: string
   reason: string
   terminated_by: string
   occurred_at: string
@@ -108,7 +106,7 @@ export interface ContractTerminateEvent {
 
 export interface ContractRecordEvidenceEvent {
   did: string
-  contract_version?: string
+  contract_version: string
   recorded_by: string
   occurred_at: string
 }
@@ -128,8 +126,8 @@ export interface ContractReviewEvent {
 
 export interface ContractIncreaseContractVersionEvent {
   did: string
-  old_contract_version?: number
-  new_contract_versiom?: number
+  old_contract_version: number
+  new_contract_versiom: number
   submitted_by: string
   occurred_at: string
 }

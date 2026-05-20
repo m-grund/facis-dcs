@@ -15,7 +15,6 @@ export interface ContractUpdateRequest {
   exp_date?: string
   exp_notice_period?: number,
   exp_policy?: ExpirationPolicy
-  contract_version?: number
   name?: string
   description?: string
   /** The data of the contract */

@@ -49,7 +49,7 @@ export interface ContractPdfArchiveManifestFile {
 
 export interface ContractPdfArchiveManifestContractRef {
   did: string
-  contractVersion?: number
+  contractVersion: number
   name?: string
 }
 

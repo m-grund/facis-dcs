@@ -127,7 +127,7 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 
 interface SubcontractKey {
     did: string
-    version?: number
+    version: number
     document_number?: string
 }
 
@@ -174,7 +174,7 @@ const getSubcontractTemplateName = (item: SubcontractKey) =>
     allTemplates.value.find(t => isSameTemplate(t, item))?.name ??
     item.did
 
-const addSubcontractTemplate = async (template: { did: string; version?: number; document_number?: string }) => {
+const addSubcontractTemplate = async (template: { did: string; version: number; document_number?: string }) => {
     if (isSelected(template)) return
     await contractTemplateService.retrieveById(template).then(fullTemplate => {
         if (fullTemplate) store.addSubTemplateSnapshot(fullTemplate)
