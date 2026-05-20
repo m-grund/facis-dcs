@@ -20,7 +20,6 @@ import (
 type UpdateManageCmd struct {
 	DID            string
 	DocumentNumber *string
-	Version        *int
 	State          *contracttemplatestate.ContractTemplateState
 	TemplateType   *contracttemplatetype.ContractTemplateType
 	UpdatedAt      time.Time
@@ -135,7 +134,6 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 	newData := db.ContractTemplateUpdateData{
 		DID:            cmd.DID,
 		DocumentNumber: cmd.DocumentNumber,
-		Version:        cmd.Version,
 		State:          state,
 		TemplateType:   templateType,
 		Name:           cmd.Name,
@@ -151,8 +149,6 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 		DID:               cmd.DID,
 		OldDocumentNumber: oldData.DocumentNumber,
 		NewDocumentNumber: cmd.DocumentNumber,
-		OldVersion:        oldData.Version,
-		NewVersion:        cmd.Version,
 		OldState:          &oldData.State,
 		NewState:          &newState,
 		OldName:           oldData.Name,

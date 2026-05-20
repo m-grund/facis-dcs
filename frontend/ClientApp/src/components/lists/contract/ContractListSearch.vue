@@ -33,7 +33,7 @@ const responseMapper = (response: ContractSearchResponse) =>
         created_at: item.created_at,
       }) as Contract,
   )
-const empty: Contract = { did: '', created_at: '', state: 'DRAFT', updated_at: '', created_by: '' }
+const empty: Contract = { did: '', created_at: '', state: 'DRAFT', updated_at: '', created_by: '', contract_version: 1 }
 </script>
 
 <template>

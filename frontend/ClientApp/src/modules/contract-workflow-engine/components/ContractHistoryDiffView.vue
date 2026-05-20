@@ -133,8 +133,8 @@ const sortedHistory = computed(() => {
     const ta = Date.parse(a.updated_at ?? '') || 0
     const tb = Date.parse(b.updated_at ?? '') || 0
     if (tb !== ta) return tb - ta
-    const va = a.contract_version ?? -1
-    const vb = b.contract_version ?? -1
+    const va = a.contract_version
+    const vb = b.contract_version
     return vb - va
   })
   return list
@@ -170,7 +170,7 @@ const compareOptions = computed<CompareOption[]>(() => {
 })
 
 function historyOptionId(item: ContractHistoryItem): string {
-  return `h:${item.did}:${item.contract_version ?? ''}:${item.updated_at ?? ''}`
+  return `h:${item.did}:${item.contract_version}:${item.updated_at ?? ''}`
 }
 
 function formatDateTime(iso?: string): string {
@@ -194,12 +194,9 @@ function formatDateTime(iso?: string): string {
 
 function formatHistoryOptionLabel(item: ContractHistoryItem): string {
   const when = formatDateTime(item.updated_at)
-  if (item.contract_version != null) {
-    return when
+  return when
       ? `${when} (version ${item.contract_version})`
       : `(version ${item.contract_version})`
-  }
-  return when ? `${when}` : ''
 }
 
 function resolveData(id: string): ContractData | undefined {

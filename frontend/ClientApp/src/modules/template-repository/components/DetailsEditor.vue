@@ -26,6 +26,10 @@
         </fieldset>
 
         <fieldset class="fieldset p-0 border-none">
+            <legend class="fieldset-legend">Version {{version}}</legend>
+        </fieldset>
+
+        <fieldset class="fieldset p-0 border-none">
             <legend class="fieldset-legend">Global Name</legend>
             <input v-model="name" class="input input-bordered w-full" type="text" required :disabled="!uiStore.isTemplateEditable"/>
         </fieldset>
@@ -127,14 +131,14 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 
 interface SubcontractKey {
     did: string
-    version?: number
+    version: number
     document_number?: string
 }
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons } = storeToRefs(store)
+const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons, version } = storeToRefs(store)
 
 const name = computed({
   get: () => store.name,
@@ -174,7 +178,7 @@ const getSubcontractTemplateName = (item: SubcontractKey) =>
     allTemplates.value.find(t => isSameTemplate(t, item))?.name ??
     item.did
 
-const addSubcontractTemplate = async (template: { did: string; version?: number; document_number?: string }) => {
+const addSubcontractTemplate = async (template: { did: string; version: number; document_number?: string }) => {
     if (isSelected(template)) return
     await contractTemplateService.retrieveById(template).then(fullTemplate => {
         if (fullTemplate) store.addSubTemplateSnapshot(fullTemplate)

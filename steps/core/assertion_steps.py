@@ -27,7 +27,6 @@ def step_then_denied_credential_invalid(context):
 def step_then_denied(context):
     assert context.requests_response.status_code in (401, 403), context.requests_response.text
 
-
 # ---------------------------------------------------------------------------
 # Generic HTTP response assertions
 # ---------------------------------------------------------------------------

@@ -84,7 +84,6 @@ const submit = async () => {
         exp_date: contract.value.exp_date,
         exp_notice_period: contract.value.exp_notice_period,
         exp_policy: contract.value.exp_policy,
-        contract_version: contract.value.contract_version,
         name: contract.value.name,
         description: contract.value.description,
         contract_data: contractData,

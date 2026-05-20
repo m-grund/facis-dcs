@@ -90,6 +90,36 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	}, nil
 }
 
+// Copy a new template.
+func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templaterepository.ContractTemplateCopyRequest) (*templaterepository.ContractTemplateCopyResponse, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	did, err := base.GetDID()
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	cmd := command.CopyCmd{
+		NewDID:   *did,
+		CopyDID:  req.Did,
+		CopiedBy: middleware.GetUsername(ctx),
+	}
+	copyHandler := command.Copier{
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+	err = copyHandler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	return &templaterepository.ContractTemplateCopyResponse{
+		Did: *did,
+	}, nil
+}
+
 // with action flag { forwardTo: "approval" | "draft" } and optional
 // reviewComments. allow resubmission path with approver comments.
 func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templaterepository.ContractTemplateSubmitRequest) (res *templaterepository.ContractTemplateSubmitResponse, err error) {
@@ -164,7 +194,6 @@ func (s *templateRepositorysrvc) Update(ctx context.Context, req *templatereposi
 	cmd := command.UpdateCmd{
 		DID:            req.Did,
 		DocumentNumber: req.DocumentNumber,
-		Version:        req.Version,
 		UpdatedAt:      updatedAt,
 		TemplateType:   templateType,
 		Name:           req.Name,
@@ -225,7 +254,6 @@ func (s *templateRepositorysrvc) UpdateManage(ctx context.Context, req *template
 	cmd := command.UpdateManageCmd{
 		DID:            req.Did,
 		DocumentNumber: req.DocumentNumber,
-		Version:        req.Version,
 		State:          state,
 		UpdatedAt:      updatedAt,
 		TemplateType:   templateType,
@@ -246,9 +274,7 @@ func (s *templateRepositorysrvc) UpdateManage(ctx context.Context, req *template
 	}
 
 	return &templaterepository.ContractTemplateUpdateManageResponse{
-		Did:            req.Did,
-		DocumentNumber: req.DocumentNumber,
-		Version:        req.Version,
+		Did: req.Did,
 	}, nil
 }
 
@@ -270,13 +296,13 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 
 	qry := contracttemplate.GetAllMetadataByFilterQry{
 		RetrievedBy:    middleware.GetUsername(ctx),
-		DID:            req.Did,
-		DocumentNumber: req.DocumentNumber,
-		Version:        req.Version,
+		DID:            *req.Did,
+		DocumentNumber: *req.DocumentNumber,
+		Version:        *req.Version,
 		State:          state,
-		Name:           req.Name,
-		Description:    req.Description,
-		TemplateData:   req.TemplateData,
+		Name:           *req.Name,
+		Description:    *req.Description,
+		TemplateData:   *req.TemplateData,
 	}
 	queryHandler := contracttemplate.GetAllMetaDataByFilterHandler{
 		DB:     s.DB,

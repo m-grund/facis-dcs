@@ -26,6 +26,24 @@ var ContractTemplateCreateResponse = Type("ContractTemplateCreateResponse", func
 	Required("did")
 })
 
+var ContractTemplateCopyRequest = Type("ContractTemplateCopyRequest", func() {
+	Description("Contract template create request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template that should be copied")
+
+	Required("did")
+})
+
+var ContractTemplateCopyResponse = Type("ContractTemplateCopyResponse", func() {
+	Description("Result for creating a contract template")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template copy")
+
+	Required("did")
+})
+
 var ContractTemplateSubmitRequest = Type("ContractTemplateSubmitRequest", func() {
 	Description("Contract template submit request")
 
@@ -61,7 +79,6 @@ var ContractTemplateUpdateRequest = Type("ContractTemplateUpdateRequest", func()
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
 	Attribute("document_number", String, "The number of the contract template")
-	Attribute("version", Int, "The version of the contract template")
 	Attribute("template_type", String, "The type of the template")
 	Attribute("name", String, "The name of the contract template")
 	Attribute("description", String, "A description for that template")
@@ -89,7 +106,6 @@ var ContractTemplateUpdateManageRequest = Type("ContractTemplateUpdateManageRequ
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
 	Attribute("document_number", String, "The number of the contract template")
-	Attribute("version", Int, "The version of the contract template")
 	Attribute("template_type", String, "The type of the template")
 	Attribute("name", String, "The name of the contract template")
 	Attribute("description", String, "A description for that template")
@@ -102,8 +118,6 @@ var ContractTemplateUpdateManageResponse = Type("ContractTemplateUpdateManageRes
 	Description("Result for updating a contract template")
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
-	Attribute("document_number", String, "The number of the contract template")
-	Attribute("version", Int, "The version of the contract template")
 
 	Required("did")
 })
@@ -141,7 +155,7 @@ var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func
 
 	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 
-	Required("did", "state", "template_type", "created_at", "updated_at")
+	Required("did", "state", "template_type", "created_at", "updated_at", "version")
 })
 
 var ContractTemplateRetrieveRequest = Type("ContractTemplateRetrieveRequest", func() {
@@ -163,7 +177,7 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("updated_at", String, "Updated at")
 	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 
-	Required("did", "state", "template_type", "created_by", "created_at", "updated_at")
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
 })
 
 var ReviewTaskItem = Type("ReviewTaskItem", func() {
@@ -174,7 +188,7 @@ var ReviewTaskItem = Type("ReviewTaskItem", func() {
 	Attribute("reviewer", String, "The reviewer of the contract template")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "reviewer", "created_at")
+	Required("did", "state", "reviewer", "created_at", "version")
 })
 
 var ApprovalTaskItem = Type("ApprovalTaskItem", func() {
@@ -185,7 +199,7 @@ var ApprovalTaskItem = Type("ApprovalTaskItem", func() {
 	Attribute("approver", String, "The approver for the contract template")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "approver", "created_at")
+	Required("did", "state", "approver", "created_at", "version")
 })
 
 var ContractTemplateRetrieveResponse = Type("ContractTemplateRetrieveResponse", func() {
@@ -232,7 +246,7 @@ var ContractTemplateHistoryRetrieveByIDResponse = Type("ContractTemplateHistoryR
 	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
-	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data")
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data", "version")
 })
 
 var ContractTemplateRetrieveByIDRequest = Type("ContractTemplateRetrieveByIDRequest", func() {
@@ -267,7 +281,7 @@ var ContractTemplateRetrieveByIDResponse = Type("ContractTemplateRetrieveByIDRes
 	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
-	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data")
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data", "version")
 })
 
 var ContractTemplateApproveRequest = Type("ContractTemplateApproveRequest", func() {
@@ -423,6 +437,29 @@ var _ = Service("TemplateRepository", func() {
 
 		HTTP(func() {
 			POST("/template/create")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// POST /template/copy
+	Method("copy", func() {
+		Description("Copy a a template")
+		Meta("dcs:ui", "Template Builder")
+
+		Security(JWTAuth, func() {
+			Scope("Template Creator")
+		})
+
+		Payload(ContractTemplateCopyRequest)
+		Result(ContractTemplateCopyResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/template/copy")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

@@ -24,7 +24,7 @@ type GetAllMetadataQry struct {
 type MetadataItem struct {
 	DID                string
 	DocumentNumber     *string
-	Version            *int
+	Version            int
 	State              contracttemplatestate.ContractTemplateState
 	TemplateType       contracttemplatetype.ContractTemplateType
 	Name               *string
@@ -39,7 +39,7 @@ type MetadataItem struct {
 type ReviewTaskItem struct {
 	DID            string
 	DocumentNumber *string
-	Version        *int
+	Version        int
 	State          reviewtaskstate.ReviewTaskState
 	Reviewer       string
 	CreatedAt      time.Time
@@ -48,7 +48,7 @@ type ReviewTaskItem struct {
 type ApprovalTaskItem struct {
 	DID            string
 	DocumentNumber *string
-	Version        *int
+	Version        int
 	State          approvaltaskstate.ApprovalTaskState
 	Approver       string
 	CreatedAt      time.Time
@@ -146,7 +146,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 
 		metadata, exists := didToMetadata[data.DID]
 		var documentNumber *string
-		var version *int
+		var version int
 		if exists {
 			documentNumber = metadata.DocumentNumber
 			version = metadata.Version
@@ -172,7 +172,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 
 		metadata, exists := didToMetadata[data.DID]
 		var documentNumber *string
-		var version *int
+		var version int
 		if exists {
 			documentNumber = metadata.DocumentNumber
 			version = metadata.Version

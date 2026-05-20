@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS contracts
 
     state             contract_state NOT NULL,
 
-    contract_version  INT,
+    contract_version  INT NOT NULL DEFAULT 1,
+
     name              VARCHAR(255),
     description       TEXT,
     contract_data     JSONB DEFAULT '{}'::jsonb,
@@ -70,7 +71,8 @@ CREATE TABLE IF NOT EXISTS contract_history
 
     state             contract_state NOT NULL,
 
-    contract_version  INT,
+    contract_version  INT NOT NULL DEFAULT 1,
+
     name              VARCHAR(255),
     description       TEXT,
     contract_data     JSONB DEFAULT '{}'::jsonb,
@@ -224,7 +226,8 @@ CREATE TABLE IF NOT EXISTS contract_negotiations
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
     did                 VARCHAR(255) NOT NULL CHECK (did <> ''),
-    contract_version    INT,
+    contract_version    INT NOT NULL,
+
     change_request      JSONB DEFAULT '{}'::jsonb,
 
     created_by VARCHAR(255) NOT NULL,

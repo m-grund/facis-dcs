@@ -4,7 +4,7 @@ export interface ContractTemplateApprovalTask {
     type: 'template'
     did: string
     document_number?: string
-    version?: number
+    version: number
     state: ApprovalTaskState
     approver: string
     created_at: string
