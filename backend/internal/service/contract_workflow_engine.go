@@ -148,7 +148,6 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
-		ContractVersion: req.ContractVersion,
 		UpdatedAt:       updatedAt,
 		UpdatedBy:       middleware.GetUsername(ctx),
 		Name:            req.Name,
@@ -603,13 +602,13 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 	}
 
 	qry := contract.GetAllMetadataByFilterQry{
-		DID:             req.Did,
-		ContractVersion: req.ContractVersion,
+		DID:             *req.Did,
+		ContractVersion: *req.ContractVersion,
 		State:           state,
 		RetrievedBy:     middleware.GetUsername(ctx),
-		Name:            req.Name,
-		Description:     req.Description,
-		ContractData:    req.ContractData,
+		Name:            *req.Name,
+		Description:     *req.Description,
+		ContractData:    *req.ContractData,
 	}
 	queryHandler := contract.GetAllMetaDataByFilterHandler{
 		DB:    s.DB,

@@ -165,19 +165,19 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	var params []interface{}
 	paramIndex := 1
 
-	if values.DID != nil {
+	if len(values.DID) > 0 {
 		conditions += ` did = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.DID)
+		params = append(params, values.DID)
 		paramIndex++
 	}
-	if values.DocumentNumber != nil {
+	if len(values.DocumentNumber) > 0 {
 		conditions += ` document_number = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.DocumentNumber)
+		params = append(params, values.DocumentNumber)
 		paramIndex++
 	}
-	if values.Version != nil {
+	if values.Version > 0 {
 		conditions += ` version = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.Version)
+		params = append(params, values.Version)
 		paramIndex++
 	}
 	if len(values.State) > 0 {
@@ -191,19 +191,19 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, "%"+values.TemplateType+"%")
 		paramIndex++
 	}
-	if values.Name != nil {
+	if len(values.Name) > 0 {
 		conditions += ` name ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Name+"%")
+		params = append(params, "%"+values.Name+"%")
 		paramIndex++
 	}
-	if values.Description != nil {
+	if len(values.Description) > 0 {
 		conditions += ` description ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Description+"%")
+		params = append(params, "%"+values.Description+"%")
 		paramIndex++
 	}
-	if values.TemplateData != nil {
+	if len(values.TemplateData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, *values.TemplateData)
+		params = append(params, values.TemplateData)
 		paramIndex++
 	}
 	l := len(" AND")
@@ -226,9 +226,6 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 
 	if data.DocumentNumber != nil && len(*data.DocumentNumber) > 0 {
 		addParam("document_number", data.DocumentNumber)
-	}
-	if data.Version != nil && *data.Version > 0 {
-		addParam("version", data.Version)
 	}
 	if len(data.State) > 0 {
 		addParam("state", data.State)

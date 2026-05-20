@@ -24,7 +24,7 @@ type GetHistoryByIDQry struct {
 type GetHistoryByIDResult struct {
 	ID                 string
 	DID                string
-	ContractVersion    *int
+	ContractVersion    int
 	State              contractstate.ContractState
 	Name               *string
 	Description        *string

@@ -24,7 +24,7 @@ type GetHistoryByIDResult struct {
 	ID                 string
 	DID                string
 	DocumentNumber     *string
-	Version            *int
+	Version            int
 	State              contracttemplatestate.ContractTemplateState
 	TemplateType       contracttemplatetype.ContractTemplateType
 	Name               *string

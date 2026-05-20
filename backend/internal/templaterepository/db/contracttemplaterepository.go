@@ -40,7 +40,7 @@ func (r *ResponsiblePersons) Scan(src any) error {
 type ContractTemplate struct {
 	DID                string              `db:"did"`
 	DocumentNumber     *string             `db:"document_number"`
-	Version            *int                `db:"version"`
+	Version            int                 `db:"version"`
 	State              string              `db:"state"`
 	TemplateType       string              `db:"template_type"`
 	Name               *string             `db:"name"`
@@ -55,7 +55,7 @@ type ContractTemplate struct {
 type ContractTemplateMetadata struct {
 	DID                string              `db:"did"`
 	DocumentNumber     *string             `db:"document_number"`
-	Version            *int                `db:"version"`
+	Version            int                 `db:"version"`
 	State              string              `db:"state"`
 	TemplateType       string              `db:"template_type"`
 	Name               *string             `db:"name"`
@@ -69,7 +69,7 @@ type ContractTemplateMetadata struct {
 type ContractTemplateProcessData struct {
 	DID            string    `db:"did"`
 	DocumentNumber *string   `db:"document_number"`
-	Version        *int      `db:"version"`
+	Version        int       `db:"version"`
 	State          string    `db:"state"`
 	CreatedBy      string    `db:"created_by"`
 	UpdatedAt      time.Time `db:"updated_at"`
@@ -78,7 +78,6 @@ type ContractTemplateProcessData struct {
 type ContractTemplateUpdateData struct {
 	DID                string              `db:"did"`
 	DocumentNumber     *string             `db:"document_number"`
-	Version            *int                `db:"version"`
 	State              string              `db:"state"`
 	TemplateType       string              `db:"template_type"`
 	Name               *string             `db:"name"`
@@ -91,7 +90,7 @@ type ContractTemplateHistory struct {
 	ID                 string              `db:"id"`
 	DID                string              `db:"did"`
 	DocumentNumber     *string             `db:"document_number"`
-	Version            *int                `db:"version"`
+	Version            int                 `db:"version"`
 	State              string              `db:"state"`
 	TemplateType       string              `db:"template_type"`
 	Name               *string             `db:"name"`
@@ -104,14 +103,14 @@ type ContractTemplateHistory struct {
 }
 
 type SearchValues struct {
-	DID            *string
-	DocumentNumber *string
-	Version        *int
+	DID            string
+	DocumentNumber string
+	Version        int
 	State          string
 	TemplateType   string
-	Name           *string
-	Description    *string
-	TemplateData   *string
+	Name           string
+	Description    string
+	TemplateData   string
 }
 
 type ContractTemplateRepo interface {

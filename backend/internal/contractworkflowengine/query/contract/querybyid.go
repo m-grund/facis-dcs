@@ -23,7 +23,7 @@ type GetByIDQry struct {
 
 type GetByIDResult struct {
 	DID                string
-	ContractVersion    *int
+	ContractVersion    int
 	State              contractstate.ContractState
 	Name               *string
 	Description        *string

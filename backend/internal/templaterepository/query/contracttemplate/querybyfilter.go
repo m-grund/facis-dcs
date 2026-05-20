@@ -17,20 +17,20 @@ import (
 
 type GetAllMetadataByFilterQry struct {
 	RetrievedBy    string
-	DID            *string
-	DocumentNumber *string
-	Version        *int
+	DID            string
+	DocumentNumber string
+	Version        int
 	State          *contracttemplatestate.ContractTemplateState
 	TemplateType   *contracttemplatetype.ContractTemplateType
-	Name           *string
-	Description    *string
-	TemplateData   *string
+	Name           string
+	Description    string
+	TemplateData   string
 }
 
 type GetAllMetadataByFilterResult struct {
 	DID                string
 	DocumentNumber     *string
-	Version            *int
+	Version            int
 	State              contracttemplatestate.ContractTemplateState
 	TemplateType       contracttemplatetype.ContractTemplateType
 	Name               *string
@@ -80,7 +80,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		return nil, fmt.Errorf("could not read all contract templates: %w", err)
 	}
 
-	evt := templateevents.RetrieveAllEvent{
+	evt := templateevents.SearchEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 	}
