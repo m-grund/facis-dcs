@@ -198,7 +198,7 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
 		Reviewers:   req.Reviewers,
-		Approver:    req.Approver,
+		Approvers:   req.Approvers,
 		Negotiators: req.Negotiators,
 	}
 	handler := command.Submitter{

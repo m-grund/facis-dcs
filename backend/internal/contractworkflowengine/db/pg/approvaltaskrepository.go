@@ -4,6 +4,8 @@ import (
 	"context"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -84,6 +86,29 @@ func (r *PostgresApprovalTaskRepo) UpdateState(ctx context.Context, tx *sqlx.Tx,
 		return errors.New("user has no review task for this contract")
 	}
 	return nil
+}
+
+func (r *PostgresApprovalTaskRepo) AnyTasksInState(ctx context.Context, tx *sqlx.Tx, did string, states ...string) (bool, error) {
+	placeholders := make([]string, len(states))
+	args := []interface{}{did}
+
+	for i, s := range states {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args = append(args, s)
+	}
+
+	query := fmt.Sprintf(`
+        SELECT COUNT(*) 
+        FROM contract_approval_task
+        WHERE did = $1 AND state IN (%s)
+    `, strings.Join(placeholders, ", "))
+
+	var count int
+	err := tx.GetContext(ctx, &count, query, args...)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (r *PostgresApprovalTaskRepo) IsValidApprover(ctx context.Context, tx *sqlx.Tx, did string, approver string) (bool, error) {

@@ -123,10 +123,18 @@
               <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Creator</li>
               <li class="list-row py-0">{{ contract.responsible_persons?.creator }}</li>
             </ul>
-            <ul class="list col-start-2 row-start-1">
-              <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Approver</li>
-              <li class="list-row py-0">{{ contract.responsible_persons?.approver }}</li>
+            <div>
+              <ul class="list col-start-2 row-start-2">
+              <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Approvers:</li>
+              <li
+                v-for="(approver, i) in contract.responsible_persons?.approvers"
+                :key="i + approver"
+                class="list-row py-0"
+              >
+                {{ approver }}
+              </li>
             </ul>
+            </div>
             <ul class="list col-start-1 row-start-2">
               <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Negotiators:</li>
               <li

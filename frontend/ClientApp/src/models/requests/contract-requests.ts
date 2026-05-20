@@ -27,7 +27,7 @@ export interface ContractSubmitRequest {
   forward_to?: ContractActionFlag
   comments?: string[]
   reviewers?: string[]
-  approver?: string
+  approvers?: string[]
   negotiators?: string[]
 }
 

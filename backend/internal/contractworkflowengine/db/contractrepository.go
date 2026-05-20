@@ -13,7 +13,7 @@ import (
 
 type ResponsiblePersons struct {
 	Creator     string   `json:"creator"`
-	Approver    string   `json:"approver"`
+	Approvers   []string `json:"approvers"`
 	Reviewers   []string `json:"reviewers"`
 	Negotiators []string `json:"negotiators"`
 }
