@@ -97,6 +97,11 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		templateType = cmd.TemplateType.String()
 	}
 
+	err = h.CTRepo.CreateHistoryEntryForDID(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not create history entry: %w", err)
+	}
+
 	newData := db.ContractTemplateUpdateData{
 		DID:            cmd.DID,
 		DocumentNumber: cmd.DocumentNumber,

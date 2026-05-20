@@ -15,7 +15,7 @@
       <template v-else-if="block && isTextBlock(block)">
         <label class="text-[10px] uppercase font-bold opacity-60">Text</label>
         <textarea v-model="localText" :disabled="!uiStore.isTemplateEditable"
-          class="textarea textarea-ghost textarea-sm w-full mt-0.5 text-sm min-h-[2.5rem] resize-y"
+          class="textarea textarea-ghost textarea-sm w-full mt-0.5 text-sm min-h-10 resize-y"
           placeholder="Text content" rows="2" />
       </template>
       <!-- Clause: read-only -->
@@ -32,7 +32,7 @@
         <div class="mt-1 flex items-start gap-2">
           <!-- Collapse button -->
           <button type="button"
-            class="flex items-center justify-center w-8 h-8 text-base-content/60 hover:text-base-content hover:bg-base-200/70 rounded-md transition-colors cursor-pointer flex-shrink-0"
+            class="flex items-center justify-center w-8 h-8 text-base-content/60 hover:text-base-content hover:bg-base-200/70 rounded-md transition-colors cursor-pointer shrink-0"
             @click.stop="toggleApprovedPreview">
             <svg class="w-3 h-3 transition-transform duration-200" :class="isApprovedPreviewOpen ? 'rotate-180' : ''"
               xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -62,7 +62,7 @@
       </template>
     </div>
     <div v-if="uiStore.isTemplateEditable" :class="[
-      'pt-2 pr-2 pb-2 flex-shrink-0 transition-opacity',
+      'pt-2 pr-2 pb-2 shrink-0 transition-opacity',
       toolbarVisibilityClass,
     ]">
       <BlockToolbar :item="item" :is-dirty="isDirty" @insert-above="emit('insertAbove')"

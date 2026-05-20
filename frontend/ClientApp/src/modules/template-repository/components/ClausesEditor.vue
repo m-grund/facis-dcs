@@ -77,8 +77,8 @@ const semanticConditions = computed(() => {
 })
 
 function addClause(payload: { title: string; text: string }) {
-  const text = payload.text.trim()
-  if (!text) return
+  const text = payload.text
+  if (!text.trim()) return
   store.addClause({
     title: payload.title.trim(),
     text,
@@ -95,9 +95,9 @@ function cancelEdit() {
 }
 
 function saveEditedClause(payload: { blockId: string; title: string; text: string }) {
-  const text = payload.text.trim()
+  const text = payload.text
   const title = payload.title.trim()
-  if (!text) return
+  if (!text.trim()) return
   store.updateClause(payload.blockId, {
     title,
     text,

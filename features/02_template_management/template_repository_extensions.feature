@@ -14,14 +14,16 @@ Feature: Template Repository Extensions
     And cryptographic checksums are generated for integrity verification
 
   Scenario: Capture dependency model for templates and schemas
-    Given templates "Base Contract" and "Amendment Schema" exist
+    Given template "Base Contract" exists
+    And template "Amendment Schema" exists
     When I define dependency "Base Contract" requires "Amendment Schema"
     Then the dependency relation is captured
     And the model supports includes/extends/requires relations
 
   Scenario: Unified export of versioned templates with dependencies
-    Given template "Master Agreement" has dependencies and artefacts
-    When I export template "Master Agreement" version "1.0"
+    Given template "Master Agreement" has dependencies defined
+    And template "Master Agreement" has artefacts defined
+    When I export template "Master Agreement" with version "1.0"
     Then a unified package is created
     And the package includes versioned template, dependencies, and artefacts
     And the package is suitable for external system consumption

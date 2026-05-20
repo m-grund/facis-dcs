@@ -1,13 +1,13 @@
 <template>
 
-  <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
+  <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
     <div class="max-w-4xl mx-auto px-6 pt-3">
       <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">
         {{ title }}
       </p>
-      <div role="tablist" class="tabs tabs-lift tabs-lg">
+      <div role="tablist" class="tabs tabs-border tabs-lg">
         <a v-for="(tab, _index) in tabs" :key="tab.id" role="tab" class="tab"
-          :class="{ 'tab-active': activeTab === tab.id }" @click="setActiveTab(tab.id)">
+          :class="{ 'tab-active text-primary': activeTab === tab.id }" @click="setActiveTab(tab.id)">
           {{ tab.label }}
         </a>
       </div>
@@ -110,37 +110,40 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useAuthStore } from '@/stores/auth-store'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
-import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
-import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
+import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
+import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AuditView from './AuditView.vue'
 
 const props = withDefaults(
   defineProps<{
     title: string
-
   }>(),
   {}
 )
 
-const authStore = useAuthStore()
+const route = useRoute()
+
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { activeTab } = storeToRefs(templateEditorUiStore)
 const { state, templateType } = storeToRefs(draftStore)
 const { setActiveTab, togglePreviewDialog } = templateEditorUiStore
-const tabs = computed(() => templateEditorUiStore.availableTabs(templateType.value))
-const currentTabNumber = computed(() => 1 + tabs.value.map(tab => tab.id).indexOf(activeTab.value))
-
-const isManager = computed(() => authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
-
+const tabs = computed(() => {
+  return templateEditorUiStore.availableTabs(templateType.value).filter((tab) => {
+    return tab.id !== 'audit' || !!route.params.did
+  })
+})
+const currentTabNumber = computed(() => 1 + tabs.value.map((tab) => tab.id).indexOf(activeTab.value))
+const { isManager } = useTemplatePermissions()
 </script>

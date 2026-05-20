@@ -87,6 +87,22 @@ type ContractTemplateUpdateData struct {
 	TemplateData       *datatype.JSON      `db:"template_data"`
 }
 
+type ContractTemplateHistory struct {
+	ID                 string              `db:"id"`
+	DID                string              `db:"did"`
+	DocumentNumber     *string             `db:"document_number"`
+	Version            *int                `db:"version"`
+	State              string              `db:"state"`
+	TemplateType       string              `db:"template_type"`
+	Name               *string             `db:"name"`
+	Description        *string             `db:"description"`
+	CreatedBy          string              `db:"created_by"`
+	CreatedAt          time.Time           `db:"created_at"`
+	UpdatedAt          time.Time           `db:"updated_at"`
+	ResponsiblePersons *ResponsiblePersons `db:"responsible_persons"`
+	TemplateData       *datatype.JSON      `db:"template_data"`
+}
+
 type SearchValues struct {
 	DID            *string
 	DocumentNumber *string
@@ -99,7 +115,9 @@ type SearchValues struct {
 }
 
 type ContractTemplateRepo interface {
+	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
 	Create(ctx context.Context, tx *sqlx.Tx, data ContractTemplate) (*time.Time, error)
+	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractTemplateHistory, error)
 	ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplate, error)
 	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]ContractTemplateMetadata, error)
 	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractTemplateMetadata, error)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"digital-contracting-service/internal/base/datatype"
+	"errors"
+	"fmt"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -11,26 +13,23 @@ import (
 type PostgresContractTemplateRepo struct {
 }
 
-func (r *PostgresContractTemplateRepo) ReadTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*datatype.JSON, error) {
+func (r *PostgresContractTemplateRepo) ReadFrameContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*datatype.JSON, error) {
 	statement := `
         SELECT template_data
-        FROM contract_templates ct
-        WHERE ct.did = $1 AND EXISTS (
-        		SELECT 1
-        		FROM contract_templates_approval_task ctat
-        		WHERE
-        			ctat.did = ct.did AND
-        			ctat.state = 'APPROVED'
-        )
+        FROM contract_templates
+        WHERE
+            did = $1
+            AND template_type = 'FRAME_CONTRACT'
+            AND (state = 'APPROVED' OR state = 'REGISTERED')
         LIMIT 1
-		`
-
+    `
 	var templateData datatype.JSON
-	if err := tx.GetContext(ctx, &templateData, statement, did); err != nil {
+	err := tx.GetContext(ctx, &templateData, statement, did)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return nil, fmt.Errorf("could not find frame contract template with DID %q", did)
+	case err != nil:
 		return nil, err
-	}
-	if !templateData.IsNotNullValue() {
-		return nil, sql.ErrNoRows
 	}
 	return &templateData, nil
 }

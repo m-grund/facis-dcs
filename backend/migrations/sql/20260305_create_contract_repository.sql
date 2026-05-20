@@ -31,6 +31,56 @@ CREATE TABLE IF NOT EXISTS contracts
     CONSTRAINT chk_did_not_empty CHECK (did <> '')
 );
 
+
+CREATE INDEX idx_contract_contracts_search ON contracts
+    USING GIN (search_vector);
+
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER contract_contracts_update_updated_at
+    BEFORE UPDATE ON contracts
+    FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+------------------------------------------------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS contract_history
+(
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    did               VARCHAR(255),
+
+    created_by        VARCHAR(255)   NOT NULL,
+    created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    start_date          TIMESTAMP,
+    exp_date          TIMESTAMP,
+    exp_policy        contract_expiration_policy,
+    exp_notice_period INT,
+
+    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+
+    state             contract_state NOT NULL,
+
+    contract_version  INT,
+    name              VARCHAR(255),
+    description       TEXT,
+    contract_data     JSONB DEFAULT '{}'::jsonb,
+    search_vector     tsvector GENERATED ALWAYS AS (
+        to_tsvector('english', contract_data::text)
+        ) STORED,
+
+    CONSTRAINT chk_did_not_empty CHECK (did <> '')
+);
+
 ------------------------------------------------------------------------------------------------------------------------
 
 CREATE OR REPLACE VIEW contracts_effective AS
@@ -101,25 +151,6 @@ SELECT
         END AS state,
     contract_version
 FROM contracts;
-
-------------------------------------------------------------------------------------------------------------------------
-
-CREATE INDEX idx_contract_contracts_search ON contracts
-    USING GIN (search_vector);
-
-
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-    RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER contract_contracts_update_updated_at
-    BEFORE UPDATE ON contracts
-    FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
 
 ------------------------------------------------------------------------------------------------------------------------
 

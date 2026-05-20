@@ -86,7 +86,7 @@ function handleSubmit() {
   if (!canSubmit.value) return
   emit('submit', {
     title: localTitle.value.trim(),
-    text: localText.value.trim(),
+    text: localText.value,
   })
   if (props.mode === 'create') {
     localTitle.value = ''

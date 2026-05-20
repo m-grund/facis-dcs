@@ -36,7 +36,7 @@ Feature: Machine-Readable and Human-Readable Contract Review
 
   Scenario: Export both formats with same version tag
     Given I am authenticated with roles: "Contract Manager"
-    And contract "Service Agreement" version "2.0" exists
+    And contract "Service Agreement" with version "2.0" exists
     When I export contract "Service Agreement" in both formats
     Then the machine-readable export has version tag "2.0"
     And the human-readable export has version tag "2.0"

@@ -2,19 +2,21 @@ import type { DocumentBlock, DocumentOutline, MetaData, PolicyReference, SchemaR
 import type { TemplateDataVersion } from "@/modules/template-repository/models/template-draft-store"
 import type { ContractTemplateState } from "@/types/contract-template-state"
 import type { TemplateType } from "@/types/template-type"
+import type { ContractTemplateResponsiblePersons } from './contract-template-responsible-persons'
 
 export interface ContractTemplate {
-    did: string
-    created_by: string
-    created_at: string
-    document_number?: string
-    version?: number
-    template_type: TemplateType
-    state: ContractTemplateState
-    name?: string
-    description?: string
-    template_data?: ContractTemplateData
-    updated_at: string
+  did: string
+  created_by: string
+  created_at: string
+  document_number?: string
+  version?: number
+  template_type: TemplateType
+  state: ContractTemplateState
+  name?: string
+  description?: string
+  template_data?: ContractTemplateData
+  updated_at: string
+  responsible_persons?: ContractTemplateResponsiblePersons
 }
 
 export type PartialContractTemplate = ContractTemplate
@@ -33,10 +35,11 @@ export interface ContractTemplateData {
 }
 
 export interface SubTemplateSnapshot {
-    did: string
-    document_number?: string
-    version?: number
-    name?: string
-    description?: string
-    template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'>
+  did: string
+  document_number?: string
+  version?: number
+  name?: string
+  description?: string
+  template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'>
 }
+

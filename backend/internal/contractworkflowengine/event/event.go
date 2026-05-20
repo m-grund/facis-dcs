@@ -104,6 +104,23 @@ func (e RetrieveByIDEvent) GetDID() string {
 	return e.DID
 }
 
+// RetrieveHistoryByDIDEvent is emitted when contract data is retrieved.
+type RetrieveHistoryByDIDEvent struct {
+	DID         string    `json:"did"`
+	RetrievedBy string    `json:"retrieved_by"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e RetrieveHistoryByDIDEvent) EventType() string {
+	return eventtype.RetrieveHistoryByDID.String()
+}
+
+// GetDID implements the Event interface.
+func (e RetrieveHistoryByDIDEvent) GetDID() string {
+	return e.DID
+}
+
 // RetrieveAllEvent is emitted when contract data is retrieved.
 type RetrieveAllEvent struct {
 	RetrievedBy string    `json:"retrieved_by"`

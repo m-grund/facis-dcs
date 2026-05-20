@@ -2,7 +2,6 @@ package contracttemplate
 
 import (
 	"context"
-	"database/sql"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -52,11 +51,8 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {
-	templateData, err := h.getTemplateDataFromDB(ctx, qry.DID)
-	if err == nil && templateData != nil {
-		return templateData, nil
-	}
-	if err != nil && err != sql.ErrNoRows {
+	templateData, err := h.getFrameContractTemplateDataFromDB(ctx, qry.DID)
+	if err != nil {
 		return nil, fmt.Errorf("could not read template data from DB: %w", err)
 	}
 
@@ -71,7 +67,7 @@ func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry G
 	return templateData, nil
 }
 
-func (h *GetTemplateDataByDIDHandler) getTemplateDataFromDB(ctx context.Context, templateDID string) (*datatype.JSON, error) {
+func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx context.Context, templateDID string) (*datatype.JSON, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -79,27 +75,16 @@ func (h *GetTemplateDataByDIDHandler) getTemplateDataFromDB(ctx context.Context,
 	}
 	defer tx.Rollback()
 
-	if h.CTRepo == nil {
-		return nil, fmt.Errorf("contract template repository is nil")
-	}
-
-	templateData, err := h.CTRepo.ReadTemplateDataByID(ctx, tx, templateDID)
-	if err == nil && templateData != nil {
-		err = tx.Commit()
-		if err != nil {
-			return nil, fmt.Errorf("could not commit transaction: %w", err)
-		}
-		return templateData, nil
-	}
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("could not read template data from DB: %w", err)
+	templateData, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, templateDID)
+	if err != nil {
+		return nil, fmt.Errorf("could not read frame contract template data: %w", err)
 	}
 
 	err = tx.Commit()
 	if err != nil {
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
-	return nil, sql.ErrNoRows
+	return templateData, nil
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateDataFromFC(qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {

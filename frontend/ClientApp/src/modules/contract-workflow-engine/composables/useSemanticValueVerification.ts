@@ -162,7 +162,8 @@ export function useSemanticValueVerification() {
     documentBlocks.forEach((b) => {
       if (!isClauseBlock(b)) return
       let conditions = getConditions(b.blockId, documentBlocks, semanticConditions, subTemplateSemanticConditions)
-      b.conditionIds.forEach((cId) => {
+      const conditionIds = b.conditionIds ?? []
+      conditionIds.forEach((cId) => {
         const condition = conditions.find((c) => c.conditionId === cId)
         if (!condition) return
         condition.parameters.forEach((p) => {

@@ -11,7 +11,11 @@
       :invalid-tip="seg.invalidTip"
       @update:value="(val) => onParamValueChange(seg, val)"
     />
-    <span v-else-if="seg.type === 'newline'" :class="previewNewlineSpanClass" aria-hidden="true" />
+    <span
+      v-else-if="seg.type === 'newline'"
+      :class="[previewNewlineSpanClass, 'preview-newline-break']"
+      aria-hidden="true"
+    />
   </template>
 </template>
 
@@ -53,8 +57,7 @@ type PreviewSegment =
 const previewNewlineSpanClass = PREVIEW_NEWLINE_SPAN_CLASS
 
 const segments = computed<PreviewSegment[]>(() => {
-  const normalizedText = (props.text ?? '').replace(/^[\s\u00A0]+/, '')
-  const baseSegments: Segment[] = parseSegments(normalizedText, props.semanticConditions)
+  const baseSegments: Segment[] = parseSegments(props.text ?? '', props.semanticConditions)
   const result: PreviewSegment[] = []
   for (const seg of baseSegments) {
     if (isText(seg)) {
@@ -107,3 +110,9 @@ function findVerificationError(conditionId: string, parameterName: string) {
   }) ?? null
 }
 </script>
+
+<style scoped>
+.preview-newline-break + .preview-newline-break {
+  margin-bottom: 0.2rem;
+}
+</style>

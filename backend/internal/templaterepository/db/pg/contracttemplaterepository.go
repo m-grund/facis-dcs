@@ -16,6 +16,37 @@ import (
 type PostgresContractTemplateRepo struct {
 }
 
+func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
+	statement := `
+        INSERT INTO contract_templates_history 
+            (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
+             responsible_persons, template_data)
+        SELECT 
+            did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
+            responsible_persons, template_data
+        FROM contract_templates 
+        WHERE did = $1
+    `
+	_, err := tx.ExecContext(ctx, statement, did)
+	return err
+}
+
+func (r *PostgresContractTemplateRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractTemplateHistory, error) {
+	query := `
+        SELECT *
+        FROM contract_templates_history WHERE did = $1
+    `
+	var ct []db.ContractTemplateHistory
+	err := tx.SelectContext(ctx, &ct, query, did)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []db.ContractTemplateHistory{}, fmt.Errorf("template contract with DID %s not found", did)
+		}
+		return []db.ContractTemplateHistory{}, err
+	}
+	return ct, nil
+}
+
 func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.ContractTemplate) (*time.Time, error) {
 	statement := `
         INSERT INTO contract_templates (

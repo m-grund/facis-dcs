@@ -53,6 +53,35 @@ EXECUTE FUNCTION update_updated_at_column();
 
 ------------------------------------------------------------------------------------------------------------------------
 
+CREATE TABLE IF NOT EXISTS contract_templates_history
+(
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    did             VARCHAR(255),
+
+    created_by      VARCHAR(255)   NOT NULL,
+    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    state           contract_template_state NOT NULL,
+    template_type   contract_template_type  NOT NULL,
+
+    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+
+    document_number VARCHAR(255),
+    version         INT,
+    name            VARCHAR(255),
+    description     TEXT,
+    template_data   JSONB DEFAULT '{}'::jsonb,
+    search_vector   tsvector GENERATED ALWAYS AS (
+        to_tsvector('english', template_data::text)
+        ) STORED,
+
+    CONSTRAINT chk_did_not_empty CHECK (did <> '')
+);
+
+------------------------------------------------------------------------------------------------------------------------
+
 CREATE TYPE contract_template_review_task_state AS ENUM ('OPEN', 'APPROVED', 'REJECTED', 'VERIFIED');
 
 CREATE TABLE IF NOT EXISTS contract_templates_review_task

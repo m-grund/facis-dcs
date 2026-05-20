@@ -17,5 +17,5 @@ Feature: Verify Template and Provenance
   Scenario: Unauthorized role cannot verify template
     Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" has provenance metadata
-    When I attempt to verify template "Standard NDA"
+    When I verify template "Standard NDA"
     Then the request is denied with an authorization error

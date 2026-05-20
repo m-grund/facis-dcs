@@ -67,16 +67,17 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	qry := contracttemplatequery.GetTemplateDataByDIDQry{
+		Token: *req.Token,
+		DID:   req.Did,
+	}
 	queryHandler := contracttemplatequery.GetTemplateDataByDIDHandler{
 		Ctx:      ctx,
 		DB:       s.DB,
 		CTRepo:   s.CTRepo,
 		FCClient: s.FCClient,
 	}
-	contractData, err := queryHandler.Handle(ctx, contracttemplatequery.GetTemplateDataByDIDQry{
-		Token: *req.Token,
-		DID:   req.Did,
-	})
+	contractData, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -214,8 +215,22 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	qry := contract.GetProcessDataByIDQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetUsername(ctx),
+	}
+	queryHandler := contract.GetProcessDataByIDHandler{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	processData, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	return &contractworkflowengine.ContractSubmitResponse{
-		Did: req.Did,
+		Did:          req.Did,
+		CurrentState: processData.State.String(),
 	}, nil
 }
 
@@ -396,6 +411,66 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		ExpNoticePeriod:    contractResult.ExpNoticePeriod,
 		ResponsiblePersons: contractResult.ResponsiblePersons,
 	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveByIDRequest) (res []*contractworkflowengine.ContractHistoryRetrieveByIDResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := contract.GetHistoryByIDQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetUsername(ctx),
+	}
+	queryHandler := contract.GetHistoryByIDHandler{
+		Ctx:   ctx,
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	result, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	var contracts []*contractworkflowengine.ContractHistoryRetrieveByIDResponse
+	for _, item := range result {
+
+		var startDate *string
+		if item.StartDate != nil {
+			s := item.StartDate.Format(time.RFC3339)
+			startDate = &s
+		}
+
+		var expDate *string
+		if item.ExpDate != nil {
+			s := item.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if item.ExpPolicy != nil {
+			s := item.ExpPolicy.String()
+			expPolicy = &s
+		}
+
+		contracts = append(contracts, &contractworkflowengine.ContractHistoryRetrieveByIDResponse{
+			Did:                item.DID,
+			ContractVersion:    item.ContractVersion,
+			State:              item.State.String(),
+			Name:               item.Name,
+			Description:        item.Description,
+			CreatedBy:          item.CreatedBy,
+			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
+			StartDate:          startDate,
+			ExpDate:            expDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    item.ExpNoticePeriod,
+			ResponsiblePersons: item.ResponsiblePersons,
+			ContractData:       item.ContractData,
+		})
+	}
+
+	return contracts, nil
 }
 
 func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contractworkflowengine.ContractNegotiationRequest) (res *contractworkflowengine.ContractNegotiationResponse, err error) {

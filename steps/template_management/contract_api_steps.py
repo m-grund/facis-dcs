@@ -6,7 +6,7 @@ import requests as _requests
 from behave import given, then, when
 
 from steps.support.services.contract_service import ContractService
-from support.api_client import (
+from steps.support.api_client import (
     contract_approve_url,
     contract_create_url,
     contract_retrieve_by_id_url,
