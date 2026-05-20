@@ -62,7 +62,8 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 
 func (r *PostgresContractTemplateRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractTemplateHistory, error) {
 	query := `
-        SELECT *
+        SELECT did, document_number, version, state, name, description,
+               created_by, created_at, updated_at, template_data, template_type, responsible_persons
         FROM contract_templates_history WHERE did = $1
     `
 	var ct []db.ContractTemplateHistory
