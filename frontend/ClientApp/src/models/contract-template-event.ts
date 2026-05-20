@@ -13,6 +13,13 @@ export interface ContractTemplateCreateEvent {
   occurred_at: string
 }
 
+export interface ContractTemplateCopyEvent {
+  copy_did: string
+  new_did: string
+  copied_by: string
+  occurred_at: string
+}
+
 export interface ContractTemplateSubmitEvent {
   did: string
   document_number?: string
