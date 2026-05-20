@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS contract_templates
     responsible_persons     JSONB DEFAULT '{}'::jsonb,
 
     document_number VARCHAR(255),
-    version         INT,
+
+    version         INT NOT NULL DEFAULT 1,
+
     name            VARCHAR(255),
     description     TEXT,
     template_data   JSONB DEFAULT '{}'::jsonb,
@@ -69,7 +71,8 @@ CREATE TABLE IF NOT EXISTS contract_templates_history
     responsible_persons     JSONB DEFAULT '{}'::jsonb,
 
     document_number VARCHAR(255),
-    version         INT,
+    version         INT NOT NULL,
+
     name            VARCHAR(255),
     description     TEXT,
     template_data   JSONB DEFAULT '{}'::jsonb,
