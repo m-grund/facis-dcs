@@ -114,6 +114,9 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			}
 			history = append(history, policyEntries...)
 		}
+		if scope == componenttype.ContractTemplateRepo && did != "" {
+			history = append(history, s.auditTemplateApprovalProvenanceTrailEntries(did, resLog)...)
+		}
 		if len(history) == 0 {
 			continue
 		}
