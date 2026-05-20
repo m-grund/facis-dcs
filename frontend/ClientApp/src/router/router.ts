@@ -241,6 +241,7 @@ const routes: RouteRecordRaw[] = [
     path: '/contracts/view/:did',
     name: ROUTES.CONTRACTS.VIEW,
     component: ViewContractView,
+    props: { isRouteComponent: true },
     meta: {
       name: 'View Contract',
       hideInSidebar: true,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SignatureContract } from '@/models/signature/signature-contract'
-import SignatureListItem from './SignatureListItem.vue'
+import SignatureContractListItem from './SignatureContractListItem.vue'
 
 defineProps<{
   contracts: SignatureContract[]
@@ -10,7 +10,7 @@ defineProps<{
 <template>
   <ul class="list">
     <template v-if="contracts.length > 0">
-      <SignatureListItem
+      <SignatureContractListItem
         v-for="contract in contracts"
         :key="`${contract.did}|${contract.contract_version}`"
         :contract="contract"

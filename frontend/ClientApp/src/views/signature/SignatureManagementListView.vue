@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import SignatureList from '@/components/lists/signature/SignatureList.vue'
+import SignatureContractList from '@/components/lists/signature/SignatureContractList.vue'
 import type { SignatureContract } from '@/models/signature/signature-contract'
 import { signatureManagementService } from '@/services/signature-management-service'
 import { onMounted, ref, type Ref } from 'vue'
@@ -8,7 +8,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const contracts: Ref<SignatureContract[]> = ref([])
 
-const loadSignedContracts = async () => {
+const loadSignatureContracts = async () => {
   loading.value = true
   error.value = null
   try {
@@ -21,7 +21,7 @@ const loadSignedContracts = async () => {
   }
 }
 
-onMounted(loadSignedContracts)
+onMounted(loadSignatureContracts)
 </script>
 
 <template>
@@ -33,6 +33,6 @@ onMounted(loadSignedContracts)
   <div>
     <div v-if="loading" class="pl-4">Loading Contracts...</div>
     <div v-else-if="error" class="pl-4">{{ error }}</div>
-    <div v-else><SignatureList :contracts="contracts" /></div>
+    <div v-else><SignatureContractList :contracts="contracts" /></div>
   </div>
 </template>
