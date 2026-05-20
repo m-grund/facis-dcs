@@ -26,6 +26,10 @@
         </fieldset>
 
         <fieldset class="fieldset p-0 border-none">
+            <legend class="fieldset-legend">Version {{version}}</legend>
+        </fieldset>
+
+        <fieldset class="fieldset p-0 border-none">
             <legend class="fieldset-legend">Global Name</legend>
             <input v-model="name" class="input input-bordered w-full" type="text" required :disabled="!uiStore.isTemplateEditable"/>
         </fieldset>
@@ -134,7 +138,7 @@ interface SubcontractKey {
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons } = storeToRefs(store)
+const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons, version } = storeToRefs(store)
 
 const name = computed({
   get: () => store.name,
