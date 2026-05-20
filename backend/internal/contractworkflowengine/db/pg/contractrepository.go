@@ -72,7 +72,8 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 
 func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
 	query := `
-        SELECT *
+        SELECT did, state, name, description,
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
         FROM contract_history WHERE did = $1
     `
 	var ct []db.ContractHistory
