@@ -3,6 +3,7 @@ import type {
   ContractTemplateApproveRequest,
   ContractTemplateArchiveRequest,
   ContractTemplateAuditRequest,
+  ContractTemplateCopyRequest,
   ContractTemplateCreateRequest,
   ContractTemplateRegisterRequest,
   ContractTemplateRejectRequest,
@@ -17,6 +18,7 @@ import type {
   ContractTemplateApproveResponse,
   ContractTemplateArchiveResponse,
   ContractTemplateAuditResponse,
+  ContractTemplateCopyResponse,
   ContractTemplateCreateResponse,
   ContractTemplateRegisterResponse,
   ContractTemplateRejectResponse,
@@ -29,6 +31,7 @@ import type {
 
 export interface ContractTemplateService {
   create: (request: ContractTemplateCreateRequest) => Promise<ContractTemplateCreateResponse>
+  copy: (request: ContractTemplateCopyRequest) => Promise<ContractTemplateCopyResponse>
   submit: (request: ContractTemplateSubmitRequest) => Promise<ContractTemplateSubmitResponse>
   update: (request: ContractTemplateUpdateRequest) => Promise<ContractTemplateUpdateResponse>
   search: (request: ContractTemplateSearchRequest) => Promise<ContractTemplateSearchResponse>

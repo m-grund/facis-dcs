@@ -102,7 +102,7 @@ func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templatereposito
 	}
 
 	cmd := command.CopyCmd{
-		DID:      *did,
+		NewDID:   *did,
 		CopyDID:  req.Did,
 		CopiedBy: middleware.GetUsername(ctx),
 	}

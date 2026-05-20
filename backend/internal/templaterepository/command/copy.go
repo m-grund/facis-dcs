@@ -13,7 +13,7 @@ import (
 )
 
 type CopyCmd struct {
-	DID      string
+	NewDID   string
 	CopyDID  string
 	CopiedBy string
 }
@@ -31,14 +31,14 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 	}
 	defer tx.Rollback()
 
-	version, err := h.CTRepo.CopyFromDID(ctx, tx, cmd.DID, cmd.CopyDID)
+	version, err := h.CTRepo.CopyFromDID(ctx, tx, cmd.CopyDID, cmd.NewDID)
 	if err != nil {
 		return fmt.Errorf("could not copy contract template: %w", err)
 	}
 
 	evt := templateevents.CopyEvent{
-		DID:        cmd.DID,
-		CopyDID:    cmd.CopiedBy,
+		NewDID:     cmd.NewDID,
+		CopyDID:    cmd.CopyDID,
 		CopiedBy:   cmd.CopiedBy,
 		NewVersion: version,
 		OccurredAt: time.Now(),

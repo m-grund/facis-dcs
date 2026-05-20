@@ -31,7 +31,7 @@ func (e CreateEvent) GetDID() string {
 
 // CopyEvent is emitted when a new contract template is created.
 type CopyEvent struct {
-	DID        string    `json:"did"`
+	NewDID     string    `json:"did"`
 	CopyDID    string    `json:"copy_did"`
 	CopiedBy   string    `json:"copied_by"`
 	NewVersion int       `json:"new_version"`
@@ -40,12 +40,12 @@ type CopyEvent struct {
 
 // EventType implements the Event interface.
 func (e CopyEvent) EventType() string {
-	return eventtype.Create.String()
+	return eventtype.Copy.String()
 }
 
 // GetDID implements the Event interface.
 func (e CopyEvent) GetDID() string {
-	return e.DID
+	return e.CopyDID
 }
 
 // SubmitEvent is emitted when a template is submitted

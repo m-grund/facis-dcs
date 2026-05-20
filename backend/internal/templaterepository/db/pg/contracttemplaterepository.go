@@ -28,7 +28,7 @@ func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx
                 WHEN state IN ('APPROVED', 'REGISTERED') THEN version + 1
                 ELSE 1
             END,
-            state, template_type, name, description, created_by, NOW(), NOW(), 
+            'DRAFT', template_type, name, description, created_by, NOW(), NOW(), 
             responsible_persons, template_data
         FROM contract_templates 
         WHERE did = $2
@@ -37,6 +37,9 @@ func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx
 	var newVersion int
 	err := tx.QueryRowContext(ctx, statement, copyDID, did).Scan(&newVersion)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("template with did %s not found", did)
+		}
 		return 0, err
 	}
 	return newVersion, nil

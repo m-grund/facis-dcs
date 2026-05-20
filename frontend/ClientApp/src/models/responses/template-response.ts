@@ -12,6 +12,10 @@ export interface ContractTemplateCreateResponse {
   did: string
 }
 
+export interface ContractTemplateCopyResponse {
+  did: string
+}
+
 export interface ContractTemplateSubmitResponse {
   did: string
 }

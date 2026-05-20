@@ -114,7 +114,7 @@ type SearchValues struct {
 }
 
 type ContractTemplateRepo interface {
-	CopyFromDID(ctx context.Context, tx *sqlx.Tx, did string, copyDID string) (int, error)
+	CopyFromDID(ctx context.Context, tx *sqlx.Tx, copyDID string, newDID string) (int, error)
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
 	Create(ctx context.Context, tx *sqlx.Tx, data ContractTemplate) (*time.Time, error)
 	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractTemplateHistory, error)
