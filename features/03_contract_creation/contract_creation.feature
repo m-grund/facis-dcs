@@ -1,10 +1,10 @@
-@skip
 @UC-03-01 @FR-CWE-13 @FR-CWE-03 @FR-CWE-30 @FR-CWE-07
 Feature: Contract Creation
   Contract Creators generate contracts from predefined templates with
   auto-filled metadata. The system supports dynamic contract assembling
   from reusable clauses and contract package bundling.
 
+  @clean_db
   Scenario: Create contract from template
     Given I am authenticated with roles: "Contract Creator"
     And template "Service Agreement Template" is approved and available
@@ -14,6 +14,7 @@ Feature: Contract Creation
     And metadata is auto-filled including parties, jurisdiction, and applicable schemas
     And the creation is logged and traceable to the template version
 
+  @clean_db
   Scenario: Created contract renders in both machine-readable and human-readable views
     Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Service Agreement" from a template
@@ -21,6 +22,7 @@ Feature: Contract Creation
     Then the machine-readable view renders correctly
     And the human-readable view renders correctly
 
+  @clean_db
   Scenario: Draft contract is editable and versioned
     Given I am authenticated with roles: "Contract Creator"
     And contract "Service Agreement" is in "Draft" status
@@ -28,7 +30,7 @@ Feature: Contract Creation
     Then the changes are saved
     And a new version is created with timestamp and user attribution
 
-  @skip
+  @clean_db
   Scenario: Assemble contract from reusable clauses
     Given I am authenticated with roles: "Contract Creator"
     And reusable clauses "Payment Terms", "Liability", and "Confidentiality" exist
@@ -38,7 +40,7 @@ Feature: Contract Creation
     And the assembly process validates content logic
     And a draft contract is generated
 
-  @skip
+  @clean_db
   Scenario: Create contract with hierarchical structure
     Given I am authenticated with roles: "Contract Creator"
     And master agreement template "Framework Agreement" exists
@@ -47,7 +49,7 @@ Feature: Contract Creation
     And components are logically linked
     And components are version-controlled
 
-  @skip
+  @clean_db
   Scenario: Bundle multiple contracts into a package
     Given I am authenticated with roles: "Contract Manager"
     And contracts "Service Agreement" and "SLA Addendum" exist
@@ -57,7 +59,7 @@ Feature: Contract Creation
     And the package maintains shared metadata
     And the package tracks signature states
 
-  @skip
+  @clean_db
   Scenario: Auto-fill metadata from template
     Given I am authenticated with roles: "Contract Creator"
     And template "NDA Template" has predefined metadata fields
@@ -65,12 +67,13 @@ Feature: Contract Creation
     Then the contract inherits metadata from the template
     And I can override specific metadata values
 
+  @clean_db
   Scenario: Unauthorized role cannot create contracts
     Given I am authenticated with roles: "Contract Observer"
     When I attempt to create a contract from template "Service Agreement Template"
     Then the request is denied with an authorization error
 
-  @skip
+  @clean_db
   Scenario: Contract Creator can only create contracts for authorized parties
     Given I am authenticated with roles: "Contract Creator"
     And I am authorized to create contracts involving party "Acme Corp"
@@ -79,7 +82,7 @@ Feature: Contract Creation
     Then the contract is created successfully
     And the contract is associated with party "Acme Corp"
 
-  @skip
+  @clean_db
   Scenario: Contract Creator cannot create contracts involving unauthorized parties
     Given I am authenticated with roles: "Contract Creator"
     And I am not authorized to create contracts with party "RestrictedVendor Inc"
@@ -88,7 +91,7 @@ Feature: Contract Creation
     And the contract creation is prevented
     And the attempt is logged
 
-  @skip
+  @clean_db
   Scenario: Created contract is accessible only to authorized parties
     Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Service Agreement" with parties "Acme Corp" and "TechVendor Inc"
@@ -97,7 +100,7 @@ Feature: Contract Creation
     And when a representative of unrelated party "UnrelatedCorp" attempts to access the contract
     Then the access is denied with a "Not authorized to access this contract" error
 
-  @skip
+  @clean_db
   Scenario: Unauthorized party cannot access created contract
     Given I am authenticated with roles: "Contract Observer"
     And contract "Service Agreement" is created with parties "Acme Corp" and "TechVendor Inc"

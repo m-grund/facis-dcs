@@ -52,6 +52,7 @@ class ContractService:
             "updated_at": updated_at,
             "reviewers": [AuthService.username_for_roles(["Contract Reviewer"])],
             "approver": AuthService.username_for_roles(["Contract Approver"]),
+            "negotiators": [],
         }
 
     @staticmethod
