@@ -18,6 +18,8 @@ type ContractContentPolicy struct {
 	PolicySetID string                      `json:"policySetId"`
 	Version     string                      `json:"version"`
 	Rules       []ContractContentPolicyRule `json:"rules"`
+	SHACLShapes []ContractSHACLShape        `json:"shaclShapes"`
+	SHACL       *ContractSHACLPolicy        `json:"shacl"`
 }
 
 type ContractContentPolicyRule struct {
@@ -34,12 +36,42 @@ type ContractContentPolicyRule struct {
 	Requirement  string   `json:"requirement"`
 }
 
+type ContractSHACLPolicy struct {
+	Shapes []ContractSHACLShape `json:"shapes"`
+}
+
+type ContractSHACLShape struct {
+	ID           string                  `json:"id"`
+	Title        string                  `json:"title"`
+	Severity     string                  `json:"severity"`
+	TargetClass  string                  `json:"targetClass"`
+	Requirement  string                  `json:"requirement"`
+	OntologyTerm string                  `json:"ontologyTerm"`
+	Properties   []ContractSHACLProperty `json:"properties"`
+	Property     []ContractSHACLProperty `json:"property"`
+}
+
+type ContractSHACLProperty struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Path         string   `json:"path"`
+	MinCount     *int     `json:"minCount"`
+	MaxCount     *int     `json:"maxCount"`
+	Datatype     string   `json:"datatype"`
+	Class        string   `json:"class"`
+	In           []string `json:"in"`
+	Severity     string   `json:"severity"`
+	Message      string   `json:"message"`
+	Requirement  string   `json:"requirement"`
+	OntologyTerm string   `json:"ontologyTerm"`
+}
+
 func AuditContractContent(contractDocument any, policyDocument any, metadata ContractContentAuditMetadata) ([]PolicyFinding, error) {
 	contract, err := normalizeObject(contractDocument)
 	if err != nil {
 		return nil, fmt.Errorf("decode contract document: %w", err)
 	}
-	policy, err := normalizeContractContentPolicy(policyDocument)
+	policy, err := normalizeContractContentPolicy(policyDocument, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +80,11 @@ func AuditContractContent(contractDocument any, policyDocument any, metadata Con
 	}
 
 	findings := []PolicyFinding{}
+	findings = append(findings, auditJSONLDContract(contract, policy)...)
+	shapes := contractSHACLShapes(policy)
+	for _, shape := range shapes {
+		findings = append(findings, auditContractSHACLShape(contract, policy, shape)...)
+	}
 	for _, rule := range policy.Rules {
 		findings = append(findings, auditContractContentRule(contract, rule)...)
 	}
@@ -58,9 +95,9 @@ func AuditContractContent(contractDocument any, policyDocument any, metadata Con
 	return findings, nil
 }
 
-func normalizeContractContentPolicy(raw any) (ContractContentPolicy, error) {
+func normalizeContractContentPolicy(raw any, metadata ContractContentAuditMetadata) (ContractContentPolicy, error) {
 	if raw == nil {
-		return ContractContentPolicy{}, fmt.Errorf("contract content policy with explicit rules is required")
+		return defaultContractContentPolicy(metadata), nil
 	}
 
 	normalized, err := normalizeObject(raw)
@@ -76,15 +113,51 @@ func normalizeContractContentPolicy(raw any) (ContractContentPolicy, error) {
 		return ContractContentPolicy{}, fmt.Errorf("decode contract content policy: %w", err)
 	}
 	if strings.TrimSpace(policy.PolicySetID) == "" {
-		return ContractContentPolicy{}, fmt.Errorf("contract content policy requires policySetId")
+		policy.PolicySetID = defaultContractPolicySetID
 	}
 	if strings.TrimSpace(policy.Version) == "" {
-		return ContractContentPolicy{}, fmt.Errorf("contract content policy requires version")
-	}
-	if len(policy.Rules) == 0 {
-		return ContractContentPolicy{}, fmt.Errorf("contract content policy requires at least one explicit rule")
+		policy.Version = metadata.PolicyVersion
+		if strings.TrimSpace(policy.Version) == "" {
+			policy.Version = defaultContractPolicyVersion
+		}
 	}
 	return policy, nil
+}
+
+const (
+	defaultContractPolicySetID   = "facis.dcs.contract.structure-semantics"
+	defaultContractPolicyVersion = "v1"
+)
+
+func defaultContractContentPolicy(metadata ContractContentAuditMetadata) ContractContentPolicy {
+	version := metadata.PolicyVersion
+	if strings.TrimSpace(version) == "" {
+		version = defaultContractPolicyVersion
+	}
+	return ContractContentPolicy{
+		PolicySetID: defaultContractPolicySetID,
+		Version:     version,
+		SHACLShapes: []ContractSHACLShape{
+			{
+				ID:          "FACIS-CONTRACT-SHACL-CORE",
+				Title:       "Contract JSON-LD must satisfy the FACIS core SHACL shape",
+				Severity:    "error",
+				TargetClass: "dcs:Contract",
+				Requirement: "DCS-FR-PACM-03",
+				Properties: []ContractSHACLProperty{
+					{Path: "@id", MinCount: intPtr(1), MaxCount: intPtr(1), Datatype: "xsd:anyURI", Name: "Contract identifier"},
+					{Path: "@type", MinCount: intPtr(1), In: []string{"dcs:Contract", "Contract"}, Name: "Contract type"},
+					{Path: "provider", MinCount: intPtr(1), Class: "dcs:Company", Name: "Provider"},
+					{Path: "customer", MinCount: intPtr(1), Class: "dcs:Company", Name: "Customer"},
+					{Path: "contract.jurisdiction", MinCount: intPtr(1), Datatype: "xsd:string", Name: "Jurisdiction"},
+				},
+			},
+		},
+	}
+}
+
+func intPtr(value int) *int {
+	return &value
 }
 
 func auditContractContentRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
@@ -105,6 +178,163 @@ func auditContractContentRule(contract map[string]any, rule ContractContentPolic
 	default:
 		return []PolicyFinding{ruleFinding(rule, "error", fmt.Sprintf("unsupported static contract content rule builtin %q", rule.Builtin))}
 	}
+}
+
+func auditJSONLDContract(contract map[string]any, policy ContractContentPolicy) []PolicyFinding {
+	findings := []PolicyFinding{}
+	if _, ok := contract["@context"]; !ok {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-001", "Contract must declare a JSON-LD context", "error", "@context is required for JSON-LD contract documents", "@context", "jsonld:@context"))
+	} else if !validJSONLDContext(contract["@context"]) {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-001", "Contract must declare a valid JSON-LD context", "error", "@context must be a string, object, or non-empty array of strings/objects", "@context", "jsonld:@context"))
+	} else {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-001", "Contract declares a valid JSON-LD context", "info", "@context is present and structurally valid", "@context", "jsonld:@context"))
+	}
+
+	if id, ok := contractString(contract, "@id"); !ok {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-002", "Contract must have a JSON-LD identifier", "error", "@id is required", "@id", "jsonld:@id"))
+	} else if !validIRIOrURN(id) {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-002", "Contract must have a JSON-LD identifier", "error", fmt.Sprintf("@id %q is not an absolute IRI or URN", id), "@id", "jsonld:@id"))
+	} else {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-002", "Contract has a JSON-LD identifier", "info", "@id is present and structurally valid", "@id", "jsonld:@id"))
+	}
+
+	if values := valuesAtPath(contract, "@type"); len(values) == 0 {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-003", "Contract must declare a JSON-LD type", "error", "@type is required", "@type", "jsonld:@type"))
+	} else if !allJSONLDTypesValid(values) {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-003", "Contract must declare valid JSON-LD types", "error", "@type must contain compact IRIs or absolute IRIs", "@type", "jsonld:@type"))
+	} else {
+		findings = append(findings, contractStructureFinding(policy, "FACIS-CONTRACT-JSONLD-003", "Contract declares valid JSON-LD types", "info", "@type is present and structurally valid", "@type", "jsonld:@type"))
+	}
+
+	return findings
+}
+
+func contractSHACLShapes(policy ContractContentPolicy) []ContractSHACLShape {
+	shapes := make([]ContractSHACLShape, 0, len(policy.SHACLShapes))
+	shapes = append(shapes, policy.SHACLShapes...)
+	if policy.SHACL != nil {
+		shapes = append(shapes, policy.SHACL.Shapes...)
+	}
+	if len(shapes) == 0 {
+		defaultPolicy := defaultContractContentPolicy(ContractContentAuditMetadata{PolicyVersion: policy.Version})
+		return defaultPolicy.SHACLShapes
+	}
+	return shapes
+}
+
+func auditContractSHACLShape(contract map[string]any, policy ContractContentPolicy, shape ContractSHACLShape) []PolicyFinding {
+	shape = normalizeContractSHACLShape(shape)
+	if shape.TargetClass != "" && !jsonLDTypeMatches(valuesAtPath(contract, "@type"), shape.TargetClass) {
+		return []PolicyFinding{contractStructureFinding(policy, shape.ID, shape.Title, shape.Severity, fmt.Sprintf("target class %q does not match contract @type", shape.TargetClass), "@type", shape.TargetClass)}
+	}
+
+	properties := shape.Properties
+	properties = append(properties, shape.Property...)
+	findings := []PolicyFinding{}
+	for index, property := range properties {
+		findings = append(findings, auditContractSHACLProperty(contract, policy, shape, normalizeContractSHACLProperty(shape, property, index))...)
+	}
+	if len(findings) == 0 {
+		findings = append(findings, contractStructureFinding(policy, shape.ID, shape.Title, "info", "SHACL shape conforms", shape.TargetClass, shape.TargetClass))
+	}
+	return findings
+}
+
+func auditContractSHACLProperty(contract map[string]any, policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty) []PolicyFinding {
+	values := valuesAtPath(contract, property.Path)
+	findings := []PolicyFinding{}
+	if property.MinCount != nil && len(nonEmptyValues(values)) < *property.MinCount {
+		findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s requires at least %d value(s)", propertyLabel(property), *property.MinCount)))
+	}
+	if property.MaxCount != nil && len(nonEmptyValues(values)) > *property.MaxCount {
+		findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s allows at most %d value(s)", propertyLabel(property), *property.MaxCount)))
+	}
+	if len(nonEmptyValues(values)) == 0 {
+		return findings
+	}
+	if property.Datatype != "" {
+		for _, value := range values {
+			if !valueConformsDatatype(value, property.Datatype) {
+				findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must use datatype %s", propertyLabel(property), property.Datatype)))
+				break
+			}
+		}
+	}
+	if len(property.In) > 0 {
+		allowed := normalizedSet(property.In)
+		matched := false
+		for _, value := range values {
+			if allowed[strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(value))))] {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must be one of %s", propertyLabel(property), strings.Join(property.In, ", "))))
+		}
+	}
+	if property.Class != "" {
+		for _, value := range values {
+			if !valueHasClass(value, property.Class) {
+				findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must reference class %s", propertyLabel(property), property.Class)))
+				break
+			}
+		}
+	}
+	if len(findings) == 0 {
+		return []PolicyFinding{contractFinding(property.ID, shape.Title, "info", fmt.Sprintf("%s conforms", propertyLabel(property)), property.Path, property.Path, property.OntologyTerm, property.Requirement)}
+	}
+	return findings
+}
+
+func normalizeContractSHACLShape(shape ContractSHACLShape) ContractSHACLShape {
+	if strings.TrimSpace(shape.ID) == "" {
+		shape.ID = "FACIS-CONTRACT-SHACL-CUSTOM"
+	}
+	if strings.TrimSpace(shape.Title) == "" {
+		shape.Title = shape.ID
+	}
+	if strings.TrimSpace(shape.Severity) == "" {
+		shape.Severity = "error"
+	}
+	if strings.TrimSpace(shape.Requirement) == "" {
+		shape.Requirement = "DCS-FR-PACM-03"
+	}
+	return shape
+}
+
+func normalizeContractSHACLProperty(shape ContractSHACLShape, property ContractSHACLProperty, index int) ContractSHACLProperty {
+	if strings.TrimSpace(property.ID) == "" {
+		property.ID = fmt.Sprintf("%s-PROP-%03d", shape.ID, index+1)
+	}
+	if strings.TrimSpace(property.Severity) == "" {
+		property.Severity = shape.Severity
+	}
+	if strings.TrimSpace(property.Requirement) == "" {
+		property.Requirement = shape.Requirement
+	}
+	if strings.TrimSpace(property.OntologyTerm) == "" {
+		property.OntologyTerm = shape.OntologyTerm
+	}
+	return property
+}
+
+func contractStructureFinding(policy ContractContentPolicy, ruleID, title, severity, message, path, ontologyTerm string) PolicyFinding {
+	finding := contractFinding(ruleID, title, severity, message, path, path, ontologyTerm, "DCS-FR-PACM-03")
+	finding.PolicySetID = policy.PolicySetID
+	finding.PolicyVersion = policy.Version
+	return finding
+}
+
+func shaclPropertyFinding(policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty, fallbackMessage string) PolicyFinding {
+	message := property.Message
+	if strings.TrimSpace(message) == "" {
+		message = fallbackMessage
+	}
+	finding := contractFinding(property.ID, shape.Title, property.Severity, message, property.Path, property.Path, property.OntologyTerm, property.Requirement)
+	finding.PolicySetID = policy.PolicySetID
+	finding.PolicyVersion = policy.Version
+	return finding
 }
 
 func normalizeContractContentRule(rule ContractContentPolicyRule) ContractContentPolicyRule {
@@ -259,6 +489,21 @@ func contractValue(contract map[string]any, semanticPath string) (any, bool) {
 	return nil, false
 }
 
+func valuesAtPath(contract map[string]any, semanticPath string) []any {
+	value, ok := contractValue(contract, semanticPath)
+	if !ok {
+		return nil
+	}
+	if values, ok := value.([]any); ok {
+		result := make([]any, 0, len(values))
+		for _, item := range values {
+			result = append(result, compactJSONLDValue(item))
+		}
+		return result
+	}
+	return []any{compactJSONLDValue(value)}
+}
+
 func contractString(contract map[string]any, semanticPath string) (string, bool) {
 	value, ok := contractValue(contract, semanticPath)
 	if !ok {
@@ -366,6 +611,127 @@ func compactJSONLDValue(value any) any {
 		}
 	}
 	return value
+}
+
+func validJSONLDContext(value any) bool {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case map[string]any:
+		return len(typed) > 0
+	case []any:
+		if len(typed) == 0 {
+			return false
+		}
+		for _, item := range typed {
+			if !validJSONLDContext(item) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func validIRIOrURN(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	return strings.Contains(trimmed, "://") || strings.HasPrefix(strings.ToLower(trimmed), "urn:")
+}
+
+func allJSONLDTypesValid(values []any) bool {
+	for _, value := range values {
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return false
+		}
+		if !validJSONLDTerm(text) {
+			return false
+		}
+	}
+	return true
+}
+
+func validJSONLDTerm(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return strings.Contains(trimmed, ":") || strings.Contains(trimmed, "://") || strings.HasPrefix(strings.ToLower(trimmed), "urn:")
+}
+
+func jsonLDTypeMatches(values []any, targetClass string) bool {
+	target := compactTerm(strings.TrimSpace(targetClass))
+	for _, value := range values {
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		if text == targetClass || compactTerm(text) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func nonEmptyValues(values []any) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		if !isEmptyAuditValue(compactJSONLDValue(value)) {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func valueConformsDatatype(value any, datatype string) bool {
+	value = compactJSONLDValue(value)
+	normalized := strings.ToLower(compactTerm(datatype))
+	switch normalized {
+	case "string":
+		_, ok := value.(string)
+		return ok
+	case "integer", "int", "long":
+		float, ok := toFloat(value)
+		return ok && math.Trunc(float) == float
+	case "decimal", "double", "float":
+		_, ok := toFloat(value)
+		return ok
+	case "boolean":
+		_, ok := value.(bool)
+		return ok
+	case "anyuri", "uri":
+		text, ok := value.(string)
+		return ok && validIRIOrURN(text)
+	default:
+		return true
+	}
+}
+
+func valueHasClass(value any, class string) bool {
+	obj, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	return jsonLDTypeMatches(valuesAtObjectPath(obj, "@type"), class)
+}
+
+func valuesAtObjectPath(obj map[string]any, semanticPath string) []any {
+	value, ok := contractValue(obj, semanticPath)
+	if !ok {
+		return nil
+	}
+	if values, ok := value.([]any); ok {
+		return values
+	}
+	return []any{value}
+}
+
+func propertyLabel(property ContractSHACLProperty) string {
+	if strings.TrimSpace(property.Name) != "" {
+		return property.Name
+	}
+	return property.Path
 }
 
 func toFloat(value any) (float64, bool) {

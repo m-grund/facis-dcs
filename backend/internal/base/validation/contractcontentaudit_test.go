@@ -48,12 +48,22 @@ func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
 
 func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 	contract := map[string]any{
+		"@context": []any{"https://w3id.org/facis/sla/ontology"},
+		"@id":      "urn:facis:dcs:contract:sla:example-001",
+		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
+		"provider": map[string]any{
+			"@type": "dcs:Company",
+		},
+		"customer": map[string]any{
+			"@type": "dcs:Company",
+		},
 		"company": map[string]any{
 			"location": map[string]any{
 				"country": "DEU",
 			},
 		},
 		"contract": map[string]any{
+			"jurisdiction": "DEU",
 			"governingLaw": "DE",
 			"payment": map[string]any{
 				"amount": 9500,
@@ -121,8 +131,83 @@ func TestAuditContractContentReadsJSONLDSemanticPathThresholds(t *testing.T) {
 func TestAuditContractContentRequiresExplicitPolicyRules(t *testing.T) {
 	findings, err := AuditContractContent(map[string]any{}, nil, ContractContentAuditMetadata{})
 
-	require.Error(t, err)
-	require.Nil(t, findings)
+	require.NoError(t, err)
+	require.NotEmpty(t, findings)
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-JSONLD-001", "error"))
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-CORE", "error"))
+}
+
+func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
+	contract := map[string]any{
+		"@context": []any{"https://w3id.org/facis/sla/ontology"},
+		"@id":      "urn:facis:dcs:contract:sla:example-001",
+		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
+		"provider": map[string]any{
+			"@type": "dcs:Company",
+		},
+		"customer": map[string]any{
+			"@type": "dcs:Company",
+		},
+		"contract": map[string]any{
+			"jurisdiction": "DEU",
+		},
+	}
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.structure-semantics",
+		"version":     "test",
+		"shaclShapes": []any{
+			map[string]any{
+				"id":          "FACIS-CONTRACT-SHACL-SLA",
+				"title":       "SLA contract must satisfy semantic shape",
+				"targetClass": "dcs:Contract",
+				"properties": []any{
+					map[string]any{"path": "contract.jurisdiction", "minCount": 1, "datatype": "xsd:string", "name": "Jurisdiction"},
+					map[string]any{"path": "provider", "minCount": 1, "class": "dcs:Company", "name": "Provider"},
+				},
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-JSONLD-001", "info"))
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "info"))
+	require.False(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
+}
+
+func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
+	contract := map[string]any{
+		"@context": "https://w3id.org/facis/sla/ontology",
+		"@id":      "urn:facis:dcs:contract:sla:example-001",
+		"@type":    "dcs:Contract",
+		"provider": map[string]any{
+			"@type": "dcs:Organization",
+		},
+	}
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.structure-semantics",
+		"version":     "test",
+		"shacl": map[string]any{
+			"shapes": []any{
+				map[string]any{
+					"id":          "FACIS-CONTRACT-SHACL-SLA",
+					"title":       "SLA contract must satisfy semantic shape",
+					"targetClass": "dcs:Contract",
+					"property": []any{
+						map[string]any{"path": "contract.jurisdiction", "minCount": 1, "name": "Jurisdiction"},
+						map[string]any{"path": "provider", "class": "dcs:Company", "name": "Provider"},
+					},
+				},
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "error"))
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
 }
 
 func hasFindingSeverity(findings []PolicyFinding, ruleID string, severity string) bool {

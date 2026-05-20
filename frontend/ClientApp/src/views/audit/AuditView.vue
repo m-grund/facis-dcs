@@ -26,17 +26,14 @@ const contractDid = ref('urn:facis:dcs:contract:sla:example-001')
 const contractVersion = ref('v1')
 const policyVersion = ref('2026-05-18')
 const contractDocumentText = ref(`{
-  "@context": [
-    "https://w3id.org/facis/sla/ontology"
-  ],
-  "@id": "urn:facis:dcs:contract:sla:example-001",
+  "@context": [],
+  "@id": "facis-contract-with-demo-errors",
   "@type": [
-    "dcs:Contract",
     "sla:ServiceLevelAgreement"
   ],
   "provider": {
     "@id": "urn:facis:party:provider-001",
-    "@type": "dcs:Company",
+    "@type": "dcs:Organization",
     "company": {
       "legalName": "Example Provider GmbH",
       "location": {
@@ -56,7 +53,6 @@ const contractDocumentText = ref(`{
   },
   "contract": {
     "type": "serviceAgreement",
-    "jurisdiction": "DEU",
     "governingLaw": "DE"
   },
   "service": {
@@ -72,8 +68,56 @@ const contractDocumentText = ref(`{
   }
 }`)
 const policyText = ref(`{
-  "policySetId": "facis.dcs.contract.content.static",
+  "policySetId": "facis.dcs.contract.structure-semantics",
   "version": "2026-05-18",
+  "shaclShapes": [
+    {
+      "id": "FACIS-CONTRACT-SHACL-SLA",
+      "title": "Contract JSON-LD must satisfy the SLA SHACL shape",
+      "targetClass": "dcs:Contract",
+      "severity": "error",
+      "requirement": "DCS-FR-PACM-03",
+      "properties": [
+        {
+          "path": "@id",
+          "name": "Contract identifier",
+          "minCount": 1,
+          "maxCount": 1,
+          "datatype": "xsd:anyURI"
+        },
+        {
+          "path": "@type",
+          "name": "Contract type",
+          "minCount": 1,
+          "in": ["dcs:Contract", "Contract"]
+        },
+        {
+          "path": "provider",
+          "name": "Provider",
+          "minCount": 1,
+          "class": "dcs:Company"
+        },
+        {
+          "path": "customer",
+          "name": "Customer",
+          "minCount": 1,
+          "class": "dcs:Company"
+        },
+        {
+          "path": "contract.jurisdiction",
+          "name": "Jurisdiction",
+          "minCount": 1,
+          "datatype": "xsd:string"
+        },
+        {
+          "path": "service.sla.availability",
+          "name": "SLA availability",
+          "minCount": 1,
+          "datatype": "xsd:decimal"
+        }
+      ]
+    }
+  ],
   "rules": [
     {
       "id": "FACIS-CONTRACT-STATIC-000",
@@ -166,7 +210,7 @@ const scopeOptions: { value: AuditScope; label: string }[] = [
 
 const auditModeOptions: { value: AuditMode; label: string }[] = [
   { value: 'repository_trail', label: 'Repository Trail' },
-  { value: 'static_contract', label: 'Static Contract' },
+  { value: 'static_contract', label: 'JSON-LD / SHACL Contract' },
 ]
 
 watch(selectedAuditMode, (mode) => {
@@ -208,6 +252,7 @@ const selectedFindingDetailRows = computed(() => {
     { label: 'Policy Version', value: stringDetail(eventData?.policyVersion) },
     { label: 'Requirement', value: stringDetail(eventData?.requirement) },
     { label: 'Semantic Path', value: stringDetail(eventData?.semanticPath) },
+    { label: 'Path', value: stringDetail(eventData?.path) },
     { label: 'Ontology Term', value: stringDetail(eventData?.ontologyTerm) },
     { label: 'Object Type', value: stringDetail(eventData?.objectType ?? finding.object_type) },
     { label: 'Contract Version', value: stringDetail(eventData?.contractVersion) },
@@ -348,6 +393,16 @@ function stringDetail(value: unknown) {
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+function findingBadgeClass(finding: AuditFinding) {
+  if (finding.category === 'violation') {
+    return 'badge-error'
+  }
+  if (finding.category === 'inconsistency') {
+    return 'badge-warning'
+  }
+  return 'badge-info'
+}
 </script>
 
 <template>
@@ -440,7 +495,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
         </label>
       </div>
       <label class="form-control">
-        <span class="label-text mb-1">Static Policy JSON</span>
+        <span class="label-text mb-1">Policy and SHACL JSON</span>
         <textarea
           v-model="policyText"
           class="textarea textarea-bordered rounded-box min-h-96 font-mono text-xs leading-5"
@@ -507,7 +562,12 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
               <td>
                 <div class="font-medium capitalize">{{ formatLabel(finding.category) }}</div>
               </td>
-              <td>{{ finding.status ?? '-' }}</td>
+              <td>
+                <span v-if="finding.status" class="badge" :class="findingBadgeClass(finding)">
+                  {{ finding.status }}
+                </span>
+                <span v-else>-</span>
+              </td>
               <td>{{ finding.did ?? '-' }}</td>
               <td class="min-w-72 max-w-xl">
                 <div class="font-medium">{{ finding.title ?? 'Audit finding' }}</div>
@@ -541,7 +601,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
           <div>
             <div class="text-xs uppercase opacity-60">{{ formatLabel(selectedFinding.category) }}</div>
             <h4 class="font-bold leading-snug">{{ selectedFinding.title ?? 'Audit finding' }}</h4>
-            <div class="mt-2 badge" :class="selectedFinding.category === 'violation' ? 'badge-error' : selectedFinding.category === 'inconsistency' ? 'badge-warning' : 'badge-info'">
+            <div class="mt-2 badge" :class="findingBadgeClass(selectedFinding)">
               {{ selectedFinding.status ?? selectedFinding.category }}
             </div>
           </div>
