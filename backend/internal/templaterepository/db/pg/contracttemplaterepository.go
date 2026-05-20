@@ -16,6 +16,32 @@ import (
 type PostgresContractTemplateRepo struct {
 }
 
+func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx.Tx, did string, copyDID string) (int, error) {
+	statement := `
+        INSERT INTO contract_templates 
+            (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
+             responsible_persons, template_data)
+        SELECT 
+            $1,
+            document_number,
+            CASE 
+                WHEN state IN ('APPROVED', 'REGISTERED') THEN version + 1
+                ELSE 1
+            END,
+            state, template_type, name, description, created_by, NOW(), NOW(), 
+            responsible_persons, template_data
+        FROM contract_templates 
+        WHERE did = $2
+        RETURNING version
+    `
+	var newVersion int
+	err := tx.QueryRowContext(ctx, statement, copyDID, did).Scan(&newVersion)
+	if err != nil {
+		return 0, err
+	}
+	return newVersion, nil
+}
+
 func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         INSERT INTO contract_templates_history 

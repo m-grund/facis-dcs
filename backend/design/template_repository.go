@@ -26,6 +26,24 @@ var ContractTemplateCreateResponse = Type("ContractTemplateCreateResponse", func
 	Required("did")
 })
 
+var ContractTemplateCopyRequest = Type("ContractTemplateCopyRequest", func() {
+	Description("Contract template create request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template that should be copied")
+
+	Required("did")
+})
+
+var ContractTemplateCopyResponse = Type("ContractTemplateCopyResponse", func() {
+	Description("Result for creating a contract template")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template copy")
+
+	Required("did")
+})
+
 var ContractTemplateSubmitRequest = Type("ContractTemplateSubmitRequest", func() {
 	Description("Contract template submit request")
 
@@ -419,6 +437,29 @@ var _ = Service("TemplateRepository", func() {
 
 		HTTP(func() {
 			POST("/template/create")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// POST /template/copy
+	Method("copy", func() {
+		Description("Copy a a template")
+		Meta("dcs:ui", "Template Builder")
+
+		Security(JWTAuth, func() {
+			Scope("Template Creator")
+		})
+
+		Payload(ContractTemplateCopyRequest)
+		Result(ContractTemplateCopyResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/template/copy")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

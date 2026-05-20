@@ -90,6 +90,36 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	}, nil
 }
 
+// Copy a new template.
+func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templaterepository.ContractTemplateCopyRequest) (*templaterepository.ContractTemplateCopyResponse, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	did, err := base.GetDID()
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	cmd := command.CopyCmd{
+		DID:      *did,
+		CopyDID:  req.Did,
+		CopiedBy: middleware.GetUsername(ctx),
+	}
+	copyHandler := command.Copier{
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+	err = copyHandler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	return &templaterepository.ContractTemplateCopyResponse{
+		Did: *did,
+	}, nil
+}
+
 // with action flag { forwardTo: "approval" | "draft" } and optional
 // reviewComments. allow resubmission path with approver comments.
 func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templaterepository.ContractTemplateSubmitRequest) (res *templaterepository.ContractTemplateSubmitResponse, err error) {
