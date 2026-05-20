@@ -2,14 +2,14 @@ export const MERGED_BLOCK_ID_SEPARATOR = '::'
 
 export interface TemplateDataRef {
   templateId: string
-  version?: number
+  version: number
   document_number?: string
 }
 
 export function isSameTemplateDataRef(a: TemplateDataRef, b: TemplateDataRef): boolean {
   return (
     a.templateId === b.templateId &&
-    (a.version ?? 1) === (b.version ?? 1) &&
+    a.version  === b.version &&
     (a.document_number ?? '') === (b.document_number ?? '')
   )
 }

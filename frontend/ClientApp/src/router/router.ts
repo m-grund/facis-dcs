@@ -1,4 +1,5 @@
 import { getUIBasePath } from '@/config'
+import { useScrollStore } from '@/core/store/scroll'
 import ApproveContractTemplateView from '@/modules/template-repository/views/ApproveContractTemplateView.vue'
 import ReviewContractTemplateView from '@/modules/template-repository/views/ReviewContractTemplateView.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
@@ -105,6 +106,7 @@ const routes: RouteRecordRaw[] = [
     path: '/templates/view/:did',
     name: ROUTES.TEMPLATES.VIEW,
     component: ViewContractTemplateView,
+    props: true,
     meta: {
       name: 'View Template',
       hideInSidebar: true,
@@ -319,6 +321,15 @@ router.beforeEach((to) => {
   const hasAuthorizedRole = authStore.user?.roles?.some((role) => to.meta.roles?.includes(role)) ?? false
   if (!hasAuthorizedRole) {
     return { name: ROUTES.HOME }
+  }
+})
+
+router.beforeEach((to) => {
+  const scrollStore = useScrollStore()
+  if (to.matched.some((r) => r.path.includes(':'))) {
+    scrollStore.addGutter()
+  } else {
+    scrollStore.removeGutter()
   }
 })
 

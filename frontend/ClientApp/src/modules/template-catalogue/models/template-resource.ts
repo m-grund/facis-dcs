@@ -3,7 +3,7 @@ import type { Participant } from '@/modules/template-catalogue/models/participan
 export interface TemplateResource {
   did: string
   document_number?: string
-  version?: number
+  version: number
   name?: string
   description?: string
   template_type?: string
@@ -15,7 +15,7 @@ export interface TemplateResource {
 export interface TemplateResourcesItem {
   did: string
   document_number?: string
-  version?: number
+  version: number
   name?: string
   description?: string
   template_type?: string

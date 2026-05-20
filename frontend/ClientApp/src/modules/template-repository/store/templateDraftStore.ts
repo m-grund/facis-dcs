@@ -23,6 +23,7 @@ const defaultState: Readonly<TemplateDraftState> = {
   version: null,
   updated_at: null,
   created_by: '',
+  responsible_persons: null,
   // This field is used to distinguish between contract and template workflows.
   workflow: 'template',
 }
@@ -114,6 +115,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
       if (payload.text !== undefined) block.text = payload.text
       if (isClauseBlock(block)) block.conditionIds = payload.conditionIds ?? []
 
+      for (const b of this.documentBlocks) if (isClauseBlock(b)) b.conditionIds = b.conditionIds ?? []
     },
     /**
      * Moves a block to a new position under the same or another parent.
@@ -255,7 +257,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
         snapshot
       ]
     },
-    removeSubTemplateSnapshot(template: { did: string, version?: number, document_number?: string }): void {
+    removeSubTemplateSnapshot(template: { did: string, version: number, document_number?: string }): void {
       this.subTemplateSnapshots = this.subTemplateSnapshots.filter((item) => !isSameTemplate(item, template))
     },
     reset(overrides?: Partial<TemplateDraftState>) {
@@ -306,6 +308,7 @@ function addBlock(
     if (!block || !isClauseBlock(block)) {
       throw new Error(`addBlock: clause block not found: ${clauseBlockId}`)
     }
+    if (isClauseBlock(block)) block.conditionIds = block.conditionIds ?? []
     const inOutline = collectBlockIdsInOutline(outline)
     if (inOutline.has(clauseBlockId)) {
       return clauseBlockId
@@ -320,6 +323,7 @@ function addBlock(
 
   const blockId = crypto.randomUUID()
   const block = createBlockFromPayload(blockId, payload)
+  if (isClauseBlock(block)) block.conditionIds = block.conditionIds ?? []
 
   if (isClauseBlock(block) && !addToOutline) {
     blocks.push(block)
@@ -465,8 +469,8 @@ function getInitialState(): TemplateDraftState {
 }
 
 function isSameTemplate(
-  t1: { did: string, version?: number, document_number?: string },
-  t2: { did: string, version?: number, document_number?: string }
+  t1: { did: string, version: number, document_number?: string },
+  t2: { did: string, version: number, document_number?: string }
 ): boolean {
   return isSameTemplateDataRef(
     {

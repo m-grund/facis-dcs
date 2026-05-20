@@ -24,7 +24,7 @@ type GetHistoryByIDQry struct {
 type GetHistoryByIDResult struct {
 	ID                 string
 	DID                string
-	ContractVersion    *int
+	ContractVersion    int
 	State              contractstate.ContractState
 	Name               *string
 	Description        *string
@@ -43,7 +43,6 @@ type GetHistoryByIDHandler struct {
 	Ctx   context.Context
 	DB    *sqlx.DB
 	CRepo db.ContractRepo
-	NRepo db.NegotiationRepo
 }
 
 func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByIDQry) ([]GetHistoryByIDResult, error) {

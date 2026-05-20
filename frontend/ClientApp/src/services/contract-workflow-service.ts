@@ -3,6 +3,7 @@ import type {
   ContractApproveRequest,
   ContractAuditRequest,
   ContractCreateRequest,
+  ContractHistoryRetrieveRequest,
   ContractNegotiationRequest,
   ContractNegotiationRespondRequest,
   ContractRejectRequest,
@@ -19,6 +20,7 @@ import type {
   ContractApproveResponse,
   ContractAuditResponse,
   ContractCreateResponse,
+  ContractHistoryResponse,
   ContractNegotiationRespondResponse,
   ContractNegotiationResponse,
   ContractRejectResponse,
@@ -115,6 +117,16 @@ export const contractWorkflowService: ContractWorkflowService = {
       .then((res) => res.data)
       .catch((err) => {
         console.error('Audit Error:', err)
+        return []
+      })
+  },
+
+  async retrieveHistoryByDid(request: ContractHistoryRetrieveRequest) {
+    return http
+      .get<ContractHistoryResponse>(`/contract/history/${request.did}`)
+      .then((res) => res.data ?? [])
+      .catch((err) => {
+        console.error('Retrieve Error:', err)
         return []
       })
   },

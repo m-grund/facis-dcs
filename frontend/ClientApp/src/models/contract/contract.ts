@@ -1,18 +1,19 @@
 import type { ContractState } from '@/types/contract-state'
-import type { ContractNegotiation } from './contract-negotiation'
 import type { ContractData } from '../contract-data'
+import type { ContractNegotiation } from './contract-negotiation'
+import type { ContractResponsiblePersons } from './contract-responsible-persons'
 
 export const ExpirationPolicy = {
-  renewal: "RENEWAL",
-  archiving: "ARCHIVING",
-  termination: "TERMINATION"
-} as const;
+  renewal: 'RENEWAL',
+  archiving: 'ARCHIVING',
+  termination: 'TERMINATION',
+} as const
 
-export type ExpirationPolicy = typeof ExpirationPolicy[keyof typeof ExpirationPolicy];
+export type ExpirationPolicy = (typeof ExpirationPolicy)[keyof typeof ExpirationPolicy]
 
 export interface Contract {
   did: string
-  contract_version?: number
+  contract_version: number
   state: ContractState
   name?: string
   description?: string
@@ -23,8 +24,12 @@ export interface Contract {
   exp_date?: string
   exp_notice_period?: number
   exp_policy?: ExpirationPolicy
+  responsible_persons?: ContractResponsiblePersons
   contract_data?: ContractData
   negotiations?: ContractNegotiation[]
 }
 
-export type ContractChangeRequest = Pick<Contract, 'name' | 'description' | 'start_date' | 'exp_date' | 'exp_notice_period' | 'exp_policy'> & { contract_data?: Partial<Contract['contract_data']> }
+export type ContractChangeRequest = Pick<
+  Contract,
+  'name' | 'description' | 'start_date' | 'exp_date' | 'exp_notice_period' | 'exp_policy'
+> & { contract_data?: Partial<Contract['contract_data']> }

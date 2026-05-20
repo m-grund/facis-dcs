@@ -8,5 +8,5 @@ import (
 )
 
 type ContractTemplateRepo interface {
-	ReadTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*datatype.JSON, error)
+	ReadFrameContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*datatype.JSON, error)
 }

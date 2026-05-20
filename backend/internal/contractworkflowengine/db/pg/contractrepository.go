@@ -72,8 +72,7 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 
 func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
 	query := `
-        SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        SELECT *
         FROM contract_history WHERE did = $1
     `
 	var ct []db.ContractHistory
@@ -194,14 +193,14 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	var params []interface{}
 	paramIndex := 1
 
-	if values.DID != nil {
+	if len(values.DID) > 0 {
 		conditions += ` did = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.DID)
+		params = append(params, values.DID)
 		paramIndex++
 	}
-	if values.ContractVersion != nil {
+	if values.ContractVersion > 0 {
 		conditions += ` contract_version = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.ContractVersion)
+		params = append(params, values.ContractVersion)
 		paramIndex++
 	}
 	if len(values.State) > 0 {
@@ -210,19 +209,19 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, state)
 		paramIndex++
 	}
-	if values.Name != nil {
+	if len(values.Name) > 0 {
 		conditions += ` name ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Name+"%")
+		params = append(params, "%"+values.Name+"%")
 		paramIndex++
 	}
-	if values.Description != nil {
+	if len(values.Description) > 0 {
 		conditions += ` description ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Description+"%")
+		params = append(params, "%"+values.Description+"%")
 		paramIndex++
 	}
-	if values.ContractData != nil {
+	if len(values.ContractData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, *values.ContractData)
+		params = append(params, values.ContractData)
 		paramIndex++
 	}
 
@@ -255,9 +254,6 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	}
 	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
 		addParam("contract_data", data.ContractData)
-	}
-	if data.ContractVersion != nil {
-		addParam("contract_version", data.ContractVersion)
 	}
 	if data.StartDate != nil {
 		addParam("start_date", data.StartDate)

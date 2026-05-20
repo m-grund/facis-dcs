@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS contracts
 
     state             contract_state NOT NULL,
 
-    contract_version  INT,
+    contract_version  INT NOT NULL DEFAULT 1,
+
     name              VARCHAR(255),
     description       TEXT,
     contract_data     JSONB DEFAULT '{}'::jsonb,
@@ -30,6 +31,24 @@ CREATE TABLE IF NOT EXISTS contracts
     CONSTRAINT pk_contracts PRIMARY KEY (did),
     CONSTRAINT chk_did_not_empty CHECK (did <> '')
 );
+
+
+CREATE INDEX idx_contract_contracts_search ON contracts
+    USING GIN (search_vector);
+
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER contract_contracts_update_updated_at
+    BEFORE UPDATE ON contracts
+    FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
 
 ------------------------------------------------------------------------------------------------------------------------
 
@@ -52,7 +71,8 @@ CREATE TABLE IF NOT EXISTS contract_history
 
     state             contract_state NOT NULL,
 
-    contract_version  INT,
+    contract_version  INT NOT NULL DEFAULT 1,
+
     name              VARCHAR(255),
     description       TEXT,
     contract_data     JSONB DEFAULT '{}'::jsonb,
@@ -136,25 +156,6 @@ FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
 
-CREATE INDEX idx_contract_contracts_search ON contracts
-    USING GIN (search_vector);
-
-
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-    RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER contract_contracts_update_updated_at
-    BEFORE UPDATE ON contracts
-    FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
-
-------------------------------------------------------------------------------------------------------------------------
-
 CREATE TYPE contract_review_task_state AS ENUM ('OPEN', 'APPROVED', 'REJECTED');
 
 CREATE TABLE IF NOT EXISTS contract_review_task
@@ -225,7 +226,8 @@ CREATE TABLE IF NOT EXISTS contract_negotiations
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
     did                 VARCHAR(255) NOT NULL CHECK (did <> ''),
-    contract_version    INT,
+    contract_version    INT NOT NULL,
+
     change_request      JSONB DEFAULT '{}'::jsonb,
 
     created_by VARCHAR(255) NOT NULL,

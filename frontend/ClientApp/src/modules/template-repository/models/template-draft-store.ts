@@ -8,6 +8,7 @@ import type {
   TemplateTypeValue,
   DocumentBlockType,
 } from "@template-repository/models/contract-templace"
+import type { ContractTemplateResponsiblePersons } from "@/models/contract-template-responsible-persons"
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const
 export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]
@@ -28,6 +29,7 @@ interface TemplateDraftState {
   version: number | null
   updated_at: string | null
   created_by: string
+  responsible_persons: ContractTemplateResponsiblePersons | null
   workflow: 'contract' | 'template'
 }
 

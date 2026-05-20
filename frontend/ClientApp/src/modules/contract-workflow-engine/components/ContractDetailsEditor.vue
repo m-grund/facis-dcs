@@ -38,7 +38,6 @@
           :class="{ 'text-red-400': !!inserted && inserted.description !== contract.description }"
           disabled
         />
-        
       </fieldset>
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Start Date</legend>
@@ -56,7 +55,7 @@
           type="text"
           v-model="inserted.start_date"
           class="input input-bordered w-full"
-           :class="{ 'text-red-400': inserted.start_date !== contract.start_date }"
+          :class="{ 'text-red-400': inserted.start_date !== contract.start_date }"
           disabled
         />
       </fieldset>
@@ -76,7 +75,7 @@
           type="text"
           v-model="inserted.exp_date"
           class="input input-bordered w-full"
-           :class="{ 'text-red-400': inserted.exp_date !== contract.exp_date }"
+          :class="{ 'text-red-400': inserted.exp_date !== contract.exp_date }"
           disabled
         />
       </fieldset>
@@ -95,18 +94,13 @@
           type="text"
           v-model="inserted.exp_notice_period"
           class="input input-bordered w-full"
-           :class="{ 'text-red-400': inserted.exp_notice_period !== contract.exp_notice_period?.toString() }"
+          :class="{ 'text-red-400': inserted.exp_notice_period !== contract.exp_notice_period?.toString() }"
           disabled
         />
       </fieldset>
       <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Expiration Policy</legend>
-        <select
-          v-if="!inserted?.exp_policy"
-          v-model="contract.exp_policy"
-          class="select w-full"
-          :disabled="disabled"
-        >
+        <select v-if="!inserted?.exp_policy" v-model="contract.exp_policy" class="select w-full" :disabled="disabled">
           <option v-for="policy in expirationPolicies" :key="policy.value" :value="policy.value">
             {{ policy.name }}
           </option>
@@ -116,9 +110,45 @@
           type="text"
           v-model="inserted.exp_policy"
           class="input input-bordered w-full"
-           :class="{ 'text-red-400': inserted.exp_policy !== contract.exp_policy }"
+          :class="{ 'text-red-400': inserted.exp_policy !== contract.exp_policy }"
           disabled
         />
+      </fieldset>
+      <fieldset v-if="showResponsiblities" class="fieldset p-0 border-none">
+        <div class="collapse collapse-arrow [&>input~.collapse-title::after]:scale-75">
+          <input type="checkbox" name="responsibles" />
+          <legend class="fieldset-legend collapse-title font-semibold pl-0">Responsible Persons</legend>
+          <div class="collapse-content grid">
+            <ul class="list col-start-1 row-start-1">
+              <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Creator</li>
+              <li class="list-row py-0">{{ contract.responsible_persons?.creator }}</li>
+            </ul>
+            <ul class="list col-start-2 row-start-1">
+              <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Approver</li>
+              <li class="list-row py-0">{{ contract.responsible_persons?.approver }}</li>
+            </ul>
+            <ul class="list col-start-1 row-start-2">
+              <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Negotiators:</li>
+              <li
+                v-for="(negotiator, i) in contract.responsible_persons?.negotiators"
+                :key="i + negotiator"
+                class="list-row py-0"
+              >
+                {{ negotiator }}
+              </li>
+            </ul>
+            <ul class="list col-start-2 row-start-2">
+              <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Reviewers</li>
+              <li
+                v-for="(reviewer, i) in contract.responsible_persons?.reviewers"
+                :key="i + reviewer"
+                class="list-row py-0"
+              >
+                {{ reviewer }}
+              </li>
+            </ul>
+          </div>
+        </div>
       </fieldset>
     </div>
   </div>
@@ -126,7 +156,8 @@
 
 <script setup lang="ts">
 import type { Contract } from '@/models/contract/contract'
-import { ref, watch, computed} from 'vue'
+import { ContractState } from '@/types/contract-state';
+import { ref, watch, computed } from 'vue'
 
 const props = defineProps<{
   contract: Contract
@@ -144,7 +175,7 @@ watch(
     // "2026-05-09T11:24:00Z" → "2026-05-09T11:24"
     expDateLocal.value = val.slice(0, 16)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(
@@ -154,7 +185,7 @@ watch(
     // "2026-05-09T11:24:00Z" → "2026-05-09T11:24"
     startDateLocal.value = val.slice(0, 16)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 function onExpDateChange() {
@@ -178,7 +209,7 @@ function onStartDateChange() {
 const expirationPolicies = [
   { name: 'Renewal', value: 'RENEWAL' },
   { name: 'Archiving', value: 'ARCHIVING' },
-  { name: 'Termination', value: 'TERMINATION' }
+  { name: 'Termination', value: 'TERMINATION' },
 ]
 
 interface ContractDetailData {
@@ -205,4 +236,6 @@ const minExpDate = computed(() => {
 })
 
 const originalContract = ref(Object.assign({}, props.contract))
+
+const showResponsiblities = computed(() => !([ContractState.draft, ContractState.terminated] as ContractState[]).includes(props.contract.state))
 </script>

@@ -16,7 +16,7 @@ import TemplatePreview from '@template-repository/components/builder-editor/prev
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import type { ContractData } from '@/models/contract-data'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
@@ -24,6 +24,8 @@ import AddBlockModal from '@template-repository/components/builder-editor/AddBlo
 import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
+import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
+import { useScrollStore } from '@/core/store/scroll'
 
 const route = useRoute()
 const router = useRouter()
@@ -50,6 +52,7 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 const contract: Ref<Contract | null> = ref(null)
 
 const canSubmit = computed(() => isEditMode.value || hasApprovedOrRegisteredTemplates.value && selectedTemplate.value !== null)
+
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
@@ -81,7 +84,6 @@ const submit = async () => {
         exp_date: contract.value.exp_date,
         exp_notice_period: contract.value.exp_notice_period,
         exp_policy: contract.value.exp_policy,
-        contract_version: contract.value.contract_version,
         name: contract.value.name,
         description: contract.value.description,
         contract_data: contractData,
@@ -170,27 +172,46 @@ function applyContractDataToDraft(contractData?: unknown) {
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null
 }
+
+const scrollStore = useScrollStore()
+
+watch(selectedTemplate, (value) => {
+  if (!!value?.did) {
+    scrollStore.addGutter()
+  } else {
+    scrollStore.removeGutter()
+  }
+})
+
+onBeforeRouteLeave(() => {
+  scrollStore.removeGutter()
+})
 </script>
 
 <template>
   <div class="flex flex-col min-h-full -mx-4 md:-mx-8 -my-4 md:-my-8">
-    <div v-if="!isEditMode" class="max-w-4xl mx-auto px-6 py-12">
+    <div v-if="!isEditMode" class="px-6 py-12">
+      <div class="flex justify-center">
       <select v-model="selectedTemplate" class="select" :disabled="!hasApprovedOrRegisteredTemplates">
         <option :value="null" disabled selected>{{ hasApprovedOrRegisteredTemplates ? 'Pick a template' : 'No templates available' }}</option>
         <option v-for="template in approvedOrRegisteredTemplates" :key="template.did" :value="template">{{ template.name }}</option>
       </select>
+      </div>
+      <div v-if="selectedTemplate" class="pt-10">
+        <ViewContractTemplateView :did="selectedTemplate.did" />
+      </div>
     </div>
     <div v-else-if="!!contract">
       <div class="flex-1 flex flex-col">
         <!-- Tabs -->
-        <div class="sticky top-0 z-10 shrink-0 bg-base-200 border-b border-base-300">
+        <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
           <div class="max-w-4xl mx-auto px-6 pt-3">
             <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">
               {{ isEditMode ? 'Update Contract' : 'Create Contract' }}
             </p>
-            <div role="tablist" class="tabs tabs-lift tabs-lg">
+            <div role="tablist" class="tabs tabs-border tabs-lg">
               <a v-for="tab in tabs" :key="tab.id" role="tab" class="tab"
-                :class="{ 'tab-active': activeTab === tab.id }" @click="setActiveTab(tab.id)">
+                :class="{ 'tab-active text-primary': activeTab === tab.id }" @click="setActiveTab(tab.id)">
                 {{ tab.label }}
               </a>
             </div>
@@ -265,7 +286,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button @click="submit" class="btn btn-primary flex-1" :disabled="isSubmitting || !canSubmit">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          {{ isEditMode ? 'Update Contract' : 'Create' }}
+          {{ isEditMode ? 'Update' : 'Create' }}
         </button>
       </div>
     </div>

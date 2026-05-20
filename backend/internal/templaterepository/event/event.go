@@ -29,11 +29,30 @@ func (e CreateEvent) GetDID() string {
 	return e.DID
 }
 
+// CopyEvent is emitted when a new contract template is created.
+type CopyEvent struct {
+	NewDID     string    `json:"did"`
+	CopyDID    string    `json:"copy_did"`
+	CopiedBy   string    `json:"copied_by"`
+	NewVersion int       `json:"new_version"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e CopyEvent) EventType() string {
+	return eventtype.Copy.String()
+}
+
+// GetDID implements the Event interface.
+func (e CopyEvent) GetDID() string {
+	return e.CopyDID
+}
+
 // SubmitEvent is emitted when a template is submitted
 type SubmitEvent struct {
 	DID                string                 `json:"did"`
 	DocumentNumber     *string                `json:"document_number,omitempty"`
-	Version            *int                   `json:"version,omitempty"`
+	Version            int                    `json:"version"`
 	PreviousState      string                 `json:"previous_state"`
 	NewState           string                 `json:"new_state"`
 	SubmittedBy        string                 `json:"submitted_by"`
@@ -57,7 +76,7 @@ func (e SubmitEvent) GetDID() string {
 type ApproveEvent struct {
 	DID            string    `json:"did"`
 	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
+	Version        int       `json:"version"`
 	ApprovedBy     string    `json:"approved_by"`
 	DecisionNotes  []string  `json:"decision_notes,omitempty"`
 	OccurredAt     time.Time `json:"occurred_at"`
@@ -77,7 +96,7 @@ func (e ApproveEvent) GetDID() string {
 type RejectEvent struct {
 	DID            string    `json:"did"`
 	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
+	Version        int       `json:"version"`
 	RejectedBy     string    `json:"rejected_by"`
 	Reason         string    `json:"reason"`
 	OccurredAt     time.Time `json:"occurred_at"`
@@ -97,7 +116,7 @@ func (e RejectEvent) GetDID() string {
 type VerifyEvent struct {
 	DID            string    `json:"did"`
 	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
+	Version        int       `json:"version"`
 	VerifiedBy     string    `json:"verified_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
 }
@@ -118,8 +137,6 @@ type UpdateEvent struct {
 	UpdatedBy         string         `json:"updated_by"`
 	OldDocumentNumber *string        `json:"old_document_number,omitempty"`
 	NewDocumentNumber *string        `json:"new_document_number,omitempty"`
-	OldVersion        *int           `json:"old_version,omitempty"`
-	NewVersion        *int           `json:"new_version,omitempty"`
 	OldName           *string        `json:"old_name,omitempty"`
 	NewName           *string        `json:"new_name,omitempty"`
 	OldDescription    *string        `json:"old_description,omitempty"`
@@ -145,8 +162,6 @@ type UpdateManageEvent struct {
 	UpdatedBy         string         `json:"updated_by"`
 	OldDocumentNumber *string        `json:"old_document_number,omitempty"`
 	NewDocumentNumber *string        `json:"new_document_number,omitempty"`
-	OldVersion        *int           `json:"old_version,omitempty,omitempty"`
-	NewVersion        *int           `json:"new_version,omitempty,omitempty"`
 	OldState          *string        `json:"old_state,omitempty,omitempty"`
 	NewState          *string        `json:"new_state,omitempty,omitempty"`
 	OldName           *string        `json:"old_name,omitempty,omitempty"`
@@ -170,10 +185,8 @@ func (e UpdateManageEvent) GetDID() string {
 
 // SearchEvent is emitted when template data is searched.
 type SearchEvent struct {
-	RetrievedBy    string    `json:"retrieved_by"`
-	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
-	OccurredAt     time.Time `json:"occurred_at"`
+	RetrievedBy string    `json:"retrieved_by"`
+	OccurredAt  time.Time `json:"occurred_at"`
 }
 
 // EventType implements the Event interface.
@@ -206,7 +219,7 @@ func (e RetrieveAllEvent) GetDID() string {
 type RetrieveByIDEvent struct {
 	DID            string    `json:"did"`
 	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
+	Version        int       `json:"version"`
 	RetrievedBy    string    `json:"retrieved_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
 }
@@ -225,7 +238,7 @@ func (e RetrieveByIDEvent) GetDID() string {
 type ArchiveEvent struct {
 	DID            string    `json:"did"`
 	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
+	Version        int       `json:"version"`
 	ArchivedBy     string    `json:"archived_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
 }
@@ -244,7 +257,7 @@ func (e ArchiveEvent) GetDID() string {
 type RegisterEvent struct {
 	DID            string    `json:"did"`
 	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        *int      `json:"version,omitempty"`
+	Version        int       `json:"version"`
 	RegisteredBy   string    `json:"registered_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
 }

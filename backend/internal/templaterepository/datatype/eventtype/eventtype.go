@@ -9,6 +9,7 @@ type EventType string
 
 const (
 	Create       EventType = "CREATE_CONTRACT_TEMPLATE"
+	Copy         EventType = "COPY_CONTRACT_TEMPLATE"
 	Submit       EventType = "SUBMIT_CONTRACT_TEMPLATE"
 	Approve      EventType = "APPROVE_CONTRACT_TEMPLATE"
 	Reject       EventType = "REJECT_CONTRACT_TEMPLATE"

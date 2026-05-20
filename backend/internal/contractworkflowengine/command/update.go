@@ -18,7 +18,6 @@ import (
 
 type UpdateCmd struct {
 	DID             string
-	ContractVersion *int
 	UpdatedAt       time.Time
 	UpdatedBy       string
 	StartDate       *time.Time
@@ -97,7 +96,6 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 
 	newData := db.ContractUpdateData{
 		DID:             cmd.DID,
-		ContractVersion: cmd.ContractVersion,
 		Name:            cmd.Name,
 		Description:     cmd.Description,
 		StartDate:       cmd.StartDate,
@@ -113,8 +111,6 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 
 	evt := contractevents.UpdateEvent{
 		DID:                cmd.DID,
-		OldContractVersion: oldData.ContractVersion,
-		NewContractVersion: cmd.ContractVersion,
 		OldName:            oldData.Name,
 		NewName:            cmd.Name,
 		OldDescription:     oldData.Description,
