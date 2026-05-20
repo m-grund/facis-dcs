@@ -50,19 +50,19 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {
+
 	templateData, err := h.getFrameContractTemplateDataFromDB(ctx, qry.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not read template data from DB: %w", err)
 	}
 
-	if h.FCClient == nil {
-		return nil, nil
+	if templateData == nil && h.FCClient != nil {
+		templateData, err = h.getTemplateDataFromFC(qry)
+		if err != nil {
+			return nil, fmt.Errorf("could not read template data from FC: %w", err)
+		}
 	}
 
-	templateData, err = h.getTemplateDataFromFC(qry)
-	if err != nil {
-		return nil, fmt.Errorf("could not read template data from FC: %w", err)
-	}
 	return templateData, nil
 }
 
