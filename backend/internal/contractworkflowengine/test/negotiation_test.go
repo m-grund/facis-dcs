@@ -576,7 +576,7 @@ func TestNegotiation_TestForOpenNegotiationDecisions(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 
-	hasOpenNegotiationDecisions, err := repo.NRepo.HasOpenNegotiationDecisions(ctx, tx, *did, nil)
+	hasOpenNegotiationDecisions, err := repo.NRepo.HasOpenNegotiationDecisions(ctx, tx, *did, 1)
 	if err != nil {
 		t.Fatalf("Failed to check for open negotiation decisions %v", err)
 	}

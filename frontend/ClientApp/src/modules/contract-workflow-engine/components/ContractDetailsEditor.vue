@@ -128,7 +128,7 @@
 <script setup lang="ts">
 import type { Contract } from '@/models/contract/contract'
 import { ContractState } from '@/types/contract-state';
-import { ref, watch, computed } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps<{
   contract: Contract

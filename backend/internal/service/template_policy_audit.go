@@ -33,9 +33,7 @@ func templatePolicyFindingEventData(finding validation.PolicyFinding, template *
 	data["templateType"] = template.TemplateType
 	data["state"] = template.State
 	data["documentNumber"] = stringPtrValue(template.DocumentNumber)
-	if template.Version != nil {
-		data["version"] = *template.Version
-	}
+	data["version"] = template.Version
 	data["createdBy"] = template.CreatedBy
 	data["createdAt"] = template.CreatedAt.UTC().Format(time.RFC3339)
 	data["updatedAt"] = template.UpdatedAt.UTC().Format(time.RFC3339)
