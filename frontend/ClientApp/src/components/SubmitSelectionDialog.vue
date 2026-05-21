@@ -44,7 +44,7 @@ const allSelectedUsersHaveRoles = computed(() => {
 })
 const hasValidSelection = computed(() => {
   return (
-    users.value.filter((user) => selectedRole.value[user.id] === approveRole.value).length === 1 &&
+    users.value.some((user) => selectedRole.value[user.id] === approveRole.value) &&
     users.value.some((user) => selectedRole.value[user.id] === reviewRole.value) &&
     ((props.dialogType === 'template' && !negotiateRole.value) ||
       (props.dialogType === 'contract' &&
@@ -95,11 +95,6 @@ function onModalClose() {
   isLoading.value = true
 }
 
-function isRoleDisabled(role: UserRole | 'CONTRACT_NEGOTIATOR', userId: string) {
-  const roles = Object.values(selectedRole.value)
-  return role === approveRole.value && selectedRole.value[userId] !== role && roles.includes(role)
-}
-
 function onCheckboxChange(event: Event, userId: string) {
   const checked = (event.target as HTMLInputElement).checked
   if (!checked) {
@@ -110,7 +105,7 @@ function onCheckboxChange(event: Event, userId: string) {
 const roleInfoText = computed(() => {
   return props.dialogType === 'template'
     ? 'Select one Approver and at least one Reviewer'
-    : 'Select one Approver, at least one Reviewer and at least one Negotiator'
+    : 'Select at least one Approver, at least one Reviewer and at least one Negotiator'
 })
 </script>
 
@@ -147,7 +142,6 @@ const roleInfoText = computed(() => {
                 v-for="role in user.availableRoles"
                 :key="role"
                 :value="role"
-                :disabled="isRoleDisabled(role, user.id)"
               >
                 {{ toProperCase(role) }}
               </option>

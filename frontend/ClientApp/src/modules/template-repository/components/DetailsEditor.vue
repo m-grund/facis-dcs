@@ -2,6 +2,9 @@
     <div class="grid grid-cols-1 gap-4">
         <!-- Contract Kind -->
         <fieldset class="fieldset p-0 border-none">
+            <legend class="fieldset-legend">Version: {{ version }}</legend>
+        </fieldset>
+        <fieldset class="fieldset p-0 border-none">
             <legend class="fieldset-legend">Contract Type</legend>
             <div class="grid grid-cols-2 gap-3 mt-1">
                 <div class="card border-2 transition-all pointer-events-none"

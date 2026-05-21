@@ -31,5 +31,5 @@ export interface Contract {
 
 export type ContractChangeRequest = Pick<
   Contract,
-  'name' | 'description' | 'start_date' | 'exp_date' | 'exp_notice_period' | 'exp_policy'
+  'name' | 'description' | 'exp_notice_period' | 'exp_policy'
 > & { contract_data?: Partial<Contract['contract_data']> }

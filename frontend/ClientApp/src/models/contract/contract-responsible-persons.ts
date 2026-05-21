@@ -1,6 +1,6 @@
 export interface ContractResponsiblePersons {
   creator: string
-  approver: string
+  approvers: string[]
   reviewers: string[]
   negotiators: string[]
 }
