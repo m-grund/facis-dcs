@@ -1,17 +1,39 @@
 <script setup lang="ts">
 import type { SignatureContract } from '@/models/signature/signature-contract'
+import { compareValues } from '@/utils/comparison'
+import { computed, ref } from 'vue'
+import ListSort from '../ListSort.vue'
 import SignatureContractListItem from './SignatureContractListItem.vue'
 
-defineProps<{
+const props = defineProps<{
   contracts: SignatureContract[]
 }>()
+
+const sorter = new Map<keyof SignatureContract, string>([
+  ['created_at', 'Creation date'],
+  ['updated_at', 'Update date'],
+  ['name', 'Name'],
+])
+const defaultSort = sorter.keys().next().value!
+const sortBy = ref(defaultSort)
+const sortOrder = ref(1)
+
+const sortedContracts = computed(() => {
+  if (!sorter.has(sortBy.value)) return props.contracts
+  return props.contracts
+    .slice()
+    .sort((contractA, contractB) => compareValues(contractA, contractB, sortBy.value, sortOrder.value))
+})
 </script>
 
 <template>
   <ul class="list">
+    <li class="tracking-wide px-4 flex justify-end flex-col sm:flex-row">
+      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" />
+    </li>
     <template v-if="contracts.length > 0">
       <SignatureContractListItem
-        v-for="contract in contracts"
+        v-for="contract in sortedContracts"
         :key="`${contract.did}|${contract.contract_version}`"
         :contract="contract"
       />
