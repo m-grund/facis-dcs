@@ -482,7 +482,7 @@ const exportPdf = async () => {
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Submit {{isSubmitting}} / {{hasChangeRequest}} / {{!hasOpenDecisions}}
+          Submit
         </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn btn-primary flex-1" />
       </div>
