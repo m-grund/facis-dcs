@@ -2,6 +2,9 @@
   <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body gap-5">
       <fieldset class="fieldset p-0 border-none">
+        <legend class="fieldset-legend">Version: {{ contract.contract_version }}</legend>
+      </fieldset>
+      <fieldset class="fieldset p-0 border-none">
         <legend class="fieldset-legend">Global Name</legend>
         <input
           v-if="!inserted?.name"
@@ -36,46 +39,6 @@
           v-model="inserted.description"
           class="textarea textarea-bordered w-full h-24"
           :class="{ 'text-red-400': !!inserted && inserted.description !== contract.description }"
-          disabled
-        />
-      </fieldset>
-      <fieldset class="fieldset p-0 border-none">
-        <legend class="fieldset-legend">Start Date</legend>
-        <input
-          v-if="!inserted?.start_date"
-          v-model="startDateLocal"
-          type="datetime-local"
-          class="input input-bordered w-full"
-          :min="minStartDate"
-          @change="onStartDateChange"
-          :disabled="disabled"
-        />
-        <input
-          v-else
-          type="text"
-          v-model="inserted.start_date"
-          class="input input-bordered w-full"
-          :class="{ 'text-red-400': inserted.start_date !== contract.start_date }"
-          disabled
-        />
-      </fieldset>
-      <fieldset class="fieldset p-0 border-none">
-        <legend class="fieldset-legend">Expiration Date</legend>
-        <input
-          v-if="!inserted?.exp_date"
-          v-model="expDateLocal"
-          type="datetime-local"
-          class="input input-bordered w-full"
-          :min="minExpDate"
-          @change="onExpDateChange"
-          :disabled="disabled"
-        />
-        <input
-          v-else
-          type="text"
-          v-model="inserted.exp_date"
-          class="input input-bordered w-full"
-          :class="{ 'text-red-400': inserted.exp_date !== contract.exp_date }"
           disabled
         />
       </fieldset>
@@ -173,47 +136,6 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-const expDateLocal = ref<string>('')
-const startDateLocal = ref<string>('')
-
-watch(
-  () => props.contract.exp_date,
-  (val) => {
-    if (!val) return
-    // "2026-05-09T11:24:00Z" → "2026-05-09T11:24"
-    expDateLocal.value = val.slice(0, 16)
-  },
-  { immediate: true },
-)
-
-watch(
-  () => props.contract.start_date,
-  (val) => {
-    if (!val) return
-    // "2026-05-09T11:24:00Z" → "2026-05-09T11:24"
-    startDateLocal.value = val.slice(0, 16)
-  },
-  { immediate: true },
-)
-
-function onExpDateChange() {
-  if (!expDateLocal.value) {
-    props.contract.exp_date = undefined
-    return
-  }
-  // "2026-05-09T11:24" → "2026-05-09T11:24:00Z"
-  props.contract.exp_date = new Date(expDateLocal.value + ':00Z').toISOString()
-}
-
-function onStartDateChange() {
-  if (!startDateLocal.value) {
-    props.contract.start_date = undefined
-    return
-  }
-  // "2026-05-09T11:24" → "2026-05-09T11:24:00Z"
-  props.contract.start_date = new Date(startDateLocal.value + ':00Z').toISOString()
-}
-
 const expirationPolicies = [
   { name: 'Renewal', value: 'RENEWAL' },
   { name: 'Archiving', value: 'ARCHIVING' },
@@ -223,25 +145,9 @@ const expirationPolicies = [
 interface ContractDetailData {
   name?: string
   description?: string
-  start_date?: string
-  exp_date?: string
   exp_notice_period?: string
   exp_policy?: string
 }
-
-const minStartDate = computed(() => {
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  tomorrow.setHours(0, 0, 0, 0)
-  return tomorrow.toISOString().slice(0, 16) // "2026-05-09T00:00"
-})
-
-const minExpDate = computed(() => {
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  tomorrow.setHours(0, 0, 0, 0)
-  return tomorrow.toISOString().slice(0, 16) // "2026-05-09T00:00"
-})
 
 const originalContract = ref(Object.assign({}, props.contract))
 
