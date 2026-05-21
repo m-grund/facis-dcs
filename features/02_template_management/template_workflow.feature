@@ -1,63 +1,92 @@
 @UC-02-10
-@skip
 Feature: Template Approval Workflow
   Templates progress through submission, review, and approval
   before becoming available for contract generation.
 
+  @clean_db
   Scenario: Submit template for review
     Given I am authenticated with roles: "Template Creator"
     And template "Standard NDA" is in "Draft" status
-    When I submit template "Standard NDA" for review
+    When I submit template "Standard NDA"
     Then the template status is "Submitted"
-    And review and approval tasks are created
 
-  Scenario: Review template
+  @clean_db
+  Scenario: Approve submitted template
     Given I am authenticated with roles: "Template Reviewer"
     And template "Standard NDA" is in "Submitted" status
-    When I submit template "Standard NDA" with flag "Approval"
-    And all other review tasks are not in "Open, Verified" states
+    And template "Standard NDA" is verified
+    When I submit template "Standard NDA" with flag=approval
     Then the template status is "Reviewed"
 
-  Scenario: Approve reviewed template
+  @clean_db
+  Scenario: Reject submitted template
+    Given I am authenticated with roles: "Template Reviewer"
+    And template "Standard NDA" is in "Submitted" status
+    And template "Standard NDA" is verified
+    When I submit template "Standard NDA" with flag=draft
+    Then the template status is "Rejected"
+
+  @clean_db
+  Scenario: Reject reviewed template without reason
     Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" is in "Reviewed" status
-    When I approve template "Standard NDA"
-    Then the template status is "Approved"
-    And the template is available for contract generation
+    When I reject template "Standard NDA" without reason
+    And I retrieve template "Standard NDA" by did
+    Then the template status is "Reviewed"
 
-  Scenario: Reject template with reason
+  @clean_db
+  Scenario: Reject reviewed template with reason
     Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" is in "Reviewed" status
     When I reject template "Standard NDA" with reason "Missing compliance clause"
     Then the template status is "Rejected"
-    And my approval task is in "Rejected" status
     And the rejection reason is recorded
 
+  @clean_db
   Scenario: Resubmit reviewed template
     Given I am authenticated with roles: "Template Approver"
     And template "Standard NDA" is in "Reviewed" status
     When I resubmit template "Standard NDA"
     Then the template status is "Submitted"
-    And all tasks are in "Open" status
 
-  Scenario: Submit to Draft template with comment
-    Given I am authenticated with roles: "Template Reviewer"
-    And template "Standard NDA" is in "Submitted" status
-    When I submit template "Standard NDA" with flag "Draft" and comment "Missing compliance clause"
-    Then the template status is "Rejected"
-    And all tasks are in "Open" status
-    And the comment is recorded
+  @clean_db
+  Scenario: Approve reviewed template
+    Given I am authenticated with roles: "Template Approver"
+    And template "Standard NDA" is in "Reviewed" status
+    When I approve template "Standard NDA"
+    Then the template status is "Approved"
 
+  @clean_db
+  Scenario: Register approved template
+    Given I am authenticated with roles: "Template Manager"
+    And template "Standard NDA" is in "Approved" status
+    When I register template "Standard NDA"
+    Then the template status is "Registered"
+
+  @clean_db
   Scenario: Resubmit template for review
     Given I am authenticated with roles: "Template Creator"
     And template "Standard NDA" is in "Rejected" status
-    When I submit template "Standard NDA" for review
+    When I submit template "Standard NDA"
     Then the template status is "Submitted"
-    And all tasks are in "Open" status
 
+  @clean_db
+  Scenario: Archive submitted template
+    Given I am authenticated with roles: "Template Manager"
+    And template "Standard NDA" is in "Submitted" status
+    When I delete template "Standard NDA"
+    Then the template status is "Deleted"
+
+  @clean_db
+  Scenario: Archive approved template
+    Given I am authenticated with roles: "Template Manager"
+    And template "Standard NDA" is in "Approved" status
+    When I delete template "Standard NDA"
+    Then the template status is "Deprecated"
+
+  @clean_db
   Scenario: Unauthorized role cannot approve template
     Given I am authenticated with roles: "Template Creator"
     And template "Standard NDA" is in "Reviewed" status
     When I approve template "Standard NDA"
     Then the request is denied with an authorization error
-

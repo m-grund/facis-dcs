@@ -11,6 +11,11 @@ export interface ContractTemplateCreateRequest {
   template_data?: ContractTemplateData
 }
 
+export interface ContractTemplateCopyRequest {
+  did: string
+}
+
+
 export interface ContractTemplateSubmitRequest {
   did: string
   updated_at: string
@@ -24,7 +29,6 @@ export interface ContractTemplateUpdateRequest {
   did: string
   updated_at: string
   document_number?: string
-  version?: number
   name?: string
   description?: string
   /** The template data of the contract template */
@@ -36,7 +40,6 @@ export interface ContractTemplateUpdateManageRequest {
   state?: ContractTemplateState
   updated_at: string
   document_number?: string
-  version?: number
   template_type?: TemplateType
   name?: string
   description?: string

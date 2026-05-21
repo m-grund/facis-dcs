@@ -63,9 +63,16 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return fmt.Errorf("could not update approval task state: %w", err)
 	}
 
-	err = h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Approved.String())
+	existOpenTasks, err := h.ATRepo.AnyTasksInState(ctx, tx, processData.DID, approvaltaskstate.Open.String())
 	if err != nil {
-		return fmt.Errorf("could not update current template state: %w", err)
+		return fmt.Errorf("could not check if review task exists: %w", err)
+	}
+
+	if !existOpenTasks {
+		err = h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Approved.String())
+		if err != nil {
+			return fmt.Errorf("could not update current template state: %w", err)
+		}
 	}
 
 	evt := contractevents.ApproveEvent{

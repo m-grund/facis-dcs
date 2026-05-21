@@ -24,7 +24,7 @@ type GetHistoryByIDQry struct {
 type GetHistoryByIDResult struct {
 	ID                 string
 	DID                string
-	ContractVersion    *int
+	ContractVersion    int
 	State              contractstate.ContractState
 	Name               *string
 	Description        *string
@@ -55,7 +55,7 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 
 	entries, err := h.CRepo.ReadHistoryByDID(ctx, tx, query.DID)
 	if err != nil {
-		return nil, fmt.Errorf("could not get contract data: %w", err)
+		return nil, fmt.Errorf("could not get contract history data: %w", err)
 	}
 
 	evt := contractevents.RetrieveByIDEvent{

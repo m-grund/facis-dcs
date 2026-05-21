@@ -19,7 +19,7 @@ export interface VerificationResult {
 
 interface subTemplateSemanticCondition {
   templateId: string
-  version?: number
+  version: number
   document_number?: string
   semanticConditions: SemanticCondition[]
 }

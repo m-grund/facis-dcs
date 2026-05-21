@@ -257,7 +257,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
         snapshot
       ]
     },
-    removeSubTemplateSnapshot(template: { did: string, version?: number, document_number?: string }): void {
+    removeSubTemplateSnapshot(template: { did: string, version: number, document_number?: string }): void {
       this.subTemplateSnapshots = this.subTemplateSnapshots.filter((item) => !isSameTemplate(item, template))
     },
     reset(overrides?: Partial<TemplateDraftState>) {
@@ -469,8 +469,8 @@ function getInitialState(): TemplateDraftState {
 }
 
 function isSameTemplate(
-  t1: { did: string, version?: number, document_number?: string },
-  t2: { did: string, version?: number, document_number?: string }
+  t1: { did: string, version: number, document_number?: string },
+  t2: { did: string, version: number, document_number?: string }
 ): boolean {
   return isSameTemplateDataRef(
     {
