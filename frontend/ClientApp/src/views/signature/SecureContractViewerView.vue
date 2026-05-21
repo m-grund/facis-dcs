@@ -79,9 +79,9 @@ const validate = async () => {
         <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Secure Contract Viewer</p>
       </div>
     </div>
-    <div v-if="contract" class="flex-1 flex flex-row h-full">
-      <div class="w-1/2 min-h-full overflow-y-auto"><ViewContractView /></div>
-      <div class="flex-1 m-20 max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3 md:items-end">
+    <div v-if="contract" class="flex-1 flex flex-col md:flex-row h-full">
+      <div class="w-full md:flex-1 min-h-full overflow-y-auto md:overflow-x-hidden"><ViewContractView /></div>
+      <div class="md:flex-1 m-20 max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3 md:items-end">
         <button class="btn btn-primary flex-1" @click="verify" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>Verify
         </button>
