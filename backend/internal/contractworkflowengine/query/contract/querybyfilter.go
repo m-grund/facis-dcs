@@ -18,17 +18,17 @@ import (
 
 type GetAllMetadataByFilterQry struct {
 	RetrievedBy     string
-	DID             *string
-	ContractVersion *int
+	DID             string
+	ContractVersion int
 	State           *contractstate.ContractState
-	Name            *string
-	Description     *string
-	ContractData    *string
+	Name            string
+	Description     string
+	ContractData    string
 }
 
 type GetAllMetadataByFilterResult struct {
 	DID                string
-	ContractVersion    *int
+	ContractVersion    int
 	State              contractstate.ContractState
 	Name               *string
 	Description        *string
@@ -74,7 +74,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		return nil, fmt.Errorf("could not read all contract: %w", err)
 	}
 
-	evt := templateevents.RetrieveAllEvent{
+	evt := templateevents.SearchEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 	}

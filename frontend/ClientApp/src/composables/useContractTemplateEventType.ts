@@ -3,6 +3,7 @@ import type {
   ContractTemplateArchiveEvent,
   ContractTemplateAuditEvent,
   ContractTemplateCreateEvent,
+  ContractTemplateCopyEvent,
   ContractTemplateRegisterEvent,
   ContractTemplateRejectEvent,
   ContractTemplateRetrieveAllEvent,
@@ -19,6 +20,12 @@ export function useContractTemplateEventType() {
     event: ContractTemplateAuditResponseItem,
   ): event is ContractTemplateAuditResponseItem & { event_data: ContractTemplateCreateEvent } => {
     return event.event_type === 'CREATE_CONTRACT_TEMPLATE'
+  }
+
+  const isCopyEvent = (
+    event: ContractTemplateAuditResponseItem,
+  ): event is ContractTemplateAuditResponseItem & { event_data: ContractTemplateCopyEvent } => {
+    return event.event_type === 'COPY_CONTRACT_TEMPLATE'
   }
 
   const isSubmitEvent = (
@@ -89,6 +96,7 @@ export function useContractTemplateEventType() {
 
   return {
     isCreateEvent,
+    isCopyEvent,
     isSubmitEvent,
     isApproveEvent,
     isRejectEvent,

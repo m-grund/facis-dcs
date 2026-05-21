@@ -11,11 +11,8 @@ export interface ContractCreateRequest {
 export interface ContractUpdateRequest {
   did: string
   updated_at: string
-  start_date?: string
-  exp_date?: string
   exp_notice_period?: number,
   exp_policy?: ExpirationPolicy
-  contract_version?: number
   name?: string
   description?: string
   /** The data of the contract */
@@ -28,7 +25,7 @@ export interface ContractSubmitRequest {
   forward_to?: ContractActionFlag
   comments?: string[]
   reviewers?: string[]
-  approver?: string
+  approvers?: string[]
   negotiators?: string[]
 }
 

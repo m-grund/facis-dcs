@@ -2,6 +2,9 @@
     <div class="grid grid-cols-1 gap-4">
         <!-- Contract Kind -->
         <fieldset class="fieldset p-0 border-none">
+            <legend class="fieldset-legend">Version: {{ version }}</legend>
+        </fieldset>
+        <fieldset class="fieldset p-0 border-none">
             <legend class="fieldset-legend">Contract Type</legend>
             <div class="grid grid-cols-2 gap-3 mt-1">
                 <div class="card border-2 transition-all pointer-events-none"
@@ -23,6 +26,10 @@
                     </div>
                 </div>
             </div>
+        </fieldset>
+
+        <fieldset class="fieldset p-0 border-none">
+            <legend class="fieldset-legend">Version {{version}}</legend>
         </fieldset>
 
         <fieldset class="fieldset p-0 border-none">
@@ -127,14 +134,14 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 
 interface SubcontractKey {
     did: string
-    version?: number
+    version: number
     document_number?: string
 }
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons } = storeToRefs(store)
+const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons, version } = storeToRefs(store)
 
 const name = computed({
   get: () => store.name,
@@ -174,7 +181,7 @@ const getSubcontractTemplateName = (item: SubcontractKey) =>
     allTemplates.value.find(t => isSameTemplate(t, item))?.name ??
     item.did
 
-const addSubcontractTemplate = async (template: { did: string; version?: number; document_number?: string }) => {
+const addSubcontractTemplate = async (template: { did: string; version: number; document_number?: string }) => {
     if (isSelected(template)) return
     await contractTemplateService.retrieveById(template).then(fullTemplate => {
         if (fullTemplate) store.addSubTemplateSnapshot(fullTemplate)

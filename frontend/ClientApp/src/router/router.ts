@@ -111,6 +111,7 @@ const routes: RouteRecordRaw[] = [
     path: '/templates/view/:did',
     name: ROUTES.TEMPLATES.VIEW,
     component: ViewContractTemplateView,
+    props: true,
     meta: {
       name: 'View Template',
       hideInSidebar: true,
@@ -344,9 +345,9 @@ router.beforeEach((to) => {
 router.beforeEach((to) => {
   const scrollStore = useScrollStore()
   if (to.matched.some((r) => r.path.includes(':'))) {
-    scrollStore.scrollContainer?.classList.add('scrollbar-gutter-stable')
+    scrollStore.addGutter()
   } else {
-    scrollStore.scrollContainer?.classList.remove('scrollbar-gutter-stable')
+    scrollStore.removeGutter()
   }
 })
 

@@ -114,22 +114,18 @@ func (h *Registrar) publishTemplateResourceToFC(ctx context.Context, cmd Registe
 	templateType := fullTemplate.TemplateType
 	name := ""
 	description := ""
-	version := 0
 	if fullTemplate.Name != nil {
 		name = *fullTemplate.Name
 	}
 	if fullTemplate.Description != nil {
 		description = *fullTemplate.Description
 	}
-	if processData.Version != nil && *processData.Version >= 0 {
-		version = *processData.Version
-	}
 
 	sd := selfdescription.BuildTemplateResourceSelfDescription(selfdescription.TemplateResourceInput{
 		ParticipantID:  cmd.ParticipantID,
 		DID:            cmd.DID,
 		DocumentNumber: documentNumber,
-		Version:        version,
+		Version:        processData.Version,
 		TemplateType:   templateType,
 		Name:           name,
 		Description:    description,

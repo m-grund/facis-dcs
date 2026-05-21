@@ -122,13 +122,13 @@ func (r PostgresNegotiationRepo) ReadAllByContractDID(ctx context.Context, tx *s
 	return negotiations, nil
 }
 
-func (r PostgresNegotiationRepo) ReadAllAcceptedByContractDIDAndVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) ([]db.NegotiationChangeData, error) {
+func (r PostgresNegotiationRepo) ReadAllAcceptedByContractDIDAndVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) ([]db.NegotiationChangeData, error) {
 	query := `
         SELECT cn.id, change_request
 		FROM contract_negotiations cn
 		JOIN contract_negotiation_decisions cnd ON cnd.negotiation_id = cn.id
 		WHERE cn.did = $1
-		  AND (cn.contract_version = $2 OR ($2 IS NULL AND cn.contract_version IS NULL))
+		  AND cn.contract_version = $2
 		GROUP BY cn.id, cn.change_request
 		HAVING COUNT(*) = COUNT(CASE WHEN cnd.decision = 'ACCEPTED' THEN 1 END)
     `
@@ -140,14 +140,14 @@ func (r PostgresNegotiationRepo) ReadAllAcceptedByContractDIDAndVersion(ctx cont
 	return negotiations, nil
 }
 
-func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) (bool, error) {
+func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error) {
 	query := `
         SELECT EXISTS (
             SELECT 1
             FROM contract_negotiations cn
             JOIN contract_negotiation_decisions cnd ON cnd.negotiation_id = cn.id
             WHERE cn.did = $1
-              AND (contract_version = $2 OR ($2 IS NULL AND contract_version IS NULL))
+              AND contract_version = $2
               AND cnd.decision IS NULL
         )
     `
@@ -159,7 +159,7 @@ func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context
 	return exists, nil
 }
 
-func (r PostgresNegotiationRepo) HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) (bool, error) {
+func (r PostgresNegotiationRepo) HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error) {
 
 	query := `
         SELECT EXISTS (
@@ -167,7 +167,7 @@ func (r PostgresNegotiationRepo) HasNegotiationForContractVersion(ctx context.Co
             FROM contract_negotiations cn
             JOIN contract_negotiation_decisions cnd ON cnd.negotiation_id = cn.id
             WHERE cn.did = $1
-              AND (contract_version = $2 OR ($2 IS NULL AND contract_version IS NULL))
+              AND contract_version = $2
         )
     `
 	var exists bool

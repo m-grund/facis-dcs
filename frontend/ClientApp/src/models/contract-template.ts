@@ -9,7 +9,7 @@ export interface ContractTemplate {
   created_by: string
   created_at: string
   document_number?: string
-  version?: number
+  version: number
   template_type: TemplateType
   state: ContractTemplateState
   name?: string
@@ -37,7 +37,7 @@ export interface ContractTemplateData {
 export interface SubTemplateSnapshot {
   did: string
   document_number?: string
-  version?: number
+  version: number
   name?: string
   description?: string
   template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'>

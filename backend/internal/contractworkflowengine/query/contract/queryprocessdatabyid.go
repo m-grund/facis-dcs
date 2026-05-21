@@ -19,7 +19,7 @@ type GetProcessDataByIDQry struct {
 
 type GetProcessDataByIDResult struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           contractstate.ContractState
 	CreatedBy       string
 	UpdatedAt       time.Time

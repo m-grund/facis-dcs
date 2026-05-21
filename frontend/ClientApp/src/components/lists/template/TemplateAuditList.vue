@@ -57,6 +57,9 @@ const policyBadgeClass = (audit: TemplateAuditItem) => {
         <div v-else-if="eventType.isCreateEvent(audit)">
           <div>Created by: {{ audit.event_data.created_by }}</div>
         </div>
+        <div v-if="eventType.isCopyEvent(audit)">
+          <div>Copied by: {{ audit.event_data.copied_by }}</div>
+        </div>
         <div v-else-if="eventType.isSubmitEvent(audit)" class="flex justify-between">
           <div>Submitted by: {{ audit.event_data.submitted_by }}</div>
           <div>

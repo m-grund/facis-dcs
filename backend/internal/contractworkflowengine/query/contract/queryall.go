@@ -26,7 +26,7 @@ type GetAllMetadataQry struct {
 
 type MetadataItem struct {
 	DID                string
-	ContractVersion    *int
+	ContractVersion    int
 	Name               *string
 	Description        *string
 	State              contractstate.ContractState
@@ -43,7 +43,7 @@ type MetadataItem struct {
 
 type ReviewTaskItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           reviewtaskstate.ReviewTaskState
 	Reviewer        string
 	CreatedAt       time.Time
@@ -51,7 +51,7 @@ type ReviewTaskItem struct {
 
 type ApprovalTaskItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           approvaltaskstate.ApprovalTaskState
 	Approver        string
 	CreatedAt       time.Time
@@ -59,7 +59,7 @@ type ApprovalTaskItem struct {
 
 type NegotiatorTaskItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           negotiationtaskstate.NegotiationTaskState
 	Negotiator      string
 	CreatedAt       time.Time
@@ -172,7 +172,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata, exists := didToMetadata[data.DID]
-		var contractVersion *int
+		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}
@@ -195,7 +195,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata, exists := didToMetadata[data.DID]
-		var contractVersion *int
+		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}
@@ -218,7 +218,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata, exists := didToMetadata[data.DID]
-		var contractVersion *int
+		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}

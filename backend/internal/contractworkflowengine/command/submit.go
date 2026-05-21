@@ -23,7 +23,7 @@ type SubmitCmd struct {
 	UpdatedAt   time.Time
 	SubmittedBy string
 	Reviewers   []string
-	Approver    *string
+	Approvers   []string
 	Negotiators []string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
@@ -65,15 +65,17 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 		}
 	}
 
-	data := db.ApprovalTaskData{
-		DID:       cmd.DID,
-		CreatedBy: cmd.SubmittedBy,
-		Approver:  *cmd.Approver,
-		State:     reviewtaskstate.Open.String(),
-	}
-	_, err := atRepo.Create(ctx, tx, data)
-	if err != nil {
-		return fmt.Errorf("could not create approval task: %w", err)
+	for _, approver := range cmd.Approvers {
+		data := db.ApprovalTaskData{
+			DID:       cmd.DID,
+			CreatedBy: cmd.SubmittedBy,
+			Approver:  approver,
+			State:     reviewtaskstate.Open.String(),
+		}
+		_, err := atRepo.Create(ctx, tx, data)
+		if err != nil {
+			return fmt.Errorf("could not create approval task: %w", err)
+		}
 	}
 
 	return nil
@@ -112,14 +114,14 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no negotiators provided")
 		}
 
-		if cmd.Approver == nil || len(*cmd.Approver) == 0 {
-			return errors.New("no approver provided")
+		if len(cmd.Approvers) == 0 {
+			return errors.New("no approvers provided")
 		}
 
 		respPersons := db.ResponsiblePersons{
 			Creator:     processData.CreatedBy,
 			Reviewers:   cmd.Reviewers,
-			Approver:    *cmd.Approver,
+			Approvers:   cmd.Approvers,
 			Negotiators: cmd.Negotiators,
 		}
 		anyRespPerson := any(respPersons)
@@ -208,17 +210,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					return fmt.Errorf("could not create history entry for did %s: %w", cmd.DID, err)
 				}
 
-				newVersion := 1
-				if processData.ContractVersion != nil {
-					newVersion = *processData.ContractVersion + 1
-				}
-
 				updatedData, err := negotiationmerging.MergeChangeRequests(ctx, tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
 				if err != nil {
 					return fmt.Errorf("could not merge change requests: %w", err)
 				}
 
-				updatedData.ContractVersion = &newVersion
 				err = h.CRepo.Update(ctx, tx, *updatedData)
 				if err != nil {
 					return fmt.Errorf("could not update contract version: %w", err)
@@ -227,7 +223,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 				evt := contractevents.IncreaseContractVersionEvent{
 					DID:                cmd.DID,
 					OldContractVersion: processData.ContractVersion,
-					NewContractVersion: &newVersion,
+					NewContractVersion: processData.ContractVersion + 1,
 					SubmittedBy:        cmd.SubmittedBy,
 					OccurredAt:         time.Now().UTC(),
 				}

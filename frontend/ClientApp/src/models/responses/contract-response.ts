@@ -32,7 +32,7 @@ export interface ContractRetrieveResponse {
 
 export interface ContractRetrieveByIdResponse {
   did: string
-  contract_version?: number
+  contract_version: number
   state: ContractState
   name?: string
   description?: string
@@ -55,7 +55,7 @@ export interface ContractReviewResponse {
 
 interface ContractSearchResponseItem {
   did: string
-  contract_version?: number
+  contract_version: number
   state: ContractState
   name?: string
   description?: string
@@ -110,7 +110,7 @@ export type ContractAuditResponse = ContractAuditResponseItem[]
 
 export interface ContractHistoryItem {
   did: string
-  contract_version?: number
+  contract_version: number
   state: ContractState
   name?: string
   description?: string
