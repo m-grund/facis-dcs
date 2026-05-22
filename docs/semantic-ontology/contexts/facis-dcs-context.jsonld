@@ -203,6 +203,9 @@
     },
     "defaultValue": "dcs:defaultValue",
     "parameterValue": "dcs:parameterValue",
+    "valueConstraint": "dcs:hasValueConstraint",
+    "semanticPath": "dcs:semanticPath",
+    "schemaRef": "dcs:schemaRef",
     "semanticMeaning": {
       "@id": "dcs:semanticMeaning",
       "@type": "@id"
@@ -235,6 +238,12 @@
       "@id": "dcs:allowedValue",
       "@container": "@set"
     },
+    "allowedValuesRef": "dcs:allowedValuesRef",
+    "pattern": "dcs:pattern",
+    "minInclusive": "dcs:minInclusive",
+    "maxInclusive": "dcs:maxInclusive",
+    "min": "dcs:minInclusive",
+    "max": "dcs:maxInclusive",
     "regexPattern": "dcs:regexPattern",
     "semanticRules": {
       "@id": "dcs:semanticRule",

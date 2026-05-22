@@ -147,6 +147,8 @@ Template: `TemplateVariable`, `Parameter`, `ParameterConstraint`, `PlaceholderBi
 
 Rules: `SemanticRule`, `Constraint`, `Operator`, `ThresholdRule`, `DateConstraintRule`.
 
+Domain catalogue and constraints: `DomainField`, `ValueConstraint`, `CountryCode`, `CurrencyCode`, `SignatureLevelCode`, `ContractTypeCode`. The canonical v1 ontology also contains the `dcst:*` schema references, validation profiles, configured value constraints, and domain fields used by template and contract normalization.
+
 ## 5. JSON-LD Context
 
 The runtime context is in [facis-dcs-context.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/contexts/facis-dcs-context.jsonld). The profile uses compact DCS field names already close to the current frontend/backend model:

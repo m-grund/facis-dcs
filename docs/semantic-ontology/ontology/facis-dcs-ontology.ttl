@@ -1,4 +1,5 @@
 @prefix dcs:  <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix dcst: <https://w3id.org/facis/dcs/taxonomy/v1#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -175,6 +176,44 @@ dcs:EnumParameter a rdfs:Class ;
 dcs:ParameterConstraint a rdfs:Class ;
   rdfs:label "Parameter Constraint" .
 
+dcs:SchemaReference a rdfs:Class ;
+  rdfs:label "Schema Reference" .
+
+dcs:ValidationProfile a rdfs:Class ;
+  rdfs:label "Validation Profile" .
+
+dcs:DomainSchema a rdfs:Class ;
+  rdfs:label "Domain Schema" .
+
+dcs:DomainField a rdfs:Class ;
+  rdfs:label "Domain Field" ;
+  rdfs:comment "Canonical semantic field such as company.location.country or contract.payment.currency." .
+
+dcs:ValueConstraint a rdfs:Class ;
+  rdfs:label "Value Constraint" .
+
+dcs:ControlledVocabulary a rdfs:Class ;
+  rdfs:label "Controlled Vocabulary" .
+
+dcs:VocabularyTerm a rdfs:Class ;
+  rdfs:label "Vocabulary Term" .
+
+dcs:CountryCode a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "ISO 3166-1 alpha-3 Country Code" .
+
+dcs:CurrencyCode a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "ISO 4217 Currency Code" .
+
+dcs:SignatureLevelCode a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "eIDAS Signature Level Code" .
+
+dcs:ContractTypeCode a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Contract Type Code" .
+
 dcs:PlaceholderBinding a rdfs:Class ;
   rdfs:label "Placeholder Binding" ;
   rdfs:comment "Binds a template placeholder to a semantic condition parameter or contract data path." .
@@ -211,6 +250,21 @@ dcs:PolicyBundle a rdfs:Class ;
 
 dcs:PolicyDecision a rdfs:Class ;
   rdfs:label "Policy Decision" .
+
+dcs:Policy a rdfs:Class ;
+  rdfs:label "Policy" .
+
+dcs:PolicyEnforcementPoint a rdfs:Class ;
+  rdfs:label "Policy Enforcement Point" .
+
+dcs:BlockCatalogueEntry a rdfs:Class ;
+  rdfs:label "Block Catalogue Entry" .
+
+dcs:PaymentTerms a rdfs:Class ;
+  rdfs:label "Payment Terms" .
+
+dcs:LiabilityTerms a rdfs:Class ;
+  rdfs:label "Liability Terms" .
 
 dcs:ProvenanceEvent a rdfs:Class ;
   rdfs:subClassOf prov:Activity ;
@@ -265,6 +319,18 @@ dcs:subTemplateSnapshots a rdf:Property ;
 dcs:templateDataVersion a rdf:Property ;
   rdfs:label "Template Data Version" ;
   rdfs:range xsd:integer .
+
+dcs:schemaRef a rdf:Property ;
+  rdfs:label "Schema Reference ID" ;
+  rdfs:range xsd:string .
+
+dcs:semanticPath a rdf:Property ;
+  rdfs:label "Semantic Path" ;
+  rdfs:range xsd:string .
+
+dcs:blockCatalogueId a rdf:Property ;
+  rdfs:label "Block Catalogue ID" ;
+  rdfs:range xsd:string .
 
 dcs:documentNumber a rdf:Property ;
   rdfs:label "Document Number" ;
@@ -455,6 +521,11 @@ dcs:hasConstraint a rdf:Property ;
   rdfs:label "Has Constraint" ;
   rdfs:range dcs:Constraint .
 
+dcs:hasValueConstraint a rdf:Property ;
+  rdfs:label "Has Value Constraint" ;
+  rdfs:domain dcs:DomainField ;
+  rdfs:range dcs:ValueConstraint .
+
 dcs:ruleId a rdf:Property ;
   rdfs:label "Rule ID" ;
   rdfs:range xsd:string .
@@ -482,6 +553,20 @@ dcs:maxValue a rdf:Property ;
 
 dcs:allowedValue a rdf:Property ;
   rdfs:label "Allowed Value" .
+
+dcs:allowedValuesRef a rdf:Property ;
+  rdfs:label "Allowed Values Reference" ;
+  rdfs:range xsd:string .
+
+dcs:pattern a rdf:Property ;
+  rdfs:label "Pattern" ;
+  rdfs:range xsd:string .
+
+dcs:minInclusive a rdf:Property ;
+  rdfs:label "Minimum Inclusive" .
+
+dcs:maxInclusive a rdf:Property ;
+  rdfs:label "Maximum Inclusive" .
 
 dcs:regexPattern a rdf:Property ;
   rdfs:label "Regex Pattern" ;
@@ -671,6 +756,284 @@ dcs:hasPolicyBundle a rdf:Property ;
 dcs:format a rdf:Property ;
   rdfs:label "Format" ;
   rdfs:range xsd:string .
+
+#################################################################
+# Schema references, validation profiles, and policies
+#################################################################
+
+dcst:schema-document-structure-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  rdfs:label "FACIS DCS Document Structure Schema v1" .
+
+dcst:schema-template-data-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.template-data.v1" ;
+  rdfs:label "FACIS DCS Template Data Schema v1" .
+
+dcst:schema-contract-data-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.contract-data.v1" ;
+  rdfs:label "FACIS DCS Contract Data Schema v1" .
+
+dcst:schema-semantic-condition-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.semantic-condition.v1" ;
+  rdfs:label "FACIS DCS Semantic Condition Schema v1" .
+
+dcst:schema-party-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  rdfs:label "FACIS DCS Party Schema v1" .
+
+dcst:schema-contract-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  rdfs:label "FACIS DCS Contract Domain Schema v1" .
+
+dcst:schema-service-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  rdfs:label "FACIS DCS Service Schema v1" .
+
+dcst:schema-signature-v1 a dcs:SchemaReference ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  rdfs:label "FACIS DCS Signature Schema v1" .
+
+dcst:validation-template-v1 a dcs:ValidationProfile ;
+  dcs:identifier "FACIS_DCS_TEMPLATE_V1" ;
+  dcs:version 1 ;
+  rdfs:label "FACIS DCS Template Validation Profile v1" .
+
+dcst:validation-contract-v1 a dcs:ValidationProfile ;
+  dcs:identifier "FACIS_DCS_CONTRACT_V1" ;
+  dcs:version 1 ;
+  rdfs:label "FACIS DCS Contract Validation Profile v1" .
+
+dcst:policy-template-structure-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.template.structure" ;
+  dcs:version 1 ;
+  rdfs:label "Template Structure Policy v1" .
+
+dcst:policy-template-semantic-conditions-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.template.semantic-conditions" ;
+  dcs:version 1 ;
+  rdfs:label "Template Semantic Conditions Policy v1" .
+
+dcst:policy-contract-structure-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.contract.structure" ;
+  dcs:version 1 ;
+  rdfs:label "Contract Structure Policy v1" .
+
+dcst:policy-contract-semantic-values-v1 a dcs:Policy ;
+  dcs:identifier "facis.dcs.contract.semantic-values" ;
+  dcs:version 1 ;
+  rdfs:label "Contract Semantic Values Policy v1" .
+
+dcst:enforcement-template-create a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "template:create" ;
+  rdfs:label "Template Create Enforcement Point" .
+
+dcst:enforcement-template-verify a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "template:verify" ;
+  rdfs:label "Template Verify Enforcement Point" .
+
+dcst:enforcement-contract-create a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "contract:create" ;
+  rdfs:label "Contract Create Enforcement Point" .
+
+dcst:enforcement-contract-update a dcs:PolicyEnforcementPoint ;
+  dcs:identifier "contract:update" ;
+  rdfs:label "Contract Update Enforcement Point" .
+
+#################################################################
+# Canonical value constraints
+#################################################################
+
+dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
+  dcs:format "iso-3166-1-alpha-3" ;
+  dcs:pattern "^[A-Z]{3}$" ;
+  dcs:allowedValuesRef "ISO 3166-1 alpha-3" ;
+  dcs:allowedValue "DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA" ;
+  rdfs:label "ISO 3166-1 alpha-3 Country Constraint" .
+
+dcst:constraint-iso4217-currency a dcs:ValueConstraint ;
+  dcs:format "iso-4217" ;
+  dcs:pattern "^[A-Z]{3}$" ;
+  dcs:allowedValuesRef "ISO 4217" ;
+  dcs:allowedValue "EUR", "USD", "GBP", "CHF", "PLN", "CZK" ;
+  rdfs:label "ISO 4217 Currency Constraint" .
+
+dcst:constraint-eidas-signature-level a dcs:ValueConstraint ;
+  dcs:format "eidas-signature-level" ;
+  dcs:allowedValue "SES", "AES", "QES" ;
+  rdfs:label "eIDAS Signature Level Constraint" .
+
+dcst:constraint-sla-availability-percent a dcs:ValueConstraint ;
+  dcs:minInclusive 0 ;
+  dcs:maxInclusive 100 ;
+  rdfs:label "SLA Availability Percentage Constraint" .
+
+dcst:constraint-contract-type a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "frameworkAgreement", "serviceAgreement", "dataProcessingAgreement", "nda", "leaseAgreement", "purchaseAgreement" ;
+  rdfs:label "Contract Type Vocabulary Constraint" .
+
+dcst:constraint-gdpr-role a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "controller", "processor", "jointController", "subProcessor" ;
+  rdfs:label "GDPR Role Vocabulary Constraint" .
+
+dcst:constraint-dispute-method a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "court", "arbitration", "mediation" ;
+  rdfs:label "Dispute Resolution Method Vocabulary Constraint" .
+
+dcst:constraint-audit-frequency a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "onDemand", "annual", "semiAnnual", "quarterly" ;
+  rdfs:label "Audit Frequency Vocabulary Constraint" .
+
+#################################################################
+# Canonical domain fields
+#################################################################
+
+dcst:field-company-legalName a dcs:DomainField ;
+  dcs:semanticPath "company.legalName" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Legal Name" .
+
+dcst:field-company-registrationNumber a dcs:DomainField ;
+  dcs:semanticPath "company.registrationNumber" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Registration Number" .
+
+dcst:field-company-vatId a dcs:DomainField ;
+  dcs:semanticPath "company.vatId" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company VAT ID" .
+
+dcst:field-company-location-country a dcs:DomainField ;
+  dcs:semanticPath "company.location.country" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
+  rdfs:label "Company Country" .
+
+dcst:field-contract-type a dcs:DomainField ;
+  dcs:semanticPath "contract.type" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-contract-type ;
+  rdfs:label "Contract Type" .
+
+dcst:field-contract-jurisdiction a dcs:DomainField ;
+  dcs:semanticPath "contract.jurisdiction" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
+  rdfs:label "Contract Jurisdiction" .
+
+dcst:field-contract-validity-startDate a dcs:DomainField ;
+  dcs:semanticPath "contract.validity.startDate" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Validity Start Date" .
+
+dcst:field-contract-validity-endDate a dcs:DomainField ;
+  dcs:semanticPath "contract.validity.endDate" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Validity End Date" .
+
+dcst:field-contract-payment-amount a dcs:DomainField ;
+  dcs:semanticPath "contract.payment.amount" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "decimal" ;
+  rdfs:label "Payment Amount" .
+
+dcst:field-contract-payment-currency a dcs:DomainField ;
+  dcs:semanticPath "contract.payment.currency" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-iso4217-currency ;
+  rdfs:label "Payment Currency" .
+
+dcst:field-contract-dataProtection-role a dcs:DomainField ;
+  dcs:semanticPath "contract.dataProtection.role" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-gdpr-role ;
+  rdfs:label "Data Protection Role" .
+
+dcst:field-contract-disputeResolution-method a dcs:DomainField ;
+  dcs:semanticPath "contract.disputeResolution.method" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-dispute-method ;
+  rdfs:label "Dispute Resolution Method" .
+
+dcst:field-service-sla-availability a dcs:DomainField ;
+  dcs:semanticPath "service.sla.availability" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "decimal" ;
+  dcs:hasValueConstraint dcst:constraint-sla-availability-percent ;
+  rdfs:label "SLA Availability" .
+
+dcst:field-service-sla-responseTime a dcs:DomainField ;
+  dcs:semanticPath "service.sla.responseTime" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "SLA Response Time" .
+
+dcst:field-signature-requiredLevel a dcs:DomainField ;
+  dcs:semanticPath "signature.requiredLevel" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-eidas-signature-level ;
+  rdfs:label "Required Signature Level" .
+
+#################################################################
+# Block catalogue entries
+#################################################################
+
+dcst:block-document-section a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.document.section" ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  dcs:semanticPath "document.section" ;
+  rdfs:label "Document Section" .
+
+dcst:block-text-free a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.text.free" ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  dcs:semanticPath "document.freeText" ;
+  rdfs:label "Free Text" .
+
+dcst:block-clause-custom a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.clause.custom" ;
+  dcs:schemaRef "facis.dcs.document-structure.v1" ;
+  dcs:semanticPath "document.clause" ;
+  rdfs:label "Custom Clause" .
+
+dcst:block-party-company-location a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.party.company.location" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:semanticPath "company.location" ;
+  rdfs:label "Company Location" .
+
+dcst:block-contract-payment a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.payment" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.payment" ;
+  rdfs:label "Payment Terms" .
+
+dcst:block-service-sla-availability a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.sla.availability" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.sla.availability" ;
+  rdfs:label "SLA Availability" .
+
+dcst:block-signature-requirement a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.signature.requirement" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:semanticPath "signature.requiredLevel" ;
+  rdfs:label "Signature Requirement" .
 
 dcs:rule a rdf:Property ;
   rdfs:label "Rule" .

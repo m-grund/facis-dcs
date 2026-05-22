@@ -74,6 +74,16 @@ export interface ParameterConstraint {
   severity?: ValidationSeverity
 }
 
+export interface ValueConstraint {
+  format?: string
+  pattern?: string
+  allowedValues?: string[]
+  allowedValuesRef?: string
+  min?: number
+  max?: number
+  description?: string
+}
+
 export interface TemplateVariable {
   '@type'?: 'TemplateVariable' | 'Parameter' | 'StringParameter' | 'DecimalParameter' | 'IntegerParameter' | 'BooleanParameter' | 'DateParameter' | 'EnumParameter'
   parameterName: string
@@ -108,6 +118,9 @@ export interface LegacySemanticConditionParameter {
   type: ParameterType
   isRequired: boolean
   operators: LegacySemanticParameterOperator[]
+  schemaRef?: string
+  semanticPath?: string
+  valueConstraint?: ValueConstraint
   value?: unknown
   defaultValue?: unknown
   semanticMeaning?: string
@@ -327,6 +340,7 @@ export type ValidationSeverity = 'info' | 'warning' | 'error' | 'blocking'
 export interface SemanticRule {
   '@type'?: 'SemanticRule' | 'ThresholdRule' | 'DateConstraintRule'
   ruleId: string
+  appliesToClause?: string[]
   leftOperand: JsonPath | PlaceholderRef
   operator: DcsOperator
   rightOperand: unknown

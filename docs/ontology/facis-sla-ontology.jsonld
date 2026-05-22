@@ -1,9 +1,9 @@
 {
   "@context": {
-    "dcs": "https://w3id.org/facis/dcs/ontology#",
+    "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
     "sla": "https://w3id.org/facis/sla/ontology#",
     "slat": "https://w3id.org/facis/sla/taxonomy#",
-    "dcst": "https://w3id.org/facis/dcs/taxonomy#",
+    "dcst": "https://w3id.org/facis/dcs/taxonomy/v1#",
     "dcterms": "http://purl.org/dc/terms/",
     "owl": "http://www.w3.org/2002/07/owl#",
     "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",

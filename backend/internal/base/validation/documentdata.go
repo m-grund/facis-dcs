@@ -28,6 +28,10 @@ const (
 	PolicyTemplateSemanticConditionsV1 = "facis.dcs.template.semantic-conditions"
 	PolicyContractStructureV1          = "facis.dcs.contract.structure"
 	PolicyContractSemanticValuesV1     = "facis.dcs.contract.semantic-values"
+
+	semanticRuleOperatorProperty        = "operator"
+	semanticRuleRightOperandProperty    = "rightOperand"
+	semanticRuleAppliesToClauseProperty = "appliesToClause"
 )
 
 var (
@@ -577,18 +581,18 @@ func buildSemanticRules(data documentData) []map[string]any {
 					rightOperand = targets[0]
 				}
 				rules = append(rules, map[string]any{
-					"@type":         ruleType,
-					"ruleId":        "rule-" + slugify(conditionID) + "-" + slugify(parameterName) + "-" + slugify(operator),
-					"conditionId":   conditionID,
-					"parameterName": parameterName,
-					"blockIds":      stringSliceToAny(blockIDsByCondition[conditionID]),
-					"leftOperand":   "{{" + conditionID + "." + parameterName + "}}",
-					"operator":      operator,
-					"rightOperand":  rightOperand,
-					"valueType":     parameterType,
-					"severity":      semanticRuleSeverity(param),
-					"source":        "semanticCondition",
-					"message":       fmt.Sprintf("%s.%s must satisfy %s.", conditionName, parameterName, operator),
+					"@type":                             ruleType,
+					"ruleId":                            "rule-" + slugify(conditionID) + "-" + slugify(parameterName) + "-" + slugify(operator),
+					"conditionId":                       conditionID,
+					"parameterName":                     parameterName,
+					semanticRuleAppliesToClauseProperty: stringSliceToAny(blockIDsByCondition[conditionID]),
+					"leftOperand":                       "{{" + conditionID + "." + parameterName + "}}",
+					semanticRuleOperatorProperty:        operator,
+					semanticRuleRightOperandProperty:    rightOperand,
+					"valueType":                         parameterType,
+					"severity":                          semanticRuleSeverity(param),
+					"source":                            "semanticCondition",
+					"message":                           fmt.Sprintf("%s.%s must satisfy %s.", conditionName, parameterName, operator),
 				})
 			}
 		}
@@ -608,6 +612,7 @@ func mergeSemanticRules(rawExisting any, generated []map[string]any) []any {
 			if source, _ := rule["source"].(string); source == "semanticCondition" {
 				continue
 			}
+			canonicalizeSemanticRule(rule)
 			ruleID, _ := rule["ruleId"].(string)
 			if strings.TrimSpace(ruleID) == "" || seen[ruleID] {
 				continue
@@ -627,12 +632,48 @@ func mergeSemanticRules(rawExisting any, generated []map[string]any) []any {
 	return result
 }
 
+// Keep generated and client-provided rules on the JSON-LD v1 ontology terms.
+func canonicalizeSemanticRule(rule map[string]any) {
+	if rawOperator, ok := rule[semanticRuleOperatorProperty].(string); ok {
+		if operator := normalizeSemanticOperator(rawOperator); operator != "" {
+			rule[semanticRuleOperatorProperty] = operator
+		}
+	} else if rawOperate, ok := rule["operate"].(string); ok {
+		if operator := normalizeSemanticOperator(rawOperate); operator != "" {
+			rule[semanticRuleOperatorProperty] = operator
+		}
+	}
+
+	if _, exists := rule[semanticRuleRightOperandProperty]; !exists {
+		if targets, ok := asArray(rule["targets"]); ok {
+			if len(targets) == 1 {
+				rule[semanticRuleRightOperandProperty] = targets[0]
+			} else {
+				rule[semanticRuleRightOperandProperty] = targets
+			}
+		}
+	}
+
+	if _, exists := rule[semanticRuleAppliesToClauseProperty]; !exists {
+		if blockIDs, ok := asArray(rule["blockIds"]); ok {
+			rule[semanticRuleAppliesToClauseProperty] = blockIDs
+		}
+	}
+
+	delete(rule, "operate")
+	delete(rule, "targets")
+	delete(rule, "blockIds")
+}
+
 func parseSemanticOperator(raw any) (string, []string) {
 	switch value := raw.(type) {
 	case string:
 		return value, nil
 	case map[string]any:
 		operate, _ := value["operate"].(string)
+		if strings.TrimSpace(operate) == "" {
+			operate, _ = value[semanticRuleOperatorProperty].(string)
+		}
 		targets := []string{}
 		if rawTargets, ok := asArray(value["targets"]); ok {
 			for _, rawTarget := range rawTargets {
@@ -641,6 +682,8 @@ func parseSemanticOperator(raw any) (string, []string) {
 					targets = append(targets, target)
 				}
 			}
+		} else if rawTarget, ok := value[semanticRuleRightOperandProperty].(string); ok {
+			targets = append(targets, rawTarget)
 		}
 		return operate, targets
 	default:
