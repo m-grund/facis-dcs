@@ -225,7 +225,7 @@ The rule engine should evaluate the profile deterministically, without semantic 
   {
     "@type": "ThresholdRule",
     "ruleId": "rule-uptime-minimum",
-    "leftOperand": "$.sla.slos[?(@.identifier=='slo-uptime-monthly')].targetValue",
+    "leftOperand": "{{sc-uptime.uptimePercentage}}",
     "operator": "GreaterThanOrEqual",
     "rightOperand": 99.95,
     "valueType": "decimal"
@@ -261,11 +261,13 @@ Evaluation contract:
 
 | Input | Meaning |
 | --- | --- |
-| `leftOperand` | JSONPath over the expanded contract profile or parameter value map. |
+| `leftOperand` | `{{conditionId.parameterName}}` placeholder (resolved from `semanticConditionValues`) or JSONPath over the contract profile for structural fields (parties, dates). |
 | `operator` | Closed enum. |
 | `rightOperand` | Literal, `now`, JSONPath, or `{{conditionId.parameterName}}`. |
 | `valueType` | Parser hint for dates/numbers/strings/booleans. |
 | `severity` | `info`, `warning`, `error`, `blocking`. |
+
+> **Design rule:** Semantic rules referencing negotiated SLA values (uptime %, response time, etc.) always use `leftOperand: "{{conditionId.parameterName}}"`. The `sla.services[].slos[]` block is a structural descriptor — it declares which services and SLO types exist and their template defaults. It is **not** updated when users negotiate values. All live contract values live in `contractData.semanticConditionValues`.
 
 ## 8. Beispiel-SLA-Template
 
@@ -273,13 +275,16 @@ See [sla-template.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-on
 
 | Template element | Representation |
 | --- | --- |
-| API service | `Service` |
-| Availability objective | `SLO` with `SLI` and `MeasurementMetric` |
-| Measurement window | `MeasurementRule` |
+| Multiple services | `SLAAgreement.services[]` — each `Service` has its own `slos[]` |
+| SLO type vocabulary | `SLO.sloType`: `availability` \| `responseTime` \| `resolutionTime` \| `errorRate` \| `throughput` |
+| SLO default target | `SLO.targetValue` + `SLO.unit` — template default only, not live contract value |
+| Measurement window | `MeasurementRule` (optional, for advanced monitoring backends) |
 | Service credit | `Remedy` and `ServiceCredit` |
 | Customer claim rules | `ClaimPolicy` |
 | Force majeure / maintenance | `ExclusionEvent` |
 | Placeholders | `TemplateVariable` and `PlaceholderBinding` |
+
+**SLA vs. SemanticConditionValues:** The `sla` block describes the *structure* (which services, which SLO types, what default targets). The actual negotiated values — the uptime percentage a customer agreed to — are stored in `contractData.semanticConditionValues`. SemanticRules reference these values via `{{conditionId.parameterName}}` placeholders, not via JSONPath into `sla`.
 
 ## 9. Beispiel-Machine-readable-Contract
 
@@ -291,7 +296,7 @@ See [machine-readable-contract.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/doc
 | Template traceability | `derivedFromTemplate`, `templateVersion` |
 | Clause-level versioning | `contractVersions[].changedClauses[]`, `clauses[].version` |
 | Semantic conditions | `contractData.semanticConditions` and `semanticConditionValues` |
-| SLA monitoring | `sla.slos`, `measurementRules` |
+| SLA structure | `sla.services[].slos[]` with `sloType`, `targetValue`, `unit` |
 | Policy deployment | `deployment.policyBundle` |
 | Identity | `parties`, `signatories`, `credentialReferences` |
 | Provenance/C2PA | `provenance`, `c2paManifest`, `statusCredential` |
@@ -591,10 +596,15 @@ SELECT did
 FROM contracts
 WHERE contract_data @? '$.parties[*] ? (@.role == "customer" && @.country == "DE")';
 
--- contracts with uptime SLO >= 99.95
+-- contracts with availability SLO negotiated >= 99.95 (via semanticConditionValues)
 SELECT did
 FROM contracts
-WHERE contract_data @? '$.sla.slos[*] ? (@.targetValue >= 99.95)';
+WHERE contract_data @? '$.semanticConditionValues[*] ? (@.conditionId == "sc-uptime" && @.parameterName == "uptimePercentage" && @.parameterValue >= 99.95)';
+
+-- contracts with an availability SLO for any service (structural check)
+SELECT did
+FROM contracts
+WHERE contract_data @? '$.sla.services[*].slos[*] ? (@.sloType == "availability")';
 ```
 
 ## Naming Conventions

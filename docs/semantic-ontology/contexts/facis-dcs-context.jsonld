@@ -252,11 +252,17 @@
     "message": "dcs:message",
     "source": "dcs:source",
     "sla": "dcs:hasSLA",
-    "service": "dcs:hasService",
+    "services": {
+      "@id": "dcs:hasService",
+      "@container": "@set"
+    },
     "slos": {
       "@id": "dcs:hasSLO",
       "@container": "@set"
     },
+    "serviceId": "dcs:serviceId",
+    "sloType": "dcs:sloType",
+    "unit": "dcs:unit",
     "sli": "dcs:hasSLI",
     "metric": "dcs:hasMetric",
     "measurementRules": {

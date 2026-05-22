@@ -551,6 +551,20 @@ dcs:hasExclusionEvent a rdf:Property ;
   rdfs:label "Has Exclusion Event" ;
   rdfs:range dcs:ExclusionEvent .
 
+dcs:serviceId a rdf:Property ;
+  rdfs:label "Service ID" ;
+  rdfs:range xsd:string .
+
+dcs:sloType a rdf:Property ;
+  rdfs:label "SLO Type" ;
+  rdfs:comment "Controlled vocabulary: availability | responseTime | resolutionTime | errorRate | throughput" ;
+  rdfs:range xsd:string .
+
+dcs:unit a rdf:Property ;
+  rdfs:label "Unit" ;
+  rdfs:comment "Measurement unit for the SLO target value, e.g. percent, ms, seconds." ;
+  rdfs:range xsd:string .
+
 dcs:metricId a rdf:Property ;
   rdfs:label "Metric ID" ;
   rdfs:range xsd:string .

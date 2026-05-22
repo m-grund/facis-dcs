@@ -405,43 +405,40 @@
   ],
   "sla": {
     "@type": "SLAAgreement",
-    "service": {
-      "@type": "Service",
-      "identifier": "showtimes-api",
-      "name": "Showtimes API",
-      "targetEndpoint": "https://api.example.org/showtimes"
-    },
-    "slos": [
+    "services": [
       {
-        "@type": "SLO",
-        "identifier": "slo-uptime-monthly",
-        "name": "Monthly API uptime",
-        "sli": {
-          "@type": "SLI",
-          "metric": {
-            "@type": "MeasurementMetric",
-            "metricId": "uptime",
-            "name": "HTTP availability percentage"
-          }
-        },
-        "operator": "GreaterThanOrEqual",
-        "targetValue": 99.95,
-        "measurementRules": [
+        "@type": "Service",
+        "serviceId": "showtimes-api",
+        "name": "Showtimes API",
+        "targetEndpoint": "https://api.example.org/showtimes",
+        "slos": [
           {
-            "@type": "MeasurementRule",
-            "identifier": "mr-uptime-monthly",
-            "measurementWindow": "P1M",
-            "leftOperand": "$.metrics.uptime",
+            "@type": "SLO",
+            "sloType": "availability",
+            "targetValue": 99.95,
+            "unit": "percent",
             "operator": "GreaterThanOrEqual",
-            "rightOperand": 99.95,
-            "valueType": "decimal"
-          }
-        ],
-        "remedies": [
-          {
-            "@type": "ServiceCredit",
-            "identifier": "credit-uptime-breach",
-            "creditPercentage": 10
+            "measurementWindow": "P1M",
+            "identifier": "slo-uptime-monthly",
+            "name": "Monthly API uptime",
+            "measurementRules": [
+              {
+                "@type": "MeasurementRule",
+                "identifier": "mr-uptime-monthly",
+                "measurementWindow": "P1M",
+                "leftOperand": "$.metrics.uptime",
+                "operator": "GreaterThanOrEqual",
+                "rightOperand": 99.95,
+                "valueType": "decimal"
+              }
+            ],
+            "remedies": [
+              {
+                "@type": "ServiceCredit",
+                "identifier": "credit-uptime-breach",
+                "creditPercentage": 10
+              }
+            ]
           }
         ]
       }
@@ -462,7 +459,7 @@
     {
       "@type": "ThresholdRule",
       "ruleId": "rule-uptime-minimum",
-      "leftOperand": "$.sla.slos[?(@.identifier=='slo-uptime-monthly')].targetValue",
+      "leftOperand": "{{sc-uptime.uptimePercentage}}",
       "operator": "GreaterThanOrEqual",
       "rightOperand": 99.95,
       "valueType": "decimal",

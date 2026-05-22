@@ -179,8 +179,24 @@ dcs:SLAAgreementShape
   sh:targetClass dcs:SLAAgreement ;
   sh:property [
     sh:path dcs:hasService ;
-    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:node dcs:ServiceShape ;
     sh:minCount 1 ;
+  ] .
+
+dcs:ServiceShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:Service ;
+  sh:property [
+    sh:path dcs:serviceId ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:name ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
   ] ;
   sh:property [
     sh:path dcs:hasSLO ;
@@ -192,17 +208,16 @@ dcs:SLOShape
   a sh:NodeShape ;
   sh:targetClass dcs:SLO ;
   sh:property [
-    sh:path dcs:hasSLI ;
+    sh:path dcs:sloType ;
+    sh:datatype xsd:string ;
+    sh:in ( "availability" "responseTime" "resolutionTime" "errorRate" "throughput" ) ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
   ] ;
   sh:property [
     sh:path dcs:targetValue ;
     sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:hasMeasurementRule ;
-    sh:minCount 1 ;
+    sh:maxCount 1 ;
   ] .
 
 dcs:ContractAdjustmentShape

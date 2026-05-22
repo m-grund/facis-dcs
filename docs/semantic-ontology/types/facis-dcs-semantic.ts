@@ -246,12 +246,15 @@ export interface Clause {
   contentHash?: HashRef | string
 }
 
+export type SloType = 'availability' | 'responseTime' | 'resolutionTime' | 'errorRate' | 'throughput'
+
 export interface Service {
   '@type'?: 'Service'
-  identifier: string
+  serviceId: string
   name: string
   targetEndpoint?: string
   serviceType?: string
+  slos: SLO[]
 }
 
 export interface MeasurementMetric {
@@ -279,12 +282,15 @@ export interface MeasurementRule {
 
 export interface SLO {
   '@type'?: 'SLO'
-  identifier: string
-  name: string
-  sli: SLI
-  operator: DcsOperator
-  targetValue: string | number | boolean
-  measurementRules: MeasurementRule[]
+  sloType: SloType
+  targetValue: number
+  unit?: string
+  operator?: DcsOperator
+  measurementWindow?: string
+  identifier?: string
+  name?: string
+  sli?: SLI
+  measurementRules?: MeasurementRule[]
   remedies?: Remedy[]
 }
 
@@ -311,8 +317,7 @@ export interface ExclusionEvent {
 
 export interface SLAAgreement {
   '@type'?: 'SLAAgreement'
-  service: Service
-  slos: SLO[]
+  services: Service[]
   claimPolicy?: ClaimPolicy
   exclusionEvents?: ExclusionEvent[]
 }
