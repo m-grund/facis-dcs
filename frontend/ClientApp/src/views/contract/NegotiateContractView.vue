@@ -488,7 +488,7 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || hasChangeRequest || !hasOpenDecisions || !!compareChangesData"
+          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
