@@ -1,5 +1,6 @@
 import type { ContractTemplateState } from "@/types/contract-template-state"
 import type { SubTemplateSnapshot } from "@/models/contract-template"
+import type { PlaceholderBinding, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable } from "@/models/semantic/facis-dcs-semantic"
 import type {
   DocumentOutline,
   DocumentBlock,
@@ -28,6 +29,11 @@ interface TemplateDraftState {
   schemaRefs: SchemaReferenceSet
   policyRefs: PolicyReference[]
   validation: ValidationProfile
+  semanticProfile: SemanticProfile
+  templateVariables: TemplateVariable[]
+  placeholderBindings: PlaceholderBinding[]
+  semanticRules: SemanticRule[]
+  sla: SLAAgreement | null
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue
   state: ContractTemplateState | null

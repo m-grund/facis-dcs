@@ -18,6 +18,11 @@ const (
 	SchemaContractV1          = "facis.dcs.contract.v1"
 	SchemaServiceV1           = "facis.dcs.service.v1"
 	SchemaSignatureV1         = "facis.dcs.signature.v1"
+	SchemaJSONLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
+	SchemaOntologyV1          = "https://w3id.org/facis/dcs/ontology/v1"
+	SchemaSHACLShapesV1       = "https://w3id.org/facis/dcs/shapes/v1"
+	SemanticProfileName       = "FACIS DCS Semantic Contract Profile"
+	SemanticProfileVersionV1  = "v1"
 
 	PolicyTemplateStructureV1          = "facis.dcs.template.structure"
 	PolicyTemplateSemanticConditionsV1 = "facis.dcs.template.semantic-conditions"
@@ -340,10 +345,14 @@ func encodeDocumentData(data documentData) (*datatype.JSON, error) {
 }
 
 func normalizeTemplateMetadata(data documentData) {
+	data["@context"] = SchemaJSONLDContextV1
 	data["schemaRefs"] = map[string]any{
 		"documentStructure": SchemaDocumentStructureV1,
 		"semanticCondition": SchemaSemanticConditionV1,
 		"templateData":      SchemaTemplateDataV1,
+		"jsonLdContext":     SchemaJSONLDContextV1,
+		"ontology":          SchemaOntologyV1,
+		"shaclShapes":       SchemaSHACLShapesV1,
 	}
 	data["policyRefs"] = templatePolicyRefs
 	data["validation"] = map[string]any{
@@ -352,13 +361,19 @@ func normalizeTemplateMetadata(data documentData) {
 		"requiredPolicies":  []string{PolicyTemplateStructureV1, PolicyTemplateSemanticConditionsV1},
 		"validatedBySchema": true,
 	}
+	normalizeSemanticProfile(data)
+	normalizeSemanticRuntimeMetadata(data)
 }
 
 func normalizeContractMetadata(data documentData) {
+	data["@context"] = SchemaJSONLDContextV1
 	data["schemaRefs"] = map[string]any{
 		"documentStructure": SchemaDocumentStructureV1,
 		"semanticCondition": SchemaSemanticConditionV1,
 		"contractData":      SchemaContractDataV1,
+		"jsonLdContext":     SchemaJSONLDContextV1,
+		"ontology":          SchemaOntologyV1,
+		"shaclShapes":       SchemaSHACLShapesV1,
 	}
 	data["policyRefs"] = contractPolicyRefs
 	data["validation"] = map[string]any{
@@ -370,6 +385,23 @@ func normalizeContractMetadata(data documentData) {
 	if _, ok := data["semanticConditionValues"]; !ok {
 		data["semanticConditionValues"] = []any{}
 	}
+	normalizeSemanticProfile(data)
+	normalizeSemanticRuntimeMetadata(data)
+}
+
+func normalizeSemanticProfile(data documentData) {
+	data["semanticProfile"] = map[string]any{
+		"name":     SemanticProfileName,
+		"version":  SemanticProfileVersionV1,
+		"context":  SchemaJSONLDContextV1,
+		"ontology": SchemaOntologyV1,
+		"shapes":   SchemaSHACLShapesV1,
+	}
+}
+
+func normalizeSemanticRuntimeMetadata(data documentData) {
+	data["placeholderBindings"] = buildPlaceholderBindings(data)
+	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], buildSemanticRules(data))
 }
 
 func validateSchemaRefs(data documentData, template bool) error {
@@ -422,6 +454,247 @@ func validatePolicyRefs(data documentData, template bool) error {
 		}
 	}
 	return nil
+}
+
+func buildPlaceholderBindings(data documentData) []map[string]any {
+	blocks, _ := asArray(data["documentBlocks"])
+	conditions, _ := asArray(data["semanticConditions"])
+	parameterByCondition := map[string]map[string]bool{}
+	for _, item := range conditions {
+		condition, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		conditionID, _ := condition["conditionId"].(string)
+		if strings.TrimSpace(conditionID) == "" {
+			continue
+		}
+		parameterByCondition[conditionID] = map[string]bool{}
+		parameters, _ := asArray(condition["parameters"])
+		for _, rawParam := range parameters {
+			param, ok := rawParam.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := param["parameterName"].(string)
+			if strings.TrimSpace(name) != "" {
+				parameterByCondition[conditionID][name] = true
+			}
+		}
+	}
+
+	placeholderPattern := regexp.MustCompile(`\{\{([^}.]+)\.([^}]+)\}\}`)
+	seen := map[string]bool{}
+	bindings := []map[string]any{}
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok || block["type"] != "CLAUSE" {
+			continue
+		}
+		blockID, _ := block["blockId"].(string)
+		text, _ := block["text"].(string)
+		for _, match := range placeholderPattern.FindAllStringSubmatch(text, -1) {
+			if len(match) != 3 {
+				continue
+			}
+			conditionID := match[1]
+			parameterName := match[2]
+			if !parameterByCondition[conditionID][parameterName] {
+				continue
+			}
+			key := blockID + "\x00" + conditionID + "\x00" + parameterName
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			bindings = append(bindings, map[string]any{
+				"@type":            "PlaceholderBinding",
+				"placeholder":      "{{" + conditionID + "." + parameterName + "}}",
+				"boundToCondition": conditionID,
+				"boundToParameter": parameterName,
+				"blockId":          blockID,
+				"source":           "clause-placeholder",
+			})
+		}
+	}
+	return bindings
+}
+
+func buildSemanticRules(data documentData) []map[string]any {
+	blocks, _ := asArray(data["documentBlocks"])
+	conditions, _ := asArray(data["semanticConditions"])
+	blockIDsByCondition := map[string][]string{}
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok || block["type"] != "CLAUSE" {
+			continue
+		}
+		blockID, _ := block["blockId"].(string)
+		refs, _ := asArray(block["conditionIds"])
+		for _, rawConditionID := range refs {
+			conditionID, ok := rawConditionID.(string)
+			if !ok {
+				continue
+			}
+			blockIDsByCondition[conditionID] = append(blockIDsByCondition[conditionID], blockID)
+		}
+	}
+
+	rules := []map[string]any{}
+	for _, item := range conditions {
+		condition, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		conditionID, _ := condition["conditionId"].(string)
+		conditionName, _ := condition["conditionName"].(string)
+		if conditionName == "" {
+			conditionName = conditionID
+		}
+		parameters, _ := asArray(condition["parameters"])
+		for _, rawParam := range parameters {
+			param, ok := rawParam.(map[string]any)
+			if !ok {
+				continue
+			}
+			parameterName, _ := param["parameterName"].(string)
+			parameterType, _ := param["type"].(string)
+			operators, _ := asArray(param["operators"])
+			for _, rawOperator := range operators {
+				operate, targets := parseSemanticOperator(rawOperator)
+				operator := normalizeSemanticOperator(operate)
+				if operator == "" {
+					continue
+				}
+				ruleType := "SemanticRule"
+				if parameterType == "date" {
+					ruleType = "DateConstraintRule"
+				} else if parameterType == "decimal" || parameterType == "integer" {
+					ruleType = "ThresholdRule"
+				}
+				var rightOperand any = targets
+				if len(targets) == 1 {
+					rightOperand = targets[0]
+				}
+				rules = append(rules, map[string]any{
+					"@type":         ruleType,
+					"ruleId":        "rule-" + slugify(conditionID) + "-" + slugify(parameterName) + "-" + slugify(operator),
+					"conditionId":   conditionID,
+					"parameterName": parameterName,
+					"blockIds":      stringSliceToAny(blockIDsByCondition[conditionID]),
+					"leftOperand":   "{{" + conditionID + "." + parameterName + "}}",
+					"operator":      operator,
+					"rightOperand":  rightOperand,
+					"valueType":     parameterType,
+					"severity":      semanticRuleSeverity(param),
+					"source":        "semanticCondition",
+					"message":       fmt.Sprintf("%s.%s must satisfy %s.", conditionName, parameterName, operator),
+				})
+			}
+		}
+	}
+	return rules
+}
+
+func mergeSemanticRules(rawExisting any, generated []map[string]any) []any {
+	result := []any{}
+	seen := map[string]bool{}
+	if existing, ok := asArray(rawExisting); ok {
+		for _, item := range existing {
+			rule, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if source, _ := rule["source"].(string); source == "semanticCondition" {
+				continue
+			}
+			ruleID, _ := rule["ruleId"].(string)
+			if strings.TrimSpace(ruleID) == "" || seen[ruleID] {
+				continue
+			}
+			seen[ruleID] = true
+			result = append(result, rule)
+		}
+	}
+	for _, rule := range generated {
+		ruleID, _ := rule["ruleId"].(string)
+		if strings.TrimSpace(ruleID) == "" || seen[ruleID] {
+			continue
+		}
+		seen[ruleID] = true
+		result = append(result, rule)
+	}
+	return result
+}
+
+func parseSemanticOperator(raw any) (string, []string) {
+	switch value := raw.(type) {
+	case string:
+		return value, nil
+	case map[string]any:
+		operate, _ := value["operate"].(string)
+		targets := []string{}
+		if rawTargets, ok := asArray(value["targets"]); ok {
+			for _, rawTarget := range rawTargets {
+				target, ok := rawTarget.(string)
+				if ok {
+					targets = append(targets, target)
+				}
+			}
+		}
+		return operate, targets
+	default:
+		return "", nil
+	}
+}
+
+func normalizeSemanticOperator(value string) string {
+	switch value {
+	case "Equals", "NotEquals", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "Between", "Contains", "MatchesRegex":
+		return value
+	case "equal":
+		return "Equals"
+	case "notEqual":
+		return "NotEquals"
+	case "greaterThan":
+		return "GreaterThan"
+	case "greaterThanOrEqual":
+		return "GreaterThanOrEqual"
+	case "lessThan":
+		return "LessThan"
+	case "lessThanOrEqual":
+		return "LessThanOrEqual"
+	case "between":
+		return "Between"
+	case "contains":
+		return "Contains"
+	case "matchesRegex":
+		return "MatchesRegex"
+	default:
+		return ""
+	}
+}
+
+func semanticRuleSeverity(param map[string]any) string {
+	if isTrue(param["isRequired"]) {
+		return "blocking"
+	}
+	return "error"
+}
+
+func stringSliceToAny(values []string) []any {
+	result := make([]any, len(values))
+	for i, value := range values {
+		result[i] = value
+	}
+	return result
+}
+
+func slugify(value string) string {
+	value = regexp.MustCompile(`([a-z])([A-Z])`).ReplaceAllString(value, "${1}-${2}")
+	value = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(value, "-")
+	value = strings.Trim(value, "-")
+	return strings.ToLower(value)
 }
 
 func validateCommonStructure(data documentData) error {
@@ -537,6 +810,9 @@ func validateCommonStructure(data documentData) error {
 				return fmt.Errorf("semantic condition %q has invalid parameter", id)
 			}
 			if err := validateDomainParameter(id, param); err != nil {
+				return err
+			}
+			if err := validateSemanticOperators(id, param); err != nil {
 				return err
 			}
 		}
@@ -727,7 +1003,7 @@ func validateBlockCatalogue(block map[string]any) error {
 
 func validSemanticType(value string) bool {
 	switch value {
-	case "date", "string", "integer", "decimal":
+	case "date", "string", "integer", "decimal", "boolean", "enum":
 		return true
 	default:
 		return false
@@ -757,6 +1033,25 @@ func validateDomainParameter(conditionID string, param map[string]any) error {
 	return nil
 }
 
+func validateSemanticOperators(conditionID string, param map[string]any) error {
+	rawOperators, exists := param["operators"]
+	if !exists {
+		param["operators"] = []any{}
+		return nil
+	}
+	operators, ok := asArray(rawOperators)
+	if !ok {
+		return fmt.Errorf("semantic condition %q parameter %q operators must be an array", conditionID, param["parameterName"])
+	}
+	for _, rawOperator := range operators {
+		operate, _ := parseSemanticOperator(rawOperator)
+		if normalizeSemanticOperator(operate) == "" {
+			return fmt.Errorf("semantic condition %q parameter %q uses unsupported operator %q", conditionID, param["parameterName"], operate)
+		}
+	}
+	return nil
+}
+
 func isTrue(value any) bool {
 	v, ok := value.(bool)
 	return ok && v
@@ -775,8 +1070,11 @@ func findParameter(condition map[string]any, parameterName string) (map[string]a
 
 func valueMatchesType(value any, paramType string) bool {
 	switch paramType {
-	case "string", "date":
+	case "string", "date", "enum":
 		_, ok := value.(string)
+		return ok
+	case "boolean":
+		_, ok := value.(bool)
 		return ok
 	case "integer":
 		number, ok := value.(float64)

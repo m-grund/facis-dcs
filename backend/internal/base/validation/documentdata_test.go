@@ -47,8 +47,12 @@ func TestNormalizeTemplateDataAddsSchemaAndPolicyRefs(t *testing.T) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &data))
 	require.Equal(t, SchemaTemplateDataV1, data["schemaRefs"].(map[string]any)["templateData"])
+	require.Equal(t, SchemaJSONLDContextV1, data["schemaRefs"].(map[string]any)["jsonLdContext"])
 	require.NotEmpty(t, data["policyRefs"])
 	require.Equal(t, "FACIS_DCS_TEMPLATE_V1", data["validation"].(map[string]any)["profile"])
+	require.Equal(t, SemanticProfileVersionV1, data["semanticProfile"].(map[string]any)["version"])
+	require.IsType(t, []any{}, data["placeholderBindings"])
+	require.IsType(t, []any{}, data["semanticRules"])
 }
 
 func TestNormalizeTemplateDataRejectsUnknownConditionReference(t *testing.T) {
@@ -179,4 +183,56 @@ func TestNormalizeContractDataAcceptsSemanticValueInsideConstraint(t *testing.T)
 
 	_, err = NormalizeContractData(&raw, true)
 	require.NoError(t, err)
+}
+
+func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	condition := conditions[0].(map[string]any)
+	params := condition["parameters"].([]any)
+	param := params[0].(map[string]any)
+	param["operators"] = []any{
+		map[string]any{
+			"operate": "greaterThanOrEqual",
+			"targets": []any{"99.95"},
+		},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeTemplateData(&raw)
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	bindings := result["placeholderBindings"].([]any)
+	require.Len(t, bindings, 1)
+	require.Equal(t, "{{cond-1.percent}}", bindings[0].(map[string]any)["placeholder"])
+	rules := result["semanticRules"].([]any)
+	require.Len(t, rules, 1)
+	require.Equal(t, "GreaterThanOrEqual", rules[0].(map[string]any)["operator"])
+	require.Equal(t, "semanticCondition", rules[0].(map[string]any)["source"])
+}
+
+func TestNormalizeTemplateDataRejectsUnsupportedSemanticOperator(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	condition := conditions[0].(map[string]any)
+	params := condition["parameters"].([]any)
+	param := params[0].(map[string]any)
+	param["operators"] = []any{
+		map[string]any{
+			"operate": "unsupported",
+			"targets": []any{"99.95"},
+		},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&raw)
+	require.ErrorContains(t, err, "unsupported operator")
 }

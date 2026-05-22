@@ -81,6 +81,8 @@
             <option value="string">Text</option>
             <option value="decimal">Decimal</option>
             <option value="integer">Integer</option>
+            <option value="boolean">Boolean</option>
+            <option value="enum">Enum</option>
           </select>
         </div>
         <div class="md:col-span-2 flex flex-col gap-1">

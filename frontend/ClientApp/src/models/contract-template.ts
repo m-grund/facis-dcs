@@ -1,5 +1,6 @@
 import type { DocumentBlock, DocumentOutline, MetaData, PolicyReference, SchemaReferenceSet, SemanticCondition, ValidationProfile } from "@/modules/template-repository/models/contract-template"
 import type { TemplateDataVersion } from "@/modules/template-repository/models/template-draft-store"
+import type { PlaceholderBinding, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable } from "@/models/semantic/facis-dcs-semantic"
 import type { ContractTemplateState } from "@/types/contract-template-state"
 import type { TemplateType } from "@/types/template-type"
 import type { ContractTemplateResponsiblePersons } from './contract-template-responsible-persons'
@@ -22,6 +23,7 @@ export interface ContractTemplate {
 export type PartialContractTemplate = ContractTemplate
 
 export interface ContractTemplateData {
+    '@context'?: string
     documentOutline: DocumentOutline
     semanticConditions: SemanticCondition[]
     documentBlocks: DocumentBlock[]
@@ -29,6 +31,11 @@ export interface ContractTemplateData {
     schemaRefs?: SchemaReferenceSet
     policyRefs?: PolicyReference[]
     validation?: ValidationProfile
+    semanticProfile?: SemanticProfile
+    templateVariables?: TemplateVariable[]
+    placeholderBindings?: PlaceholderBinding[]
+    semanticRules?: SemanticRule[]
+    sla?: SLAAgreement
     // Only when the template is a frame contract, it can have sub-templates
     subTemplateSnapshots?: SubTemplateSnapshot[]
     templateDataVersion?: TemplateDataVersion

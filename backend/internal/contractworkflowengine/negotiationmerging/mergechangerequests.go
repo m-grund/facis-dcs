@@ -22,10 +22,13 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 		return nil, err
 	}
 
-	var contractData ContractData
+	var contractData map[string]any
 	err = json.Unmarshal(*contract.ContractData, &contractData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal contract data: %w", err)
+	}
+	if contractData == nil {
+		contractData = map[string]any{}
 	}
 
 	updateData := db.ContractUpdateData{
@@ -71,10 +74,15 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 		}
 
 		if change.ContractData != nil {
+			semanticConditionValues, err := readSemanticConditionValues(contractData)
+			if err != nil {
+				return nil, err
+			}
 
 			for _, value := range change.ContractData.SemanticConditionValues {
-				upsertSemanticConditionValue(&contractData, value)
+				semanticConditionValues = upsertSemanticConditionValue(semanticConditionValues, value)
 			}
+			contractData["semanticConditionValues"] = semanticConditionValues
 
 			newContractData, err := datatype.NewJSON(contractData)
 			if err != nil {
@@ -87,15 +95,31 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 	return &updateData, nil
 }
 
-func upsertSemanticConditionValue(contract *ContractData, newValue SemanticConditionValue) {
-	for i, existing := range contract.SemanticConditionValues {
+func readSemanticConditionValues(contractData map[string]any) ([]SemanticConditionValue, error) {
+	raw, ok := contractData["semanticConditionValues"]
+	if !ok || raw == nil {
+		return []SemanticConditionValue{}, nil
+	}
+	bytes, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal semantic condition values: %w", err)
+	}
+	var values []SemanticConditionValue
+	if err := json.Unmarshal(bytes, &values); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal semantic condition values: %w", err)
+	}
+	return values, nil
+}
+
+func upsertSemanticConditionValue(values []SemanticConditionValue, newValue SemanticConditionValue) []SemanticConditionValue {
+	for i, existing := range values {
 		if existing.BlockID == newValue.BlockID &&
 			existing.ParameterName == newValue.ParameterName &&
 			existing.ConditionID == newValue.ConditionID {
 
-			contract.SemanticConditionValues[i] = newValue // update
-			return
+			values[i] = newValue // update
+			return values
 		}
 	}
-	contract.SemanticConditionValues = append(contract.SemanticConditionValues, newValue) // insert
+	return append(values, newValue) // insert
 }

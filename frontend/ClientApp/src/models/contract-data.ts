@@ -1,8 +1,10 @@
 import type { DocumentBlock, DocumentOutline, PolicyReference, SchemaReferenceSet, SemanticCondition, ValidationProfile } from "@/modules/template-repository/models/contract-template"
 import type { TemplateDataVersion } from "@/modules/template-repository/models/template-draft-store"
+import type { PlaceholderBinding, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable, ValidationReport } from "@/models/semantic/facis-dcs-semantic"
 import type { SubTemplateSnapshot } from "./contract-template"
 
 export interface ContractData {
+  '@context'?: string
   documentOutline: DocumentOutline
   documentBlocks: DocumentBlock[]
   semanticConditions: SemanticCondition[]
@@ -16,6 +18,12 @@ export interface ContractData {
     version?: number
     document_number?: string
   }
+  semanticProfile?: SemanticProfile
+  templateVariables?: TemplateVariable[]
+  placeholderBindings?: PlaceholderBinding[]
+  semanticRules?: SemanticRule[]
+  sla?: SLAAgreement
+  validationReports?: ValidationReport[]
   semanticConditionValues: SemanticConditionValue[]
 }
 
@@ -24,5 +32,5 @@ export interface SemanticConditionValue {
   blockId: string
   conditionId: string
   parameterName: string
-  parameterValue?: string | number
+  parameterValue?: string | number | boolean
 }

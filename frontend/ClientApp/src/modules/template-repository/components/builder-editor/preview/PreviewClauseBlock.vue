@@ -47,7 +47,7 @@ type PreviewSegment =
     parameterName: string
     paramType: SemanticParameterType
     label: string
-    value?: string | number
+    value?: string | number | boolean
     valueConstraint?: SemanticValueConstraint
     isInvalid?: boolean
     invalidTip?: string
@@ -84,12 +84,12 @@ const segments = computed<PreviewSegment[]>(() => {
   return result
 })
 
-function onParamValueChange(seg: PreviewSegment, value: string | number) {
+function onParamValueChange(seg: PreviewSegment, value: string | number | boolean) {
   if (seg.type !== 'param') return
   props.setSemanticConditionValue?.(props.blockId, seg.conditionId, seg.parameterName, value)
 }
 
-function findSemanticValue(conditionId: string, parameterName: string): string | number | undefined {
+function findSemanticValue(conditionId: string, parameterName: string): string | number | boolean | undefined {
   return props.semanticConditionValues?.find((item) => {
     return (
       item.blockId === props.blockId &&

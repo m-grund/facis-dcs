@@ -1,0 +1,757 @@
+@prefix dcs:  <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix vc:   <https://www.w3.org/2018/credentials#> .
+
+<https://w3id.org/facis/dcs/ontology/v1>
+  a owl:Ontology ;
+  dct:title "FACIS DCS Pragmatic Semantic Contract Ontology" ;
+  dct:description "Lightweight JSON-LD-first ontology profile for FACIS DCS machine-readable contracts, SLA templates, semantic conditions, workflow metadata, deployment, and policy enforcement." ;
+  owl:versionIRI <https://w3id.org/facis/dcs/ontology/v1> ;
+  owl:versionInfo "v1" .
+
+#################################################################
+# Core classes
+#################################################################
+
+dcs:Contract a rdfs:Class ;
+  rdfs:label "Contract" ;
+  rdfs:comment "A digital contract instance managed by DCS in machine-readable and human-readable form." .
+
+dcs:ContractTemplate a rdfs:Class ;
+  rdfs:label "Contract Template" ;
+  rdfs:comment "A reusable machine-readable template that can generate contract instances." .
+
+dcs:ContractObject a rdfs:Class ;
+  rdfs:label "Contract Object" ;
+  rdfs:comment "A lifecycle-aware digital object containing contract content, metadata, parties, semantic conditions, and evidence." .
+
+dcs:ContractVersion a rdfs:Class ;
+  rdfs:label "Contract Version" ;
+  rdfs:comment "A version of a contract created by generation, adjustment, renewal, or correction." .
+
+dcs:Section a rdfs:Class ;
+  rdfs:label "Section" ;
+  rdfs:comment "A structural section in a contract document outline." .
+
+dcs:Clause a rdfs:Class ;
+  rdfs:label "Clause" ;
+  rdfs:comment "A clause-level unit that may be versioned, negotiated, and linked to semantic conditions." .
+
+dcs:ContractCondition a rdfs:Class ;
+  rdfs:label "Contract Condition" ;
+  rdfs:comment "A contractual condition, obligation, policy, or regulatory requirement." .
+
+dcs:SemanticCondition a rdfs:Class ;
+  rdfs:subClassOf dcs:ContractCondition ;
+  rdfs:label "Semantic Condition" ;
+  rdfs:comment "A machine-readable condition used for automated validation or policy extraction." .
+
+#################################################################
+# SLA classes
+#################################################################
+
+dcs:SLAAgreement a rdfs:Class ;
+  rdfs:label "SLA Agreement" .
+
+dcs:Service a rdfs:Class ;
+  rdfs:label "Service" .
+
+dcs:SLO a rdfs:Class ;
+  rdfs:label "Service Level Objective" .
+
+dcs:SLI a rdfs:Class ;
+  rdfs:label "Service Level Indicator" .
+
+dcs:MeasurementMetric a rdfs:Class ;
+  rdfs:label "Measurement Metric" .
+
+dcs:MeasurementRule a rdfs:Class ;
+  rdfs:label "Measurement Rule" .
+
+dcs:Remedy a rdfs:Class ;
+  rdfs:label "Remedy" .
+
+dcs:ServiceCredit a rdfs:Class ;
+  rdfs:subClassOf dcs:Remedy ;
+  rdfs:label "Service Credit" .
+
+dcs:ClaimPolicy a rdfs:Class ;
+  rdfs:label "Claim Policy" .
+
+dcs:ExclusionEvent a rdfs:Class ;
+  rdfs:label "Exclusion Event" .
+
+#################################################################
+# Workflow classes
+#################################################################
+
+dcs:ContractLifecycleState a rdfs:Class ;
+  rdfs:label "Contract Lifecycle State" .
+
+dcs:ContractAdjustment a rdfs:Class ;
+  rdfs:label "Contract Adjustment" ;
+  rdfs:comment "A clause-level add, remove, replace, or value-change request made during negotiation or renewal." .
+
+dcs:Approval a rdfs:Class ;
+  rdfs:label "Approval" .
+
+dcs:Negotiation a rdfs:Class ;
+  rdfs:label "Negotiation" .
+
+dcs:Deployment a rdfs:Class ;
+  rdfs:label "Deployment" ;
+  rdfs:comment "The release of a signed machine-readable contract or policy bundle to a target system." .
+
+dcs:DeploymentTarget a rdfs:Class ;
+  rdfs:label "Deployment Target" .
+
+dcs:DeploymentReceipt a rdfs:Class ;
+  rdfs:label "Deployment Receipt" .
+
+dcs:WorkflowHook a rdfs:Class ;
+  rdfs:label "Workflow Hook" .
+
+#################################################################
+# Identity classes
+#################################################################
+
+dcs:Party a rdfs:Class ;
+  rdfs:label "Party" .
+
+dcs:Signatory a rdfs:Class ;
+  rdfs:subClassOf dcs:Party ;
+  rdfs:label "Signatory" .
+
+dcs:CredentialReference a rdfs:Class ;
+  rdfs:label "Credential Reference" ;
+  rdfs:comment "A reference to a Verifiable Credential, presentation, status list entry, or credential hash." .
+
+dcs:DIDReference a rdfs:Class ;
+  rdfs:label "DID Reference" .
+
+dcs:UUIDReference a rdfs:Class ;
+  rdfs:label "UUID Reference" .
+
+#################################################################
+# Template classes
+#################################################################
+
+dcs:TemplateVariable a rdfs:Class ;
+  rdfs:label "Template Variable" .
+
+dcs:Parameter a rdfs:Class ;
+  rdfs:label "Parameter" .
+
+dcs:StringParameter a rdfs:Class ;
+  rdfs:subClassOf dcs:Parameter ;
+  rdfs:label "String Parameter" .
+
+dcs:DecimalParameter a rdfs:Class ;
+  rdfs:subClassOf dcs:Parameter ;
+  rdfs:label "Decimal Parameter" .
+
+dcs:IntegerParameter a rdfs:Class ;
+  rdfs:subClassOf dcs:Parameter ;
+  rdfs:label "Integer Parameter" .
+
+dcs:BooleanParameter a rdfs:Class ;
+  rdfs:subClassOf dcs:Parameter ;
+  rdfs:label "Boolean Parameter" .
+
+dcs:DateParameter a rdfs:Class ;
+  rdfs:subClassOf dcs:Parameter ;
+  rdfs:label "Date Parameter" .
+
+dcs:EnumParameter a rdfs:Class ;
+  rdfs:subClassOf dcs:Parameter ;
+  rdfs:label "Enum Parameter" .
+
+dcs:ParameterConstraint a rdfs:Class ;
+  rdfs:label "Parameter Constraint" .
+
+dcs:PlaceholderBinding a rdfs:Class ;
+  rdfs:label "Placeholder Binding" ;
+  rdfs:comment "Binds a template placeholder to a semantic condition parameter or contract data path." .
+
+#################################################################
+# Rule classes
+#################################################################
+
+dcs:SemanticRule a rdfs:Class ;
+  rdfs:label "Semantic Rule" .
+
+dcs:Constraint a rdfs:Class ;
+  rdfs:label "Constraint" .
+
+dcs:Operator a rdfs:Class ;
+  rdfs:label "Operator" .
+
+dcs:ThresholdRule a rdfs:Class ;
+  rdfs:subClassOf dcs:SemanticRule ;
+  rdfs:label "Threshold Rule" .
+
+dcs:DateConstraintRule a rdfs:Class ;
+  rdfs:subClassOf dcs:SemanticRule ;
+  rdfs:label "Date Constraint Rule" .
+
+dcs:ValidationReport a rdfs:Class ;
+  rdfs:label "Validation Report" .
+
+dcs:ValidationFinding a rdfs:Class ;
+  rdfs:label "Validation Finding" .
+
+dcs:PolicyBundle a rdfs:Class ;
+  rdfs:label "Policy Bundle" .
+
+dcs:PolicyDecision a rdfs:Class ;
+  rdfs:label "Policy Decision" .
+
+dcs:ProvenanceEvent a rdfs:Class ;
+  rdfs:subClassOf prov:Activity ;
+  rdfs:label "Provenance Event" .
+
+#################################################################
+# Identifier and metadata properties
+#################################################################
+
+dcs:did a rdf:Property ;
+  rdfs:label "DID" ;
+  rdfs:range xsd:string .
+
+dcs:uuid a rdf:Property ;
+  rdfs:label "UUID" ;
+  rdfs:range xsd:string .
+
+dcs:identifier a rdf:Property ;
+  rdfs:label "Identifier" ;
+  rdfs:range xsd:string .
+
+dcs:name a rdf:Property ;
+  rdfs:label "Name" ;
+  rdfs:range xsd:string .
+
+dcs:description a rdf:Property ;
+  rdfs:label "Description" ;
+  rdfs:range xsd:string .
+
+dcs:schemaVersion a rdf:Property ;
+  rdfs:label "Schema Version" ;
+  rdfs:range xsd:string .
+
+dcs:templateData a rdf:Property ;
+  rdfs:label "Template Data" .
+
+dcs:contractData a rdf:Property ;
+  rdfs:label "Contract Data" .
+
+dcs:documentOutline a rdf:Property ;
+  rdfs:label "Document Outline" .
+
+dcs:documentBlocks a rdf:Property ;
+  rdfs:label "Document Blocks" .
+
+dcs:customMetaData a rdf:Property ;
+  rdfs:label "Custom Metadata" .
+
+dcs:subTemplateSnapshots a rdf:Property ;
+  rdfs:label "Sub Template Snapshots" .
+
+dcs:templateDataVersion a rdf:Property ;
+  rdfs:label "Template Data Version" ;
+  rdfs:range xsd:integer .
+
+dcs:documentNumber a rdf:Property ;
+  rdfs:label "Document Number" ;
+  rdfs:range xsd:string .
+
+dcs:templateId a rdf:Property ;
+  rdfs:label "Template ID" ;
+  rdfs:range xsd:string .
+
+dcs:version a rdf:Property ;
+  rdfs:label "Version" ;
+  rdfs:range xsd:integer .
+
+dcs:title a rdf:Property ;
+  rdfs:label "Title" ;
+  rdfs:range xsd:string .
+
+dcs:blockType a rdf:Property ;
+  rdfs:label "Block Type" ;
+  rdfs:range xsd:string .
+
+dcs:jsonType a rdf:Property ;
+  rdfs:label "JSON Type" ;
+  rdfs:range xsd:string .
+
+dcs:templateVariable a rdf:Property ;
+  rdfs:label "Template Variable" ;
+  rdfs:range dcs:TemplateVariable .
+
+dcs:placeholderBinding a rdf:Property ;
+  rdfs:label "Placeholder Binding" ;
+  rdfs:range dcs:PlaceholderBinding .
+
+dcs:placeholder a rdf:Property ;
+  rdfs:label "Placeholder" ;
+  rdfs:range xsd:string .
+
+dcs:boundToCondition a rdf:Property ;
+  rdfs:label "Bound To Condition" ;
+  rdfs:range xsd:string .
+
+dcs:boundToParameter a rdf:Property ;
+  rdfs:label "Bound To Parameter" ;
+  rdfs:range xsd:string .
+
+dcs:semanticProfile a rdf:Property ;
+  rdfs:label "Semantic Profile" .
+
+dcs:semanticProfileVersion a rdf:Property ;
+  rdfs:label "Semantic Profile Version" ;
+  rdfs:range xsd:string .
+
+dcs:createdAt a rdf:Property ;
+  rdfs:label "Created At" ;
+  rdfs:range xsd:dateTime .
+
+dcs:updatedAt a rdf:Property ;
+  rdfs:label "Updated At" ;
+  rdfs:range xsd:dateTime .
+
+dcs:validFrom a rdf:Property ;
+  rdfs:label "Valid From" ;
+  rdfs:range xsd:dateTime .
+
+dcs:validUntil a rdf:Property ;
+  rdfs:label "Valid Until" ;
+  rdfs:range xsd:dateTime .
+
+dcs:contentHash a rdf:Property ;
+  rdfs:label "Content Hash" ;
+  rdfs:range xsd:string .
+
+dcs:fileHash a rdf:Property ;
+  rdfs:label "File Hash" ;
+  rdfs:range xsd:string .
+
+#################################################################
+# Contract/template structure properties
+#################################################################
+
+dcs:derivedFromTemplate a rdf:Property ;
+  rdfs:label "Derived From Template" ;
+  rdfs:domain dcs:Contract ;
+  rdfs:range dcs:ContractTemplate .
+
+dcs:hasVersion a rdf:Property ;
+  rdfs:label "Has Version" ;
+  rdfs:range dcs:ContractVersion .
+
+dcs:contractVersion a rdf:Property ;
+  rdfs:label "Contract Version" ;
+  rdfs:range xsd:integer .
+
+dcs:templateVersion a rdf:Property ;
+  rdfs:label "Template Version" ;
+  rdfs:range xsd:integer .
+
+dcs:hasSection a rdf:Property ;
+  rdfs:label "Has Section" ;
+  rdfs:domain dcs:ContractObject ;
+  rdfs:range dcs:Section .
+
+dcs:hasClause a rdf:Property ;
+  rdfs:label "Has Clause" ;
+  rdfs:domain dcs:ContractObject ;
+  rdfs:range dcs:Clause .
+
+dcs:clauseId a rdf:Property ;
+  rdfs:label "Clause ID" ;
+  rdfs:range xsd:string .
+
+dcs:blockId a rdf:Property ;
+  rdfs:label "Block ID" ;
+  rdfs:range xsd:string .
+
+dcs:text a rdf:Property ;
+  rdfs:label "Text" ;
+  rdfs:range xsd:string .
+
+dcs:clauseVersion a rdf:Property ;
+  rdfs:label "Clause Version" ;
+  rdfs:range xsd:integer .
+
+dcs:hasMachineReadableArtifact a rdf:Property ;
+  rdfs:label "Has Machine-Readable Artifact" .
+
+dcs:hasHumanReadableArtifact a rdf:Property ;
+  rdfs:label "Has Human-Readable Artifact" .
+
+#################################################################
+# Condition and rule properties
+#################################################################
+
+dcs:hasCondition a rdf:Property ;
+  rdfs:label "Has Condition" ;
+  rdfs:range dcs:ContractCondition .
+
+dcs:hasSemanticCondition a rdf:Property ;
+  rdfs:label "Has Semantic Condition" ;
+  rdfs:range dcs:SemanticCondition .
+
+dcs:conditionId a rdf:Property ;
+  rdfs:label "Condition ID" ;
+  rdfs:range xsd:string .
+
+dcs:conditionName a rdf:Property ;
+  rdfs:label "Condition Name" ;
+  rdfs:range xsd:string .
+
+dcs:appliesToClause a rdf:Property ;
+  rdfs:label "Applies To Clause" ;
+  rdfs:domain dcs:SemanticCondition ;
+  rdfs:range dcs:Clause .
+
+dcs:hasParameter a rdf:Property ;
+  rdfs:label "Has Parameter" ;
+  rdfs:range dcs:Parameter .
+
+dcs:parameterName a rdf:Property ;
+  rdfs:label "Parameter Name" ;
+  rdfs:range xsd:string .
+
+dcs:parameterType a rdf:Property ;
+  rdfs:label "Parameter Type" ;
+  rdfs:range xsd:string .
+
+dcs:required a rdf:Property ;
+  rdfs:label "Required" ;
+  rdfs:range xsd:boolean .
+
+dcs:defaultValue a rdf:Property ;
+  rdfs:label "Default Value" .
+
+dcs:parameterValue a rdf:Property ;
+  rdfs:label "Parameter Value" .
+
+dcs:semanticConditionValues a rdf:Property ;
+  rdfs:label "Semantic Condition Values" .
+
+dcs:semanticMeaning a rdf:Property ;
+  rdfs:label "Semantic Meaning" ;
+  rdfs:range xsd:anyURI .
+
+dcs:uiMetadata a rdf:Property ;
+  rdfs:label "UI Metadata" .
+
+dcs:hasConstraint a rdf:Property ;
+  rdfs:label "Has Constraint" ;
+  rdfs:range dcs:Constraint .
+
+dcs:ruleId a rdf:Property ;
+  rdfs:label "Rule ID" ;
+  rdfs:range xsd:string .
+
+dcs:leftOperand a rdf:Property ;
+  rdfs:label "Left Operand" ;
+  rdfs:range xsd:string .
+
+dcs:operator a rdf:Property ;
+  rdfs:label "Operator" ;
+  rdfs:range dcs:Operator .
+
+dcs:rightOperand a rdf:Property ;
+  rdfs:label "Right Operand" .
+
+dcs:valueType a rdf:Property ;
+  rdfs:label "Value Type" ;
+  rdfs:range xsd:string .
+
+dcs:minValue a rdf:Property ;
+  rdfs:label "Minimum Value" .
+
+dcs:maxValue a rdf:Property ;
+  rdfs:label "Maximum Value" .
+
+dcs:allowedValue a rdf:Property ;
+  rdfs:label "Allowed Value" .
+
+dcs:regexPattern a rdf:Property ;
+  rdfs:label "Regex Pattern" ;
+  rdfs:range xsd:string .
+
+dcs:semanticRule a rdf:Property ;
+  rdfs:label "Semantic Rule" ;
+  rdfs:range dcs:SemanticRule .
+
+dcs:validationReport a rdf:Property ;
+  rdfs:label "Validation Report" ;
+  rdfs:range dcs:ValidationReport .
+
+dcs:validationFinding a rdf:Property ;
+  rdfs:label "Validation Finding" ;
+  rdfs:range dcs:ValidationFinding .
+
+dcs:severity a rdf:Property ;
+  rdfs:label "Severity" ;
+  rdfs:range xsd:string .
+
+dcs:message a rdf:Property ;
+  rdfs:label "Message" ;
+  rdfs:range xsd:string .
+
+dcs:source a rdf:Property ;
+  rdfs:label "Source" ;
+  rdfs:range xsd:string .
+
+#################################################################
+# SLA properties
+#################################################################
+
+dcs:hasSLA a rdf:Property ;
+  rdfs:label "Has SLA" ;
+  rdfs:range dcs:SLAAgreement .
+
+dcs:hasService a rdf:Property ;
+  rdfs:label "Has Service" ;
+  rdfs:range dcs:Service .
+
+dcs:hasSLO a rdf:Property ;
+  rdfs:label "Has SLO" ;
+  rdfs:range dcs:SLO .
+
+dcs:hasSLI a rdf:Property ;
+  rdfs:label "Has SLI" ;
+  rdfs:range dcs:SLI .
+
+dcs:hasMetric a rdf:Property ;
+  rdfs:label "Has Metric" ;
+  rdfs:range dcs:MeasurementMetric .
+
+dcs:hasMeasurementRule a rdf:Property ;
+  rdfs:label "Has Measurement Rule" ;
+  rdfs:range dcs:MeasurementRule .
+
+dcs:hasRemedy a rdf:Property ;
+  rdfs:label "Has Remedy" ;
+  rdfs:range dcs:Remedy .
+
+dcs:hasClaimPolicy a rdf:Property ;
+  rdfs:label "Has Claim Policy" ;
+  rdfs:range dcs:ClaimPolicy .
+
+dcs:hasExclusionEvent a rdf:Property ;
+  rdfs:label "Has Exclusion Event" ;
+  rdfs:range dcs:ExclusionEvent .
+
+dcs:metricId a rdf:Property ;
+  rdfs:label "Metric ID" ;
+  rdfs:range xsd:string .
+
+dcs:targetValue a rdf:Property ;
+  rdfs:label "Target Value" .
+
+dcs:measurementWindow a rdf:Property ;
+  rdfs:label "Measurement Window" ;
+  rdfs:range xsd:string .
+
+dcs:creditPercentage a rdf:Property ;
+  rdfs:label "Credit Percentage" ;
+  rdfs:range xsd:decimal .
+
+#################################################################
+# Workflow, identity, deployment, provenance
+#################################################################
+
+dcs:hasLifecycleState a rdf:Property ;
+  rdfs:label "Has Lifecycle State" ;
+  rdfs:range dcs:ContractLifecycleState .
+
+dcs:state a rdf:Property ;
+  rdfs:label "State" ;
+  rdfs:range xsd:string .
+
+dcs:hasAdjustment a rdf:Property ;
+  rdfs:label "Has Adjustment" ;
+  rdfs:range dcs:ContractAdjustment .
+
+dcs:adjustmentId a rdf:Property ;
+  rdfs:label "Adjustment ID" ;
+  rdfs:range xsd:string .
+
+dcs:operation a rdf:Property ;
+  rdfs:label "Operation" ;
+  rdfs:range xsd:string .
+
+dcs:targetId a rdf:Property ;
+  rdfs:label "Target ID" ;
+  rdfs:range xsd:string .
+
+dcs:path a rdf:Property ;
+  rdfs:label "Path" ;
+  rdfs:range xsd:string .
+
+dcs:hasApproval a rdf:Property ;
+  rdfs:label "Has Approval" ;
+  rdfs:range dcs:Approval .
+
+dcs:hasNegotiation a rdf:Property ;
+  rdfs:label "Has Negotiation" ;
+  rdfs:range dcs:Negotiation .
+
+dcs:hasDeployment a rdf:Property ;
+  rdfs:label "Has Deployment" ;
+  rdfs:range dcs:Deployment .
+
+dcs:party a rdf:Property ;
+  rdfs:label "Party" ;
+  rdfs:range dcs:Party .
+
+dcs:role a rdf:Property ;
+  rdfs:label "Role" ;
+  rdfs:range xsd:string .
+
+dcs:country a rdf:Property ;
+  rdfs:label "Country" ;
+  rdfs:range xsd:string .
+
+dcs:hasSignatory a rdf:Property ;
+  rdfs:label "Has Signatory" ;
+  rdfs:range dcs:Signatory .
+
+dcs:hasCredentialReference a rdf:Property ;
+  rdfs:label "Has Credential Reference" ;
+  rdfs:range dcs:CredentialReference .
+
+dcs:credentialId a rdf:Property ;
+  rdfs:label "Credential ID" ;
+  rdfs:range xsd:string .
+
+dcs:credentialType a rdf:Property ;
+  rdfs:label "Credential Type" ;
+  rdfs:range xsd:string .
+
+dcs:statusListRef a rdf:Property ;
+  rdfs:label "Status List Reference" ;
+  rdfs:range xsd:anyURI .
+
+dcs:targetSystem a rdf:Property ;
+  rdfs:label "Target System" ;
+  rdfs:range xsd:string .
+
+dcs:targetEndpoint a rdf:Property ;
+  rdfs:label "Target Endpoint" ;
+  rdfs:range xsd:anyURI .
+
+dcs:hasPolicyBundle a rdf:Property ;
+  rdfs:label "Has Policy Bundle" ;
+  rdfs:range dcs:PolicyBundle .
+
+dcs:format a rdf:Property ;
+  rdfs:label "Format" ;
+  rdfs:range xsd:string .
+
+dcs:rule a rdf:Property ;
+  rdfs:label "Rule" .
+
+dcs:credentialRequirement a rdf:Property ;
+  rdfs:label "Credential Requirement" .
+
+dcs:hasDeploymentReceipt a rdf:Property ;
+  rdfs:label "Has Deployment Receipt" ;
+  rdfs:range dcs:DeploymentReceipt .
+
+dcs:receiptId a rdf:Property ;
+  rdfs:label "Receipt ID" ;
+  rdfs:range xsd:string .
+
+dcs:correlationId a rdf:Property ;
+  rdfs:label "Correlation ID" ;
+  rdfs:range xsd:string .
+
+dcs:hasProvenanceEvent a rdf:Property ;
+  rdfs:label "Has Provenance Event" ;
+  rdfs:range dcs:ProvenanceEvent .
+
+dcs:eventId a rdf:Property ;
+  rdfs:label "Event ID" ;
+  rdfs:range xsd:string .
+
+dcs:eventType a rdf:Property ;
+  rdfs:label "Event Type" ;
+  rdfs:range xsd:string .
+
+dcs:actor a rdf:Property ;
+  rdfs:label "Actor" ;
+  rdfs:range xsd:string .
+
+dcs:actorRole a rdf:Property ;
+  rdfs:label "Actor Role" ;
+  rdfs:range xsd:string .
+
+dcs:occurredAt a rdf:Property ;
+  rdfs:label "Occurred At" ;
+  rdfs:range xsd:dateTime .
+
+dcs:previousEventHash a rdf:Property ;
+  rdfs:label "Previous Event Hash" ;
+  rdfs:range xsd:string .
+
+dcs:c2paManifest a rdf:Property ;
+  rdfs:label "C2PA Manifest" .
+
+dcs:statusCredential a rdf:Property ;
+  rdfs:label "Status Credential" ;
+  rdfs:range vc:VerifiableCredential .
+
+#################################################################
+# Operator individuals
+#################################################################
+
+dcs:Equals a dcs:Operator ; rdfs:label "Equals" ; dcs:identifier "Equals" .
+dcs:NotEquals a dcs:Operator ; rdfs:label "Not Equals" ; dcs:identifier "NotEquals" .
+dcs:GreaterThan a dcs:Operator ; rdfs:label "Greater Than" ; dcs:identifier "GreaterThan" .
+dcs:GreaterThanOrEqual a dcs:Operator ; rdfs:label "Greater Than Or Equal" ; dcs:identifier "GreaterThanOrEqual" .
+dcs:LessThan a dcs:Operator ; rdfs:label "Less Than" ; dcs:identifier "LessThan" .
+dcs:LessThanOrEqual a dcs:Operator ; rdfs:label "Less Than Or Equal" ; dcs:identifier "LessThanOrEqual" .
+dcs:Between a dcs:Operator ; rdfs:label "Between" ; dcs:identifier "Between" .
+dcs:Contains a dcs:Operator ; rdfs:label "Contains" ; dcs:identifier "Contains" .
+dcs:MatchesRegex a dcs:Operator ; rdfs:label "Matches Regex" ; dcs:identifier "MatchesRegex" .
+
+#################################################################
+# Lifecycle state individuals
+#################################################################
+
+dcs:Draft a dcs:ContractLifecycleState ; dcs:identifier "Draft" .
+dcs:Offered a dcs:ContractLifecycleState ; dcs:identifier "Offered" .
+dcs:InNegotiation a dcs:ContractLifecycleState ; dcs:identifier "InNegotiation" .
+dcs:SubmittedForReview a dcs:ContractLifecycleState ; dcs:identifier "SubmittedForReview" .
+dcs:Reviewed a dcs:ContractLifecycleState ; dcs:identifier "Reviewed" .
+dcs:Approved a dcs:ContractLifecycleState ; dcs:identifier "Approved" .
+dcs:ReadyForSignature a dcs:ContractLifecycleState ; dcs:identifier "ReadyForSignature" .
+dcs:Signed a dcs:ContractLifecycleState ; dcs:identifier "Signed" .
+dcs:Executed a dcs:ContractLifecycleState ; dcs:identifier "Executed" .
+dcs:Deployed a dcs:ContractLifecycleState ; dcs:identifier "Deployed" .
+dcs:Active a dcs:ContractLifecycleState ; dcs:identifier "Active" .
+dcs:Suspended a dcs:ContractLifecycleState ; dcs:identifier "Suspended" .
+dcs:Terminated a dcs:ContractLifecycleState ; dcs:identifier "Terminated" .
+dcs:Expired a dcs:ContractLifecycleState ; dcs:identifier "Expired" .
+dcs:Archived a dcs:ContractLifecycleState ; dcs:identifier "Archived" .
+dcs:Revoked a dcs:ContractLifecycleState ; dcs:identifier "Revoked" .
+dcs:Replaced a dcs:ContractLifecycleState ; dcs:identifier "Replaced" .
+
+#################################################################
+# Alignment hints
+#################################################################
+
+dcs:PolicyBundle rdfs:seeAlso odrl:Policy .
+dcs:Constraint rdfs:seeAlso odrl:Constraint .
+dcs:Party rdfs:seeAlso odrl:Party .
+dcs:ProvenanceEvent rdfs:seeAlso prov:Activity .

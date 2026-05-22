@@ -47,7 +47,7 @@ const confirmationDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>
 const isSubmitting = ref(false)
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
-  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
+  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
@@ -196,6 +196,11 @@ function applyContractDataToDraft(contractData?: unknown) {
     semanticConditions: cd.semanticConditions ?? [],
     subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
     templateDataVersion: cd.templateDataVersion,
+    semanticProfile: cd.semanticProfile,
+    templateVariables: cd.templateVariables ?? [],
+    placeholderBindings: cd.placeholderBindings ?? [],
+    semanticRules: cd.semanticRules ?? [],
+    sla: cd.sla ?? null,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null

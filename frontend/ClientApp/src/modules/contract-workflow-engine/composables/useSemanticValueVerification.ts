@@ -113,10 +113,14 @@ export function useSemanticValueVerification() {
     }
     return conditions
   }
-  function validateParameterType(value: string | number, type: string): boolean {
+  function validateParameterType(value: string | number | boolean, type: string): boolean {
     switch (type) {
       case 'string':
         return typeof value === 'string'
+      case 'enum':
+        return typeof value === 'string'
+      case 'boolean':
+        return typeof value === 'boolean'
       case 'integer':
         return typeof value === 'number' && Number.isInteger(value)
       case 'decimal':
@@ -128,7 +132,7 @@ export function useSemanticValueVerification() {
     }
   }
 
-  function validateValueConstraint(value: string | number, constraint?: SemanticValueConstraint): string | null {
+  function validateValueConstraint(value: string | number | boolean, constraint?: SemanticValueConstraint): string | null {
     if (!constraint) return null
     if (constraint.allowedValues?.length) {
       if (typeof value !== 'string' || !constraint.allowedValues.includes(value)) {

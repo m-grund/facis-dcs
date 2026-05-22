@@ -20,6 +20,7 @@ const CURRENT_TEMPLATE_DATA_VERSION: TemplateDataVersion = TEMPLATE_DATA_VERSION
 export function useContractDataPreprocess() {
   function preprocessContractData(cd: ContractData): ContractData {
     const contractData: ContractData = {
+      ...(cd['@context'] ? { '@context': cd['@context'] } : {}),
       documentOutline: deepClone(cd.documentOutline ?? []),
       documentBlocks: deepClone(cd.documentBlocks ?? []),
       semanticConditions: deepClone(cd.semanticConditions ?? []),
