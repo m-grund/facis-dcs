@@ -15,6 +15,7 @@ import {
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
+import { buildContractPdfArchive } from '@/modules/contract-workflow-engine/utils/buildContractPdfArchive'
 import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
 import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
@@ -112,13 +113,13 @@ const submitContract = async (result: SelectedUserRole[]) => {
   if (!isSemanticValueValid) return
   try {
     const reviewers = result.filter((user) => user.role === 'CONTRACT_REVIEWER').map((user) => user.user.username)
-    const approver = result.find((user) => user.role === 'CONTRACT_APPROVER')?.user.username!
+    const approvers = result.filter((user) => user.role === 'CONTRACT_APPROVER').map((user) => user.user.username)
     const negotiators = result.filter((user) => user.role === 'CONTRACT_NEGOTIATOR').map((user) => user.user.username)
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
       reviewers,
-      approver,
+      approvers,
       negotiators,
     })
     if (response.did) {
@@ -213,9 +214,10 @@ const exportPdf = async () => {
   if (!contract) return
   const blocks = convertContractToPlainTextBlocks(contract.contract_data)
   const pdfData = toPdfData(blocks)
+  const archive = await buildContractPdfArchive(contract)
   const title = `${contract.name ?? 'contract'}`
   const filename = `${title}.pdf`
-  downloadContractPdf(pdfData, filename, title, { displayTitleInContent: true })
+  downloadContractPdf(pdfData, filename, title, { displayTitleInContent: true, archive })
 }
 </script>
 

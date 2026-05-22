@@ -1,15 +1,14 @@
-package contract
+package contracttemplate
 
 import (
 	"context"
-	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
-	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
+	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
+	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
+	"digital-contracting-service/internal/templaterepository/db"
 	"fmt"
 	"time"
 
@@ -24,25 +23,23 @@ type GetHistoryByIDQry struct {
 type GetHistoryByIDResult struct {
 	ID                 string
 	DID                string
-	ContractVersion    int
-	State              contractstate.ContractState
+	DocumentNumber     *string
+	Version            int
+	State              contracttemplatestate.ContractTemplateState
+	TemplateType       contracttemplatetype.ContractTemplateType
 	Name               *string
 	Description        *string
 	CreatedBy          string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
-	ContractData       *datatype.JSON
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
 	ResponsiblePersons *db.ResponsiblePersons
+	TemplateData       *datatype.JSON
 }
 
 type GetHistoryByIDHandler struct {
-	Ctx   context.Context
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	Ctx    context.Context
+	DB     *sqlx.DB
+	CTRepo db.ContractTemplateRepo
 }
 
 func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByIDQry) ([]GetHistoryByIDResult, error) {
@@ -53,9 +50,9 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 	}
 	defer tx.Rollback()
 
-	entries, err := h.CRepo.ReadHistoryByDID(ctx, tx, query.DID)
+	entries, err := h.CTRepo.ReadHistoryByDID(ctx, tx, query.DID)
 	if err != nil {
-		return nil, fmt.Errorf("could not get contract history data: %w", err)
+		return nil, fmt.Errorf("could not get contract data: %w", err)
 	}
 
 	evt := contractevents.RetrieveByIDEvent{
@@ -63,7 +60,7 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 	}
-	err = event.Create(h.Ctx, tx, evt, componenttype.ContractWorkflowEngine)
+	err = event.Create(h.Ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
 		return nil, fmt.Errorf("could not create event: %w", err)
 	}
@@ -76,35 +73,29 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 	result := make([]GetHistoryByIDResult, len(entries))
 	for idx, entry := range entries {
 
-		state, err := contractstate.NewContractState(entry.State)
+		state, err := contracttemplatestate.NewContractTemplateState(entry.State)
 		if err != nil {
-			return nil, fmt.Errorf("could not create contract state: %w", err)
+			return nil, fmt.Errorf("could not create contract template state: %w", err)
 		}
 
-		var expPolicy *expirationpolicy.ExpirationPolicy
-		if entry.ExpPolicy != nil {
-			policy, err := expirationpolicy.NewExpirationPolicy(*entry.ExpPolicy)
-			if err != nil {
-				return nil, contractworkflowengine.MakeInternalError(err)
-			}
-			expPolicy = &policy
+		ctType, err := contracttemplatetype.NewContractTemplateType(entry.TemplateType)
+		if err != nil {
+			return nil, fmt.Errorf("could not create contract template type: %w", err)
 		}
 
 		result[idx] = GetHistoryByIDResult{
 			ID:                 entry.ID,
 			DID:                entry.DID,
-			ContractVersion:    entry.ContractVersion,
+			DocumentNumber:     entry.DocumentNumber,
+			Version:            entry.Version,
 			State:              state,
 			Name:               entry.Name,
 			Description:        entry.Description,
 			CreatedBy:          entry.CreatedBy,
 			CreatedAt:          entry.CreatedAt,
 			UpdatedAt:          entry.UpdatedAt,
-			ContractData:       entry.ContractData,
-			StartDate:          entry.StartDate,
-			ExpDate:            entry.ExpDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    entry.ExpNoticePeriod,
+			TemplateData:       entry.TemplateData,
+			TemplateType:       ctType,
 			ResponsiblePersons: entry.ResponsiblePersons,
 		}
 	}

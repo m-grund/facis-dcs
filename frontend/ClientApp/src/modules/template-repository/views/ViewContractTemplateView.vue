@@ -3,9 +3,9 @@
     <TemplateEditors title="View Template" />
 
     <!-- Pinned Footer -->
-    <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
+    <div v-if="$route.params.did === did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <CopyTemplateButton v-if="isCreator || isManager" class="btn btn-primary flex-1" />
         <template v-if="isCreator">
           <SubmitSelectionDialog
@@ -45,34 +45,33 @@ import { useTemplatePermissions } from '@template-repository/composables/useTemp
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch, type Ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, watch, type Ref } from 'vue'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
-const router = useRouter()
-const route = useRoute()
+const props = defineProps<{
+  did: string
+}>()
+
 const navStore = useNavStore()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { state } = storeToRefs(draftStore)
 
-const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const { isCreator, isManager: isManagerBase } = useTemplatePermissions()
-const isManager = computed(() => hasDid.value && isManagerBase.value)
+const { isCreator, isManager } = useTemplatePermissions()
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
 
 watch(
-  hasDid,
-  (hasDid) => {
+  () => props.did,
+  (newDid, oldDid) => {
     templateEditorUiStore.reset()
-    if (!hasDid) return
+    if (newDid === oldDid) return
 
     hasChosenType.value = true
-    const did = `${route.params.did}`
+    const did = `${props.did}`
     contractTemplateService
       .retrieveById({ did })
       .then((template) => {

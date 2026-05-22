@@ -435,7 +435,7 @@ def step_then_draft_contract_generated(context):
     assert state == "DRAFT", f"Expected new contract to be in DRAFT state, got '{state}'"
 
 
-@then("a contract is created linked to the template")
+@then("a contract is created")
 def step_then_contract_linked_to_template(context):
     assert context.requests_response.status_code == 200, (
         f"Contract generation failed: {context.requests_response.status_code} — {context.requests_response.text}"

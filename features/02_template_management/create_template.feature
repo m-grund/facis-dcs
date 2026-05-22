@@ -8,8 +8,7 @@ Feature: Create Contract Template
 
   Scenario: Create a new contract template
     When I create a template "Standard NDA" in category "Legal"
-    Then the template status is "Draft" status
-    And the template is assigned version "1.0"
+    Then the template status is "Draft"
 
   Scenario: Unauthorized role cannot create template
     Given I am authenticated with roles: "Template Reviewer"

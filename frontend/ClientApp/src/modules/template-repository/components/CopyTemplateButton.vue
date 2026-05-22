@@ -13,8 +13,7 @@ const { isCreator, isManager } = useTemplatePermissions()
 const copyTemplate = async () => {
   if (!draftStore.did || (!isCreator && !isManager)) return
 
-  const data = draftStore.templateCreateRequestData
-  const response = await contractTemplateService.create(data)
+  const response = await contractTemplateService.copy({ did: draftStore.did })
   if (response.did) {
     router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: response.did } })
   }

@@ -5,6 +5,9 @@ cleanup() {
   if [[ -f .tmp/port-forward.pid ]]; then
     kill "$(cat .tmp/port-forward.pid)" >/dev/null 2>&1 || true
   fi
+  if [[ -f .tmp/port-forward-db.pid ]]; then
+    kill "$(cat .tmp/port-forward-db.pid)" >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT
@@ -31,12 +34,19 @@ echo "Starting port-forward svc/$DCS_SERVICE $LOCAL_FORWARD_PORT:$SERVICE_PORT i
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/$DCS_SERVICE" "$LOCAL_FORWARD_PORT:$SERVICE_PORT" > .tmp/port-forward.log 2>&1 &
 echo $! > .tmp/port-forward.pid
 
+sleep 2
+
+echo "Starting port-forward for PostgreSQL"
+"$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/dcs-postgresql" 5432:5432 > .tmp/port-forward-db.log 2>&1 &
+echo $! > .tmp/port-forward-db.pid
 
 sleep 2
 
 source "$VENV_PATH/bin/activate"
 export HOSTALIASES="$PWD/.tmp/hostaliases"
 export BDD_DCS_BASE_URL="http://127.0.0.1:$LOCAL_FORWARD_PORT$DCS_API_BASE_PATH"
+
+export DATABASE_URL="host=localhost port=5432 user=dcs password=dcs dbname=dcs sslmode=disable"
 
 # Canonical bdd-executor integration requires the package in the active environment.
 python -c 'import eu.xfsc.bdd.core' >/dev/null

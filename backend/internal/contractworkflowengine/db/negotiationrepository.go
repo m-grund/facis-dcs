@@ -10,7 +10,7 @@ import (
 
 type NegotiationCreateData struct {
 	DID             string         `db:"did"`
-	ContractVersion *int           `db:"contract_version"`
+	ContractVersion int            `db:"contract_version"`
 	ChangeRequest   *datatype.JSON `db:"change_request"`
 	CreatedBy       string         `db:"created_by"`
 }
@@ -18,7 +18,7 @@ type NegotiationCreateData struct {
 type NegotiationData struct {
 	ID              string         `db:"id"`
 	DID             string         `db:"did"`
-	ContractVersion *int           `db:"contract_version"`
+	ContractVersion int            `db:"contract_version"`
 	ChangeRequest   *datatype.JSON `db:"change_request"`
 	Negotiator      string         `db:"negotiator"`
 	Decision        *string        `db:"decision"`
@@ -37,8 +37,8 @@ type NegotiationRepo interface {
 	Accept(ctx context.Context, tx *sqlx.Tx, id string, acceptedBy string) error
 	Reject(ctx context.Context, tx *sqlx.Tx, id string, rejectedBy string, rejectionReason *string) error
 	ReadAllByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]NegotiationData, error)
-	ReadAllAcceptedByContractDIDAndVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) ([]NegotiationChangeData, error)
-	HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) (bool, error)
-	HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion *int) (bool, error)
+	ReadAllAcceptedByContractDIDAndVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) ([]NegotiationChangeData, error)
+	HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error)
+	HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error)
 	Delete(ctx context.Context, tx *sqlx.Tx, did string) error
 }

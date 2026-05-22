@@ -12,6 +12,10 @@ export interface ContractTemplateCreateResponse {
   did: string
 }
 
+export interface ContractTemplateCopyResponse {
+  did: string
+}
+
 export interface ContractTemplateSubmitResponse {
   did: string
 }
@@ -22,19 +26,18 @@ export interface ContractTemplateUpdateResponse {
 
 export interface ContractTemplateUpdateManageResponse {
   did: string
-  document_number?: string
-  version?: number
 }
 
 interface ContractTemplateSearchResponseItem {
   did: string
   document_number?: string
-  version?: string
+  version: string
   state: ContractTemplateState
   template_type: TemplateType
   name?: string
   description?: string
   created_at: string
+  created_by: string
   updated_at: string
   responsible_persons?: ContractTemplateResponsiblePersons
 }
@@ -50,7 +53,7 @@ export interface ContractTemplateRetrieveResponse {
 export interface ContractTemplateRetrieveByIdResponse {
   did: string
   document_number?: string
-  version?: number
+  version: number
   state: ContractTemplateState
   template_type: TemplateType
   name?: string

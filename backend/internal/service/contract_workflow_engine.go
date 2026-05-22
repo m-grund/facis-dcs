@@ -148,7 +148,6 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
-		ContractVersion: req.ContractVersion,
 		UpdatedAt:       updatedAt,
 		UpdatedBy:       middleware.GetUsername(ctx),
 		Name:            req.Name,
@@ -199,7 +198,7 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
 		Reviewers:   req.Reviewers,
-		Approver:    req.Approver,
+		Approvers:   req.Approvers,
 		Negotiators: req.Negotiators,
 	}
 	handler := command.Submitter{
@@ -413,7 +412,7 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 	}, nil
 }
 
-func (s *contractWorkflowEnginesrvc) RetrieveHistoryByDid(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveRequest) (res []*contractworkflowengine.ContractHistoryItem, err error) {
+func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveByIDRequest) (res []*contractworkflowengine.ContractHistoryRetrieveByIDResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -431,7 +430,7 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByDid(ctx context.Context, r
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	var contracts []*contractworkflowengine.ContractHistoryItem
+	var contracts []*contractworkflowengine.ContractHistoryRetrieveByIDResponse
 	for _, item := range result {
 
 		var startDate *string
@@ -452,7 +451,7 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByDid(ctx context.Context, r
 			expPolicy = &s
 		}
 
-		contracts = append(contracts, &contractworkflowengine.ContractHistoryItem{
+		contracts = append(contracts, &contractworkflowengine.ContractHistoryRetrieveByIDResponse{
 			Did:                item.DID,
 			ContractVersion:    item.ContractVersion,
 			State:              item.State.String(),
@@ -471,11 +470,6 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByDid(ctx context.Context, r
 	}
 
 	return contracts, nil
-}
-
-func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveRequest) (res []*contractworkflowengine.ContractItem, err error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contractworkflowengine.ContractNegotiationRequest) (res *contractworkflowengine.ContractNegotiationResponse, err error) {
@@ -608,13 +602,13 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 	}
 
 	qry := contract.GetAllMetadataByFilterQry{
-		DID:             req.Did,
-		ContractVersion: req.ContractVersion,
+		DID:             *req.Did,
+		ContractVersion: *req.ContractVersion,
 		State:           state,
 		RetrievedBy:     middleware.GetUsername(ctx),
-		Name:            req.Name,
-		Description:     req.Description,
-		ContractData:    req.ContractData,
+		Name:            *req.Name,
+		Description:     *req.Description,
+		ContractData:    *req.ContractData,
 	}
 	queryHandler := contract.GetAllMetaDataByFilterHandler{
 		DB:    s.DB,

@@ -18,7 +18,7 @@
                     <CopyTemplateButton v-if="isEditMode && (isCreator || isManager)" class="btn btn-primary flex-1" />
                     <button @click="submit" class="btn btn-primary flex-1" :disabled="isSubmitting">
                         <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-                        {{ isEditMode ? 'Update Template' : 'Create' }}
+                        {{ isEditMode ? 'Update' : 'Create' }}
                     </button>
                 </div>
             </div>

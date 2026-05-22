@@ -13,7 +13,7 @@ export type ExpirationPolicy = (typeof ExpirationPolicy)[keyof typeof Expiration
 
 export interface Contract {
   did: string
-  contract_version?: number
+  contract_version: number
   state: ContractState
   name?: string
   description?: string
@@ -31,5 +31,5 @@ export interface Contract {
 
 export type ContractChangeRequest = Pick<
   Contract,
-  'name' | 'description' | 'start_date' | 'exp_date' | 'exp_notice_period' | 'exp_policy'
+  'name' | 'description' | 'exp_notice_period' | 'exp_policy'
 > & { contract_data?: Partial<Contract['contract_data']> }
