@@ -93,7 +93,7 @@ func upsertSemanticConditionValue(contract *ContractData, newValue SemanticCondi
 			existing.ParameterName == newValue.ParameterName &&
 			existing.ConditionID == newValue.ConditionID {
 
-			contract.SemanticConditionValues[i] = newValue // update
+			contract.SemanticConditionValues[i].ParameterValue = newValue.ParameterValue // update
 			return
 		}
 	}

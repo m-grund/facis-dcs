@@ -177,7 +177,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user")
 		}
 
-		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion)
+		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, cmd.SubmittedBy)
 		if err != nil {
 			return fmt.Errorf("could not check open negotiations: %w", err)
 		}
@@ -215,6 +215,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					return fmt.Errorf("could not merge change requests: %w", err)
 				}
 
+				updatedData.ContractVersion = processData.ContractVersion + 1
 				err = h.CRepo.Update(ctx, tx, *updatedData)
 				if err != nil {
 					return fmt.Errorf("could not update contract version: %w", err)

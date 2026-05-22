@@ -25,7 +25,7 @@ type DocumentBlock struct {
 	Text           string   `json:"text"`
 	Type           string   `json:"type"`
 	BlockID        string   `json:"blockId"`
-	Title          string   `json:"title,omitempty"`
+	Title          *string  `json:"title,omitempty"`
 	ConditionIDs   []string `json:"conditionIds,omitempty"`
 	Version        int      `json:"version,omitempty"`
 	TemplateID     string   `json:"templateId,omitempty"`
@@ -62,6 +62,7 @@ type SemanticConditionValue struct {
 type SubTemplateSnapshot struct {
 	DID          string       `json:"did"`
 	Name         string       `json:"name"`
+	Version      *int         `json:"version,omitempty"`
 	Description  string       `json:"description"`
 	TemplateData TemplateData `json:"template_data"`
 }
