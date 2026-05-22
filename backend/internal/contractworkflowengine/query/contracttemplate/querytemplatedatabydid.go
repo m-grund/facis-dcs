@@ -161,6 +161,7 @@ func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string) (
 	contractDataMap["sourceTemplate"] = map[string]interface{}{
 		"did": templateDID,
 	}
+	contractDataMap["derivedFromTemplate"] = templateDID
 
 	contractData, err := datatype.NewJSON(contractDataMap)
 	if err != nil {

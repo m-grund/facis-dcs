@@ -369,9 +369,9 @@
     {
       "@type": "SemanticRule",
       "ruleId": "rule-organization-country-de",
-      "leftOperand": "$.parties[?(@.role=='customer')].country",
+      "leftOperand": "$.parties[?(@.role=='customer')].location.country",
       "operator": "Equals",
-      "rightOperand": "DE",
+      "rightOperand": "DEU",
       "valueType": "string",
       "severity": "blocking"
     },

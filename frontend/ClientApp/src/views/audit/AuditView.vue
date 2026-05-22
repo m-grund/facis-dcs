@@ -31,26 +31,26 @@ const contractDocumentText = ref(`{
   "@type": [
     "sla:ServiceLevelAgreement"
   ],
-  "provider": {
-    "@id": "urn:facis:party:provider-001",
-    "@type": "dcs:Organization",
-    "company": {
-      "legalName": "Example Provider GmbH",
+  "parties": [
+    {
+      "@id": "urn:facis:party:supplier-001",
+      "@type": "dcs:Organization",
+      "role": "supplier",
+      "legalName": "Example Supplier GmbH",
       "location": {
         "country": "RUS"
       }
-    }
-  },
-  "customer": {
-    "@id": "urn:facis:party:customer-001",
-    "@type": "dcs:Company",
-    "company": {
+    },
+    {
+      "@id": "urn:facis:party:customer-001",
+      "@type": "dcs:Company",
+      "role": "customer",
       "legalName": "Example Customer AG",
       "location": {
         "country": "DEU"
       }
     }
-  },
+  ],
   "contract": {
     "type": "serviceAgreement",
     "governingLaw": "DE"
@@ -92,15 +92,9 @@ const policyText = ref(`{
           "in": ["dcs:Contract", "Contract"]
         },
         {
-          "path": "provider",
-          "name": "Provider",
-          "minCount": 1,
-          "class": "dcs:Company"
-        },
-        {
-          "path": "customer",
-          "name": "Customer",
-          "minCount": 1,
+          "path": "parties",
+          "name": "Contract parties",
+          "minCount": 2,
           "class": "dcs:Company"
         },
         {
@@ -119,40 +113,6 @@ const policyText = ref(`{
     }
   ],
   "rules": [
-    {
-      "id": "FACIS-CONTRACT-STATIC-000",
-      "title": "Provider country is present",
-      "builtin": "required_field",
-      "semanticPath": "provider.company.location.country",
-      "ontologyTerm": "dcs:CountryCode",
-      "requirement": "DCS-FR-PACM-03"
-    },
-    {
-      "id": "FACIS-CONTRACT-STATIC-000",
-      "title": "Customer country is present",
-      "builtin": "required_field",
-      "semanticPath": "customer.company.location.country",
-      "ontologyTerm": "dcs:CountryCode",
-      "requirement": "DCS-FR-PACM-03"
-    },
-    {
-      "id": "FACIS-CONTRACT-STATIC-001",
-      "title": "Provider country must not be blacklisted",
-      "builtin": "value_not_in",
-      "semanticPath": "provider.company.location.country",
-      "values": ["RUS", "BLR"],
-      "ontologyTerm": "dcs:CountryCode",
-      "requirement": "DCS-FR-PACM-03"
-    },
-    {
-      "id": "FACIS-CONTRACT-STATIC-001",
-      "title": "Customer country must not be blacklisted",
-      "builtin": "value_not_in",
-      "semanticPath": "customer.company.location.country",
-      "values": ["RUS", "BLR"],
-      "ontologyTerm": "dcs:CountryCode",
-      "requirement": "DCS-FR-PACM-03"
-    },
     {
       "id": "FACIS-CONTRACT-STATIC-002",
       "title": "Contract jurisdiction must be allowed",

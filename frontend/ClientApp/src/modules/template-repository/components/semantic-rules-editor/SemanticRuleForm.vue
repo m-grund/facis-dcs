@@ -149,9 +149,9 @@ import {
   type SemanticConditionParameter,
   type DomainSemanticPath,
   type SemanticValueConstraint,
-  FACIS_DOMAIN_FIELDS,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
+import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
 
@@ -168,7 +168,7 @@ const emit = defineEmits<{
 }>()
 
 function defaultParam(): SemanticConditionParameter {
-  const defaultField = FACIS_DOMAIN_FIELDS[0]!
+  const defaultField = ONTOLOGY_DOMAIN_FIELDS[0]!
   return {
     parameterName: '',
     type: defaultField.type,
@@ -198,11 +198,11 @@ const isEditMode = computed(() => props.mode === 'edit')
 const formTitle = computed(() => (isEditMode.value ? 'Edit rule' : 'New rule'))
 const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rule'))
 const selectedDomainField = computed(() =>
-  FACIS_DOMAIN_FIELDS.find((field) => field.semanticPath === selectedDomainPath.value),
+  ONTOLOGY_DOMAIN_FIELDS.find((field) => field.semanticPath === selectedDomainPath.value),
 )
 const groupedDomainFields = computed(() => {
   const query = domainFieldSearch.value.trim().toLowerCase()
-  const filtered = FACIS_DOMAIN_FIELDS.filter((field) => {
+  const filtered = ONTOLOGY_DOMAIN_FIELDS.filter((field) => {
     if (!query) return true
     return [
       field.label,
@@ -254,7 +254,7 @@ watch(
 )
 
 watch(selectedDomainPath, (path) => {
-  const field = FACIS_DOMAIN_FIELDS.find((item) => item.semanticPath === path)
+  const field = ONTOLOGY_DOMAIN_FIELDS.find((item) => item.semanticPath === path)
   if (!field) {
     draftParameter.value = defaultParam()
     return
@@ -288,7 +288,7 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
   return constraint.description ?? 'Constrained value'
 }
 
-function formatDomainFieldLabel(field: (typeof FACIS_DOMAIN_FIELDS)[number]) {
+function formatDomainFieldLabel(field: (typeof ONTOLOGY_DOMAIN_FIELDS)[number]) {
   return `${field.label} (${field.semanticPath})`
 }
 

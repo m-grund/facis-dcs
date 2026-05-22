@@ -147,8 +147,7 @@ func defaultContractContentPolicy(metadata ContractContentAuditMetadata) Contrac
 				Properties: []ContractSHACLProperty{
 					{Path: "@id", MinCount: intPtr(1), MaxCount: intPtr(1), Datatype: "xsd:anyURI", Name: "Contract identifier"},
 					{Path: "@type", MinCount: intPtr(1), In: []string{"dcs:Contract", "Contract"}, Name: "Contract type"},
-					{Path: "provider", MinCount: intPtr(1), Class: "dcs:Company", Name: "Provider"},
-					{Path: "customer", MinCount: intPtr(1), Class: "dcs:Company", Name: "Customer"},
+					{Path: "parties", MinCount: intPtr(2), Class: "dcs:Company", Name: "Contract parties"},
 					{Path: "contract.jurisdiction", MinCount: intPtr(1), Datatype: "xsd:string", Name: "Jurisdiction"},
 				},
 			},

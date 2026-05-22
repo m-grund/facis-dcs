@@ -3,6 +3,7 @@ package negotiationmerging
 import (
 	"context"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"encoding/json"
 	"fmt"
@@ -88,7 +89,11 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal contract data: %w", err)
 			}
-			updateData.ContractData = &newContractData
+			normalizedContractData, err := validation.NormalizeContractDataForPersistence(&newContractData, contract.DID, true)
+			if err != nil {
+				return nil, fmt.Errorf("contract data validation failed after merging change requests: %w", err)
+			}
+			updateData.ContractData = normalizedContractData
 		}
 	}
 

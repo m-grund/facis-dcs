@@ -24,12 +24,15 @@
   },
   "parties": [
     {
-      "@type": "Party",
+      "@type": "Company",
       "identifier": "provider",
-      "role": "provider",
+      "role": "supplier",
       "name": "DE Staatstheater Augsburg",
+      "legalName": "DE Staatstheater Augsburg",
       "did": "did:web:provider.example",
-      "country": "DE",
+      "location": {
+        "country": "DEU"
+      },
       "credentialReferences": [
         {
           "@type": "CredentialReference",
@@ -40,12 +43,15 @@
       ]
     },
     {
-      "@type": "Party",
+      "@type": "Company",
       "identifier": "customer",
       "role": "customer",
       "name": "Culture Research Institute",
+      "legalName": "Culture Research Institute",
       "did": "did:web:customer.example",
-      "country": "DE",
+      "location": {
+        "country": "DEU"
+      },
       "credentialReferences": [
         {
           "@type": "CredentialReference",
@@ -477,9 +483,9 @@
     {
       "@type": "SemanticRule",
       "ruleId": "rule-organization-country-de",
-      "leftOperand": "$.parties[?(@.role=='customer')].country",
+      "leftOperand": "$.parties[?(@.role=='customer')].location.country",
       "operator": "Equals",
-      "rightOperand": "DE",
+      "rightOperand": "DEU",
       "valueType": "string",
       "severity": "blocking"
     },

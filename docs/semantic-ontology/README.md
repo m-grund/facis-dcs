@@ -243,9 +243,9 @@ The rule engine should evaluate the profile deterministically, without semantic 
   {
     "@type": "SemanticRule",
     "ruleId": "rule-organization-country-de",
-    "leftOperand": "$.parties[?(@.role=='customer')].country",
+    "leftOperand": "$.parties[?(@.role=='customer')].location.country",
     "operator": "Equals",
-    "rightOperand": "DE",
+    "rightOperand": "DEU",
     "valueType": "string"
   },
   {
@@ -596,7 +596,7 @@ WHERE contract_data @? '$.validationReports[*].findings[*] ? (@.severity == "blo
 -- contracts whose customer country is DE
 SELECT did
 FROM contracts
-WHERE contract_data @? '$.parties[*] ? (@.role == "customer" && @.country == "DE")';
+WHERE contract_data @? '$.parties[*] ? (@.role == "customer" && @.location.country == "DEU")';
 
 -- contracts with availability SLO negotiated >= 99.95 (via semanticConditionValues)
 SELECT did

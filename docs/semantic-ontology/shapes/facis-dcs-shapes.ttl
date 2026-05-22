@@ -39,6 +39,28 @@ dcs:ContractShape
     sh:path dcs:validUntil ;
     sh:datatype xsd:dateTime ;
     sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:party ;
+    sh:node dcs:CompanyShape ;
+    sh:minCount 2 ;
+  ] .
+
+dcs:CompanyShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:Company ;
+  sh:property [
+    sh:path dcs:role ;
+    sh:datatype xsd:string ;
+    sh:in ( "supplier" "customer" "provider" "client" ) ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:legalName ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
   ] .
 
 dcs:ContractTemplateShape

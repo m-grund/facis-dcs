@@ -4,7 +4,8 @@
       <div ref="editorRef"
         class="clause-editor textarea textarea-bordered textarea-sm w-full min-h-24 text-sm whitespace-pre-wrap wrap-break-word"
         contenteditable="true" data-placeholder="" @input="onEditorInput" @paste="onEditorPaste" @blur="onEditorBlur"
-        @keydown="onEditorKeydown" @click="onEditorClick"></div>
+        @keydown="onEditorKeydown" @keyup="rememberEditorCursor" @mouseup="rememberEditorCursor"
+        @click="onEditorClick"></div>
       <!-- placeholder suggestions -->
       <div v-show="showPlaceholderSuggestions" :style="placeholderDropdownStyle" :class="placeholderDropdownClass">
         <p class="px-3 py-2 text-xs text-base-content/50 border-b border-base-200">
@@ -147,7 +148,17 @@ function insertPlaceholderFromPanel(conditionId: string, parameterName: string) 
 }
 
 function onEditorBlur() {
-  if (editorRef.value) lastCursorIndex.value = getCursorIndex()
+  rememberEditorCursor()
+}
+
+function rememberEditorCursor() {
+  const el = editorRef.value
+  const selection = document.getSelection()
+  if (!el || !selection?.anchorNode || !el.contains(selection.anchorNode)) return
+  const cursorIndex = getCursorIndex()
+  if (cursorIndex >= 0) {
+    lastCursorIndex.value = cursorIndex
+  }
 }
 
 const placeholderOptions = computed(() => {
@@ -207,12 +218,14 @@ function onEditorClick(e: MouseEvent) {
         nextTick(() => {
           el.focus()
           setCursorAfter(node!)
+          rememberEditorCursor()
         })
         return
       }
     }
     node = node.parentNode
   }
+  nextTick(() => rememberEditorCursor())
 }
 
 function onEditorPaste(e: ClipboardEvent) {

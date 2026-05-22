@@ -212,14 +212,32 @@ export type ContractLifecycleState =
   | 'Replaced'
 
 export interface Party {
-  '@type'?: 'Party' | 'Signatory'
+  '@type'?: 'Party' | 'Company' | 'Signatory'
   identifier: string
-  role: 'provider' | 'customer' | 'initiator' | 'responder' | 'observer' | string
+  role: ContractPartyRole | string
   name: string
   did?: DcsDid | string
   uuid?: DcsUuidUrn | string
   country?: string
   credentialReferences?: CredentialReference[]
+}
+
+export type ContractPartyRole = 'supplier' | 'customer' | 'provider' | 'client'
+
+export interface CompanyLocation {
+  street?: string
+  postalCode?: string
+  city?: string
+  region?: string
+  country: string
+}
+
+export interface Company extends Party {
+  '@type'?: 'Company'
+  legalName: string
+  registrationNumber?: string
+  vatId?: string
+  location?: CompanyLocation
 }
 
 export interface Signatory extends Party {
@@ -459,7 +477,7 @@ export interface DcsSemanticContract {
   derivedFromTemplate?: DcsDid | string
   templateVersion?: number
   semanticProfile: SemanticProfile
-  parties: Party[]
+  parties: Company[]
   signatories?: Signatory[]
   contractData: DcsContractData
   clauses?: Clause[]

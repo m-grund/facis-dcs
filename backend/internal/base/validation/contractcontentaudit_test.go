@@ -51,11 +51,9 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 		"@context": []any{"https://w3id.org/facis/sla/ontology"},
 		"@id":      "urn:facis:dcs:contract:sla:example-001",
 		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
-		"provider": map[string]any{
-			"@type": "dcs:Company",
-		},
-		"customer": map[string]any{
-			"@type": "dcs:Company",
+		"parties": []any{
+			map[string]any{"@type": "dcs:Company", "role": "supplier"},
+			map[string]any{"@type": "dcs:Company", "role": "customer"},
 		},
 		"company": map[string]any{
 			"location": map[string]any{
@@ -142,11 +140,9 @@ func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
 		"@context": []any{"https://w3id.org/facis/sla/ontology"},
 		"@id":      "urn:facis:dcs:contract:sla:example-001",
 		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
-		"provider": map[string]any{
-			"@type": "dcs:Company",
-		},
-		"customer": map[string]any{
-			"@type": "dcs:Company",
+		"parties": []any{
+			map[string]any{"@type": "dcs:Company", "role": "supplier"},
+			map[string]any{"@type": "dcs:Company", "role": "customer"},
 		},
 		"contract": map[string]any{
 			"jurisdiction": "DEU",
@@ -162,7 +158,7 @@ func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
 				"targetClass": "dcs:Contract",
 				"properties": []any{
 					map[string]any{"path": "contract.jurisdiction", "minCount": 1, "datatype": "xsd:string", "name": "Jurisdiction"},
-					map[string]any{"path": "provider", "minCount": 1, "class": "dcs:Company", "name": "Provider"},
+					map[string]any{"path": "parties", "minCount": 2, "class": "dcs:Company", "name": "Contract parties"},
 				},
 			},
 		},
@@ -181,8 +177,8 @@ func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
 		"@context": "https://w3id.org/facis/sla/ontology",
 		"@id":      "urn:facis:dcs:contract:sla:example-001",
 		"@type":    "dcs:Contract",
-		"provider": map[string]any{
-			"@type": "dcs:Organization",
+		"parties": []any{
+			map[string]any{"@type": "dcs:Organization", "role": "supplier"},
 		},
 	}
 	policy := map[string]any{
@@ -196,7 +192,7 @@ func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
 					"targetClass": "dcs:Contract",
 					"property": []any{
 						map[string]any{"path": "contract.jurisdiction", "minCount": 1, "name": "Jurisdiction"},
-						map[string]any{"path": "provider", "class": "dcs:Company", "name": "Provider"},
+						map[string]any{"path": "parties", "class": "dcs:Company", "name": "Contract parties"},
 					},
 				},
 			},

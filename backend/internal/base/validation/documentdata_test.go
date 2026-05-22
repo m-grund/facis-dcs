@@ -46,6 +46,8 @@ func TestNormalizeTemplateDataAddsSchemaAndPolicyRefs(t *testing.T) {
 
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &data))
+	require.Equal(t, SchemaJSONLDContextV1, data["@context"])
+	require.Equal(t, "ContractTemplate", data["@type"])
 	require.Equal(t, SchemaTemplateDataV1, data["schemaRefs"].(map[string]any)["templateData"])
 	require.Equal(t, SchemaJSONLDContextV1, data["schemaRefs"].(map[string]any)["jsonLdContext"])
 	require.NotEmpty(t, data["policyRefs"])
@@ -74,6 +76,36 @@ func TestNormalizeContractDataRequiresSemanticValuesWhenStrict(t *testing.T) {
 
 	_, err = NormalizeContractData(contractData, true)
 	require.ErrorContains(t, err, "required semantic value missing")
+}
+
+func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {
+	normalized, err := NormalizeContractData(validTemplateData(t), false)
+	require.NoError(t, err)
+
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &data))
+	require.Equal(t, SchemaJSONLDContextV1, data["@context"])
+	require.Equal(t, "Contract", data["@type"])
+}
+
+func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
+	normalized, err := NormalizeTemplateDataForPersistence(validTemplateData(t), "did:web:facis.example:template:1")
+	require.NoError(t, err)
+
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &data))
+	require.Equal(t, "did:web:facis.example:template:1", data["@id"])
+	require.Equal(t, "did:web:facis.example:template:1", data["did"])
+}
+
+func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
+	normalized, err := NormalizeContractDataForPersistence(validTemplateData(t), "did:web:facis.example:contract:1", false)
+	require.NoError(t, err)
+
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &data))
+	require.Equal(t, "did:web:facis.example:contract:1", data["@id"])
+	require.Equal(t, "did:web:facis.example:contract:1", data["did"])
 }
 
 func TestNormalizeContractDataAcceptsTypedSemanticValues(t *testing.T) {
@@ -123,6 +155,79 @@ func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
 	constraint := normalizedParam["valueConstraint"].(map[string]any)
 	require.Equal(t, "iso-3166-1-alpha-3", constraint["format"])
 	require.Contains(t, constraint["allowedValues"], "DEU")
+}
+
+func TestNormalizeTemplateDataAddsContractPartyRoleConstraint(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	condition := conditions[0].(map[string]any)
+	params := condition["parameters"].([]any)
+	params[0] = map[string]any{
+		"parameterName": "role",
+		"type":          "string",
+		"schemaRef":     SchemaPartyV1,
+		"semanticPath":  "company.role",
+		"isRequired":    true,
+		"operators":     []any{},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeTemplateData(&raw)
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	normalizedCondition := result["semanticConditions"].([]any)[0].(map[string]any)
+	normalizedParam := normalizedCondition["parameters"].([]any)[0].(map[string]any)
+	constraint := normalizedParam["valueConstraint"].(map[string]any)
+	require.Equal(t, "controlled-vocabulary", constraint["format"])
+	require.Equal(t, []any{"supplier", "customer", "provider", "client"}, constraint["allowedValues"])
+}
+
+func TestNormalizeContractDataAcceptsCompanyParties(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	decoded["parties"] = []any{
+		map[string]any{"@type": "Company", "role": "supplier", "legalName": "Example Supplier GmbH"},
+		map[string]any{"@type": "dcs:Company", "role": "customer", "legalName": "Example Customer AG"},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(&raw, false)
+	require.NoError(t, err)
+}
+
+func TestNormalizeContractDataRejectsPartyRoleOutsideVocabulary(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	decoded["parties"] = []any{
+		map[string]any{"@type": "Company", "role": "reseller", "legalName": "Example Reseller GmbH"},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(&raw, false)
+	require.ErrorContains(t, err, "parties.0.role")
+}
+
+func TestNormalizeContractDataRejectsNonCompanyParty(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	decoded["parties"] = []any{
+		map[string]any{"@type": "Party", "role": "supplier", "legalName": "Example Supplier GmbH"},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(&raw, false)
+	require.ErrorContains(t, err, "parties.0.@type")
 }
 
 func TestNormalizeContractDataRejectsSemanticValueOutsideConstraint(t *testing.T) {

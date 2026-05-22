@@ -35,6 +35,7 @@
     "DeploymentReceipt": "dcs:DeploymentReceipt",
     "WorkflowHook": "dcs:WorkflowHook",
     "Party": "dcs:Party",
+    "Company": "dcs:Company",
     "Signatory": "dcs:Signatory",
     "CredentialReference": "dcs:CredentialReference",
     "DIDReference": "dcs:DIDReference",
@@ -110,6 +111,22 @@
     "type": "dcs:jsonType",
     "semanticProfileVersion": "dcs:semanticProfileVersion",
     "semanticProfile": "dcs:semanticProfile",
+    "schemaRefs": {
+      "@id": "dcs:schemaRefs",
+      "@type": "@json"
+    },
+    "policyRefs": {
+      "@id": "dcs:policyRefs",
+      "@type": "@json"
+    },
+    "validation": {
+      "@id": "dcs:validation",
+      "@type": "@json"
+    },
+    "sourceTemplate": {
+      "@id": "dcs:sourceTemplate",
+      "@type": "@json"
+    },
     "createdAt": {
       "@id": "dcs:createdAt",
       "@type": "xsd:dateTime"
@@ -321,6 +338,14 @@
       "@container": "@set"
     },
     "role": "dcs:role",
+    "legalName": "dcs:legalName",
+    "registrationNumber": "dcs:registrationNumber",
+    "vatId": "dcs:vatId",
+    "location": "dcs:location",
+    "street": "dcs:street",
+    "postalCode": "dcs:postalCode",
+    "city": "dcs:city",
+    "region": "dcs:region",
     "country": "dcs:country",
     "signatories": {
       "@id": "dcs:hasSignatory",

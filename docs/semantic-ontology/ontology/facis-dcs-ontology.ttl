@@ -125,6 +125,11 @@ dcs:WorkflowHook a rdfs:Class ;
 dcs:Party a rdfs:Class ;
   rdfs:label "Party" .
 
+dcs:Company a rdfs:Class ;
+  rdfs:subClassOf dcs:Party ;
+  rdfs:label "Company" ;
+  rdfs:comment "A company acting as a contract party. Its dcs:role identifies its function in the current contract." .
+
 dcs:Signatory a rdfs:Class ;
   rdfs:subClassOf dcs:Party ;
   rdfs:label "Signatory" .
@@ -213,6 +218,10 @@ dcs:SignatureLevelCode a rdfs:Class ;
 dcs:ContractTypeCode a rdfs:Class ;
   rdfs:subClassOf dcs:VocabularyTerm ;
   rdfs:label "Contract Type Code" .
+
+dcs:ContractPartyRoleCode a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Contract Party Role Code" .
 
 dcs:PlaceholderBinding a rdfs:Class ;
   rdfs:label "Placeholder Binding" ;
@@ -382,6 +391,18 @@ dcs:semanticProfile a rdf:Property ;
 dcs:semanticProfileVersion a rdf:Property ;
   rdfs:label "Semantic Profile Version" ;
   rdfs:range xsd:string .
+
+dcs:schemaRefs a rdf:Property ;
+  rdfs:label "Schema References" .
+
+dcs:policyRefs a rdf:Property ;
+  rdfs:label "Policy References" .
+
+dcs:validation a rdf:Property ;
+  rdfs:label "Validation Metadata" .
+
+dcs:sourceTemplate a rdf:Property ;
+  rdfs:label "Source Template Metadata" .
 
 dcs:createdAt a rdf:Property ;
   rdfs:label "Created At" ;
@@ -715,6 +736,38 @@ dcs:party a rdf:Property ;
 
 dcs:role a rdf:Property ;
   rdfs:label "Role" ;
+  rdfs:comment "Contract-scoped function of a party, for example supplier or customer." ;
+  rdfs:range xsd:string .
+
+dcs:legalName a rdf:Property ;
+  rdfs:label "Legal Name" ;
+  rdfs:range xsd:string .
+
+dcs:registrationNumber a rdf:Property ;
+  rdfs:label "Registration Number" ;
+  rdfs:range xsd:string .
+
+dcs:vatId a rdf:Property ;
+  rdfs:label "VAT ID" ;
+  rdfs:range xsd:string .
+
+dcs:location a rdf:Property ;
+  rdfs:label "Location" .
+
+dcs:street a rdf:Property ;
+  rdfs:label "Street" ;
+  rdfs:range xsd:string .
+
+dcs:postalCode a rdf:Property ;
+  rdfs:label "Postal Code" ;
+  rdfs:range xsd:string .
+
+dcs:city a rdf:Property ;
+  rdfs:label "City" ;
+  rdfs:range xsd:string .
+
+dcs:region a rdf:Property ;
+  rdfs:label "Region" ;
   rdfs:range xsd:string .
 
 dcs:country a rdf:Property ;
@@ -872,6 +925,11 @@ dcst:constraint-contract-type a dcs:ValueConstraint ;
   dcs:allowedValue "frameworkAgreement", "serviceAgreement", "dataProcessingAgreement", "nda", "leaseAgreement", "purchaseAgreement" ;
   rdfs:label "Contract Type Vocabulary Constraint" .
 
+dcst:constraint-contract-party-role a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "supplier", "customer", "provider", "client" ;
+  rdfs:label "Contract Party Role Vocabulary Constraint" .
+
 dcst:constraint-gdpr-role a dcs:ValueConstraint ;
   dcs:format "controlled-vocabulary" ;
   dcs:allowedValue "controller", "processor", "jointController", "subProcessor" ;
@@ -887,6 +945,16 @@ dcst:constraint-audit-frequency a dcs:ValueConstraint ;
   dcs:allowedValue "onDemand", "annual", "semiAnnual", "quarterly" ;
   rdfs:label "Audit Frequency Vocabulary Constraint" .
 
+dcst:constraint-governing-law a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "DE", "AT", "CH", "FR", "NL", "BE", "EU" ;
+  rdfs:label "Governing Law Vocabulary Constraint" .
+
+dcst:constraint-ip-ownership a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "customer", "supplier", "joint", "preExistingRetained" ;
+  rdfs:label "IP Ownership Vocabulary Constraint" .
+
 #################################################################
 # Canonical domain fields
 #################################################################
@@ -896,6 +964,13 @@ dcst:field-company-legalName a dcs:DomainField ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Legal Name" .
+
+dcst:field-company-role a dcs:DomainField ;
+  dcs:semanticPath "company.role" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-contract-party-role ;
+  rdfs:label "Company Contract Role" .
 
 dcst:field-company-registrationNumber a dcs:DomainField ;
   dcs:semanticPath "company.registrationNumber" ;
@@ -908,6 +983,54 @@ dcst:field-company-vatId a dcs:DomainField ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company VAT ID" .
+
+dcst:field-company-representative-name a dcs:DomainField ;
+  dcs:semanticPath "company.representative.name" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Representative Name" .
+
+dcst:field-company-representative-role a dcs:DomainField ;
+  dcs:semanticPath "company.representative.role" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Representative Role" .
+
+dcst:field-company-contact-email a dcs:DomainField ;
+  dcs:semanticPath "company.contact.email" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Contact Email" .
+
+dcst:field-company-contact-phone a dcs:DomainField ;
+  dcs:semanticPath "company.contact.phone" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Contact Phone" .
+
+dcst:field-company-location-street a dcs:DomainField ;
+  dcs:semanticPath "company.location.street" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Street" .
+
+dcst:field-company-location-postalCode a dcs:DomainField ;
+  dcs:semanticPath "company.location.postalCode" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Postal Code" .
+
+dcst:field-company-location-city a dcs:DomainField ;
+  dcs:semanticPath "company.location.city" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company City" .
+
+dcst:field-company-location-region a dcs:DomainField ;
+  dcs:semanticPath "company.location.region" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Company Region" .
 
 dcst:field-company-location-country a dcs:DomainField ;
   dcs:semanticPath "company.location.country" ;
@@ -923,12 +1046,31 @@ dcst:field-contract-type a dcs:DomainField ;
   dcs:hasValueConstraint dcst:constraint-contract-type ;
   rdfs:label "Contract Type" .
 
+dcst:field-contract-title a dcs:DomainField ;
+  dcs:semanticPath "contract.title" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Contract Title" .
+
 dcst:field-contract-jurisdiction a dcs:DomainField ;
   dcs:semanticPath "contract.jurisdiction" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
   rdfs:label "Contract Jurisdiction" .
+
+dcst:field-contract-governingLaw a dcs:DomainField ;
+  dcs:semanticPath "contract.governingLaw" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-governing-law ;
+  rdfs:label "Governing Law" .
+
+dcst:field-contract-disputeResolution-venue a dcs:DomainField ;
+  dcs:semanticPath "contract.disputeResolution.venue" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Dispute Venue" .
 
 dcst:field-contract-validity-startDate a dcs:DomainField ;
   dcs:semanticPath "contract.validity.startDate" ;
@@ -942,6 +1084,24 @@ dcst:field-contract-validity-endDate a dcs:DomainField ;
   dcs:parameterType "date" ;
   rdfs:label "Validity End Date" .
 
+dcst:field-contract-effectiveDate a dcs:DomainField ;
+  dcs:semanticPath "contract.effectiveDate" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Effective Date" .
+
+dcst:field-contract-renewal-noticePeriodDays a dcs:DomainField ;
+  dcs:semanticPath "contract.renewal.noticePeriodDays" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "Renewal Notice Period" .
+
+dcst:field-contract-termination-noticePeriodDays a dcs:DomainField ;
+  dcs:semanticPath "contract.termination.noticePeriodDays" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "Termination Notice Period" .
+
 dcst:field-contract-payment-amount a dcs:DomainField ;
   dcs:semanticPath "contract.payment.amount" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
@@ -954,6 +1114,42 @@ dcst:field-contract-payment-currency a dcs:DomainField ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso4217-currency ;
   rdfs:label "Payment Currency" .
+
+dcst:field-contract-payment-dueDate a dcs:DomainField ;
+  dcs:semanticPath "contract.payment.dueDate" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Payment Due Date" .
+
+dcst:field-contract-payment-dueDays a dcs:DomainField ;
+  dcs:semanticPath "contract.payment.dueDays" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "Payment Due Days" .
+
+dcst:field-contract-liability-capAmount a dcs:DomainField ;
+  dcs:semanticPath "contract.liability.capAmount" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "decimal" ;
+  rdfs:label "Liability Cap Amount" .
+
+dcst:field-contract-liability-currency a dcs:DomainField ;
+  dcs:semanticPath "contract.liability.currency" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Liability Currency" .
+
+dcst:field-contract-insurance-minimumCoverage a dcs:DomainField ;
+  dcs:semanticPath "contract.insurance.minimumCoverage" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "decimal" ;
+  rdfs:label "Minimum Insurance Coverage" .
+
+dcst:field-contract-confidentiality-durationMonths a dcs:DomainField ;
+  dcs:semanticPath "contract.confidentiality.durationMonths" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "Confidentiality Duration" .
 
 dcst:field-contract-dataProtection-role a dcs:DomainField ;
   dcs:semanticPath "contract.dataProtection.role" ;
@@ -969,6 +1165,50 @@ dcst:field-contract-disputeResolution-method a dcs:DomainField ;
   dcs:hasValueConstraint dcst:constraint-dispute-method ;
   rdfs:label "Dispute Resolution Method" .
 
+dcst:field-contract-auditRights-frequency a dcs:DomainField ;
+  dcs:semanticPath "contract.auditRights.frequency" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-audit-frequency ;
+  rdfs:label "Audit Rights Frequency" .
+
+dcst:field-contract-ipRights-ownership a dcs:DomainField ;
+  dcs:semanticPath "contract.ipRights.ownership" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "string" ;
+  dcs:hasValueConstraint dcst:constraint-ip-ownership ;
+  rdfs:label "IP Rights Ownership" .
+
+dcst:field-contract-forceMajeure-noticeDays a dcs:DomainField ;
+  dcs:semanticPath "contract.forceMajeure.noticeDays" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "Force Majeure Notice Days" .
+
+dcst:field-service-description a dcs:DomainField ;
+  dcs:semanticPath "service.description" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Service Description" .
+
+dcst:field-service-scope a dcs:DomainField ;
+  dcs:semanticPath "service.scope" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Service Scope" .
+
+dcst:field-service-deliverable-name a dcs:DomainField ;
+  dcs:semanticPath "service.deliverable.name" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Deliverable Name" .
+
+dcst:field-service-deliverable-acceptanceCriteria a dcs:DomainField ;
+  dcs:semanticPath "service.deliverable.acceptanceCriteria" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Acceptance Criteria" .
+
 dcst:field-service-sla-availability a dcs:DomainField ;
   dcs:semanticPath "service.sla.availability" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
@@ -982,12 +1222,36 @@ dcst:field-service-sla-responseTime a dcs:DomainField ;
   dcs:parameterType "integer" ;
   rdfs:label "SLA Response Time" .
 
+dcst:field-service-sla-resolutionTime a dcs:DomainField ;
+  dcs:semanticPath "service.sla.resolutionTime" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "integer" ;
+  rdfs:label "SLA Resolution Time" .
+
+dcst:field-service-sla-supportHours a dcs:DomainField ;
+  dcs:semanticPath "service.sla.supportHours" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Support Hours" .
+
 dcst:field-signature-requiredLevel a dcs:DomainField ;
   dcs:semanticPath "signature.requiredLevel" ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-eidas-signature-level ;
   rdfs:label "Required Signature Level" .
+
+dcst:field-signature-requiredSignerRole a dcs:DomainField ;
+  dcs:semanticPath "signature.requiredSignerRole" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:parameterType "string" ;
+  rdfs:label "Required Signer Role" .
+
+dcst:field-signature-deadline a dcs:DomainField ;
+  dcs:semanticPath "signature.deadline" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:parameterType "date" ;
+  rdfs:label "Signature Deadline" .
 
 #################################################################
 # Block catalogue entries

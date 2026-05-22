@@ -213,7 +213,7 @@ func auditCanonicalDomainFields(policySet *templatePolicySet, rule templatePolic
 	findings := []PolicyFinding{}
 	forEachSemanticParameter(data, func(conditionID string, index int, param map[string]any) {
 		semanticPath, _ := param["semanticPath"].(string)
-		if _, ok := domainFields[semanticPath]; !ok {
+		if _, ok := ontologyDomainFieldIndex[semanticPath]; !ok {
 			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("semantic condition %q uses unknown domain field %q", conditionID, semanticPath), fmt.Sprintf("semanticConditions.%s.parameters.%d", conditionID, index), semanticPath))
 		}
 	})
@@ -224,7 +224,7 @@ func auditConstrainedParameters(policySet *templatePolicySet, rule templatePolic
 	findings := []PolicyFinding{}
 	forEachSemanticParameter(data, func(conditionID string, index int, param map[string]any) {
 		semanticPath, _ := param["semanticPath"].(string)
-		field, ok := domainFields[semanticPath]
+		field, ok := ontologyDomainFieldIndex[semanticPath]
 		if !ok || field.Constraint == nil {
 			return
 		}

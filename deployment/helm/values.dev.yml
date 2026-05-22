@@ -84,14 +84,22 @@ neo4j:
     nodePortHttp: 30474
     nodePortBolt: 30687
 
+# XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
+# See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
-  enabled: true
-  service:
-    type: NodePort
-    nodePort: 30081
-  keycloak:
-    hostname: "localhost:30080"
-    issuerScheme: "http"
+  enabled: false
+  # URL the DCS backend uses to reach the Federated Catalogue API
+  apiURL: ""
+  secretRef:
+    name: ""
+    key: "FEDERATED_CATALOGUE_API_URL"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 
 # OIDC / route values below are not used when replicaCount=0,
 # but kept here as documentation for the backend .env.dev file.

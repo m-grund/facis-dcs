@@ -66,10 +66,6 @@ type blockDefinition struct {
 	SemanticPath string
 }
 
-func numberPtr(value float64) *float64 {
-	return &value
-}
-
 func (constraint *valueConstraint) asMap() map[string]any {
 	result := map[string]any{}
 	if constraint.Format != "" {
@@ -98,149 +94,6 @@ func (constraint *valueConstraint) asMap() map[string]any {
 		result["description"] = constraint.Description
 	}
 	return result
-}
-
-var domainFields = map[string]domainField{
-	"company.legalName":           {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.registrationNumber":  {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.vatId":               {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.representative.name": {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.representative.role": {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.contact.email":       {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.contact.phone":       {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.location.street":     {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.location.postalCode": {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.location.city":       {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.location.region":     {SchemaRef: SchemaPartyV1, Type: "string"},
-	"company.location.country": {
-		SchemaRef: SchemaPartyV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:           "iso-3166-1-alpha-3",
-			Pattern:          "^[A-Z]{3}$",
-			AllowedValuesRef: "ISO 3166-1 alpha-3",
-			AllowedValues:    []string{"DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA"},
-			Description:      "Use ISO 3166-1 alpha-3 country codes, for example DEU instead of Germany.",
-		},
-	},
-	"contract.title": {SchemaRef: SchemaContractV1, Type: "string"},
-	"contract.type": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "controlled-vocabulary",
-			AllowedValues: []string{"frameworkAgreement", "serviceAgreement", "dataProcessingAgreement", "nda", "leaseAgreement", "purchaseAgreement"},
-			Description:   "Use the FACIS contract type vocabulary.",
-		},
-	},
-	"contract.jurisdiction": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:           "iso-3166-1-alpha-3",
-			Pattern:          "^[A-Z]{3}$",
-			AllowedValuesRef: "ISO 3166-1 alpha-3",
-			AllowedValues:    []string{"DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA"},
-			Description:      "Use ISO 3166-1 alpha-3 jurisdiction codes.",
-		},
-	},
-	"contract.governingLaw": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "controlled-vocabulary",
-			AllowedValues: []string{"DE", "AT", "CH", "FR", "NL", "BE", "EU"},
-			Description:   "Use the agreed governing-law code vocabulary.",
-		},
-	},
-	"contract.disputeResolution.venue": {SchemaRef: SchemaContractV1, Type: "string"},
-	"contract.disputeResolution.method": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "controlled-vocabulary",
-			AllowedValues: []string{"court", "arbitration", "mediation"},
-			Description:   "Use the FACIS dispute resolution vocabulary.",
-		},
-	},
-	"contract.validity.startDate":           {SchemaRef: SchemaContractV1, Type: "date"},
-	"contract.validity.endDate":             {SchemaRef: SchemaContractV1, Type: "date"},
-	"contract.effectiveDate":                {SchemaRef: SchemaContractV1, Type: "date"},
-	"contract.renewal.noticePeriodDays":     {SchemaRef: SchemaContractV1, Type: "integer"},
-	"contract.termination.noticePeriodDays": {SchemaRef: SchemaContractV1, Type: "integer"},
-	"contract.payment.amount":               {SchemaRef: SchemaContractV1, Type: "decimal"},
-	"contract.payment.currency": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:           "iso-4217",
-			Pattern:          "^[A-Z]{3}$",
-			AllowedValuesRef: "ISO 4217",
-			AllowedValues:    []string{"EUR", "USD", "GBP", "CHF", "PLN", "CZK"},
-			Description:      "Use ISO 4217 currency codes.",
-		},
-	},
-	"contract.payment.dueDate":                {SchemaRef: SchemaContractV1, Type: "date"},
-	"contract.payment.dueDays":                {SchemaRef: SchemaContractV1, Type: "integer"},
-	"contract.liability.capAmount":            {SchemaRef: SchemaContractV1, Type: "decimal"},
-	"contract.liability.currency":             {SchemaRef: SchemaContractV1, Type: "string"},
-	"contract.insurance.minimumCoverage":      {SchemaRef: SchemaContractV1, Type: "decimal"},
-	"contract.confidentiality.durationMonths": {SchemaRef: SchemaContractV1, Type: "integer"},
-	"contract.dataProtection.role": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "controlled-vocabulary",
-			AllowedValues: []string{"controller", "processor", "jointController", "subProcessor"},
-			Description:   "Use the GDPR role vocabulary.",
-		},
-	},
-	"contract.auditRights.frequency": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "controlled-vocabulary",
-			AllowedValues: []string{"onDemand", "annual", "semiAnnual", "quarterly"},
-			Description:   "Use the FACIS audit frequency vocabulary.",
-		},
-	},
-	"contract.ipRights.ownership": {
-		SchemaRef: SchemaContractV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "controlled-vocabulary",
-			AllowedValues: []string{"customer", "supplier", "joint", "preExistingRetained"},
-			Description:   "Use the FACIS IP ownership vocabulary.",
-		},
-	},
-	"contract.forceMajeure.noticeDays":       {SchemaRef: SchemaContractV1, Type: "integer"},
-	"service.description":                    {SchemaRef: SchemaServiceV1, Type: "string"},
-	"service.scope":                          {SchemaRef: SchemaServiceV1, Type: "string"},
-	"service.deliverable.name":               {SchemaRef: SchemaServiceV1, Type: "string"},
-	"service.deliverable.acceptanceCriteria": {SchemaRef: SchemaServiceV1, Type: "string"},
-	"service.sla.availability": {
-		SchemaRef: SchemaServiceV1,
-		Type:      "decimal",
-		Constraint: &valueConstraint{
-			Min:         numberPtr(0),
-			Max:         numberPtr(100),
-			Description: "Availability percentage from 0 to 100.",
-		},
-	},
-	"service.sla.responseTime":   {SchemaRef: SchemaServiceV1, Type: "integer"},
-	"service.sla.resolutionTime": {SchemaRef: SchemaServiceV1, Type: "integer"},
-	"service.sla.supportHours":   {SchemaRef: SchemaServiceV1, Type: "string"},
-	"signature.requiredLevel": {
-		SchemaRef: SchemaSignatureV1,
-		Type:      "string",
-		Constraint: &valueConstraint{
-			Format:        "eidas-signature-level",
-			AllowedValues: []string{"SES", "AES", "QES"},
-			Description:   "Use eIDAS signature level codes.",
-		},
-	},
-	"signature.requiredSignerRole": {SchemaRef: SchemaSignatureV1, Type: "string"},
-	"signature.deadline":           {SchemaRef: SchemaSignatureV1, Type: "date"},
 }
 
 var blockCatalogue = map[string]blockDefinition{
@@ -301,6 +154,16 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	return encodeDocumentData(data)
 }
 
+// NormalizeTemplateDataForPersistence keeps stored template JSON-LD
+// self-identifying when it is read outside the relational row envelope.
+func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datatype.JSON, error) {
+	normalized, err := NormalizeTemplateData(raw)
+	if err != nil {
+		return nil, err
+	}
+	return addDocumentIdentity(normalized, did)
+}
+
 // NormalizeContractData adds FACIS contract schema and policy references and
 // validates structure plus semantic values. When requireSemanticValues is false,
 // required semantic values may still be empty so a draft contract can be created
@@ -322,6 +185,31 @@ func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*dat
 	}
 	if err := validateSemanticValues(data, requireSemanticValues); err != nil {
 		return nil, err
+	}
+	if err := validateContractParties(data); err != nil {
+		return nil, err
+	}
+	return encodeDocumentData(data)
+}
+
+// NormalizeContractDataForPersistence keeps stored contract JSON-LD
+// self-identifying when it is read outside the relational row envelope.
+func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, requireSemanticValues bool) (*datatype.JSON, error) {
+	normalized, err := NormalizeContractData(raw, requireSemanticValues)
+	if err != nil {
+		return nil, err
+	}
+	return addDocumentIdentity(normalized, did)
+}
+
+func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error) {
+	data, err := decodeDocumentData(raw)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(did) != "" {
+		data["@id"] = did
+		data["did"] = did
 	}
 	return encodeDocumentData(data)
 }
@@ -350,6 +238,7 @@ func encodeDocumentData(data documentData) (*datatype.JSON, error) {
 
 func normalizeTemplateMetadata(data documentData) {
 	data["@context"] = SchemaJSONLDContextV1
+	data["@type"] = "ContractTemplate"
 	data["schemaRefs"] = map[string]any{
 		"documentStructure": SchemaDocumentStructureV1,
 		"semanticCondition": SchemaSemanticConditionV1,
@@ -371,6 +260,7 @@ func normalizeTemplateMetadata(data documentData) {
 
 func normalizeContractMetadata(data documentData) {
 	data["@context"] = SchemaJSONLDContextV1
+	data["@type"] = "Contract"
 	data["schemaRefs"] = map[string]any{
 		"documentStructure": SchemaDocumentStructureV1,
 		"semanticCondition": SchemaSemanticConditionV1,
@@ -945,7 +835,7 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 				return fmt.Errorf("semantic value %q on condition %q does not match type %q", parameterName, conditionID, paramType)
 			}
 			semanticPath, _ := param["semanticPath"].(string)
-			if field, ok := domainFields[semanticPath]; ok && field.Constraint != nil {
+			if field, ok := ontologyDomainFieldIndex[semanticPath]; ok && field.Constraint != nil {
 				if err := valueMatchesConstraint(rawValue, field.Constraint); err != nil {
 					return fmt.Errorf("semantic value %q on condition %q violates constraint: %w", parameterName, conditionID, err)
 				}
@@ -1058,7 +948,7 @@ func validateDomainParameter(conditionID string, param map[string]any) error {
 	if strings.TrimSpace(semanticPath) == "" {
 		return fmt.Errorf("semantic condition %q parameter %q requires semanticPath", conditionID, param["parameterName"])
 	}
-	field, ok := domainFields[semanticPath]
+	field, ok := ontologyDomainFieldIndex[semanticPath]
 	if !ok {
 		return fmt.Errorf("semantic condition %q uses unknown domain semanticPath %q", conditionID, semanticPath)
 	}
@@ -1172,6 +1062,36 @@ func containsString(values []string, candidate string) bool {
 		}
 	}
 	return false
+}
+
+func validateContractParties(data documentData) error {
+	rawParties, exists := data["parties"]
+	if !exists {
+		return nil
+	}
+	roleField, ok := ontologyDomainFieldIndex["company.role"]
+	if !ok || roleField.Constraint == nil || len(roleField.Constraint.AllowedValues) == 0 {
+		return errors.New("ontology domain field company.role requires allowed role values")
+	}
+	parties, ok := asArray(rawParties)
+	if !ok {
+		return errors.New("parties must be an array")
+	}
+	for index, rawParty := range parties {
+		party, ok := rawParty.(map[string]any)
+		if !ok {
+			return fmt.Errorf("parties.%d must be an object", index)
+		}
+		partyType, _ := party["@type"].(string)
+		if partyType != "Company" && partyType != "dcs:Company" {
+			return fmt.Errorf("parties.%d.@type must be Company", index)
+		}
+		role, _ := party["role"].(string)
+		if !containsString(roleField.Constraint.AllowedValues, role) {
+			return fmt.Errorf("parties.%d.role must be one of %s", index, strings.Join(roleField.Constraint.AllowedValues, ", "))
+		}
+	}
+	return nil
 }
 
 func semanticValueKey(blockID, conditionID, parameterName string) string {
