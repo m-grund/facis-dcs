@@ -12,7 +12,7 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-const emit = defineEmits<{ selectedNegotiation: [value: ContractNegotiation | null] }>()
+const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
 
 const authStore = useAuthStore()
 const username = computed(() => authStore.user?.username)
@@ -20,8 +20,10 @@ const username = computed(() => authStore.user?.username)
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
 const negotiations = computed(() => {
-    const activeNegotiations = props.contract.negotiations?.filter(negotiation => negotiation.contract_version === props.contract.contract_version)
-    return activeNegotiations ?? []
+  const activeNegotiations = props.contract.negotiations?.filter(
+    (negotiation) => negotiation.contract_version === props.contract.contract_version,
+  )
+  return activeNegotiations ?? []
 })
 
 const sortedNegotiations = computed(() =>
@@ -40,14 +42,16 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
   try {
     const { isCanceled } = await confirmationModal.value?.reveal({ message: 'Accept this change request?' })
     if (!isCanceled) {
-      await contractWorkflowService.respond({
+      const response = await contractWorkflowService.respond({
         id: negotiation.id,
         did: props.contract.did,
         action_flag: 'ACCEPTING',
         responded_by: username.value,
       })
-      const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
-      if (decision) decision.decision = 'ACCEPTED'
+      if (response.id) {
+        const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
+        if (decision) decision.decision = 'ACCEPTED'
+      }
     }
   } catch (err) {
     console.error('Accepting the negotiation failed', err)
@@ -65,21 +69,23 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
       editor: { requiredText: true, placeholder: 'Rejection reason' },
     })
     if (!rejectResult.isCanceled) {
-      await contractWorkflowService.respond({
+      const response = await contractWorkflowService.respond({
         id: negotiation.id,
         did: props.contract.did,
         action_flag: 'REJECTING',
         responded_by: username.value,
         rejection_reason: rejectResult.data,
       })
-      negotiation.negotiation_decisions.forEach((decision) => {
-        if (decision.negotiator === username.value) {
-          decision.decision = 'REJECTED'
-          decision.rejection_reason = rejectResult.data
-        } else {
-          decision.decision = 'CLOSED'
-        }
-      })
+      if (response.id) {
+        negotiation.negotiation_decisions.forEach((decision) => {
+          if (decision.negotiator === username.value) {
+            decision.decision = 'REJECTED'
+            decision.rejection_reason = rejectResult.data
+          } else {
+            decision.decision = 'CLOSED'
+          }
+        })
+      }
     }
   } catch (err) {
     console.error('Rejecting the negotiation failed', err)
@@ -111,7 +117,7 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
     <li v-for="negotiation in sortedNegotiations" :key="negotiation.id" class="list-row px-0">
       <div class="card bg-base-100 shadow-sm card-border border-base-content/10">
         <div class="card-body">
-          <h2 class="card-title">Change request proposed by: {{ negotiation.created_by }}</h2>
+          <h2 class="card-title">Change proposal by: {{ negotiation.created_by }}</h2>
           <ul class="list">
             <li
               v-for="decision in sortedDecisions(negotiation.negotiation_decisions)"

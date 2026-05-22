@@ -3,9 +3,10 @@
     <TemplateEditors title="View Template" />
 
     <!-- Pinned Footer -->
-    <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
+    <div v-if="$route.params.did === did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
+        <CopyTemplateButton v-if="isCreator || isManager" class="btn btn-primary flex-1" />
         <template v-if="isCreator">
           <SubmitSelectionDialog
             v-if="state === TemplateState.draft"
@@ -23,7 +24,7 @@
         </template>
         <TemplateManagerActions
           v-if="contractTemplate && isManager"
-          :item="contractTemplate"
+          :template="contractTemplate"
           class="btn btn-primary flex-1"
         />
       </div>
@@ -32,51 +33,45 @@
 </template>
 
 <script setup lang="ts">
-import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
 import type { SelectedUserRole } from '@/models/user'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch, type Ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, watch, type Ref } from 'vue'
+import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
-const router = useRouter()
-const route = useRoute()
+const props = defineProps<{
+  did: string
+}>()
+
 const navStore = useNavStore()
 
-const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 const { state } = storeToRefs(draftStore)
 
-const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const isCreator = computed(() => {
-  return draftStore.created_by === authStore.user?.username
-})
-
-const isManager = computed(() => {
-  return hasDid.value && (authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
-})
+const { isCreator, isManager } = useTemplatePermissions()
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
 
 watch(
-  hasDid,
-  (hasDid) => {
+  () => props.did,
+  (newDid, oldDid) => {
     templateEditorUiStore.reset()
-    if (!hasDid) return
+    if (newDid === oldDid) return
 
     hasChosenType.value = true
-    const did = `${route.params.did}`
+    const did = `${props.did}`
     contractTemplateService
       .retrieveById({ did })
       .then((template) => {
@@ -103,6 +98,7 @@ watch(
           document_number: template.document_number ?? null,
           updated_at: template.updated_at ?? null,
           created_by: template.created_by,
+          responsible_persons: template.responsible_persons ?? null,
         })
       })
       .catch((error) => {

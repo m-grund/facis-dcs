@@ -5,6 +5,7 @@ import type {
   ContractTemplateArchiveRequest,
   ContractTemplateAuditRequest,
   ContractTemplateCreateRequest,
+  ContractTemplateCopyRequest,
   ContractTemplateRegisterRequest,
   ContractTemplateRejectRequest,
   ContractTemplateRetrieveByIdRequest,
@@ -19,6 +20,7 @@ import type {
   ContractTemplateArchiveResponse,
   ContractTemplateAuditResponse,
   ContractTemplateCreateResponse,
+  ContractTemplateCopyResponse,
   ContractTemplateRegisterResponse,
   ContractTemplateRejectResponse,
   ContractTemplateRetrieveByIdResponse,
@@ -37,6 +39,16 @@ export const contractTemplateService: ContractTemplateService = {
       .then((res) => res.data)
       .catch((err) => {
         console.error('Create Error:', err)
+        throw err
+      })
+  },
+
+  async copy(request: ContractTemplateCopyRequest) {
+    return http
+      .post<ContractTemplateCopyResponse>('/template/copy', request)
+      .then((res) => res.data)
+      .catch((err) => {
+        console.error('Copy Error:', err)
         throw err
       })
   },

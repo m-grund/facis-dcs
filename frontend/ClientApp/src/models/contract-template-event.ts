@@ -13,10 +13,17 @@ export interface ContractTemplateCreateEvent {
   occurred_at: string
 }
 
+export interface ContractTemplateCopyEvent {
+  copy_did: string
+  new_did: string
+  copied_by: string
+  occurred_at: string
+}
+
 export interface ContractTemplateSubmitEvent {
   did: string
   document_number?: string
-  version?: number
+  version: number
   previous_state: ContractTemplateState
   new_state: ContractTemplateState
   submitted_by: string
@@ -28,7 +35,7 @@ export interface ContractTemplateSubmitEvent {
 export interface ContractTemplateApproveEvent {
   did: string
   document_number?: string
-  version?: number
+  version: number
   approved_by: string
   decision_notes?: string[]
   occurred_at: string
@@ -37,7 +44,7 @@ export interface ContractTemplateApproveEvent {
 export interface ContractTemplateRejectEvent {
   did: string
   document_number?: string
-  version?: string
+  version: string
   rejected_by: string
   reason: string
   occurred_at: string
@@ -46,7 +53,7 @@ export interface ContractTemplateRejectEvent {
 export interface ContractTemplateVerifyEvent {
   did: string
   document_number?: string
-  version?: number
+  version: number
   verified_by: string
   occurred_at: string
 }
@@ -56,8 +63,6 @@ export interface ContractTemplateUpdateEvent {
   updated_at: string
   old_document_number?: string
   new_document_number?: string
-  old_version?: number
-  new_version?: number
   old_name?: string
   new_name?: string
   old_description?: string
@@ -72,8 +77,6 @@ export interface ContractTemplateUpdateManageEvent {
   updated_at: string
   old_document_number?: string
   new_document_number?: string
-  old_version?: number
-  new_version?: number
   old_state?: ContractTemplateState
   new_state?: ContractTemplateState
   old_name?: string
@@ -88,7 +91,7 @@ export interface ContractTemplateUpdateManageEvent {
 export interface ContractTemplateSearchEvent {
   retrieved_by: string
   document_number?: string
-  version?: number
+  version: number
   occurred_at: string
 }
 
@@ -100,7 +103,7 @@ export interface ContractTemplateRetrieveAllEvent {
 export interface ContractTemplateRetrieveByIDEvent {
   did: string
   document_number?: string
-  version?: number
+  version: number
   retrieved_by: string
   occurred_at: string
 }
@@ -108,7 +111,7 @@ export interface ContractTemplateRetrieveByIDEvent {
 export interface ContractTemplateArchiveEvent {
   did: string
   document_number?: string
-  version?: number
+  version: number
   archived_by: string
   occurred_at: string
 }
@@ -116,7 +119,7 @@ export interface ContractTemplateArchiveEvent {
 export interface ContractTemplateRegisterEvent {
   did: string
   document_number?: string
-  version?: number
+  version: number
   registered_by: string
   occurred_at: string
 }

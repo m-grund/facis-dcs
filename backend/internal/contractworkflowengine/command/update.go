@@ -5,6 +5,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -17,10 +18,12 @@ import (
 
 type UpdateCmd struct {
 	DID             string
-	ContractVersion *int
 	UpdatedAt       time.Time
 	UpdatedBy       string
-	ExpirationDate  *time.Time
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
 	Name            *string
 	Description     *string
 	ContractData    *datatype.JSON
@@ -56,12 +59,49 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("invalid contract state")
 	}
 
+	if cmd.ExpDate != nil {
+		tomorrow := time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
+		if cmd.ExpDate.Before(tomorrow) {
+			return fmt.Errorf("expiration date must be at least one day in the future")
+		}
+	}
+
+	if cmd.StartDate != nil {
+		tomorrow := time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
+		if cmd.StartDate.Before(tomorrow) {
+			return fmt.Errorf("start date must be at least one day in the future")
+		}
+	}
+
+	if cmd.StartDate != nil && cmd.ExpDate != nil {
+		if !cmd.ExpDate.After(*cmd.StartDate) {
+			return fmt.Errorf("expiration date must be after start date")
+		}
+	}
+
+	var oldExpPolicy *expirationpolicy.ExpirationPolicy
+	if oldData.ExpPolicy != nil {
+		policy, err := expirationpolicy.NewExpirationPolicy(*oldData.ExpPolicy)
+		if err != nil {
+			return fmt.Errorf("could not parse expiration policy: %w", err)
+		}
+		oldExpPolicy = &policy
+	}
+
+	var expPolicy *string
+	if cmd.ExpPolicy != nil {
+		s := cmd.ExpPolicy.String()
+		expPolicy = &s
+	}
+
 	newData := db.ContractUpdateData{
 		DID:             cmd.DID,
-		ContractVersion: cmd.ContractVersion,
 		Name:            cmd.Name,
 		Description:     cmd.Description,
-		ExpirationDate:  cmd.ExpirationDate,
+		StartDate:       cmd.StartDate,
+		ExpDate:         cmd.ExpDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: cmd.ExpNoticePeriod,
 		ContractData:    cmd.ContractData,
 	}
 	err = h.CRepo.Update(ctx, tx, newData)
@@ -71,16 +111,20 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 
 	evt := contractevents.UpdateEvent{
 		DID:                cmd.DID,
-		OldContractVersion: oldData.ContractVersion,
-		NewContractVersion: cmd.ContractVersion,
 		OldName:            oldData.Name,
 		NewName:            cmd.Name,
 		OldDescription:     oldData.Description,
 		NewDescription:     cmd.Description,
 		OldContractData:    oldData.ContractData,
 		NewContractData:    cmd.ContractData,
-		OldExpirationDate:  cmd.ExpirationDate,
-		NewExpirationDate:  cmd.ExpirationDate,
+		OldStartDate:       oldData.StartDate,
+		NewStartDate:       newData.StartDate,
+		OldExpDate:         oldData.ExpDate,
+		NewExpDate:         cmd.ExpDate,
+		OldExpPolicy:       oldExpPolicy,
+		NewExpPolicy:       cmd.ExpPolicy,
+		OldExpNoticePeriod: oldData.ExpNoticePeriod,
+		NewExpNoticePeriod: cmd.ExpNoticePeriod,
 		UpdatedBy:          cmd.UpdatedBy,
 		OccurredAt:         time.Now().UTC(),
 	}

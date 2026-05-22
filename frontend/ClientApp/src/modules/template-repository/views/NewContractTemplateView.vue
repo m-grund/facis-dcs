@@ -15,9 +15,10 @@
             <div v-if="templateEditorUiStore.isTemplateEditable" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
                 <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
                     <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
+                    <CopyTemplateButton v-if="isEditMode && (isCreator || isManager)" class="btn btn-primary flex-1" />
                     <button @click="submit" class="btn btn-primary flex-1" :disabled="isSubmitting">
                         <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-                        {{ isEditMode ? 'Update Template' : 'Create' }}
+                        {{ isEditMode ? 'Update' : 'Create' }}
                     </button>
                 </div>
             </div>
@@ -31,11 +32,13 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import TemplateTypeSelect from '@template-repository/components/TemplateTypeSelect.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -48,6 +51,8 @@ const isEditMode = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 const showTypeSelectionOnly = computed(() => !isEditMode.value && !hasChosenType.value)
 const title = computed(() => isEditMode.value ? 'Update Template' : 'Create Template')
+
+const { isCreator, isManager } = useTemplatePermissions()
 
 function onTemplateTypeChosen(value: typeof templateType.value) {
     draftStore.reset({ templateType: value })

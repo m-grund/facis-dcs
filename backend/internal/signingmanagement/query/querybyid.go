@@ -48,7 +48,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 	}
 	defer tx.Rollback()
 
-	data, err := h.CRepo.ReadDataByID(tx, query.DID)
+	data, err := h.CRepo.ReadDataByID(ctx, tx, query.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get contract data: %w", err)
 	}

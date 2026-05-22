@@ -9,17 +9,18 @@
       <ConfirmationModal ref="comment-dialog" />
       <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
         <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
+        <CopyTemplateButton v-if="isCreator || isManager" class="btn btn-primary flex-1" />
         <!-- Return to draft / request changes -->
         <button @click="returnToDraft" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Return to draft
+          Reject
         </button>
         <!-- Complete review (verify then forward to approval) -->
         <button @click="forwardToApproval" class="btn btn-primary flex-1" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
-          Forward to approval
+          Approve
         </button>
-        <TemplateManagerActions v-if="contractTemplate && isManager" :item="contractTemplate" class="btn btn-primary flex-1" />
+        <TemplateManagerActions v-if="contractTemplate && isManager" :template="contractTemplate" class="btn btn-primary flex-1" />
       </div>
     </div>
 
@@ -27,23 +28,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, type Ref, useTemplateRef } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import { useAuthStore } from '@/stores/auth-store'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useNavStore } from '@/stores/nav-store'
+import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
+import { computed, ref, useTemplateRef, watch, type Ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
 const router = useRouter()
 const route = useRoute()
 const navStore = useNavStore()
 
-const authStore = useAuthStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 
@@ -52,9 +53,8 @@ const commentDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('co
 const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const isManager = computed(() => {
-  return hasDid.value && (authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
-})
+const { isCreator, isManager: isManagerBase } = useTemplatePermissions()
+const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
 
@@ -88,6 +88,7 @@ watch(hasDid, (hasDidVal) => {
         version: template.version ?? null,
         document_number: template.document_number ?? null,
         updated_at: template.updated_at ?? null,
+        responsible_persons: template.responsible_persons ?? null,
       })
     })
     .catch(error => {
@@ -169,5 +170,4 @@ const returnToDraft = async () => {
     isSubmitting.value = false
   }
 }
-
 </script>

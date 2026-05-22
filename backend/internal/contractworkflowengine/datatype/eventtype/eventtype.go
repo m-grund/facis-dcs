@@ -20,11 +20,13 @@ const (
 	Update                  EventType = "UPDATE_CONTRACT"
 	RetrieveAll             EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveByID            EventType = "RETRIEVE_CONTRACT_BY_ID"
+	RetrieveHistoryByDID    EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
 	Search                  EventType = "SEARCH_CONTRACT"
 	Review                  EventType = "REVIEW_CONTRACT"
 	Audit                   EventType = "AUDIT_CONTRACT"
 	Terminate               EventType = "TERMINATE_CONTRACT"
 	RecordEvidence          EventType = "RECORD_EVIDENCE"
+	ContractExpired         EventType = "CONTRACT_EXPIRED"
 )
 
 var validStates = map[EventType]bool{
@@ -40,11 +42,13 @@ var validStates = map[EventType]bool{
 	Update:                  true,
 	RetrieveAll:             true,
 	RetrieveByID:            true,
+	RetrieveHistoryByDID:    true,
 	Search:                  true,
 	Review:                  true,
 	Audit:                   true,
 	Terminate:               true,
 	RecordEvidence:          true,
+	ContractExpired:         true,
 }
 
 func NewEventType(s string) (EventType, error) {

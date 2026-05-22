@@ -31,9 +31,10 @@ var ContractUpdateRequest = Type("ContractUpdateRequest", func() {
 
 	Attribute("updated_at", String, "The timestamp when the contract was updated")
 
-	Attribute("expiration_date", String, "The timestamp when the contract expired")
-
-	Attribute("contract_version", Int, "The version of the contract")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that")
@@ -63,7 +64,7 @@ var ContractSubmitRequest = Type("ContractSubmitRequest", func() {
 	Attribute("comments", ArrayOf(String), "Optional comments")
 
 	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
-	Attribute("approver", String, "The approver for that contract")
+	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
 	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
 
 	Required("did", "updated_at")
@@ -74,7 +75,38 @@ var ContractSubmitResponse = Type("ContractSubmitResponse", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 
+	Attribute("current_state", String, "The current state of the contract")
+
+	Required("did", "current_state")
+})
+
+var ContractHistoryRetrieveByIDRequest = Type("ContractHistoryRetrieveByIDRequest", func() {
+	Description("Contract history retrieve request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
 	Required("did")
+})
+
+var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDResponse", func() {
+	Attribute("did", String, "DID of the contract")
+	Attribute("contract_version", Int, "The version of the contract")
+	Attribute("state", String, "Current state of the contract")
+	Attribute("name", String, "The name of the contract")
+	Attribute("description", String, "The description of the contract")
+	Attribute("created_by", String, "Identifier of who created the contract negotiation")
+	Attribute("created_at", String, "Created at")
+	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("contract_data", Any, "The data of that contract")
+
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
 var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
@@ -92,8 +124,13 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
-	Required("did", "state", "created_by", "created_at", "updated_at")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
 var ContractReviewTaskItem = Type("ContractReviewTaskItem", func() {
@@ -103,7 +140,7 @@ var ContractReviewTaskItem = Type("ContractReviewTaskItem", func() {
 	Attribute("reviewer", String, "The reviewer of the contract")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "reviewer", "created_at")
+	Required("did", "state", "reviewer", "created_at", "contract_version")
 })
 
 var ContractApprovalTaskItem = Type("ContractApprovalTaskItem", func() {
@@ -113,7 +150,7 @@ var ContractApprovalTaskItem = Type("ContractApprovalTaskItem", func() {
 	Attribute("approver", String, "The approver for the contract")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "approver", "created_at")
+	Required("did", "state", "approver", "created_at", "contract_version")
 })
 
 var ContractNegotiationTaskItem = Type("ContractNegotiationTaskItem", func() {
@@ -123,7 +160,7 @@ var ContractNegotiationTaskItem = Type("ContractNegotiationTaskItem", func() {
 	Attribute("negotiator", String, "The negotiator for the contract")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "negotiator", "created_at")
+	Required("did", "state", "negotiator", "created_at", "contract_version")
 })
 
 var ContractRetrieveResponse = Type("ContractRetrieveResponse", func() {
@@ -168,7 +205,7 @@ var ContractNegotiationItem = Type("ContractNegotiationItem", func() {
 
 	Attribute("negotiation_decisions", ArrayOf(ContractNegotiationDecisionItem), "List with decisions for that negotiation")
 
-	Required("id", "change_request", "created_by", "created_at", "negotiation_decisions")
+	Required("id", "change_request", "created_by", "created_at", "negotiation_decisions", "contract_version")
 })
 
 var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
@@ -182,11 +219,18 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+
 	Attribute("contract_data", Any, "The data of that contract")
 
 	Attribute("negotiations", ArrayOf(ContractNegotiationItem), "List with negotiations for that contract")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations", "contract_version")
 })
 
 var ContractReviewRequest = Type("ContractReviewRequest", func() {
@@ -230,11 +274,18 @@ var ContractSearchResponse = Type("ContractSearchResponse", func() {
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
 
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+
+	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
+
 	Attribute("created_at", String, "The timestamp when the contract template was created")
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_at", "updated_at", "contract_version")
 })
 
 var ContractNegotiationRequest = Type("ContractNegotiationRequest", func() {
@@ -618,6 +669,37 @@ var _ = Service("ContractWorkflowEngine", func() {
 		})
 	})
 
+	// GET /contract/history/{did}
+	Method("retrieve_history_by_id", func() {
+		Description("fetch history of a contract")
+		Meta("dcs:cwe:components", "")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+		})
+
+		Payload(ContractHistoryRetrieveByIDRequest)
+		Result(ArrayOfRequired(ContractHistoryRetrieveByIDResponse))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/history/{did}")
+			Param("did")
+
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
 	Method("search", func() {
 		Description("locate contracts by data or state. filter/search across lifecycle states.")
 		Meta("dcs:requirements", "DCS-IR-CWE-07", "DCS-IR-CWE-11")
@@ -625,8 +707,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Meta("dcs:ui", "Contract Review", "Contract Management Dashboard")
 
 		Security(JWTAuth, func() {
+			Scope("Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
 		})

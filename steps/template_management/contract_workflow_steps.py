@@ -4,7 +4,7 @@
 from behave import given, then, when
 
 from steps.support.services.contract_service import ContractService
-from support.api_client import (
+from steps.support.api_client import (
     contract_approve_url,
     contract_create_url,
     contract_negotiate_url,
@@ -18,7 +18,7 @@ from support.api_client import (
     put_json,
 )
 
-from support.services.auth_service import AuthService
+from steps.support.services.auth_service import AuthService
 
 
 @given('contract "{name}" is in "Draft" status')
@@ -435,7 +435,7 @@ def step_then_draft_contract_generated(context):
     assert state == "DRAFT", f"Expected new contract to be in DRAFT state, got '{state}'"
 
 
-@then("a contract is created linked to the template")
+@then("a contract is created")
 def step_then_contract_linked_to_template(context):
     assert context.requests_response.status_code == 200, (
         f"Contract generation failed: {context.requests_response.status_code} — {context.requests_response.text}"

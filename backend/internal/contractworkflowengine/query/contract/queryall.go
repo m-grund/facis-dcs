@@ -2,12 +2,14 @@ package contract
 
 import (
 	"context"
+	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -23,20 +25,25 @@ type GetAllMetadataQry struct {
 }
 
 type MetadataItem struct {
-	DID             string
-	ContractVersion *int
-	Name            *string
-	Description     *string
-	State           contractstate.ContractState
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	MetaData        datatype.JSON
-	CreatedBy       string
+	DID                string
+	ContractVersion    int
+	Name               *string
+	Description        *string
+	State              contractstate.ContractState
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	MetaData           datatype.JSON
+	CreatedBy          string
+	StartDate          *time.Time
+	ExpDate            *time.Time
+	ExpPolicy          *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod    *int
+	ResponsiblePersons *db.ResponsiblePersons
 }
 
 type ReviewTaskItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           reviewtaskstate.ReviewTaskState
 	Reviewer        string
 	CreatedAt       time.Time
@@ -44,7 +51,7 @@ type ReviewTaskItem struct {
 
 type ApprovalTaskItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           approvaltaskstate.ApprovalTaskState
 	Approver        string
 	CreatedAt       time.Time
@@ -52,7 +59,7 @@ type ApprovalTaskItem struct {
 
 type NegotiatorTaskItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           negotiationtaskstate.NegotiationTaskState
 	Negotiator      string
 	CreatedAt       time.Time
@@ -127,15 +134,29 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			return nil, fmt.Errorf("could not create contract state: %w", err)
 		}
 
+		var expPolicy *expirationpolicy.ExpirationPolicy
+		if data.ExpPolicy != nil {
+			policy, err := expirationpolicy.NewExpirationPolicy(*data.ExpPolicy)
+			if err != nil {
+				return nil, contractworkflowengine.MakeInternalError(err)
+			}
+			expPolicy = &policy
+		}
+
 		metadata := MetadataItem{
-			DID:             data.DID,
-			ContractVersion: data.ContractVersion,
-			State:           state,
-			Name:            data.Name,
-			Description:     data.Description,
-			CreatedBy:       data.CreatedBy,
-			CreatedAt:       data.CreatedAt,
-			UpdatedAt:       data.UpdatedAt,
+			DID:                data.DID,
+			ContractVersion:    data.ContractVersion,
+			State:              state,
+			Name:               data.Name,
+			Description:        data.Description,
+			CreatedBy:          data.CreatedBy,
+			CreatedAt:          data.CreatedAt,
+			UpdatedAt:          data.UpdatedAt,
+			StartDate:          data.StartDate,
+			ExpDate:            data.ExpDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    data.ExpNoticePeriod,
+			ResponsiblePersons: data.ResponsiblePersons,
 		}
 		contractItems = append(contractItems, metadata)
 
@@ -151,7 +172,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata, exists := didToMetadata[data.DID]
-		var contractVersion *int
+		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}
@@ -174,7 +195,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata, exists := didToMetadata[data.DID]
-		var contractVersion *int
+		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}
@@ -197,7 +218,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata, exists := didToMetadata[data.DID]
-		var contractVersion *int
+		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}

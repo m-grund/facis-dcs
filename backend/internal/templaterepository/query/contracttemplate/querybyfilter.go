@@ -17,27 +17,28 @@ import (
 
 type GetAllMetadataByFilterQry struct {
 	RetrievedBy    string
-	DID            *string
-	DocumentNumber *string
-	Version        *int
+	DID            string
+	DocumentNumber string
+	Version        int
 	State          *contracttemplatestate.ContractTemplateState
 	TemplateType   *contracttemplatetype.ContractTemplateType
-	Name           *string
-	Description    *string
-	TemplateData   *string
+	Name           string
+	Description    string
+	TemplateData   string
 }
 
 type GetAllMetadataByFilterResult struct {
-	DID            string
-	DocumentNumber *string
-	Version        *int
-	State          contracttemplatestate.ContractTemplateState
-	TemplateType   contracttemplatetype.ContractTemplateType
-	Name           *string
-	Description    *string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	MetaData       datatype.JSON
+	DID                string
+	DocumentNumber     *string
+	Version            int
+	State              contracttemplatestate.ContractTemplateState
+	TemplateType       contracttemplatetype.ContractTemplateType
+	Name               *string
+	Description        *string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ResponsiblePersons *db.ResponsiblePersons
+	MetaData           datatype.JSON
 }
 
 type GetAllMetaDataByFilterHandler struct {
@@ -79,7 +80,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		return nil, fmt.Errorf("could not read all contract templates: %w", err)
 	}
 
-	evt := templateevents.RetrieveAllEvent{
+	evt := templateevents.SearchEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 	}
@@ -107,15 +108,16 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		}
 
 		result[i] = GetAllMetadataByFilterResult{
-			DID:            data.DID,
-			DocumentNumber: data.DocumentNumber,
-			Version:        data.Version,
-			State:          ctState,
-			TemplateType:   ctType,
-			Name:           data.Name,
-			Description:    data.Description,
-			CreatedAt:      data.CreatedAt,
-			UpdatedAt:      data.UpdatedAt,
+			DID:                data.DID,
+			DocumentNumber:     data.DocumentNumber,
+			Version:            data.Version,
+			State:              ctState,
+			TemplateType:       ctType,
+			Name:               data.Name,
+			Description:        data.Description,
+			CreatedAt:          data.CreatedAt,
+			UpdatedAt:          data.UpdatedAt,
+			ResponsiblePersons: data.ResponsiblePersons,
 		}
 	}
 

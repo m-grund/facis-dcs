@@ -3,9 +3,13 @@ package negotiationmerging
 import "encoding/json"
 
 type ChangeRequest struct {
-	Name         *string       `json:"name"`
-	Description  *string       `json:"description"`
-	ContractData *ContractData `json:"contract_data"`
+	Name            *string       `json:"name"`
+	Description     *string       `json:"description"`
+	ContractData    *ContractData `json:"contract_data"`
+	StartDate       *string       `json:"start_date"`
+	ExpDate         *string       `json:"exp_date,omitempty"`
+	ExpNoticePeriod *int          `json:"exp_notice_period,omitempty"`
+	ExpPolicy       *string       `json:"exp_policy,omitempty"`
 }
 
 type ContractData struct {

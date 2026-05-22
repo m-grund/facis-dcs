@@ -1,8 +1,9 @@
 import re
 
+from docutils.nodes import description
 from requests import get
 
-from steps.support.api_client import get_with_headers, post_json, template_approve_url, template_create_url, template_retrieve_by_id_url, template_submit_url, template_verify_url
+from steps.support.api_client import get_with_headers, post_json, template_approve_url, template_create_url, template_retrieve_by_id_url, template_retrieve_url, template_submit_url, template_verify_url
 from steps.support.services.auth_service import AuthService
 
 
@@ -25,15 +26,15 @@ class TemplateService:
 
 
     @staticmethod
-    def create_fresh_template(context) -> tuple:
+    def create_fresh_template(context, name="Standard Template", description="BDD auto-created template", title="BDD Standard NDA") -> tuple:
         """Create a Draft template as Template Creator; return (did, updated_at)."""
         headers = AuthService.get_headers_for_roles(["Template Creator"])
         payload = {
-            "template_type": TemplateService.template_type_for_category("Legal"),
-            "name": "BDD Standard NDA",
-            "description": "BDD auto-created template",
+            "template_type": TemplateService.template_type_for_category("legal"),
+            "name": name,
+            "description": description,
             "template_data": {
-                "title": "BDD Standard NDA",
+                "title": title,
                 "clauses": [{"id": "c1", "text": "Confidentiality clause"}],
             },
         }
@@ -68,6 +69,12 @@ class TemplateService:
         return resp.json()
 
     @staticmethod
+    def fetch_all_templates(context, headers=None) -> dict:
+        resp = get_with_headers(context, template_retrieve_url(context), headers=headers)
+        assert resp.status_code == 200, f"Template retrieve failed: {resp.text}"
+        return resp.json()
+
+    @staticmethod
     def template_submit_payload(context, did: str, updated_at: str) -> dict:
         AuthService.get_headers_for_roles(["Template Reviewer"])
         AuthService.get_headers_for_roles(["Template Approver"])
@@ -79,13 +86,55 @@ class TemplateService:
         }
 
     @staticmethod
-    def template_reviewer_submit_payload(context, did: str, updated_at: str) -> dict:
+    def template_update_payload(context, did: str, updated_at: str, name=None, description=None) -> dict:
+        AuthService.get_headers_for_roles(["Template Creator"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "name": name,
+            "description": description,
+        }
+
+    @staticmethod
+    def template_submit_payload_with_flag(context, did: str, updated_at: str, flag: str) -> dict:
+        AuthService.get_headers_for_roles(["Template Reviewer"])
+        AuthService.get_headers_for_roles(["Template Approver"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "reviewers": [AuthService.username_for_roles(["Template Reviewer"])],
+            "approver": AuthService.username_for_roles(["Template Approver"]),
+            "forward_to": flag
+        }
+
+    @staticmethod
+    def template_submit_payload_without_reviewers(context, did: str, updated_at: str) -> dict:
+        AuthService.get_headers_for_roles(["Template Reviewer"])
         AuthService.get_headers_for_roles(["Template Approver"])
         return {
             "did": did,
             "updated_at": updated_at,
             "approver": AuthService.username_for_roles(["Template Approver"]),
-            "forward_to": "approval",
+        }
+
+    @staticmethod
+    def template_submit_payload_without_approver(context, did: str, updated_at: str) -> dict:
+        AuthService.get_headers_for_roles(["Template Reviewer"])
+        AuthService.get_headers_for_roles(["Template Approver"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "reviewers": [AuthService.username_for_roles(["Template Reviewer"])]
+        }
+
+    @staticmethod
+    def template_reviewer_submit_payload(context, did: str, updated_at: str, flag="approval") -> dict:
+        AuthService.get_headers_for_roles(["Template Approver"])
+        return {
+            "did": did,
+            "updated_at": updated_at,
+            "approver": AuthService.username_for_roles(["Template Approver"]),
+            "forward_to": flag,
         }
 
     @staticmethod
@@ -119,6 +168,21 @@ class TemplateService:
             context,
             template_submit_url(context),
             TemplateService.template_reviewer_submit_payload(context, did, updated_at),
+            headers=headers,
+        )
+        assert resp.status_code == 200, f"Template review submit failed: {resp.text}"
+        return TemplateService.fetch_template(context, did, headers=headers).get("updated_at")
+
+    @staticmethod
+    def do_recommend_for_rejected(context, did: str, updated_at: str) -> str:
+        """Submit reviewer recommendation and advance review workflow."""
+        # Backend requires verification before reviewer recommendation submit.
+        updated_at = TemplateService.do_verify(context, did, updated_at)
+        headers = AuthService.get_headers_for_roles(["Template Reviewer"])
+        resp = post_json(
+            context,
+            template_submit_url(context),
+            TemplateService.template_reviewer_submit_payload(context, did, updated_at, "draft"),
             headers=headers,
         )
         assert resp.status_code == 200, f"Template review submit failed: {resp.text}"

@@ -23,7 +23,7 @@ type SubmitCmd struct {
 	UpdatedAt   time.Time
 	SubmittedBy string
 	Reviewers   []string
-	Approver    *string
+	Approvers   []string
 	Negotiators []string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
@@ -65,15 +65,17 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 		}
 	}
 
-	data := db.ApprovalTaskData{
-		DID:       cmd.DID,
-		CreatedBy: cmd.SubmittedBy,
-		Approver:  *cmd.Approver,
-		State:     reviewtaskstate.Open.String(),
-	}
-	_, err := atRepo.Create(ctx, tx, data)
-	if err != nil {
-		return fmt.Errorf("could not create approval task: %w", err)
+	for _, approver := range cmd.Approvers {
+		data := db.ApprovalTaskData{
+			DID:       cmd.DID,
+			CreatedBy: cmd.SubmittedBy,
+			Approver:  approver,
+			State:     reviewtaskstate.Open.String(),
+		}
+		_, err := atRepo.Create(ctx, tx, data)
+		if err != nil {
+			return fmt.Errorf("could not create approval task: %w", err)
+		}
 	}
 
 	return nil
@@ -96,6 +98,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
+	var responsiblePersons *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
@@ -111,11 +114,29 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no negotiators provided")
 		}
 
-		if cmd.Approver == nil || len(*cmd.Approver) == 0 {
-			return errors.New("no approver provided")
+		if len(cmd.Approvers) == 0 {
+			return errors.New("no approvers provided")
 		}
 
-		err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
+		respPersons := db.ResponsiblePersons{
+			Creator:     processData.CreatedBy,
+			Reviewers:   cmd.Reviewers,
+			Approvers:   cmd.Approvers,
+			Negotiators: cmd.Negotiators,
+		}
+		anyRespPerson := any(respPersons)
+		responsiblePersons = &anyRespPerson
+
+		updateData := db.ContractUpdateData{
+			DID:                cmd.DID,
+			ResponsiblePersons: &respPersons,
+		}
+		err := h.CRepo.Update(ctx, tx, updateData)
+		if err != nil {
+			return fmt.Errorf("could not update contract: %w", err)
+		}
+
+		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
 		if err != nil {
 			return err
 		}
@@ -183,20 +204,18 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			}
 
 			if hasNegotiations {
-				err = negotiationmerging.MergeChangeRequests(ctx, tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
+
+				err = h.CRepo.CreateHistoryEntryForDID(ctx, tx, processData.DID)
+				if err != nil {
+					return fmt.Errorf("could not create history entry for did %s: %w", cmd.DID, err)
+				}
+
+				updatedData, err := negotiationmerging.MergeChangeRequests(ctx, tx, h.CRepo, h.NRepo, cmd.DID, processData.ContractVersion)
 				if err != nil {
 					return fmt.Errorf("could not merge change requests: %w", err)
 				}
 
-				newVersion := 1
-				if processData.ContractVersion != nil {
-					newVersion = *processData.ContractVersion + 1
-				}
-
-				err = h.CRepo.Update(ctx, tx, db.ContractUpdateData{
-					DID:             cmd.DID,
-					ContractVersion: &newVersion,
-				})
+				err = h.CRepo.Update(ctx, tx, *updatedData)
 				if err != nil {
 					return fmt.Errorf("could not update contract version: %w", err)
 				}
@@ -204,7 +223,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 				evt := contractevents.IncreaseContractVersionEvent{
 					DID:                cmd.DID,
 					OldContractVersion: processData.ContractVersion,
-					NewContractVersion: &newVersion,
+					NewContractVersion: processData.ContractVersion + 1,
 					SubmittedBy:        cmd.SubmittedBy,
 					OccurredAt:         time.Now().UTC(),
 				}
@@ -304,14 +323,15 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		evt := contractevents.SubmitEvent{
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			SubmittedBy:     cmd.SubmittedBy,
-			PreviousState:   processData.State,
-			NewState:        nextState.String(),
-			ActionFlag:      cmd.ActionFlag,
-			Comments:        cmd.Comments,
-			OccurredAt:      time.Now().UTC(),
+			DID:                cmd.DID,
+			ContractVersion:    processData.ContractVersion,
+			SubmittedBy:        cmd.SubmittedBy,
+			PreviousState:      processData.State,
+			NewState:           nextState.String(),
+			ActionFlag:         cmd.ActionFlag,
+			Comments:           cmd.Comments,
+			OccurredAt:         time.Now().UTC(),
+			ResponsiblePersons: responsiblePersons,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 		if err != nil {

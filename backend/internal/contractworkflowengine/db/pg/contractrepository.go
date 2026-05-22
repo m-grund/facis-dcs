@@ -16,11 +16,6 @@ import (
 type PostgresContractRepo struct {
 }
 
-func (r *PostgresContractRepo) ExpireOutdatedContracts(ctx context.Context, tx *sqlx.Tx) (int64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) (*time.Time, error) {
 	statement := `
         INSERT INTO contracts (
@@ -39,10 +34,63 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 	return &createdAt, nil
 }
 
+func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
+	statement := `
+        INSERT INTO contract_history 
+            (did, state, name, description, created_by, created_at, updated_at, 
+             contract_version, contract_data, start_date, exp_date, exp_policy, 
+             exp_notice_period, responsible_persons)
+        SELECT 
+            did, state, name, description, created_by, created_at, updated_at, 
+            contract_version, contract_data, start_date, exp_date, exp_policy, 
+            exp_notice_period, responsible_persons
+        FROM contracts_effective 
+        WHERE did = $1
+    `
+	_, err := tx.ExecContext(ctx, statement, did)
+	return err
+}
+
+func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractHistory, error) {
+	query := `
+        SELECT did, state, name, description,
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contract_history WHERE did = $1
+        ORDER BY contract_version DESC NULLS LAST
+    	LIMIT 1
+    `
+	var ct db.ContractHistory
+	err := tx.GetContext(ctx, &ct, query, did)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("contract with DID %s not found", did)
+		}
+		return nil, err
+	}
+	return &ct, nil
+}
+
+func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
+	query := `
+        SELECT did, state, name, description,
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contract_history WHERE did = $1
+    `
+	var ct []db.ContractHistory
+	err := tx.SelectContext(ctx, &ct, query, did)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []db.ContractHistory{}, fmt.Errorf("contract with DID %s not found", did)
+		}
+		return []db.ContractHistory{}, err
+	}
+	return ct, nil
+}
+
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version, contract_data
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
         FROM contracts_effective WHERE did = $1
     `
 	var ct db.Contract
@@ -58,8 +106,8 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
-        FROM contracts_effective
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contracts_effective_metadata
     `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
@@ -71,8 +119,8 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx)
 
 func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
-        FROM contracts_effective
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contracts_effective_metadata
     `
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
@@ -85,15 +133,15 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 	var cts []db.ContractMetadata
 	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
-		return []db.ContractMetadata{}, err
+		return nil, err
 	}
 	return cts, nil
 }
 
 func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
-        SELECT did, state, updated_at, created_by, contract_version
-        FROM contracts_effective WHERE did = $1
+        SELECT did, state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
+        FROM contracts_effective_process_data WHERE did = $1
     `
 	var processData db.ContractProcessData
 	err := tx.GetContext(ctx, &processData, query, did)
@@ -106,9 +154,26 @@ func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx,
 	return &processData, nil
 }
 
+func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	query := `
+    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+    FROM contracts
+    WHERE exp_date IS NOT NULL
+    AND exp_date < NOW()
+    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED')
+`
+	var cts []db.ContractMetadata
+	err := tx.SelectContext(ctx, &cts, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return cts, nil
+}
+
 func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
-        UPDATE contracts_effective SET state = $2
+        UPDATE contracts SET state = $2
         WHERE did = $1
     `
 	_, err := tx.ExecContext(ctx, statement, did, state)
@@ -129,14 +194,14 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	var params []interface{}
 	paramIndex := 1
 
-	if values.DID != nil {
+	if len(values.DID) > 0 {
 		conditions += ` did = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.DID)
+		params = append(params, values.DID)
 		paramIndex++
 	}
-	if values.ContractVersion != nil {
+	if values.ContractVersion > 0 {
 		conditions += ` contract_version = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.ContractVersion)
+		params = append(params, values.ContractVersion)
 		paramIndex++
 	}
 	if len(values.State) > 0 {
@@ -145,19 +210,19 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, state)
 		paramIndex++
 	}
-	if values.Name != nil {
+	if len(values.Name) > 0 {
 		conditions += ` name ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Name+"%")
+		params = append(params, "%"+values.Name+"%")
 		paramIndex++
 	}
-	if values.Description != nil {
+	if len(values.Description) > 0 {
 		conditions += ` description ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Description+"%")
+		params = append(params, "%"+values.Description+"%")
 		paramIndex++
 	}
-	if values.ContractData != nil {
+	if len(values.ContractData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, *values.ContractData)
+		params = append(params, values.ContractData)
 		paramIndex++
 	}
 
@@ -170,7 +235,7 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 }
 
 func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
-	queryBase := `UPDATE contracts_effective SET `
+	queryBase := `UPDATE contracts SET `
 	var columns []string
 	var params []interface{}
 
@@ -191,8 +256,20 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
 		addParam("contract_data", data.ContractData)
 	}
-	if data.ContractVersion != nil {
-		addParam("contract_version", data.ContractVersion)
+	if data.StartDate != nil {
+		addParam("start_date", data.StartDate)
+	}
+	if data.ExpDate != nil {
+		addParam("exp_date", data.ExpDate)
+	}
+	if data.ExpPolicy != nil {
+		addParam("exp_policy", data.ExpPolicy)
+	}
+	if data.ExpNoticePeriod != nil {
+		addParam("exp_notice_period", data.ExpNoticePeriod)
+	}
+	if data.ResponsiblePersons != nil {
+		addParam("responsible_persons", data.ResponsiblePersons)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")
