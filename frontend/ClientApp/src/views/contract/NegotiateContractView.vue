@@ -28,10 +28,9 @@ import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const router = useRouter()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
@@ -210,7 +209,7 @@ const submitContract = async () => {
       } else {
         const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
         errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
-        router.go(0)
+        await loadContract()
       }
     }
   } catch (err) {
