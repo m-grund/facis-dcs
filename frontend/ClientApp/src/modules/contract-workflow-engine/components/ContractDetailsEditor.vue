@@ -86,8 +86,7 @@
               <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Creator</li>
               <li class="list-row py-0">{{ contract.responsible_persons?.creator }}</li>
             </ul>
-            <div>
-              <ul class="list col-start-2 row-start-2">
+            <ul class="list col-start-2 row-start-1">
               <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Approvers:</li>
               <li
                 v-for="(approver, i) in contract.responsible_persons?.approvers"
@@ -97,7 +96,6 @@
                 {{ approver }}
               </li>
             </ul>
-            </div>
             <ul class="list col-start-1 row-start-2">
               <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Negotiators:</li>
               <li
@@ -127,8 +125,8 @@
 
 <script setup lang="ts">
 import type { Contract } from '@/models/contract/contract'
-import { ContractState } from '@/types/contract-state';
-import { ref, computed } from 'vue'
+import { ContractState } from '@/types/contract-state'
+import { computed, ref } from 'vue'
 
 const props = defineProps<{
   contract: Contract
@@ -151,5 +149,7 @@ interface ContractDetailData {
 
 const originalContract = ref(Object.assign({}, props.contract))
 
-const showResponsiblities = computed(() => !([ContractState.draft, ContractState.terminated] as ContractState[]).includes(props.contract.state))
+const showResponsiblities = computed(
+  () => !([ContractState.draft, ContractState.terminated] as ContractState[]).includes(props.contract.state),
+)
 </script>
