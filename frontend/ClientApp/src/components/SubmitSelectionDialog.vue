@@ -95,6 +95,12 @@ function onModalClose() {
   isLoading.value = true
 }
 
+function isRoleDisabled(role: UserRole | 'CONTRACT_NEGOTIATOR', userId: string) {
+  if (props.dialogType === 'contract') return false
+  const roles = Object.values(selectedRole.value)
+  return role === approveRole.value && selectedRole.value[userId] !== role && roles.includes(role)
+}
+
 function onCheckboxChange(event: Event, userId: string) {
   const checked = (event.target as HTMLInputElement).checked
   if (!checked) {
@@ -142,6 +148,7 @@ const roleInfoText = computed(() => {
                 v-for="role in user.availableRoles"
                 :key="role"
                 :value="role"
+                :disabled="isRoleDisabled(role, user.id)"
               >
                 {{ toProperCase(role) }}
               </option>

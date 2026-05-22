@@ -100,12 +100,14 @@ const changeExpNoticePeriod = computed(
 )
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
-  return (
-    contract.value?.contract_data &&
-    !arrayEqual(
-      contractContentValuesStore.semanticConditionValues.map((v) => v.parameterValue),
-      contract.value.contract_data.semanticConditionValues.map((v) => v.parameterValue),
-    )
+  const storedValues = contractContentValuesStore.semanticConditionValues
+  const contractValues = contract.value?.contract_data?.semanticConditionValues
+  
+  if (!storedValues?.length || !contractValues?.length) return false
+  
+  return !arrayEqual(
+    storedValues.map((v) => v.parameterValue),
+    contractValues.map((v) => v.parameterValue),
   )
 })
 
@@ -216,10 +218,11 @@ const submitContract = async () => {
   }
 }
 
-const hasOpenDecisions = computed(() =>
-  contract.value?.negotiations?.every((negotiation) =>
-    negotiation.negotiation_decisions.every((decision) => !!decision.decision),
-  ),
+const hasOpenDecisions = computed(
+  () =>
+    contract.value?.negotiations?.some((negotiation) =>
+      negotiation.negotiation_decisions.some((decision) => !decision.decision),
+    ) ?? false,
 )
 
 onMounted(() => {
@@ -478,7 +481,7 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || hasChangeRequest || !hasOpenDecisions"
+          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
