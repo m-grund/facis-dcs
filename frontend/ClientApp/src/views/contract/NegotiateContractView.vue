@@ -28,9 +28,10 @@ import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
@@ -102,9 +103,9 @@ const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contr
 const changedContractData = computed(() => {
   const storedValues = contractContentValuesStore.semanticConditionValues
   const contractValues = contract.value?.contract_data?.semanticConditionValues
-  
+
   if (!storedValues?.length || !contractValues?.length) return false
-  
+
   return !arrayEqual(
     storedValues.map((v) => v.parameterValue),
     contractValues.map((v) => v.parameterValue),
@@ -209,6 +210,7 @@ const submitContract = async () => {
       } else {
         const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
         errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
+        router.go(0)
       }
     }
   } catch (err) {
@@ -220,7 +222,7 @@ const submitContract = async () => {
 
 const hasOpenDecisions = computed(
   () =>
-    !contract.value?.negotiations?.some((negotiation) =>
+    contract.value?.negotiations?.some((negotiation) =>
       negotiation.negotiation_decisions.some((decision) => !decision.decision),
     ) ?? false,
 )
@@ -258,6 +260,7 @@ function applyContractDataToDraft(contractData?: unknown) {
 const tabContent = useTemplateRef<HTMLElement>('tabContent')
 
 const originalSemanticConditionValues = ref<SemanticConditionValue[]>([])
+const originalValuesWereCached = ref(false)
 
 const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null) => {
   if (!contract.value) return
@@ -281,7 +284,10 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     : null
 
   if (compareChangesData.value && negotiation) {
-    originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+    if (!originalValuesWereCached.value) {
+      originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+      originalValuesWereCached.value = true
+    }
     const negotiationValues = negotiation.change_request.contract_data?.semanticConditionValues ?? []
 
     const originalValuesMap = new Map(
@@ -327,6 +333,7 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     scrollStore.scrollToTop()
   } else {
     contractContentValuesStore.reset({ semanticConditionValues: originalSemanticConditionValues.value })
+    originalValuesWereCached.value = false
     requestAnimationFrame(() => {
       const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
       inputs.forEach((input) => {
@@ -481,7 +488,7 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions"
+          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
