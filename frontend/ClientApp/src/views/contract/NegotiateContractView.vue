@@ -220,7 +220,7 @@ const submitContract = async () => {
 
 const hasOpenDecisions = computed(
   () =>
-    contract.value?.negotiations?.some((negotiation) =>
+    !contract.value?.negotiations?.some((negotiation) =>
       negotiation.negotiation_decisions.some((decision) => !decision.decision),
     ) ?? false,
 )
