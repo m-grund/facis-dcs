@@ -35,7 +35,7 @@ KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
 
-.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help
+.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
 	@echo "make setup_dev    # Create venv and install bdd-executor"

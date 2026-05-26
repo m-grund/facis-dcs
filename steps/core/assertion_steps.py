@@ -41,6 +41,19 @@ def step_when_public_request(context, method, endpoint):
         context.requests_response = _requests.post(url, json={}, timeout=context.http_timeout_seconds)
     else:
         raise NotImplementedError(f"Method {method} not supported in public endpoint step")
+    
+
+@when('the system sends "{method}" request to internal endpoint "{endpoint}"')
+def step_when_internal_request(context, method, endpoint):
+    # For internal endpoints, we ignore any path in the base URL and construct the URL directly from the endpoint to ensure it targets the correct service.
+    url = "/".join(context.base_url.split("/", 3)[:3]) + endpoint
+    m = method.upper()
+    if m == "GET":
+        context.requests_response = _requests.get(url, timeout=context.http_timeout_seconds)
+    elif m == "POST":
+        context.requests_response = _requests.post(url, json={}, timeout=context.http_timeout_seconds)
+    else:
+        raise NotImplementedError(f"Method {method} not supported in internal endpoint step")
 
 
 @then("the response status is {status_code:d}")
