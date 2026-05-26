@@ -20,6 +20,8 @@ type ContractData struct {
 	DocumentBlocks          []DocumentBlock          `json:"documentBlocks"`
 	DocumentOutline         []DocumentOutlineNode    `json:"documentOutline"`
 	SemanticConditions      []SemanticCondition      `json:"semanticConditions"`
+	SemanticRules           []SemanticRule           `json:"semanticRules"`
+	ContractStatements      *ContractStatementSet    `json:"contractStatements,omitempty"`
 	TemplateDataVersion     int                      `json:"templateDataVersion"`
 	SubTemplateSnapshots    []SubTemplateSnapshot    `json:"subTemplateSnapshots"`
 	SemanticConditionValues []SemanticConditionValue `json:"semanticConditionValues"`
@@ -62,6 +64,24 @@ type SemanticConditionValue struct {
 	ParameterName  string          `json:"parameterName"`
 	ParameterValue json.RawMessage `json:"parameterValue"`
 }
+
+type SemanticRule struct {
+	Type         string          `json:"@type,omitempty"`
+	RuleID       string          `json:"ruleId"`
+	LeftOperand  string          `json:"leftOperand"`
+	Operator     string          `json:"operator"`
+	RightOperand json.RawMessage `json:"rightOperand,omitempty"`
+	Severity     string          `json:"severity,omitempty"`
+	Source       string          `json:"source,omitempty"`
+	Message      string          `json:"message,omitempty"`
+}
+
+type ContractStatementSet struct {
+	Type       string              `json:"@type"`
+	Statements []ContractStatement `json:"statements"`
+}
+
+type ContractStatement map[string]any
 
 type SubTemplateSnapshot struct {
 	DID          string       `json:"did"`

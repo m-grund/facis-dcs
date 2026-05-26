@@ -337,6 +337,12 @@ dcs:semanticPath a rdf:Property ;
   rdfs:label "Semantic Path" ;
   rdfs:range xsd:string .
 
+dcs:statementField a rdf:Property ;
+  rdfs:label "Contract Statement Field" ;
+  rdfs:comment "Target field used when deriving normalized machine-readable contract statements from semantic condition values." ;
+  rdfs:domain dcs:DomainField ;
+  rdfs:range xsd:string .
+
 dcs:blockCatalogueId a rdf:Property ;
   rdfs:label "Block Catalogue ID" ;
   rdfs:range xsd:string .
@@ -961,12 +967,14 @@ dcst:constraint-ip-ownership a dcs:ValueConstraint ;
 
 dcst:field-company-legalName a dcs:DomainField ;
   dcs:semanticPath "company.legalName" ;
+  dcs:statementField "party.legalName" ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Legal Name" .
 
 dcst:field-company-role a dcs:DomainField ;
   dcs:semanticPath "company.role" ;
+  dcs:statementField "party.role" ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-contract-party-role ;
@@ -1034,6 +1042,7 @@ dcst:field-company-location-region a dcs:DomainField ;
 
 dcst:field-company-location-country a dcs:DomainField ;
   dcs:semanticPath "company.location.country" ;
+  dcs:statementField "party.country" ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
@@ -1048,12 +1057,14 @@ dcst:field-contract-type a dcs:DomainField ;
 
 dcst:field-contract-title a dcs:DomainField ;
   dcs:semanticPath "contract.title" ;
+  dcs:statementField "contract.title" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Contract Title" .
 
 dcst:field-contract-jurisdiction a dcs:DomainField ;
   dcs:semanticPath "contract.jurisdiction" ;
+  dcs:statementField "contract.jurisdiction" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
@@ -1074,18 +1085,21 @@ dcst:field-contract-disputeResolution-venue a dcs:DomainField ;
 
 dcst:field-contract-validity-startDate a dcs:DomainField ;
   dcs:semanticPath "contract.validity.startDate" ;
+  dcs:statementField "contract.startDate" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "date" ;
   rdfs:label "Validity Start Date" .
 
 dcst:field-contract-validity-endDate a dcs:DomainField ;
   dcs:semanticPath "contract.validity.endDate" ;
+  dcs:statementField "contract.endDate" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "date" ;
   rdfs:label "Validity End Date" .
 
 dcst:field-contract-effectiveDate a dcs:DomainField ;
   dcs:semanticPath "contract.effectiveDate" ;
+  dcs:statementField "contract.effectiveDate" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "date" ;
   rdfs:label "Effective Date" .
@@ -1104,12 +1118,14 @@ dcst:field-contract-termination-noticePeriodDays a dcs:DomainField ;
 
 dcst:field-contract-payment-amount a dcs:DomainField ;
   dcs:semanticPath "contract.payment.amount" ;
+  dcs:statementField "payment.amount" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "decimal" ;
   rdfs:label "Payment Amount" .
 
 dcst:field-contract-payment-currency a dcs:DomainField ;
   dcs:semanticPath "contract.payment.currency" ;
+  dcs:statementField "payment.currency" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso4217-currency ;
@@ -1117,6 +1133,7 @@ dcst:field-contract-payment-currency a dcs:DomainField ;
 
 dcst:field-contract-payment-dueDate a dcs:DomainField ;
   dcs:semanticPath "contract.payment.dueDate" ;
+  dcs:statementField "payment.dueDate" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "date" ;
   rdfs:label "Payment Due Date" .
@@ -1211,6 +1228,7 @@ dcst:field-service-deliverable-acceptanceCriteria a dcs:DomainField ;
 
 dcst:field-service-sla-availability a dcs:DomainField ;
   dcs:semanticPath "service.sla.availability" ;
+  dcs:statementField "slo.availability" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "decimal" ;
   dcs:hasValueConstraint dcst:constraint-sla-availability-percent ;
@@ -1236,6 +1254,7 @@ dcst:field-service-sla-supportHours a dcs:DomainField ;
 
 dcst:field-signature-requiredLevel a dcs:DomainField ;
   dcs:semanticPath "signature.requiredLevel" ;
+  dcs:statementField "signature.requiredLevel" ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-eidas-signature-level ;
@@ -1243,6 +1262,7 @@ dcst:field-signature-requiredLevel a dcs:DomainField ;
 
 dcst:field-signature-requiredSignerRole a dcs:DomainField ;
   dcs:semanticPath "signature.requiredSignerRole" ;
+  dcs:statementField "signature.requiredSignerRole" ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Required Signer Role" .

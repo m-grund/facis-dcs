@@ -36,6 +36,7 @@ var templateDataAllowedKeys = []string{
 	"templateVariables",
 	"placeholderBindings",
 	"semanticRules",
+	"contractStatements",
 	"sla",
 	"subTemplateSnapshots",
 	"templateDataVersion",

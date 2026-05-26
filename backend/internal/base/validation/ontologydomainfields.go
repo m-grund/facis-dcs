@@ -86,10 +86,11 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 		}
 		subject := ontologySubject(statement)
 		field := domainField{
-			SchemaRef:    schemaRef,
-			Type:         parameterType,
-			DomainPath:   semanticPath,
-			OntologyTerm: expandOntologyResource(subject),
+			SchemaRef:      schemaRef,
+			Type:           parameterType,
+			DomainPath:     semanticPath,
+			OntologyTerm:   expandOntologyResource(subject),
+			StatementField: ontologyString(statement, "dcs:statementField"),
 		}
 		if constraintRef := ontologyResource(statement, "dcs:hasValueConstraint"); constraintRef != "" {
 			constraint, ok := constraints[constraintRef]
@@ -101,6 +102,9 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 			field.Constraint = &copy
 		}
 		fields[semanticPath] = field
+		if alias := legacySemanticPathAlias(semanticPath); alias != "" && alias != semanticPath {
+			fields[alias] = field
+		}
 		fields[subject] = field
 		if field.OntologyTerm != "" {
 			fields[field.OntologyTerm] = field
@@ -110,6 +114,10 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 		return nil, fmt.Errorf("ontology does not define dcs:DomainField entries")
 	}
 	return fields, nil
+}
+
+func legacySemanticPathAlias(value string) string {
+	return strings.ReplaceAll(value, ".", "_")
 }
 
 func expandOntologyResource(value string) string {
