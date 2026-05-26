@@ -225,7 +225,6 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		params = append(params, values.ContractData)
 		paramIndex++
 	}
-
 	l := len(" AND")
 	if len(conditions) > l {
 		conditions = conditions[:len(conditions)-l]
@@ -244,6 +243,9 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 		params = append(params, value)
 	}
 
+	if data.ContractVersion > 0 {
+		addParam("contract_version", data.ContractVersion)
+	}
 	if len(data.State) > 0 {
 		addParam("state", data.State)
 	}

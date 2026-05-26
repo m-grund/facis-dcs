@@ -28,9 +28,10 @@ import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
@@ -88,8 +89,6 @@ const hasChangeRequest = computed(() => {
     changedName.value ||
     changedDescription.value ||
     changedContractData.value ||
-    changedStartDate.value ||
-    changeExpDate.value ||
     changeExpNoticePeriod.value ||
     changeExpPolicy.value
   )
@@ -97,19 +96,19 @@ const hasChangeRequest = computed(() => {
 
 const changedName = computed(() => editedContract.value?.name !== contract.value?.name)
 const changedDescription = computed(() => editedContract.value?.description !== contract.value?.description)
-const changedStartDate = computed(() => editedContract.value?.start_date != contract.value?.start_date)
-const changeExpDate = computed(() => editedContract.value?.exp_date != contract.value?.exp_date)
 const changeExpNoticePeriod = computed(
   () => editedContract.value?.exp_notice_period != contract.value?.exp_notice_period,
 )
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
-  return (
-    contract.value?.contract_data &&
-    !arrayEqual(
-      contractContentValuesStore.semanticConditionValues.map((v) => v.parameterValue),
-      contract.value.contract_data.semanticConditionValues.map((v) => v.parameterValue),
-    )
+  const storedValues = contractContentValuesStore.semanticConditionValues
+  const contractValues = contract.value?.contract_data?.semanticConditionValues
+
+  if (!storedValues?.length || !contractValues?.length) return false
+
+  return !arrayEqual(
+    storedValues.map((v) => v.parameterValue),
+    contractValues.map((v) => v.parameterValue),
   )
 })
 
@@ -172,12 +171,6 @@ const negotiateContractChange = async () => {
     if (changedDescription.value) {
       changeRequest.description = editedContract.value.description
     }
-    if (changedStartDate.value) {
-      changeRequest.start_date = editedContract.value.start_date
-    }
-    if (changeExpDate.value) {
-      changeRequest.exp_date = editedContract.value.exp_date
-    }
     if (changeExpNoticePeriod.value) {
       changeRequest.exp_notice_period = editedContract.value.exp_notice_period
     }
@@ -217,6 +210,7 @@ const submitContract = async () => {
       } else {
         const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
         errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
+        router.go(0)
       }
     }
   } catch (err) {
@@ -226,10 +220,11 @@ const submitContract = async () => {
   }
 }
 
-const hasOpenDecisions = computed(() =>
-  contract.value?.negotiations?.every((negotiation) =>
-    negotiation.negotiation_decisions.every((decision) => !!decision.decision),
-  ),
+const hasOpenDecisions = computed(
+  () =>
+    contract.value?.negotiations?.some((negotiation) =>
+      negotiation.negotiation_decisions.some((decision) => !decision.decision),
+    ) ?? false,
 )
 
 onMounted(() => {
@@ -265,6 +260,7 @@ function applyContractDataToDraft(contractData?: unknown) {
 const tabContent = useTemplateRef<HTMLElement>('tabContent')
 
 const originalSemanticConditionValues = ref<SemanticConditionValue[]>([])
+const originalValuesWereCached = ref(false)
 
 const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null) => {
   if (!contract.value) return
@@ -274,12 +270,6 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
         name: negotiation.change_request.name
           ? `${contract.value.name} -> ${negotiation.change_request.name}`
           : contract.value.name,
-        start_date: negotiation.change_request.start_date
-          ? `${contract.value.start_date?.slice(0, 16)} -> ${negotiation.change_request.start_date?.slice(0, 16)}`
-          : contract.value.start_date,
-        exp_date: negotiation.change_request.exp_date
-          ? `${contract.value.exp_date?.slice(0, 16)} -> ${negotiation.change_request.exp_date?.slice(0, 16)}`
-          : contract.value.exp_date,
         exp_notice_period_str: negotiation.change_request.exp_notice_period
           ? `${contract.value.exp_notice_period} -> ${negotiation.change_request.exp_notice_period}`
           : (contract.value.exp_notice_period?.toString() ?? ''),
@@ -294,7 +284,10 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     : null
 
   if (compareChangesData.value && negotiation) {
-    originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+    if (!originalValuesWereCached.value) {
+      originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+      originalValuesWereCached.value = true
+    }
     const negotiationValues = negotiation.change_request.contract_data?.semanticConditionValues ?? []
 
     const originalValuesMap = new Map(
@@ -340,6 +333,7 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     scrollStore.scrollToTop()
   } else {
     contractContentValuesStore.reset({ semanticConditionValues: originalSemanticConditionValues.value })
+    originalValuesWereCached.value = false
     requestAnimationFrame(() => {
       const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
       inputs.forEach((input) => {
@@ -423,8 +417,6 @@ const exportPdf = async () => {
                   :inserted="{
                     name: compareChangesData?.name,
                     description: compareChangesData?.description,
-                    start_date: compareChangesData?.start_date,
-                    exp_date: compareChangesData?.exp_date,
                     exp_notice_period: compareChangesData?.exp_notice_period_str,
                     exp_policy: compareChangesData?.exp_policy_str,
                   }"
@@ -496,7 +488,7 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn btn-primary flex-1"
-          :disabled="isSubmitting || hasChangeRequest || !hasOpenDecisions"
+          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
