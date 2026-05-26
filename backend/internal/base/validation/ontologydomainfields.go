@@ -19,6 +19,11 @@ var (
 	ontologyDomainFieldIndex = mustLoadOntologyDomainFields()
 )
 
+const (
+	ontologyDCSBase  = "https://w3id.org/facis/dcs/ontology/v1#"
+	ontologyDCSTBase = "https://w3id.org/facis/dcs/taxonomy/v1#"
+)
+
 func mustLoadOntologyDomainFields() map[string]domainField {
 	fields, err := loadOntologyDomainFields()
 	if err != nil {
@@ -79,7 +84,13 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 		if semanticPath == "" || schemaRef == "" || parameterType == "" {
 			return nil, fmt.Errorf("domain field %s requires semanticPath, schemaRef, and parameterType", ontologySubject(statement))
 		}
-		field := domainField{SchemaRef: schemaRef, Type: parameterType}
+		subject := ontologySubject(statement)
+		field := domainField{
+			SchemaRef:    schemaRef,
+			Type:         parameterType,
+			DomainPath:   semanticPath,
+			OntologyTerm: expandOntologyResource(subject),
+		}
 		if constraintRef := ontologyResource(statement, "dcs:hasValueConstraint"); constraintRef != "" {
 			constraint, ok := constraints[constraintRef]
 			if !ok {
@@ -90,11 +101,40 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 			field.Constraint = &copy
 		}
 		fields[semanticPath] = field
+		fields[subject] = field
+		if field.OntologyTerm != "" {
+			fields[field.OntologyTerm] = field
+		}
 	}
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("ontology does not define dcs:DomainField entries")
 	}
 	return fields, nil
+}
+
+func expandOntologyResource(value string) string {
+	switch {
+	case strings.HasPrefix(value, "dcs:"):
+		return ontologyDCSBase + strings.TrimPrefix(value, "dcs:")
+	case strings.HasPrefix(value, "dcst:"):
+		return ontologyDCSTBase + strings.TrimPrefix(value, "dcst:")
+	case strings.HasPrefix(value, "http://"), strings.HasPrefix(value, "https://"):
+		return value
+	default:
+		return value
+	}
+}
+
+func canonicalDomainFieldTerm(value string) string {
+	field, ok := ontologyDomainFieldIndex[value]
+	if ok && field.OntologyTerm != "" {
+		return field.OntologyTerm
+	}
+	return value
+}
+
+func equivalentSemanticPath(left string, right string) bool {
+	return canonicalDomainFieldTerm(left) == canonicalDomainFieldTerm(right)
 }
 
 func ontologyStatements(content string) []string {

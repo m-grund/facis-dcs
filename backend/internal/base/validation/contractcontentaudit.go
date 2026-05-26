@@ -571,7 +571,7 @@ func recursiveSemanticPathValue(current any, semanticPath string) (any, bool) {
 		if pathValue == "" {
 			pathValue, _ = value["dcs:semanticPath"].(string)
 		}
-		if pathValue == semanticPath {
+		if equivalentSemanticPath(pathValue, semanticPath) {
 			for key, found := range value {
 				switch compactTerm(key) {
 				case "value", "hasTargetValue", "targetValue", "actualValue", "hasActualValue":

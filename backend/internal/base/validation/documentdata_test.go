@@ -55,6 +55,9 @@ func TestNormalizeTemplateDataAddsSchemaAndPolicyRefs(t *testing.T) {
 	require.Equal(t, SemanticProfileVersionV1, data["semanticProfile"].(map[string]any)["version"])
 	require.IsType(t, []any{}, data["placeholderBindings"])
 	require.IsType(t, []any{}, data["semanticRules"])
+	condition := data["semanticConditions"].([]any)[0].(map[string]any)
+	param := condition["parameters"].([]any)[0].(map[string]any)
+	require.Equal(t, ontologyDCSTBase+"field-service-sla-availability", param["semanticPath"])
 }
 
 func TestNormalizeTemplateDataRejectsUnknownConditionReference(t *testing.T) {
@@ -127,6 +130,58 @@ func TestNormalizeContractDataAcceptsTypedSemanticValues(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestNormalizeContractDataAcceptsConditionsFromEmbeddedTemplateSnapshot(t *testing.T) {
+	raw, err := datatype.NewJSON(map[string]any{
+		"documentOutline": []any{
+			map[string]any{"blockId": "root", "isRoot": true, "children": []any{"approved-1"}},
+			map[string]any{"blockId": "approved-1", "isRoot": false, "children": []any{"approved-1::clause-1"}},
+			map[string]any{"blockId": "approved-1::clause-1", "isRoot": false, "children": []any{}},
+		},
+		"documentBlocks": []any{
+			map[string]any{"blockId": "approved-1", "type": "APPROVED_TEMPLATE", "templateId": "template-1", "version": 1},
+			map[string]any{"blockId": "approved-1::clause-1", "type": "CLAUSE", "text": "Company {{cond-1.company_legalName}}", "conditionIds": []any{"cond-1"}},
+		},
+		"semanticConditions": []any{},
+		"subTemplateSnapshots": []any{
+			map[string]any{
+				"did": "template-1",
+				"template_data": map[string]any{
+					"semanticConditions": []any{
+						map[string]any{
+							"conditionId":   "cond-1",
+							"conditionName": "Company",
+							"schemaVersion": "v1",
+							"parameters": []any{
+								map[string]any{
+									"parameterName": "company_legalName",
+									"type":          "string",
+									"schemaRef":     SchemaPartyV1,
+									"semanticPath":  "company.legalName",
+									"isRequired":    true,
+									"operators":     []any{},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"semanticConditionValues": []any{
+			map[string]any{
+				"blockId":        "approved-1::clause-1",
+				"conditionId":    "cond-1",
+				"parameterName":  "company_legalName",
+				"parameterValue": "Example GmbH",
+			},
+		},
+		"customMetaData": []any{},
+	})
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(&raw, true)
+	require.NoError(t, err)
+}
+
 func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
@@ -152,6 +207,7 @@ func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(*normalized, &result))
 	normalizedCondition := result["semanticConditions"].([]any)[0].(map[string]any)
 	normalizedParam := normalizedCondition["parameters"].([]any)[0].(map[string]any)
+	require.Equal(t, ontologyDCSTBase+"field-company-location-country", normalizedParam["semanticPath"])
 	constraint := normalizedParam["valueConstraint"].(map[string]any)
 	require.Equal(t, "iso-3166-1-alpha-3", constraint["format"])
 	require.Contains(t, constraint["allowedValues"], "DEU")

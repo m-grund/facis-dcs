@@ -243,11 +243,11 @@ func auditRequiredDomainFields(policySet *templatePolicySet, rule templatePolicy
 	seen := map[string]bool{}
 	forEachSemanticParameter(data, func(_ string, _ int, param map[string]any) {
 		semanticPath, _ := param["semanticPath"].(string)
-		seen[semanticPath] = true
+		seen[canonicalDomainFieldTerm(semanticPath)] = true
 	})
 	findings := []PolicyFinding{}
 	for _, semanticPath := range required {
-		if !seen[semanticPath] {
+		if !seen[canonicalDomainFieldTerm(semanticPath)] {
 			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("required semantic field %q is missing", semanticPath), "semanticConditions.parameters", semanticPath))
 		}
 	}

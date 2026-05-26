@@ -46,9 +46,11 @@ var (
 )
 
 type domainField struct {
-	SchemaRef  string
-	Type       string
-	Constraint *valueConstraint
+	SchemaRef    string
+	Type         string
+	DomainPath   string
+	OntologyTerm string
+	Constraint   *valueConstraint
 }
 
 type valueConstraint struct {
@@ -717,38 +719,18 @@ func validateCommonStructure(data documentData) error {
 		if !ok {
 			return errors.New("semanticConditions entries must be objects")
 		}
-		id, _ := condition["conditionId"].(string)
-		if strings.TrimSpace(id) == "" {
-			return errors.New("semanticConditions entries require conditionId")
+		id, err := validateSemanticCondition(condition)
+		if err != nil {
+			return err
 		}
 		if conditionIDs[id] {
 			return fmt.Errorf("duplicate semantic condition id %q", id)
 		}
 		conditionIDs[id] = true
-		if version, _ := condition["schemaVersion"].(string); version != "v1" {
-			return fmt.Errorf("semantic condition %q must use schemaVersion v1", id)
-		}
-		parameters, ok := asArray(condition["parameters"])
-		if !ok {
-			return fmt.Errorf("semantic condition %q parameters must be an array", id)
-		}
-		for _, rawParam := range parameters {
-			param, ok := rawParam.(map[string]any)
-			if !ok {
-				return fmt.Errorf("semantic condition %q parameter entries must be objects", id)
-			}
-			name, _ := param["parameterName"].(string)
-			paramType, _ := param["type"].(string)
-			if strings.TrimSpace(name) == "" || !validSemanticType(paramType) {
-				return fmt.Errorf("semantic condition %q has invalid parameter", id)
-			}
-			if err := validateDomainParameter(id, param); err != nil {
-				return err
-			}
-			if err := validateSemanticOperators(id, param); err != nil {
-				return err
-			}
-		}
+	}
+	embeddedConditions, err := embeddedSemanticConditionsByBlockID(data)
+	if err != nil {
+		return err
 	}
 
 	for _, item := range blocks {
@@ -763,7 +745,7 @@ func validateCommonStructure(data documentData) error {
 		}
 		for _, rawConditionID := range refs {
 			conditionID, ok := rawConditionID.(string)
-			if !ok || !conditionIDs[conditionID] {
+			if !ok || !conditionReferenceExists(id, conditionID, conditionIDs, embeddedConditions) {
 				return fmt.Errorf("clause block %q references unknown semantic condition %q", id, conditionID)
 			}
 		}
@@ -778,6 +760,10 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 	}
 	blocks, _ := asArray(data["documentBlocks"])
 	conditions, _ := asArray(data["semanticConditions"])
+	embeddedConditions, err := embeddedSemanticConditionsByBlockID(data)
+	if err != nil {
+		return err
+	}
 
 	conditionByID := map[string]map[string]any{}
 	requiredParams := map[string]map[string]string{}
@@ -824,7 +810,10 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 		if !clauseConditions[blockID][conditionID] {
 			return fmt.Errorf("semantic value references unknown block/condition pair %q/%q", blockID, conditionID)
 		}
-		condition := conditionByID[conditionID]
+		condition := embeddedConditions.conditionForBlock(blockID, conditionID)
+		if condition == nil {
+			condition = conditionByID[conditionID]
+		}
 		param, found := findParameter(condition, parameterName)
 		if !found {
 			return fmt.Errorf("semantic value references unknown parameter %q on condition %q", parameterName, conditionID)
@@ -849,7 +838,11 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 	}
 	for blockID, conditionSet := range clauseConditions {
 		for conditionID := range conditionSet {
-			for parameterName := range requiredParams[conditionID] {
+			params := embeddedConditions.requiredParamsForBlock(blockID, conditionID)
+			if len(params) == 0 {
+				params = requiredParams[conditionID]
+			}
+			for parameterName := range params {
 				if !provided[semanticValueKey(blockID, conditionID, parameterName)] {
 					return fmt.Errorf("required semantic value missing: block=%s condition=%s parameter=%s", blockID, conditionID, parameterName)
 				}
@@ -857,6 +850,157 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 		}
 	}
 	return nil
+}
+
+type embeddedSemanticConditions struct {
+	byOuterBlock map[string]map[string]map[string]any
+}
+
+func (conditions embeddedSemanticConditions) blockHasCondition(blockID string, conditionID string) bool {
+	return conditions.conditionForBlock(blockID, conditionID) != nil
+}
+
+func (conditions embeddedSemanticConditions) hasKnownOuterBlock(blockID string) bool {
+	outerBlockID, _ := splitEmbeddedBlockID(blockID)
+	if outerBlockID == "" {
+		return false
+	}
+	return conditions.byOuterBlock[outerBlockID] != nil
+}
+
+func (conditions embeddedSemanticConditions) conditionForBlock(blockID string, conditionID string) map[string]any {
+	outerBlockID, _ := splitEmbeddedBlockID(blockID)
+	if outerBlockID == "" {
+		return nil
+	}
+	return conditions.byOuterBlock[outerBlockID][conditionID]
+}
+
+func (conditions embeddedSemanticConditions) requiredParamsForBlock(blockID string, conditionID string) map[string]string {
+	condition := conditions.conditionForBlock(blockID, conditionID)
+	if condition == nil {
+		return nil
+	}
+	requiredParams := map[string]string{}
+	parameters, _ := asArray(condition["parameters"])
+	for _, rawParam := range parameters {
+		param := rawParam.(map[string]any)
+		if !isTrue(param["isRequired"]) {
+			continue
+		}
+		requiredParams[param["parameterName"].(string)] = param["type"].(string)
+	}
+	return requiredParams
+}
+
+func conditionReferenceExists(blockID string, conditionID string, topLevelConditionIDs map[string]bool, embeddedConditions embeddedSemanticConditions) bool {
+	if embeddedConditions.hasKnownOuterBlock(blockID) {
+		return embeddedConditions.blockHasCondition(blockID, conditionID)
+	}
+	return topLevelConditionIDs[conditionID]
+}
+
+func embeddedSemanticConditionsByBlockID(data documentData) (embeddedSemanticConditions, error) {
+	result := embeddedSemanticConditions{byOuterBlock: map[string]map[string]map[string]any{}}
+	outerBlockByTemplateID := map[string]string{}
+	blocks, _ := asArray(data["documentBlocks"])
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		blockType, _ := block["type"].(string)
+		if blockType != "APPROVED_TEMPLATE" && blockType != "MERGED_APPROVED_TEMPLATE" {
+			continue
+		}
+		blockID, _ := block["blockId"].(string)
+		templateID, _ := block["templateId"].(string)
+		if strings.TrimSpace(blockID) == "" || strings.TrimSpace(templateID) == "" {
+			continue
+		}
+		outerBlockByTemplateID[templateID] = blockID
+	}
+
+	snapshots, ok := asArray(data["subTemplateSnapshots"])
+	if !ok {
+		return result, nil
+	}
+	for _, rawSnapshot := range snapshots {
+		snapshot, ok := rawSnapshot.(map[string]any)
+		if !ok {
+			return result, errors.New("subTemplateSnapshots entries must be objects")
+		}
+		did, _ := snapshot["did"].(string)
+		outerBlockID := outerBlockByTemplateID[did]
+		if outerBlockID == "" {
+			continue
+		}
+		templateData, ok := snapshot["template_data"].(map[string]any)
+		if !ok {
+			return result, fmt.Errorf("subTemplateSnapshot %q template_data must be an object", did)
+		}
+		conditions, ok := asArray(templateData["semanticConditions"])
+		if !ok {
+			return result, fmt.Errorf("subTemplateSnapshot %q semanticConditions must be an array", did)
+		}
+		conditionIDs := map[string]map[string]any{}
+		for _, item := range conditions {
+			condition, ok := item.(map[string]any)
+			if !ok {
+				return result, fmt.Errorf("subTemplateSnapshot %q semanticConditions entries must be objects", did)
+			}
+			id, err := validateSemanticCondition(condition)
+			if err != nil {
+				return result, err
+			}
+			if conditionIDs[id] != nil {
+				return result, fmt.Errorf("duplicate semantic condition id %q in subTemplateSnapshot %q", id, did)
+			}
+			conditionIDs[id] = condition
+		}
+		result.byOuterBlock[outerBlockID] = conditionIDs
+	}
+	return result, nil
+}
+
+func splitEmbeddedBlockID(blockID string) (string, string) {
+	parts := strings.SplitN(blockID, "::", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
+}
+
+func validateSemanticCondition(condition map[string]any) (string, error) {
+	id, _ := condition["conditionId"].(string)
+	if strings.TrimSpace(id) == "" {
+		return "", errors.New("semanticConditions entries require conditionId")
+	}
+	if version, _ := condition["schemaVersion"].(string); version != "v1" {
+		return "", fmt.Errorf("semantic condition %q must use schemaVersion v1", id)
+	}
+	parameters, ok := asArray(condition["parameters"])
+	if !ok {
+		return "", fmt.Errorf("semantic condition %q parameters must be an array", id)
+	}
+	for _, rawParam := range parameters {
+		param, ok := rawParam.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("semantic condition %q parameter entries must be objects", id)
+		}
+		name, _ := param["parameterName"].(string)
+		paramType, _ := param["type"].(string)
+		if strings.TrimSpace(name) == "" || !validSemanticType(paramType) {
+			return "", fmt.Errorf("semantic condition %q has invalid parameter", id)
+		}
+		if err := validateDomainParameter(id, param); err != nil {
+			return "", err
+		}
+		if err := validateSemanticOperators(id, param); err != nil {
+			return "", err
+		}
+	}
+	return id, nil
 }
 
 func asArray(value any) ([]any, bool) {
@@ -951,6 +1095,9 @@ func validateDomainParameter(conditionID string, param map[string]any) error {
 	field, ok := ontologyDomainFieldIndex[semanticPath]
 	if !ok {
 		return fmt.Errorf("semantic condition %q uses unknown domain semanticPath %q", conditionID, semanticPath)
+	}
+	if field.OntologyTerm != "" {
+		param["semanticPath"] = field.OntologyTerm
 	}
 	schemaRef, _ := param["schemaRef"].(string)
 	if schemaRef != field.SchemaRef {
@@ -1069,7 +1216,7 @@ func validateContractParties(data documentData) error {
 	if !exists {
 		return nil
 	}
-	roleField, ok := ontologyDomainFieldIndex["company.role"]
+	roleField, ok := ontologyDomainFieldIndex[ontologyDCSTBase+"field-company-role"]
 	if !ok || roleField.Constraint == nil || len(roleField.Constraint.AllowedValues) == 0 {
 		return errors.New("ontology domain field company.role requires allowed role values")
 	}
