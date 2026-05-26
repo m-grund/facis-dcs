@@ -33,7 +33,6 @@ func (s *templateCatalogueIntegrationsrvc) RetrieveTemplate(ctx context.Context,
 	}
 
 	result, err := queryHandler.Handle(templatequery.GetAllMetadataQry{
-		Token:  *req.Token,
 		Offset: req.Offset,
 		Limit:  req.Limit,
 	})
@@ -50,8 +49,7 @@ func (s *templateCatalogueIntegrationsrvc) RetrieveTemplateByID(ctx context.Cont
 	}
 
 	result, err := queryHandler.Handle(templatequery.GetByIDQry{
-		Token: *req.Token,
-		DID:   req.Did,
+		DID: req.Did,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -94,7 +92,6 @@ func (s *templateCatalogueIntegrationsrvc) CreateParticipant(ctx context.Context
 	}
 
 	cmd := participantcmd.CreateCmd{
-		Token: *req.Token,
 		Participant: selfdescription.ParticipantSdInput{
 			ParticipantID:             middleware.GetParticipantID(ctx),
 			LegalName:                 req.LegalName,
@@ -133,7 +130,6 @@ func (s *templateCatalogueIntegrationsrvc) CreateServiceOffering(ctx context.Con
 	}
 
 	cmd := serviceofferingcmd.CreateCmd{
-		Token:              *req.Token,
 		ParticipantID:      middleware.GetParticipantID(ctx),
 		Description:        req.Description,
 		Keywords:           req.Keywords,
@@ -161,7 +157,6 @@ func (s *templateCatalogueIntegrationsrvc) GetCurrentParticipant(ctx context.Con
 
 	result, err := queryHandler.Handle(participantquery.GetCurrentParticipantQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -199,7 +194,6 @@ func (s *templateCatalogueIntegrationsrvc) GetCurrentParticipantSummary(ctx cont
 
 	result, err := queryHandler.Handle(participantquery.GetCurrentParticipantSummaryQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -219,7 +213,6 @@ func (s *templateCatalogueIntegrationsrvc) ListOtherParticipants(ctx context.Con
 
 	result, err := queryHandler.Handle(participantquery.GetOtherParticipantsQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -236,7 +229,6 @@ func (s *templateCatalogueIntegrationsrvc) GetCurrentServiceOffering(ctx context
 
 	result, err := queryHandler.Handle(serviceofferingquery.GetByParticipantQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -280,7 +272,6 @@ func (s *templateCatalogueIntegrationsrvc) UpdateParticipant(ctx context.Context
 	}
 
 	cmd := participantcmd.UpdateCmd{
-		Token: *req.Token,
 		Participant: selfdescription.ParticipantSdInput{
 			ParticipantID:             middleware.GetParticipantID(ctx),
 			LegalName:                 req.LegalName,
@@ -316,7 +307,6 @@ func (s *templateCatalogueIntegrationsrvc) UpdateServiceOffering(ctx context.Con
 	}
 
 	cmd := serviceofferingcmd.UpdateCmd{
-		Token:              *req.Token,
 		ParticipantID:      middleware.GetParticipantID(ctx),
 		Keywords:           req.Keywords,
 		Description:        req.Description,
@@ -342,8 +332,7 @@ func (s *templateCatalogueIntegrationsrvc) DeleteParticipant(ctx context.Context
 	}
 
 	cmd := participantcmd.DeleteCmd{
-		ID:    middleware.GetParticipantID(ctx),
-		Token: *req.Token,
+		ID: middleware.GetParticipantID(ctx),
 	}
 	err = deleteHandler.Handle(ctx, cmd)
 	if err != nil {
@@ -363,7 +352,6 @@ func (s *templateCatalogueIntegrationsrvc) DeleteServiceOffering(ctx context.Con
 	}
 
 	cmd := serviceofferingcmd.DeleteCmd{
-		Token:         *req.Token,
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}
 	result, err := deleteHandler.Handle(ctx, cmd)

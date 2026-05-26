@@ -486,7 +486,6 @@ func (s *templateRepositorysrvc) Verify(ctx context.Context, req *templatereposi
 		DID:           req.Did,
 		VerifiedBy:    middleware.GetUsername(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	}
 	handler := command.Verifier{
 		DB:       s.DB,
@@ -585,7 +584,6 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 		UpdatedAt:     updatedAt,
 		RegisteredBy:  middleware.GetUsername(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	}
 	handler := command.Registrar{
 		DB:       s.DB,
