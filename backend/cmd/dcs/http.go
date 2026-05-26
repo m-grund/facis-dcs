@@ -248,7 +248,6 @@ func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
 
 func metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// /metrics selbst nicht messen
 		if r.URL.Path == "/metrics" {
 			next.ServeHTTP(w, r)
 			return
