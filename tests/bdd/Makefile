@@ -118,7 +118,7 @@ run_bdd_helm_all: setup_dev ensure_k8s_tools
 		bash "$(BDD_RUNNER_SCRIPT)"
 
 build_dcs_image:
-	@docker build -f ../../backend/Dockerfile -t "$(DOCKER_IMAGE)" ../..
+	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
