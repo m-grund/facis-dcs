@@ -23,8 +23,8 @@ const (
 	ValidationRuleReferences     = "references"
 )
 
-//go:embed profiles/facis.sla.basic.v1.json
-var defaultContractStatementValidationProfileJSON []byte
+//go:embed profiles/facis.sla.basic.v1.ttl
+var defaultContractStatementValidationProfileSHACL []byte
 
 type ValidationProfile struct {
 	ID          string           `json:"id" yaml:"id"`
@@ -96,6 +96,8 @@ func LoadValidationProfileFile(path string) (ValidationProfile, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".yaml", ".yml":
 		return LoadValidationProfileYAML(raw)
+	case ".ttl", ".shacl":
+		return LoadValidationProfileSHACL(raw)
 	default:
 		return LoadValidationProfileJSON(raw)
 	}
@@ -397,7 +399,7 @@ func knownValidationRuleType(ruleType string) bool {
 }
 
 func defaultContractStatementValidationProfile() ValidationProfile {
-	profile, err := LoadValidationProfileJSON(defaultContractStatementValidationProfileJSON)
+	profile, err := LoadValidationProfileSHACL(defaultContractStatementValidationProfileSHACL)
 	if err != nil {
 		panic(fmt.Sprintf("load default contract statement validation profile: %v", err))
 	}

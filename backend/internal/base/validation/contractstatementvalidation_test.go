@@ -232,14 +232,32 @@ func TestLoadValidationProfileRejectsInvalidDefinitions(t *testing.T) {
 	require.ErrorContains(t, err, "requires a target")
 }
 
-func TestLoadValidationProfileSupportsJSONAndYAML(t *testing.T) {
-	jsonPath := filepath.Join("profiles", "facis.sla.basic.v1.json")
-	raw, err := os.ReadFile(jsonPath)
+func TestLoadValidationProfileSupportsSHACLJSONAndYAML(t *testing.T) {
+	shaclPath := filepath.Join("profiles", "facis.sla.basic.v1.ttl")
+	raw, err := os.ReadFile(shaclPath)
 	require.NoError(t, err)
 
-	jsonProfile, err := LoadValidationProfileJSON(raw)
+	shaclProfile, err := LoadValidationProfileSHACL(raw)
 	require.NoError(t, err)
-	require.Equal(t, "facis.sla.basic.v1", jsonProfile.ID)
+	require.Equal(t, "facis.sla.basic.v1", shaclProfile.ID)
+	require.Contains(t, validationIssueIDs(ValidateContractStatements(
+		[]map[string]any{{"@id": "payment-main", "@type": contractStatementPaymentType, "amount": 0}},
+		shaclProfile,
+	)), "payment-amount-positive")
+
+	fileProfile, err := LoadValidationProfileFile(shaclPath)
+	require.NoError(t, err)
+	require.Equal(t, shaclProfile.ID, fileProfile.ID)
+
+	jsonProfile, err := LoadValidationProfileJSON([]byte(`{
+		"id": "facis.marketplace.contract.v1",
+		"version": "1",
+		"rules": [
+			{"id": "payment-exists", "type": "exists", "severity": "error", "where": {"@type": "https://w3id.org/facis/dcs/ontology/v1#PaymentTerm"}}
+		]
+	}`))
+	require.NoError(t, err)
+	require.Equal(t, "facis.marketplace.contract.v1", jsonProfile.ID)
 
 	yamlProfile, err := LoadValidationProfileYAML([]byte(`
 id: facis.marketplace.contract.v1

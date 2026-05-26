@@ -193,18 +193,17 @@ func ontologyString(statement string, predicate string) string {
 }
 
 func ontologyStrings(statement string, predicate string) []string {
+	values := []string{}
 	for _, line := range strings.Split(statement, "\n") {
 		if !strings.HasPrefix(strings.TrimSpace(line), predicate+" ") {
 			continue
 		}
 		matches := ontologyQuotedValue.FindAllStringSubmatch(line, -1)
-		values := make([]string, 0, len(matches))
 		for _, match := range matches {
 			values = append(values, match[1])
 		}
-		return values
 	}
-	return nil
+	return values
 }
 
 func ontologyNumber(statement string, predicate string) *float64 {
