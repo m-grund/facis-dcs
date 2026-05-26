@@ -17,6 +17,8 @@ export const useContractsStore = defineStore('contracts', () => {
 
   const hasContracts = computed(() => contracts.value.length > 0)
 
+  const findContractByDid = (did: string) => contracts.value.find((contract) => contract.did === did)
+
   async function loadContracts() {
     loading.value = true
     error.value = null
@@ -51,6 +53,7 @@ export const useContractsStore = defineStore('contracts', () => {
     approvalTasks,
     negotiationTasks,
     hasContracts,
+    findContractByDid,
     loadContracts,
     loading,
     error,

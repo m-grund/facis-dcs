@@ -27,7 +27,7 @@ type FilterLabelValue = FilterLabels[FilterLabelKey]
 const selectedFilter = ref<FilterLabelValue>(
   (Object.values(props.filterLabels)[0] as FilterLabelValue) ?? ('' as FilterLabelValue),
 )
-const filterPopover = useTemplateRef('filterPopover')
+const filterPopover = useTemplateRef('filter-popover')
 const searchResults: Ref<T[]> = ref([])
 
 const selectedOption: Ref<T | null> = ref(null)
@@ -128,7 +128,7 @@ function onFilterSelect(label: FilterLabelValue) {
         {{ selectedFilter }}
       </button>
       <ul
-        ref="filterPopover"
+        ref="filter-popover"
         class="dropdown dropdown-start menu w-52 rounded-box bg-base-300 shadow-sm"
         popover
         id="list-popover-search"

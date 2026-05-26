@@ -256,9 +256,9 @@ function applyContractDataToDraft(contractData?: unknown) {
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
 }
 
-const tabContent = useTemplateRef<HTMLElement>('tabContent')
+const templatePreviewContent = useTemplateRef<HTMLElement>('template-preview-content')
 
-const originalSemanticConditionValues = ref<SemanticConditionValue[]>([])
+const originalSemanticConditionValues: Ref<SemanticConditionValue[]> = ref([])
 const originalValuesWereCached = ref(false)
 
 const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null) => {
@@ -306,7 +306,7 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     await nextTick()
 
     requestAnimationFrame(() => {
-      const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
+      const inputs = Array.from(templatePreviewContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
 
       const highlightedValues = new Set<string>()
       for (const [key, negotiationValue] of negotiationValuesMap.entries()) {
@@ -334,7 +334,7 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     contractContentValuesStore.reset({ semanticConditionValues: originalSemanticConditionValues.value })
     originalValuesWereCached.value = false
     requestAnimationFrame(() => {
-      const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
+      const inputs = Array.from(templatePreviewContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
       inputs.forEach((input) => {
         input.classList.remove('!border-warning', '!border-2')
         input.style.removeProperty('border-color')
@@ -425,7 +425,7 @@ const exportPdf = async () => {
               <div v-show="activeTab === 'content'">
                 <div class="card bg-base-100 border border-base-300 shadow-sm">
                   <div class="card-body gap-5">
-                    <div ref="tabContent">
+                    <div ref="template-preview-content">
                       <TemplatePreview
                         :document-outline="templateDraftStore.documentOutline"
                         :document-blocks="templateDraftStore.documentBlocks"

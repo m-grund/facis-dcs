@@ -50,7 +50,7 @@ const filteredTasks = computed(() => {
 })
 
 const getContractName = (task: ContractNegotiationTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === task.did)?.name ?? 'Nameless Contract'
+  return contractsStore.findContractByDid(task.did)?.name ?? 'Nameless Contract'
 }
 
 const applySearchResult = (searchResult: ContractNegotiationTask[]) => {
@@ -59,7 +59,7 @@ const applySearchResult = (searchResult: ContractNegotiationTask[]) => {
 }
 
 const resolveViewRouteName = (task: ContractNegotiationTask) => {
-  const currentState = contractsStore.contracts.find((contract) => contract.did === task.did)?.state
+  const currentState = contractsStore.findContractByDid(task.did)?.state
   if (currentState === ContractState.negotiation) {
     return ROUTES.CONTRACTS.NEGOTIATE
   }

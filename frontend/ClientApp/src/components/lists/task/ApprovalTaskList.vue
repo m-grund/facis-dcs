@@ -57,19 +57,19 @@ const filteredTasks = computed(() => {
 })
 
 const getTemplateName = (task: ContractTemplateApprovalTask) => {
-  return templatesStore.contractTemplates.find((template) => template.did === task.did)?.name ?? 'Nameless Template'
+  return templatesStore.findTemplateByDid(task.did)?.name ?? 'Nameless Template'
 }
 
 const getContractName = (task: ContractApprovalTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === task.did)?.name ?? 'Nameless Contract'
+  return contractsStore.findContractByDid(task.did)?.name ?? 'Nameless Contract'
 }
 
 const getTemplateState = (task: ContractTemplateApprovalTask) => {
-  return templatesStore.contractTemplates.find((template) => template.did === task.did)?.state
+  return templatesStore.findTemplateByDid(task.did)?.state
 }
 
 const getContractState = (task: ContractApprovalTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === task.did)?.state
+  return contractsStore.findContractByDid(task.did)?.state
 }
 
 const canApprove = (task: ContractTemplateApprovalTask) => {

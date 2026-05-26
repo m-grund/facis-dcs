@@ -45,12 +45,12 @@ const searchableItems = computed(() => {
     seenDids.add(task.did)
 
     if (task.type === 'template') {
-      const template = templatesStore.contractTemplates.find((t) => t.did === task.did)
+      const template = templatesStore.findTemplateByDid(task.did)
       if (template) {
         items.push(template)
       }
     } else {
-      const contract = contractsStore.contracts.find((c) => c.did === task.did)
+      const contract = contractsStore.findContractByDid(task.did)
       if (contract) {
         items.push(contract)
       }
