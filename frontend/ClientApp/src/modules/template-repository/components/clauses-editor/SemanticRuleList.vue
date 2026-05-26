@@ -11,7 +11,7 @@
             :is-used="isParamUsedInText(c.conditionId, p.parameterName)"
             :is-required-and-unused="isParamRequiredAndUnused(c.conditionId, p.parameterName)"
             @mouseenter="onParamEnter(c.conditionId, p.parameterName)" @mouseleave="onParamLeave"
-            @click="onParamClick(c.conditionId, p.parameterName)" />
+            @click="onParamClick(c.conditionId, p.parameterName, p.fixedValue !== undefined)" />
         </ul>
       </li>
     </ul>
@@ -61,7 +61,8 @@ function onParamEnter(conditionId: string, parameterName: string) {
   emit('highlightParam', conditionId, parameterName)
 }
 
-function onParamClick(conditionId: string, parameterName: string) {
+function onParamClick(conditionId: string, parameterName: string, isFixed: boolean) {
+  if (isFixed) return
   emit('insertPlaceholder', conditionId, parameterName)
 }
 </script>

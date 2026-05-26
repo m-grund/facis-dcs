@@ -33,6 +33,24 @@ func TestConvertTemplateDataToContractDataKeepsJSONLDSemantics(t *testing.T) {
 					},
 				},
 			},
+			map[string]any{
+				"conditionId":   "customer",
+				"conditionName": "Customer",
+				"schemaVersion": "v1",
+				"entityType":    "Party",
+				"entityRole":    "customer",
+				"parameters": []any{
+					map[string]any{
+						"parameterName": "company_role",
+						"type":          "string",
+						"schemaRef":     validation.SchemaPartyV1,
+						"semanticPath":  "company.role",
+						"fixedValue":    "customer",
+						"isRequired":    true,
+						"operators":     []any{},
+					},
+				},
+			},
 		},
 		"customMetaData": []any{},
 	})
@@ -47,4 +65,9 @@ func TestConvertTemplateDataToContractDataKeepsJSONLDSemantics(t *testing.T) {
 	require.Equal(t, "Contract", data["@type"])
 	require.Equal(t, "did:web:facis.example:template:1", data["derivedFromTemplate"])
 	require.Equal(t, "did:web:facis.example:template:1", data["sourceTemplate"].(map[string]any)["did"])
+	conditions := data["semanticConditions"].([]any)
+	customer := conditions[1].(map[string]any)
+	require.Equal(t, validation.SchemaPartyV1, customer["parameters"].([]any)[0].(map[string]any)["schemaRef"])
+	require.Equal(t, "https://w3id.org/facis/dcs/taxonomy/v1#role-customer", customer["entityRole"])
+	require.Equal(t, "customer", customer["parameters"].([]any)[0].(map[string]any)["fixedValue"])
 }

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,9 @@ const (
 	ValidationRuleComparison     = "comparison"
 	ValidationRuleReferences     = "references"
 )
+
+//go:embed profiles/facis.sla.basic.v1.json
+var defaultContractStatementValidationProfileJSON []byte
 
 type ValidationProfile struct {
 	ID          string           `json:"id" yaml:"id"`
@@ -393,81 +397,9 @@ func knownValidationRuleType(ruleType string) bool {
 }
 
 func defaultContractStatementValidationProfile() ValidationProfile {
-	return ValidationProfile{
-		ID:          "facis.sla.basic.v1",
-		Version:     "1",
-		Description: "Basic FACIS SLA contract statement validation profile.",
-		Rules: []ValidationRule{
-			{
-				ID:       "exactly-one-provider",
-				Type:     ValidationRuleCount,
-				Severity: "error",
-				Where: map[string]any{
-					"@type": contractStatementPartyType,
-					"role":  contractStatementProviderRole,
-				},
-				Operator: "eq",
-				Value:    1,
-				Message:  "Contract requires exactly one provider.",
-			},
-			{
-				ID:       "exactly-one-customer",
-				Type:     ValidationRuleCount,
-				Severity: "error",
-				Where: map[string]any{
-					"@type": contractStatementPartyType,
-					"role":  contractStatementCustomerRole,
-				},
-				Operator: "eq",
-				Value:    1,
-				Message:  "Contract requires exactly one customer.",
-			},
-			{
-				ID:       "payment-required",
-				Type:     ValidationRuleRequiredFields,
-				Severity: "error",
-				Where: map[string]any{
-					"@type": contractStatementPaymentType,
-				},
-				RequiredFields: []string{"amount", "currency", "dueDate", "payer", "payee"},
-				Message:        "Payment term is incomplete.",
-			},
-			{
-				ID:       "availability-slo-required",
-				Type:     ValidationRuleRequiredFields,
-				Severity: "error",
-				Where: map[string]any{
-					"@type":  contractStatementSLOType,
-					"metric": contractStatementAvailability,
-				},
-				RequiredFields: []string{"value"},
-				Message:        "Availability SLO is incomplete.",
-			},
-			{
-				ID:       "payment-party-references-exist",
-				Type:     ValidationRuleReferences,
-				Severity: "error",
-				Where: map[string]any{
-					"@type": contractStatementPaymentType,
-				},
-				ReferenceFields: []StatementReference{
-					{Field: "payer", Where: map[string]any{"@type": contractStatementPartyType}},
-					{Field: "payee", Where: map[string]any{"@type": contractStatementPartyType}},
-				},
-				Message: "Payment term references unknown parties.",
-			},
-			{
-				ID:       "obligation-target-references-exist",
-				Type:     ValidationRuleReferences,
-				Severity: "error",
-				Where: map[string]any{
-					"@type": contractStatementObligation,
-				},
-				ReferenceFields: []StatementReference{
-					{Field: "target"},
-				},
-				Message: "Obligation references an unknown target statement.",
-			},
-		},
+	profile, err := LoadValidationProfileJSON(defaultContractStatementValidationProfileJSON)
+	if err != nil {
+		panic(fmt.Sprintf("load default contract statement validation profile: %v", err))
 	}
+	return profile
 }

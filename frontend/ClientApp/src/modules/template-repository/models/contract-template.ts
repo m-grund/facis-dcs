@@ -35,10 +35,14 @@ export interface SemanticCondition {
     conditionId: string
     conditionName: string
     schemaVersion: 'v1'
+    entityType?: SemanticEntityType
+    entityRole?: SemanticEntityRole
     parameters: SemanticConditionParameter[]
 }
 
 export type SemanticParameterType = ParameterType
+export type SemanticEntityType = '' | 'Party'
+export type SemanticEntityRole = '' | 'provider' | 'customer' | 'supplier' | 'client'
 
 export const SemanticOperate = {
     lessThan: 'lessThan',
@@ -72,6 +76,7 @@ export interface SemanticConditionParameter {
     semanticPath: DomainSemanticPath
     valueConstraint?: SemanticValueConstraint
     defaultValue?: unknown
+    fixedValue?: unknown
     semanticMeaning?: string
     uiMetadata?: UiMetadata
     isRequired: boolean

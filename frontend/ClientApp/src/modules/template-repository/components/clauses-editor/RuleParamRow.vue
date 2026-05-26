@@ -2,7 +2,8 @@
   <li class="flex items-center gap-1.5 rounded px-1 py-0.5 -mx-1" :class="rowClass" @click="$emit('click')">
     <span class="font-mono border border-base-300 rounded px-1" @mouseenter="$emit('mouseenter')"
       @mouseleave="$emit('mouseleave')">{{ param.parameterName }}</span>
-    <span class="text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
+    <span v-if="param.fixedValue !== undefined" class="text-base-content/50">fixed: {{ param.fixedValue }}</span>
+    <span v-else class="text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
     <span class="text-base-content/40">({{ param.type }})</span>
     <span v-if="constraintLabel" class="text-base-content/40">{{ constraintLabel }}</span>
   </li>
@@ -27,6 +28,7 @@ defineEmits<{
 const rowClass = computed(() => ({
   'text-primary font-medium': props.isUsed,
   'text-error cursor-pointer hover:bg-base-200': props.isRequiredAndUnused,
+  'cursor-pointer hover:bg-base-200': props.param.fixedValue === undefined && !props.isRequiredAndUnused,
 }))
 
 const constraintLabel = computed(() => {

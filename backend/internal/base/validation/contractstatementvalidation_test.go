@@ -105,6 +105,16 @@ func TestValidateContractStatementsReportsMissingPaymentField(t *testing.T) {
 	require.Equal(t, "payment-main", issues[0].StatementID)
 }
 
+func TestValidateContractStatementsReportsNonPositivePaymentAmount(t *testing.T) {
+	statements := validContractStatementsForValidation()
+	statements[2]["amount"] = 0.0
+
+	issues := ValidateContractStatements(statements, defaultContractStatementValidationProfile())
+
+	require.Equal(t, []string{"payment-amount-positive"}, validationIssueIDs(issues))
+	require.Equal(t, "payment-main", issues[0].StatementID)
+}
+
 func TestValidateContractStatementsReportsMissingSLO(t *testing.T) {
 	statements := []map[string]any{}
 	for _, statement := range validContractStatementsForValidation() {

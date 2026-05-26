@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 )
 
 const (
@@ -366,7 +365,7 @@ func normalizeContractSemanticRuntime(data documentData) {
 			"statements": statementsToAny(statements),
 		}
 	}
-	generated := append(buildSemanticRules(data), buildContractSemanticRules(data)...)
+	generated := buildSemanticRules(data)
 	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], generated)
 }
 
@@ -883,6 +882,7 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 			provided[semanticValueKey(blockID, conditionID, parameterName)] = true
 		}
 	}
+	markFixedSemanticValuesProvided(blocks, embeddedConditions, conditionByID, provided)
 
 	if !requireSemanticValues {
 		return nil
@@ -903,10 +903,45 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 	return nil
 }
 
+func markFixedSemanticValuesProvided(blocks []any, embeddedConditions embeddedSemanticConditions, conditionByID map[string]map[string]any, provided map[string]bool) {
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok || block["type"] != "CLAUSE" {
+			continue
+		}
+		blockID, _ := block["blockId"].(string)
+		refs, _ := asArray(block["conditionIds"])
+		for _, rawConditionID := range refs {
+			conditionID, _ := rawConditionID.(string)
+			condition := embeddedConditions.conditionForBlock(blockID, conditionID)
+			if condition == nil {
+				condition = conditionByID[conditionID]
+			}
+			if condition == nil {
+				continue
+			}
+			parameters, _ := asArray(condition["parameters"])
+			for _, rawParam := range parameters {
+				param, ok := rawParam.(map[string]any)
+				if !ok {
+					continue
+				}
+				if _, exists := param["fixedValue"]; !exists {
+					continue
+				}
+				parameterName, _ := param["parameterName"].(string)
+				provided[semanticValueKey(blockID, conditionID, parameterName)] = true
+			}
+		}
+	}
+}
+
 type semanticValueRecord struct {
 	BlockID        string
 	ConditionID    string
 	ParameterName  string
+	EntityType     string
+	EntityRole     string
 	DomainPath     string
 	OntologyTerm   string
 	StatementField string
@@ -941,6 +976,16 @@ func buildContractStatements(data documentData) ([]map[string]any, error) {
 	slo := &sloStatementDraft{}
 
 	for _, record := range records {
+		if record.EntityType == contractStatementPartyType || strings.HasPrefix(record.StatementField, "party.") {
+			draft := partyDrafts[record.ConditionID]
+			if draft == nil {
+				draft = &partyStatementDraft{}
+				partyDrafts[record.ConditionID] = draft
+			}
+			if record.EntityRole != "" && draft.Role == "" {
+				draft.Role = record.EntityRole
+			}
+		}
 		switch record.StatementField {
 		case "party.legalName", "party.country", "party.role":
 			draft := partyDrafts[record.ConditionID]
@@ -1056,36 +1101,6 @@ func buildContractStatements(data documentData) ([]map[string]any, error) {
 	return statements, nil
 }
 
-func buildContractSemanticRules(data documentData) []map[string]any {
-	rules := []map[string]any{
-		contractRule("rule-payment-amount-positive", "payment.amount", "GreaterThan", 0, "payment.amount must be greater than 0."),
-		contractRule("rule-payment-currency-iso4217", "payment.currency", "In", allowedValuesForDomainPath("contract.payment.currency"), "payment.currency must be an allowed ISO-4217 value."),
-		contractRule("rule-provider-country-allowed", "provider.country", "In", allowedValuesForDomainPath("company.location.country"), "provider.country must be an allowed ISO-3166-1 alpha-3 value."),
-		contractRule("rule-customer-country-allowed", "customer.country", "In", allowedValuesForDomainPath("company.location.country"), "customer.country must be an allowed ISO-3166-1 alpha-3 value."),
-		contractRule("rule-sla-availability-between", "sla.availability", "Between", []any{0, 100}, "sla.availability must be between 0 and 100."),
-		contractRule("rule-exactly-one-provider", "parties.provider.count", "Equals", 1, "contract must contain exactly one provider."),
-		contractRule("rule-exactly-one-customer", "parties.customer.count", "Equals", 1, "contract must contain exactly one customer."),
-		contractRule("rule-payment-due-date-valid", "payment.dueDate", "ValidISODate", "2006-01-02", "payment.dueDate must be a valid ISO date."),
-	}
-	if strings.TrimSpace(contractCreationDate(data)) != "" {
-		rules = append(rules, contractRule("rule-payment-due-date-after-creation", "payment.dueDate", "After", contractCreationDate(data), "payment.dueDate must be after contract creation date."))
-	}
-	return rules
-}
-
-func contractRule(ruleID string, leftOperand string, operator string, rightOperand any, message string) map[string]any {
-	return map[string]any{
-		"@type":                          contractStatementConstraint,
-		"ruleId":                         ruleID,
-		"leftOperand":                    leftOperand,
-		semanticRuleOperatorProperty:     operator,
-		semanticRuleRightOperandProperty: rightOperand,
-		"severity":                       "blocking",
-		"source":                         semanticRuleSourceContract,
-		"message":                        message,
-	}
-}
-
 func validateContractSemanticsData(data documentData, requireCompleteStatements bool) error {
 	if err := validatePlaceholderBindings(data, requireCompleteStatements); err != nil {
 		return err
@@ -1095,11 +1110,6 @@ func validateContractSemanticsData(data documentData, requireCompleteStatements 
 	}
 	if requireCompleteStatements && hasContractStatementIntent(data) {
 		if err := validateContractStatementCompleteness(data); err != nil {
-			return err
-		}
-	}
-	if requireCompleteStatements && hasContractStatementIntent(data) {
-		if err := validateContractSemanticRules(data); err != nil {
 			return err
 		}
 	}
@@ -1192,116 +1202,6 @@ func validateContractStatementCompleteness(data documentData) error {
 	return nil
 }
 
-func validateContractSemanticRules(data documentData) error {
-	statements, err := buildContractStatements(data)
-	if err != nil {
-		return err
-	}
-	values := contractRuleValues(statements)
-	for _, rule := range buildContractSemanticRules(data) {
-		leftOperand, _ := rule["leftOperand"].(string)
-		operator, _ := rule[semanticRuleOperatorProperty].(string)
-		rightOperand := rule[semanticRuleRightOperandProperty]
-		value := values[leftOperand]
-		if !contractRuleSatisfied(value, operator, rightOperand) {
-			ruleID, _ := rule["ruleId"].(string)
-			return fmt.Errorf("semantic rule %q failed: %s", ruleID, rule["message"])
-		}
-	}
-	return nil
-}
-
-func contractRuleValues(statements []map[string]any) map[string]any {
-	values := map[string]any{
-		"parties.provider.count": 0,
-		"parties.customer.count": 0,
-	}
-	for _, statement := range statements {
-		statementType, _ := statement["@type"].(string)
-		switch statementType {
-		case contractStatementPartyType:
-			role, _ := statement["role"].(string)
-			if role == contractStatementProviderRole {
-				values["parties.provider.count"] = values["parties.provider.count"].(int) + 1
-				values["provider.country"] = statement["country"]
-			}
-			if role == contractStatementCustomerRole {
-				values["parties.customer.count"] = values["parties.customer.count"].(int) + 1
-				values["customer.country"] = statement["country"]
-			}
-		case contractStatementPaymentType:
-			values["payment.amount"] = statement["amount"]
-			values["payment.currency"] = statement["currency"]
-			values["payment.dueDate"] = statement["dueDate"]
-		case contractStatementSLOType:
-			values["sla.availability"] = statement["value"]
-		}
-	}
-	return values
-}
-
-func contractRuleSatisfied(value any, operator string, rightOperand any) bool {
-	switch operator {
-	case "Equals":
-		return numericEqual(value, rightOperand)
-	case "GreaterThan":
-		left, ok := numericValue(value)
-		right, rightOK := numericValue(rightOperand)
-		return ok && rightOK && left > right
-	case "Between":
-		left, ok := numericValue(value)
-		rangeValues, rangeOK := asArray(rightOperand)
-		if !ok || !rangeOK || len(rangeValues) != 2 {
-			return false
-		}
-		min, minOK := numericValue(rangeValues[0])
-		max, maxOK := numericValue(rangeValues[1])
-		return minOK && maxOK && left >= min && left <= max
-	case "In":
-		text, ok := value.(string)
-		if !ok || text == "" {
-			return false
-		}
-		allowed, ok := asArray(rightOperand)
-		if !ok {
-			return false
-		}
-		for _, item := range allowed {
-			if item == text {
-				return true
-			}
-		}
-		return false
-	case "ValidISODate":
-		text, ok := value.(string)
-		if !ok || text == "" {
-			return false
-		}
-		_, err := time.Parse("2006-01-02", text)
-		return err == nil
-	case "After":
-		text, ok := value.(string)
-		after, afterOK := rightOperand.(string)
-		if !ok || !afterOK || text == "" || after == "" {
-			return false
-		}
-		leftDate, err := time.Parse("2006-01-02", text)
-		if err != nil {
-			return false
-		}
-		rightDate, err := time.Parse("2006-01-02", after)
-		return err == nil && leftDate.After(rightDate)
-	default:
-		return true
-	}
-}
-
-func numericEqual(left any, right any) bool {
-	leftNumber, leftOK := numericValue(left)
-	rightNumber, rightOK := numericValue(right)
-	return leftOK && rightOK && leftNumber == rightNumber
-}
-
 func numericValue(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case int:
@@ -1343,23 +1243,80 @@ func semanticValueRecords(data documentData) ([]semanticValueRecord, error) {
 		if !found {
 			return nil, fmt.Errorf("semantic value references unknown parameter %q on condition %q", parameterName, conditionID)
 		}
-		semanticPath, _ := param["semanticPath"].(string)
-		field, ok := ontologyDomainFieldIndex[semanticPath]
-		if !ok {
-			return nil, fmt.Errorf("semantic value parameter %q uses unknown semanticPath %q", parameterName, semanticPath)
+		record, err := semanticValueRecordForParameter(blockID, conditionID, parameterName, condition, param, value["parameterValue"])
+		if err != nil {
+			return nil, err
 		}
-		records = append(records, semanticValueRecord{
-			BlockID:        blockID,
-			ConditionID:    conditionID,
-			ParameterName:  parameterName,
-			DomainPath:     field.DomainPath,
-			OntologyTerm:   field.OntologyTerm,
-			StatementField: field.StatementField,
-			Type:           field.Type,
-			Value:          value["parameterValue"],
-		})
+		records = append(records, record)
 	}
+	records = append(records, fixedSemanticValueRecords(data, conditions, records)...)
 	return records, nil
+}
+
+func semanticValueRecordForParameter(blockID string, conditionID string, parameterName string, condition map[string]any, param map[string]any, value any) (semanticValueRecord, error) {
+	semanticPath, _ := param["semanticPath"].(string)
+	field, ok := ontologyDomainFieldIndex[semanticPath]
+	if !ok {
+		return semanticValueRecord{}, fmt.Errorf("semantic value parameter %q uses unknown semanticPath %q", parameterName, semanticPath)
+	}
+	entityType, _ := condition["entityType"].(string)
+	entityRole, _ := condition["entityRole"].(string)
+	return semanticValueRecord{
+		BlockID:        blockID,
+		ConditionID:    conditionID,
+		ParameterName:  parameterName,
+		EntityType:     canonicalStatementEntityType(entityType),
+		EntityRole:     canonicalContractEntityRole(entityRole),
+		DomainPath:     field.DomainPath,
+		OntologyTerm:   field.OntologyTerm,
+		StatementField: field.StatementField,
+		Type:           field.Type,
+		Value:          value,
+	}, nil
+}
+
+func fixedSemanticValueRecords(data documentData, conditions semanticConditionsByBlock, existing []semanticValueRecord) []semanticValueRecord {
+	existingByBinding := map[string]bool{}
+	for _, record := range existing {
+		existingByBinding[semanticValueKey(record.BlockID, record.ConditionID, record.ParameterName)] = true
+	}
+	records := []semanticValueRecord{}
+	blocks, _ := asArray(data["documentBlocks"])
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok || block["type"] != "CLAUSE" {
+			continue
+		}
+		blockID, _ := block["blockId"].(string)
+		refs, _ := asArray(block["conditionIds"])
+		for _, rawConditionID := range refs {
+			conditionID, _ := rawConditionID.(string)
+			condition := conditions.conditionForBlock(blockID, conditionID)
+			if condition == nil {
+				continue
+			}
+			parameters, _ := asArray(condition["parameters"])
+			for _, rawParam := range parameters {
+				param, ok := rawParam.(map[string]any)
+				if !ok {
+					continue
+				}
+				value, hasFixedValue := param["fixedValue"]
+				if !hasFixedValue {
+					continue
+				}
+				parameterName, _ := param["parameterName"].(string)
+				if existingByBinding[semanticValueKey(blockID, conditionID, parameterName)] {
+					continue
+				}
+				record, err := semanticValueRecordForParameter(blockID, conditionID, parameterName, condition, param, value)
+				if err == nil {
+					records = append(records, record)
+				}
+			}
+		}
+	}
+	return records
 }
 
 type semanticConditionsByBlock struct {
@@ -1394,7 +1351,13 @@ func semanticConditionIndex(data documentData) (semanticConditionsByBlock, error
 }
 
 func canonicalContractPartyRole(value string) string {
+	return canonicalContractEntityRole(value)
+}
+
+func canonicalContractEntityRole(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "none":
+		return ""
 	case "provider", "supplier":
 		return contractStatementProviderRole
 	case "customer", "client":
@@ -1404,6 +1367,31 @@ func canonicalContractPartyRole(value string) string {
 			return value
 		}
 		return ontologyDCSTBase + "role-" + slugify(value)
+	}
+}
+
+func canonicalStatementEntityType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "none":
+		return ""
+	case "party", "company", "customer", "client", "provider", "supplier", "dcs:party", "dcs:company", strings.ToLower(contractStatementPartyType):
+		return contractStatementPartyType
+	default:
+		if strings.HasPrefix(value, ontologyDCSBase) {
+			return value
+		}
+		return ""
+	}
+}
+
+func entityRoleFromEntityType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "provider", "supplier":
+		return contractStatementProviderRole
+	case "customer", "client":
+		return contractStatementCustomerRole
+	default:
+		return ""
 	}
 }
 
@@ -1425,19 +1413,6 @@ func statementsToAny(statements []map[string]any) []any {
 		result[i] = statement
 	}
 	return result
-}
-
-func contractCreationDate(data documentData) string {
-	for _, key := range []string{"createdAt", "created_at", "creationDate"} {
-		value, _ := data[key].(string)
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
-		if len(value) >= len("2006-01-02") {
-			return value[:len("2006-01-02")]
-		}
-	}
-	return ""
 }
 
 type embeddedSemanticConditions struct {
@@ -1567,6 +1542,9 @@ func validateSemanticCondition(condition map[string]any) (string, error) {
 	if version, _ := condition["schemaVersion"].(string); version != "v1" {
 		return "", fmt.Errorf("semantic condition %q must use schemaVersion v1", id)
 	}
+	if err := validateSemanticConditionEntity(id, condition); err != nil {
+		return "", err
+	}
 	parameters, ok := asArray(condition["parameters"])
 	if !ok {
 		return "", fmt.Errorf("semantic condition %q parameters must be an array", id)
@@ -1584,11 +1562,43 @@ func validateSemanticCondition(condition map[string]any) (string, error) {
 		if err := validateDomainParameter(id, param); err != nil {
 			return "", err
 		}
+		if err := validateFixedSemanticValue(id, param); err != nil {
+			return "", err
+		}
 		if err := validateSemanticOperators(id, param); err != nil {
 			return "", err
 		}
 	}
 	return id, nil
+}
+
+func validateSemanticConditionEntity(conditionID string, condition map[string]any) error {
+	rawEntityType, _ := condition["entityType"].(string)
+	rawEntityRole, hasEntityRole := condition["entityRole"].(string)
+	if strings.TrimSpace(rawEntityType) == "" {
+		if hasEntityRole && strings.TrimSpace(rawEntityRole) != "" {
+			return fmt.Errorf("semantic condition %q entityRole requires entityType", conditionID)
+		}
+		return nil
+	}
+	entityType := canonicalStatementEntityType(rawEntityType)
+	if entityType == "" {
+		return fmt.Errorf("semantic condition %q uses unsupported entityType %q", conditionID, rawEntityType)
+	}
+	condition["entityType"] = entityType
+	if strings.TrimSpace(rawEntityRole) == "" {
+		if inferredRole := entityRoleFromEntityType(rawEntityType); inferredRole != "" {
+			condition["entityRole"] = inferredRole
+		}
+		return nil
+	}
+	if hasEntityRole && strings.TrimSpace(rawEntityRole) != "" {
+		if entityType != contractStatementPartyType {
+			return fmt.Errorf("semantic condition %q entityRole is only supported for Party entities", conditionID)
+		}
+		condition["entityRole"] = canonicalContractEntityRole(rawEntityRole)
+	}
+	return nil
 }
 
 func asArray(value any) ([]any, bool) {
@@ -1697,6 +1707,25 @@ func validateDomainParameter(conditionID string, param map[string]any) error {
 	}
 	if field.Constraint != nil {
 		param["valueConstraint"] = field.Constraint.asMap()
+	}
+	return nil
+}
+
+func validateFixedSemanticValue(conditionID string, param map[string]any) error {
+	value, exists := param["fixedValue"]
+	if !exists || value == nil {
+		return nil
+	}
+	paramType, _ := param["type"].(string)
+	if !valueMatchesType(value, paramType) {
+		return fmt.Errorf("semantic condition %q parameter %q fixedValue does not match type %q", conditionID, param["parameterName"], paramType)
+	}
+	semanticPath, _ := param["semanticPath"].(string)
+	field, ok := ontologyDomainFieldIndex[semanticPath]
+	if ok && field.Constraint != nil {
+		if err := valueMatchesConstraint(value, field.Constraint); err != nil {
+			return fmt.Errorf("semantic condition %q parameter %q fixedValue violates constraint: %w", conditionID, param["parameterName"], err)
+		}
 	}
 	return nil
 }

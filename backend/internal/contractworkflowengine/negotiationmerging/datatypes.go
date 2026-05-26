@@ -49,13 +49,18 @@ type SemanticCondition struct {
 	ConditionID   string               `json:"conditionId"`
 	ConditionName string               `json:"conditionName"`
 	SchemaVersion string               `json:"schemaVersion"`
+	EntityType    string               `json:"entityType,omitempty"`
+	EntityRole    string               `json:"entityRole,omitempty"`
 }
 
 type ConditionParameter struct {
-	Type          string   `json:"type"`
-	Operators     []string `json:"operators"`
-	IsRequired    bool     `json:"isRequired"`
-	ParameterName string   `json:"parameterName"`
+	Type          string          `json:"type"`
+	Operators     []string        `json:"operators"`
+	IsRequired    bool            `json:"isRequired"`
+	ParameterName string          `json:"parameterName"`
+	SchemaRef     string          `json:"schemaRef,omitempty"`
+	SemanticPath  string          `json:"semanticPath,omitempty"`
+	FixedValue    json.RawMessage `json:"fixedValue,omitempty"`
 }
 
 type SemanticConditionValue struct {

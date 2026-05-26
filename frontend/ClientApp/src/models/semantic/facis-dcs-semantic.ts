@@ -199,6 +199,7 @@ type SemanticConditionLike = {
     parameterName: string
     type: ParameterType
     isRequired?: boolean
+    fixedValue?: unknown
     operators?: Array<{ operate: LegacySemanticOperate | string; targets?: string[] } | LegacySemanticOperate | string>
   }[]
 }
@@ -275,6 +276,7 @@ export function buildSemanticRulesFromConditions(
   const rules: SemanticRule[] = []
   for (const condition of semanticConditions) {
     for (const parameter of condition.parameters) {
+      if (parameter.fixedValue !== undefined && parameter.fixedValue !== null && parameter.fixedValue !== '') continue
       for (const rawOperator of parameter.operators ?? []) {
         const operate = typeof rawOperator === 'string' ? rawOperator : rawOperator.operate
         const operator = normalizeSemanticOperator(operate)

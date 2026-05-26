@@ -298,9 +298,8 @@ func TestNormalizeContractDataBuildsContractStatementsAndRules(t *testing.T) {
 	})
 
 	rules := data["semanticRules"].([]any)
-	require.GreaterOrEqual(t, len(rules), 8)
-	require.Contains(t, ruleIDs(rules), "rule-payment-amount-positive")
-	require.Contains(t, ruleIDs(rules), "rule-exactly-one-provider")
+	require.NotContains(t, ruleIDs(rules), "rule-payment-amount-positive")
+	require.NotContains(t, ruleIDs(rules), "rule-exactly-one-provider")
 }
 
 func TestNormalizeContractDataRejectsInvalidStatementCountry(t *testing.T) {
@@ -358,12 +357,140 @@ func TestValidateContractSemanticsRejectsBindingToUnknownParameter(t *testing.T)
 
 func TestNormalizeContractDataRejectsPaymentAmountNotPositive(t *testing.T) {
 	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "payment", "amount", 0.0), true)
-	require.ErrorContains(t, err, "rule-payment-amount-positive")
+	require.ErrorContains(t, err, "Payment amount must be greater than 0")
 }
 
 func TestNormalizeContractDataRejectsMissingProviderOrCustomer(t *testing.T) {
 	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "provider", "role", "customer"), true)
 	require.ErrorContains(t, err, "exactly one provider")
+}
+
+func TestNormalizeContractDataBuildsCustomerFromEntityMetadata(t *testing.T) {
+	data := validSemanticContractData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+
+	conditions := decoded["semanticConditions"].([]any)
+	for _, rawCondition := range conditions {
+		condition := rawCondition.(map[string]any)
+		if condition["conditionId"] != "customer" {
+			continue
+		}
+		condition["entityType"] = "Party"
+		condition["entityRole"] = "customer"
+		params := condition["parameters"].([]any)
+		condition["parameters"] = []any{params[0], params[1]}
+	}
+	values := decoded["semanticConditionValues"].([]any)
+	filtered := []any{}
+	for _, rawValue := range values {
+		value := rawValue.(map[string]any)
+		if value["conditionId"] == "customer" && value["parameterName"] == "role" {
+			continue
+		}
+		filtered = append(filtered, rawValue)
+	}
+	decoded["semanticConditionValues"] = filtered
+
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeContractData(&raw, true)
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
+	require.Contains(t, statements, map[string]any{
+		"@id":       "party-customer",
+		"@type":     contractStatementPartyType,
+		"role":      contractStatementCustomerRole,
+		"legalName": "Example company",
+		"country":   "DEU",
+	})
+}
+
+func TestNormalizeContractDataBuildsCustomerFromCustomerEntityType(t *testing.T) {
+	data := validSemanticContractData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+
+	conditions := decoded["semanticConditions"].([]any)
+	for _, rawCondition := range conditions {
+		condition := rawCondition.(map[string]any)
+		if condition["conditionId"] != "customer" {
+			continue
+		}
+		condition["entityType"] = "Customer"
+		delete(condition, "entityRole")
+		params := condition["parameters"].([]any)
+		condition["parameters"] = []any{params[0], params[1]}
+	}
+	values := decoded["semanticConditionValues"].([]any)
+	filtered := []any{}
+	for _, rawValue := range values {
+		value := rawValue.(map[string]any)
+		if value["conditionId"] == "customer" && value["parameterName"] == "role" {
+			continue
+		}
+		filtered = append(filtered, rawValue)
+	}
+	decoded["semanticConditionValues"] = filtered
+
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeContractData(&raw, true)
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	conditions = result["semanticConditions"].([]any)
+	customerCondition := conditions[1].(map[string]any)
+	require.Equal(t, contractStatementPartyType, customerCondition["entityType"])
+	require.Equal(t, contractStatementCustomerRole, customerCondition["entityRole"])
+	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
+	require.Contains(t, statements, map[string]any{
+		"@id":       "party-customer",
+		"@type":     contractStatementPartyType,
+		"role":      contractStatementCustomerRole,
+		"legalName": "Example company",
+		"country":   "DEU",
+	})
+}
+
+func TestNormalizeContractDataBuildsCustomerFromFixedRoleValue(t *testing.T) {
+	data := removeSemanticValue(t, validSemanticContractData(t), "customer", "role")
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+
+	conditions := decoded["semanticConditions"].([]any)
+	for _, rawCondition := range conditions {
+		condition := rawCondition.(map[string]any)
+		if condition["conditionId"] != "customer" {
+			continue
+		}
+		params := condition["parameters"].([]any)
+		roleParam := params[2].(map[string]any)
+		roleParam["fixedValue"] = "customer"
+	}
+
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeContractData(&raw, true)
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
+	require.Contains(t, statements, map[string]any{
+		"@id":       "party-customer",
+		"@type":     contractStatementPartyType,
+		"role":      contractStatementCustomerRole,
+		"legalName": "Example company",
+		"country":   "DEU",
+	})
 }
 
 func TestNormalizeContractDataAcceptsLegacyCustomerFieldAliases(t *testing.T) {

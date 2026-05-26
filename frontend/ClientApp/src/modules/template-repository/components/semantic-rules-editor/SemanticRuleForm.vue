@@ -12,6 +12,30 @@
       <p v-if="isRuleNameDuplicate" class="text-xs text-error mt-0.5">Rule name already exists.</p>
     </div>
 
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="label-text text-xs text-base-content/60 block mb-1">Entity type</label>
+        <select v-model="newCondition.entityType" class="select select-bordered select-sm w-full">
+          <option value="">None</option>
+          <option value="Party">Party</option>
+        </select>
+      </div>
+      <div>
+        <label class="label-text text-xs text-base-content/60 block mb-1">Entity role</label>
+        <select
+          v-model="newCondition.entityRole"
+          class="select select-bordered select-sm w-full"
+          :disabled="newCondition.entityType !== 'Party'"
+        >
+          <option value="">None</option>
+          <option value="provider">Provider</option>
+          <option value="customer">Customer</option>
+          <option value="supplier">Supplier</option>
+          <option value="client">Client</option>
+        </select>
+      </div>
+    </div>
+
     <div class="space-y-4">
       <p class="label-text text-xs text-base-content/60 mb-1">Parameters</p>
       <div
@@ -70,7 +94,7 @@
           </p>
           <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
         </div>
-        <div class="md:col-span-3 flex flex-col gap-1">
+        <div class="md:col-span-2 flex flex-col gap-1">
           <label class="label py-0 min-h-0">
             <span class="label-text text-xs text-base-content/60">Type
               <RequiredIndicator />
@@ -85,6 +109,27 @@
             <option value="enum">Enum</option>
           </select>
         </div>
+        <div class="md:col-span-3 flex flex-col gap-1">
+          <label class="label py-0 min-h-0">
+            <span class="label-text text-xs text-base-content/60">Fixed value</span>
+          </label>
+          <select
+            v-if="fixedValueOptions.length"
+            v-model="draftFixedValue"
+            class="select select-bordered select-sm w-full h-9"
+          >
+            <option value="">None</option>
+            <option v-for="value in fixedValueOptions" :key="value" :value="value">{{ value }}</option>
+          </select>
+          <input
+            v-else
+            v-model="draftFixedValue"
+            type="text"
+            class="input input-bordered input-sm w-full h-9"
+            placeholder="None"
+          />
+          <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
+        </div>
         <div class="md:col-span-2 flex flex-col gap-1">
           <label class="label py-0 min-h-0">
             <span class="label-text text-xs text-base-content/60">Required</span>
@@ -97,14 +142,14 @@
             </label>
           </div>
         </div>
-        <div class="md:col-span-2 flex flex-col gap-1">
+        <div class="md:col-span-1 flex flex-col gap-1">
           <label class="label py-0 min-h-0 invisible">
             <span class="label-text text-xs">Add</span>
           </label>
           <div class="h-9 flex items-center">
-            <button type="button" class="btn btn-secondary btn-sm w-full whitespace-nowrap" :disabled="!canAddParameter"
+            <button type="button" class="btn btn-secondary btn-sm btn-square w-full" aria-label="Add parameter" title="Add parameter" :disabled="!canAddParameter"
               @click="addParameter">
-              + Add parameter
+              +
             </button>
           </div>
         </div>
@@ -119,6 +164,7 @@
             <span class="font-mono text-sm font-medium border border-base-300 rounded px-2 py-0.5 bg-base-200/50">{{
               param.parameterName }}</span>
             <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
+            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">fixed: {{ param.fixedValue }}</span>
             <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
               {{ formatValueConstraint(param.valueConstraint) }}
             </span>
@@ -149,11 +195,17 @@ import {
   type SemanticConditionParameter,
   type DomainSemanticPath,
   type SemanticValueConstraint,
+  type SemanticEntityRole,
+  type SemanticEntityType,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
+type DraftConditionPayload = NewConditionPayload & {
+  entityType: SemanticEntityType
+  entityRole: SemanticEntityRole
+}
 
 const props = defineProps<{
   existingConditions: SemanticCondition[]
@@ -181,16 +233,19 @@ function defaultParam(): SemanticConditionParameter {
   }
 }
 
-function getDefaultNewCondition(): NewConditionPayload {
+function getDefaultNewCondition(): DraftConditionPayload {
   return {
     conditionName: '',
     schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
+    entityType: '',
+    entityRole: '',
     parameters: [],
   }
 }
 
-const newCondition = ref<NewConditionPayload>(getDefaultNewCondition())
+const newCondition = ref<DraftConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
+const draftFixedValue = ref('')
 const selectedDomainPath = ref<DomainSemanticPath | ''>('')
 const domainFieldSearch = ref('')
 const showDomainFieldOptions = ref(false)
@@ -200,6 +255,8 @@ const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rul
 const selectedDomainField = computed(() =>
   ONTOLOGY_DOMAIN_FIELDS.find((field) => field.semanticPath === selectedDomainPath.value),
 )
+const fixedValueOptions = computed(() => selectedDomainField.value?.valueConstraint?.allowedValues ?? [])
+const fixedValueError = computed(() => validateDraftFixedValue())
 const groupedDomainFields = computed(() => {
   const query = domainFieldSearch.value.trim().toLowerCase()
   const filtered = ONTOLOGY_DOMAIN_FIELDS.filter((field) => {
@@ -235,6 +292,7 @@ watch(
     if (!isEditMode.value || !props.initialCondition) {
       newCondition.value = getDefaultNewCondition()
       draftParameter.value = defaultParam()
+      draftFixedValue.value = ''
       selectedDomainPath.value = ''
       domainFieldSearch.value = ''
       showDomainFieldOptions.value = false
@@ -243,9 +301,12 @@ watch(
     newCondition.value = {
       conditionName: props.initialCondition.conditionName,
       schemaVersion: props.initialCondition.schemaVersion,
-      parameters: props.initialCondition.parameters.map((p) => ({ ...p })),
+      entityType: normalizeEntityTypeForForm(props.initialCondition.entityType),
+      entityRole: normalizeEntityRoleForForm(props.initialCondition.entityRole, props.initialCondition.entityType),
+      parameters: props.initialCondition.parameters.map((p) => ({ ...p, valueConstraint: cloneValueConstraint(p.valueConstraint) })),
     }
     draftParameter.value = defaultParam()
+    draftFixedValue.value = ''
     selectedDomainPath.value = ''
     domainFieldSearch.value = ''
     showDomainFieldOptions.value = false
@@ -268,7 +329,15 @@ watch(selectedDomainPath, (path) => {
     type: field.type,
   }
   domainFieldSearch.value = formatDomainFieldLabel(field)
+  draftFixedValue.value = ''
 })
+
+watch(
+  () => newCondition.value.entityType,
+  (entityType) => {
+    if (entityType !== 'Party') newCondition.value.entityRole = ''
+  },
+)
 
 function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
   if (!constraint) return undefined
@@ -322,6 +391,7 @@ const isParameterNameDuplicate = computed(() => {
 const canAddParameter = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return false
+  if (fixedValueError.value) return false
   return !isParameterNameDuplicate.value
 })
 
@@ -349,11 +419,17 @@ function addParameter() {
   if (!canAddParameter.value) return
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return
+  const fixedValue = parseDraftFixedValue()
   newCondition.value.parameters.push({
     ...draftParameter.value,
     parameterName: name,
+    fixedValue,
   })
+  if (fixedValue === undefined) {
+    delete newCondition.value.parameters[newCondition.value.parameters.length - 1]?.fixedValue
+  }
   draftParameter.value = defaultParam()
+  draftFixedValue.value = ''
   selectedDomainPath.value = ''
   domainFieldSearch.value = ''
   showDomainFieldOptions.value = false
@@ -364,7 +440,7 @@ function deleteParameter(index: number) {
 }
 
 function buildConditionPayload(): NewConditionPayload {
-  return {
+  const payload: NewConditionPayload = {
     conditionName: newCondition.value.conditionName.trim(),
     schemaVersion: newCondition.value.schemaVersion,
     parameters: newCondition.value.parameters.map((p) => ({
@@ -372,6 +448,13 @@ function buildConditionPayload(): NewConditionPayload {
       parameterName: p.parameterName.trim(),
     })),
   }
+  if (newCondition.value.entityType) {
+    payload.entityType = newCondition.value.entityType
+  }
+  if (newCondition.value.entityRole) {
+    payload.entityRole = newCondition.value.entityRole
+  }
+  return payload
 }
 
 function submitRule() {
@@ -385,8 +468,63 @@ function submitRule() {
   }
   newCondition.value = getDefaultNewCondition()
   draftParameter.value = defaultParam()
+  draftFixedValue.value = ''
   selectedDomainPath.value = ''
   domainFieldSearch.value = ''
   showDomainFieldOptions.value = false
+}
+
+function parseDraftFixedValue(): unknown {
+  const raw = draftFixedValue.value.trim()
+  if (raw === '') return undefined
+  switch (draftParameter.value.type) {
+    case 'decimal':
+    case 'integer':
+      return Number(raw)
+    case 'boolean':
+      return raw === 'true'
+    default:
+      return raw
+  }
+}
+
+function validateDraftFixedValue(): string {
+  const raw = draftFixedValue.value.trim()
+  if (raw === '') return ''
+  if (draftParameter.value.type === 'decimal' || draftParameter.value.type === 'integer') {
+    const number = Number(raw)
+    if (!Number.isFinite(number)) return 'Fixed value must be numeric.'
+    if (draftParameter.value.type === 'integer' && !Number.isInteger(number)) return 'Fixed value must be an integer.'
+    const constraint = selectedDomainField.value?.valueConstraint
+    if (constraint?.min !== undefined && number < constraint.min) return `Minimum is ${constraint.min}.`
+    if (constraint?.max !== undefined && number > constraint.max) return `Maximum is ${constraint.max}.`
+  }
+  if (draftParameter.value.type === 'boolean' && raw !== 'true' && raw !== 'false') {
+    return 'Use true or false.'
+  }
+  return ''
+}
+
+function normalizeEntityTypeForForm(value?: string): SemanticEntityType {
+  const normalized = (value ?? '').trim().toLowerCase()
+  if (!normalized) return ''
+  if (
+    normalized === 'party' ||
+    normalized === 'company' ||
+    normalized === 'customer' ||
+    normalized === 'client' ||
+    normalized === 'provider' ||
+    normalized === 'supplier' ||
+    normalized.endsWith('#party')
+  ) return 'Party'
+  return ''
+}
+
+function normalizeEntityRoleForForm(value?: string, entityType?: string): SemanticEntityRole {
+  const normalized = (value ?? entityType ?? '').trim().toLowerCase()
+  if (!normalized || normalized === 'party' || normalized === 'company' || normalized.endsWith('#party')) return ''
+  if (normalized === 'customer' || normalized === 'client' || normalized.endsWith('#role-customer')) return 'customer'
+  if (normalized === 'provider' || normalized === 'supplier' || normalized.endsWith('#role-provider')) return 'provider'
+  return ''
 }
 </script>
