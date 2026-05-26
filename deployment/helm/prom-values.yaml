@@ -1,27 +1,3 @@
-# BDD test values: used by tests/bdd/Makefile kind_deploy target (kind cluster).
-# Uses Keycloak's built-in master realm, no realm import needed.
-# Assumes release name "dcs" (HELM_RELEASE default in the Makefile).
-extraEnv:
-- name: JWT_ALG_NONE_SUPPORTED
-  value: "true"
-
-postgresql:
-  enabled: true
-
-nats:
-  enabled: true
-
-oidc:
-  issuerURL: "https://auth.eclipse.org/auth/realms/community"
-  clientID: "dcs-client"
-  keycloakScheme: "http"
-
-route:
-  basePath: "/digital-contracting-service"
-
-monitoring:
-  enabled: true
-
 grafana:
   adminPassword: YourStrongPassword
   persistence:
