@@ -66,7 +66,8 @@ setup_dev:
 		SRC_PATH="$(BDD_EXECUTOR_FALLBACK_PATH)"; \
 	fi; \
 	"$(VENV_PATH)/bin/pip" install --upgrade pip wheel; \
-	"$(VENV_PATH)/bin/pip" install -e "$$SRC_PATH[dev]"
+	"$(VENV_PATH)/bin/pip" install -e "$$SRC_PATH[dev]"; \
+	"$(VENV_PATH)/bin/pip" install psycopg2-binary
 
 run_bdd_dev: setup_dev
 	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
@@ -157,7 +158,10 @@ kind_load_image: kind_create
 	@"$(KIND_BIN)" load docker-image "$(DOCKER_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
 kind_deploy: kind_load_image
+	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
+	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
 	@if ! "$(HELM_BIN)" upgrade --install "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
 		--namespace "$(KIND_NAMESPACE)" \
 		--create-namespace \
