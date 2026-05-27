@@ -11,6 +11,9 @@ dependencies:
 - name: neo4j
   repository: file://charts/neo4j
   version: 0.1.0
+- name: orce
+  repository: file://charts/orce
+  version: 0.1.0
 - name: federated-catalogue
   repository: file://charts/federated-catalogue
   version: 0.1.0
@@ -26,5 +29,5 @@ dependencies:
 - name: ipfs-document-manager
   repository: file://charts/ipfs-document-manager
   version: 0.1.0
-digest: sha256:53b4bd4474059e298eea0f993f33f5b1a68770e18724b1c29a068af38f6de2cf
-generated: "2026-05-06T16:02:20.7193678+02:00"
+digest: sha256:a07c653330de6ddb752ea9396443c042eeb2e7e7cdb21608369ff55ff2c35205
+generated: "2026-05-27T13:45:46.166075801+02:00"

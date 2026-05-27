@@ -15,6 +15,18 @@ service:
   swarmPort: 4001
   swarmNodePort: null
 
+api:
+  cors:
+    enabled: false
+    allowOrigins: []
+    allowMethods:
+      - POST
+      - OPTIONS
+    allowHeaders:
+      - Content-Type
+      - Authorization
+    allowCredentials: true
+
 persistence:
   enabled: false
   size: 5Gi

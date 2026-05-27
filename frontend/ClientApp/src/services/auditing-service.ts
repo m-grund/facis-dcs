@@ -55,6 +55,7 @@ function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: num
         entry.did ?? item.did,
         entry.component ?? item.component,
         entry.created_at ?? entry.createdAt ?? item.created_at ?? item.createdAt,
+        true,
       ),
     )
 }
@@ -65,6 +66,7 @@ function normalizeFinding(
   fallbackDid?: string,
   fallbackComponent?: string,
   fallbackCreatedAt?: string,
+  useFallbackId = false,
 ): AuditFinding {
   const eventType = item.event_type ?? item.eventType
   const eventData = item.event_data ?? item.eventData
@@ -74,7 +76,7 @@ function normalizeFinding(
   const category = item.category ?? categoryFromEvent(eventType, status)
   const objectDid = stringValue(policyData?.objectDid)
   return {
-    id: item.id ?? fallbackId,
+    id: useFallbackId ? fallbackId : item.id ?? fallbackId,
     category,
     title: item.title ?? stringValue(policyData?.title) ?? eventType ?? 'Audit finding',
     description: item.description ?? descriptionFromEventData(eventData),

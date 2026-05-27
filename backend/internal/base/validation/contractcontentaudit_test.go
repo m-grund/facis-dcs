@@ -48,12 +48,14 @@ func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
 
 func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 	contract := map[string]any{
-		"@context": []any{"https://w3id.org/facis/sla/ontology"},
-		"@id":      "urn:facis:dcs:contract:sla:example-001",
-		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
+		"@context":        []any{"https://w3id.org/facis/sla/ontology"},
+		"@id":             "urn:facis:dcs:contract:sla:example-001",
+		"@type":           []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
+		"contractVersion": 1,
+		"state":           "APPROVED",
 		"parties": []any{
-			map[string]any{"@type": "dcs:Company", "role": "supplier"},
-			map[string]any{"@type": "dcs:Company", "role": "customer"},
+			map[string]any{"@type": "dcs:Company", "role": "supplier", "legalName": "Supplier GmbH"},
+			map[string]any{"@type": "dcs:Company", "role": "customer", "legalName": "Customer AG"},
 		},
 		"company": map[string]any{
 			"location": map[string]any{
@@ -132,7 +134,7 @@ func TestAuditContractContentRequiresExplicitPolicyRules(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, findings)
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-JSONLD-001", "error"))
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-CORE", "error"))
+	require.True(t, hasFindingSeverity(findings, "dcs:ContractShape", "error"))
 }
 
 func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {

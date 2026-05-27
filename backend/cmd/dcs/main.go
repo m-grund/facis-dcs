@@ -129,8 +129,8 @@ func main() {
 	// Initialize IPFS client
 	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
 	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
-	if oidcIssuerURL == "" || oidcClientID == "" {
-		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
+	if mfsBaseURL == "" {
+		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_MFS_BASE_URL environment variable must be specified")
 	}
 	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
 	aRepo := pq.PostgresAuditTrailRepository{}

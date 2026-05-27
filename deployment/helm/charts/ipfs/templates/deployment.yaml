@@ -14,6 +14,31 @@ spec:
         app.kubernetes.io/name: ipfs
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      {{- if .Values.api.cors.enabled }}
+      initContainers:
+        - name: ipfs-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -eu
+              if [ ! -f /data/ipfs/config ]; then
+                ipfs init
+              fi
+              ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+              ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
+              ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '{{ toJson .Values.api.cors.allowOrigins }}'
+              ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '{{ toJson .Values.api.cors.allowMethods }}'
+              ipfs config --json API.HTTPHeaders.Access-Control-Allow-Headers '{{ toJson .Values.api.cors.allowHeaders }}'
+              ipfs config --json API.HTTPHeaders.Access-Control-Allow-Credentials '["{{ .Values.api.cors.allowCredentials }}"]'
+              chown -R 1000:100 /data/ipfs
+          volumeMounts:
+            - name: ipfs-data
+              mountPath: /data/ipfs
+      {{- end }}
       containers:
         - name: ipfs
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -29,8 +54,7 @@ spec:
               containerPort: 4001
               protocol: TCP
           readinessProbe:
-            httpGet:
-              path: /api/v0/id
+            tcpSocket:
               port: api
             initialDelaySeconds: 10
             periodSeconds: 10
