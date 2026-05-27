@@ -2,8 +2,6 @@
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
 import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
-import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
-import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
@@ -79,13 +77,7 @@ const register = async () => {
 }
 
 const exportPdf = async() => {
-  const template = await contractTemplateService.retrieveById({ did: props.template.did })
-  if (!template) return
-  const blocks = convertContractToPlainTextBlocks(template.template_data)
-  const pdfData = toPdfData(blocks)
-  const title = `${template.name ?? 'contract-template'}`
-  const filename = `${title}.pdf`
-  downloadContractPdf(pdfData, filename, title)
+  // todo: call backend
 }
 </script>
 

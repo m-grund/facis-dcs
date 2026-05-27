@@ -12,13 +12,11 @@
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
     "@heroicons/vue": "^2.2.0",
-    "@types/pdfmake": "^0.3.2",
     "@vueuse/core": "^14.2.1",
     "@vueuse/integrations": "^14.2.1",
     "axios": "^1.13.6",
     "fast-myers-diff": "^3.2.0",
     "jwt-decode": "^4.0.0",
-    "pdfmake": "^0.3.7",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
