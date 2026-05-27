@@ -3,6 +3,7 @@ import type { ContractNegotiationTask } from '@/models/contract/contract-negotia
 import { ROUTES } from '@/router/router'
 import { useContractsStore } from '@/stores/contracts-store'
 import { useNegotiationTaskStateFilterStore } from '@/stores/state-filter-store'
+import { ContractState } from '@/types/contract-state'
 import { negotiationTaskStates } from '@/types/negotiation-task-state'
 import { compareValues } from '@/utils/comparison'
 import { computed, onUnmounted, ref, type Ref } from 'vue'
@@ -49,7 +50,7 @@ const filteredTasks = computed(() => {
 })
 
 const getContractName = (task: ContractNegotiationTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === task.did)?.name ?? 'Nameless Contract'
+  return contractsStore.findContractByDid(task.did)?.name ?? 'Nameless Contract'
 }
 
 const applySearchResult = (searchResult: ContractNegotiationTask[]) => {
@@ -57,7 +58,13 @@ const applySearchResult = (searchResult: ContractNegotiationTask[]) => {
   searchedTasks.value = searchResult
 }
 
-const resolveViewRouteName = () => ROUTES.CONTRACTS.NEGOTIATE
+const resolveViewRouteName = (task: ContractNegotiationTask) => {
+  const currentState = contractsStore.findContractByDid(task.did)?.state
+  if (currentState === ContractState.negotiation) {
+    return ROUTES.CONTRACTS.NEGOTIATE
+  }
+  return ROUTES.CONTRACTS.VIEW
+}
 
 onUnmounted(() => stateFilterStore.reset())
 </script>
@@ -90,7 +97,7 @@ onUnmounted(() => stateFilterStore.reset())
               <div>Creation date: {{ new Date(task.created_at).toLocaleDateString() }}</div>
               <div class="card-actions justify-end">
                 <RouterLink
-                  :to="{ name: resolveViewRouteName(), params: { did: task.did } }"
+                  :to="{ name: resolveViewRouteName(task), params: { did: task.did } }"
                   class="btn btn-sm btn-primary"
                 >
                   View

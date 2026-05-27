@@ -59,21 +59,21 @@ const filteredTasks = computed(() => {
 })
 
 const getTemplateName = (task: ContractTemplateReviewTask) => {
-  return templatesStore.contractTemplates.find((template) => template.did === task.did)?.name ?? 'Nameless Template'
+  return templatesStore.findTemplateByDid(task.did)?.name ?? 'Nameless Template'
 }
 
 const getContractName = (task: ContractReviewTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === task.did)?.name ?? 'Nameless Contract'
+  return contractsStore.findContractByDid(task.did)?.name ?? 'Nameless Contract'
 }
 
 const getContractState = (task: ContractReviewTask) => {
-  return contractsStore.contracts.find((contract) => contract.did === task.did)?.state
+  return contractsStore.findContractByDid(task.did)?.state
 }
 
 const canEdit = (task: ReviewTask) => {
   if (task.type === 'contract') return false
 
-  const template = templatesStore.contractTemplates.find((template) => template.did === task.did)
+  const template = templatesStore.findTemplateByDid(task.did)
   const state = template?.state
   return (
     (template?.created_by === authStore.user?.username &&

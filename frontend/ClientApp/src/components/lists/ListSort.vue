@@ -7,7 +7,7 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-const sortPopover = useTemplateRef('sortPopover')
+const sortPopover = useTemplateRef('sort-popover')
 
 const sortBy = defineModel<string>('sortBy', { required: true })
 const sortOrder = defineModel<number>('sortOrder', { required: true })
@@ -31,7 +31,7 @@ function sortItemsBy(key: string) {
     <span>Sort by</span> <ChevronUpDownIcon class="w-6 h-6" />
   </button>
   <ul
-    ref="sortPopover"
+    ref="sort-popover"
     class="dropdown dropdown-end menu w-52 rounded-box bg-base-300 shadow-sm"
     popover
     anchor="sort-btn"
