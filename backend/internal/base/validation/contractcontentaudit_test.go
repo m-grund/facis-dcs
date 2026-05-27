@@ -128,13 +128,12 @@ func TestAuditContractContentReadsJSONLDSemanticPathThresholds(t *testing.T) {
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-003", "error"))
 }
 
-func TestAuditContractContentRequiresExplicitPolicyRules(t *testing.T) {
+func TestAuditContractContentRequiresPolicyDocument(t *testing.T) {
 	findings, err := AuditContractContent(map[string]any{}, nil, ContractContentAuditMetadata{})
 
-	require.NoError(t, err)
-	require.NotEmpty(t, findings)
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-JSONLD-001", "error"))
-	require.True(t, hasFindingSeverity(findings, "dcs:ContractShape", "error"))
+	require.Error(t, err)
+	require.Nil(t, findings)
+	require.Contains(t, err.Error(), "contract content policy is required")
 }
 
 func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {

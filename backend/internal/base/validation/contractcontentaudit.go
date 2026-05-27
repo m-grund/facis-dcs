@@ -4,10 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 )
 
@@ -107,7 +103,7 @@ func AuditContractContent(contractDocument any, policyDocument any, metadata Con
 
 func normalizeContractContentPolicy(raw any, metadata ContractContentAuditMetadata) (ContractContentPolicy, error) {
 	if raw == nil {
-		return defaultContractContentPolicy(metadata), nil
+		return ContractContentPolicy{}, fmt.Errorf("contract content policy is required")
 	}
 
 	normalized, err := normalizeObject(raw)
@@ -138,43 +134,6 @@ const (
 	defaultContractPolicySetID   = "facis.dcs.contract.structure-semantics"
 	defaultContractPolicyVersion = "v1"
 )
-
-func defaultContractContentPolicy(metadata ContractContentAuditMetadata) ContractContentPolicy {
-	version := metadata.PolicyVersion
-	if strings.TrimSpace(version) == "" {
-		version = defaultContractPolicyVersion
-	}
-	if shapes, err := loadDefaultContractSHACLShapes(); err == nil && len(shapes) > 0 {
-		return ContractContentPolicy{
-			PolicySetID: defaultContractPolicySetID,
-			Version:     version,
-			SHACLShapes: shapes,
-		}
-	}
-	return ContractContentPolicy{
-		PolicySetID: defaultContractPolicySetID,
-		Version:     version,
-		SHACLShapes: []ContractSHACLShape{
-			{
-				ID:          "FACIS-CONTRACT-SHACL-CORE",
-				Title:       "Contract JSON-LD must satisfy the FACIS core SHACL shape",
-				Severity:    "error",
-				TargetClass: "dcs:Contract",
-				Requirement: "DCS-FR-PACM-03",
-				Properties: []ContractSHACLProperty{
-					{Path: "@id", MinCount: intPtr(1), MaxCount: intPtr(1), Datatype: "xsd:anyURI", Name: "Contract identifier"},
-					{Path: "@type", MinCount: intPtr(1), In: []string{"dcs:Contract", "Contract"}, Name: "Contract type"},
-					{Path: "parties", MinCount: intPtr(2), Class: "dcs:Company", Name: "Contract parties"},
-					{Path: "contract.jurisdiction", MinCount: intPtr(1), Datatype: "xsd:string", Name: "Jurisdiction"},
-				},
-			},
-		},
-	}
-}
-
-func intPtr(value int) *int {
-	return &value
-}
 
 func auditContractContentRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
 	rule = normalizeContractContentRule(rule)
@@ -230,10 +189,6 @@ func contractSHACLShapes(policy ContractContentPolicy) []ContractSHACLShape {
 	shapes = append(shapes, policy.SHACLShapes...)
 	if policy.SHACL != nil {
 		shapes = append(shapes, policy.SHACL.Shapes...)
-	}
-	if len(shapes) == 0 {
-		defaultPolicy := defaultContractContentPolicy(ContractContentAuditMetadata{PolicyVersion: policy.Version})
-		return defaultPolicy.SHACLShapes
 	}
 	return shapes
 }
@@ -861,213 +816,6 @@ func signatureLevelSatisfies(actual string, required string) bool {
 	actualRank := rank[strings.ToUpper(strings.TrimSpace(actual))]
 	requiredRank := rank[strings.ToUpper(strings.TrimSpace(required))]
 	return actualRank >= requiredRank && requiredRank > 0
-}
-
-const defaultContractSHACLShapesPath = "docs/semantic-ontology/shapes/facis-dcs-shapes.ttl"
-
-func loadDefaultContractSHACLShapes() ([]ContractSHACLShape, error) {
-	path, err := defaultContractSHACLPath()
-	if err != nil {
-		return nil, err
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	shapes := parseContractSHACLShapesTurtle(string(content))
-	result := make([]ContractSHACLShape, 0, len(shapes))
-	for _, shape := range shapes {
-		if compactTerm(shape.TargetClass) == "Contract" {
-			result = append(result, shape)
-			appendReferencedShapes(&result, shapes, shape)
-		}
-	}
-	return result, nil
-}
-
-func defaultContractSHACLPath() (string, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", fmt.Errorf("could not resolve source path")
-	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(filename), "../../../.."))
-	path := filepath.Join(root, defaultContractSHACLShapesPath)
-	if _, err := os.Stat(path); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-func appendReferencedShapes(result *[]ContractSHACLShape, shapes map[string]ContractSHACLShape, shape ContractSHACLShape) {
-	for _, property := range append(shape.Properties, shape.Property...) {
-		if strings.TrimSpace(property.Node) == "" {
-			continue
-		}
-		referenced, ok := shapes[property.Node]
-		if !ok {
-			continue
-		}
-		if containsSHACLShape(*result, referenced.ID) {
-			continue
-		}
-		*result = append(*result, referenced)
-		appendReferencedShapes(result, shapes, referenced)
-	}
-}
-
-func containsSHACLShape(shapes []ContractSHACLShape, id string) bool {
-	for _, shape := range shapes {
-		if shape.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
-func parseContractSHACLShapesTurtle(content string) map[string]ContractSHACLShape {
-	lines := strings.Split(stripTurtleComments(content), "\n")
-	shapes := map[string]ContractSHACLShape{}
-	for i := 0; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
-		if line == "" || strings.HasPrefix(line, "@prefix") || strings.HasPrefix(line, "<") || strings.HasPrefix(line, "sh:") || strings.HasPrefix(line, "a ") {
-			continue
-		}
-		if !strings.HasPrefix(line, "dcs:") {
-			continue
-		}
-		id := strings.Fields(line)[0]
-		shape := ContractSHACLShape{ID: id, Title: compactTerm(id)}
-		for i++; i < len(lines); i++ {
-			inner := strings.TrimSpace(lines[i])
-			if strings.HasPrefix(inner, "sh:targetClass ") {
-				shape.TargetClass = turtleObject(inner)
-			}
-			if strings.HasPrefix(inner, "sh:property [") {
-				propertyLines := []string{}
-				endShape := false
-				for i++; i < len(lines); i++ {
-					propertyLine := strings.TrimSpace(lines[i])
-					if strings.HasPrefix(propertyLine, "]") {
-						endShape = strings.HasSuffix(propertyLine, ".")
-						break
-					}
-					propertyLines = append(propertyLines, propertyLine)
-				}
-				shape.Properties = append(shape.Properties, parseContractSHACLPropertyTurtle(shape, len(shape.Properties), propertyLines))
-				if endShape {
-					break
-				}
-			}
-			if strings.HasSuffix(inner, ".") {
-				break
-			}
-		}
-		if compactTerm(shape.TargetClass) != "" {
-			shapes[shape.ID] = shape
-			shapes[compactTerm(shape.ID)] = shape
-		}
-	}
-	return shapes
-}
-
-func parseContractSHACLPropertyTurtle(shape ContractSHACLShape, index int, lines []string) ContractSHACLProperty {
-	property := ContractSHACLProperty{
-		ID: fmt.Sprintf("%s-PROP-%03d", shape.ID, index+1),
-	}
-	for _, line := range lines {
-		switch {
-		case strings.HasPrefix(line, "sh:path "):
-			property.Path = compactTerm(turtleObject(line))
-		case strings.HasPrefix(line, "sh:datatype "):
-			property.Datatype = turtleObject(line)
-		case strings.HasPrefix(line, "sh:minCount "):
-			property.MinCount = parseTurtleIntPtr(turtleObject(line))
-		case strings.HasPrefix(line, "sh:maxCount "):
-			property.MaxCount = parseTurtleIntPtr(turtleObject(line))
-		case strings.HasPrefix(line, "sh:minInclusive "):
-			property.MinInclusive = parseTurtleFloatPtr(turtleObject(line))
-		case strings.HasPrefix(line, "sh:class "):
-			property.Class = turtleObject(line)
-		case strings.HasPrefix(line, "sh:node "):
-			property.Node = turtleObject(line)
-		case strings.HasPrefix(line, "sh:message "):
-			property.Message = strings.Trim(turtleObject(line), `"`)
-		case strings.HasPrefix(line, "sh:in "):
-			property.In = parseTurtleList(line)
-		}
-	}
-	property.Name = compactTerm(property.Path)
-	return property
-}
-
-func stripTurtleComments(content string) string {
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		inQuote := false
-		inIRI := false
-		for index, r := range line {
-			switch r {
-			case '"':
-				if !inIRI {
-					inQuote = !inQuote
-				}
-			case '<':
-				if !inQuote {
-					inIRI = true
-				}
-			case '>':
-				if !inQuote {
-					inIRI = false
-				}
-			case '#':
-				if !inQuote && !inIRI {
-					lines[i] = strings.TrimRight(line[:index], " \t")
-					break
-				}
-			}
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-func turtleObject(line string) string {
-	line = strings.TrimSpace(line)
-	if index := strings.Index(line, " "); index >= 0 {
-		line = strings.TrimSpace(line[index+1:])
-	}
-	line = strings.TrimSuffix(line, ";")
-	line = strings.TrimSuffix(line, ".")
-	return strings.TrimSpace(line)
-}
-
-func parseTurtleList(line string) []string {
-	start := strings.Index(line, "(")
-	end := strings.LastIndex(line, ")")
-	if start < 0 || end <= start {
-		return nil
-	}
-	parts := strings.Fields(line[start+1 : end])
-	values := make([]string, 0, len(parts))
-	for _, part := range parts {
-		values = append(values, strings.Trim(part, `"`))
-	}
-	return values
-}
-
-func parseTurtleIntPtr(value string) *int {
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		return nil
-	}
-	return &parsed
-}
-
-func parseTurtleFloatPtr(value string) *float64 {
-	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil {
-		return nil
-	}
-	return &parsed
 }
 
 func compactTerm(value string) string {
