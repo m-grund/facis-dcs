@@ -14,7 +14,7 @@ Feature: User Authentication & Authorization
     When I attempt to access the DCS system
     Then the request is denied with error "Credential invalid or access revoked"
     And the attempt is logged for audit
-
+ 
   Scenario: Role enforcement prevents unauthorized actions
     Given I am authenticated with roles: "Contract Creator"
     When I attempt to access admin functions
