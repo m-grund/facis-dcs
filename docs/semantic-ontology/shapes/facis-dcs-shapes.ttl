@@ -42,6 +42,7 @@ dcs:ContractShape
   ] ;
   sh:property [
     sh:path dcs:party ;
+    sh:class dcs:Company ;
     sh:node dcs:CompanyShape ;
     sh:minCount 2 ;
   ] .

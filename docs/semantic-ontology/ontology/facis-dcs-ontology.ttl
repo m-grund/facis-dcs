@@ -123,7 +123,8 @@ dcs:WorkflowHook a rdfs:Class ;
 #################################################################
 
 dcs:Party a rdfs:Class ;
-  rdfs:label "Party" .
+  rdfs:label "Party" ;
+  rdfs:comment "Abstract identity participant. Contract parties are currently restricted to companies." .
 
 dcs:Company a rdfs:Class ;
   rdfs:subClassOf dcs:Party ;
@@ -738,7 +739,8 @@ dcs:hasDeployment a rdf:Property ;
 
 dcs:party a rdf:Property ;
   rdfs:label "Party" ;
-  rdfs:range dcs:Party .
+  rdfs:comment "A company acting as a party to the contract." ;
+  rdfs:range dcs:Company .
 
 dcs:role a rdf:Property ;
   rdfs:label "Role" ;
