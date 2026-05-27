@@ -1,4 +1,4 @@
-@UC-01 @FR-UC-01-1 @FR-UC-01-2 @FR-UC-01-3 @FR-UC-01-4
+@FR-UC-01-1 @FR-UC-01-3 @FR-UC-01-4
 @skip
 Feature: User Authentication & Authorization
   Users authenticate securely and are authorized based on roles and credentials.
@@ -14,7 +14,7 @@ Feature: User Authentication & Authorization
     When I attempt to access the DCS system
     Then the request is denied with error "Credential invalid or access revoked"
     And the attempt is logged for audit
-
+ 
   Scenario: Role enforcement prevents unauthorized actions
     Given I am authenticated with roles: "Contract Creator"
     When I attempt to access admin functions
