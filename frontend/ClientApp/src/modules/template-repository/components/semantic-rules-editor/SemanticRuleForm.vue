@@ -257,9 +257,12 @@ const selectedDomainField = computed(() =>
 )
 const fixedValueOptions = computed(() => selectedDomainField.value?.valueConstraint?.allowedValues ?? [])
 const fixedValueError = computed(() => validateDraftFixedValue())
+const selectableDomainFields = computed(() =>
+  ONTOLOGY_DOMAIN_FIELDS.filter((field) => domainFieldAllowedForEntityType(field.semanticPath, newCondition.value.entityType)),
+)
 const groupedDomainFields = computed(() => {
   const query = domainFieldSearch.value.trim().toLowerCase()
-  const filtered = ONTOLOGY_DOMAIN_FIELDS.filter((field) => {
+  const filtered = selectableDomainFields.value.filter((field) => {
     if (!query) return true
     return [
       field.label,
@@ -336,6 +339,13 @@ watch(
   () => newCondition.value.entityType,
   (entityType) => {
     if (entityType !== 'Party') newCondition.value.entityRole = ''
+    if (selectedDomainField.value && !domainFieldAllowedForEntityType(selectedDomainField.value.semanticPath, entityType)) {
+      draftParameter.value = defaultParam()
+      draftFixedValue.value = ''
+      selectedDomainPath.value = ''
+      domainFieldSearch.value = ''
+      showDomainFieldOptions.value = false
+    }
   },
 )
 
@@ -362,8 +372,15 @@ function formatDomainFieldLabel(field: (typeof ONTOLOGY_DOMAIN_FIELDS)[number]) 
 }
 
 function selectDomainField(path: DomainSemanticPath) {
+  if (!domainFieldAllowedForEntityType(path, newCondition.value.entityType)) return
   selectedDomainPath.value = path
   showDomainFieldOptions.value = false
+}
+
+function domainFieldAllowedForEntityType(path: DomainSemanticPath, entityType: string): boolean {
+  const isPartyField = path === 'company' || path.startsWith('company.')
+  if (entityType === 'Party') return isPartyField
+  return !isPartyField
 }
 
 function handleDomainFieldInput() {
