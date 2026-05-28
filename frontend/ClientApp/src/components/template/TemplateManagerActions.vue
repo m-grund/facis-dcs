@@ -75,7 +75,6 @@ const register = async () => {
 }
 
 const exportPdf = async () => {
-<<<<<<< HEAD
   const blob = await contractTemplateService.exportPdf(props.template.did)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -83,15 +82,6 @@ const exportPdf = async () => {
   a.download = `template-${props.template.did}.pdf`
   a.click()
   URL.revokeObjectURL(url)
-=======
-  const template = await contractTemplateService.retrieveById({ did: props.template.did })
-  if (!template) return
-  const blocks = convertContractToPlainTextBlocks(template.template_data)
-  const pdfData = toPdfData(blocks)
-  const title = `${template.name ?? 'contract-template'}`
-  const filename = `${title}.pdf`
-  downloadContractPdf(pdfData, filename, title)
->>>>>>> development
 }
 </script>
 
