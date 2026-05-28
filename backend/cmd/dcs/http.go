@@ -13,11 +13,13 @@ import (
 	dcstodcssvr "digital-contracting-service/gen/http/dcs_to_dcs/server"
 	externaltargetsystemapisvr "digital-contracting-service/gen/http/external_target_system_api/server"
 	orchestrationwebhookssvr "digital-contracting-service/gen/http/orchestration_webhooks/server"
+	pdfgenerationsvr "digital-contracting-service/gen/http/pdf_generation/server"
 	processauditandcompliancesvr "digital-contracting-service/gen/http/process_audit_and_compliance/server"
 	signaturemanagementsvr "digital-contracting-service/gen/http/signature_management/server"
 	templatecatalogueintegrationsvr "digital-contracting-service/gen/http/template_catalogue_integration/server"
 	templaterepositorysvr "digital-contracting-service/gen/http/template_repository/server"
 	orchestrationwebhooks "digital-contracting-service/gen/orchestration_webhooks"
+	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
@@ -62,7 +64,7 @@ var (
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
-func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.Endpoints, contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints, dcsToDcsEndpoints *dcstodcs.Endpoints, externalTargetSystemAPIEndpoints *externaltargetsystemapi.Endpoints, orchestrationWebhooksEndpoints *orchestrationwebhooks.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints, signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints, templateRepositoryEndpoints *templaterepository.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup, errc chan error, dbg bool) {
+func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.Endpoints, contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints, dcsToDcsEndpoints *dcstodcs.Endpoints, externalTargetSystemAPIEndpoints *externaltargetsystemapi.Endpoints, orchestrationWebhooksEndpoints *orchestrationwebhooks.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints, signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints, templateRepositoryEndpoints *templaterepository.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup, errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
 	// The goa http package has built-in support for JSON, XML and gob.
@@ -99,6 +101,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		dcsToDcsServer                     *dcstodcssvr.Server
 		externalTargetSystemAPIServer      *externaltargetsystemapisvr.Server
 		orchestrationWebhooksServer        *orchestrationwebhookssvr.Server
+		pdfGenerationServer                *pdfgenerationsvr.Server
 		processAuditAndComplianceServer    *processauditandcompliancesvr.Server
 		signatureManagementServer          *signaturemanagementsvr.Server
 		templateCatalogueIntegrationServer *templatecatalogueintegrationsvr.Server
@@ -113,6 +116,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		dcsToDcsServer = dcstodcssvr.New(dcsToDcsEndpoints, apiMux, dec, enc, eh, ef)
 		externalTargetSystemAPIServer = externaltargetsystemapisvr.New(externalTargetSystemAPIEndpoints, apiMux, dec, enc, eh, ef)
 		orchestrationWebhooksServer = orchestrationwebhookssvr.New(orchestrationWebhooksEndpoints, apiMux, dec, enc, eh, ef)
+		pdfGenerationServer = pdfgenerationsvr.New(pdfGenerationEndpoints, apiMux, dec, enc, eh, ef)
 		processAuditAndComplianceServer = processauditandcompliancesvr.New(processAuditAndComplianceEndpoints, apiMux, dec, enc, eh, ef)
 		signatureManagementServer = signaturemanagementsvr.New(signatureManagementEndpoints, apiMux, dec, enc, eh, ef)
 		templateCatalogueIntegrationServer = templatecatalogueintegrationsvr.New(templateCatalogueIntegrationEndpoints, apiMux, dec, enc, eh, ef)
@@ -126,6 +130,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	dcstodcssvr.Mount(apiMux, dcsToDcsServer)
 	externaltargetsystemapisvr.Mount(apiMux, externalTargetSystemAPIServer)
 	orchestrationwebhookssvr.Mount(apiMux, orchestrationWebhooksServer)
+	pdfgenerationsvr.Mount(apiMux, pdfGenerationServer)
 	processauditandcompliancesvr.Mount(apiMux, processAuditAndComplianceServer)
 	signaturemanagementsvr.Mount(apiMux, signatureManagementServer)
 	templatecatalogueintegrationsvr.Mount(apiMux, templateCatalogueIntegrationServer)
@@ -171,6 +176,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range orchestrationWebhooksServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range pdfGenerationServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range processAuditAndComplianceServer.Mounts {

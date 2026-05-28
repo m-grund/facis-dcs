@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
@@ -14,7 +13,6 @@ defineOptions({
 })
 
 const attrs = useAttrs()
-const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 
 const filteredClass = computed(() =>
   String(attrs.class || '')
@@ -76,8 +74,14 @@ const register = async () => {
   }
 }
 
-const exportPdf = async() => {
-  // todo: call backend
+const exportPdf = async () => {
+  const blob = await contractTemplateService.exportPdf(props.template.did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${props.template.did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 

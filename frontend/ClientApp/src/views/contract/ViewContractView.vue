@@ -7,7 +7,6 @@ import type { SelectedUserRole } from '@/models/user'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
 import {
   useSemanticValueVerification,
   type VerificationResult,
@@ -38,7 +37,6 @@ const templateEditorUiStore = useTemplateEditorUiStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
-const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 const { setActiveTab } = contractEditorUiStore
 
@@ -205,7 +203,14 @@ function applyContractDataToDraft(contractData?: unknown) {
 }
 
 const exportPdf = async () => {
-  // todo: call backend
+  const did = route.params.did as string
+  const blob = await contractWorkflowService.exportPdf(did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `contract-${did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 

@@ -49,4 +49,6 @@ export interface ContractWorkflowService {
   terminate: (request: ContractTerminateRequest) => Promise<ContractTerminateResponse>
   audit: (request: ContractAuditRequest) => Promise<ContractAuditResponse>
   retrieveHistoryByDid: (request: ContractHistoryRetrieveRequest) => Promise<ContractHistoryResponse>
+  exportPdf: (did: string) => Promise<Blob>
+  verifyPdf: (did: string) => Promise<{ match: boolean; jsonld_hash: string; base_pdf_hash: string; stored_base_pdf_hash: string }>
 }
