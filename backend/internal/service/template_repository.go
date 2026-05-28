@@ -713,3 +713,10 @@ func (s *templateRepositorysrvc) auditTemplatePolicyFindings(ctx context.Context
 	})
 	return findings, template, err
 }
+
+func derefInt(i *int) int {
+	if i != nil {
+		return *i
+	}
+	return 0
+}

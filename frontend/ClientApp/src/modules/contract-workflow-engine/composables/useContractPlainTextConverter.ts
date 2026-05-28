@@ -17,7 +17,7 @@ import {
   isMergedApprovedTemplateBlock,
   isSectionBlock,
   isTextBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
