@@ -104,7 +104,6 @@ def step_when_internal_request(context, method, endpoint):
 @then("the response status is {status_code:d}")
 def step_then_response_status(context, status_code):
     actual = context.requests_response.status_code
-    assert 1==2, context.requests_response.json()
     assert actual == status_code, (
         f"Expected HTTP {status_code}, got {actual}: {context.requests_response.text}"
     )
