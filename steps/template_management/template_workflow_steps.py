@@ -373,6 +373,11 @@ def step_when_search_templates(context, keyword):
         timeout=context.http_timeout_seconds,
     )
 
+@when('I am authenticated with roles: "{roles}"')
+def step_when_authenticated_with_roles(context, roles):
+    role_list = [role.strip() for role in roles.split(",")]
+    AuthService.set_headers_for_roles(context, role_list)
+
 @when('I try to search for templates with name "{name}" "{count}"')
 def step_when_search_templates(context, name, count):
     for _ in range(int(count)):
@@ -382,6 +387,11 @@ def step_when_search_templates(context, name, count):
             headers=getattr(context, "headers", {}),
             timeout=context.http_timeout_seconds,
         )
+
+@when('the request is denied because of too many failed attempts')
+def step_when_denied_to_many_attempts(context):
+    response = context.requests_response.json()
+    assert context.requests_response.status_code in (401, 403) and "too many failed attempts" in response["message"], response
 
 @when('I search for templates with name "{name}"')
 def step_when_search_templates(context, name):
