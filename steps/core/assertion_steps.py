@@ -22,9 +22,10 @@ def step_then_denied_authorization(context):
     assert context.requests_response.status_code in (401, 403), context.requests_response.text
 
 
-@then('the request is denied with error "Credential invalid or access revoked"')
+@then('the request is denied because of credential expiration')
 def step_then_denied_credential_invalid(context):
-    assert context.requests_response.status_code in (401, 403), context.requests_response.text
+    response = context.requests_response.json()
+    assert context.requests_response.status_code in (401, 403) and "token is expired" in response["message"], response
 
 
 @then("the request is denied")
