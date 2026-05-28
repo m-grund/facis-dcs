@@ -29,6 +29,9 @@ service:
   type: ClusterIP
   port: 8991
 
+serviceMonitor:
+  enabled: false
+
 ingress:
   enabled: false
   className: ""
@@ -145,7 +148,7 @@ neo4j:
 # See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
   enabled: false
-    # URL the DCS backend uses to reach the Federated Catalogue API
+  # URL the DCS backend uses to reach the Federated Catalogue API
   apiURL: ""
   secretRef:
     name: ""
@@ -189,3 +192,48 @@ customPolicyAgent:
     level: "info"
     format: "json"
 
+# ---- Optional monitoring stack (Prometheus, Grafana, Alertmanager) ----------------
+monitoring:
+  enabled: false
+
+grafana:
+  enabled: false
+  adminPassword: YourStrongPassword
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+
+prometheus:
+  enabled: false
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    serviceMonitorSelectorNilUsesHelmValues: true
+    podMonitorSelectorNilUsesHelmValues: true
+
+alertmanager:
+  enabled: false
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+nodeExporter:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+>>>>>>> development-dasimonde

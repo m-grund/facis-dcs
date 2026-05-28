@@ -24,9 +24,9 @@ export interface DocumentStructure {
 export type DocumentOutline = DocumentOutlineBlock[]
 
 export interface DocumentOutlineBlock {
-    blockId: string
-    isRoot?: boolean
-    children: string[]
+  blockId: string
+  isRoot?: boolean
+  children: string[]
 }
 
 // ---- SemanticCondition ----
@@ -59,14 +59,14 @@ export const SemanticOperate = {
 export type SemanticOperateType = (typeof SemanticOperate)[keyof typeof SemanticOperate] | LegacySemanticOperate
 
 export interface SemanticParameterOperator {
-    operate: SemanticOperateType
-    /**
-     * Target could be other parameters or basic value, 
-     * for example: 
-     * { "operate": "greaterThan", "value": "100" } 
-     * { "operate": "greaterThan", "value": "{{startDate}}" } 
-     */
-    targets: string[]
+  operate: SemanticOperateType
+  /**
+   * Target could be other parameters or basic value,
+   * for example:
+   * { "operate": "greaterThan", "value": "100" }
+   * { "operate": "greaterThan", "value": "{{startDate}}" }
+   */
+  targets: string[]
 }
 
 export interface SemanticConditionParameter {
@@ -167,11 +167,11 @@ export const FACIS_CONTRACT_VALIDATION_PROFILE: ValidationProfile = {
 }
 
 export const DocumentBlockType = {
-    Section: 'SECTION',
-    Text: 'TEXT',
-    Clause: 'CLAUSE',
-    ApprovedTemplate: 'APPROVED_TEMPLATE',
-    MergedApprovedTemplate: 'MERGED_APPROVED_TEMPLATE',
+  Section: 'SECTION',
+  Text: 'TEXT',
+  Clause: 'CLAUSE',
+  ApprovedTemplate: 'APPROVED_TEMPLATE',
+  MergedApprovedTemplate: 'MERGED_APPROVED_TEMPLATE',
 } as const
 
 // ---- DocumentBlock ----
@@ -191,67 +191,67 @@ interface BaseBlock {
 }
 
 export interface SectionBlock extends BaseBlock {
-    type: (typeof DocumentBlockType)['Section']
+  type: (typeof DocumentBlockType)['Section']
 }
 
 export interface TextBlock extends BaseBlock {
-    type: (typeof DocumentBlockType)['Text']
+  type: (typeof DocumentBlockType)['Text']
 }
 
 export interface ClauseBlock extends BaseBlock {
-    type: (typeof DocumentBlockType)['Clause']
-    conditionIds: string[]
-    // TBD: render
-    // number: 0.##
-    // date: yyyy-MM-dd
+  type: (typeof DocumentBlockType)['Clause']
+  conditionIds: string[]
+  // TBD: render
+  // number: 0.##
+  // date: yyyy-MM-dd
 }
 
 export interface ApprovedTemplateBlock extends BaseBlock {
-    type: (typeof DocumentBlockType)['ApprovedTemplate']
-    templateId: string
-    version: number
-    document_number: string
+  type: (typeof DocumentBlockType)['ApprovedTemplate']
+  templateId: string
+  version: number
+  document_number: string
 }
 
 export interface MergedApprovedTemplateBlock extends BaseBlock {
-    type: (typeof DocumentBlockType)['MergedApprovedTemplate']
-    templateId: string
-    version: number
-    document_number: string
+  type: (typeof DocumentBlockType)['MergedApprovedTemplate']
+  templateId: string
+  version: number
+  document_number: string
 }
 
 export function isSectionBlock(block: DocumentBlock): block is SectionBlock {
-    return block.type === DocumentBlockType.Section
+  return block.type === DocumentBlockType.Section
 }
 
 export function isTextBlock(block: DocumentBlock): block is TextBlock {
-    return block.type === DocumentBlockType.Text
+  return block.type === DocumentBlockType.Text
 }
 
 export function isClauseBlock(block: DocumentBlock): block is ClauseBlock {
-    return block.type === DocumentBlockType.Clause
+  return block.type === DocumentBlockType.Clause
 }
 
 export function isApprovedTemplateBlock(block: DocumentBlock): block is ApprovedTemplateBlock {
-    return block.type === DocumentBlockType.ApprovedTemplate
+  return block.type === DocumentBlockType.ApprovedTemplate
 }
 
 export function isMergedApprovedTemplateBlock(block: DocumentBlock): block is MergedApprovedTemplateBlock {
-    return block.type === DocumentBlockType.MergedApprovedTemplate
+  return block.type === DocumentBlockType.MergedApprovedTemplate
 }
 
 // ---- MetaData ----
 
 export interface MetaData {
-    name: string
-    value: string
+  name: string
+  value: string
 }
 
 // ---- TemplateTypeValue ----
 
 export const TemplateType = {
-    subContract: 'SUB_CONTRACT',
-    frameContract: 'FRAME_CONTRACT',
+  subContract: 'SUB_CONTRACT',
+  frameContract: 'FRAME_CONTRACT',
 } as const
 
 export type TemplateTypeValue = (typeof TemplateType)[keyof typeof TemplateType]

@@ -29,5 +29,10 @@ dependencies:
 - name: ipfs-document-manager
   repository: file://charts/ipfs-document-manager
   version: 0.1.0
+
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 85.2.0
+
 digest: sha256:a07c653330de6ddb752ea9396443c042eeb2e7e7cdb21608369ff55ff2c35205
 generated: "2026-05-27T13:45:46.166075801+02:00"

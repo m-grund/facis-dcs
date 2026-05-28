@@ -22,8 +22,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SemanticCondition, SemanticParameterType, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
-import { parseSegments, isText, isPlaceholder, type Segment, isNewline } from '@template-repository/composables/useClauseTextChips'
+import type { SemanticCondition, SemanticParameterType, SemanticValueConstraint } from '@template-repository/models/contract-template'
+import {
+  parseSegments,
+  isText,
+  isPlaceholder,
+  type Segment,
+  isNewline,
+} from '@template-repository/composables/useClauseTextChips'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import PreviewParamInput from './PreviewParamInput.vue'
@@ -91,23 +97,17 @@ function onParamValueChange(seg: PreviewSegment, value: string | number | boolea
 
 function findSemanticValue(conditionId: string, parameterName: string): string | number | boolean | undefined {
   return props.semanticConditionValues?.find((item) => {
-    return (
-      item.blockId === props.blockId &&
-      item.conditionId === conditionId &&
-      item.parameterName === parameterName
-    )
+    return item.blockId === props.blockId && item.conditionId === conditionId && item.parameterName === parameterName
   })?.parameterValue
 }
 
 function findVerificationError(conditionId: string, parameterName: string) {
   if (!props.verificationResult) return null
-  return props.verificationResult.errors.find((item) => {
-    return (
-      item.blockId === props.blockId &&
-      item.conditionId === conditionId &&
-      item.parameterName === parameterName
-    )
-  }) ?? null
+  return (
+    props.verificationResult.errors.find((item) => {
+      return item.blockId === props.blockId && item.conditionId === conditionId && item.parameterName === parameterName
+    }) ?? null
+  )
 }
 </script>
 

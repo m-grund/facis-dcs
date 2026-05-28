@@ -64,13 +64,13 @@ const policyBadgeClass = (audit: TemplateAuditItem) => {
           <div>Submitted by: {{ audit.event_data.submitted_by }}</div>
           <div>
             Transition:
-            <span class="badge badge-outline badge-secondary badge-xs">{{
-              toProperCase(audit.event_data.previous_state)
-            }}</span>
+            <span class="badge badge-outline badge-xs badge-secondary">
+              {{ toProperCase(audit.event_data.previous_state) }}
+            </span>
             →
-            <span class="badge badge-outline badge-secondary badge-xs">{{
-              toProperCase(audit.event_data.new_state)
-            }}</span>
+            <span class="badge badge-outline badge-xs badge-secondary">
+              {{ toProperCase(audit.event_data.new_state) }}
+            </span>
           </div>
         </div>
         <div v-else-if="eventType.isApproveEvent(audit)">

@@ -1,20 +1,39 @@
 <template>
   <span class="tooltip tooltip-top inline-flex items-baseline" :data-tip="tipText">
-    <select v-if="(type === 'string' || type === 'enum') && valueConstraint?.allowedValues?.length" v-model="stringValue" @change="emitStringValue"
-      :class="inputClass" :aria-label="label">
-      <option value="" disabled>Select</option>
-      <option v-for="option in valueConstraint.allowedValues" :key="option" :value="option">{{ option }}</option>
-    </select>
-    <input v-else-if="type === 'string' || type === 'enum'" v-model="stringValue" type="text" @input="emitStringValue"
-      :class="inputClass" :aria-label="label" />
-    <input v-else-if="type === 'integer'" v-model="numberValue" type="text" inputmode="numeric" @keydown="onIntegerKeyDown" @input="emitIntegerValue"
-      :class="inputClass" :aria-label="label" />
-    <input v-else-if="type === 'decimal'" v-model="numberValue" type="number" @input="emitDecimalValue"
-      :class="inputClass" :aria-label="label" />
-    <input v-else-if="type === 'date'" v-model="dateValue" type="date" @input="emitDateValue"
-      :class="inputClass" :aria-label="label" />
-    <input v-else-if="type === 'boolean'" v-model="booleanValue" type="checkbox" class="checkbox checkbox-xs checkbox-primary align-middle"
-      :aria-label="label" @change="emitBooleanValue" />
+    <input
+      v-if="type === 'string'"
+      v-model="stringValue"
+      type="text"
+      :class="inputClass"
+      :aria-label="label"
+      @input="emitStringValue"
+    />
+    <input
+      v-else-if="type === 'integer'"
+      v-model="numberValue"
+      type="text"
+      inputmode="numeric"
+      :class="inputClass"
+      :aria-label="label"
+      @keydown="onIntegerKeyDown"
+      @input="emitIntegerValue"
+    />
+    <input
+      v-else-if="type === 'decimal'"
+      v-model="numberValue"
+      type="number"
+      :class="inputClass"
+      :aria-label="label"
+      @input="emitDecimalValue"
+    />
+    <input
+      v-else-if="type === 'date'"
+      v-model="dateValue"
+      type="date"
+      :class="inputClass"
+      :aria-label="label"
+      @input="emitDateValue"
+    />
   </span>
 </template>
 
@@ -71,7 +90,7 @@ function emitStringValue(event: Event) {
 }
 
 function emitIntegerValue(event: Event) {
-  const next =  getIntegerInput((event.target as HTMLInputElement | null)?.value ?? '')
+  const next = getIntegerInput((event.target as HTMLInputElement | null)?.value ?? '')
   if (next === '' || next === '-') {
     emit('update:value', '')
     return
@@ -110,7 +129,15 @@ function getIntegerInput(value: string): string {
 
 function onIntegerKeyDown(event: KeyboardEvent) {
   const allowedControlKeys = new Set([
-    'Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End',
+    'Backspace',
+    'Delete',
+    'Tab',
+    'Escape',
+    'Enter',
+    'ArrowLeft',
+    'ArrowRight',
+    'Home',
+    'End',
   ])
   if (allowedControlKeys.has(event.key) || event.metaKey || event.ctrlKey) return
   if (event.key === '-') {

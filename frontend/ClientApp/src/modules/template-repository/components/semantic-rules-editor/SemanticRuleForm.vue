@@ -1,15 +1,20 @@
 <template>
-
-  <h3 class="text-sm font-semibold text-base-content/80 mb-4">{{ formTitle }}</h3>
+  <h3 class="mb-4 text-sm font-semibold text-base-content/80">{{ formTitle }}</h3>
   <div class="space-y-4">
     <div>
-      <label class="label-text text-xs text-base-content/60 block mb-1">Rule name
+      <label class="label-text mb-1 block text-xs text-base-content/60">
+        Rule name
         <RequiredIndicator />
       </label>
-      <input v-model="newCondition.conditionName" type="text" class="input input-bordered input-sm w-full"
-        :class="{ 'input-error': isRuleNameDuplicate }" placeholder="" />
-      <p class="text-xs text-base-content/50 mt-0.5">Used when selecting this rule for a clause.</p>
-      <p v-if="isRuleNameDuplicate" class="text-xs text-error mt-0.5">Rule name already exists.</p>
+      <input
+        v-model="newCondition.conditionName"
+        type="text"
+        class="input-bordered input input-sm w-full"
+        :class="{ 'input-error': isRuleNameDuplicate }"
+        placeholder=""
+      />
+      <p class="mt-0.5 text-xs text-base-content/50">Used when selecting this rule for a clause.</p>
+      <p v-if="isRuleNameDuplicate" class="mt-0.5 text-xs text-error">Rule name already exists.</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -38,7 +43,7 @@
     </div>
 
     <div class="space-y-4">
-      <p class="label-text text-xs text-base-content/60 mb-1">Parameters</p>
+      <p class="label-text mb-1 text-xs text-base-content/60">Parameters</p>
       <div
         class="grid grid-cols-1 md:grid-cols-12 gap-x-3 p-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50">
         <p class="md:col-span-12 text-xs font-medium text-base-content/70 mb-2">New parameter</p>
@@ -131,14 +136,17 @@
           />
           <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
         </div>
-        <div class="md:col-span-2 flex flex-col gap-1">
-          <label class="label py-0 min-h-0">
+        <div class="flex flex-col gap-1 md:col-span-2">
+          <label class="label min-h-0 py-0">
             <span class="label-text text-xs text-base-content/60">Required</span>
           </label>
-          <div class="flex items-center h-9">
-            <label class="label cursor-pointer justify-start gap-2 py-0 min-h-0 h-auto">
-              <input v-model="draftParameter.isRequired" type="checkbox"
-                class="checkbox checkbox-sm checkbox-primary" />
+          <div class="flex h-9 items-center">
+            <label class="label h-auto min-h-0 cursor-pointer justify-start gap-2 py-0">
+              <input
+                v-model="draftParameter.isRequired"
+                type="checkbox"
+                class="checkbox checkbox-sm checkbox-primary"
+              />
               <span class="label-text text-xs">Required</span>
             </label>
           </div>
@@ -171,17 +179,23 @@
             </span>
             <span class="badge badge-ghost badge-sm">{{ param.type }}</span>
             <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
-            <button type="button" class="btn btn-ghost btn-xs text-error ml-auto shrink-0" aria-label="Delete parameter"
-              @click="deleteParameter(idx)"> ✕ </button>
+            <button
+              type="button"
+              class="btn ml-auto shrink-0 text-error btn-ghost btn-xs"
+              aria-label="Delete parameter"
+              @click="deleteParameter(idx)"
+            >
+              ✕
+            </button>
           </li>
         </ul>
       </div>
     </div>
 
-    <div class="flex justify-between items-center">
+    <div class="flex items-center justify-between">
       <button v-if="isEditMode" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">Cancel</button>
       <span v-else />
-      <button type="button" class="btn btn-secondary btn-sm" :disabled="!canSubmitRule" @click="submitRule">
+      <button type="button" class="btn btn-sm btn-secondary" :disabled="!canSubmitRule" @click="submitRule">
         {{ submitLabel }}
       </button>
     </div>
@@ -411,9 +425,7 @@ const isParameterNameDuplicate = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return false
   const lower = name.toLowerCase()
-  return newCondition.value.parameters.some(
-    (p) => p.parameterName.trim().toLowerCase() === lower
-  )
+  return newCondition.value.parameters.some((p) => p.parameterName.trim().toLowerCase() === lower)
 })
 
 const canAddParameter = computed(() => {
@@ -431,8 +443,7 @@ const isRuleNameDuplicate = computed(() => {
   return props.existingConditions.some(
     (c) =>
       // When in edit mode, the current condition is not included in the check
-      c.conditionId !== currentConditionId &&
-      c.conditionName.trim().toLowerCase() === lower
+      c.conditionId !== currentConditionId && c.conditionName.trim().toLowerCase() === lower,
   )
 })
 

@@ -88,6 +88,7 @@ type ContractUpdateData struct {
 	State              string              `db:"state"`
 	Name               *string             `db:"name"`
 	Description        *string             `db:"description"`
+	ContractVersion    int                 `db:"contract_version"`
 	ContractData       *datatype.JSON      `db:"contract_data"`
 	StartDate          *time.Time          `db:"start_date"`
 	ExpDate            *time.Time          `db:"exp_date"`
