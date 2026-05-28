@@ -22,6 +22,7 @@ import (
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
+	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/service"
 	"digital-contracting-service/internal/webhookplatform"
 	"net/http"
@@ -145,6 +146,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 
 	var handler http.Handler = outerMux
 	handler = service.RequestContextMiddleware(handler)
+	handler = middleware.InjectIP(handler)
 	handler = metricsMiddleware(handler)
 	if dbg {
 		// Log query and response bodies if debug logs are enabled.
