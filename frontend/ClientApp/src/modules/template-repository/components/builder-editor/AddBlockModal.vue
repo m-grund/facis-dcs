@@ -82,7 +82,7 @@
                 </button>
               </div>
               <p class="text-xs text-base-content/50">
-                Adds legal name, registration, VAT, representative, contact, address, country, and a fixed role.
+                Adds legal name, registration, VAT, representative, contact, address, and country.
               </p>
             </div>
           </div>
@@ -138,8 +138,7 @@ const companyRoleOptions = ONTOLOGY_ENTITY_ROLES
 const companyFields = ONTOLOGY_DOMAIN_FIELDS
   .filter((field) => field.semanticPath.startsWith('company.'))
   .sort((left, right) => companyFieldSortIndex(left.semanticPath) - companyFieldSortIndex(right.semanticPath))
-const companyRoleField = companyFields.find((field) => field.mapsEntityRole) ?? companyFields.find((field) => field.semanticPath === 'company.role')
-const companyEntityType = localOntologyName(companyRoleField?.statementType ?? '')
+const companyEntityType = localOntologyName(companyFields.find((field) => field.statementType)?.statementType ?? 'CompanyParty')
 const selectedCompanyRole = ref('')
 
 const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
@@ -207,7 +206,7 @@ function handleAddCompanyPartyBlock() {
   if (ctx === null || !role || !companyEntityType) return
   const conditionId = `company-${role}-${crypto.randomUUID()}`
   const roleLabel = companyRoleOptions.find((option) => option.value === role)?.label ?? role
-  const parameters = companyFields.map((field) => buildCompanyParameter(field, role))
+  const parameters = companyFields.map((field) => buildCompanyParameter(field))
 
   draftStore.semanticConditions.push({
     conditionId,
@@ -253,10 +252,9 @@ function handleAddClause(clauseBlockId: string) {
   uiStore.closeAddBlockModal()
 }
 
-function buildCompanyParameter(field: DomainFieldDefinition, role: string): SemanticConditionParameter {
-  const fixedValue = field.semanticPath === 'company.role' ? role : undefined
+function buildCompanyParameter(field: DomainFieldDefinition): SemanticConditionParameter {
   const parameter: SemanticConditionParameter = {
-    parameterName: field.semanticPath.split('.').join('_'),
+    parameterName: field.semanticPath,
     type: field.type,
     schemaRef: field.schemaRef,
     semanticPath: field.semanticPath,
@@ -265,7 +263,6 @@ function buildCompanyParameter(field: DomainFieldDefinition, role: string): Sema
     operators: [],
     value: undefined,
   }
-  if (fixedValue !== undefined) parameter.fixedValue = fixedValue
   return parameter
 }
 
@@ -296,7 +293,6 @@ function localOntologyName(resource: string): string {
 
 function companyFieldSortIndex(semanticPath: string): number {
   const order = [
-    'company.role',
     'company.legalName',
     'company.registrationNumber',
     'company.vatId',

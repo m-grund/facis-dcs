@@ -21,11 +21,10 @@ func TestBuildTemplateResourceSelfDescriptionIncludesSemanticEntityContext(t *te
 				"entityRole":    "customer",
 				"parameters": []any{
 					map[string]any{
-						"parameterName": "company_role",
+						"parameterName": "legalName",
 						"type":          "string",
 						"schemaRef":     "facis.dcs.party.v1",
-						"semanticPath":  "company.role",
-						"fixedValue":    "customer",
+						"semanticPath":  "company.legalName",
 						"isRequired":    true,
 						"operators":     []any{},
 					},
@@ -65,6 +64,4 @@ func TestBuildTemplateResourceSelfDescriptionIncludesSemanticEntityContext(t *te
 	condition := embeddedTemplateData["semanticConditions"].([]any)[0].(map[string]any)
 	require.Equal(t, "CompanyParty", condition["entityType"])
 	require.Equal(t, "customer", condition["entityRole"])
-	param := condition["parameters"].([]any)[0].(map[string]any)
-	require.Equal(t, "customer", param["fixedValue"])
 }

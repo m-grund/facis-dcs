@@ -114,10 +114,6 @@ function emitDateValue(event: Event) {
   emit('update:value', next)
 }
 
-function emitBooleanValue(event: Event) {
-  emit('update:value', (event.target as HTMLInputElement | null)?.checked ?? false)
-}
-
 function getIntegerInput(value: string): string {
   if (!value) return ''
   const trimmed = value.trim()

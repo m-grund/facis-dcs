@@ -18,7 +18,6 @@ type domainField struct {
 	StatementType  string
 	StatementID    string
 	ValuePrefix    string
-	MapsEntityRole bool
 	Constraint     *valueConstraint
 }
 
@@ -494,31 +493,7 @@ func canonicalizeSemanticRule(rule map[string]any) {
 		if operator := normalizeSemanticOperator(rawOperator); operator != "" {
 			rule[semanticRuleOperatorProperty] = operator
 		}
-	} else if rawOperate, ok := rule["operate"].(string); ok {
-		if operator := normalizeSemanticOperator(rawOperate); operator != "" {
-			rule[semanticRuleOperatorProperty] = operator
-		}
 	}
-
-	if _, exists := rule[semanticRuleRightOperandProperty]; !exists {
-		if targets, ok := asArray(rule["targets"]); ok {
-			if len(targets) == 1 {
-				rule[semanticRuleRightOperandProperty] = targets[0]
-			} else {
-				rule[semanticRuleRightOperandProperty] = targets
-			}
-		}
-	}
-
-	if _, exists := rule[semanticRuleAppliesToClauseProperty]; !exists {
-		if blockIDs, ok := asArray(rule["blockIds"]); ok {
-			rule[semanticRuleAppliesToClauseProperty] = blockIDs
-		}
-	}
-
-	delete(rule, "operate")
-	delete(rule, "targets")
-	delete(rule, "blockIds")
 }
 
 func parseSemanticOperator(raw any) (string, []string) {
@@ -862,7 +837,6 @@ type semanticValueRecord struct {
 	StatementType  string
 	StatementID    string
 	ValuePrefix    string
-	MapsEntityRole bool
 	Type           string
 	Value          any
 }
@@ -1091,7 +1065,6 @@ func semanticValueRecordForParameter(blockID string, conditionID string, paramet
 		StatementType:  field.StatementType,
 		StatementID:    field.StatementID,
 		ValuePrefix:    field.ValuePrefix,
-		MapsEntityRole: field.MapsEntityRole,
 		Type:           field.Type,
 		Value:          value,
 	}, nil

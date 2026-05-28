@@ -346,7 +346,7 @@ watch(selectedDomainPath, (path) => {
   }
   draftParameter.value = {
     ...draftParameter.value,
-    parameterName: field.semanticPath.split('.').join('_'),
+    parameterName: field.semanticPath,
     schemaRef: field.schemaRef,
     semanticPath: field.semanticPath,
     valueConstraint: cloneValueConstraint(field.valueConstraint),
