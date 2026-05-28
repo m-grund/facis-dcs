@@ -29,5 +29,11 @@ dependencies:
 - name: ipfs-document-manager
   repository: file://charts/ipfs-document-manager
   version: 0.1.0
-digest: sha256:a07c653330de6ddb752ea9396443c042eeb2e7e7cdb21608369ff55ff2c35205
-generated: "2026-05-28T15:39:12.1816793+02:00"
+- name: crypto-provider
+  repository: file://charts/crypto-provider
+  version: 0.1.0
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 85.2.0
+digest: sha256:271bc675bd2efb724a5dce07682399b0a237ff6f7749ba7db24b337ccfcbcd42
+generated: "2026-05-28T22:08:19.36461+02:00"

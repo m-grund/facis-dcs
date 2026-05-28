@@ -118,6 +118,37 @@ serviceDiscovery:
   natsHost: ""
   keycloakPort: ""
 
+# ---- Signing / C2PA provenance ----------------------------------------
+# DCS never holds private keys (DCS-IR-HI-01). Set these when connecting to
+# an external Crypto Provider Service or relying on the co-deployed one below.
+
+signing:
+  # DID of this DCS instance (embedded in C2PA lifecycle assertions as authority).
+  issuerDID: ""
+  issuerDIDSecretRef:
+    name: ""
+    key: "ISSUER_DID"
+
+  # RFC 3161 Timestamp Authority (optional; activates real timestamps on C2PA manifests).
+  tsaURL: ""
+
+  # Vault transit backend. Leave vaultAddr empty when cryptoProvider.enabled=true
+  # (auto-derived from the co-deployed Vault instance).
+  vaultAddr: ""
+  vaultAddrSecretRef:
+    name: ""
+    key: "VAULT_ADDR"
+
+  # Vault auth token. For production use vaultTokenSecretRef instead.
+  vaultToken: ""
+  vaultTokenSecretRef:
+    name: ""
+    key: "VAULT_TOKEN"
+
+  # Override transit mount/key; taken from cryptoProvider.transit.* when co-deploying.
+  vaultTransitMount: ""
+  vaultTransitKey: ""
+
 # ---- Co-deployed dependencies ----------------------------------------
 # Each sub-chart owns its full set of configurable values.
 # Only fields referenced by the parent chart's helpers are listed here.
@@ -143,6 +174,22 @@ nats:
 
 neo4j:
   enabled: false
+
+# XFSC Crypto Provider Service + HashiCorp Vault (transit engine).
+# When enabled, CRYPTO_PROVIDER_URL is auto-derived and wired into DCS.
+# See charts/crypto-provider/values.yaml for the full set of options.
+cryptoProvider:
+  enabled: false
+  vault:
+    dev:
+      enabled: true
+      rootToken: "root"
+    service:
+      port: 8200
+  transit:
+    mount: "transit"
+    key: "dcs-signing-key"
+    keyType: "ed25519"
 
 # XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
 # See charts/federated-catalogue/values.yaml for all configurable fields.

@@ -135,4 +135,16 @@ export const contractTemplateService: ContractTemplateService = {
         return []
       })
   },
+
+  async exportPdf(did: string): Promise<Blob> {
+    return http
+      .get<Blob>(`/pdf/export/template/${encodeURIComponent(did)}`, { responseType: 'blob' })
+      .then((res) => res.data)
+  },
+
+  async verifyPdf(did: string): Promise<{ match: boolean; jsonld_hash: string; base_pdf_hash: string; stored_base_pdf_hash: string }> {
+    return http
+      .get(`/pdf/verify/template/${encodeURIComponent(did)}`)
+      .then((res) => res.data)
+  },
 }

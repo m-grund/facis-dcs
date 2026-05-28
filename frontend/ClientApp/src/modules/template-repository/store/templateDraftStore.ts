@@ -28,7 +28,7 @@ import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } fro
 import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 
-const storeId = "templateDraft"
+const storeId = 'templateDraft'
 const defaultState: Readonly<TemplateDraftState> = {
   did: null,
   name: '',

@@ -95,8 +95,50 @@ spec:
               value: {{ include "digital-contracting-service.apiPath" . | quote }}
             - name: DCS_UI_PATH
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
+            # ---- Signing / C2PA provenance (Vault transit) -------------------------
+            - name: VAULT_ADDR
+              {{- if .Values.signing.vaultAddrSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signing.vaultAddrSecretRef.name | quote }}
+                  key: {{ .Values.signing.vaultAddrSecretRef.key | quote }}
+              {{- else }}
+              value: {{ include "digital-contracting-service.vaultAddr" . | quote }}
+              {{- end }}
+            - name: VAULT_TOKEN
+              {{- if .Values.signing.vaultTokenSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signing.vaultTokenSecretRef.name | quote }}
+                  key: {{ .Values.signing.vaultTokenSecretRef.key | quote }}
+              {{- else }}
+              value: {{ .Values.signing.vaultToken | quote }}
+              {{- end }}
+            - name: VAULT_TRANSIT_MOUNT
+              value: {{ include "digital-contracting-service.vaultTransitMount" . | quote }}
+            - name: VAULT_TRANSIT_KEY
+              value: {{ include "digital-contracting-service.vaultTransitKey" . | quote }}
+            - name: ISSUER_DID
+              {{- if .Values.signing.issuerDIDSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signing.issuerDIDSecretRef.name | quote }}
+                  key: {{ .Values.signing.issuerDIDSecretRef.key | quote }}
+              {{- else }}
+              value: {{ include "digital-contracting-service.issuerDID" . | quote }}
+              {{- end }}
+            - name: TSA_URL
+              value: {{ .Values.signing.tsaURL | quote }}
+            # ---- IPFS storage -------------------------------------------------------
             - name: IPFS_TENANT_BASE_URL
+              {{- if .Values.ipfs.tenantBaseURLSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.ipfs.tenantBaseURLSecretRef.name | quote }}
+                  key: {{ .Values.ipfs.tenantBaseURLSecretRef.key | quote }}
+              {{- else }}
               value: {{ include "digital-contracting-service.ipfsTenantBaseURL" . | quote }}
+              {{- end }}
             - name: IPFS_MFS_BASE_URL
               value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
             {{- with .Values.extraEnv }}
