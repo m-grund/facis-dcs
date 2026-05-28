@@ -99,9 +99,10 @@ watch(hasDid, (hasDid) => {
         updated_at: template.updated_at ?? null,
         responsible_persons: template.responsible_persons ?? null,
       })
-      .catch((error: unknown) => {
-        console.error('Failed to load template for editing', error)
-      })
+    })
+    .catch((error: unknown) => {
+      console.error('Failed to load template for editing', error)
+    })
   },
   { immediate: true },
 )

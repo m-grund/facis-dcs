@@ -12,14 +12,17 @@ import type {
   TemplateTypeValue,
   SemanticCondition,
   MetaData,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   DocumentBlockType,
   TemplateType,
   isClauseBlock,
   isSectionBlock,
   isApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+  FACIS_SCHEMA_REFS,
+  FACIS_TEMPLATE_POLICY_REFS,
+  FACIS_TEMPLATE_VALIDATION_PROFILE,
+} from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
 import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
@@ -592,6 +595,7 @@ function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTem
       },
     }
   })
+}
 
 function mergePlaceholderBindings(
   stored: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'],
@@ -619,5 +623,4 @@ function mergeSemanticRules(
     result.set(rule.ruleId, rule)
   }
   return [...result.values()]
-}
 }

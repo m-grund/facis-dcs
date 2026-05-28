@@ -4,12 +4,15 @@ import type {
   ApprovedTemplateBlock,
   DocumentBlock,
   DocumentOutlineBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   DocumentBlockType,
+  FACIS_CONTRACT_POLICY_REFS,
+  FACIS_CONTRACT_VALIDATION_PROFILE,
+  FACIS_SCHEMA_REFS,
   isApprovedTemplateBlock,
   isMergedApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { TEMPLATE_DATA_VERSIONS, type TemplateDataVersion } from '@template-repository/models/template-draft-store'
 

@@ -79,13 +79,6 @@ watch(
                 const uneditableStates = [TemplateState.approved, TemplateState.deleted, TemplateState.deprecated, TemplateState.registered].map((s) => s.toLowerCase())
                 templateEditorUiStore.setTemplateEditable(!(uneditableStates.includes(template.state.toLowerCase())))
 
-                draftStore.reset({
-                    did: template.did,
-                    name: template.name,
-                    description: template.description,
-                    templateDataVersion: template.template_data?.templateDataVersion ?? 1,
-                    documentOutline: template.template_data?.documentOutline ?? [],
-
           draftStore.reset({
             did: template.did,
             name: template.name,
@@ -95,12 +88,18 @@ watch(
             documentBlocks: template.template_data?.documentBlocks ?? [],
             semanticConditions: template.template_data?.semanticConditions ?? [],
             customMetaData: template.template_data?.customMetaData ?? [],
+            semanticProfile: template.template_data?.semanticProfile,
+            templateVariables: template.template_data?.templateVariables ?? [],
+            placeholderBindings: template.template_data?.placeholderBindings ?? [],
+            semanticRules: template.template_data?.semanticRules ?? [],
+            sla: template.template_data?.sla ?? null,
             subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
             templateType: template.template_type,
             state: template.state,
             version: template.version ?? null,
             document_number: template.document_number ?? null,
             updated_at: template.updated_at ?? null,
+            responsible_persons: template.responsible_persons ?? null,
           })
         })
         .catch((error: unknown) => {

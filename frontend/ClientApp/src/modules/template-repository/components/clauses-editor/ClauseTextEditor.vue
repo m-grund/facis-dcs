@@ -64,7 +64,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 import {
   useClauseTextChips,
   conditionIdsInText,
