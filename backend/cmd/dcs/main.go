@@ -184,10 +184,7 @@ func main() {
 	cryptoProviderNamespace := os.Getenv("CRYPTO_PROVIDER_NAMESPACE")
 	cryptoProviderKey := os.Getenv("CRYPTO_PROVIDER_KEY")
 	issuerDID := os.Getenv("ISSUER_DID")
-	var cryptoClient *cryptoprovider.Client
-	if cryptoProviderURL != "" {
-		cryptoClient = cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
-	}
+	cryptoClient := cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
 	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
 
 	// Initialize the service.

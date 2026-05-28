@@ -539,14 +539,14 @@ func (s *signatureManagementsrvc) fetchContractPDFBytes(ctx context.Context, did
 // fetching the contract metadata required for rendering.
 func (s *signatureManagementsrvc) rebuildContractPDFFromJSONLD(ctx context.Context, did string, jsonld []byte) ([]byte, error) {
 	type contractMeta struct {
-		DID             string     `db:"did"`
-		State           string     `db:"state"`
-		ContractVersion int        `db:"contract_version"`
-		Name            *string    `db:"name"`
-		Description     *string    `db:"description"`
-		CreatedBy       string     `db:"created_by"`
-		CreatedAt       time.Time  `db:"created_at"`
-		UpdatedAt       time.Time  `db:"updated_at"`
+		DID             string    `db:"did"`
+		State           string    `db:"state"`
+		ContractVersion int       `db:"contract_version"`
+		Name            *string   `db:"name"`
+		Description     *string   `db:"description"`
+		CreatedBy       string    `db:"created_by"`
+		CreatedAt       time.Time `db:"created_at"`
+		UpdatedAt       time.Time `db:"updated_at"`
 	}
 	var meta contractMeta
 	if err := s.DB.GetContext(ctx, &meta,
