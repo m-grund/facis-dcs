@@ -17,7 +17,9 @@
         <label class="label-text text-xs text-base-content/60 block mb-1">Entity type</label>
         <select v-model="newCondition.entityType" class="select select-bordered select-sm w-full">
           <option value="">None</option>
-          <option value="Party">Party</option>
+          <option v-for="option in entityTypeOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
         </select>
       </div>
       <div>
@@ -25,13 +27,12 @@
         <select
           v-model="newCondition.entityRole"
           class="select select-bordered select-sm w-full"
-          :disabled="newCondition.entityType !== 'Party'"
+          :disabled="!isPartyEntityType(newCondition.entityType)"
         >
           <option value="">None</option>
-          <option value="provider">Provider</option>
-          <option value="customer">Customer</option>
-          <option value="supplier">Supplier</option>
-          <option value="client">Client</option>
+          <option v-for="option in entityRoleOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
         </select>
       </div>
     </div>
@@ -199,7 +200,11 @@ import {
   type SemanticEntityType,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
-import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
+import {
+  ONTOLOGY_DOMAIN_FIELDS,
+  ONTOLOGY_ENTITY_ROLES,
+  ONTOLOGY_ENTITY_TYPES,
+} from '@/modules/template-repository/utils/ontology-domain-fields'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
 type DraftConditionPayload = NewConditionPayload & {
@@ -252,6 +257,8 @@ const showDomainFieldOptions = ref(false)
 const isEditMode = computed(() => props.mode === 'edit')
 const formTitle = computed(() => (isEditMode.value ? 'Edit rule' : 'New rule'))
 const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rule'))
+const entityTypeOptions = computed(() => ONTOLOGY_ENTITY_TYPES)
+const entityRoleOptions = computed(() => ONTOLOGY_ENTITY_ROLES)
 const selectedDomainField = computed(() =>
   ONTOLOGY_DOMAIN_FIELDS.find((field) => field.semanticPath === selectedDomainPath.value),
 )
@@ -338,7 +345,7 @@ watch(selectedDomainPath, (path) => {
 watch(
   () => newCondition.value.entityType,
   (entityType) => {
-    if (entityType !== 'Party') newCondition.value.entityRole = ''
+    if (!isPartyEntityType(entityType)) newCondition.value.entityRole = ''
     if (selectedDomainField.value && !domainFieldAllowedForEntityType(selectedDomainField.value.semanticPath, entityType)) {
       draftParameter.value = defaultParam()
       draftFixedValue.value = ''
@@ -379,8 +386,12 @@ function selectDomainField(path: DomainSemanticPath) {
 
 function domainFieldAllowedForEntityType(path: DomainSemanticPath, entityType: string): boolean {
   const isPartyField = path === 'company' || path.startsWith('company.')
-  if (entityType === 'Party') return isPartyField
+  if (isPartyEntityType(entityType)) return isPartyField
   return !isPartyField
+}
+
+function isPartyEntityType(entityType: string): boolean {
+  return entityType === 'Party' || entityType === 'Company'
 }
 
 function handleDomainFieldInput() {
@@ -525,23 +536,25 @@ function validateDraftFixedValue(): string {
 function normalizeEntityTypeForForm(value?: string): SemanticEntityType {
   const normalized = (value ?? '').trim().toLowerCase()
   if (!normalized) return ''
-  if (
-    normalized === 'party' ||
-    normalized === 'company' ||
-    normalized === 'customer' ||
-    normalized === 'client' ||
-    normalized === 'provider' ||
-    normalized === 'supplier' ||
-    normalized.endsWith('#party')
-  ) return 'Party'
+  const exactOption = entityTypeOptions.value.find((option) => option.value.toLowerCase() === normalized)
+  if (exactOption) return exactOption.value
+  if (normalized.endsWith('#party')) return 'Party'
+  if (normalized.endsWith('#company')) return 'Company'
+  if (entityRoleOptions.value.some((option) => option.value.toLowerCase() === normalized)) return 'Party'
   return ''
 }
 
 function normalizeEntityRoleForForm(value?: string, entityType?: string): SemanticEntityRole {
   const normalized = (value ?? entityType ?? '').trim().toLowerCase()
   if (!normalized || normalized === 'party' || normalized === 'company' || normalized.endsWith('#party')) return ''
-  if (normalized === 'customer' || normalized === 'client' || normalized.endsWith('#role-customer')) return 'customer'
-  if (normalized === 'provider' || normalized === 'supplier' || normalized.endsWith('#role-provider')) return 'provider'
+  const exactOption = entityRoleOptions.value.find((option) => option.value.toLowerCase() === normalized)
+  if (exactOption) return exactOption.value
+  if (normalized.endsWith('#role-customer')) return roleOptionValue('customer')
+  if (normalized.endsWith('#role-provider')) return roleOptionValue('provider')
   return ''
+}
+
+function roleOptionValue(value: string): SemanticEntityRole {
+  return entityRoleOptions.value.find((option) => option.value === value)?.value ?? ''
 }
 </script>

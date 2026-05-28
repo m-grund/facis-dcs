@@ -41,8 +41,8 @@ export interface SemanticCondition {
 }
 
 export type SemanticParameterType = ParameterType
-export type SemanticEntityType = '' | 'Party'
-export type SemanticEntityRole = '' | 'provider' | 'customer' | 'supplier' | 'client'
+export type SemanticEntityType = string
+export type SemanticEntityRole = string
 
 export const SemanticOperate = {
     lessThan: 'lessThan',

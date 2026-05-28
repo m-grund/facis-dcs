@@ -1,6 +1,8 @@
 import ontologyText from '../../../../../../docs/semantic-ontology/ontology/facis-dcs-ontology.ttl?raw'
 import type {
   DomainFieldDefinition,
+  SemanticEntityRole,
+  SemanticEntityType,
   SemanticParameterType,
   SemanticValueConstraint,
 } from '@/modules/template-repository/models/contract-template'
@@ -10,11 +12,20 @@ interface OntologyStatement {
   text: string
 }
 
+export interface OntologySelectOption<TValue extends string = string> {
+  value: TValue
+  label: string
+}
+
 const quotedValue = /"([^"]*)"/g
 const numericValue = /[-+]?[0-9]+(?:\.[0-9]+)?/
 
 export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] =
   parseOntologyDomainFields(ontologyText)
+export const ONTOLOGY_ENTITY_TYPES: readonly OntologySelectOption<SemanticEntityType>[] =
+  parseOntologyEntityTypes(ontologyText)
+export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
+  parseOntologyEntityRoles(ontologyText)
 
 export function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
   const statements = parseStatements(source)
@@ -46,6 +57,46 @@ export function parseOntologyDomainFields(source: string): DomainFieldDefinition
       }
     })
     .sort((left, right) => left.semanticPath.localeCompare(right.semanticPath))
+}
+
+export function parseOntologyEntityTypes(source: string): OntologySelectOption<SemanticEntityType>[] {
+  return parseStatements(source)
+    .filter((statement) => statement.text.includes(' a rdfs:Class'))
+    .filter((statement) => statement.subject === 'dcs:Party' || firstResource(statement.text, 'rdfs:subClassOf') === 'dcs:Party')
+    .map((statement) => {
+      const value = localName(statement.subject)
+      const label = firstLiteral(statement.text, 'rdfs:label') || value
+      if (!value) throw new Error(`Ontology entity type ${statement.subject} is incomplete.`)
+      return { value, label }
+    })
+    .filter((option) => option.value === 'Party' || option.value === 'Company')
+    .sort((left, right) => {
+      if (left.value === 'Party') return -1
+      if (right.value === 'Party') return 1
+      return left.label.localeCompare(right.label)
+    })
+}
+
+export function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
+  const statements = parseStatements(source)
+  const constraints = new Map<string, SemanticValueConstraint>()
+
+  for (const statement of statements) {
+    if (!statement.text.includes(' a dcs:ValueConstraint')) continue
+    constraints.set(statement.subject, parseValueConstraint(statement.text))
+  }
+
+  const roleField = statements.find(
+    (statement) =>
+      statement.text.includes(' a dcs:DomainField') &&
+      firstLiteral(statement.text, 'dcs:semanticPath') === 'company.role',
+  )
+  const roleConstraintRef = roleField ? firstResource(roleField.text, 'dcs:hasValueConstraint') : ''
+  const allowedValues = roleConstraintRef ? constraints.get(roleConstraintRef)?.allowedValues ?? [] : []
+
+  return allowedValues
+    .map((value) => ({ value, label: formatOntologyLabel(value) }))
+    .sort((left, right) => left.label.localeCompare(right.label))
 }
 
 function parseStatements(source: string): OntologyStatement[] {
@@ -96,6 +147,15 @@ function firstResource(statement: string, predicate: string): string {
   const line = predicateLine(statement, predicate)
   if (!line) return ''
   return line.split(/\s+/)[1]?.replace(/[;.]+$/, '') ?? ''
+}
+
+function localName(resource: string): string {
+  return resource.replace(/^.*[:#/]/, '')
+}
+
+function formatOntologyLabel(value: string): string {
+  const spaced = value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
 function predicateLine(statement: string, predicate: string): string {
