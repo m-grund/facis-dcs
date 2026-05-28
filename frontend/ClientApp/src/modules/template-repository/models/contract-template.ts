@@ -120,40 +120,6 @@ export interface DomainFieldDefinition {
     valueConstraint?: SemanticValueConstraint
 }
 
-export const FACIS_BLOCK_CATALOGUE = [
-    { blockCatalogueId: 'facis.block.document.section', schemaRef: FACIS_SCHEMA_REFS.documentStructure, semanticPath: 'document.section', label: 'Document section', group: 'Basic' },
-    { blockCatalogueId: 'facis.block.text.free', schemaRef: FACIS_SCHEMA_REFS.documentStructure, semanticPath: 'document.freeText', label: 'Free text', group: 'Basic' },
-    { blockCatalogueId: 'facis.block.clause.custom', schemaRef: FACIS_SCHEMA_REFS.documentStructure, semanticPath: 'document.clause', label: 'Custom clause', group: 'Basic' },
-    { blockCatalogueId: 'facis.block.party.company', schemaRef: FACIS_SCHEMA_REFS.party, semanticPath: 'company', label: 'Company party', group: 'Parties' },
-    { blockCatalogueId: 'facis.block.party.company.location', schemaRef: FACIS_SCHEMA_REFS.party, semanticPath: 'company.location', label: 'Company location', group: 'Parties' },
-    { blockCatalogueId: 'facis.block.party.representative', schemaRef: FACIS_SCHEMA_REFS.party, semanticPath: 'company.representative', label: 'Company representative', group: 'Parties' },
-    { blockCatalogueId: 'facis.block.party.contact', schemaRef: FACIS_SCHEMA_REFS.party, semanticPath: 'company.contact', label: 'Company contact', group: 'Parties' },
-    { blockCatalogueId: 'facis.block.contract.basics', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract', label: 'Contract basics', group: 'Contract' },
-    { blockCatalogueId: 'facis.block.contract.validity', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.validity', label: 'Contract validity', group: 'Contract' },
-    { blockCatalogueId: 'facis.block.contract.jurisdiction', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.jurisdiction', label: 'Jurisdiction', group: 'Contract' },
-    { blockCatalogueId: 'facis.block.contract.renewal', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.renewal', label: 'Renewal terms', group: 'Contract' },
-    { blockCatalogueId: 'facis.block.contract.termination', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.termination', label: 'Termination terms', group: 'Contract' },
-    { blockCatalogueId: 'facis.block.contract.payment', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.payment', label: 'Payment terms', group: 'Commercial' },
-    { blockCatalogueId: 'facis.block.contract.liability', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.liability', label: 'Liability', group: 'Risk' },
-    { blockCatalogueId: 'facis.block.contract.insurance', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.insurance', label: 'Insurance', group: 'Risk' },
-    { blockCatalogueId: 'facis.block.contract.confidentiality', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.confidentiality', label: 'Confidentiality', group: 'Legal' },
-    { blockCatalogueId: 'facis.block.contract.data-protection', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.dataProtection', label: 'Data protection', group: 'Compliance' },
-    { blockCatalogueId: 'facis.block.contract.audit-rights', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.auditRights', label: 'Audit rights', group: 'Compliance' },
-    { blockCatalogueId: 'facis.block.contract.ip-rights', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.ipRights', label: 'IP rights', group: 'Legal' },
-    { blockCatalogueId: 'facis.block.contract.force-majeure', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.forceMajeure', label: 'Force majeure', group: 'Risk' },
-    { blockCatalogueId: 'facis.block.contract.dispute-resolution', schemaRef: FACIS_SCHEMA_REFS.contract, semanticPath: 'contract.disputeResolution', label: 'Dispute resolution', group: 'Legal' },
-    { blockCatalogueId: 'facis.block.service.description', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.description', label: 'Service description', group: 'Service' },
-    { blockCatalogueId: 'facis.block.service.scope', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.scope', label: 'Service scope', group: 'Service' },
-    { blockCatalogueId: 'facis.block.service.deliverable', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.deliverable', label: 'Deliverable', group: 'Service' },
-    { blockCatalogueId: 'facis.block.sla.availability', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.sla.availability', label: 'SLA availability', group: 'SLA' },
-    { blockCatalogueId: 'facis.block.sla.response-time', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.sla.responseTime', label: 'SLA response time', group: 'SLA' },
-    { blockCatalogueId: 'facis.block.sla.resolution-time', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.sla.resolutionTime', label: 'SLA resolution time', group: 'SLA' },
-    { blockCatalogueId: 'facis.block.sla.support', schemaRef: FACIS_SCHEMA_REFS.service, semanticPath: 'service.sla.supportHours', label: 'Support hours', group: 'SLA' },
-    { blockCatalogueId: 'facis.block.signature.requirement', schemaRef: FACIS_SCHEMA_REFS.signature, semanticPath: 'signature.requiredLevel', label: 'Signature requirement', group: 'Signature' },
-    { blockCatalogueId: 'facis.block.signature.signer-role', schemaRef: FACIS_SCHEMA_REFS.signature, semanticPath: 'signature.requiredSignerRole', label: 'Signer role', group: 'Signature' },
-    { blockCatalogueId: 'facis.block.signature.deadline', schemaRef: FACIS_SCHEMA_REFS.signature, semanticPath: 'signature.deadline', label: 'Signature deadline', group: 'Signature' },
-] as const
-
 export interface SchemaReferenceSet {
     documentStructure: string
     semanticCondition: string

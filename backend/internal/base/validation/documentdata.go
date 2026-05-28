@@ -9,66 +9,16 @@ import (
 	"strings"
 )
 
-const (
-	SchemaDocumentStructureV1 = "facis.dcs.document-structure.v1"
-	SchemaTemplateDataV1      = "facis.dcs.template-data.v1"
-	SchemaContractDataV1      = "facis.dcs.contract-data.v1"
-	SchemaSemanticConditionV1 = "facis.dcs.semantic-condition.v1"
-	SchemaPartyV1             = "facis.dcs.party.v1"
-	SchemaContractV1          = "facis.dcs.contract.v1"
-	SchemaServiceV1           = "facis.dcs.service.v1"
-	SchemaSignatureV1         = "facis.dcs.signature.v1"
-	SchemaJSONLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
-	SchemaOntologyV1          = "https://w3id.org/facis/dcs/ontology/v1"
-	SchemaSHACLShapesV1       = "https://w3id.org/facis/dcs/shapes/v1"
-	SemanticProfileName       = "FACIS DCS Semantic Contract Profile"
-	SemanticProfileVersionV1  = "v1"
-
-	PolicyTemplateStructureV1          = "facis.dcs.template.structure"
-	PolicyTemplateSemanticConditionsV1 = "facis.dcs.template.semantic-conditions"
-	PolicyContractStructureV1          = "facis.dcs.contract.structure"
-	PolicyContractSemanticValuesV1     = "facis.dcs.contract.semantic-values"
-
-	semanticRuleOperatorProperty        = "operator"
-	semanticRuleRightOperandProperty    = "rightOperand"
-	semanticRuleAppliesToClauseProperty = "appliesToClause"
-
-	contractStatementSetType       = ontologyDCSBase + "ContractStatementSet"
-	contractStatementPartyType     = ontologyDCSBase + "Party"
-	contractStatementPaymentType   = ontologyDCSBase + "PaymentTerm"
-	contractStatementSLOType       = ontologyDCSBase + "ServiceLevelObjective"
-	contractStatementObligation    = ontologyDCSBase + "Obligation"
-	contractStatementPermission    = ontologyDCSBase + "Permission"
-	contractStatementProhibition   = ontologyDCSBase + "Prohibition"
-	contractStatementConstraint    = ontologyDCSBase + "Constraint"
-	contractStatementProviderRole  = ontologyDCSTBase + "role-provider"
-	contractStatementCustomerRole  = ontologyDCSTBase + "role-customer"
-	contractStatementPayAction     = ontologyDCSBase + "Pay"
-	contractStatementSLAAction     = ontologyDCSBase + "MaintainAvailability"
-	contractStatementAvailability  = ontologyDCSBase + "Availability"
-	contractStatementPercentUnit   = ontologyDCSTBase + "unit-percent"
-	semanticRuleSourceContract     = "contractSemantics"
-	semanticRuleSourceCondition    = "semanticCondition"
-	contractStatementsPropertyName = "contractStatements"
-)
-
-var (
-	templatePolicyRefs = []map[string]any{
-		{"policyId": PolicyTemplateStructureV1, "version": "v1", "enforcementPoint": "template:create"},
-		{"policyId": PolicyTemplateSemanticConditionsV1, "version": "v1", "enforcementPoint": "template:verify"},
-	}
-	contractPolicyRefs = []map[string]any{
-		{"policyId": PolicyContractStructureV1, "version": "v1", "enforcementPoint": "contract:create"},
-		{"policyId": PolicyContractSemanticValuesV1, "version": "v1", "enforcementPoint": "contract:update"},
-	}
-)
-
 type domainField struct {
 	SchemaRef      string
 	Type           string
 	DomainPath     string
 	OntologyTerm   string
 	StatementField string
+	StatementType  string
+	StatementID    string
+	ValuePrefix    string
+	MapsEntityRole bool
 	Constraint     *valueConstraint
 }
 
@@ -115,42 +65,6 @@ func (constraint *valueConstraint) asMap() map[string]any {
 		result["description"] = constraint.Description
 	}
 	return result
-}
-
-var blockCatalogue = map[string]blockDefinition{
-	"facis.block.document.section":            {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.section"},
-	"facis.block.text.free":                   {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.freeText"},
-	"facis.block.clause.custom":               {SchemaRef: SchemaDocumentStructureV1, SemanticPath: "document.clause"},
-	"facis.block.party.company":               {SchemaRef: SchemaPartyV1, SemanticPath: "company"},
-	"facis.block.party.company.location":      {SchemaRef: SchemaPartyV1, SemanticPath: "company.location"},
-	"facis.block.party.representative":        {SchemaRef: SchemaPartyV1, SemanticPath: "company.representative"},
-	"facis.block.party.contact":               {SchemaRef: SchemaPartyV1, SemanticPath: "company.contact"},
-	"facis.block.contract.basics":             {SchemaRef: SchemaContractV1, SemanticPath: "contract"},
-	"facis.block.contract.jurisdiction":       {SchemaRef: SchemaContractV1, SemanticPath: "contract.jurisdiction"},
-	"facis.block.sla.availability":            {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.availability"},
-	"facis.block.sla.response-time":           {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.responseTime"},
-	"facis.block.sla.resolution-time":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.resolutionTime"},
-	"facis.block.sla.support":                 {SchemaRef: SchemaServiceV1, SemanticPath: "service.sla.supportHours"},
-	"facis.block.contract.validity":           {SchemaRef: SchemaContractV1, SemanticPath: "contract.validity"},
-	"facis.block.contract.renewal":            {SchemaRef: SchemaContractV1, SemanticPath: "contract.renewal"},
-	"facis.block.contract.termination":        {SchemaRef: SchemaContractV1, SemanticPath: "contract.termination"},
-	"facis.block.contract.payment":            {SchemaRef: SchemaContractV1, SemanticPath: "contract.payment"},
-	"facis.block.contract.liability":          {SchemaRef: SchemaContractV1, SemanticPath: "contract.liability"},
-	"facis.block.contract.insurance":          {SchemaRef: SchemaContractV1, SemanticPath: "contract.insurance"},
-	"facis.block.contract.confidentiality":    {SchemaRef: SchemaContractV1, SemanticPath: "contract.confidentiality"},
-	"facis.block.contract.data-protection":    {SchemaRef: SchemaContractV1, SemanticPath: "contract.dataProtection"},
-	"facis.block.contract.audit-rights":       {SchemaRef: SchemaContractV1, SemanticPath: "contract.auditRights"},
-	"facis.block.contract.ip-rights":          {SchemaRef: SchemaContractV1, SemanticPath: "contract.ipRights"},
-	"facis.block.contract.force-majeure":      {SchemaRef: SchemaContractV1, SemanticPath: "contract.forceMajeure"},
-	"facis.block.contract.dispute-resolution": {SchemaRef: SchemaContractV1, SemanticPath: "contract.disputeResolution"},
-	"facis.block.service.description":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.description"},
-	"facis.block.service.scope":               {SchemaRef: SchemaServiceV1, SemanticPath: "service.scope"},
-	"facis.block.service.deliverable":         {SchemaRef: SchemaServiceV1, SemanticPath: "service.deliverable"},
-	"facis.block.signature.requirement":       {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.requiredLevel"},
-	"facis.block.signature.signer-role":       {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.requiredSignerRole"},
-	"facis.block.signature.deadline":          {SchemaRef: SchemaSignatureV1, SemanticPath: "signature.deadline"},
-	"facis.block.template.approved-embed":     {SchemaRef: SchemaTemplateDataV1, SemanticPath: "template.approvedEmbed"},
-	"facis.block.template.merged-approved":    {SchemaRef: SchemaTemplateDataV1, SemanticPath: "template.mergedApproved"},
 }
 
 type documentData map[string]any
@@ -211,7 +125,7 @@ func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*dat
 	if err := validateContractSemanticsData(data, requireSemanticValues); err != nil {
 		return nil, err
 	}
-	if err := validateContractParties(data); err != nil {
+	if err := validateRoleEntities(data); err != nil {
 		return nil, err
 	}
 	return encodeDocumentData(data)
@@ -360,8 +274,8 @@ func normalizeSemanticRuntimeMetadata(data documentData) {
 func normalizeContractSemanticRuntime(data documentData) {
 	statements, err := buildContractStatements(data)
 	if err == nil {
-		data[contractStatementsPropertyName] = map[string]any{
-			"@type":      contractStatementSetType,
+		data[statementSetDocumentProperty()] = map[string]any{
+			"@type":      statementSetOntologyType(),
 			"statements": statementsToAny(statements),
 		}
 	}
@@ -945,25 +859,12 @@ type semanticValueRecord struct {
 	DomainPath     string
 	OntologyTerm   string
 	StatementField string
+	StatementType  string
+	StatementID    string
+	ValuePrefix    string
+	MapsEntityRole bool
 	Type           string
 	Value          any
-}
-
-type partyStatementDraft struct {
-	ID        string
-	Role      string
-	LegalName string
-	Country   string
-}
-
-type paymentStatementDraft struct {
-	Amount   any
-	Currency string
-	DueDate  string
-}
-
-type sloStatementDraft struct {
-	Availability any
 }
 
 func buildContractStatements(data documentData) ([]map[string]any, error) {
@@ -971,134 +872,51 @@ func buildContractStatements(data documentData) ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	partyDrafts := map[string]*partyStatementDraft{}
-	payment := &paymentStatementDraft{}
-	slo := &sloStatementDraft{}
-
+	statementsByKey := map[string]map[string]any{}
+	statementKeys := []string{}
 	for _, record := range records {
-		if record.EntityType == contractStatementPartyType || strings.HasPrefix(record.StatementField, "party.") {
-			draft := partyDrafts[record.ConditionID]
-			if draft == nil {
-				draft = &partyStatementDraft{}
-				partyDrafts[record.ConditionID] = draft
-			}
-			if record.EntityRole != "" && draft.Role == "" {
-				draft.Role = record.EntityRole
-			}
+		group, fieldName, ok := splitStatementField(record.StatementField)
+		if !ok {
+			continue
 		}
-		switch record.StatementField {
-		case "party.legalName", "party.country", "party.role":
-			draft := partyDrafts[record.ConditionID]
-			if draft == nil {
-				draft = &partyStatementDraft{}
-				partyDrafts[record.ConditionID] = draft
-			}
-			switch record.StatementField {
-			case "party.legalName":
-				draft.LegalName, _ = record.Value.(string)
-			case "party.country":
-				draft.Country, _ = record.Value.(string)
-			case "party.role":
-				role, _ := record.Value.(string)
-				draft.Role = canonicalContractPartyRole(role)
-			}
-		case "payment.amount":
-			payment.Amount = record.Value
-		case "payment.currency":
-			payment.Currency, _ = record.Value.(string)
-		case "payment.dueDate":
-			payment.DueDate, _ = record.Value.(string)
-		case "slo.availability":
-			slo.Availability = record.Value
+		statementType := record.StatementType
+		if statementType == "" {
+			statementType = record.EntityType
 		}
+		if statementType == "" {
+			continue
+		}
+		statementID := record.StatementID
+		if statementID == "" {
+			statementID = group + "-" + slugify(record.ConditionID)
+		}
+		key := statementID
+		statement := statementsByKey[key]
+		if statement == nil {
+			statement = map[string]any{
+				"@id":   statementID,
+				"@type": statementType,
+			}
+			statementsByKey[key] = statement
+			statementKeys = append(statementKeys, key)
+		}
+		applyStatementEntityRole(statement, record.EntityRole)
+		statement[fieldName] = normalizeStatementValue(record)
 	}
 
 	statements := []map[string]any{}
-	providerID := ""
-	customerID := ""
-	for _, draft := range partyDrafts {
-		if draft.Role == "" && draft.LegalName == "" && draft.Country == "" {
-			continue
-		}
-		switch draft.Role {
-		case contractStatementProviderRole:
-			draft.ID = "party-provider"
-			providerID = draft.ID
-		case contractStatementCustomerRole:
-			draft.ID = "party-customer"
-			customerID = draft.ID
-		default:
-			draft.ID = "party-" + slugify(draft.LegalName)
-		}
-		statement := map[string]any{
-			"@id":   draft.ID,
-			"@type": contractStatementPartyType,
-		}
-		if draft.Role != "" {
-			statement["role"] = draft.Role
-		}
-		if draft.LegalName != "" {
-			statement["legalName"] = draft.LegalName
-		}
-		if draft.Country != "" {
-			statement["country"] = draft.Country
-		}
-		statements = append(statements, statement)
+	for _, key := range statementKeys {
+		statements = append(statements, statementsByKey[key])
 	}
-
-	if payment.Amount != nil || payment.Currency != "" || payment.DueDate != "" {
-		statement := map[string]any{
-			"@id":   "payment-main",
-			"@type": contractStatementPaymentType,
-		}
-		if customerID != "" {
-			statement["payer"] = customerID
-		}
-		if providerID != "" {
-			statement["payee"] = providerID
-		}
-		if payment.Currency != "" {
-			statement["currency"] = payment.Currency
-		}
-		if payment.Amount != nil {
-			statement["amount"] = payment.Amount
-		}
-		if payment.DueDate != "" {
-			statement["dueDate"] = payment.DueDate
-		}
-		statements = append(statements, statement)
-		if customerID != "" {
-			statements = append(statements, map[string]any{
-				"@id":      "obligation-payment",
-				"@type":    contractStatementObligation,
-				"assignee": customerID,
-				"action":   contractStatementPayAction,
-				"target":   "payment-main",
-			})
-		}
-	}
-
-	if slo.Availability != nil {
-		statements = append(statements, map[string]any{
-			"@id":      "slo-availability",
-			"@type":    contractStatementSLOType,
-			"metric":   contractStatementAvailability,
-			"operator": ">=",
-			"value":    slo.Availability,
-			"unit":     contractStatementPercentUnit,
-		})
-		if providerID != "" {
-			statements = append(statements, map[string]any{
-				"@id":      "obligation-availability",
-				"@type":    contractStatementObligation,
-				"assignee": providerID,
-				"action":   contractStatementSLAAction,
-				"target":   "slo-availability",
-			})
-		}
-	}
-
 	return statements, nil
+}
+
+func splitStatementField(value string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(value), ".", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 func validateContractSemanticsData(data documentData, requireCompleteStatements bool) error {
@@ -1117,13 +935,13 @@ func validateContractSemanticsData(data documentData, requireCompleteStatements 
 }
 
 func hasContractStatementIntent(data documentData) bool {
-	records, err := semanticValueRecords(data)
+	statements, err := buildContractStatements(data)
 	if err != nil {
 		return false
 	}
-	for _, record := range records {
-		switch record.StatementField {
-		case "party.role", "payment.amount", "payment.currency", "payment.dueDate", "slo.availability":
+	profile := defaultContractStatementValidationProfile()
+	for _, rule := range profile.Rules {
+		if CountStatements(statements, rule.Where) > 0 {
 			return true
 		}
 	}
@@ -1266,10 +1084,14 @@ func semanticValueRecordForParameter(blockID string, conditionID string, paramet
 		ConditionID:    conditionID,
 		ParameterName:  parameterName,
 		EntityType:     canonicalStatementEntityType(entityType),
-		EntityRole:     canonicalContractEntityRole(entityRole),
+		EntityRole:     canonicalEntityRole(entityRole),
 		DomainPath:     field.DomainPath,
 		OntologyTerm:   field.OntologyTerm,
 		StatementField: field.StatementField,
+		StatementType:  field.StatementType,
+		StatementID:    field.StatementID,
+		ValuePrefix:    field.ValuePrefix,
+		MapsEntityRole: field.MapsEntityRole,
 		Type:           field.Type,
 		Value:          value,
 	}, nil
@@ -1348,51 +1170,6 @@ func semanticConditionIndex(data documentData) (semanticConditionsByBlock, error
 	}
 	conditions.embedded = embedded
 	return conditions, nil
-}
-
-func canonicalContractPartyRole(value string) string {
-	return canonicalContractEntityRole(value)
-}
-
-func canonicalContractEntityRole(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "none":
-		return ""
-	case "provider", "supplier":
-		return contractStatementProviderRole
-	case "customer", "client":
-		return contractStatementCustomerRole
-	default:
-		if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
-			return value
-		}
-		return ontologyDCSTBase + "role-" + slugify(value)
-	}
-}
-
-func canonicalStatementEntityType(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "none":
-		return ""
-	case "party", "company", "customer", "client", "provider", "supplier", "dcs:party", "dcs:company", strings.ToLower(contractStatementPartyType):
-		return contractStatementPartyType
-	default:
-		if strings.HasPrefix(value, ontologyDCSBase) {
-			return value
-		}
-		return ""
-	}
-}
-
-func entityRoleFromEntityType(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "provider", "supplier":
-		return contractStatementProviderRole
-	case "customer", "client":
-		return contractStatementCustomerRole
-	default:
-		return ""
-	}
 }
 
 func allowedValuesForDomainPath(domainPath string) []any {
@@ -1593,10 +1370,10 @@ func validateSemanticConditionEntity(conditionID string, condition map[string]an
 		return nil
 	}
 	if hasEntityRole && strings.TrimSpace(rawEntityRole) != "" {
-		if entityType != contractStatementPartyType {
-			return fmt.Errorf("semantic condition %q entityRole is only supported for Party entities", conditionID)
+		if !statementEntityTypeSupportsRole(entityType) {
+			return fmt.Errorf("semantic condition %q entityRole is not supported for entityType %q", conditionID, rawEntityType)
 		}
-		condition["entityRole"] = canonicalContractEntityRole(rawEntityRole)
+		condition["entityRole"] = canonicalEntityRole(rawEntityRole)
 	}
 	return nil
 }
@@ -1629,51 +1406,6 @@ func validBlockType(value string) bool {
 	default:
 		return false
 	}
-}
-
-func normalizeBlockCatalogue(block map[string]any) {
-	if _, ok := block["blockCatalogueId"].(string); ok {
-		return
-	}
-	switch block["type"] {
-	case "SECTION":
-		applyBlockDefinition(block, "facis.block.document.section")
-	case "TEXT":
-		applyBlockDefinition(block, "facis.block.text.free")
-	case "CLAUSE":
-		applyBlockDefinition(block, "facis.block.clause.custom")
-	case "APPROVED_TEMPLATE":
-		applyBlockDefinition(block, "facis.block.template.approved-embed")
-	case "MERGED_APPROVED_TEMPLATE":
-		applyBlockDefinition(block, "facis.block.template.merged-approved")
-	}
-}
-
-func applyBlockDefinition(block map[string]any, catalogueID string) {
-	def, ok := blockCatalogue[catalogueID]
-	if !ok {
-		return
-	}
-	block["blockCatalogueId"] = catalogueID
-	block["schemaRef"] = def.SchemaRef
-	block["semanticPath"] = def.SemanticPath
-}
-
-func validateBlockCatalogue(block map[string]any) error {
-	catalogueID, _ := block["blockCatalogueId"].(string)
-	def, ok := blockCatalogue[catalogueID]
-	if !ok {
-		return fmt.Errorf("unknown blockCatalogueId %q", catalogueID)
-	}
-	schemaRef, _ := block["schemaRef"].(string)
-	semanticPath, _ := block["semanticPath"].(string)
-	if schemaRef != def.SchemaRef {
-		return fmt.Errorf("schemaRef must be %q for blockCatalogueId %q", def.SchemaRef, catalogueID)
-	}
-	if semanticPath != def.SemanticPath {
-		return fmt.Errorf("semanticPath must be %q for blockCatalogueId %q", def.SemanticPath, catalogueID)
-	}
-	return nil
 }
 
 func validSemanticType(value string) bool {
@@ -1828,31 +1560,26 @@ func containsString(values []string, candidate string) bool {
 	return false
 }
 
-func validateContractParties(data documentData) error {
-	rawParties, exists := data["parties"]
+func validateRoleEntities(data documentData) error {
+	documentField := ontologyRuntime.RoleEntityDocumentField
+	if documentField == "" {
+		return nil
+	}
+	rawEntities, exists := data[documentField]
 	if !exists {
 		return nil
 	}
-	roleField, ok := ontologyDomainFieldIndex[ontologyDCSTBase+"field-company-role"]
-	if !ok || roleField.Constraint == nil || len(roleField.Constraint.AllowedValues) == 0 {
-		return errors.New("ontology domain field company.role requires allowed role values")
-	}
-	parties, ok := asArray(rawParties)
+	entities, ok := asArray(rawEntities)
 	if !ok {
-		return errors.New("parties must be an array")
+		return fmt.Errorf("%s must be an array", documentField)
 	}
-	for index, rawParty := range parties {
-		party, ok := rawParty.(map[string]any)
+	for index, rawEntity := range entities {
+		entity, ok := rawEntity.(map[string]any)
 		if !ok {
-			return fmt.Errorf("parties.%d must be an object", index)
+			return fmt.Errorf("%s.%d must be an object", documentField, index)
 		}
-		partyType, _ := party["@type"].(string)
-		if partyType != "Company" && partyType != "dcs:Company" {
-			return fmt.Errorf("parties.%d.@type must be Company", index)
-		}
-		role, _ := party["role"].(string)
-		if !containsString(roleField.Constraint.AllowedValues, role) {
-			return fmt.Errorf("parties.%d.role must be one of %s", index, strings.Join(roleField.Constraint.AllowedValues, ", "))
+		if err := validateOntologyRoleEntity(entity); err != nil {
+			return fmt.Errorf("%s.%d.%w", documentField, index, err)
 		}
 	}
 	return nil

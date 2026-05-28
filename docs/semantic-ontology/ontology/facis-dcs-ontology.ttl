@@ -122,17 +122,15 @@ dcs:WorkflowHook a rdfs:Class ;
 # Identity classes
 #################################################################
 
-dcs:Party a rdfs:Class ;
-  rdfs:label "Party" ;
-  rdfs:comment "Abstract identity participant. Contract parties are currently restricted to companies." .
-
-dcs:Company a rdfs:Class ;
-  rdfs:subClassOf dcs:Party ;
-  rdfs:label "Company" ;
+dcs:CompanyParty a rdfs:Class ;
+  rdfs:label "Company Party" ;
   rdfs:comment "A company acting as a contract party. Its dcs:role identifies its function in the current contract." .
 
+dcs:ContractStatementSet a rdfs:Class ;
+  dcs:documentProperty "contractStatements" ;
+  rdfs:label "Contract Statement Set" .
+
 dcs:Signatory a rdfs:Class ;
-  rdfs:subClassOf dcs:Party ;
   rdfs:label "Signatory" .
 
 dcs:CredentialReference a rdfs:Class ;
@@ -344,8 +342,40 @@ dcs:statementField a rdf:Property ;
   rdfs:domain dcs:DomainField ;
   rdfs:range xsd:string .
 
+dcs:statementType a rdf:Property ;
+  rdfs:label "Contract Statement Type" ;
+  rdfs:comment "Target RDF type used when deriving normalized machine-readable contract statements from semantic condition values." ;
+  rdfs:domain dcs:DomainField .
+
+dcs:statementId a rdf:Property ;
+  rdfs:label "Contract Statement ID" ;
+  rdfs:comment "Optional stable statement identifier used when multiple semantic fields populate the same contract statement." ;
+  rdfs:domain dcs:DomainField ;
+  rdfs:range xsd:string .
+
+dcs:statementValuePrefix a rdf:Property ;
+  rdfs:label "Contract Statement Value Prefix" ;
+  rdfs:comment "Optional resource prefix used to normalize compact controlled-vocabulary values for statement output." ;
+  rdfs:domain dcs:DomainField .
+
+dcs:mapsEntityRole a rdf:Property ;
+  rdfs:label "Maps Entity Role" ;
+  rdfs:comment "Marks a domain field whose statement target receives semantic condition entityRole values." ;
+  rdfs:domain dcs:DomainField ;
+  rdfs:range xsd:boolean .
+
+dcs:documentProperty a rdf:Property ;
+  rdfs:label "Document Property" ;
+  rdfs:comment "JSON property used for a runtime document artifact." ;
+  rdfs:range xsd:string .
+
 dcs:blockCatalogueId a rdf:Property ;
   rdfs:label "Block Catalogue ID" ;
+  rdfs:range xsd:string .
+
+dcs:blockType a rdf:Property ;
+  rdfs:label "Block Type" ;
+  rdfs:comment "Document block type that receives this catalogue entry as a default." ;
   rdfs:range xsd:string .
 
 dcs:documentNumber a rdf:Property ;
@@ -738,9 +768,10 @@ dcs:hasDeployment a rdf:Property ;
   rdfs:range dcs:Deployment .
 
 dcs:party a rdf:Property ;
-  rdfs:label "Party" ;
+  rdfs:label "Company Party" ;
   rdfs:comment "A company acting as a party to the contract." ;
-  rdfs:range dcs:Company .
+  dcs:documentProperty "parties" ;
+  rdfs:range dcs:CompanyParty .
 
 dcs:role a rdf:Property ;
   rdfs:label "Role" ;
@@ -970,6 +1001,7 @@ dcst:constraint-ip-ownership a dcs:ValueConstraint ;
 dcst:field-company-legalName a dcs:DomainField ;
   dcs:semanticPath "company.legalName" ;
   dcs:statementField "party.legalName" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Legal Name" .
@@ -977,6 +1009,9 @@ dcst:field-company-legalName a dcs:DomainField ;
 dcst:field-company-role a dcs:DomainField ;
   dcs:semanticPath "company.role" ;
   dcs:statementField "party.role" ;
+  dcs:statementType dcs:CompanyParty ;
+  dcs:statementValuePrefix dcst:role- ;
+  dcs:mapsEntityRole true ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-contract-party-role ;
@@ -1045,6 +1080,7 @@ dcst:field-company-location-region a dcs:DomainField ;
 dcst:field-company-location-country a dcs:DomainField ;
   dcs:semanticPath "company.location.country" ;
   dcs:statementField "party.country" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
@@ -1121,6 +1157,8 @@ dcst:field-contract-termination-noticePeriodDays a dcs:DomainField ;
 dcst:field-contract-payment-amount a dcs:DomainField ;
   dcs:semanticPath "contract.payment.amount" ;
   dcs:statementField "payment.amount" ;
+  dcs:statementType dcs:PaymentTerm ;
+  dcs:statementId "payment-main" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "decimal" ;
   rdfs:label "Payment Amount" .
@@ -1128,6 +1166,8 @@ dcst:field-contract-payment-amount a dcs:DomainField ;
 dcst:field-contract-payment-currency a dcs:DomainField ;
   dcs:semanticPath "contract.payment.currency" ;
   dcs:statementField "payment.currency" ;
+  dcs:statementType dcs:PaymentTerm ;
+  dcs:statementId "payment-main" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso4217-currency ;
@@ -1136,6 +1176,8 @@ dcst:field-contract-payment-currency a dcs:DomainField ;
 dcst:field-contract-payment-dueDate a dcs:DomainField ;
   dcs:semanticPath "contract.payment.dueDate" ;
   dcs:statementField "payment.dueDate" ;
+  dcs:statementType dcs:PaymentTerm ;
+  dcs:statementId "payment-main" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "date" ;
   rdfs:label "Payment Due Date" .
@@ -1231,6 +1273,8 @@ dcst:field-service-deliverable-acceptanceCriteria a dcs:DomainField ;
 dcst:field-service-sla-availability a dcs:DomainField ;
   dcs:semanticPath "service.sla.availability" ;
   dcs:statementField "slo.availability" ;
+  dcs:statementType dcs:ServiceLevelObjective ;
+  dcs:statementId "slo-availability" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "decimal" ;
   dcs:hasValueConstraint dcst:constraint-sla-availability-percent ;
@@ -1281,21 +1325,30 @@ dcst:field-signature-deadline a dcs:DomainField ;
 
 dcst:block-document-section a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.document.section" ;
+  dcs:blockType "SECTION" ;
   dcs:schemaRef "facis.dcs.document-structure.v1" ;
   dcs:semanticPath "document.section" ;
   rdfs:label "Document Section" .
 
 dcst:block-text-free a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.text.free" ;
+  dcs:blockType "TEXT" ;
   dcs:schemaRef "facis.dcs.document-structure.v1" ;
   dcs:semanticPath "document.freeText" ;
   rdfs:label "Free Text" .
 
 dcst:block-clause-custom a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.clause.custom" ;
+  dcs:blockType "CLAUSE" ;
   dcs:schemaRef "facis.dcs.document-structure.v1" ;
   dcs:semanticPath "document.clause" ;
   rdfs:label "Custom Clause" .
+
+dcst:block-party-company a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.party.company" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:semanticPath "company" ;
+  rdfs:label "Company Party" .
 
 dcst:block-party-company-location a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.party.company.location" ;
@@ -1303,11 +1356,119 @@ dcst:block-party-company-location a dcs:BlockCatalogueEntry ;
   dcs:semanticPath "company.location" ;
   rdfs:label "Company Location" .
 
+dcst:block-party-representative a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.party.representative" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:semanticPath "company.representative" ;
+  rdfs:label "Company Representative" .
+
+dcst:block-party-contact a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.party.contact" ;
+  dcs:schemaRef "facis.dcs.party.v1" ;
+  dcs:semanticPath "company.contact" ;
+  rdfs:label "Company Contact" .
+
+dcst:block-contract-basics a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.basics" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract" ;
+  rdfs:label "Contract Basics" .
+
+dcst:block-contract-jurisdiction a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.jurisdiction" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.jurisdiction" ;
+  rdfs:label "Contract Jurisdiction" .
+
 dcst:block-contract-payment a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.contract.payment" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:semanticPath "contract.payment" ;
   rdfs:label "Payment Terms" .
+
+dcst:block-contract-validity a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.validity" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.validity" ;
+  rdfs:label "Contract Validity" .
+
+dcst:block-contract-renewal a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.renewal" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.renewal" ;
+  rdfs:label "Contract Renewal" .
+
+dcst:block-contract-termination a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.termination" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.termination" ;
+  rdfs:label "Contract Termination" .
+
+dcst:block-contract-liability a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.liability" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.liability" ;
+  rdfs:label "Contract Liability" .
+
+dcst:block-contract-insurance a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.insurance" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.insurance" ;
+  rdfs:label "Contract Insurance" .
+
+dcst:block-contract-confidentiality a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.confidentiality" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.confidentiality" ;
+  rdfs:label "Contract Confidentiality" .
+
+dcst:block-contract-data-protection a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.data-protection" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.dataProtection" ;
+  rdfs:label "Contract Data Protection" .
+
+dcst:block-contract-audit-rights a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.audit-rights" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.auditRights" ;
+  rdfs:label "Contract Audit Rights" .
+
+dcst:block-contract-ip-rights a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.ip-rights" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.ipRights" ;
+  rdfs:label "Contract IP Rights" .
+
+dcst:block-contract-force-majeure a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.force-majeure" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.forceMajeure" ;
+  rdfs:label "Contract Force Majeure" .
+
+dcst:block-contract-dispute-resolution a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.contract.dispute-resolution" ;
+  dcs:schemaRef "facis.dcs.contract.v1" ;
+  dcs:semanticPath "contract.disputeResolution" ;
+  rdfs:label "Contract Dispute Resolution" .
+
+dcst:block-service-description a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.service.description" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.description" ;
+  rdfs:label "Service Description" .
+
+dcst:block-service-scope a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.service.scope" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.scope" ;
+  rdfs:label "Service Scope" .
+
+dcst:block-service-deliverable a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.service.deliverable" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.deliverable" ;
+  rdfs:label "Service Deliverable" .
 
 dcst:block-service-sla-availability a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.sla.availability" ;
@@ -1315,11 +1476,55 @@ dcst:block-service-sla-availability a dcs:BlockCatalogueEntry ;
   dcs:semanticPath "service.sla.availability" ;
   rdfs:label "SLA Availability" .
 
+dcst:block-service-sla-response-time a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.sla.response-time" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.sla.responseTime" ;
+  rdfs:label "SLA Response Time" .
+
+dcst:block-service-sla-resolution-time a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.sla.resolution-time" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.sla.resolutionTime" ;
+  rdfs:label "SLA Resolution Time" .
+
+dcst:block-service-sla-support a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.sla.support" ;
+  dcs:schemaRef "facis.dcs.service.v1" ;
+  dcs:semanticPath "service.sla.supportHours" ;
+  rdfs:label "SLA Support Hours" .
+
 dcst:block-signature-requirement a dcs:BlockCatalogueEntry ;
   dcs:blockCatalogueId "facis.block.signature.requirement" ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:semanticPath "signature.requiredLevel" ;
   rdfs:label "Signature Requirement" .
+
+dcst:block-signature-signer-role a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.signature.signer-role" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:semanticPath "signature.requiredSignerRole" ;
+  rdfs:label "Signature Signer Role" .
+
+dcst:block-signature-deadline a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.signature.deadline" ;
+  dcs:schemaRef "facis.dcs.signature.v1" ;
+  dcs:semanticPath "signature.deadline" ;
+  rdfs:label "Signature Deadline" .
+
+dcst:block-template-approved-embed a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.template.approved-embed" ;
+  dcs:blockType "APPROVED_TEMPLATE" ;
+  dcs:schemaRef "facis.dcs.template-data.v1" ;
+  dcs:semanticPath "template.approvedEmbed" ;
+  rdfs:label "Approved Template Embed" .
+
+dcst:block-template-merged-approved a dcs:BlockCatalogueEntry ;
+  dcs:blockCatalogueId "facis.block.template.merged-approved" ;
+  dcs:blockType "MERGED_APPROVED_TEMPLATE" ;
+  dcs:schemaRef "facis.dcs.template-data.v1" ;
+  dcs:semanticPath "template.mergedApproved" ;
+  rdfs:label "Merged Approved Template" .
 
 dcs:rule a rdf:Property ;
   rdfs:label "Rule" .
@@ -1416,5 +1621,5 @@ dcs:Replaced a dcs:ContractLifecycleState ; dcs:identifier "Replaced" .
 
 dcs:PolicyBundle rdfs:seeAlso odrl:Policy .
 dcs:Constraint rdfs:seeAlso odrl:Constraint .
-dcs:Party rdfs:seeAlso odrl:Party .
+dcs:CompanyParty rdfs:seeAlso odrl:Party .
 dcs:ProvenanceEvent rdfs:seeAlso prov:Activity .

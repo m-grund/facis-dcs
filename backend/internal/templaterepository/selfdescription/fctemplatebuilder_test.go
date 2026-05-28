@@ -17,7 +17,7 @@ func TestBuildTemplateResourceSelfDescriptionIncludesSemanticEntityContext(t *te
 				"conditionId":   "customer",
 				"conditionName": "Customer",
 				"schemaVersion": "v1",
-				"entityType":    "Party",
+				"entityType":    "CompanyParty",
 				"entityRole":    "customer",
 				"parameters": []any{
 					map[string]any{
@@ -63,7 +63,7 @@ func TestBuildTemplateResourceSelfDescriptionIncludesSemanticEntityContext(t *te
 	rawTemplateData := subject["dcs-template:templateData"].(*datatype.JSON)
 	require.NoError(t, json.Unmarshal(*rawTemplateData, &embeddedTemplateData))
 	condition := embeddedTemplateData["semanticConditions"].([]any)[0].(map[string]any)
-	require.Equal(t, "Party", condition["entityType"])
+	require.Equal(t, "CompanyParty", condition["entityType"])
 	require.Equal(t, "customer", condition["entityRole"])
 	param := condition["parameters"].([]any)[0].(map[string]any)
 	require.Equal(t, "customer", param["fixedValue"])

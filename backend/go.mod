@@ -15,6 +15,7 @@ require (
 	goa.design/clue v1.2.4
 	goa.design/goa/v3 v3.26.0
 	goa.design/plugins/v3 v3.24.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -88,5 +89,4 @@ require (
 	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

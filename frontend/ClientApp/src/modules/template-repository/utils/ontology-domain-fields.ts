@@ -62,19 +62,14 @@ export function parseOntologyDomainFields(source: string): DomainFieldDefinition
 export function parseOntologyEntityTypes(source: string): OntologySelectOption<SemanticEntityType>[] {
   return parseStatements(source)
     .filter((statement) => statement.text.includes(' a rdfs:Class'))
-    .filter((statement) => statement.subject === 'dcs:Party' || firstResource(statement.text, 'rdfs:subClassOf') === 'dcs:Party')
+    .filter((statement) => statement.subject === 'dcs:CompanyParty')
     .map((statement) => {
       const value = localName(statement.subject)
       const label = firstLiteral(statement.text, 'rdfs:label') || value
       if (!value) throw new Error(`Ontology entity type ${statement.subject} is incomplete.`)
       return { value, label }
     })
-    .filter((option) => option.value === 'Party' || option.value === 'Company')
-    .sort((left, right) => {
-      if (left.value === 'Party') return -1
-      if (right.value === 'Party') return 1
-      return left.label.localeCompare(right.label)
-    })
+    .sort((left, right) => left.label.localeCompare(right.label))
 }
 
 export function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {

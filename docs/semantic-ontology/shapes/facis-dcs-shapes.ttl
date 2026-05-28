@@ -42,14 +42,14 @@ dcs:ContractShape
   ] ;
   sh:property [
     sh:path dcs:party ;
-    sh:class dcs:Company ;
-    sh:node dcs:CompanyShape ;
+    sh:class dcs:CompanyParty ;
+    sh:node dcs:CompanyPartyShape ;
     sh:minCount 2 ;
   ] .
 
-dcs:CompanyShape
+dcs:CompanyPartyShape
   a sh:NodeShape ;
-  sh:targetClass dcs:Company ;
+  sh:targetClass dcs:CompanyParty ;
   sh:property [
     sh:path dcs:role ;
     sh:datatype xsd:string ;

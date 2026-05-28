@@ -391,7 +391,7 @@ function domainFieldAllowedForEntityType(path: DomainSemanticPath, entityType: s
 }
 
 function isPartyEntityType(entityType: string): boolean {
-  return entityType === 'Party' || entityType === 'Company'
+  return entityType === 'CompanyParty'
 }
 
 function handleDomainFieldInput() {

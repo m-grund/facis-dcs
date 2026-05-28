@@ -43,7 +43,7 @@ const contractDocumentText = ref(`{
     },
     {
       "@id": "urn:facis:party:customer-001",
-      "@type": "dcs:Company",
+      "@type": "dcs:CompanyParty",
       "role": "customer",
       "legalName": "Example Customer AG",
       "location": {
@@ -95,7 +95,7 @@ const policyText = ref(`{
           "path": "parties",
           "name": "Contract parties",
           "minCount": 2,
-          "class": "dcs:Company"
+          "class": "dcs:CompanyParty"
         },
         {
           "path": "contract.jurisdiction",

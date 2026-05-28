@@ -20,22 +20,6 @@
           </div>
 
           <div class="border-t border-base-300 pt-4">
-            <p class="text-sm text-base-content/70 mb-2">FACIS blocks:</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                v-for="block in domainBlockCatalogue"
-                :key="block.blockCatalogueId"
-                type="button"
-                class="text-left min-h-[44px] flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
-                @click="handleAddCatalogueBlock(block)"
-              >
-                <span class="text-sm font-medium text-base-content">{{ block.label }}</span>
-                <span class="text-xs text-base-content/50">{{ block.semanticPath }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="border-t border-base-300 pt-4">
             <div class="flex flex-col gap-2 mb-2">
               <p class="text-sm text-base-content/70">Defined clauses:</p>
               <input
@@ -60,6 +44,34 @@
               </p>
             </div>
           </div>
+
+          <div class="border-t border-base-300 pt-4">
+            <p class="text-sm text-base-content/70 mb-2">Company party:</p>
+            <div class="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                <label class="form-control">
+                  <span class="label-text text-xs text-base-content/60 mb-1">Role in contract</span>
+                  <select v-model="selectedCompanyRole" class="select select-bordered select-sm w-full">
+                    <option value="" disabled>Select role</option>
+                    <option v-for="option in companyRoleOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  :disabled="!selectedCompanyRole || !companyFields.length"
+                  @click="handleAddCompanyPartyBlock"
+                >
+                  Add company
+                </button>
+              </div>
+              <p class="text-xs text-base-content/50">
+                Adds legal name, registration, VAT, representative, contact, address, country, and a fixed role.
+              </p>
+            </div>
+          </div>
         </template>
 
         <div class="flex justify-end pt-2">
@@ -75,12 +87,23 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { DocumentBlockType, FACIS_BLOCK_CATALOGUE, isClauseBlock, isApprovedTemplateBlock, TemplateType, type ClauseBlock } from '@/modules/template-repository/models/contract-template'
+import {
+  DocumentBlockType,
+  SEMANTIC_CONDITION_SCHEMA_VERSION,
+  isClauseBlock,
+  isApprovedTemplateBlock,
+  TemplateType,
+  type ClauseBlock,
+  type DomainFieldDefinition,
+  type SemanticConditionParameter,
+  type SemanticValueConstraint,
+} from '@/modules/template-repository/models/contract-template'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { parseSegments, getPlaceholderLabelFromConditions, type Segment } from '@template-repository/composables/useClauseTextChips'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import { ONTOLOGY_DOMAIN_FIELDS, ONTOLOGY_ENTITY_ROLES } from '@template-repository/utils/ontology-domain-fields'
 
 const draftStore = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
@@ -93,7 +116,11 @@ const paletteBlockTypes = [
   { blockType: DocumentBlockType.Text, label: 'Text' },
   { blockType: DocumentBlockType.Clause, label: 'Clause' },
 ] as const
-const domainBlockCatalogue = FACIS_BLOCK_CATALOGUE.filter((block) => !block.blockCatalogueId.startsWith('facis.block.document.') && !block.blockCatalogueId.startsWith('facis.block.text.'))
+const companyRoleOptions = ONTOLOGY_ENTITY_ROLES
+const companyFields = ONTOLOGY_DOMAIN_FIELDS
+  .filter((field) => field.semanticPath.startsWith('company.'))
+  .sort((left, right) => companyFieldSortIndex(left.semanticPath) - companyFieldSortIndex(right.semanticPath))
+const selectedCompanyRole = ref('')
 
 const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
 
@@ -132,6 +159,7 @@ const filteredUnusedClauses = computed((): ClauseBlock[] => {
 
 watch(addBlockModalContext, () => {
   clauseSearch.value = ''
+  selectedCompanyRole.value = ''
 })
 
 function getSegments(clause: ClauseBlock): Segment[] {
@@ -153,17 +181,29 @@ function handleAddBlock(blockType: DocumentBlockType) {
   uiStore.closeAddBlockModal()
 }
 
-function handleAddCatalogueBlock(block: (typeof FACIS_BLOCK_CATALOGUE)[number]) {
+function handleAddCompanyPartyBlock() {
   const ctx = addBlockModalContext.value
-  if (ctx === null) return
+  const role = selectedCompanyRole.value
+  if (ctx === null || !role) return
+  const conditionId = `company-${role}-${crypto.randomUUID()}`
+  const roleLabel = companyRoleOptions.find((option) => option.value === role)?.label ?? role
+  const parameters = companyFields.map((field) => buildCompanyParameter(field, role))
+
+  draftStore.semanticConditions.push({
+    conditionId,
+    conditionName: `${roleLabel} company`,
+    schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
+    entityType: 'Company',
+    entityRole: role,
+    parameters,
+  })
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
     blockType: DocumentBlockType.Clause,
-    title: block.label,
-    text: '',
-    conditionIds: [],
-    blockCatalogueId: block.blockCatalogueId,
-    schemaRef: block.schemaRef,
-    semanticPath: block.semanticPath,
+    title: `${roleLabel} company`,
+    text: buildCompanyBlockText(conditionId, roleLabel, parameters),
+    conditionIds: [conditionId],
+    schemaRef: companyFields[0]?.schemaRef,
+    semanticPath: 'company',
   })
   uiStore.closeAddBlockModal()
 }
@@ -191,5 +231,62 @@ function handleAddClause(clauseBlockId: string) {
     clauseBlockId,
   })
   uiStore.closeAddBlockModal()
+}
+
+function buildCompanyParameter(field: DomainFieldDefinition, role: string): SemanticConditionParameter {
+  const fixedValue = field.semanticPath === 'company.role' ? role : undefined
+  const parameter: SemanticConditionParameter = {
+    parameterName: field.semanticPath.split('.').join('_'),
+    type: field.type,
+    schemaRef: field.schemaRef,
+    semanticPath: field.semanticPath,
+    valueConstraint: cloneValueConstraint(field.valueConstraint),
+    isRequired: true,
+    operators: [],
+    value: undefined,
+  }
+  if (fixedValue !== undefined) parameter.fixedValue = fixedValue
+  return parameter
+}
+
+function buildCompanyBlockText(conditionId: string, roleLabel: string, parameters: SemanticConditionParameter[]): string {
+  const lines = [`${roleLabel} company`, `Role: ${roleLabel}`]
+  for (const parameter of parameters) {
+    if (parameter.fixedValue !== undefined) continue
+    lines.push(`${formatCompanyFieldLabel(parameter.semanticPath)}: {{${conditionId}.${parameter.parameterName}}}`)
+  }
+  return lines.join('\n')
+}
+
+function formatCompanyFieldLabel(semanticPath: string): string {
+  return companyFields.find((field) => field.semanticPath === semanticPath)?.label ?? semanticPath
+}
+
+function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
+  if (!constraint) return undefined
+  return {
+    ...constraint,
+    allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+  }
+}
+
+function companyFieldSortIndex(semanticPath: string): number {
+  const order = [
+    'company.role',
+    'company.legalName',
+    'company.registrationNumber',
+    'company.vatId',
+    'company.representative.name',
+    'company.representative.role',
+    'company.contact.email',
+    'company.contact.phone',
+    'company.location.street',
+    'company.location.postalCode',
+    'company.location.city',
+    'company.location.region',
+    'company.location.country',
+  ]
+  const index = order.indexOf(semanticPath)
+  return index >= 0 ? index : order.length
 }
 </script>

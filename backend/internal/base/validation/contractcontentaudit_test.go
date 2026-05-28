@@ -54,8 +54,8 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 		"contractVersion": 1,
 		"state":           "APPROVED",
 		"parties": []any{
-			map[string]any{"@type": "dcs:Company", "role": "supplier", "legalName": "Supplier GmbH"},
-			map[string]any{"@type": "dcs:Company", "role": "customer", "legalName": "Customer AG"},
+			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier", "legalName": "Supplier GmbH"},
+			map[string]any{"@type": "dcs:CompanyParty", "role": "customer", "legalName": "Customer AG"},
 		},
 		"company": map[string]any{
 			"location": map[string]any{
@@ -142,8 +142,8 @@ func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
 		"@id":      "urn:facis:dcs:contract:sla:example-001",
 		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
 		"parties": []any{
-			map[string]any{"@type": "dcs:Company", "role": "supplier"},
-			map[string]any{"@type": "dcs:Company", "role": "customer"},
+			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier"},
+			map[string]any{"@type": "dcs:CompanyParty", "role": "customer"},
 		},
 		"contract": map[string]any{
 			"jurisdiction": "DEU",
@@ -159,7 +159,7 @@ func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
 				"targetClass": "dcs:Contract",
 				"properties": []any{
 					map[string]any{"path": "contract.jurisdiction", "minCount": 1, "datatype": "xsd:string", "name": "Jurisdiction"},
-					map[string]any{"path": "parties", "minCount": 2, "class": "dcs:Company", "name": "Contract parties"},
+					map[string]any{"path": "parties", "minCount": 2, "class": "dcs:CompanyParty", "name": "Contract parties"},
 				},
 			},
 		},
@@ -193,7 +193,7 @@ func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
 					"targetClass": "dcs:Contract",
 					"property": []any{
 						map[string]any{"path": "contract.jurisdiction", "minCount": 1, "name": "Jurisdiction"},
-						map[string]any{"path": "parties", "class": "dcs:Company", "name": "Contract parties"},
+						map[string]any{"path": "parties", "class": "dcs:CompanyParty", "name": "Contract parties"},
 					},
 				},
 			},

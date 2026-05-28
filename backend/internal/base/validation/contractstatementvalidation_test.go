@@ -12,45 +12,27 @@ func validContractStatementsForValidation() []map[string]any {
 	return []map[string]any{
 		{
 			"@id":       "party-provider",
-			"@type":     contractStatementPartyType,
-			"role":      contractStatementProviderRole,
+			"@type":     ontologyRuntime.RoleEntityType,
+			"role":      canonicalEntityRole("provider"),
 			"legalName": "Provider GmbH",
 		},
 		{
 			"@id":       "party-customer",
-			"@type":     contractStatementPartyType,
-			"role":      contractStatementCustomerRole,
+			"@type":     ontologyRuntime.RoleEntityType,
+			"role":      canonicalEntityRole("customer"),
 			"legalName": "Customer GmbH",
 		},
 		{
 			"@id":      "payment-main",
-			"@type":    contractStatementPaymentType,
+			"@type":    statementTypeByStatementField("payment.amount"),
 			"amount":   1000.0,
 			"currency": "EUR",
 			"dueDate":  "2026-06-19",
-			"payer":    "party-customer",
-			"payee":    "party-provider",
 		},
 		{
-			"@id":      "slo-availability",
-			"@type":    contractStatementSLOType,
-			"metric":   contractStatementAvailability,
-			"operator": ">=",
-			"value":    99.9,
-		},
-		{
-			"@id":      "obligation-payment",
-			"@type":    contractStatementObligation,
-			"assignee": "party-customer",
-			"action":   contractStatementPayAction,
-			"target":   "payment-main",
-		},
-		{
-			"@id":      "obligation-availability",
-			"@type":    contractStatementObligation,
-			"assignee": "party-provider",
-			"action":   contractStatementSLAAction,
-			"target":   "slo-availability",
+			"@id":          "slo-availability",
+			"@type":        statementTypeByStatementField("slo.availability"),
+			"availability": 99.9,
 		},
 	}
 }
@@ -80,14 +62,13 @@ func TestValidateContractStatementsReportsMissingProvider(t *testing.T) {
 	issues := ValidateContractStatements(statements, defaultContractStatementValidationProfile())
 
 	require.Contains(t, validationIssueIDs(issues), "exactly-one-provider")
-	require.Contains(t, validationIssueIDs(issues), "payment-party-references-exist")
 }
 
 func TestValidateContractStatementsReportsDuplicateProvider(t *testing.T) {
 	statements := append(validContractStatementsForValidation(), map[string]any{
 		"@id":   "party-provider-2",
-		"@type": contractStatementPartyType,
-		"role":  contractStatementProviderRole,
+		"@type": ontologyRuntime.RoleEntityType,
+		"role":  canonicalEntityRole("provider"),
 	})
 
 	issues := ValidateContractStatements(statements, defaultContractStatementValidationProfile())
@@ -118,7 +99,7 @@ func TestValidateContractStatementsReportsNonPositivePaymentAmount(t *testing.T)
 func TestValidateContractStatementsReportsMissingSLO(t *testing.T) {
 	statements := []map[string]any{}
 	for _, statement := range validContractStatementsForValidation() {
-		if statement["@id"] == "slo-availability" || statement["@id"] == "obligation-availability" {
+		if statement["@id"] == "slo-availability" {
 			continue
 		}
 		statements = append(statements, statement)
@@ -129,21 +110,11 @@ func TestValidateContractStatementsReportsMissingSLO(t *testing.T) {
 	require.Equal(t, []string{"availability-slo-required"}, validationIssueIDs(issues))
 }
 
-func TestValidateContractStatementsReportsInvalidStatementReferences(t *testing.T) {
-	statements := validContractStatementsForValidation()
-	statements[2]["payer"] = "party-missing"
-	statements[4]["target"] = "payment-missing"
-
-	issues := ValidateContractStatements(statements, defaultContractStatementValidationProfile())
-
-	require.ElementsMatch(t, []string{"payment-party-references-exist", "obligation-target-references-exist"}, validationIssueIDs(issues))
-}
-
 func TestValidateContractStatementsReportsMultipleValidationFailures(t *testing.T) {
 	statements := []map[string]any{
 		{
 			"@id":    "payment-main",
-			"@type":  contractStatementPaymentType,
+			"@type":  statementTypeByStatementField("payment.amount"),
 			"amount": 1000.0,
 		},
 	}
@@ -155,7 +126,6 @@ func TestValidateContractStatementsReportsMultipleValidationFailures(t *testing.
 		"exactly-one-customer",
 		"payment-required",
 		"availability-slo-required",
-		"payment-party-references-exist",
 	}, validationIssueIDs(issues))
 }
 
@@ -176,8 +146,8 @@ func TestValidateContractStatementsReportsUnknownRuleType(t *testing.T) {
 func TestValidateContractStatementsSupportsReusableRuleTypes(t *testing.T) {
 	statements := append(validContractStatementsForValidation(), map[string]any{
 		"@id":       "party-provider-duplicate-name",
-		"@type":     contractStatementPartyType,
-		"role":      ontologyDCSTBase + "role-reseller",
+		"@type":     ontologyRuntime.RoleEntityType,
+		"role":      canonicalEntityRole("reseller"),
 		"legalName": "Provider GmbH",
 	})
 	profile := ValidationProfile{
@@ -187,7 +157,7 @@ func TestValidateContractStatementsSupportsReusableRuleTypes(t *testing.T) {
 			{
 				ID:    "payment-exists",
 				Type:  ValidationRuleExists,
-				Where: map[string]any{"@type": contractStatementPaymentType},
+				Where: map[string]any{"@type": statementTypeByStatementField("payment.amount")},
 			},
 			{
 				ID:       "provider-role",
@@ -195,13 +165,13 @@ func TestValidateContractStatementsSupportsReusableRuleTypes(t *testing.T) {
 				Target:   "role",
 				Where:    map[string]any{"@id": "party-provider"},
 				Operator: "eq",
-				Value:    contractStatementProviderRole,
+				Value:    canonicalEntityRole("provider"),
 			},
 			{
 				ID:       "positive-payment",
 				Type:     ValidationRuleComparison,
 				Target:   "amount",
-				Where:    map[string]any{"@type": contractStatementPaymentType},
+				Where:    map[string]any{"@type": statementTypeByStatementField("payment.amount")},
 				Operator: "gt",
 				Value:    0,
 			},
@@ -209,7 +179,7 @@ func TestValidateContractStatementsSupportsReusableRuleTypes(t *testing.T) {
 				ID:     "unique-party-names",
 				Type:   ValidationRuleUnique,
 				Target: "legalName",
-				Where:  map[string]any{"@type": contractStatementPartyType},
+				Where:  map[string]any{"@type": ontologyRuntime.RoleEntityType},
 			},
 		},
 	}
@@ -241,7 +211,7 @@ func TestLoadValidationProfileSupportsSHACLJSONAndYAML(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "facis.sla.basic.v1", shaclProfile.ID)
 	require.Contains(t, validationIssueIDs(ValidateContractStatements(
-		[]map[string]any{{"@id": "payment-main", "@type": contractStatementPaymentType, "amount": 0}},
+		[]map[string]any{{"@id": "payment-main", "@type": statementTypeByStatementField("payment.amount"), "amount": 0}},
 		shaclProfile,
 	)), "payment-amount-positive")
 
@@ -276,11 +246,11 @@ rules:
 func TestStatementQueryUtilities(t *testing.T) {
 	statements := validContractStatementsForValidation()
 
-	require.True(t, MatchesWhereClause(statements[0], map[string]any{"role": contractStatementProviderRole}))
-	require.Len(t, FindStatements(statements, map[string]any{"@type": contractStatementPartyType}), 2)
-	require.Equal(t, 1, CountStatements(statements, map[string]any{"@type": contractStatementPaymentType}))
+	require.True(t, MatchesWhereClause(statements[0], map[string]any{"role": canonicalEntityRole("provider")}))
+	require.Len(t, FindStatements(statements, map[string]any{"@type": ontologyRuntime.RoleEntityType}), 2)
+	require.Equal(t, 1, CountStatements(statements, map[string]any{"@type": statementTypeByStatementField("payment.amount")}))
 	require.Len(t, FilterStatements(statements, func(statement map[string]any) bool {
-		_, ok := statement["target"]
+		_, ok := statement["availability"]
 		return ok
-	}), 2)
+	}), 1)
 }

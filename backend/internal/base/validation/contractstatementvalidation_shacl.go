@@ -136,12 +136,5 @@ func shaclPredicateLine(statement string, predicate string) string {
 }
 
 func expandSHACLValue(value string) string {
-	switch {
-	case strings.HasPrefix(value, "dcs:"):
-		return ontologyDCSBase + strings.TrimPrefix(value, "dcs:")
-	case strings.HasPrefix(value, "dcst:"):
-		return ontologyDCSTBase + strings.TrimPrefix(value, "dcst:")
-	default:
-		return value
-	}
+	return expandOntologyResource(value)
 }

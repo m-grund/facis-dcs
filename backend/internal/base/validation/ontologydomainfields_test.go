@@ -15,12 +15,12 @@ func TestOntologyDomainFieldsIncludeContractPartyRole(t *testing.T) {
 	require.Equal(t, SchemaPartyV1, role.SchemaRef)
 	require.Equal(t, "string", role.Type)
 	require.Equal(t, "company.role", role.DomainPath)
-	require.Equal(t, ontologyDCSTBase+"field-company-role", role.OntologyTerm)
+	require.Equal(t, expandOntologyResource("dcst:field-company-role"), role.OntologyTerm)
 	require.Equal(t, "party.role", role.StatementField)
 	require.NotNil(t, role.Constraint)
 	require.Equal(t, []string{"supplier", "customer", "provider", "client"}, role.Constraint.AllowedValues)
 
-	uriRole, ok := fields[ontologyDCSTBase+"field-company-role"]
+	uriRole, ok := fields[expandOntologyResource("dcst:field-company-role")]
 	require.True(t, ok)
 	require.Equal(t, role, uriRole)
 
@@ -28,7 +28,7 @@ func TestOntologyDomainFieldsIncludeContractPartyRole(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, role, legacyRole)
 
-	paymentAmount, ok := fields[ontologyDCSTBase+"field-contract-payment-amount"]
+	paymentAmount, ok := fields[expandOntologyResource("dcst:field-contract-payment-amount")]
 	require.True(t, ok)
 	require.Equal(t, "payment.amount", paymentAmount.StatementField)
 }

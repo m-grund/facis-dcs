@@ -197,7 +197,7 @@ func TestNormalizeTemplateDataAddsSchemaAndPolicyRefs(t *testing.T) {
 	require.IsType(t, []any{}, data["semanticRules"])
 	condition := data["semanticConditions"].([]any)[0].(map[string]any)
 	param := condition["parameters"].([]any)[0].(map[string]any)
-	require.Equal(t, ontologyDCSTBase+"field-service-sla-availability", param["semanticPath"])
+	require.Equal(t, expandOntologyResource("dcst:field-service-sla-availability"), param["semanticPath"])
 }
 
 func TestNormalizeTemplateDataRejectsUnknownConditionReference(t *testing.T) {
@@ -277,21 +277,19 @@ func TestNormalizeContractDataBuildsContractStatementsAndRules(t *testing.T) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &data))
 	statementSet := data["contractStatements"].(map[string]any)
-	require.Equal(t, contractStatementSetType, statementSet["@type"])
+	require.Equal(t, statementSetOntologyType(), statementSet["@type"])
 	statements := statementSet["statements"].([]any)
 	require.NotEmpty(t, statements)
 	require.Contains(t, statements, map[string]any{
 		"@id":       "party-provider",
-		"@type":     contractStatementPartyType,
-		"role":      contractStatementProviderRole,
+		"@type":     ontologyRuntime.RoleEntityType,
+		"role":      canonicalEntityRole("provider"),
 		"legalName": "Musterfirma",
 		"country":   "POL",
 	})
 	require.Contains(t, statements, map[string]any{
 		"@id":      "payment-main",
-		"@type":    contractStatementPaymentType,
-		"payer":    "party-customer",
-		"payee":    "party-provider",
+		"@type":    statementTypeByStatementField("payment.amount"),
 		"currency": "EUR",
 		"amount":   10000.0,
 		"dueDate":  "2026-06-19",
@@ -376,7 +374,7 @@ func TestNormalizeContractDataBuildsCustomerFromEntityMetadata(t *testing.T) {
 		if condition["conditionId"] != "customer" {
 			continue
 		}
-		condition["entityType"] = "Party"
+		condition["entityType"] = "CompanyParty"
 		condition["entityRole"] = "customer"
 		params := condition["parameters"].([]any)
 		condition["parameters"] = []any{params[0], params[1]}
@@ -403,14 +401,14 @@ func TestNormalizeContractDataBuildsCustomerFromEntityMetadata(t *testing.T) {
 	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
 	require.Contains(t, statements, map[string]any{
 		"@id":       "party-customer",
-		"@type":     contractStatementPartyType,
-		"role":      contractStatementCustomerRole,
+		"@type":     ontologyRuntime.RoleEntityType,
+		"role":      canonicalEntityRole("customer"),
 		"legalName": "Example company",
 		"country":   "DEU",
 	})
 }
 
-func TestNormalizeContractDataBuildsCustomerFromCustomerEntityType(t *testing.T) {
+func TestNormalizeContractDataDoesNotInferRoleFromCustomerEntityType(t *testing.T) {
 	data := validSemanticContractData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
@@ -440,23 +438,8 @@ func TestNormalizeContractDataBuildsCustomerFromCustomerEntityType(t *testing.T)
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
 
-	normalized, err := NormalizeContractData(&raw, true)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	conditions = result["semanticConditions"].([]any)
-	customerCondition := conditions[1].(map[string]any)
-	require.Equal(t, contractStatementPartyType, customerCondition["entityType"])
-	require.Equal(t, contractStatementCustomerRole, customerCondition["entityRole"])
-	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
-	require.Contains(t, statements, map[string]any{
-		"@id":       "party-customer",
-		"@type":     contractStatementPartyType,
-		"role":      contractStatementCustomerRole,
-		"legalName": "Example company",
-		"country":   "DEU",
-	})
+	_, err = NormalizeContractData(&raw, true)
+	require.ErrorContains(t, err, "unsupported entityType")
 }
 
 func TestNormalizeContractDataBuildsCustomerFromFixedRoleValue(t *testing.T) {
@@ -486,8 +469,8 @@ func TestNormalizeContractDataBuildsCustomerFromFixedRoleValue(t *testing.T) {
 	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
 	require.Contains(t, statements, map[string]any{
 		"@id":       "party-customer",
-		"@type":     contractStatementPartyType,
-		"role":      contractStatementCustomerRole,
+		"@type":     ontologyRuntime.RoleEntityType,
+		"role":      canonicalEntityRole("customer"),
 		"legalName": "Example company",
 		"country":   "DEU",
 	})
@@ -544,8 +527,8 @@ func TestNormalizeContractDataAcceptsLegacyCustomerFieldAliases(t *testing.T) {
 	statements := statementSet["statements"].([]any)
 	require.Contains(t, statements, map[string]any{
 		"@id":       "party-customer",
-		"@type":     contractStatementPartyType,
-		"role":      contractStatementCustomerRole,
+		"@type":     ontologyRuntime.RoleEntityType,
+		"role":      canonicalEntityRole("customer"),
 		"legalName": "Example company",
 		"country":   "DEU",
 	})
@@ -628,7 +611,7 @@ func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(*normalized, &result))
 	normalizedCondition := result["semanticConditions"].([]any)[0].(map[string]any)
 	normalizedParam := normalizedCondition["parameters"].([]any)[0].(map[string]any)
-	require.Equal(t, ontologyDCSTBase+"field-company-location-country", normalizedParam["semanticPath"])
+	require.Equal(t, expandOntologyResource("dcst:field-company-location-country"), normalizedParam["semanticPath"])
 	constraint := normalizedParam["valueConstraint"].(map[string]any)
 	require.Equal(t, "iso-3166-1-alpha-3", constraint["format"])
 	require.Contains(t, constraint["allowedValues"], "DEU")
@@ -669,8 +652,8 @@ func TestNormalizeContractDataAcceptsCompanyParties(t *testing.T) {
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
 	decoded["parties"] = []any{
-		map[string]any{"@type": "Company", "role": "supplier", "legalName": "Example Supplier GmbH"},
-		map[string]any{"@type": "dcs:Company", "role": "customer", "legalName": "Example Customer AG"},
+		map[string]any{"@type": "CompanyParty", "role": "supplier", "legalName": "Example Supplier GmbH"},
+		map[string]any{"@type": "dcs:CompanyParty", "role": "customer", "legalName": "Example Customer AG"},
 	}
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
@@ -684,7 +667,7 @@ func TestNormalizeContractDataRejectsPartyRoleOutsideVocabulary(t *testing.T) {
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
 	decoded["parties"] = []any{
-		map[string]any{"@type": "Company", "role": "reseller", "legalName": "Example Reseller GmbH"},
+		map[string]any{"@type": "CompanyParty", "role": "reseller", "legalName": "Example Reseller GmbH"},
 	}
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
@@ -693,12 +676,12 @@ func TestNormalizeContractDataRejectsPartyRoleOutsideVocabulary(t *testing.T) {
 	require.ErrorContains(t, err, "parties.0.role")
 }
 
-func TestNormalizeContractDataRejectsNonCompanyParty(t *testing.T) {
+func TestNormalizeContractDataRejectsNonCompanyPartyType(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
 	decoded["parties"] = []any{
-		map[string]any{"@type": "Party", "role": "supplier", "legalName": "Example Supplier GmbH"},
+		map[string]any{"@type": "Company", "role": "supplier", "legalName": "Example Supplier GmbH"},
 	}
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)

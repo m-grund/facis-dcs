@@ -24,7 +24,7 @@
   },
   "parties": [
     {
-      "@type": "Company",
+      "@type": "CompanyParty",
       "identifier": "provider",
       "role": "supplier",
       "name": "DE Staatstheater Augsburg",
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "@type": "Company",
+      "@type": "CompanyParty",
       "identifier": "customer",
       "role": "customer",
       "name": "Culture Research Institute",

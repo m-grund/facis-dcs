@@ -629,7 +629,7 @@
       "id": "sla:hasParty",
       "type": "owl:ObjectProperty",
       "domain": "sla:ServiceLevelAgreement",
-      "range": "dcs:Party",
+      "range": "dcs:CompanyParty",
       "label": {
         "en": "has party",
         "de": "hat Partei"
@@ -640,7 +640,7 @@
       "type": "owl:ObjectProperty",
       "subPropertyOf": "sla:hasParty",
       "domain": "sla:ServiceLevelAgreement",
-      "range": "dcs:Party",
+      "range": "dcs:CompanyParty",
       "label": {
         "en": "has provider",
         "de": "hat Anbieter"
@@ -651,7 +651,7 @@
       "type": "owl:ObjectProperty",
       "subPropertyOf": "sla:hasParty",
       "domain": "sla:ServiceLevelAgreement",
-      "range": "dcs:Party",
+      "range": "dcs:CompanyParty",
       "label": {
         "en": "has customer",
         "de": "hat Kunde"

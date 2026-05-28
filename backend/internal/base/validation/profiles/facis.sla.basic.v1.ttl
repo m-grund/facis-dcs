@@ -14,7 +14,7 @@ facisv:ExactlyOneProviderShape a sh:NodeShape ;
   facisv:ruleType "count" ;
   sh:severity sh:Violation ;
   sh:message "Contract requires exactly one provider." ;
-  facisv:where "@type=dcs:Party" ;
+  facisv:where "@type=dcs:CompanyParty" ;
   facisv:where "role=dcst:role-provider" ;
   facisv:operator "eq" ;
   facisv:value 1 .
@@ -25,7 +25,7 @@ facisv:ExactlyOneCustomerShape a sh:NodeShape ;
   facisv:ruleType "count" ;
   sh:severity sh:Violation ;
   sh:message "Contract requires exactly one customer." ;
-  facisv:where "@type=dcs:Party" ;
+  facisv:where "@type=dcs:CompanyParty" ;
   facisv:where "role=dcst:role-customer" ;
   facisv:operator "eq" ;
   facisv:value 1 .
@@ -37,18 +37,18 @@ facisv:AvailabilitySLORequiredShape a sh:NodeShape ;
   sh:severity sh:Violation ;
   sh:message "Availability SLO is incomplete." ;
   facisv:where "@type=dcs:ServiceLevelObjective" ;
-  facisv:where "metric=dcs:Availability" ;
-  facisv:requiredField "value" .
+  facisv:requiredField "availability" .
 
-facisv:PaymentPartyReferencesShape a sh:NodeShape ;
+facisv:PaymentRequiredShape a sh:NodeShape ;
   facisv:profile facisv:SLABasicProfile ;
-  facisv:ruleId "payment-party-references-exist" ;
-  facisv:ruleType "references" ;
+  facisv:ruleId "payment-required" ;
+  facisv:ruleType "required_fields" ;
   sh:severity sh:Violation ;
-  sh:message "Payment term references unknown parties." ;
+  sh:message "Payment term is incomplete." ;
   facisv:where "@type=dcs:PaymentTerm" ;
-  facisv:referenceField "payer|@type=dcs:Party" ;
-  facisv:referenceField "payee|@type=dcs:Party" .
+  facisv:requiredField "amount" ;
+  facisv:requiredField "currency" ;
+  facisv:requiredField "dueDate" .
 
 facisv:PaymentAmountPositiveShape a sh:NodeShape ;
   facisv:profile facisv:SLABasicProfile ;
@@ -60,12 +60,3 @@ facisv:PaymentAmountPositiveShape a sh:NodeShape ;
   facisv:target "amount" ;
   facisv:operator "gt" ;
   facisv:value 0 .
-
-facisv:ObligationTargetReferencesShape a sh:NodeShape ;
-  facisv:profile facisv:SLABasicProfile ;
-  facisv:ruleId "obligation-target-references-exist" ;
-  facisv:ruleType "references" ;
-  sh:severity sh:Violation ;
-  sh:message "Obligation references an unknown target statement." ;
-  facisv:where "@type=dcs:Obligation" ;
-  facisv:referenceField "target" .

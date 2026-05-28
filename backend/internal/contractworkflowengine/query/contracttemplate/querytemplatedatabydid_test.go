@@ -37,7 +37,7 @@ func TestConvertTemplateDataToContractDataKeepsJSONLDSemantics(t *testing.T) {
 				"conditionId":   "customer",
 				"conditionName": "Customer",
 				"schemaVersion": "v1",
-				"entityType":    "Party",
+				"entityType":    "CompanyParty",
 				"entityRole":    "customer",
 				"parameters": []any{
 					map[string]any{
