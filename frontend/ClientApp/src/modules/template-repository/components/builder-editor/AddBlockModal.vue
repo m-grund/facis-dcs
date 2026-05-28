@@ -61,7 +61,7 @@
                 <button
                   type="button"
                   class="btn btn-secondary btn-sm"
-                  :disabled="!selectedCompanyRole || !companyFields.length"
+                  :disabled="!selectedCompanyRole || !companyFields.length || !companyEntityType"
                   @click="handleAddCompanyPartyBlock"
                 >
                   Add company
@@ -120,6 +120,8 @@ const companyRoleOptions = ONTOLOGY_ENTITY_ROLES
 const companyFields = ONTOLOGY_DOMAIN_FIELDS
   .filter((field) => field.semanticPath.startsWith('company.'))
   .sort((left, right) => companyFieldSortIndex(left.semanticPath) - companyFieldSortIndex(right.semanticPath))
+const companyRoleField = companyFields.find((field) => field.mapsEntityRole) ?? companyFields.find((field) => field.semanticPath === 'company.role')
+const companyEntityType = localOntologyName(companyRoleField?.statementType ?? '')
 const selectedCompanyRole = ref('')
 
 const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
@@ -184,7 +186,7 @@ function handleAddBlock(blockType: DocumentBlockType) {
 function handleAddCompanyPartyBlock() {
   const ctx = addBlockModalContext.value
   const role = selectedCompanyRole.value
-  if (ctx === null || !role) return
+  if (ctx === null || !role || !companyEntityType) return
   const conditionId = `company-${role}-${crypto.randomUUID()}`
   const roleLabel = companyRoleOptions.find((option) => option.value === role)?.label ?? role
   const parameters = companyFields.map((field) => buildCompanyParameter(field, role))
@@ -193,7 +195,7 @@ function handleAddCompanyPartyBlock() {
     conditionId,
     conditionName: `${roleLabel} company`,
     schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
-    entityType: 'Company',
+    entityType: companyEntityType,
     entityRole: role,
     parameters,
   })
@@ -268,6 +270,10 @@ function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticVal
     ...constraint,
     allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
   }
+}
+
+function localOntologyName(resource: string): string {
+  return resource.replace(/^.*[:#/]/, '')
 }
 
 function companyFieldSortIndex(semanticPath: string): number {

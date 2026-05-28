@@ -53,6 +53,8 @@ export function parseOntologyDomainFields(source: string): DomainFieldDefinition
         type,
         label,
         group: inferDomainFieldGroup(semanticPath),
+        statementType: firstResource(statement.text, 'dcs:statementType') || undefined,
+        mapsEntityRole: firstBoolean(statement.text, 'dcs:mapsEntityRole'),
         valueConstraint: valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined,
       }
     })
@@ -136,6 +138,14 @@ function literals(statement: string, predicate: string): string[] {
 function firstNumber(statement: string, predicate: string): number | undefined {
   const match = predicateLine(statement, predicate)?.match(numericValue)
   return match ? Number(match[0]) : undefined
+}
+
+function firstBoolean(statement: string, predicate: string): boolean | undefined {
+  const line = predicateLine(statement, predicate)
+  if (!line) return undefined
+  if (/\btrue\b/i.test(line)) return true
+  if (/\bfalse\b/i.test(line)) return false
+  return undefined
 }
 
 function firstResource(statement: string, predicate: string): string {

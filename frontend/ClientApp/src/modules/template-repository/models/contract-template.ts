@@ -117,6 +117,8 @@ export interface DomainFieldDefinition {
     type: SemanticParameterType
     label: string
     group: string
+    statementType?: string
+    mapsEntityRole?: boolean
     valueConstraint?: SemanticValueConstraint
 }
 
