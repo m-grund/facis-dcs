@@ -215,6 +215,14 @@ mongodb:
 
 ipfs:
   enabled: false
+  tenantBaseURL: ""
+  mfsBaseURL: ""
+  tenantBaseURLSecretRef:
+    name: ""
+    key: "IPFS_TENANT_BASE_URL"
+  mfsBaseURLSecretRef:
+    name: ""
+    key: "IPFS_MFS_BASE_URL"
 
 ipfsDocumentManager:
   enabled: false

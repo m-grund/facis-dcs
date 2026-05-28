@@ -281,13 +281,6 @@ ISSUER_DID: explicit value or secret ref.
 {{- end }}
 
 {{/*
-IPFS_TENANT_BASE_URL: explicit value or secret ref.
-*/}}
-{{- define "digital-contracting-service.ipfsTenantBaseURL" -}}
-{{- .Values.ipfs.tenantBaseURL -}}
-{{- end }}
-
-{{/*
 IPFS_MFS_BASE_URL: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
