@@ -59,14 +59,16 @@ const searchableItems = computed(() => {
   return items
 })
 
-const search = async (request: Record<string, any>): Promise<Searchable[]> => {
-  if (!request.name) return searchableItems.value
+const search = (request: Record<string, unknown>): Promise<Searchable[]> => {
+  if (!request.name) return Promise.resolve(searchableItems.value)
 
-  const query = String(request.name).toLowerCase()
-  return searchableItems.value.filter((item) => {
-    const name = item.name ? String(item.name).toLowerCase() : ''
-    return name.includes(query)
-  })
+  const query = (typeof request.name === 'string' ? request.name : '').toLowerCase()
+  return Promise.resolve(
+    searchableItems.value.filter((item) => {
+      const name = item.name ? String(item.name).toLowerCase() : ''
+      return name.includes(query)
+    }),
+  )
 }
 
 const handleSearchResult = (searchResults: Searchable[]) => {

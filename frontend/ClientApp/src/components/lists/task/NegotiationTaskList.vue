@@ -71,7 +71,7 @@ onUnmounted(() => stateFilterStore.reset())
 
 <template>
   <ul class="list">
-    <li class="tracking-wide w-full px-4 flex justify-end flex-col sm:flex-row">
+    <li class="flex w-full flex-col justify-end px-4 tracking-wide sm:flex-row">
       <TaskListSearch class="flex-1" :tasks="tasks" placeholder="Search contracts" @search-result="applySearchResult" />
       <ListStateFilter
         label="Negotiation Task"
@@ -79,11 +79,11 @@ onUnmounted(() => stateFilterStore.reset())
         store-type="negotiationTasks"
         :disabled="!hasTasks"
       />
-      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasTasks" />
+      <ListSort v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :sorter="sorter" :disabled="!hasTasks" />
     </li>
     <template v-if="filteredTasks.length > 0">
       <li v-for="task in filteredTasks" :key="task.did" class="list-row">
-        <div class="list-col-grow card bg-base-100 card-border hover:bg-base-300 border-base-content/10">
+        <div class="list-col-grow card border-base-content/10 bg-base-100 card-border hover:bg-base-300">
           <div class="card-body">
             <h2 class="card-title flex-wrap justify-between">
               <div>Negotiation Task for Contract: {{ getContractName(task) }}</div>
