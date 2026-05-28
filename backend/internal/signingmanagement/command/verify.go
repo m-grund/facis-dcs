@@ -13,17 +13,17 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type ComplianceCmd struct {
-	DID       string
-	CheckedBy string
+type VerifyCmd struct {
+	DID        string
+	VerifiedBy string
 }
 
-type ComplianceValidator struct {
+type Verifier struct {
 	DB    *sqlx.DB
 	CRepo db.ContractRepo
 }
 
-func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) error {
+func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -39,10 +39,10 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	evt := signingmanagementevents.ComplianceValidationEvent{
+	evt := signingmanagementevents.VerifyEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
-		CheckedBy:       cmd.CheckedBy,
+		VerifiedBy:      cmd.VerifiedBy,
 		OccurredAt:      time.Now(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

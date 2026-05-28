@@ -172,8 +172,8 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signaturemanagement.SMContractComplianceRequest) (res *signaturemanagement.SMContractComplianceResponse, err error) {
 
 	qry := command.ComplianceCmd{
-		DID:         req.Did,
-		ValidatedBy: middleware.GetUsername(ctx),
+		DID:       req.Did,
+		CheckedBy: middleware.GetUsername(ctx),
 	}
 	queryHandler := command.ComplianceValidator{
 		DB:    s.DB,

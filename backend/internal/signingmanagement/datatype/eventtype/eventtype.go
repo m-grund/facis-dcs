@@ -9,6 +9,7 @@ type EventType string
 
 const (
 	Validate             EventType = "VALIDATE_SIGNATURE"
+	Verify               EventType = "VERIFY_SIGNATURE"
 	RetrieveAll          EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveByID         EventType = "RETRIEVE_CONTRACT_BY_ID"
 	Revoke               EventType = "REVOKE_SIGNATURE"
@@ -18,6 +19,7 @@ const (
 
 var validStates = map[EventType]bool{
 	Validate:             true,
+	Verify:               true,
 	RetrieveAll:          true,
 	RetrieveByID:         true,
 	Revoke:               true,

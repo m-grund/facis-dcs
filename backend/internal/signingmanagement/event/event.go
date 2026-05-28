@@ -57,6 +57,24 @@ func (e ValidateEvent) GetDID() string {
 	return e.DID
 }
 
+// VerifyEvent is emitted when a signature is validated.
+type VerifyEvent struct {
+	DID             string    `json:"did"`
+	ContractVersion *int      `json:"contract_version,omitempty"`
+	VerifiedBy      string    `json:"verified_by"`
+	OccurredAt      time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e VerifyEvent) EventType() string {
+	return eventtype.Validate.String()
+}
+
+// GetDID implements the Event interface.
+func (e VerifyEvent) GetDID() string {
+	return e.DID
+}
+
 // AuditEvt is emitted when template data is registered.
 type AuditEvt struct {
 	DID           string                      `json:"did"`
@@ -97,7 +115,7 @@ func (e RevokeEvent) GetDID() string {
 type ComplianceValidationEvent struct {
 	DID             string    `json:"did"`
 	ContractVersion *int      `json:"contract_version,omitempty"`
-	ValidatedBy     string    `json:"validated_by"`
+	CheckedBy       string    `json:"checked_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
 }
 
