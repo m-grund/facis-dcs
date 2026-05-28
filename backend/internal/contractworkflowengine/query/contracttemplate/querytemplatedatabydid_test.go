@@ -41,11 +41,10 @@ func TestConvertTemplateDataToContractDataKeepsJSONLDSemantics(t *testing.T) {
 				"entityRole":    "customer",
 				"parameters": []any{
 					map[string]any{
-						"parameterName": "company_role",
+						"parameterName": "legalName",
 						"type":          "string",
 						"schemaRef":     validation.SchemaPartyV1,
-						"semanticPath":  "company.role",
-						"fixedValue":    "customer",
+						"semanticPath":  "company.legalName",
 						"isRequired":    true,
 						"operators":     []any{},
 					},
@@ -69,5 +68,4 @@ func TestConvertTemplateDataToContractDataKeepsJSONLDSemantics(t *testing.T) {
 	customer := conditions[1].(map[string]any)
 	require.Equal(t, validation.SchemaPartyV1, customer["parameters"].([]any)[0].(map[string]any)["schemaRef"])
 	require.Equal(t, "https://w3id.org/facis/dcs/taxonomy/v1#role-customer", customer["entityRole"])
-	require.Equal(t, "customer", customer["parameters"].([]any)[0].(map[string]any)["fixedValue"])
 }

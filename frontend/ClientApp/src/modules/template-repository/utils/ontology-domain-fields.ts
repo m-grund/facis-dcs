@@ -54,7 +54,6 @@ export function parseOntologyDomainFields(source: string): DomainFieldDefinition
         label,
         group: inferDomainFieldGroup(semanticPath),
         statementType: firstResource(statement.text, 'dcs:statementType') || undefined,
-        mapsEntityRole: firstBoolean(statement.text, 'dcs:mapsEntityRole'),
         valueConstraint: valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined,
       }
     })
@@ -83,13 +82,7 @@ export function parseOntologyEntityRoles(source: string): OntologySelectOption<S
     constraints.set(statement.subject, parseValueConstraint(statement.text))
   }
 
-  const roleField = statements.find(
-    (statement) =>
-      statement.text.includes(' a dcs:DomainField') &&
-      firstLiteral(statement.text, 'dcs:semanticPath') === 'company.role',
-  )
-  const roleConstraintRef = roleField ? firstResource(roleField.text, 'dcs:hasValueConstraint') : ''
-  const allowedValues = roleConstraintRef ? constraints.get(roleConstraintRef)?.allowedValues ?? [] : []
+  const allowedValues = constraints.get('dcst:constraint-contract-party-role')?.allowedValues ?? []
 
   return allowedValues
     .map((value) => ({ value, label: formatOntologyLabel(value) }))
@@ -138,14 +131,6 @@ function literals(statement: string, predicate: string): string[] {
 function firstNumber(statement: string, predicate: string): number | undefined {
   const match = predicateLine(statement, predicate)?.match(numericValue)
   return match ? Number(match[0]) : undefined
-}
-
-function firstBoolean(statement: string, predicate: string): boolean | undefined {
-  const line = predicateLine(statement, predicate)
-  if (!line) return undefined
-  if (/\btrue\b/i.test(line)) return true
-  if (/\bfalse\b/i.test(line)) return false
-  return undefined
 }
 
 function firstResource(statement: string, predicate: string): string {

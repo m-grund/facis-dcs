@@ -118,7 +118,6 @@ export interface DomainFieldDefinition {
     label: string
     group: string
     statementType?: string
-    mapsEntityRole?: boolean
     valueConstraint?: SemanticValueConstraint
 }
 

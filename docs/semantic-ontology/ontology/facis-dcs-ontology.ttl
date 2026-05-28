@@ -358,12 +358,6 @@ dcs:statementValuePrefix a rdf:Property ;
   rdfs:comment "Optional resource prefix used to normalize compact controlled-vocabulary values for statement output." ;
   rdfs:domain dcs:DomainField .
 
-dcs:mapsEntityRole a rdf:Property ;
-  rdfs:label "Maps Entity Role" ;
-  rdfs:comment "Marks a domain field whose statement target receives semantic condition entityRole values." ;
-  rdfs:domain dcs:DomainField ;
-  rdfs:range xsd:boolean .
-
 dcs:documentProperty a rdf:Property ;
   rdfs:label "Document Property" ;
   rdfs:comment "JSON property used for a runtime document artifact." ;
@@ -1005,17 +999,6 @@ dcst:field-company-legalName a dcs:DomainField ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Legal Name" .
-
-dcst:field-company-role a dcs:DomainField ;
-  dcs:semanticPath "company.role" ;
-  dcs:statementField "party.role" ;
-  dcs:statementType dcs:CompanyParty ;
-  dcs:statementValuePrefix dcst:role- ;
-  dcs:mapsEntityRole true ;
-  dcs:schemaRef "facis.dcs.party.v1" ;
-  dcs:parameterType "string" ;
-  dcs:hasValueConstraint dcst:constraint-contract-party-role ;
-  rdfs:label "Company Contract Role" .
 
 dcst:field-company-registrationNumber a dcs:DomainField ;
   dcs:semanticPath "company.registrationNumber" ;

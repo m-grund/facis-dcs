@@ -27,6 +27,7 @@ type ontologyRuntimeMetadata struct {
 	EntityRoleField          string
 	EntityRoleStatementField string
 	EntityRoleValuePrefix    string
+	EntityRoleAllowedValues  []string
 	RoleEntityDocumentField  string
 	StatementSetProperty     string
 }
@@ -106,28 +107,30 @@ func parseOntologyClasses(content string) map[string]string {
 }
 
 func buildOntologyRuntime() ontologyRuntimeMetadata {
-	roleField := domainFieldMappingEntityRole()
-	roleStatementField := statementLeaf(roleField.StatementField)
+	roleEntityType := expandOntologyResource("dcs:CompanyParty")
 	statementSetType, statementProperty := statementSetRuntime()
-	roleEntityDocumentField := documentPropertyForRange(roleField.StatementType)
+	roleEntityDocumentField := documentPropertyForRange(roleEntityType)
 	return ontologyRuntimeMetadata{
 		StatementSetType:         statementSetType,
-		RoleEntityType:           roleField.StatementType,
-		EntityRoleField:          roleField.OntologyTerm,
-		EntityRoleStatementField: roleStatementField,
-		EntityRoleValuePrefix:    roleField.ValuePrefix,
+		RoleEntityType:           roleEntityType,
+		EntityRoleField:          expandOntologyResource("dcs:role"),
+		EntityRoleStatementField: "role",
+		EntityRoleValuePrefix:    expandOntologyResource("dcst:role-"),
+		EntityRoleAllowedValues:  entityRoleAllowedValues(),
 		RoleEntityDocumentField:  roleEntityDocumentField,
 		StatementSetProperty:     statementProperty,
 	}
 }
 
-func domainFieldMappingEntityRole() domainField {
-	for _, field := range ontologyDomainFieldIndex {
-		if field.MapsEntityRole {
-			return field
+func entityRoleAllowedValues() []string {
+	for _, statement := range ontologyStatementsFromConfiguredFile() {
+		if ontologySubject(statement) != "dcst:constraint-contract-party-role" {
+			continue
 		}
+		constraint := parseOntologyValueConstraint(statement)
+		return append([]string(nil), constraint.AllowedValues...)
 	}
-	return domainField{}
+	return nil
 }
 
 func domainFieldByStatementField(statementField string) domainField {
@@ -244,7 +247,6 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 			StatementType:  expandOntologyResource(ontologyResource(statement, "dcs:statementType")),
 			StatementID:    ontologyString(statement, "dcs:statementId"),
 			ValuePrefix:    expandOntologyResource(ontologyResource(statement, "dcs:statementValuePrefix")),
-			MapsEntityRole: ontologyBool(statement, "dcs:mapsEntityRole"),
 		}
 		if constraintRef := ontologyResource(statement, "dcs:hasValueConstraint"); constraintRef != "" {
 			constraint, ok := constraints[constraintRef]
@@ -256,9 +258,6 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 			field.Constraint = &copy
 		}
 		fields[semanticPath] = field
-		if alias := legacySemanticPathAlias(semanticPath); alias != "" && alias != semanticPath {
-			fields[alias] = field
-		}
 		fields[subject] = field
 		if field.OntologyTerm != "" {
 			fields[field.OntologyTerm] = field
@@ -268,10 +267,6 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 		return nil, fmt.Errorf("ontology does not define dcs:DomainField entries")
 	}
 	return fields, nil
-}
-
-func legacySemanticPathAlias(value string) string {
-	return strings.ReplaceAll(value, ".", "_")
 }
 
 func expandOntologyResource(value string) string {
@@ -380,15 +375,22 @@ func validateOntologyRoleEntity(entity map[string]any) error {
 	if ontologyIdentifier(entityType) != ontologyRuntime.RoleEntityType {
 		return fmt.Errorf("@type must be %s", compactOntologyResource(ontologyRuntime.RoleEntityType))
 	}
-	roleField, ok := ontologyDomainFieldIndex[ontologyRuntime.EntityRoleField]
-	if !ok || roleField.Constraint == nil || len(roleField.Constraint.AllowedValues) == 0 {
-		return fmt.Errorf("role ontology field requires allowed values")
+	if len(ontologyRuntime.EntityRoleAllowedValues) == 0 {
+		return fmt.Errorf("role ontology requires allowed values")
 	}
 	role, _ := entity[ontologyRuntime.EntityRoleStatementField].(string)
-	if !containsString(roleField.Constraint.AllowedValues, role) {
-		return fmt.Errorf("role must be one of %s", strings.Join(roleField.Constraint.AllowedValues, ", "))
+	if !containsString(ontologyRuntime.EntityRoleAllowedValues, role) && !containsString(ontologyRuntime.EntityRoleAllowedValues, compactEntityRole(role)) {
+		return fmt.Errorf("role must be one of %s", strings.Join(ontologyRuntime.EntityRoleAllowedValues, ", "))
 	}
 	return nil
+}
+
+func compactEntityRole(value string) string {
+	prefix := ontologyRuntime.EntityRoleValuePrefix
+	if prefix != "" && strings.HasPrefix(value, prefix) {
+		return strings.TrimPrefix(value, prefix)
+	}
+	return value
 }
 
 func compactOntologyResource(value string) string {

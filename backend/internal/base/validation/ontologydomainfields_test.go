@@ -6,27 +6,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOntologyDomainFieldsIncludeContractPartyRole(t *testing.T) {
+func TestOntologyDomainFieldsExcludeContractPartyRole(t *testing.T) {
 	fields, err := loadOntologyDomainFields()
 	require.NoError(t, err)
 
-	role, ok := fields["company.role"]
-	require.True(t, ok)
-	require.Equal(t, SchemaPartyV1, role.SchemaRef)
-	require.Equal(t, "string", role.Type)
-	require.Equal(t, "company.role", role.DomainPath)
-	require.Equal(t, expandOntologyResource("dcst:field-company-role"), role.OntologyTerm)
-	require.Equal(t, "party.role", role.StatementField)
-	require.NotNil(t, role.Constraint)
-	require.Equal(t, []string{"supplier", "customer", "provider", "client"}, role.Constraint.AllowedValues)
+	_, ok := fields["company.role"]
+	require.False(t, ok)
 
-	uriRole, ok := fields[expandOntologyResource("dcst:field-company-role")]
-	require.True(t, ok)
-	require.Equal(t, role, uriRole)
+	_, ok = fields[expandOntologyResource("dcst:field-company-role")]
+	require.False(t, ok)
 
-	legacyRole, ok := fields["company_role"]
-	require.True(t, ok)
-	require.Equal(t, role, legacyRole)
+	_, ok = fields["company_role"]
+	require.False(t, ok)
+
+	require.Equal(t, []string{"supplier", "customer", "provider", "client"}, ontologyRuntime.EntityRoleAllowedValues)
 
 	paymentAmount, ok := fields[expandOntologyResource("dcst:field-contract-payment-amount")]
 	require.True(t, ok)
