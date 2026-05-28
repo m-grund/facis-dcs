@@ -28,8 +28,8 @@ export const useContractsStore = defineStore('contracts', () => {
       reviewTasks.value = data.review_tasks.map((task) => ({ ...task, type: 'contract' }))
       approvalTasks.value = data.approval_tasks.map((task) => ({ ...task, type: 'contract' }))
       negotiationTasks.value = data.negotiation_tasks.map((task) => ({ ...task, type: 'contract' }))
-    } catch (err: any) {
-      error.value = err.message || 'Error loading the contracts'
+    } catch (err: unknown) {
+      error.value = err instanceof Error && err.message ? err.message : 'Error loading the contracts'
     } finally {
       loading.value = false
     }

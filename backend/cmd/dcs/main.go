@@ -14,6 +14,7 @@ import (
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
+	pg "digital-contracting-service/internal/auth/db/pq"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
@@ -114,7 +115,10 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to initialize OIDC validator")
 	}
-	jwtAuth := auth.NewJWTAuthenticator(oidcValidator)
+
+	laRepo := &pg.PostgresLoginAttemptRepo{}
+	lockRepo := &pg.PostgresIPLockoutRepo{}
+	jwtAuth := auth.NewJWTAuthenticator(oidcValidator, db, laRepo, lockRepo)
 
 	ctRepo := tplrepo.PostgresContractTemplateRepo{}
 	ctRTRepo := tplrepo.PostgresReviewTaskRepo{}

@@ -1,6 +1,7 @@
 @FR-UC-01-2
-Feature: Public Authentication Endpoints
-  Public auth endpoints should stay reachable without bearer authentication.
+Feature: Authentication Endpoints
+  Public auth endpoints should stay reachable without bearer token authentication.
+  The other endpoints required a bearer token one.
 
   Scenario Outline: Public auth endpoint responds successfully
     When the system sends "<method>" request to endpoint "<endpoint>" without payload

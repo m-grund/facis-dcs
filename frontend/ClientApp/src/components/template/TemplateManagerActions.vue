@@ -5,7 +5,7 @@ import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { TemplateState, type ContractTemplateState } from '@/types/contract-template-state'
-import { computed, useAttrs, useTemplateRef } from 'vue'
+import { computed, normalizeClass, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({
@@ -14,8 +14,8 @@ defineOptions({
 
 const attrs = useAttrs()
 
-const filteredClass = computed(() =>
-  String(attrs.class || '')
+const filteredClass = computed(() => {
+  return normalizeClass(attrs.class)
     .split(' ')
     .filter(
       (cls) =>
@@ -23,8 +23,8 @@ const filteredClass = computed(() =>
           cls,
         ),
     )
-    .join(' '),
-)
+    .join(' ')
+})
 
 const props = defineProps<{
   template: PartialContractTemplate
@@ -54,7 +54,7 @@ const archive = async () => {
     const { isCanceled } = await confirmationModal.value.reveal({ message: 'Proceed with archiving?' })
     if (!isCanceled) {
       await contractTemplateService.archive({ did: props.template.did, updated_at: props.template.updated_at })
-      router.push({ name: ROUTES.TEMPLATES.LIST })
+      await router.push({ name: ROUTES.TEMPLATES.LIST })
     }
   } catch (err) {
     console.error('Archiving failed:', err)
@@ -67,7 +67,7 @@ const register = async () => {
     const { isCanceled } = await confirmationModal.value.reveal({ message: 'Proceed with registration?' })
     if (!isCanceled) {
       await contractTemplateService.register({ did: props.template.did, updated_at: props.template.updated_at })
-      router.push({ name: ROUTES.TEMPLATES.LIST })
+      await router.push({ name: ROUTES.TEMPLATES.LIST })
     }
   } catch (err) {
     console.error('Registration failed:', err)
@@ -75,6 +75,7 @@ const register = async () => {
 }
 
 const exportPdf = async () => {
+<<<<<<< HEAD
   const blob = await contractTemplateService.exportPdf(props.template.did)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -82,6 +83,15 @@ const exportPdf = async () => {
   a.download = `template-${props.template.did}.pdf`
   a.click()
   URL.revokeObjectURL(url)
+=======
+  const template = await contractTemplateService.retrieveById({ did: props.template.did })
+  if (!template) return
+  const blocks = convertContractToPlainTextBlocks(template.template_data)
+  const pdfData = toPdfData(blocks)
+  const title = `${template.name ?? 'contract-template'}`
+  const filename = `${title}.pdf`
+  downloadContractPdf(pdfData, filename, title)
+>>>>>>> development
 }
 </script>
 
