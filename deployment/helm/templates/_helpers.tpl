@@ -205,6 +205,66 @@ UI path override or derived default.
 {{- end }}
 
 {{/*
+VAULT_ADDR: explicit override, or derived from the co-deployed Vault instance.
+*/}}
+{{- define "digital-contracting-service.vaultAddr" -}}
+{{- if .Values.signing.vaultAddr -}}
+{{- .Values.signing.vaultAddr -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- printf "http://%s-crypto-provider-vault:%v" .Release.Name .Values.cryptoProvider.vault.service.port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+VAULT_TRANSIT_MOUNT: explicit override or taken from subchart transit.mount.
+*/}}
+{{- define "digital-contracting-service.vaultTransitMount" -}}
+{{- if .Values.signing.vaultTransitMount -}}
+{{- .Values.signing.vaultTransitMount -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.mount -}}
+{{- else -}}
+{{- "transit" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+VAULT_TRANSIT_KEY: explicit override or taken from subchart transit.key.
+*/}}
+{{- define "digital-contracting-service.vaultTransitKey" -}}
+{{- if .Values.signing.vaultTransitKey -}}
+{{- .Values.signing.vaultTransitKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.key -}}
+{{- else -}}
+{{- "dcs-signing-key" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+ISSUER_DID: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.issuerDID" -}}
+{{- .Values.signing.issuerDID -}}
+{{- end }}
+
+{{/*
+IPFS_TENANT_BASE_URL: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.ipfsTenantBaseURL" -}}
+{{- .Values.ipfs.tenantBaseURL -}}
+{{- end }}
+
+{{/*
+IPFS_MFS_BASE_URL: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
+{{- .Values.ipfs.mfsBaseURL -}}
+{{- end }}
+
+{{/*
 Normalize Keycloak route path (leading slash, no trailing slash).
 */}}
 {{- define "digital-contracting-service.keycloakRoutePath" -}}

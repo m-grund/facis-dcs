@@ -1,0 +1,35 @@
+# HashiCorp Vault backend
+vault:
+  image:
+    repository: hashicorp/vault
+    tag: "1.17"
+    pullPolicy: IfNotPresent
+
+  # dev mode: auto-unsealed, in-memory storage, single root token.
+  # Production deployments should disable dev mode and configure proper
+  # Vault auth (AppRole, Kubernetes auth, etc.) via extraEnv.
+  dev:
+    enabled: true
+    # Root token for Vault dev mode. Change in production.
+    rootToken: "root"
+
+  service:
+    type: ClusterIP
+    port: 8200
+    nodePort: null
+
+  resources: {}
+
+
+# Vault transit engine configuration
+transit:
+  # Mount path for the Vault transit secrets engine.
+  # This is sent as CRYPTO_PROVIDER_NAMESPACE to the DCS backend.
+  mount: "transit"
+
+  # Name of the signing key to create in the transit engine.
+  # This is sent as CRYPTO_PROVIDER_KEY to the DCS backend.
+  key: "dcs-signing-key"
+
+  # Key algorithm. Options: ed25519, ecdsa-p256, rsa-2048, rsa-4096
+  keyType: "ed25519"

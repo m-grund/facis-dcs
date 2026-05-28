@@ -1,20 +1,32 @@
 # Dev values: co-deploy all dependencies, skip the DCS app itself.
 # Run the backend locally with `air` and the frontend with `vite`.
 #
+# First-time setup (packages local subcharts):
+#   helm dependency update ./deployment/helm
+#
 # Install:
 #   helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 #
 # Upgrade (after chart changes):
+#   helm dependency update ./deployment/helm  # re-run if Chart.yaml changed
 #   helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 #
 # Services exposed on localhost via NodePort (Rancher Desktop forwards these automatically):
-#   PostgreSQL : localhost:30432
-#   Keycloak   : localhost:30080  →  realm: http://localhost:30080/realms/gaia-x
-#   NATS       : localhost:30422
-#   Neo4j HTTP : localhost:30474
-#   Neo4j Bolt : localhost:30687
-#   FC service : localhost:30081
-#   ORCE       : localhost:30180
+#   PostgreSQL       : localhost:30432
+#   Keycloak         : localhost:30080  →  realm: http://localhost:30080/realms/gaia-x
+#   NATS             : localhost:30422
+#   Neo4j HTTP       : localhost:30474
+#   Neo4j Bolt       : localhost:30687
+#   FC service       : localhost:30081
+#   ORCE             : localhost:30180
+#   Vault API        : localhost:30820  (dev mode, root token = "root")
+#
+# Backend .env.dev additions (for local air run):
+#   VAULT_ADDR=http://localhost:30820
+#   VAULT_TOKEN=root
+#   VAULT_TRANSIT_MOUNT=transit
+#   VAULT_TRANSIT_KEY=dcs-signing-key
+#   ISSUER_DID=did:web:localhost
 
 # In development, don't deploy the DCS container since we run it locally
 replicaCount: 0
@@ -87,6 +99,21 @@ federatedCatalogue:
   keycloak:
     hostname: "localhost:30080"
     issuerScheme: "http"
+
+cryptoProvider:
+  enabled: true
+  vault:
+    dev:
+      enabled: true
+      rootToken: "root"
+    service:
+      type: NodePort
+      port: 8200
+      nodePort: 30820
+  transit:
+    mount: "transit"
+    key: "dcs-signing-key"
+    keyType: "ed25519"
 
 # OIDC / route values below are not used when replicaCount=0,
 # but kept here as documentation for the backend .env.dev file.

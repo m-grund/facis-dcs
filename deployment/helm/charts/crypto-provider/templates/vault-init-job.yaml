@@ -1,0 +1,44 @@
+# One-shot Job that enables the Vault transit secrets engine and creates the
+# DCS signing key. Runs once at chart install/upgrade; idempotent (|| true).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-vault-init
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: vault-init
+          image: "{{ .Values.vault.image.repository }}:{{ .Values.vault.image.tag }}"
+          imagePullPolicy: {{ .Values.vault.image.pullPolicy }}
+          env:
+            - name: VAULT_ADDR
+              value: "http://{{ .Release.Name }}-crypto-provider-vault:{{ .Values.vault.service.port }}"
+            - name: VAULT_TOKEN
+              value: {{ .Values.vault.dev.rootToken | quote }}
+            - name: TRANSIT_MOUNT
+              value: {{ .Values.transit.mount | quote }}
+            - name: KEY_NAME
+              value: {{ .Values.transit.key | quote }}
+            - name: KEY_TYPE
+              value: {{ .Values.transit.keyType | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              until vault status > /dev/null 2>&1; do
+                echo "Waiting for Vault..."
+                sleep 2
+              done
+              vault secrets enable -path="${TRANSIT_MOUNT}" transit 2>/dev/null || \
+                echo "Transit engine at '${TRANSIT_MOUNT}' already enabled."
+              vault write -f "${TRANSIT_MOUNT}/keys/${KEY_NAME}" type="${KEY_TYPE}" 2>/dev/null || \
+                echo "Key '${KEY_NAME}' already exists."
+              echo "Vault init complete: mount=${TRANSIT_MOUNT} key=${KEY_NAME} type=${KEY_TYPE}"

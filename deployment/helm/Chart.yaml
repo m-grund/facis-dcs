@@ -27,6 +27,11 @@ dependencies:
     repository: "file://charts/federated-catalogue"
     condition: federatedCatalogue.enabled
     alias: federatedCatalogue
+  - name: crypto-provider
+    version: "0.1.0"
+    repository: "file://charts/crypto-provider"
+    condition: cryptoProvider.enabled
+    alias: cryptoProvider
   - name: kube-prometheus-stack
     version: "85.2.0"
     repository: "https://prometheus-community.github.io/helm-charts"

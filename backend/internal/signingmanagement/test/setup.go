@@ -74,6 +74,24 @@ func cleanupContractTable(t *testing.T, db *sqlx.DB) {
 		t.Fatalf("Failed to clean table: %v", err)
 	}
 
+	cleanNegotiationTasksStatement := `
+	-- noinspection SqlWithoutWhere
+	DELETE FROM contract_negotiation_task;
+`
+	_, err = db.Exec(cleanNegotiationTasksStatement)
+	if err != nil {
+		t.Fatalf("Failed to clean table: %v", err)
+	}
+
+	cleanSignaturesStatement := `
+	-- noinspection SqlWithoutWhere
+	DELETE FROM contract_signatures;
+`
+	_, err = db.Exec(cleanSignaturesStatement)
+	if err != nil {
+		t.Fatalf("Failed to clean table: %v", err)
+	}
+
 	cleanTableStatement := `
 	-- noinspection SqlWithoutWhere
 	DELETE FROM contracts;
