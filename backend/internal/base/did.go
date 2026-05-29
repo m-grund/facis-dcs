@@ -2,6 +2,7 @@ package base
 
 import (
 	"crypto/rand"
+	"digital-contracting-service/internal/base/datatype"
 	"fmt"
 	"os"
 )
@@ -21,7 +22,7 @@ func generateUUID() (string, error) {
 		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }
 
-func GetDID() (*string, error) {
+func GetDID(resourceType datatype.ResourceType) (*string, error) {
 
 	dcsIssuer := os.Getenv("DCS_ISSUER")
 
@@ -30,6 +31,6 @@ func GetDID() (*string, error) {
 		return nil, err
 	}
 
-	did := fmt.Sprintf("did:web:%s:%s", dcsIssuer, uuid)
+	did := fmt.Sprintf("did:web:%s:%s:%s", dcsIssuer, resourceType.String(), uuid)
 	return &did, nil
 }
