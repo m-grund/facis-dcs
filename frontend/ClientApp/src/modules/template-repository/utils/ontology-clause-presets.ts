@@ -44,14 +44,21 @@ export function buildOntologyClauseText(
 ): string {
   const roleLabel = role ? roleLabelFor(role) : ''
   const title = roleLabel ? `${roleLabel} ${preset.label}` : preset.label
+  const fieldLines = preset.fields.map((field) => buildOntologyClauseFieldLine(conditionId, field))
   return [
     title,
-    ...preset.fields.map((field) => `${field.label}: {{${conditionId}.${field.semanticPath}}}`),
+    '',
+    ...fieldLines,
   ].join('\n')
 }
 
 export function roleLabelFor(role: SemanticEntityRole): string {
   return ONTOLOGY_ENTITY_ROLES.find((option) => option.value === role)?.label ?? role
+}
+
+function buildOntologyClauseFieldLine(conditionId: string, field: DomainFieldDefinition): string {
+  const label = field.label || field.semanticPath
+  return `${label}: {{${conditionId}.${field.semanticPath}}}`
 }
 
 function buildOntologyClausePresets(): OntologyClausePreset[] {

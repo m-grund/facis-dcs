@@ -165,15 +165,25 @@ function onInsertPlaceholderFromPanel(conditionId: string, parameterName: string
   }
 }
 
+function labeledPlaceholderText(conditionId: string, parameterName: string): string {
+  const condition = props.semanticConditions.find((item) => item.conditionId === conditionId)
+  const parameter = condition?.parameters.find((item) => item.parameterName === parameterName)
+  const placeholder = `{{${conditionId}.${parameterName}}}`
+  return parameter ? `${semanticParameterLabel(parameter)}: ${placeholder}` : placeholder
+}
+
 /** Inserts placeholder at lastCursorIndex. */
 function insertPlaceholderFromPanel(conditionId: string, parameterName: string) {
-  const insertText = `{{${conditionId}.${parameterName}}}`
+  const insertText = labeledPlaceholderText(conditionId, parameterName)
   const current = props.modelValue ?? ''
   const len = current.length
   const insertPos = Math.max(0, Math.min(lastCursorIndex.value, len))
   const before = current.slice(0, insertPos)
   const after = current.slice(insertPos)
-  const { value: newValue, insertLength } = wrapSpaces(before, insertText, after)
+  const prefix = before.length > 0 && !before.endsWith('\n') ? '\n' : ''
+  const suffix = after.length > 0 && !after.startsWith('\n') ? '\n' : ''
+  const newValue = before + prefix + insertText + suffix + after
+  const insertLength = prefix.length + insertText.length + suffix.length
   const newCursorPos = insertPos + insertLength
   applyEditorChange(newValue, newCursorPos)
 }

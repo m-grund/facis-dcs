@@ -179,12 +179,13 @@ function addPrebuiltClause(presetId: string) {
     ...(role ? { entityRole: role } : {}),
     parameters,
   })
-  store.addClause({
+  const blockId = store.addClause({
     title,
     text,
-    conditionIds: [conditionId],
+    conditionIds: conditionIdsFromText(text),
     schemaRef: preset.fields[0]?.schemaRef,
     semanticPath: preset.fields[0]?.semanticPath.split('.', 1)[0] ?? preset.id,
   })
+  editingBlockId.value = blockId
 }
 </script>
