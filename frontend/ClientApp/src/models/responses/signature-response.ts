@@ -1,8 +1,8 @@
-import type { ComponentType } from "@/types/component-type"
-import type { SignatureContract } from "../signature/signature-contract"
-import type { SignatureSigningTask as SignatureSigningTask } from "../signature/signature-signing-task"
-import type { SignatureEventType } from "@/types/signature-event-type"
-import type { SignatureEvent } from "../signature/signature-event"
+import type { ComponentType } from '@/types/component-type'
+import type { SignatureContract } from '../signature/signature-contract'
+import type { SignatureSigningTask as SignatureSigningTask } from '../signature/signature-signing-task'
+import type { SignatureEventType } from '@/types/signature-event-type'
+import type { SignatureEvent } from '../signature/signature-event'
 
 export interface SignatureRetrieveResponse {
   contracts: SignatureContract[]

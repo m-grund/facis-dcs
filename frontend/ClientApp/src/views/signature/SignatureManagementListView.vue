@@ -14,8 +14,8 @@ const loadSignatureContracts = async () => {
   try {
     const data = await signatureManagementService.retrieve()
     contracts.value = data.contracts
-  } catch (err: any) {
-    error.value = err.message || 'Error loading the contracts'
+  } catch (err: unknown) {
+    error.value = err instanceof Error && err.message ? err.message : 'Error loading the contracts'
   } finally {
     loading.value = false
   }
@@ -25,7 +25,7 @@ onMounted(loadSignatureContracts)
 </script>
 
 <template>
-  <div class="flex bg-base-100 border-b border-base-content/10 justify-between p-4 mb-4">
+  <div class="mb-4 flex justify-between border-b border-base-content/10 bg-base-100 p-4">
     <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
       {{ $route.meta.name }}
     </h2>

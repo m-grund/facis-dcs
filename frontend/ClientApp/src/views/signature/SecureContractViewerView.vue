@@ -73,28 +73,31 @@ const validate = async () => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-full">
-    <div class="sticky top-0 z-20 shrink-0 bg-base-100 border-b border-base-300">
-      <div class="max-w-4xl mx-auto px-6 pt-3">
-        <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Secure Contract Viewer</p>
+  <div class="flex min-h-full flex-col">
+    <div class="sticky top-0 z-20 shrink-0 border-b border-base-300 bg-base-100">
+      <div class="mx-auto max-w-4xl px-6 pt-3">
+        <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">Secure Contract Viewer</p>
       </div>
     </div>
-    <div v-if="contract" class="flex-1 flex flex-col md:flex-row h-full">
-      <div class="w-full md:flex-1 min-h-full overflow-y-auto md:overflow-x-hidden"><ViewContractView /></div>
-      <div class="md:flex-1 m-20 max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3 md:items-end">
-        <button class="btn btn-primary flex-1" @click="verify" :disabled="isSubmitting">
-          <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>Verify
+    <div v-if="contract" class="flex h-full flex-1 flex-col md:flex-row">
+      <div class="min-h-full w-full overflow-y-auto md:flex-1 md:overflow-x-hidden"><ViewContractView /></div>
+      <div class="m-20 mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-1 md:flex-row md:items-end">
+        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="verify">
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Verify
         </button>
-        <button class="btn btn-primary flex-1" @click="applySignature" :disabled="isSubmitting">
-          <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>Apply
+        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="applySignature">
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Apply
         </button>
-        <button class="btn btn-primary flex-1" @click="validate" :disabled="isSubmitting">
-          <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>Validate
+        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="validate">
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Validate
         </button>
       </div>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
       </div>
     </div>

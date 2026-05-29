@@ -1,4 +1,4 @@
-import type { ContractState } from "@/types/contract-state"
+import type { ContractState } from '@/types/contract-state'
 
 export interface SignatureContract {
   did: string

@@ -28,8 +28,8 @@ const sortedContracts = computed(() => {
 
 <template>
   <ul class="list">
-    <li class="tracking-wide px-4 flex justify-end flex-col sm:flex-row">
-      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" />
+    <li class="flex flex-col justify-end px-4 tracking-wide sm:flex-row">
+      <ListSort v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :sorter="sorter" />
     </li>
     <template v-if="contracts.length > 0">
       <SignatureContractListItem

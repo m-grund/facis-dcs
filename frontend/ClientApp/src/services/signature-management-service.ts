@@ -26,7 +26,7 @@ export const signatureManagementService: SignatureManagementService = {
     return http
       .get<SignatureRetrieveResponse>('/signature/retrieve')
       .then((res) => res.data)
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('Retrieve Error:', err)
         return { contracts: [], signing_tasks: [] }
       })
@@ -56,7 +56,7 @@ export const signatureManagementService: SignatureManagementService = {
     return http
       .get<SignatureAuditResponse>(`/signature/audit/${request.did}`)
       .then((res) => res.data)
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error('Audit Error:', err)
         return []
       })
