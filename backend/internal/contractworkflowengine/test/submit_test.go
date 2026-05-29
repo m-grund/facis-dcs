@@ -40,7 +40,7 @@ func TestSubmit_SubmitContractInDraftState(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
@@ -56,7 +56,7 @@ func TestSubmit_SubmitContractInDraftState(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
@@ -134,7 +134,7 @@ func TestSubmit_SubmitContractInDraftStateWithInvalidUser(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
@@ -145,7 +145,7 @@ func TestSubmit_SubmitContractInDraftStateWithInvalidUser(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
@@ -218,7 +218,7 @@ func TestSubmit_SubmitContractInNegotiationState(t *testing.T) {
 	}
 
 	assert.Equal(t, contractstate.Submitted, result.State)
-	assert.Equal(t, *result.ContractVersion, 1)
+	assert.Equal(t, result.ContractVersion, 1)
 }
 
 func TestSubmit_SubmitContractInNegotiationStateWithOpenNegotiations(t *testing.T) {
@@ -430,7 +430,7 @@ func TestSubmit_SubmitContractInNegationStateWithInvalidUser(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Negotiation, creator)
 
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
@@ -441,7 +441,7 @@ func TestSubmit_SubmitContractInNegationStateWithInvalidUser(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
@@ -1065,7 +1065,7 @@ func TestSubmit_SubmitContractTemplateAfterUpdate(t *testing.T) {
 	createContract(t, db, repo, did, contractstate.Draft, "Test User")
 
 	submittedBy := "Test User"
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID: *did,
 
@@ -1077,7 +1077,7 @@ func TestSubmit_SubmitContractTemplateAfterUpdate(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
