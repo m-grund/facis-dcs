@@ -50,7 +50,7 @@ type LifecycleAssertion struct {
 	PrevManifestHash string `json:"prev_manifest_hash,omitempty"`
 }
 
-const lifecycleAssertionLabel = "dcs.contract.lifecycle"
+const lifecycleAssertionLabel = "org.facis.dcs.contract.lifecycle"
 
 // NewLifecycleAssertion constructs a LifecycleAssertion with the required fields.
 func NewLifecycleAssertion(contractID, fileHash, pdfHash, rendererVersion, status, reason, authority, vcID, prevManifestHash string, effectiveAt time.Time) LifecycleAssertion {

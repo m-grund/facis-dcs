@@ -25,6 +25,11 @@ type Result struct {
 	// StoredBasePDFHash is the SHA-256 of the base layer of the stored PDF (before
 	// any C2PA incremental updates).
 	StoredBasePDFHash string `json:"stored_base_pdf_hash"`
+	// ManifestSource indicates where C2PA provenance was verified from.
+	// "embedded" — manifest present in the supplied PDF bytes.
+	// "remote"   — manifest absent; canonical PDF fetched via FetchFn (DCS-OR-C2PA-008).
+	// "none"     — no manifest found and FetchFn unavailable or returned no data.
+	ManifestSource string `json:"manifest_source"`
 }
 
 // ContractVerifier holds the dependencies needed to re-render a contract PDF.
@@ -32,25 +37,56 @@ type ContractVerifier struct {
 	// BuildFn re-renders a PDF from the given JSON-LD bytes.
 	// Injected so tests can provide a stub.
 	BuildFn func(jsonld []byte) ([]byte, error)
+
+	// FetchFn, when set, is called to retrieve the canonical full PDF (with C2PA
+	// incremental updates attached) when the input PDF has no incremental updates.
+	// This implements the DCS-OR-C2PA-008 remote manifest fallback: the verifier
+	// fetches from IPFS if the embedded manifest has been stripped.
+	FetchFn func() ([]byte, error)
 }
 
 // TemplateVerifier holds the dependencies for template re-rendering.
 type TemplateVerifier struct {
 	BuildFn func(jsonld []byte) ([]byte, error)
+	// FetchFn mirrors ContractVerifier.FetchFn for templates (DCS-OR-C2PA-008).
+	FetchFn func() ([]byte, error)
 }
 
 // Verify extracts the embedded JSON-LD from pdfBytes, re-renders the base PDF,
 // and compares SHA-256 hashes.
 func (v *ContractVerifier) Verify(pdfBytes []byte) (*Result, error) {
-	return verify(pdfBytes, v.BuildFn)
+	return verify(pdfBytes, v.BuildFn, v.FetchFn)
 }
 
 // Verify is the template counterpart.
 func (v *TemplateVerifier) Verify(pdfBytes []byte) (*Result, error) {
-	return verify(pdfBytes, v.BuildFn)
+	return verify(pdfBytes, v.BuildFn, v.FetchFn)
 }
 
-func verify(pdfBytes []byte, buildFn func([]byte) ([]byte, error)) (*Result, error) {
+func verify(pdfBytes []byte, buildFn func([]byte) ([]byte, error), fetchFn func() ([]byte, error)) (*Result, error) {
+	manifestSource := "embedded"
+
+	// Check whether any incremental updates (C2PA manifests, PAdES signatures, etc.)
+	// have been appended.  We look for a "startxref" keyword after the first %%EOF,
+	// because every well-formed incremental update section ends with
+	// "startxref\nN\n%%EOF" — whereas compressed stream bytes that accidentally
+	// contain the %%EOF byte sequence will not have "startxref" immediately after.
+	// When no incremental updates are found the manifest may have been stripped;
+	// attempt to retrieve the canonical copy from remote storage (DCS-OR-C2PA-008).
+	if !hasIncrementalUpdates(pdfBytes) {
+		if fetchFn != nil {
+			canonical, fetchErr := fetchFn()
+			if fetchErr == nil && hasIncrementalUpdates(canonical) {
+				pdfBytes = canonical
+				manifestSource = "remote"
+			} else {
+				manifestSource = "none"
+			}
+		} else {
+			manifestSource = "none"
+		}
+	}
+
 	// Strip any incremental updates (C2PA manifests, future PAdES) appended after
 	// the first %%EOF to recover the base PDF layer.
 	basePDF, err := extractBasePDF(pdfBytes)
@@ -79,6 +115,7 @@ func verify(pdfBytes []byte, buildFn func([]byte) ([]byte, error)) (*Result, err
 		JSONLDHash:        jsonldHash,
 		BasePDFHash:       basePDFHash,
 		StoredBasePDFHash: storedHash,
+		ManifestSource:    manifestSource,
 	}, nil
 }
 
@@ -147,6 +184,25 @@ func ExtractJSONLD(pdfBytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("decompress attachment stream: %w", err)
 	}
 	return decompressed, nil
+}
+
+// hasIncrementalUpdates returns true when pdfBytes contains at least one real
+// PDF incremental update section appended after the first %%EOF.
+//
+// Detection: scan for "startxref" anywhere after the first %%EOF marker.
+// Every incremental update must contain a new cross-reference section that
+// ends with "startxref\nN\n%%EOF", so its presence is a reliable indicator.
+// Compressed stream bytes that happen to contain the %%EOF sequence will not
+// be followed by "startxref", making this test more robust than a simple
+// byte-length comparison.
+func hasIncrementalUpdates(pdf []byte) bool {
+	eofMarker := []byte("%%EOF")
+	idx := bytes.Index(pdf, eofMarker)
+	if idx == -1 {
+		return false
+	}
+	after := pdf[idx+len(eofMarker):]
+	return bytes.Contains(after, []byte("startxref"))
 }
 
 func sha256hex(b []byte) string {

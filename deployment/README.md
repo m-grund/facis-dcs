@@ -154,6 +154,32 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 
 ## Production Deployment
 
+### C2PA certificate chain (x5chain)
+
+DCS requires a signer certificate chain (PEM) for C2PA manifests. Configure it via Kubernetes Secret.
+
+Create the secret (example):
+
+```bash
+kubectl -n <namespace> create secret generic dcs-c2pa-cert-chain \
+  --from-file=chain.pem=./chain.pem
+```
+
+Enable it in your Helm values override:
+
+```yaml
+signing:
+  certChain:
+    enabled: true
+    existingSecret:
+      name: dcs-c2pa-cert-chain
+      key: chain.pem
+```
+
+When enabled, the chart automatically:
+- mounts the secret into the DCS container
+- sets `CRYPTO_PROVIDER_CERT_CHAIN_FILE` to the mounted PEM path
+
 ### Keycloak
 - Use a properly secured external Keycloak instance (not the bundled sub-chart)
 - Configure valid redirect URIs in your client settings:

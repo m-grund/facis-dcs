@@ -56,6 +56,11 @@ dependencies:
     repository: "file://charts/crypto-provider"
     condition: cryptoProvider.enabled
     alias: cryptoProvider
+  - name: statuslist-service
+    version: "0.1.0"
+    repository: "file://charts/statuslist-service"
+    condition: statuslistService.enabled
+    alias: statuslistService
   - name: kube-prometheus-stack
     version: "85.2.0"
     repository: "https://prometheus-community.github.io/helm-charts"

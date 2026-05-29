@@ -12,30 +12,78 @@ import (
 
 // boxType for a JUMBF Superbox (contains description box + content boxes).
 var (
-	jumbfBoxType  = [4]byte{'j', 'u', 'm', 'b'} // JUMBF Superbox
-	jumdBoxType   = [4]byte{'j', 'u', 'm', 'd'} // JUMBF Description Box
-	c2paBoxType   = [4]byte{0xc2, 0x70, 0x62, 0x78} // placeholder — actual UUID used below
-	jsonBoxType   = [4]byte{'j', 's', 'o', 'n'} // JSON content box
-	cborBoxType   = [4]byte{'c', 'b', 'o', 'r'} // CBOR content box (COSE uses CBOR)
+	jumbfBoxType = [4]byte{'j', 'u', 'm', 'b'} // JUMBF Superbox
+	jumdBoxType  = [4]byte{'j', 'u', 'm', 'd'} // JUMBF Description Box
+	jsonBoxType  = [4]byte{'j', 's', 'o', 'n'} // JSON content box
+	cborBoxType  = [4]byte{'c', 'b', 'o', 'r'} // CBOR content box (COSE uses CBOR)
+	uuidBoxType  = [4]byte{'u', 'u', 'i', 'd'} // UUID content box
 )
 
 // C2PA label UUIDs (as 16-byte arrays per ISO 19566-5 §7.2.1).
 // Using the registered C2PA namespace UUID: 6a636231-6362-6f78-0000-000000000001 base.
 var (
-	// c2paManifestUUID is the type UUID for a C2PA manifest store box.
-	c2paManifestUUID = [16]byte{
+	// c2paBlockUUID is the top-level manifest store UUID (c2pa).
+	c2paBlockUUID = [16]byte{
 		0x63, 0x32, 0x70, 0x61, // "c2pa"
 		0x00, 0x11, 0x00, 0x10,
 		0x80, 0x00, 0x00, 0xAA,
 		0x00, 0x38, 0x9B, 0x71,
 	}
 
-	// c2paAssertionUUID is the type UUID for a C2PA assertion store box.
-	c2paAssertionUUID = [16]byte{
+	// c2paManifestUUID is the manifest box UUID (c2ma).
+	c2paManifestUUID = [16]byte{
+		0x63, 0x32, 0x6D, 0x61, // "c2ma"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
+	// c2paAssertionStoreUUID is the assertion store UUID (c2as).
+	c2paAssertionStoreUUID = [16]byte{
 		0x63, 0x32, 0x61, 0x73, // "c2as"
 		0x00, 0x11, 0x00, 0x10,
 		0x80, 0x00, 0x00, 0xAA,
-		0x00, 0x38, 0x9B, 0x72,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
+	// c2paClaimUUID is the claim box UUID (c2cl).
+	c2paClaimUUID = [16]byte{
+		0x63, 0x32, 0x63, 0x6C, // "c2cl"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
+	// c2paSignatureUUID is the signature box UUID (c2cs).
+	c2paSignatureUUID = [16]byte{
+		0x63, 0x32, 0x63, 0x73, // "c2cs"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
+	// c2paJSONAssertionUUID is the JSON assertion box UUID.
+	c2paJSONAssertionUUID = [16]byte{
+		0x6A, 0x73, 0x6F, 0x6E, // "json"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
+	// c2paCBORAssertionUUID is the CBOR assertion box UUID.
+	c2paCBORAssertionUUID = [16]byte{
+		0x63, 0x62, 0x6F, 0x72, // "cbor"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
+	// c2paUUIDAssertionUUID is the UUID assertion box UUID.
+	c2paUUIDAssertionUUID = [16]byte{
+		0x75, 0x75, 0x69, 0x64, // "uuid"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
 	}
 )
 
@@ -98,4 +146,12 @@ func WriteJSONBox(jsonBytes []byte) []byte {
 // WriteCBORBox wraps CBOR bytes (e.g. a COSE_Sign1 structure) in a JUMBF CBOR box.
 func WriteCBORBox(cborBytes []byte) []byte {
 	return WriteBox(cborBoxType, cborBytes)
+}
+
+// WriteUUIDBox wraps UUID assertion payload bytes in a UUID content box.
+func WriteUUIDBox(contentUUID [16]byte, data []byte) []byte {
+	content := make([]byte, 0, 16+len(data))
+	content = append(content, contentUUID[:]...)
+	content = append(content, data...)
+	return WriteBox(uuidBoxType, content)
 }

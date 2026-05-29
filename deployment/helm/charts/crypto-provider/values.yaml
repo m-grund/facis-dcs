@@ -29,10 +29,16 @@ transit:
 
   # Name of the signing key to create in the transit engine.
   # This is sent as CRYPTO_PROVIDER_KEY to the DCS backend.
-  key: "dcs-signing-key"
+  key: "dcs-signing-key-p256"
 
   # Key algorithm. Options: ed25519, ecdsa-p256, rsa-2048, rsa-4096
-  keyType: "ed25519"
+  keyType: "ecdsa-p256"
+
+  # Dedicated VC key used for local Ed25519Signature2020 proofs.
+  vcKey: "dcs-vc-signing-key"
+
+  # Key algorithm for the VC proof key.
+  vcKeyType: "ed25519"
 
 
 # XFSC Crypto Provider Service (signer HTTP API)

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -14,25 +13,27 @@ import (
 	pdfgen "digital-contracting-service/gen/pdf_generation"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/ipfs"
+	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/pdfgeneration/builder"
 	"digital-contracting-service/internal/pdfgeneration/c2pa"
 	"digital-contracting-service/internal/pdfgeneration/verify"
-	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 )
 
 type pdfGenerationSrvc struct {
-	DB         *sqlx.DB
-	IPFSClient *ipfs.APIClient
-	CRepo      *cwerepo.PostgresContractRepo
-	TRepo      *tplrepo.PostgresContractTemplateRepo
-	Signer     c2pa.Signer
-	TSACfg     c2pa.TSAConfig
-	IssuerDID  string
+	DB               *sqlx.DB
+	IPFSClient       *ipfs.APIClient
+	CRepo            *cwerepo.PostgresContractRepo
+	TRepo            *tplrepo.PostgresContractTemplateRepo
+	Signer           c2pa.Signer
+	TSACfg           c2pa.TSAConfig
+	IssuerDID        string
+	VCIssuer         c2pa.VCIssuer
 	auth.JWTAuthenticator
 }
 
 // NewPDFGeneration constructs the PDFGeneration service implementation.
+// Fails hard if required dependencies are nil (per SRS DCS-OR-C2PA-004 and 005).
 func NewPDFGeneration(
 	db *sqlx.DB,
 	jwtAuth auth.JWTAuthenticator,
@@ -42,7 +43,12 @@ func NewPDFGeneration(
 	signer c2pa.Signer,
 	tsaCfg c2pa.TSAConfig,
 	issuerDID string,
+	vcIssuer c2pa.VCIssuer,
 ) pdfgen.Service {
+	if vcIssuer == nil {
+		panic("VCIssuer is required for DCS-OR-C2PA-004 compliance")
+	}
+	// Note: VCIssuer now includes StatusListPublisher atomically (DCS-OR-C2PA-005).
 	return &pdfGenerationSrvc{
 		DB:               db,
 		IPFSClient:       ipfsClient,
@@ -51,6 +57,7 @@ func NewPDFGeneration(
 		Signer:           signer,
 		TSACfg:           tsaCfg,
 		IssuerDID:        issuerDID,
+		VCIssuer:         vcIssuer,
 		JWTAuthenticator: jwtAuth,
 	}
 }
@@ -197,6 +204,9 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 		BuildFn: func(jsonld []byte) ([]byte, error) {
 			return s.rebuildContractFromJSONLD(ctx, p.Did, jsonld)
 		},
+		// FetchFn fetches the canonical PDF (with C2PA manifests) from IPFS when the
+		// input PDF has been stripped of incremental updates (DCS-OR-C2PA-008).
+		FetchFn: s.contractIPFSFetchFn(ctx, p.Did),
 	}
 	result, err := v.Verify(pdfBytes)
 	if err != nil {
@@ -221,6 +231,8 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 		BuildFn: func(jsonld []byte) ([]byte, error) {
 			return s.rebuildTemplateFromJSONLD(ctx, p.Did, jsonld)
 		},
+		// FetchFn fetches the canonical PDF from IPFS when stripped (DCS-OR-C2PA-008).
+		FetchFn: s.templateIPFSFetchFn(ctx, p.Did),
 	}
 	result, err := v.Verify(pdfBytes)
 	if err != nil {
@@ -234,8 +246,50 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 	}, nil
 }
 
+// contractIPFSFetchFn returns a FetchFn that retrieves the canonical contract PDF
+// from IPFS using the stored pdf_ipfs_cid (DCS-OR-C2PA-008).
+func (s *pdfGenerationSrvc) contractIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
+	if s.IPFSClient == nil {
+		return nil
+	}
+	return func() ([]byte, error) {
+		var cidStr string
+		if err := s.DB.QueryRowContext(ctx,
+			`SELECT COALESCE(pdf_ipfs_cid,'') FROM contracts WHERE did=$1`, did,
+		).Scan(&cidStr); err != nil || cidStr == "" {
+			return nil, nil
+		}
+		r, err := s.IPFSClient.FetchFile(cidStr)
+		if err != nil {
+			return nil, err
+		}
+		return r.Data, nil
+	}
+}
+
+// templateIPFSFetchFn is the template counterpart of contractIPFSFetchFn (DCS-OR-C2PA-008).
+func (s *pdfGenerationSrvc) templateIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
+	if s.IPFSClient == nil {
+		return nil
+	}
+	return func() ([]byte, error) {
+		var cidStr string
+		if err := s.DB.QueryRowContext(ctx,
+			`SELECT COALESCE(pdf_ipfs_cid,'') FROM contract_templates WHERE did=$1`, did,
+		).Scan(&cidStr); err != nil || cidStr == "" {
+			return nil, nil
+		}
+		r, err := s.IPFSClient.FetchFile(cidStr)
+		if err != nil {
+			return nil, err
+		}
+		return r.Data, nil
+	}
+}
+
 // appendAndCache appends an initial C2PA assertion and stores the PDF in IPFS,
 // updating the pdf_ipfs_cid column in the given table.
+// It also creates a W3C Verifiable Credential for the lifecycle event (DCS-OR-C2PA-004).
 func (s *pdfGenerationSrvc) appendAndCache(
 	ctx context.Context, tx *sqlx.Tx,
 	did, state string, jsonldBytes, pdfBytes []byte, table string,
@@ -244,21 +298,37 @@ func (s *pdfGenerationSrvc) appendAndCache(
 		return nil, fmt.Errorf("C2PA signer is not configured")
 	}
 	fileHash := c2pa.FileHashOf(jsonldBytes)
-	pdfHash := c2pa.FileHashOf(pdfBytes)
+	pdfHash := c2pa.BasePDFHashOf(pdfBytes)
 	prevHash := c2pa.PrevManifestHashFrom(pdfBytes)
+	
+	// Generate a reason based on the state transition (DCS-OR-C2PA-003).
+	reason := stateToReason(state)
+	
+	// Issue a W3C VC for this lifecycle event (DCS-OR-C2PA-004).
+	// Status list publication is atomic with VC issuance (DCS-OR-C2PA-005).
+	vcID, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
+		ctx, did, fileHash, state, reason, s.IssuerDID, time.Now().UTC(),
+	)
+	if err != nil {
+		return pdfBytes, fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
+	}
+
 	assertion := c2pa.NewLifecycleAssertion(
 		did, fileHash, pdfHash, builder.RendererVersion,
-		state, "", s.IssuerDID, "", prevHash,
+		state, reason, s.IssuerDID, vcID, prevHash,
 		time.Now().UTC(),
 	)
-	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, pdfBytes)
+	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, pdfBytes, vcBytes)
 	if err != nil {
 		return pdfBytes, err
 	}
-	_, _ = tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(ctx,
 		fmt.Sprintf(`UPDATE %s SET pdf_ipfs_cid=$1, pdf_renderer_version=$2 WHERE did=$3`, table),
 		result.IPFSCID, builder.RendererVersion, did,
-	)
+
+	); err != nil {
+		return nil, fmt.Errorf("update %s pdf_ipfs_cid: %w", table, err)
+	}
 	return result.UpdatedPDF, nil
 }
 
@@ -385,4 +455,26 @@ func (s *pdfGenerationSrvc) rebuildTemplateFromJSONLD(ctx context.Context, did s
 		CreatedBy: tpl.CreatedBy, CreatedAt: tpl.CreatedAt, UpdatedAt: tpl.UpdatedAt,
 		TemplateData: jsonld,
 	})
+}
+
+// stateToReason generates a human-readable reason for a state transition (DCS-OR-C2PA-003).
+func stateToReason(state string) string {
+	switch state {
+	case "draft":
+		return "Contract created as draft"
+	case "active":
+		return "Contract activated for execution"
+	case "amended":
+		return "Contract amended with new terms"
+	case "suspended":
+		return "Contract suspended pending review"
+	case "terminated":
+		return "Contract terminated by parties"
+	case "expired":
+		return "Contract reached expiration date"
+	case "replaced":
+		return "Contract replaced with newer version"
+	default:
+		return "Contract state changed to: " + state
+	}
 }

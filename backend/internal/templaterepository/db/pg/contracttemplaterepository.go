@@ -279,6 +279,8 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 		return nil, nil, errors.New("no fields to update")
 	}
 
+	columns = append(columns, "pdf_ipfs_cid = NULL", "pdf_renderer_version = NULL")
+
 	fullQuery := queryBase + strings.Join(columns, ", ")
 	nextIdx := len(params) + 1
 	fullQuery += fmt.Sprintf(" WHERE did = $%d;",

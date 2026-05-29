@@ -1,14 +1,15 @@
 package c2pa
 
 import (
-	"compress/zlib"
 	"bytes"
+	"compress/zlib"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -26,6 +27,10 @@ func (s *stubSigner) Sign(_ context.Context, _ []byte) ([]byte, error) {
 	return s.sig, nil
 }
 
+func (s *stubSigner) CertificateChain(_ context.Context) ([][]byte, error) {
+	return [][]byte{[]byte("dummy-cert")}, nil
+}
+
 // stubStorer captures stored data and returns a fixed CID.
 type stubStorer struct {
 	storedData any
@@ -41,8 +46,8 @@ func (s *stubStorer) CreateFile(_ context.Context, data any) (*ipfs.IPFSResult, 
 func testAssertion() LifecycleAssertion {
 	return NewLifecycleAssertion(
 		"did:example:contract1",
-		"filehash",
-		"pdfhash",
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		"1.0.0",
 		"draft",
 		"",
@@ -94,6 +99,7 @@ func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
 		"did:example:issuer",
 		testAssertion(),
 		basePDF,
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -118,7 +124,7 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	// First assertion.
 	result1, err := AppendManifest(
 		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF,
+		"did:example:issuer", testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -126,13 +132,13 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 
 	// Second assertion referencing the first via PrevManifestHash.
 	assertion2 := NewLifecycleAssertion(
-		"did:example:contract1", "filehash2", "pdfhash2", "1.0.0",
+		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.0",
 		"active", "", "did:example:auth", "", prevHash, time.Now(),
 	)
 
 	result2, err := AppendManifest(
 		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", assertion2, result1.UpdatedPDF,
+		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -144,6 +150,58 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	assert.Equal(t, result2.ManifestHash, extracted)
 }
 
+func TestAppendManifest_FailsOnPrevManifestHashMismatch(t *testing.T) {
+	basePDF := minimalValidPDF()
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
+	storer := &stubStorer{}
+
+	_, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer",
+		NewLifecycleAssertion(
+			"did:example:contract1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "1.0.0",
+			"draft", "", "did:example:auth", "", "deadbeef",
+			time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		),
+		basePDF, nil,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "prev_manifest_hash mismatch")
+}
+
+func TestAppendManifest_PreservesPreviousManifestNameTreeEntries(t *testing.T) {
+	basePDF := minimalValidPDF()
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
+	storer := &stubStorer{}
+
+	result1, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", testAssertion(), basePDF, nil,
+	)
+	require.NoError(t, err)
+
+	assertion2 := NewLifecycleAssertion(
+		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.0",
+		"active", "", "did:example:auth", "", result1.ManifestHash,
+		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+	)
+	result2, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+	)
+	require.NoError(t, err)
+
+	objects := parsePDFObjects(result2.UpdatedPDF)
+	filespecs := c2paFilespecNames(objects)
+
+	first := manifestFileName(result1.ManifestHash)
+	second := manifestFileName(result2.ManifestHash)
+	assert.NotEqual(t, first, second)
+	assert.Contains(t, filespecs, first)
+	assert.Contains(t, filespecs, second)
+	assert.GreaterOrEqual(t, len(filespecs), 2)
+}
+
 func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
@@ -151,16 +209,17 @@ func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 
 	result, err := AppendManifest(
 		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF,
+		"did:example:issuer", testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
 	objects := parsePDFObjects(result.UpdatedPDF)
 
 	filespecObjNum, filespecObj, ok := findC2PAFileSpecObject(objects)
-	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA")
+	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA_Manifest")
 	assert.Contains(t, string(filespecObj), "/Type /Filespec")
-	assert.Contains(t, string(filespecObj), "/AFRelationship /C2PA")
+	assert.Contains(t, string(filespecObj), "/Subtype /application#2Fc2pa")
+	assert.Contains(t, string(filespecObj), "/AFRelationship /C2PA_Manifest")
 
 	streamObjNum := extractEmbeddedFileRef(t, filespecObj)
 	streamObj, exists := objects[streamObjNum]
@@ -168,7 +227,45 @@ func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 
 	assert.Contains(t, string(streamObj), "/Type /EmbeddedFile")
 	assert.Contains(t, string(streamObj), "/Subtype /application#2Fc2pa")
+	assert.Contains(t, string(streamObj), "/Params <</Size ")
 	assert.NotZero(t, filespecObjNum)
+
+	catalogObj, foundCatalog := findCatalogObject(objects)
+	require.True(t, foundCatalog, "expected updated catalog object")
+	assert.Contains(t, string(catalogObj), "/AF")
+	assert.Regexp(t, regexp.MustCompile(`/AF\s*\[.*\d+\s+0\s+R.*\]`), string(catalogObj), "catalog /AF should contain the active manifest FileSpec")
+	assert.Contains(t, string(catalogObj), "/Names")
+	assert.Contains(t, string(catalogObj), "/EmbeddedFiles")
+}
+
+func TestAppendManifest_DocMDPUsesFileAttachmentReferencePath(t *testing.T) {
+	basePDF := minimalValidPDF()
+	basePDF = append(basePDF, []byte("\n% contains certifying signature marker /DocMDP\n")...)
+
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
+	storer := &stubStorer{}
+
+	result, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", testAssertion(), basePDF, nil,
+	)
+	require.NoError(t, err)
+
+	objects := parsePDFObjects(result.UpdatedPDF)
+	_, filespecObj, ok := findC2PAFileSpecObject(objects)
+	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA_Manifest")
+
+	annotObj, foundAnnot := findFileAttachmentAnnotationObject(objects)
+	require.True(t, foundAnnot, "expected FileAttachment annotation for DocMDP path")
+	assert.Contains(t, string(annotObj), "/FS")
+	assert.Regexp(t, regexp.MustCompile(`/Subtype\s*/FileAttachment`), string(annotObj))
+
+	catalogObj, foundCatalog := findCatalogObject(objects)
+	require.True(t, foundCatalog, "expected updated catalog object")
+	assert.Contains(t, string(catalogObj), "/AF")
+	assert.NotContains(t, string(catalogObj), "/EmbeddedFiles")
+
+	_ = filespecObj
 }
 
 func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
@@ -178,13 +275,13 @@ func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
 
 	result, err := AppendManifest(
 		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF,
+		"did:example:issuer", testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
 	objects := parsePDFObjects(result.UpdatedPDF)
 	_, filespecObj, ok := findC2PAFileSpecObject(objects)
-	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA")
+	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA_Manifest")
 
 	streamObjNum := extractEmbeddedFileRef(t, filespecObj)
 	streamObj, exists := objects[streamObjNum]
@@ -216,6 +313,32 @@ func TestPrevManifestHashFrom_ExtractsLastHash(t *testing.T) {
 	assert.Equal(t, hex2, PrevManifestHashFrom(pdf))
 }
 
+func TestPrevManifestHashFrom_ReadsActiveEmbeddedManifestPayload(t *testing.T) {
+	basePDF := minimalValidPDF()
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
+	storer := &stubStorer{}
+
+	result1, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", testAssertion(), basePDF, nil,
+	)
+	require.NoError(t, err)
+
+	assertion2 := NewLifecycleAssertion(
+		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.0",
+		"active", "", "did:example:auth", "", result1.ManifestHash,
+		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+	)
+	result2, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+	)
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(result2.UpdatedPDF), "%% DCS-C2PA-HASH:")
+	assert.Equal(t, result2.ManifestHash, PrevManifestHashFrom(result2.UpdatedPDF))
+}
+
 func parsePDFObjects(pdf []byte) map[int][]byte {
 	re := regexp.MustCompile(`(?s)(\d+)\s+0\s+obj\b(.*?)\bendobj`)
 	objects := make(map[int][]byte)
@@ -231,11 +354,30 @@ func parsePDFObjects(pdf []byte) map[int][]byte {
 
 func findC2PAFileSpecObject(objects map[int][]byte) (int, []byte, bool) {
 	for n, obj := range objects {
-		if bytes.Contains(obj, []byte("/Type /Filespec")) && bytes.Contains(obj, []byte("/AFRelationship /C2PA")) {
+		if bytes.Contains(obj, []byte("/Type /Filespec")) && bytes.Contains(obj, []byte("/AFRelationship /C2PA_Manifest")) {
 			return n, obj, true
 		}
 	}
 	return 0, nil, false
+}
+
+func findCatalogObject(objects map[int][]byte) ([]byte, bool) {
+	for _, obj := range objects {
+		if bytes.Contains(obj, []byte("/Catalog")) {
+			return obj, true
+		}
+	}
+	return nil, false
+}
+
+func findFileAttachmentAnnotationObject(objects map[int][]byte) ([]byte, bool) {
+	reFileAttachment := regexp.MustCompile(`/Subtype\s*/FileAttachment`)
+	for _, obj := range objects {
+		if reFileAttachment.Match(obj) {
+			return obj, true
+		}
+	}
+	return nil, false
 }
 
 func extractEmbeddedFileRef(t *testing.T, filespecObj []byte) int {
@@ -266,4 +408,21 @@ func extractEmbeddedFilePayload(t *testing.T, streamObj []byte) []byte {
 	}
 
 	return payload
+}
+
+func c2paFilespecNames(objects map[int][]byte) []string {
+	re := regexp.MustCompile(`/Type\s*/Filespec\b`)
+	nameRe := regexp.MustCompile(`/F\s*\(([^)]+)\)`)
+	out := make([]string, 0)
+	for _, obj := range objects {
+		if !re.Match(obj) || !bytes.Contains(obj, []byte("/AFRelationship /C2PA_Manifest")) {
+			continue
+		}
+		match := nameRe.FindSubmatch(obj)
+		if len(match) == 2 {
+			out = append(out, string(match[1]))
+		}
+	}
+	sort.Strings(out)
+	return out
 }

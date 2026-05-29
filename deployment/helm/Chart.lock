@@ -32,8 +32,11 @@ dependencies:
 - name: crypto-provider
   repository: file://charts/crypto-provider
   version: 0.1.0
+- name: statuslist-service
+  repository: file://charts/statuslist-service
+  version: 0.1.0
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 85.2.0
-digest: sha256:271bc675bd2efb724a5dce07682399b0a237ff6f7749ba7db24b337ccfcbcd42
-generated: "2026-05-28T22:08:19.36461+02:00"
+digest: sha256:eb0b8c6b7bcf3fcd02dff928978e88d0fe881365d2f236bb1a1ef41015ff53fd
+generated: "2026-05-29T17:31:55.89984603+02:00"

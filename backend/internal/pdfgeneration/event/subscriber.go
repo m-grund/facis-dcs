@@ -51,6 +51,9 @@ type Subscriber struct {
 	Signer     c2pa.Signer
 	TSACfg     c2pa.TSAConfig
 	IssuerDID  string
+	// VCIssuer issues and signs a W3C VC for each lifecycle event (DCS-OR-C2PA-004/005).
+	// When nil, no VC is embedded in the C2PA manifest.
+	VCIssuer c2pa.VCIssuer
 }
 
 // Start registers the event handler with the NATS sub-client and begins
@@ -164,14 +167,27 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		effectiveAt = time.Now().UTC()
 	}
 
-	pdfHash := c2pa.FileHashOf(existingPDF)
+	pdfHash := c2pa.BasePDFHashOf(existingPDF)
+
+	// Issue W3C VC for this lifecycle event when a VCIssuer is configured (DCS-OR-C2PA-004/005).
+	var vcID string
+	var vcBytes []byte
+	if s.VCIssuer != nil {
+		vcID, vcBytes, err = s.VCIssuer.IssueContractLifecycleVC(
+			ctx, cweEvt.DID, fileHash, state, cweEvt.Reason, s.IssuerDID, effectiveAt,
+		)
+		if err != nil {
+			return fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
+		}
+	}
+
 	assertion := c2pa.NewLifecycleAssertion(
 		cweEvt.DID, fileHash, pdfHash, builder.RendererVersion,
-		state, cweEvt.Reason, s.IssuerDID, "", prevHash, effectiveAt,
+		state, cweEvt.Reason, s.IssuerDID, vcID, prevHash, effectiveAt,
 	)
 
 	// Append the C2PA manifest; store the updated PDF in IPFS.
-	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, existingPDF)
+	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, existingPDF, vcBytes)
 	if err != nil {
 		return fmt.Errorf("append C2PA manifest for %s: %w", cweEvt.DID, err)
 	}

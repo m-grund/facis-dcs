@@ -101,7 +101,7 @@ func TestVerifier_MismatchOnTamperedPDF(t *testing.T) {
 
 func TestVerifier_StripsIncrementalUpdates(t *testing.T) {
 	jsonld := []byte(`{"@type":"Contract","id":"did:ex:3"}`)
-	pdf := makeFakePDF(jsonld, []byte("\n%%C2PA-MANIFEST-BEGIN abc\nDUMMY\n%%C2PA-MANIFEST-END\n"))
+	pdf := makeFakePDF(jsonld, []byte("startxref\n9999\n%%EOF\n%%C2PA-MANIFEST-BEGIN abc\nDUMMY\n%%C2PA-MANIFEST-END\n"))
 
 	base, err := extractBasePDF(pdf)
 	require.NoError(t, err)
@@ -115,6 +115,75 @@ func TestVerifier_StripsIncrementalUpdates(t *testing.T) {
 	result, err := v.Verify(pdf)
 	require.NoError(t, err)
 	assert.True(t, result.Match, "incremental update should be stripped before hash comparison")
+}
+
+func TestVerifier_FetchFnUsedWhenManifestStripped(t *testing.T) {
+	jsonld := []byte(`{"@type":"Contract","id":"did:ex:4"}`)
+	// stripped = base PDF only, no incremental updates
+	strippedPDF := makeFakePDF(jsonld, nil)
+	// canonical = base PDF + a dummy incremental update appended (must contain
+	// "startxref" so hasIncrementalUpdates detects it as a real PDF increment).
+	canonicalPDF := makeFakePDF(jsonld, []byte("startxref\n9999\n%%EOF\n"))
+
+	fetchCalled := false
+	base, err := extractBasePDF(strippedPDF)
+	require.NoError(t, err)
+
+	v := &ContractVerifier{
+		BuildFn: func(_ []byte) ([]byte, error) {
+			return base, nil
+		},
+		FetchFn: func() ([]byte, error) {
+			fetchCalled = true
+			return canonicalPDF, nil
+		},
+	}
+
+	result, err := v.Verify(strippedPDF)
+	require.NoError(t, err)
+	assert.True(t, fetchCalled, "FetchFn should be called when no incremental updates present")
+	assert.Equal(t, "remote", result.ManifestSource)
+	assert.True(t, result.Match)
+}
+
+func TestVerifier_FetchFnNotCalledWhenManifestPresent(t *testing.T) {
+	jsonld := []byte(`{"@type":"Contract","id":"did:ex:5"}`)
+	// PDF already has incremental update appended (contains "startxref" so
+	// hasIncrementalUpdates recognises it as a real PDF increment).
+	pdf := makeFakePDF(jsonld, []byte("startxref\n9999\n%%EOF\n"))
+
+	base, err := extractBasePDF(pdf)
+	require.NoError(t, err)
+
+	v := &ContractVerifier{
+		BuildFn: func(_ []byte) ([]byte, error) {
+			return base, nil
+		},
+		FetchFn: func() ([]byte, error) {
+			t.Fatal("FetchFn should not be called when manifest is already embedded")
+			return nil, nil
+		},
+	}
+
+	result, err := v.Verify(pdf)
+	require.NoError(t, err)
+	assert.Equal(t, "embedded", result.ManifestSource)
+	assert.True(t, result.Match)
+}
+
+func TestVerifier_ManifestSourceNoneWhenFetchFnNil(t *testing.T) {
+	jsonld := []byte(`{"@type":"Contract","id":"did:ex:6"}`)
+	strippedPDF := makeFakePDF(jsonld, nil)
+	base, err := extractBasePDF(strippedPDF)
+	require.NoError(t, err)
+
+	v := &ContractVerifier{
+		BuildFn: func(_ []byte) ([]byte, error) { return base, nil },
+	}
+
+	result, err := v.Verify(strippedPDF)
+	require.NoError(t, err)
+	assert.Equal(t, "none", result.ManifestSource)
 }
 
 func TestSHA256Hex(t *testing.T) {

@@ -1,14 +1,22 @@
 package c2pa
 
 import (
+	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/digitorus/timestamp"
+	"github.com/fxamacker/cbor/v2"
+	"github.com/google/uuid"
 	"github.com/veraison/go-cose"
 )
 
@@ -20,6 +28,24 @@ type Signer interface {
 	Sign(ctx context.Context, data []byte) ([]byte, error)
 }
 
+// CertificateChainProvider can expose the signer certificate chain for COSE x5chain headers.
+type CertificateChainProvider interface {
+	CertificateChain(ctx context.Context) ([][]byte, error)
+}
+
+type coseSignerAdapter struct {
+	ctx    context.Context
+	signer Signer
+}
+
+func (a coseSignerAdapter) Algorithm() cose.Algorithm {
+	return cose.AlgorithmES256
+}
+
+func (a coseSignerAdapter) Sign(_ io.Reader, content []byte) ([]byte, error) {
+	return a.signer.Sign(a.ctx, content)
+}
+
 // TSAConfig holds RFC 3161 timestamp authority configuration (DCS-OR-C2PA-009).
 type TSAConfig struct {
 	// URL is the TSA endpoint. If empty, no timestamp is requested.
@@ -28,21 +54,23 @@ type TSAConfig struct {
 
 // claim is the JSON structure inside the COSE_Sign1 payload.
 type claim struct {
-	Assertions      []assertionRef `json:"assertions"`
-	ClaimGenerator  string         `json:"claim_generator"`
-	RendererVersion string         `json:"renderer_version"`
-	SignatureInfo   signInfo       `json:"signature_info"`
+	Assertions     []assertionRef `json:"assertions"`
+	ClaimGenerator string         `json:"claim_generator"`
+	Signature      string         `json:"signature"`
+	DCFormat       string         `json:"dc:format"`
+	InstanceID     string         `json:"instanceID"`
+	Alg            string         `json:"alg,omitempty"`
 }
 
 type assertionRef struct {
 	URL  string `json:"url"`
-	Hash string `json:"hash"`
+	Alg  string `json:"alg"`
+	Hash []byte `json:"hash"`
 }
 
-type signInfo struct {
-	Issuer string `json:"issuer"`
-	Time   string `json:"time"`
-}
+const manifestLabel = "c2pa.manifest"
+
+var lifecycleContentUUID = [16]byte{0x5F, 0x93, 0x6D, 0x19, 0x2A, 0x0F, 0x4B, 0x8D, 0xA0, 0x77, 0x5D, 0x4A, 0x77, 0x63, 0xA5, 0x11}
 
 // BuildManifest builds a JUMBF manifest box containing the lifecycle assertion
 // signed by the Crypto Provider Service and (optionally) RFC 3161 timestamped.
@@ -59,58 +87,94 @@ func BuildManifest(
 	if err != nil {
 		return nil, "", fmt.Errorf("marshal assertion: %w", err)
 	}
+	pdfHashBytes, err := hex.DecodeString(assertion.PDFHash)
+	if err != nil || len(pdfHashBytes) == 0 {
+		return nil, "", errors.New("lifecycle assertion PDFHash must be a non-empty hex string")
+	}
 
-	// 2. Compute assertion hash for the claim.
-	assertionHash := sha256.Sum256(assertionJSON)
-	assertionHashHex := hex.EncodeToString(assertionHash[:])
+	// 2. Build assertion boxes and hash full assertion JUMBF box bytes for claim linkage.
+	dataHashAssertionMap := map[string]any{
+		"alg":  "sha256",
+		"name": "pdf-asset",
+		"hash": pdfHashBytes,
+		"pad":  []byte{},
+	}
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	if err != nil {
+		return nil, "", fmt.Errorf("build canonical CBOR mode: %w", err)
+	}
+	dataHashAssertionCBOR, err := encMode.Marshal(dataHashAssertionMap)
+	if err != nil {
+		return nil, "", fmt.Errorf("marshal c2pa.hash.data assertion CBOR: %w", err)
+	}
+	dataHashAssertionBox := WriteSuperbox(c2paCBORAssertionUUID, "c2pa.hash.data", WriteCBORBox(dataHashAssertionCBOR))
+	dataHashAssertionSum := sha256.Sum256(dataHashAssertionBox[8:])
 
-	// 3. Build the claim.
-	// Use EffectiveAt from the assertion as the signing timestamp so that the claim
-	// is reproducible from DB state and does not capture the wall clock.
+	lifecycleAssertionBox := WriteSuperbox(c2paUUIDAssertionUUID, lifecycleAssertionLabel, WriteUUIDBox(lifecycleContentUUID, assertionJSON))
+	lifecycleAssertionSum := sha256.Sum256(lifecycleAssertionBox[8:])
+
+	// 3. Build a claim object limited to C2PA v1 claim fields.
+	signatureURI := "self#jumbf=/c2pa/" + manifestLabel + "/c2pa.signature"
 	c := claim{
 		Assertions: []assertionRef{
-			{URL: "self#jumbf=/c2pa/assertions/" + lifecycleAssertionLabel, Hash: assertionHashHex},
+			{
+				URL:  "self#jumbf=/c2pa/" + manifestLabel + "/c2pa.assertions/c2pa.hash.data",
+				Alg:  "sha256",
+				Hash: dataHashAssertionSum[:],
+			},
+			{
+				URL:  "self#jumbf=/c2pa/" + manifestLabel + "/c2pa.assertions/" + lifecycleAssertionLabel,
+				Alg:  "sha256",
+				Hash: lifecycleAssertionSum[:],
+			},
 		},
-		ClaimGenerator:  producer,
-		RendererVersion: assertion.RendererVersion,
-		SignatureInfo: signInfo{
-			Issuer: issuerDID,
-			Time:   assertion.EffectiveAt.UTC().Format(time.RFC3339),
-		},
+		ClaimGenerator: producer,
+		Signature:      signatureURI,
+		DCFormat:       "application/pdf",
+		InstanceID:     "xmp:iid:" + uuid.New().String(),
+		Alg:            "sha256",
 	}
-	claimJSON, err := json.Marshal(c)
+	claimCBOR, err := encMode.Marshal(c)
 	if err != nil {
-		return nil, "", fmt.Errorf("marshal claim: %w", err)
+		return nil, "", fmt.Errorf("marshal claim CBOR: %w", err)
 	}
 
 	// 4. Build COSE_Sign1 protected header (alg: ES256 = -7).
 	protected := cose.ProtectedHeader{}
 	protected.SetAlgorithm(cose.AlgorithmES256)
-
-	// 5. Sign the claim bytes via Crypto Provider Service.
-	sigBytes, err := signer.Sign(ctx, claimJSON)
+	chainProvider, ok := signer.(CertificateChainProvider)
+	if !ok {
+		return nil, "", fmt.Errorf("signer does not expose certificate chain")
+	}
+	certChain, err := chainProvider.CertificateChain(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("sign claim: %w", err)
+		return nil, "", fmt.Errorf("get certificate chain: %w", err)
 	}
-
-	// 6. Optionally attach RFC 3161 timestamp (DCS-OR-C2PA-009).
-	var tsBytes []byte
-	if tsaCfg.URL != "" {
-		tsBytes, err = requestTimestamp(ctx, tsaCfg.URL, sigBytes)
-		if err != nil {
-			// Non-fatal: log and continue without timestamp.
-			tsBytes = nil
-		}
+	if len(certChain) == 0 {
+		return nil, "", fmt.Errorf("certificate chain is empty")
 	}
+	protected["x5chain"] = certChain
 
-	// 7. Build COSE_Sign1 structure (untagged, as per C2PA spec).
+	// 5. Build COSE_Sign1 and sign the Sig_structure with the remote signer.
 	sig := &cose.Sign1Message{
 		Headers: cose.Headers{
 			Protected:   protected,
 			Unprotected: cose.UnprotectedHeader{},
 		},
-		Payload:   claimJSON,
-		Signature: sigBytes,
+		Payload: claimCBOR,
+	}
+	if err := sig.Sign(rand.Reader, nil, coseSignerAdapter{ctx: ctx, signer: signer}); err != nil {
+		return nil, "", fmt.Errorf("sign COSE_Sign1: %w", err)
+	}
+
+	// 6. Optionally attach RFC 3161 timestamp (DCS-OR-C2PA-009).
+	var tsBytes []byte
+	if tsaCfg.URL != "" {
+		var tsErr error
+		tsBytes, tsErr = requestTimestamp(ctx, tsaCfg.URL, sig.Signature)
+		if tsErr != nil {
+			return nil, "", fmt.Errorf("request TSA timestamp: %w", tsErr)
+		}
 	}
 	if len(tsBytes) > 0 {
 		sig.Headers.Unprotected["sigTst"] = tsBytes
@@ -121,11 +185,13 @@ func BuildManifest(
 		return nil, "", fmt.Errorf("marshal COSE_Sign1: %w", err)
 	}
 
-	// 8. Wrap in JUMBF: superbox → assertion JSON box + claim CBOR box.
-	assertionBox := WriteSuperbox(c2paAssertionUUID, lifecycleAssertionLabel, WriteJSONBox(assertionJSON))
-	claimBox := WriteSuperbox(c2paManifestUUID, "c2pa.claim", WriteCBORBox(cosBytes))
+	// 8. Wrap in canonical C2PA JUMBF hierarchy.
+	assertionStore := WriteSuperbox(c2paAssertionStoreUUID, "c2pa.assertions", dataHashAssertionBox, lifecycleAssertionBox)
+	claimBox := WriteSuperbox(c2paClaimUUID, "c2pa.claim", WriteCBORBox(claimCBOR))
+	signatureBox := WriteSuperbox(c2paSignatureUUID, "c2pa.signature", WriteCBORBox(cosBytes))
 
-	manifestBytes = WriteSuperbox(c2paManifestUUID, "c2pa.manifest", assertionBox, claimBox)
+	manifestBox := WriteSuperbox(c2paManifestUUID, manifestLabel, assertionStore, claimBox, signatureBox)
+	manifestBytes = WriteSuperbox(c2paBlockUUID, "c2pa", manifestBox)
 	h := sha256.Sum256(manifestBytes)
 	manifestHash = hex.EncodeToString(h[:])
 
@@ -133,19 +199,52 @@ func BuildManifest(
 }
 
 // requestTimestamp requests an RFC 3161 timestamp token from the given TSA URL.
-func requestTimestamp(_ context.Context, tsaURL string, data []byte) ([]byte, error) {
-	h := sha256.Sum256(data)
-	req, err := timestamp.CreateRequest(nil, &timestamp.RequestOptions{
-		Hash:         4, // SHA-256
+func requestTimestamp(ctx context.Context, tsaURL string, data []byte) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := timestamp.CreateRequest(bytes.NewReader(data), &timestamp.RequestOptions{
+		Hash:         crypto.SHA256,
 		Certificates: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create TSA request: %w", err)
 	}
-	_ = req
-	_ = h
-	_ = tsaURL
-	// TODO(DCS-OR-C2PA-009): Full TSA HTTP round-trip deferred.
-	// Set TSA_URL env var to activate real RFC 3161 timestamps via digitorus/timestamp.
-	return nil, nil
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, tsaURL, bytes.NewReader(req))
+	if err != nil {
+		return nil, fmt.Errorf("create TSA HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/timestamp-query")
+	httpReq.Header.Set("Accept", "application/timestamp-reply")
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("call TSA endpoint: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read TSA response: %w", err)
+	}
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected TSA status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	ts, err := timestamp.ParseResponse(body)
+	if err != nil {
+		return nil, fmt.Errorf("parse TSA response: %w", err)
+	}
+
+	expectedHash := sha256.Sum256(data)
+	if !bytes.Equal(ts.HashedMessage, expectedHash[:]) {
+		return nil, fmt.Errorf("TSA hashed message mismatch")
+	}
+	if len(ts.RawToken) == 0 {
+		return nil, fmt.Errorf("TSA response token is empty")
+	}
+
+	return ts.RawToken, nil
 }

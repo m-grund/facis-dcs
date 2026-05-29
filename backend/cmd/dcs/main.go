@@ -183,9 +183,36 @@ func main() {
 	cryptoProviderURL := os.Getenv("CRYPTO_PROVIDER_URL")
 	cryptoProviderNamespace := os.Getenv("CRYPTO_PROVIDER_NAMESPACE")
 	cryptoProviderKey := os.Getenv("CRYPTO_PROVIDER_KEY")
+	cryptoProviderCertChainFile := os.Getenv("CRYPTO_PROVIDER_CERT_CHAIN_FILE")
 	issuerDID := os.Getenv("ISSUER_DID")
 	cryptoClient := cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
+
+	if cryptoProviderCertChainFile == "" {
+		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_CERT_CHAIN_FILE is required for C2PA x5chain support")
+	}
+	if err := cryptoClient.SetCertificateChainFromPEMFile(cryptoProviderCertChainFile); err != nil {
+		log.Fatalf(ctx, err, "load crypto provider certificate chain")
+	}
 	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
+
+	// Probe crypto provider liveness before accepting traffic.
+	if cryptoProviderURL == "" {
+		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_URL is required")
+	}
+	if err := probeHTTP(cryptoProviderURL + "/readiness"); err != nil {
+		log.Fatalf(ctx, err, "crypto provider not reachable at %s", cryptoProviderURL)
+	}
+
+	// Initialize OCM-W Status List Service client (DCS-OR-C2PA-005).
+	statusListServiceURL := os.Getenv("STATUSLIST_SERVICE_URL")
+	if statusListServiceURL == "" {
+		log.Fatalf(ctx, nil, "STATUSLIST_SERVICE_URL is required (DCS-OR-C2PA-005)")
+	}
+	if err := probeHTTPAny(statusListServiceURL+"/health", statusListServiceURL+"/v1/metrics/health"); err != nil {
+		log.Fatalf(ctx, err, "status list service not reachable at %s", statusListServiceURL)
+	}
+	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
+	statusListPublisher := c2pa.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
 
 	// Initialize the service.
 	var (
@@ -208,7 +235,7 @@ func main() {
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, cryptoClient, tsaCfg, issuerDID)
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, cryptoClient, tsaCfg, issuerDID, c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
@@ -233,6 +260,7 @@ func main() {
 		Signer:     cryptoClient,
 		TSACfg:     tsaCfg,
 		IssuerDID:  issuerDID,
+		VCIssuer:   c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
 	}
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {

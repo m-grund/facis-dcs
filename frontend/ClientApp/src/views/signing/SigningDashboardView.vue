@@ -23,6 +23,25 @@ const verifyResults = ref<Record<string, SignatureVerifyResult | undefined>>({})
 const validateResults = ref<Record<string, SignatureValidateResult | undefined>>({})
 const complianceResults = ref<Record<string, SignatureComplianceResult | undefined>>({})
 
+// DCS-OR-C2PA-006: derive human-readable C2PA lifecycle banner label and CSS class
+// from the contract state. Returns one of: Active, Draft, Suspended, Terminated,
+// Replaced, Expired, or the raw state as fallback.
+type C2PAStatus = { label: string; cls: string }
+function c2paStatus(contract: SignatureContract): C2PAStatus {
+  const state = (contract.state ?? '').toLowerCase()
+  const map: Record<string, C2PAStatus> = {
+    active:     { label: 'Active',     cls: 'badge-success' },
+    approved:   { label: 'Active',     cls: 'badge-success' },
+    draft:      { label: 'Draft',      cls: 'badge-ghost' },
+    suspended:  { label: 'Suspended',  cls: 'badge-warning' },
+    terminated: { label: 'Terminated', cls: 'badge-error' },
+    replaced:   { label: 'Replaced',   cls: 'badge-neutral' },
+    expired:    { label: 'Expired',    cls: 'badge-neutral' },
+    amended:    { label: 'Active',     cls: 'badge-success' },
+  }
+  return map[state] ?? { label: contract.state ?? 'Unknown', cls: 'badge-ghost' }
+}
+
 onMounted(async () => {
   loading.value = true
   try {
@@ -100,6 +119,7 @@ async function compliance(contract: SignatureContract) {
             <th>Name</th>
             <th>Version</th>
             <th>Updated</th>
+            <th>C2PA Status</th>
             <th>Signature</th>
             <th>Actions</th>
           </tr>
@@ -110,6 +130,12 @@ async function compliance(contract: SignatureContract) {
             <td>{{ contract.name ?? '—' }}</td>
             <td>{{ contract.contract_version ?? 1 }}</td>
             <td>{{ new Date(contract.updated_at).toLocaleDateString() }}</td>
+            <!-- DCS-OR-C2PA-006: C2PA lifecycle status banner -->
+            <td>
+              <span :class="['badge', 'badge-sm', c2paStatus(contract).cls]">
+                {{ c2paStatus(contract).label }}
+              </span>
+            </td>
             <td>
               <span
                 v-if="envelopes[contract.did]"

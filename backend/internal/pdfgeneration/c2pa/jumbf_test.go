@@ -71,7 +71,7 @@ func TestWriteDescriptionBox_ContainsUUIDAndLabel(t *testing.T) {
 }
 
 func TestWriteSuperbox_ContainsDescriptionAndChildren(t *testing.T) {
-	uuid := c2paAssertionUUID
+	uuid := c2paAssertionStoreUUID
 	label := "test.box"
 	child1 := WriteJSONBox([]byte(`{}`))
 	child2 := WriteCBORBox([]byte{0x80})
