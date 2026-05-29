@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"goa.design/clue/log"
 )
 
 type signatureManagementsrvc struct {
@@ -34,6 +33,9 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 }
 
 func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturemanagement.SMContractRetrieveRequest) (res *signaturemanagement.SMContractRetrieveResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
 
 	qry := query.GetAllMetadataQry{
 		RetrievedBy: middleware.GetUsername(ctx),
@@ -66,6 +68,9 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 }
 
 func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signaturemanagement.SMContractRetrieveByIDRequest) (res *signaturemanagement.SMContractRetrieveByIDResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
 
 	qry := query.GetByIDQry{
 		DID:         req.Did,
@@ -100,16 +105,74 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 }
 
 func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemanagement.SMContractVerifyRequest) (res *signaturemanagement.SMContractVerifyResponse, err error) {
-	log.Printf(ctx, "signatureManagement.verify")
-	return
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.VerifyCmd{
+		DID:        req.Did,
+		VerifiedBy: middleware.GetUsername(ctx),
+	}
+	handler := command.Verifier{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	return &signaturemanagement.SMContractVerifyResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanagement.SMContractApplyRequest) (res *signaturemanagement.SMContractApplyResponse, err error) {
-	log.Printf(ctx, "signatureManagement.apply")
-	return
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.ApplyCmd{
+		DID:       req.Did,
+		AppliedBy: middleware.GetUsername(ctx),
+	}
+	handler := command.Applier{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	return &signaturemanagement.SMContractApplyResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturemanagement.SMContractValidateRequest) (res *signaturemanagement.SMContractValidateResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := command.ValidateCmd{
+		DID:         req.Did,
+		ValidatedBy: middleware.GetUsername(ctx),
+	}
+	queryHandler := command.Validator{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+
+	err = queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+
+	}
+
+	return &signaturemanagement.SMContractValidateResponse{}, nil
+}
+
+func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
 
 	qry := command.RevokeCmd{
 		DID:       req.Did,
@@ -126,12 +189,7 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 
 	}
 
-	return &signaturemanagement.SMContractValidateResponse{}, nil
-}
-
-func (s *signatureManagementsrvc) Revoke(ctx context.Context, request *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
-	log.Printf(ctx, "signatureManagement.revoke")
-	return
+	return &signaturemanagement.SMContractRevokeResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanagement.SMContractAuditRequest) (res []*signaturemanagement.SMContractAuditResponse, err error) {
@@ -170,6 +228,9 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 }
 
 func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signaturemanagement.SMContractComplianceRequest) (res *signaturemanagement.SMContractComplianceResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
 
 	qry := command.ComplianceCmd{
 		DID:       req.Did,

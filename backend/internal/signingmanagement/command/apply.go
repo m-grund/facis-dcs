@@ -12,17 +12,17 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type VerifyCmd struct {
-	DID        string
-	VerifiedBy string
+type ApplyCmd struct {
+	DID       string
+	AppliedBy string
 }
 
-type Verifier struct {
+type Applier struct {
 	DB    *sqlx.DB
 	CRepo db.ContractRepo
 }
 
-func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
+func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -35,10 +35,10 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	evt := event2.VerifyEvent{
+	evt := event2.ApplyEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
-		VerifiedBy:      cmd.VerifiedBy,
+		AppliedBy:       cmd.AppliedBy,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

@@ -146,3 +146,21 @@ func (e SigningRequestEvent) EventType() string {
 func (e SigningRequestEvent) GetDID() string {
 	return e.DID
 }
+
+// ApplyEvent is emitted when contract is reviewed.
+type ApplyEvent struct {
+	DID             string    `json:"did"`
+	ContractVersion int       `json:"contract_version"`
+	AppliedBy       string    `json:"applied_by"`
+	OccurredAt      time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e ApplyEvent) EventType() string {
+	return eventtype.SigningRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e ApplyEvent) GetDID() string {
+	return e.DID
+}
