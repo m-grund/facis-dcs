@@ -1,5 +1,6 @@
-import type { ContractTemplateState } from '@/types/contract-template-state'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { ContractTemplateState } from "@/types/contract-template-state"
+import type { SubTemplateSnapshot } from "@/models/contract-template"
+import type { PlaceholderBinding, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable } from "@/models/semantic/facis-dcs-semantic"
 import type {
   DocumentOutline,
   DocumentBlock,
@@ -7,8 +8,11 @@ import type {
   MetaData,
   TemplateTypeValue,
   DocumentBlockType,
-} from '@template-repository/models/contract-templace'
-import type { ContractTemplateResponsiblePersons } from '@/models/contract-template-responsible-persons'
+  PolicyReference,
+  SchemaReferenceSet,
+  ValidationProfile,
+} from "@/modules/template-repository/models/contract-template"
+import type { ContractTemplateResponsiblePersons } from "@/models/contract-template-responsible-persons"
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const
 export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]
@@ -22,6 +26,14 @@ interface TemplateDraftState {
   documentBlocks: DocumentBlock[]
   semanticConditions: SemanticCondition[]
   customMetaData: MetaData[]
+  schemaRefs: SchemaReferenceSet
+  policyRefs: PolicyReference[]
+  validation: ValidationProfile
+  semanticProfile: SemanticProfile
+  templateVariables: TemplateVariable[]
+  placeholderBindings: PlaceholderBinding[]
+  semanticRules: SemanticRule[]
+  sla: SLAAgreement | null
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue
   state: ContractTemplateState | null
@@ -41,6 +53,9 @@ export interface AddBlockPayload {
   // #### For Clause ####
   clauseBlockId?: string
   conditionIds?: string[]
+  blockCatalogueId?: string
+  schemaRef?: string
+  semanticPath?: string
   // #### For ApprovedTemplate ####
   templateId?: string
   version?: number

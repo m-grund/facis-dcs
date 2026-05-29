@@ -9,10 +9,18 @@
           (used in {{ usedInClauseCount }} clause{{ usedInClauseCount === 1 ? '' : 's' }})
         </span>
       </div>
-      <div class="mt-2 flex flex-wrap gap-2">
-        <div v-for="(p, i) in condition.parameters" :key="i" class="badge gap-1 badge-ghost badge-sm">
+      <div v-if="condition.entityType" class="flex flex-wrap gap-2 mt-2">
+        <span class="badge badge-outline badge-sm">{{ condition.entityType }}</span>
+        <span v-if="condition.entityRole" class="badge badge-outline badge-sm">{{ condition.entityRole }}</span>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <div
+          v-for="(p, i) in condition.parameters"
+          :key="i"
+          class="badge badge-ghost badge-sm gap-1"
+        >
           <span>{{ p.parameterName }}</span>
-          <span class="opacity-70">({{ p.type }}, {{ p.isRequired ? 'required' : 'optional' }})</span>
+          <span class="opacity-70">({{ p.type }}, {{ p.fixedValue !== undefined ? `fixed: ${p.fixedValue}` : p.isRequired ? 'required' : 'optional' }})</span>
         </div>
       </div>
     </div>
@@ -41,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import IconEdit from '@/core/components/icons/IconEdit.vue'
 import IconRemove from '@/core/components/icons/IconRemove.vue'
 

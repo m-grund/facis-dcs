@@ -11,8 +11,23 @@ dependencies:
 - name: neo4j
   repository: file://charts/neo4j
   version: 0.1.0
+- name: orce
+  repository: file://charts/orce
+  version: 0.1.0
 - name: federated-catalogue
   repository: file://charts/federated-catalogue
+  version: 0.1.0
+- name: custom-policy-agent
+  repository: file://charts/custom-policy-agent
+  version: 0.1.0
+- name: mongodb
+  repository: file://charts/mongodb
+  version: 0.1.0
+- name: ipfs
+  repository: file://charts/ipfs
+  version: 0.1.0
+- name: ipfs-document-manager
+  repository: file://charts/ipfs-document-manager
   version: 0.1.0
 - name: crypto-provider
   repository: file://charts/crypto-provider
@@ -20,5 +35,5 @@ dependencies:
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 85.2.0
-digest: sha256:f4c47d567a7ecd05e3518eaed084b65ba0799a51f0dec16e2c99cabd21032ccd
-generated: "2026-05-28T17:21:25.145342775+02:00"
+digest: sha256:271bc675bd2efb724a5dce07682399b0a237ff6f7749ba7db24b337ccfcbcd42
+generated: "2026-05-28T22:08:19.36461+02:00"

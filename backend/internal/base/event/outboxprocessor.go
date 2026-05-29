@@ -96,7 +96,7 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	defer tx.Rollback()
 
 	if err := j.PubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
-		return fmt.Errorf("could not publish event %d: %w", event.ID, err)
+		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
 	}
 
 	globalLogPredCID, err := j.ARepo.ReadLogCID(ctx, tx, conf.GlobalAuditTrailName(), conf.GlobalAuditTrailName())

@@ -59,7 +59,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ClauseBlock, SemanticCondition } from '@template-repository/models/contract-templace'
+import type { ClauseBlock, SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import {
   parseSegments,
   getPlaceholderLabelFromConditions,

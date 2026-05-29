@@ -39,24 +39,27 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { SemanticParameterType } from '@template-repository/models/contract-templace'
+import type { SemanticParameterType, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
 
 const props = defineProps<{
   type: SemanticParameterType
   label?: string
-  value?: string | number
+  value?: string | number | boolean
+  valueConstraint?: SemanticValueConstraint
   isInvalid?: boolean
   invalidTip?: string
 }>()
-const emit = defineEmits<(e: 'update:value', value: string | number) => void>()
+const emit = defineEmits<{
+  (e: 'update:value', value: string | number | boolean): void
+}>()
 
 const stringValue = ref('')
 const numberValue = ref('')
 const dateValue = ref('')
-const tipText = computed(() => props.invalidTip ?? props.label ?? '')
-const inputClass = computed(
-  () =>
-    `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
+const booleanValue = ref(false)
+const tipText = computed(() => props.invalidTip || props.valueConstraint?.description || props.label || '')
+const inputClass = computed(() =>
+  `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
 )
 
 watch(
@@ -65,22 +68,24 @@ watch(
     stringValue.value = ''
     numberValue.value = ''
     dateValue.value = ''
-  },
+    booleanValue.value = false
+  }
 )
 
 watch(
   () => props.value,
   (value) => {
     const next = value ?? ''
-    if (props.type === 'string') stringValue.value = `${next}`
+    if (props.type === 'string' || props.type === 'enum') stringValue.value = `${next}`
     if (props.type === 'decimal' || props.type === 'integer') numberValue.value = `${next}`
     if (props.type === 'date') dateValue.value = `${next}`
+    if (props.type === 'boolean') booleanValue.value = Boolean(next)
   },
   { immediate: true },
 )
 
 function emitStringValue(event: Event) {
-  const next = (event.target as HTMLInputElement | null)?.value ?? ''
+  const next = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value ?? ''
   emit('update:value', next)
 }
 

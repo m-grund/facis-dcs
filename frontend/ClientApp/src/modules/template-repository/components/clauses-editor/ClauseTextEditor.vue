@@ -64,7 +64,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 import {
   useClauseTextChips,
   conditionIdsInText,
@@ -143,7 +143,7 @@ function isParamUsedInText(conditionId: string, parameterName: string): boolean 
 function isParamRequiredAndUnused(conditionId: string, parameterName: string): boolean {
   const cond = props.semanticConditions.find((c) => c.conditionId === conditionId)
   const param = cond?.parameters.find((p) => p.parameterName === parameterName)
-  return !!(param?.isRequired && !isParamUsedInText(conditionId, parameterName))
+  return !!(param?.isRequired && param.fixedValue === undefined && !isParamUsedInText(conditionId, parameterName))
 }
 
 function setHighlight(payload: { conditionId: string; parameterName?: string }) {
@@ -178,7 +178,17 @@ function insertPlaceholderFromPanel(conditionId: string, parameterName: string) 
 }
 
 function onEditorBlur() {
-  if (editorRef.value) lastCursorIndex.value = getCursorIndex()
+  rememberEditorCursor()
+}
+
+function rememberEditorCursor() {
+  const el = editorRef.value
+  const selection = document.getSelection()
+  if (!el || !selection?.anchorNode || !el.contains(selection.anchorNode)) return
+  const cursorIndex = getCursorIndex()
+  if (cursorIndex >= 0) {
+    lastCursorIndex.value = cursorIndex
+  }
 }
 
 const placeholderOptions = computed(() => {
@@ -186,6 +196,7 @@ const placeholderOptions = computed(() => {
   const list: { insertText: string; parameterName: string; conditionName: string }[] = []
   for (const c of props.semanticConditions) {
     for (const p of c.parameters) {
+      if (p.fixedValue !== undefined) continue
       if (usedKeys.has(`${c.conditionId}.${p.parameterName}`)) continue
       list.push({
         insertText: `{{${c.conditionId}.${p.parameterName}}}`,
@@ -238,12 +249,14 @@ function onEditorClick(e: MouseEvent) {
         void nextTick(() => {
           el.focus()
           setCursorAfter(node!)
+          rememberEditorCursor()
         })
         return
       }
     }
     node = node.parentNode
   }
+  nextTick(() => rememberEditorCursor())
 }
 
 function onEditorPaste(e: ClipboardEvent) {

@@ -22,5 +22,8 @@ func (e AuditEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e AuditEvent) GetDID() string {
+	if e.DID == "" {
+		return "*"
+	}
 	return e.DID
 }

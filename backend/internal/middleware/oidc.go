@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 )
@@ -24,9 +25,15 @@ type OIDCValidator struct {
 	config   OIDCConfig
 }
 
+const (
+	oidcDiscoveryAttempts       = 5
+	oidcDiscoveryAttemptTimeout = 3 * time.Second
+	oidcDiscoveryInitialBackoff = 500 * time.Millisecond
+)
+
 // connects to the OIDC provider to get public keys
 func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, error) {
-	provider, err := oidc.NewProvider(ctx, config.IssuerURL)
+	provider, err := discoverOIDCProvider(ctx, config.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover OIDC provider: %w", err)
 	}
@@ -44,6 +51,33 @@ func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, e
 		verifier: verifier,
 		config:   config,
 	}, nil
+}
+
+func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider, error) {
+	var lastErr error
+	backoff := oidcDiscoveryInitialBackoff
+
+	for attempt := 1; attempt <= oidcDiscoveryAttempts; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, oidcDiscoveryAttemptTimeout)
+		provider, err := oidc.NewProvider(attemptCtx, issuerURL)
+		cancel()
+		if err == nil {
+			return provider, nil
+		}
+		lastErr = err
+
+		if attempt == oidcDiscoveryAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+	}
+
+	return nil, fmt.Errorf("OIDC discovery failed after %d attempts: %w", oidcDiscoveryAttempts, lastErr)
 }
 
 // TokenInfo holds the validated identity extracted from a JWT.

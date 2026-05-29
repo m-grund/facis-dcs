@@ -33,7 +33,7 @@
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { isClauseBlock, type ClauseBlock } from '@template-repository/models/contract-templace'
+import { isClauseBlock, type ClauseBlock } from '@/modules/template-repository/models/contract-template'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'

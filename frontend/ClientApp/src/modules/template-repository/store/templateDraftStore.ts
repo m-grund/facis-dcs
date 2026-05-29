@@ -12,16 +12,20 @@ import type {
   TemplateTypeValue,
   SemanticCondition,
   MetaData,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   DocumentBlockType,
   TemplateType,
   isClauseBlock,
   isSectionBlock,
   isApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+  FACIS_SCHEMA_REFS,
+  FACIS_TEMPLATE_POLICY_REFS,
+  FACIS_TEMPLATE_VALIDATION_PROFILE,
+} from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
+import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 
 const storeId = 'templateDraft'
@@ -34,6 +38,18 @@ const defaultState: Readonly<TemplateDraftState> = {
   documentBlocks: [],
   semanticConditions: [],
   customMetaData: [],
+  schemaRefs: {
+    documentStructure: FACIS_SCHEMA_REFS.documentStructure,
+    semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
+    templateData: FACIS_SCHEMA_REFS.templateData,
+  },
+  policyRefs: FACIS_TEMPLATE_POLICY_REFS,
+  validation: FACIS_TEMPLATE_VALIDATION_PROFILE,
+  semanticProfile: FACIS_DCS_SEMANTIC_PROFILE,
+  templateVariables: [],
+  placeholderBindings: [],
+  semanticRules: [],
+  sla: null,
   subTemplateSnapshots: [],
   templateType: TemplateType.subContract,
   state: null,
@@ -58,6 +74,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     /** Returns the data to create a contract template based on the current draft state. */
     templateCreateRequestData(): ContractTemplateCreateRequest {
+      const semanticExtension = buildSemanticTemplateExtension(this.documentBlocks, this.semanticConditions, this.semanticProfile)
       return {
         name: this.name,
         description: this.description,
@@ -67,6 +84,14 @@ export const useTemplateDraftStore = defineStore(storeId, {
           documentBlocks: this.documentBlocks,
           semanticConditions: this.semanticConditions,
           customMetaData: this.customMetaData,
+          schemaRefs: this.schemaRefs,
+          policyRefs: this.policyRefs,
+          validation: this.validation,
+          semanticProfile: semanticExtension.semanticProfile,
+          templateVariables: this.templateVariables,
+          placeholderBindings: mergePlaceholderBindings(this.placeholderBindings, semanticExtension.placeholderBindings),
+          semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
+          sla: this.sla ?? undefined,
           subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
           templateDataVersion: this.templateDataVersion,
         },
@@ -74,6 +99,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     templateUpdateRequestData(): ContractTemplateUpdateRequest | null {
       if (!this.did || !this.updated_at) return null
+      const semanticExtension = buildSemanticTemplateExtension(this.documentBlocks, this.semanticConditions, this.semanticProfile)
       return {
         did: this.did,
         updated_at: this.updated_at,
@@ -84,6 +110,14 @@ export const useTemplateDraftStore = defineStore(storeId, {
           documentBlocks: this.documentBlocks,
           semanticConditions: this.semanticConditions,
           customMetaData: this.customMetaData,
+          schemaRefs: this.schemaRefs,
+          policyRefs: this.policyRefs,
+          validation: this.validation,
+          semanticProfile: semanticExtension.semanticProfile,
+          templateVariables: this.templateVariables,
+          placeholderBindings: mergePlaceholderBindings(this.placeholderBindings, semanticExtension.placeholderBindings),
+          semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
+          sla: this.sla ?? undefined,
           subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
           templateDataVersion: this.templateDataVersion,
         },
@@ -427,11 +461,16 @@ function deleteBlock(outline: DocumentOutlineBlock[], blocks: DocumentBlock[], b
 
 function createBlockFromPayload(blockId: string, payload: AddBlockPayload): DocumentBlock {
   const text = payload.text ?? ''
+  const blockMeta = {
+    blockCatalogueId: payload.blockCatalogueId,
+    schemaRef: payload.schemaRef,
+    semanticPath: payload.semanticPath,
+  }
   switch (payload.blockType) {
     case DocumentBlockType.Section:
-      return { blockId, type: DocumentBlockType.Section, text }
+      return { blockId, type: DocumentBlockType.Section, text, ...blockMeta }
     case DocumentBlockType.Text:
-      return { blockId, type: DocumentBlockType.Text, text }
+      return { blockId, type: DocumentBlockType.Text, text, ...blockMeta }
     case DocumentBlockType.Clause:
       return {
         blockId,
@@ -445,6 +484,7 @@ function createBlockFromPayload(blockId: string, payload: AddBlockPayload): Docu
         blockId,
         type: DocumentBlockType.ApprovedTemplate,
         text,
+        ...blockMeta,
         templateId: payload.templateId ?? '',
         version: payload.version ?? 1,
         document_number: payload.document_number ?? '',
@@ -492,6 +532,17 @@ function getInitialState(): TemplateDraftState {
     documentBlocks: [...defaultState.documentBlocks],
     semanticConditions: [...defaultState.semanticConditions],
     customMetaData: [...defaultState.customMetaData],
+    schemaRefs: { ...defaultState.schemaRefs },
+    policyRefs: defaultState.policyRefs.map((policy) => ({ ...policy })),
+    validation: {
+      ...defaultState.validation,
+      requiredPolicies: [...defaultState.validation.requiredPolicies],
+    },
+    semanticProfile: { ...defaultState.semanticProfile },
+    templateVariables: [...defaultState.templateVariables],
+    placeholderBindings: [...defaultState.placeholderBindings],
+    semanticRules: [...defaultState.semanticRules],
+    sla: defaultState.sla,
     subTemplateSnapshots: [...defaultState.subTemplateSnapshots],
   }
 }
@@ -533,7 +584,43 @@ function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTem
         semanticConditions: td.semanticConditions,
         documentBlocks: td.documentBlocks,
         customMetaData: td.customMetaData,
+        schemaRefs: td.schemaRefs,
+        policyRefs: td.policyRefs,
+        validation: td.validation,
+        semanticProfile: td.semanticProfile,
+        templateVariables: td.templateVariables,
+        placeholderBindings: td.placeholderBindings,
+        semanticRules: td.semanticRules,
+        sla: td.sla,
       },
     }
   })
+}
+
+function mergePlaceholderBindings(
+  stored: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'],
+  generated: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings']
+) {
+  const result = new Map<string, ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'][number]>()
+  for (const binding of stored.filter((item) => item.source !== 'clause-placeholder')) {
+    result.set(`${binding.blockId}:${binding.boundToCondition}:${binding.boundToParameter}`, binding)
+  }
+  for (const binding of generated) {
+    result.set(`${binding.blockId}:${binding.boundToCondition}:${binding.boundToParameter}`, binding)
+  }
+  return [...result.values()]
+}
+
+function mergeSemanticRules(
+  stored: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'],
+  generated: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules']
+) {
+  const result = new Map<string, ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'][number]>()
+  for (const rule of stored.filter((item) => item.source !== 'semanticCondition')) {
+    result.set(rule.ruleId, rule)
+  }
+  for (const rule of generated) {
+    result.set(rule.ruleId, rule)
+  }
+  return [...result.values()]
 }

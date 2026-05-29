@@ -33,21 +33,57 @@
             </div>
           </div>
 
-          <div v-if="unusedClauses.length" class="border-t border-base-300 pt-4">
-            <p class="mb-2 text-sm text-base-content/70">Unused Clauses:</p>
-            <div class="flex max-h-64 flex-col gap-2 overflow-y-auto">
-              <button
-                v-for="clause in unusedClauses"
-                :key="clause.blockId"
-                type="button"
-                class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
-                @click="handleAddClause(clause.blockId)"
-              >
+          <div class="border-t border-base-300 pt-4">
+            <div class="flex flex-col gap-2 mb-2">
+              <p class="text-sm text-base-content/70">Defined clauses:</p>
+              <input
+                v-model="clauseSearch"
+                type="search"
+                class="input input-bordered input-sm w-full"
+                placeholder="Search clauses"
+                autocomplete="off"
+              />
+            </div>
+            <div class="flex flex-col gap-2 max-h-64 overflow-y-auto">
+              <button v-for="clause in filteredUnusedClauses" :key="clause.blockId" type="button"
+                class="text-left min-h-[44px] flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
+                @click="handleAddClause(clause.blockId)">
                 <span class="text-sm font-medium text-base-content">{{ clause.title || 'Untitled clause' }}</span>
                 <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
                   <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
                 </p>
               </button>
+              <p v-if="!filteredUnusedClauses.length" class="text-sm text-base-content/50 py-2">
+                {{ unusedClauses.length ? 'No matching clauses.' : 'No unplaced clauses from the Clauses tab.' }}
+              </p>
+            </div>
+          </div>
+
+          <div class="border-t border-base-300 pt-4">
+            <p class="text-sm text-base-content/70 mb-2">Company party:</p>
+            <div class="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                <label class="form-control">
+                  <span class="label-text text-xs text-base-content/60 mb-1">Role in contract</span>
+                  <select v-model="selectedCompanyRole" class="select select-bordered select-sm w-full">
+                    <option value="" disabled>Select role</option>
+                    <option v-for="option in companyRoleOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  :disabled="!selectedCompanyRole || !companyFields.length || !companyEntityType"
+                  @click="handleAddCompanyPartyBlock"
+                >
+                  Add company
+                </button>
+              </div>
+              <p class="text-xs text-base-content/50">
+                Adds legal name, registration, VAT, representative, contact, address, and country.
+              </p>
             </div>
           </div>
         </template>
@@ -61,17 +97,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import {
   DocumentBlockType,
+  SEMANTIC_CONDITION_SCHEMA_VERSION,
   isClauseBlock,
   isApprovedTemplateBlock,
   TemplateType,
   type ClauseBlock,
-} from '@template-repository/models/contract-templace'
+  type DomainFieldDefinition,
+  type SemanticConditionParameter,
+  type SemanticValueConstraint,
+} from '@/modules/template-repository/models/contract-template'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import {
@@ -81,6 +121,7 @@ import {
 } from '@template-repository/composables/useClauseTextChips'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import { ONTOLOGY_DOMAIN_FIELDS, ONTOLOGY_ENTITY_ROLES } from '@template-repository/utils/ontology-domain-fields'
 
 const draftStore = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
@@ -91,7 +132,14 @@ const isContractWorkflow = computed(() => uiStore.workflow === 'contract')
 const paletteBlockTypes = [
   { blockType: DocumentBlockType.Section, label: 'Section' },
   { blockType: DocumentBlockType.Text, label: 'Text' },
+  { blockType: DocumentBlockType.Clause, label: 'Clause' },
 ] as const
+const companyRoleOptions = ONTOLOGY_ENTITY_ROLES
+const companyFields = ONTOLOGY_DOMAIN_FIELDS
+  .filter((field) => field.semanticPath.startsWith('company.'))
+  .sort((left, right) => companyFieldSortIndex(left.semanticPath) - companyFieldSortIndex(right.semanticPath))
+const companyEntityType = localOntologyName(companyFields.find((field) => field.statementType)?.statementType ?? 'CompanyParty')
+const selectedCompanyRole = ref('')
 
 const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
 
@@ -113,6 +161,25 @@ const unusedClauses = computed((): ClauseBlock[] => {
   const unused = clauses.filter((c) => !inOutline.has(c.blockId))
   return [...unused].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''))
 })
+const clauseSearch = ref('')
+const filteredUnusedClauses = computed((): ClauseBlock[] => {
+  const query = clauseSearch.value.trim().toLowerCase()
+  if (!query) return unusedClauses.value
+  return unusedClauses.value.filter((clause) =>
+    [
+      clause.title ?? '',
+      clause.text ?? '',
+      clause.conditionIds.join(' '),
+      clause.semanticPath ?? '',
+      clause.schemaRef ?? '',
+    ].some((value) => value.toLowerCase().includes(query)),
+  )
+})
+
+watch(addBlockModalContext, () => {
+  clauseSearch.value = ''
+  selectedCompanyRole.value = ''
+})
 
 function getSegments(clause: ClauseBlock): Segment[] {
   return parseSegments(clause.text ?? '', semanticConditions.value)
@@ -130,6 +197,33 @@ function handleAddBlock(blockType: DocumentBlockType) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, { blockType, text: '' })
+  uiStore.closeAddBlockModal()
+}
+
+function handleAddCompanyPartyBlock() {
+  const ctx = addBlockModalContext.value
+  const role = selectedCompanyRole.value
+  if (ctx === null || !role || !companyEntityType) return
+  const conditionId = `company-${role}-${crypto.randomUUID()}`
+  const roleLabel = companyRoleOptions.find((option) => option.value === role)?.label ?? role
+  const parameters = companyFields.map((field) => buildCompanyParameter(field))
+
+  draftStore.semanticConditions.push({
+    conditionId,
+    conditionName: `${roleLabel} company`,
+    schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
+    entityType: companyEntityType,
+    entityRole: role,
+    parameters,
+  })
+  draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
+    blockType: DocumentBlockType.Clause,
+    title: `${roleLabel} company`,
+    text: buildCompanyBlockText(conditionId, roleLabel, parameters),
+    conditionIds: [conditionId],
+    schemaRef: companyFields[0]?.schemaRef,
+    semanticPath: 'company',
+  })
   uiStore.closeAddBlockModal()
 }
 
@@ -156,5 +250,63 @@ function handleAddClause(clauseBlockId: string) {
     clauseBlockId,
   })
   uiStore.closeAddBlockModal()
+}
+
+function buildCompanyParameter(field: DomainFieldDefinition): SemanticConditionParameter {
+  const parameter: SemanticConditionParameter = {
+    parameterName: field.semanticPath,
+    type: field.type,
+    schemaRef: field.schemaRef,
+    semanticPath: field.semanticPath,
+    valueConstraint: cloneValueConstraint(field.valueConstraint),
+    isRequired: true,
+    operators: [],
+    value: undefined,
+  }
+  return parameter
+}
+
+function buildCompanyBlockText(conditionId: string, roleLabel: string, parameters: SemanticConditionParameter[]): string {
+  const lines = [`${roleLabel} company`, `Role: ${roleLabel}`]
+  for (const parameter of parameters) {
+    if (parameter.fixedValue !== undefined) continue
+    lines.push(`${formatCompanyFieldLabel(parameter.semanticPath)}: {{${conditionId}.${parameter.parameterName}}}`)
+  }
+  return lines.join('\n')
+}
+
+function formatCompanyFieldLabel(semanticPath: string): string {
+  return companyFields.find((field) => field.semanticPath === semanticPath)?.label ?? semanticPath
+}
+
+function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
+  if (!constraint) return undefined
+  return {
+    ...constraint,
+    allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+  }
+}
+
+function localOntologyName(resource: string): string {
+  return resource.replace(/^.*[:#/]/, '')
+}
+
+function companyFieldSortIndex(semanticPath: string): number {
+  const order = [
+    'company.legalName',
+    'company.registrationNumber',
+    'company.vatId',
+    'company.representative.name',
+    'company.representative.role',
+    'company.contact.email',
+    'company.contact.phone',
+    'company.location.street',
+    'company.location.postalCode',
+    'company.location.city',
+    'company.location.region',
+    'company.location.country',
+  ]
+  const index = order.indexOf(semanticPath)
+  return index >= 0 ? index : order.length
 }
 </script>

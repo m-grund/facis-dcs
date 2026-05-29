@@ -45,16 +45,19 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	fullTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not read template data: %w", err)
-	}
+	// fullTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
+	// if err != nil {
+	// 	return fmt.Errorf("could not read template data: %w", err)
+	// }
+	// if _, err := validation.NormalizeTemplateData(fullTemplate.TemplateData); err != nil {
+	// 	return fmt.Errorf("template data validation failed: %w", err)
+	// }
 
-	if h.FCClient != nil {
-		if err := h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate); err != nil {
-			return err
-		}
-	}
+	// if h.FCClient != nil {
+	// 	if err := h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	hasTask, err := h.RTRepo.TaskExistsInState(ctx, tx, cmd.DID, cmd.VerifiedBy, reviewtaskstate.Open.String())
 	if err != nil {

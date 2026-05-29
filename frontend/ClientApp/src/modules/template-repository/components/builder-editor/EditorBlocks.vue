@@ -50,19 +50,18 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { useFlattenedOutline, type FlattenedOutlineItem } from '@template-repository/composables/useFlattenedOutline'
 import type {
   DocumentBlock,
   DocumentOutline,
   DocumentOutlineBlock,
   MergedApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 import {
-  isSectionBlock,
-  isApprovedTemplateBlock,
-  isMergedApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+  useFlattenedOutline,
+  type FlattenedOutlineItem,
+} from '@template-repository/composables/useFlattenedOutline'
+import { isSectionBlock, isApprovedTemplateBlock, isMergedApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
 import EditorBlock from '@template-repository/components/builder-editor/document-block/EditorBlock.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId } from '@template-repository/utils/template-data-ref'

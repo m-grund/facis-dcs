@@ -9,15 +9,15 @@ import type {
   DocumentOutlineBlock,
   SectionBlock,
   SemanticCondition,
-  TextBlock,
-} from '@template-repository/models/contract-templace'
+  TextBlock
+} from '@/modules/template-repository/models/contract-template'
 import {
   isApprovedTemplateBlock,
   isClauseBlock,
   isMergedApprovedTemplateBlock,
   isSectionBlock,
   isTextBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,

@@ -6,6 +6,7 @@ import ViewContractTemplateView from '@/modules/template-repository/views/ViewCo
 import { authenticationService } from '@/services/authentication-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
+import AuditView from '@/views/audit/AuditView.vue'
 import AuthSuccessView from '@/views/auth/AuthSuccessView.vue'
 import SigningDashboardView from '@/views/signing/SigningDashboardView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
@@ -21,6 +22,7 @@ import TemplateCatalogueAdminView from '@/views/template-repository/TemplateCata
 import {
   ArrowsRightLeftIcon,
   CheckCircleIcon,
+  ClipboardDocumentListIcon,
   DocumentTextIcon,
   EyeIcon,
   PencilSquareIcon,
@@ -46,6 +48,9 @@ const ROUTES = {
   },
   TEMPLATE_CATALOGUES: {
     ADMIN: 'template.catalogues.admin',
+  },
+  AUDIT: {
+    LIST: 'audit.list',
   },
   AUTH: {
     SUCCESS: 'auth.success',
@@ -194,6 +199,19 @@ const routes: RouteRecordRaw[] = [
       title: 'DCS - Template Catalogue Admin',
       order: 4,
       roles: ['SYSTEM_ADMINISTRATOR'],
+    },
+  },
+  {
+    path: '/audit',
+    name: ROUTES.AUDIT.LIST,
+    component: AuditView,
+    meta: {
+      name: 'Audit',
+      icon: ClipboardDocumentListIcon,
+      requiresAuth: true,
+      title: 'DCS - Audit',
+      order: 5,
+      roles: ['AUDITOR'],
     },
   },
   {

@@ -144,19 +144,6 @@ signing:
   cryptoProviderNamespace: ""
   cryptoProviderKey: ""
 
-# ---- IPFS storage -------------------------------------------------------
-# Required for PDF/C2PA storage. No co-deployed subchart (IPFS is assumed
-# to be provided by the deployment environment or an external IPFS node).
-ipfs:
-  tenantBaseURL: ""
-  mfsBaseURL: ""
-  tenantBaseURLSecretRef:
-    name: ""
-    key: "IPFS_TENANT_BASE_URL"
-  mfsBaseURLSecretRef:
-    name: ""
-    key: "IPFS_MFS_BASE_URL"
-
 # ---- Co-deployed dependencies ----------------------------------------
 # Each sub-chart owns its full set of configurable values.
 # Only fields referenced by the parent chart's helpers are listed here.
@@ -215,6 +202,45 @@ federatedCatalogue:
     limits:
       cpu: 500m
       memory: 1Gi
+
+# XFSC Custom Policy Agent (OPA-based policy evaluation)
+# See charts/custom-policy-agent/values.yaml for all configurable fields.
+mongodb:
+  enabled: false
+
+ipfs:
+  enabled: false
+  tenantBaseURL: ""
+  mfsBaseURL: ""
+  tenantBaseURLSecretRef:
+    name: ""
+    key: "IPFS_TENANT_BASE_URL"
+  mfsBaseURLSecretRef:
+    name: ""
+    key: "IPFS_MFS_BASE_URL"
+
+ipfsDocumentManager:
+  enabled: false
+
+# IPFS Document Manager client – auto-wired when sub-charts are enabled
+ipfsClient:
+  tenantName: "tenant_space"  # tenant identifier in the Document Manager URL path
+  tenantBaseURL: ""            # IPFS_TENANT_BASE_URL explicit override
+  mfsBaseURL: ""               # IPFS_MFS_BASE_URL explicit override (Kubo RPC API)
+
+customPolicyAgent:
+  enabled: false
+  mongo:
+    uri: ""
+    database: "policy"
+    collectionName: "policy"
+  nats:
+    url: ""
+  auth:
+    jwkURL: ""
+  logging:
+    level: "info"
+    format: "json"
 
 # ---- Optional monitoring stack (Prometheus, Grafana, Alertmanager) ----------------
 monitoring:

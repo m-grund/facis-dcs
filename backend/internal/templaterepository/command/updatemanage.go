@@ -5,6 +5,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
@@ -38,6 +39,13 @@ type UpdateManager struct {
 }
 
 func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
+	if cmd.TemplateData != nil && cmd.TemplateData.IsNotNullValue() {
+		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("template data validation failed: %w", err)
+		}
+		cmd.TemplateData = normalizedTemplateData
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {

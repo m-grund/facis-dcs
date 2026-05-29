@@ -105,7 +105,7 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo database.Contra
 
 		expiredContracts, err := readExpiredContracts()
 		if err != nil {
-			log.Printf("could not read expired contracts: %w", err)
+			log.Printf("could not read expired contracts: %v", err)
 			continue
 		}
 
@@ -116,7 +116,7 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo database.Contra
 		for _, expiredContract := range expiredContracts {
 			err = callExpirationLogic(expiredContract)
 			if err != nil {
-				log.Printf("could not call expiration logic for expired contract: %w", err)
+				log.Printf("could not call expiration logic for expired contract: %v", err)
 			}
 		}
 	}

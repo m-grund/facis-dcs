@@ -83,7 +83,7 @@ spec:
               value: {{ include "digital-contracting-service.natsURL" . | quote }}
               {{- end }}
             - name: FEDERATED_CATALOGUE_API_URL
-              {{- if .Values.federatedCatalogue.secretRef.name }}
+              {{- if and .Values.federatedCatalogue.secretRef .Values.federatedCatalogue.secretRef.name }}
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.federatedCatalogue.secretRef.name | quote }}
@@ -131,14 +131,7 @@ spec:
               value: {{ include "digital-contracting-service.ipfsTenantBaseURL" . | quote }}
               {{- end }}
             - name: IPFS_MFS_BASE_URL
-              {{- if .Values.ipfs.mfsBaseURLSecretRef.name }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.ipfs.mfsBaseURLSecretRef.name | quote }}
-                  key: {{ .Values.ipfs.mfsBaseURLSecretRef.key | quote }}
-              {{- else }}
-              value: {{ include "digital-contracting-service.ipfsMFSBaseURL" . | quote }}
-              {{- end }}
+              value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

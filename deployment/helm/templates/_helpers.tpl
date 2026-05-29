@@ -205,7 +205,24 @@ UI path override or derived default.
 {{- end }}
 
 {{/*
+IPFS Document Manager tenant base URL (auto-wired when ipfsDocumentManager sub-chart is enabled).
+*/}}
+{{- define "digital-contracting-service.ipfsTenantBaseURL" -}}
+{{- if .Values.ipfsClient.tenantBaseURL -}}
+{{- .Values.ipfsClient.tenantBaseURL -}}
+{{- else if .Values.ipfsDocumentManager.enabled -}}
+{{- $host := printf "%s-ipfs-document-manager" .Release.Name -}}
+{{- $port := default 8080 .Values.ipfsDocumentManager.service.port -}}
+{{- $tenant := default "tenant_space" .Values.ipfsClient.tenantName -}}
+{{- printf "http://%s:%v/v1/tenants/%s" $host $port $tenant -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 CRYPTO_PROVIDER_URL: explicit override, or derived from the co-deployed signer service.
+VAULT_ADDR: explicit override, or derived from the co-deployed Vault instance.
 */}}
 {{- define "digital-contracting-service.cryptoProviderURL" -}}
 {{- if .Values.signing.cryptoProviderURL -}}
@@ -231,6 +248,21 @@ CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.moun
 {{- end }}
 
 {{/*
+IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
+*/}}
+{{- define "digital-contracting-service.ipfsMfsBaseURL" -}}
+{{- if .Values.ipfsClient.mfsBaseURL -}}
+{{- .Values.ipfsClient.mfsBaseURL -}}
+{{- else if .Values.ipfs.enabled -}}
+{{- $host := printf "%s-ipfs" .Release.Name -}}
+{{- $port := default 5001 .Values.ipfs.service.apiPort -}}
+{{- printf "http://%s:%v" $host $port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 CRYPTO_PROVIDER_KEY: explicit override or taken from subchart transit.key.
 */}}
 {{- define "digital-contracting-service.cryptoProviderKey" -}}
@@ -248,13 +280,6 @@ ISSUER_DID: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.issuerDID" -}}
 {{- .Values.signing.issuerDID -}}
-{{- end }}
-
-{{/*
-IPFS_TENANT_BASE_URL: explicit value or secret ref.
-*/}}
-{{- define "digital-contracting-service.ipfsTenantBaseURL" -}}
-{{- .Values.ipfs.tenantBaseURL -}}
 {{- end }}
 
 {{/*

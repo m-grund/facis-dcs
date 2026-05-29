@@ -20,6 +20,11 @@
 #   FC service       : localhost:30081
 #   ORCE             : localhost:30180
 #   Crypto Provider  : localhost:30808  (XFSC signer HTTP API)
+#   Vault API        : localhost:30820  (dev mode, root token = "root")
+#   Policy Agent: localhost:30380
+#   MongoDB     : intern (kein NodePort nötig)
+#   IPFS Gateway: localhost:30480
+#   IPFS API    : localhost:30501
 #
 # Backend .env.dev additions (for local air run):
 #   CRYPTO_PROVIDER_URL=http://localhost:30808
@@ -90,14 +95,22 @@ neo4j:
     nodePortHttp: 30474
     nodePortBolt: 30687
 
+# XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
+# See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
-  enabled: true
-  service:
-    type: NodePort
-    nodePort: 30081
-  keycloak:
-    hostname: "localhost:30080"
-    issuerScheme: "http"
+  enabled: false
+  # URL the DCS backend uses to reach the Federated Catalogue API
+  apiURL: ""
+  secretRef:
+    name: ""
+    key: "FEDERATED_CATALOGUE_API_URL"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 
 cryptoProvider:
   enabled: true
@@ -133,6 +146,67 @@ orce:
   service:
     type: NodePort
     nodePort: 30180
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: false
+
+customPolicyAgent:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30380
+  nats:
+    addr: "nats://dcs-nats:4222"
+  mongo:
+    addr: "mongodb://dcs-mongodb-0.dcs-mongodb-headless.default.svc.cluster.local:27017/?replicaSet=rs0"
+    user: "policy"
+    pass: "policy"
+  externalServices:
+    ocmAddr: "http://localhost:9999"
+  logging:
+    level: "DEBUG"
+
+ipfs:
+  enabled: true
+  persistence:
+    enabled: false
+  api:
+    cors:
+      enabled: true
+      allowOrigins:
+        - "http://localhost:30480"
+        - "http://127.0.0.1:30480"
+        - "http://localhost:30501"
+        - "http://127.0.0.1:30501"
+        - "http://webui.ipfs.io"
+        - "https://webui.ipfs.io"
+  service:
+    type: NodePort
+    gatewayNodePort: 30480
+    apiNodePort: 30501
+
+ipfsDocumentManager:
+  enabled: false
+  service:
+    type: NodePort
+    nodePort: 30481
+  ipfs:
+    host: "dcs-ipfs"
+    apiGatewayURL: "http://dcs-ipfs:8080/ipfs"
+    rpcApiPort: 5001
+    logLevel: "debug"
+  config:
+    serverMode: "debug"
+
+# IPFS client env vars are not used when replicaCount=0 (backend runs locally).
+# For local dev, set in backend/.env.dev:
+#   IPFS_TENANT_BASE_URL=
+#   IPFS_MFS_BASE_URL=http://localhost:30501
+# In-cluster, IPFS_MFS_BASE_URL is auto-wired from the ipfs sub-chart. If
+# ipfsDocumentManager is enabled with a valid image, IPFS_TENANT_BASE_URL is
+# auto-wired to the document-manager service.
 
 route:
   basePath: "/api"
