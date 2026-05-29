@@ -242,8 +242,6 @@ CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.moun
 {{- .Values.signing.cryptoProviderNamespace -}}
 {{- else if .Values.cryptoProvider.enabled -}}
 {{- .Values.cryptoProvider.transit.mount -}}
-{{- else -}}
-{{- "transit" -}}
 {{- end -}}
 {{- end }}
 
@@ -270,8 +268,17 @@ CRYPTO_PROVIDER_KEY: explicit override or taken from subchart transit.key.
 {{- .Values.signing.cryptoProviderKey -}}
 {{- else if .Values.cryptoProvider.enabled -}}
 {{- .Values.cryptoProvider.transit.key -}}
-{{- else -}}
-{{- "dcs-signing-key" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_VC_KEY: explicit override or taken from subchart transit.vcKey.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderVCKey" -}}
+{{- if .Values.signing.cryptoProviderVCKey -}}
+{{- .Values.signing.cryptoProviderVCKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.vcKey -}}
 {{- end -}}
 {{- end }}
 

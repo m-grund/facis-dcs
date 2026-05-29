@@ -1,11 +1,15 @@
 package c2pa
 
 import (
+	"compress/zlib"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -140,6 +144,60 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	assert.Equal(t, result2.ManifestHash, extracted)
 }
 
+func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
+	basePDF := minimalValidPDF()
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
+	storer := &stubStorer{}
+
+	result, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", testAssertion(), basePDF,
+	)
+	require.NoError(t, err)
+
+	objects := parsePDFObjects(result.UpdatedPDF)
+
+	filespecObjNum, filespecObj, ok := findC2PAFileSpecObject(objects)
+	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA")
+	assert.Contains(t, string(filespecObj), "/Type /Filespec")
+	assert.Contains(t, string(filespecObj), "/AFRelationship /C2PA")
+
+	streamObjNum := extractEmbeddedFileRef(t, filespecObj)
+	streamObj, exists := objects[streamObjNum]
+	require.True(t, exists, "expected referenced EmbeddedFile object to exist")
+
+	assert.Contains(t, string(streamObj), "/Type /EmbeddedFile")
+	assert.Contains(t, string(streamObj), "/Subtype /application#2Fc2pa")
+	assert.NotZero(t, filespecObjNum)
+}
+
+func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
+	basePDF := minimalValidPDF()
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
+	storer := &stubStorer{}
+
+	result, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", testAssertion(), basePDF,
+	)
+	require.NoError(t, err)
+
+	objects := parsePDFObjects(result.UpdatedPDF)
+	_, filespecObj, ok := findC2PAFileSpecObject(objects)
+	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA")
+
+	streamObjNum := extractEmbeddedFileRef(t, filespecObj)
+	streamObj, exists := objects[streamObjNum]
+	require.True(t, exists, "expected referenced EmbeddedFile object to exist")
+
+	payload := extractEmbeddedFilePayload(t, streamObj)
+	assert.Greater(t, len(payload), 0)
+	assert.Equal(t, "jumb", string(payload[4:8]))
+	assert.Contains(t, string(payload), "c2pa.manifest")
+	assert.Contains(t, string(payload), "c2pa.claim")
+	assert.Contains(t, string(payload), "dcs.contract.lifecycle")
+}
+
 func TestPrevManifestHashFrom_NoManifest(t *testing.T) {
 	assert.Equal(t, "", PrevManifestHashFrom([]byte("%PDF-1.4\n%%EOF\n")))
 }
@@ -156,4 +214,56 @@ func TestPrevManifestHashFrom_ExtractsLastHash(t *testing.T) {
 	pdf = append(pdf, []byte("%% DCS-C2PA-HASH: "+hex2+"\n")...)
 
 	assert.Equal(t, hex2, PrevManifestHashFrom(pdf))
+}
+
+func parsePDFObjects(pdf []byte) map[int][]byte {
+	re := regexp.MustCompile(`(?s)(\d+)\s+0\s+obj\b(.*?)\bendobj`)
+	objects := make(map[int][]byte)
+	for _, match := range re.FindAllSubmatch(pdf, -1) {
+		n, err := strconv.Atoi(string(match[1]))
+		if err != nil {
+			continue
+		}
+		objects[n] = match[2]
+	}
+	return objects
+}
+
+func findC2PAFileSpecObject(objects map[int][]byte) (int, []byte, bool) {
+	for n, obj := range objects {
+		if bytes.Contains(obj, []byte("/Type /Filespec")) && bytes.Contains(obj, []byte("/AFRelationship /C2PA")) {
+			return n, obj, true
+		}
+	}
+	return 0, nil, false
+}
+
+func extractEmbeddedFileRef(t *testing.T, filespecObj []byte) int {
+	t.Helper()
+	re := regexp.MustCompile(`/EF\s*<<\s*/F\s*(\d+)\s+0\s+R\s*>>`)
+	match := re.FindSubmatch(filespecObj)
+	require.NotNil(t, match, "expected /EF << /F n 0 R >> in Filespec")
+	n, err := strconv.Atoi(string(match[1]))
+	require.NoError(t, err)
+	return n
+}
+
+func extractEmbeddedFilePayload(t *testing.T, streamObj []byte) []byte {
+	t.Helper()
+	re := regexp.MustCompile(`(?s)<<(.+?)>>\s*stream\r?\n(.*?)\r?\nendstream`)
+	match := re.FindSubmatch(streamObj)
+	require.NotNil(t, match, "expected stream object with dictionary and stream payload")
+	dict := match[1]
+	payload := match[2]
+
+	if bytes.Contains(dict, []byte("/Filter /FlateDecode")) {
+		zr, err := zlib.NewReader(bytes.NewReader(payload))
+		require.NoError(t, err)
+		defer zr.Close()
+		decoded, err := io.ReadAll(zr)
+		require.NoError(t, err)
+		return decoded
+	}
+
+	return payload
 }

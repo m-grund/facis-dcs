@@ -113,8 +113,7 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 	// Append initial C2PA assertion and cache to IPFS.
 	pdfBytes, err = s.appendAndCache(ctx, tx, p.Did, contract.State, jsonldBytes, pdfBytes, "contracts")
 	if err != nil {
-		// Non-fatal: return the plain PDF even if IPFS storage fails.
-		_ = err
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("append and cache contract PDF C2PA manifest: %w", err))
 	}
 
 	_ = tx.Commit()
@@ -179,7 +178,10 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("build template PDF: %w", err))
 	}
 
-	_, _ = s.appendAndCache(ctx, tx, p.Did, tpl.State, jsonldBytes, pdfBytes, "contract_templates")
+	pdfBytes, err = s.appendAndCache(ctx, tx, p.Did, tpl.State, jsonldBytes, pdfBytes, "contract_templates")
+	if err != nil {
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("append and cache template PDF C2PA manifest: %w", err))
+	}
 	_ = tx.Commit()
 	return io.NopCloser(bytes.NewReader(pdfBytes)), nil
 }
@@ -239,7 +241,7 @@ func (s *pdfGenerationSrvc) appendAndCache(
 	did, state string, jsonldBytes, pdfBytes []byte, table string,
 ) ([]byte, error) {
 	if s.Signer == nil {
-		return pdfBytes, nil
+		return nil, fmt.Errorf("C2PA signer is not configured")
 	}
 	fileHash := c2pa.FileHashOf(jsonldBytes)
 	pdfHash := c2pa.FileHashOf(pdfBytes)

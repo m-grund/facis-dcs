@@ -2,10 +2,16 @@ package builder
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"testing"
 	"time"
 
+	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/pdfgeneration/c2pa"
+
+	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,4 +85,61 @@ func TestContractBuilder_EmptyContractDataProducesPDF(t *testing.T) {
 	out, err := BuildContract(in)
 	require.NoError(t, err)
 	assert.True(t, bytes.HasPrefix(out, []byte("%PDF-")))
+}
+
+// stubSigner and stubStorer satisfy the c2pa interfaces for test purposes.
+type stubSigner struct{}
+
+func (s *stubSigner) Sign(_ context.Context, _ []byte) ([]byte, error) {
+	return bytes.Repeat([]byte{0xAB}, 64), nil
+}
+
+type stubStorer struct{}
+
+func (s *stubStorer) CreateFile(_ context.Context, _ any) (*ipfs.IPFSResult, error) {
+	r := &ipfs.IPFSResult{}
+	r.Identifier.Value = "QmTestCID"
+	return r, nil
+}
+
+// TestC2PA_RoundTripWithRealPDF tests that AppendManifest produces a valid
+// incremental PDF update when given a real fpdf-generated PDF, and that
+// pdfcpu can parse the result without error.
+func TestC2PA_RoundTripWithRealPDF(t *testing.T) {
+	pdf, err := BuildContract(fixedInput)
+	require.NoError(t, err)
+
+	conf := model.NewDefaultConfiguration()
+	conf.ValidationMode = model.ValidationRelaxed
+
+	// Base PDF must be parseable by pdfcpu.
+	_, err = pdfapi.ReadValidateAndOptimize(bytes.NewReader(pdf), conf)
+	require.NoError(t, err, "base PDF must be parseable by pdfcpu")
+
+	assertion := c2pa.NewLifecycleAssertion(
+		fixedInput.DID, "filehash", "pdfhash", "1.0.0",
+		"draft", "", "did:example:issuer", "", "", time.Now(),
+	)
+
+	result, err := c2pa.AppendManifest(
+		context.Background(),
+		&stubSigner{},
+		c2pa.TSAConfig{},
+		&stubStorer{},
+		"did:example:issuer",
+		assertion,
+		pdf,
+	)
+	require.NoError(t, err)
+	assert.True(t, bytes.HasPrefix(result.UpdatedPDF, pdf), "base PDF must be unchanged")
+
+	// Post-append PDF must still be parseable by pdfcpu.
+	_, err = pdfapi.ReadValidateAndOptimize(bytes.NewReader(result.UpdatedPDF), conf)
+	require.NoError(t, err, "post-append PDF must be parseable by pdfcpu")
+
+	// AF array must be present in the catalog (C2PA EmbeddedFile wired up).
+	assert.True(t, bytes.Contains(result.UpdatedPDF, []byte("/AF")),
+		"updated PDF must contain /AF array in catalog")
+	assert.True(t, bytes.Contains(result.UpdatedPDF, []byte("C2PA")),
+		"updated PDF must reference AFRelationship /C2PA")
 }

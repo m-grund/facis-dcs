@@ -215,27 +215,30 @@ func main() {
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}
 
+	// Channel used by background workers and signal handler to notify main to exit.
+	errc := make(chan error)
+
 	// Start the PDF lifecycle C2PA subscriber (appends C2PA assertions on state changes).
 	// Only start when a real signing URL is configured; without one, the subscriber
 	// would attempt signing on every CWE event and log spurious HTTP errors.
-	if cryptoProviderURL != "" {
-		pdfSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
-		if err != nil {
-			log.Fatalf(ctx, err, "Could not create PDF generation NATS subscriber")
-		}
-		defer pdfSubClient.Close()
-		pdfSub := &pdfevent.Subscriber{
-			DB:         db,
-			IPFSClient: ipfsAPIClient,
-			CRepo:      &cweRepo,
-			Signer:     cryptoClient,
-			TSACfg:     tsaCfg,
-			IssuerDID:  issuerDID,
-		}
-		if err := pdfSub.Start(pdfSubClient); err != nil {
-			log.Fatalf(ctx, err, "Could not start PDF generation subscriber")
-		}
+	pdfSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not create PDF generation NATS subscriber")
 	}
+	defer pdfSubClient.Close()
+	pdfSub := &pdfevent.Subscriber{
+		DB:         db,
+		IPFSClient: ipfsAPIClient,
+		CRepo:      &cweRepo,
+		Signer:     cryptoClient,
+		TSACfg:     tsaCfg,
+		IssuerDID:  issuerDID,
+	}
+	go func() {
+		if err := pdfSub.Start(pdfSubClient); err != nil {
+			errc <- fmt.Errorf("could not start PDF generation subscriber: %w", err)
+		}
+	}()
 
 	// Wrap the service in endpoints that can be invoked from other service
 	// potentially running in different processes.
@@ -287,10 +290,6 @@ func main() {
 		templateRepositoryEndpoints.Use(debug.LogPayloads())
 		templateRepositoryEndpoints.Use(log.Endpoint)
 	}
-
-	// Create channel used by both the signal handler and server goroutines
-	// to notify the main goroutine when to stop the server.
-	errc := make(chan error)
 
 	// Setup interrupt handler. This optional step configures the process so
 	// that SIGINT and SIGTERM signals cause the service to stop gracefully.

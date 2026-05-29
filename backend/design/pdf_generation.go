@@ -46,7 +46,9 @@ var _ = Service("PDFGeneration", func() {
 		HTTP(func() {
 			GET("/pdf/export/contract/{did}")
 			SkipResponseBodyEncodeDecode()
-			Response(StatusOK)
+			Response(StatusOK, func() {
+				ContentType("application/pdf")
+			})
 		})
 	})
 
@@ -68,7 +70,9 @@ var _ = Service("PDFGeneration", func() {
 		HTTP(func() {
 			GET("/pdf/export/template/{did}")
 			SkipResponseBodyEncodeDecode()
-			Response(StatusOK)
+			Response(StatusOK, func() {
+				ContentType("application/pdf")
+			})
 		})
 	})
 

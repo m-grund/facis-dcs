@@ -21,15 +21,19 @@
 #   ORCE             : localhost:30180
 #   Crypto Provider  : localhost:30808  (XFSC signer HTTP API)
 #   Vault API        : localhost:30820  (dev mode, root token = "root")
+#   Status List Service : localhost:30821  (XFSC status list management)
 #   Policy Agent: localhost:30380
 #   MongoDB     : intern (kein NodePort nötig)
 #   IPFS Gateway: localhost:30480
 #   IPFS API    : localhost:30501
 #
-# Backend .env.dev additions (for local air run):
+# Backend .env.dev (auto-detects pre-built dev certificate, no manual setup needed):
 #   CRYPTO_PROVIDER_URL=http://localhost:30808
 #   CRYPTO_PROVIDER_NAMESPACE=transit
-#   CRYPTO_PROVIDER_KEY=dcs-signing-key
+#   CRYPTO_PROVIDER_KEY=dcs-signing-key-p256
+#   CRYPTO_PROVIDER_VC_KEY=dcs-vc-signing-key
+#   CRYPTO_PROVIDER_VC_SIGNATURE_TYPE=ed25519signature2020
+#   STATUSLIST_SERVICE_URL=http://localhost:30821
 #   ISSUER_DID=did:web:localhost
 
 # In development, don't deploy the DCS container since we run it locally
@@ -46,7 +50,7 @@ postgresql:
     username: dcs
     password: dcs
     database: dcs
-  additionalDatabases: ["fc"]
+  additionalDatabases: ["fc", "statuslist"]
   persistence:
     enabled: false
   service:
@@ -127,11 +131,42 @@ cryptoProvider:
       nodePort: 30808
   transit:
     mount: "transit"
-    key: "dcs-signing-key"
-    keyType: "ed25519"
+    key: "dcs-signing-key-p256"
+    keyType: "ecdsa-p256"
+    vcKey: "dcs-vc-signing-key"
+    vcKeyType: "ed25519"
+
+# XFSC Status List Service (DCS-OR-C2PA-005)
+statuslistService:
+  enabled: true
+  image:
+    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
+    tag: "main"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 8080
+    nodePort: 30821
+  database:
+    enabled: true
+    host: "dcs-postgresql"
+    port: "5432"
+    name: "statuslist"
+    user: "dcs"
+    password: "dcs"
+    sslMode: "disable"
+  nats:
+    url: "nats://dcs-nats:4222"
 
 # OIDC / route values below are not used when replicaCount=0,
 # but kept here as documentation for the backend .env.dev file.
+signing:
+  issuerDID: "did:web:localhost"
+  cryptoProviderNamespace: "transit"
+  cryptoProviderKey: "dcs-signing-key-p256"
+  cryptoProviderVCKey: "dcs-vc-signing-key"
+  vcSignatureType: "ed25519signature2020"
+
 oidc:
   clientID: "dcs-client"
   redirectURI: "http://localhost:5173/api/auth/callback"

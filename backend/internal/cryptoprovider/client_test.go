@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,7 @@ func TestCryptoProviderClient_Sign(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.Equal(t, testNamespace, req.Namespace)
 		assert.Equal(t, testKey, req.Key)
+		assert.Equal(t, "", req.Group)
 		assert.NotEmpty(t, req.Data)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -58,36 +60,37 @@ func TestCryptoProviderClient_Sign_HTTPError(t *testing.T) {
 }
 
 func TestCryptoProviderClient_CreateCredential(t *testing.T) {
-	signedVC := json.RawMessage(`{
-		"@context": ["https://www.w3.org/2018/credentials/v1"],
-		"type": ["VerifiableCredential"],
-		"proof": {
-			"type": "Ed25519Signature2020",
-			"proofPurpose": "assertionMethod",
-			"proofValue": "zABC123"
-		}
-	}`)
+	t.Setenv("CRYPTO_PROVIDER_VC_KEY", "dcs-vc-signing-key")
+
+	wantSig := []byte{0x01, 0x02, 0x03, 0x04}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/credential/proof", r.URL.Path)
+		assert.Equal(t, "/v1/sign", r.URL.Path)
 		assert.Equal(t, testNamespace, r.Header.Get("x-namespace"))
 
-		var req credentialProofRequest
+		var req signRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.Equal(t, testNamespace, req.Namespace)
-		assert.Equal(t, testKey, req.Key)
-		assert.Equal(t, "ldp_vc", req.Format)
-		assert.Equal(t, "ed25519signature2020", req.SignatureType)
-		assert.NotNil(t, req.Credential)
+		assert.Equal(t, "dcs-vc-signing-key", req.Key)
+		assert.Equal(t, "", req.Group)
+		assert.NotEmpty(t, req.Data)
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(signedVC)
+		_ = json.NewEncoder(w).Encode(signResult{Signature: base64.StdEncoding.EncodeToString(wantSig)})
 	}))
 	defer srv.Close()
 
 	client := NewClient(srv.URL, testNamespace, testKey)
-	unsignedVC := json.RawMessage(`{"@context":["https://www.w3.org/2018/credentials/v1"],"type":["VerifiableCredential"]}`)
+	unsignedVC := json.RawMessage(`{
+		"@context": ["https://www.w3.org/2018/credentials/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
+		"type": ["VerifiableCredential"],
+		"issuer": "did:web:example.org:issuer",
+		"credentialSubject": {
+			"id": "did:web:example.org:subject",
+			"name": "Example"
+		}
+	}`)
 	result, err := client.CreateCredential(context.Background(), unsignedVC)
 	require.NoError(t, err)
 
@@ -96,4 +99,6 @@ func TestCryptoProviderClient_CreateCredential(t *testing.T) {
 	proof, ok := got["proof"].(map[string]interface{})
 	require.True(t, ok, "expected proof field in response")
 	assert.Equal(t, "Ed25519Signature2020", proof["type"])
+	assert.Equal(t, "assertionMethod", proof["proofPurpose"])
+	assert.True(t, strings.HasPrefix(proof["proofValue"].(string), "z"))
 }

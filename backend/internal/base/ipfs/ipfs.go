@@ -113,13 +113,17 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 
 	if len(result.Data) > 0 {
 		var dataStr string
-		if err := json.Unmarshal(result.Data, &dataStr); err == nil {
-			decoded, err := base64.RawStdEncoding.DecodeString(dataStr)
-			if err != nil {
-				decoded, _ = base64.StdEncoding.DecodeString(dataStr)
-			}
-			result.Data = json.RawMessage(decoded)
+		if err := json.Unmarshal(result.Data, &dataStr); err != nil {
+			return nil, fmt.Errorf("decode ipfs data json string: %w", err)
 		}
+		if dataStr == "" {
+			return nil, fmt.Errorf("decode ipfs data: empty payload")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(dataStr)
+		if err != nil {
+			return nil, fmt.Errorf("decode ipfs data base64: %w", err)
+		}
+		result.Data = json.RawMessage(decoded)
 	}
 
 	return &result, nil
