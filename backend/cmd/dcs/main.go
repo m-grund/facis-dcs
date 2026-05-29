@@ -86,10 +86,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	dcsIssuer := os.Getenv("DCS_ISSUER")
-	if dcsIssuer == "" {
-		log.Fatalf(ctx, nil, "DCS_ISSUER configuration missing: DCS_ISSUER environment variable must be specified")
+	dcsIssuer := "localhost"
+	if os.Getenv("DCS_ISSUER") == "" {
+		log.Printf(ctx, "DCS_ISSUER configuration missing: DCS_ISSUER will be set to localhost as issuer")
 	} else {
+		dcsIssuer = os.Getenv("DCS_ISSUER")
 		if strings.Contains(dcsIssuer, ":") {
 			log.Fatalf(ctx, nil, "DCS_ISSUER must not contain service port")
 		}
