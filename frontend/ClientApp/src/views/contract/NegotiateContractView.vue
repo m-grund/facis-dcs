@@ -42,7 +42,6 @@ const templateEditorUiStore = useTemplateEditorUiStore()
 const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
-const { setActiveTab } = contractEditorUiStore
 const contractContentValuesStore = useContractContentValuesStore()
 const scrollStore = useScrollStore()
 const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
@@ -100,12 +99,14 @@ const changeExpNoticePeriod = computed(
 )
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
-  return (
-    contract.value?.contract_data &&
-    !arrayEqual(
-      contractContentValuesStore.semanticConditionValues.map((v) => v.parameterValue),
-      contract.value.contract_data.semanticConditionValues.map((v) => v.parameterValue),
-    )
+  const storedValues = contractContentValuesStore.semanticConditionValues
+  const contractValues = contract.value?.contract_data?.semanticConditionValues
+
+  if (!storedValues?.length || !contractValues?.length) return false
+
+  return !arrayEqual(
+    storedValues.map((v) => v.parameterValue),
+    contractValues.map((v) => v.parameterValue),
   )
 })
 
@@ -122,7 +123,7 @@ const loadContract = async () => {
       editedContract.value = !!contract.value ? { ...contract.value } : null
       applyContractDataToDraft(contract.value?.contract_data)
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to load contract', err)
   }
 }
@@ -203,10 +204,11 @@ const submitContract = async () => {
     })
     if (response.did) {
       if (response.current_state !== contract.value.state) {
-        navStore.goToPreviousRoute()
+        await navStore.goToPreviousRoute()
       } else {
         const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
         errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
+        await loadContract()
       }
     }
   } catch (err) {
@@ -216,10 +218,11 @@ const submitContract = async () => {
   }
 }
 
-const hasOpenDecisions = computed(() =>
-  contract.value?.negotiations?.every((negotiation) =>
-    negotiation.negotiation_decisions.every((decision) => !!decision.decision),
-  ),
+const hasOpenDecisions = computed(
+  () =>
+    contract.value?.negotiations?.some((negotiation) =>
+      negotiation.negotiation_decisions.some((decision) => !decision.decision),
+    ) ?? false,
 )
 
 onMounted(() => {
@@ -252,9 +255,10 @@ function applyContractDataToDraft(contractData?: unknown) {
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
 }
 
-const tabContent = useTemplateRef<HTMLElement>('tabContent')
+const templatePreviewContent = useTemplateRef<HTMLElement>('template-preview-content')
 
-const originalSemanticConditionValues = ref<SemanticConditionValue[]>([])
+const originalSemanticConditionValues: Ref<SemanticConditionValue[]> = ref([])
+const originalValuesWereCached = ref(false)
 
 const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null) => {
   if (!contract.value) return
@@ -278,7 +282,10 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     : null
 
   if (compareChangesData.value && negotiation) {
-    originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+    if (!originalValuesWereCached.value) {
+      originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
+      originalValuesWereCached.value = true
+    }
     const negotiationValues = negotiation.change_request.contract_data?.semanticConditionValues ?? []
 
     const originalValuesMap = new Map(
@@ -298,7 +305,7 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     await nextTick()
 
     requestAnimationFrame(() => {
-      const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
+      const inputs = Array.from(templatePreviewContent.value?.querySelectorAll('input') ?? [])
 
       const highlightedValues = new Set<string>()
       for (const [key, negotiationValue] of negotiationValuesMap.entries()) {
@@ -324,8 +331,9 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
     scrollStore.scrollToTop()
   } else {
     contractContentValuesStore.reset({ semanticConditionValues: originalSemanticConditionValues.value })
+    originalValuesWereCached.value = false
     requestAnimationFrame(() => {
-      const inputs = Array.from(tabContent.value?.querySelectorAll('input') ?? []) as HTMLInputElement[]
+      const inputs = Array.from(templatePreviewContent.value?.querySelectorAll('input') ?? [])
       inputs.forEach((input) => {
         input.classList.remove('!border-warning', '!border-2')
         input.style.removeProperty('border-color')
@@ -376,21 +384,21 @@ const exportPdf = async () => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-full -mx-4 md:-mx-8 -my-4 md:-my-8">
+  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <div v-if="!!contract && !!editedContract && !!shownData">
-      <div class="flex-1 flex flex-col">
+      <div class="flex flex-1 flex-col">
         <!-- Tabs -->
-        <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
-          <div class="max-w-4xl mx-auto px-6 pt-3">
-            <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">Negotiate Contract</p>
-            <div role="tablist" class="tabs tabs-border tabs-lg">
+        <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
+          <div class="mx-auto max-w-4xl px-6 pt-3">
+            <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">Negotiate Contract</p>
+            <div role="tablist" class="tabs-border tabs tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
                 class="tab"
                 :class="{ 'tab-active text-primary': activeTab === tab.id }"
-                @click="setActiveTab(tab.id)"
+                @click="contractEditorUiStore.setActiveTab(tab.id)"
               >
                 {{ tab.label }}
               </a>
@@ -398,8 +406,8 @@ const exportPdf = async () => {
           </div>
         </div>
         <!-- Tab content -->
-        <div class="grow mt-5">
-          <div class="max-w-4xl mx-auto p-6">
+        <div class="mt-5 grow">
+          <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor
@@ -414,9 +422,9 @@ const exportPdf = async () => {
               </div>
 
               <div v-show="activeTab === 'content'">
-                <div class="card bg-base-100 border border-base-300 shadow-sm">
+                <div class="card border border-base-300 bg-base-100 shadow-sm">
                   <div class="card-body gap-5">
-                    <div ref="tabContent">
+                    <div ref="template-preview-content">
                       <TemplatePreview
                         :document-outline="templateDraftStore.documentOutline"
                         :document-blocks="templateDraftStore.documentBlocks"
@@ -442,7 +450,7 @@ const exportPdf = async () => {
 
               <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
-                  <div class="card bg-base-100 border border-base-300 shadow-sm">
+                  <div class="card border border-base-300 bg-base-100 shadow-sm">
                     <div class="card-body">
                       <h2 class="card-title text-sm">Audit History</h2>
                       <AuditView />
@@ -456,35 +464,35 @@ const exportPdf = async () => {
       </div>
       <template v-if="activeTab !== 'audit' && hasActiveNegotiations">
         <div class="divider"></div>
-        <div class="max-w-4xl mx-auto p-6">
+        <div class="mx-auto max-w-4xl p-6">
           <div class="text-lg">Active negotiations</div>
           <NegotiationList :contract="contract" @selected-negotiation="handleSelectedNegotiation" />
         </div>
       </template>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
-          class="btn btn-primary flex-1"
+          class="btn flex-1 btn-primary"
           :disabled="isSubmitting || !hasChangeRequest || !!compareChangesData"
           @click="negotiateContractChange"
         >
-          <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Change Proposal
         </button>
         <button
           v-if="contract?.state === ContractState.negotiation"
-          class="btn btn-primary flex-1"
-          :disabled="isSubmitting || hasChangeRequest || !hasOpenDecisions"
+          class="btn flex-1 btn-primary"
+          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
           @click="submitContract"
         >
-          <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Submit
         </button>
-        <ContractManagerActions v-if="contract" :contract="contract" class="btn btn-primary flex-1" />
+        <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>
   </div>
