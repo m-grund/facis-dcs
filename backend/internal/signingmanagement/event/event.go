@@ -42,7 +42,7 @@ func (e RetrieveAllEvent) GetDID() string {
 // ValidateEvent is emitted when a signature is validated.
 type ValidateEvent struct {
 	DID             string    `json:"did"`
-	ContractVersion *int      `json:"contract_version,omitempty"`
+	ContractVersion int       `json:"contract_version,omitempty"`
 	ValidatedBy     string    `json:"validated_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
 }
@@ -60,7 +60,7 @@ func (e ValidateEvent) GetDID() string {
 // VerifyEvent is emitted when a signature is validated.
 type VerifyEvent struct {
 	DID             string    `json:"did"`
-	ContractVersion *int      `json:"contract_version,omitempty"`
+	ContractVersion int       `json:"contract_version,omitempty"`
 	VerifiedBy      string    `json:"verified_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
 }
@@ -96,7 +96,7 @@ func (e AuditEvt) GetDID() string {
 // AuditEvent is emitted when a signature is revoked
 type RevokeEvent struct {
 	DID             string    `json:"did"`
-	ContractVersion *int      `json:"contract_version,omitempty"`
+	ContractVersion int       `json:"contract_version,omitempty"`
 	RevokedBy       string    `json:"revoked_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
 }
@@ -114,7 +114,7 @@ func (e RevokeEvent) GetDID() string {
 // ComplianceValidation is emitted when compliance check ist started
 type ComplianceValidationEvent struct {
 	DID             string    `json:"did"`
-	ContractVersion *int      `json:"contract_version,omitempty"`
+	ContractVersion int       `json:"contract_version,omitempty"`
 	CheckedBy       string    `json:"checked_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
 }
@@ -126,5 +126,23 @@ func (e ComplianceValidationEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e ComplianceValidationEvent) GetDID() string {
+	return e.DID
+}
+
+// SigningRequestEvent is emitted when contract is reviewed.
+type SigningRequestEvent struct {
+	DID             string    `json:"did"`
+	ContractVersion int       `json:"contract_version"`
+	RequestedBy     string    `json:"requested_by"`
+	OccurredAt      time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e SigningRequestEvent) EventType() string {
+	return eventtype.SigningRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e SigningRequestEvent) GetDID() string {
 	return e.DID
 }
