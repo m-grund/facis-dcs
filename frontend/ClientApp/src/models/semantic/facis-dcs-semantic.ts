@@ -16,7 +16,7 @@ export const FACIS_DCS_SEMANTIC_PROFILE: SemanticProfile = {
   name: 'FACIS DCS Semantic Contract Profile',
   version: 'v1',
   context: 'https://w3id.org/facis/dcs/context/v1',
-  ontology: 'https://w3id.org/facis/dcs/ontology/v1',
+  ontology: 'https://w3id.org/facis/sla/ontology',
   shapes: 'https://w3id.org/facis/dcs/shapes/v1',
 }
 

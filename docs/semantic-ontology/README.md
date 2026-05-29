@@ -92,8 +92,6 @@ Signed contract JSON-LD -> policy bundle extractor -> Node-RED deployment flow
 ```text
 docs/semantic-ontology/
   README.md
-  ontology/
-    facis-dcs-ontology.ttl
   shapes/
     facis-dcs-shapes.ttl
   contexts/
@@ -103,6 +101,9 @@ docs/semantic-ontology/
     machine-readable-contract.jsonld
   types/
     facis-dcs-semantic.ts
+
+docs/ontology/
+  facis-sla-ontology.ttl
 ```
 
 Recommended future implementation modules:
@@ -131,9 +132,9 @@ The profile is intentionally small:
 | Workflow-aware | Lifecycle, approvals, negotiation, signing, deployment, archive, and revocation are first-class events. |
 | Policy-ready | Rules can be exported as ODRL-like constraints or target-specific policy bundles. |
 
-## 4. OWL/RDFS Turtle Ontologie
+## 4. Turtle SLA/DCS Ontologie
 
-The ontology is in [facis-dcs-ontology.ttl](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/ontology/facis-dcs-ontology.ttl). It declares the required classes:
+The merged runtime ontology is in [facis-sla-ontology.ttl](../ontology/facis-sla-ontology.ttl). It combines the DCS contract/template vocabulary with the SLA-specific vocabulary and declares the required classes:
 
 Core: `Contract`, `ContractTemplate`, `ContractObject`, `ContractVersion`, `Clause`, `Section`, `ContractCondition`, `SemanticCondition`.
 
@@ -631,3 +632,8 @@ WHERE contract_data @? '$.sla.services[*].slos[*] ? (@.sloType == "availability"
 5. Emit semantic NATS/CloudEvents for validation, lifecycle, signing, deployment, and revocation.
 6. Export deployment policy bundles from approved/signed contracts.
 7. Add optional SHACL validation in PACM/CI once RDF expansion is operational.
+docs/ontology/
+  facis-sla-ontology.ttl
+```
+
+```text

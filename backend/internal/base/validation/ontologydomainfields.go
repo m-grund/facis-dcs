@@ -14,7 +14,7 @@ import (
 var (
 	ontologyQuotedValue      = regexp.MustCompile(`"([^"]*)"`)
 	ontologyNumberValue      = regexp.MustCompile(`[-+]?[0-9]+(?:\.[0-9]+)?`)
-	ontologyDomainFieldsPath = "docs/semantic-ontology/ontology/facis-dcs-ontology.ttl"
+	ontologyDomainFieldsPath = "docs/ontology/facis-sla-ontology.ttl"
 	ontologyPrefixIndex      = mustLoadOntologyPrefixes()
 	ontologyDomainFieldIndex = mustLoadOntologyDomainFields()
 	ontologyClassIndex       = mustLoadOntologyClasses()
