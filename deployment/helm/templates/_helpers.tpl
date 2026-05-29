@@ -205,24 +205,24 @@ UI path override or derived default.
 {{- end }}
 
 {{/*
-VAULT_ADDR: explicit override, or derived from the co-deployed Vault instance.
+CRYPTO_PROVIDER_URL: explicit override, or derived from the co-deployed signer service.
 */}}
-{{- define "digital-contracting-service.vaultAddr" -}}
-{{- if .Values.signing.vaultAddr -}}
-{{- .Values.signing.vaultAddr -}}
+{{- define "digital-contracting-service.cryptoProviderURL" -}}
+{{- if .Values.signing.cryptoProviderURL -}}
+{{- .Values.signing.cryptoProviderURL -}}
 {{- else if .Values.cryptoProvider.enabled -}}
-{{- printf "http://%s-crypto-provider-vault:%v" .Release.Name .Values.cryptoProvider.vault.service.port -}}
+{{- printf "http://%s-crypto-provider-signer:%v" .Release.Name .Values.cryptoProvider.signer.port -}}
 {{- else -}}
 {{- "" -}}
 {{- end -}}
 {{- end }}
 
 {{/*
-VAULT_TRANSIT_MOUNT: explicit override or taken from subchart transit.mount.
+CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.mount.
 */}}
-{{- define "digital-contracting-service.vaultTransitMount" -}}
-{{- if .Values.signing.vaultTransitMount -}}
-{{- .Values.signing.vaultTransitMount -}}
+{{- define "digital-contracting-service.cryptoProviderNamespace" -}}
+{{- if .Values.signing.cryptoProviderNamespace -}}
+{{- .Values.signing.cryptoProviderNamespace -}}
 {{- else if .Values.cryptoProvider.enabled -}}
 {{- .Values.cryptoProvider.transit.mount -}}
 {{- else -}}
@@ -231,11 +231,11 @@ VAULT_TRANSIT_MOUNT: explicit override or taken from subchart transit.mount.
 {{- end }}
 
 {{/*
-VAULT_TRANSIT_KEY: explicit override or taken from subchart transit.key.
+CRYPTO_PROVIDER_KEY: explicit override or taken from subchart transit.key.
 */}}
-{{- define "digital-contracting-service.vaultTransitKey" -}}
-{{- if .Values.signing.vaultTransitKey -}}
-{{- .Values.signing.vaultTransitKey -}}
+{{- define "digital-contracting-service.cryptoProviderKey" -}}
+{{- if .Values.signing.cryptoProviderKey -}}
+{{- .Values.signing.cryptoProviderKey -}}
 {{- else if .Values.cryptoProvider.enabled -}}
 {{- .Values.cryptoProvider.transit.key -}}
 {{- else -}}

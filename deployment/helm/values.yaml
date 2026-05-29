@@ -132,22 +132,17 @@ signing:
   # RFC 3161 Timestamp Authority (optional; activates real timestamps on C2PA manifests).
   tsaURL: ""
 
-  # Vault transit backend. Leave vaultAddr empty when cryptoProvider.enabled=true
-  # (auto-derived from the co-deployed Vault instance).
-  vaultAddr: ""
-  vaultAddrSecretRef:
+  # XFSC Crypto Provider Service URL. Leave empty when cryptoProvider.enabled=true
+  # (auto-derived from the co-deployed signer service).
+  cryptoProviderURL: ""
+  cryptoProviderURLSecretRef:
     name: ""
-    key: "VAULT_ADDR"
+    key: "CRYPTO_PROVIDER_URL"
 
-  # Vault auth token. For production use vaultTokenSecretRef instead.
-  vaultToken: ""
-  vaultTokenSecretRef:
-    name: ""
-    key: "VAULT_TOKEN"
-
-  # Override transit mount/key; taken from cryptoProvider.transit.* when co-deploying.
-  vaultTransitMount: ""
-  vaultTransitKey: ""
+  # Vault transit mount path and key name.
+  # Taken from cryptoProvider.transit.* when co-deploying.
+  cryptoProviderNamespace: ""
+  cryptoProviderKey: ""
 
 # ---- IPFS storage -------------------------------------------------------
 # Required for PDF/C2PA storage. No co-deployed subchart (IPFS is assumed

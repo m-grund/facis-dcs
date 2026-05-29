@@ -19,13 +19,12 @@
 #   Neo4j Bolt       : localhost:30687
 #   FC service       : localhost:30081
 #   ORCE             : localhost:30180
-#   Vault API        : localhost:30820  (dev mode, root token = "root")
+#   Crypto Provider  : localhost:30808  (XFSC signer HTTP API)
 #
 # Backend .env.dev additions (for local air run):
-#   VAULT_ADDR=http://localhost:30820
-#   VAULT_TOKEN=root
-#   VAULT_TRANSIT_MOUNT=transit
-#   VAULT_TRANSIT_KEY=dcs-signing-key
+#   CRYPTO_PROVIDER_URL=http://localhost:30808
+#   CRYPTO_PROVIDER_NAMESPACE=transit
+#   CRYPTO_PROVIDER_KEY=dcs-signing-key
 #   ISSUER_DID=did:web:localhost
 
 # In development, don't deploy the DCS container since we run it locally
@@ -107,9 +106,12 @@ cryptoProvider:
       enabled: true
       rootToken: "root"
     service:
-      type: NodePort
+      type: ClusterIP
       port: 8200
-      nodePort: 30820
+  signer:
+    service:
+      type: NodePort
+      nodePort: 30808
   transit:
     mount: "transit"
     key: "dcs-signing-key"

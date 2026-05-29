@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"testing"
 	"time"
 
@@ -48,8 +49,36 @@ func testAssertion() LifecycleAssertion {
 	)
 }
 
+// minimalValidPDF builds the smallest valid PDF that pdfcpu can parse.
+// It has a Catalog, Pages dict, and one blank Page.
+func minimalValidPDF() []byte {
+	var b bytes.Buffer
+	offsets := make([]int, 4) // indices 1-3 are obj offsets
+
+	b.WriteString("%PDF-1.4\n")
+
+	offsets[1] = b.Len()
+	b.WriteString("1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n")
+
+	offsets[2] = b.Len()
+	b.WriteString("2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n")
+
+	offsets[3] = b.Len()
+	b.WriteString("3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n")
+
+	xrefOffset := b.Len()
+	b.WriteString("xref\n0 4\n")
+	b.WriteString("0000000000 65535 f \n")
+	for i := 1; i <= 3; i++ {
+		fmt.Fprintf(&b, "%010d 00000 n \n", offsets[i])
+	}
+	fmt.Fprintf(&b, "trailer\n<</Size 4 /Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n", xrefOffset)
+
+	return b.Bytes()
+}
+
 func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
-	basePDF := []byte("%PDF-1.4\nsome content\n%%EOF\n")
+	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
 	storer := &stubStorer{}
 
@@ -64,7 +93,7 @@ func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Base layer must be unchanged.
+	// Base layer must be unchanged at the start of the updated PDF.
 	assert.True(t, bytes.HasPrefix(result.UpdatedPDF, basePDF),
 		"base PDF bytes must appear unchanged at the start of the updated PDF")
 
@@ -78,7 +107,7 @@ func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
 }
 
 func TestAppendManifest_ChainLinkage(t *testing.T) {
-	basePDF := []byte("%PDF-1.4\ncontent\n%%EOF\n")
+	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
 	storer := &stubStorer{}
 
@@ -89,8 +118,6 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Compute expected prev hash: SHA-256 of the manifest JUMBF.
-	// The returned ManifestHash is already the hash of the JUMBF bytes.
 	prevHash := result1.ManifestHash
 
 	// Second assertion referencing the first via PrevManifestHash.
@@ -108,15 +135,8 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	// Second manifest must differ from first (different assertion content).
 	assert.NotEqual(t, result1.ManifestHash, result2.ManifestHash)
 
-	// The extracted prev manifest hash from the second PDF must be the first manifest's hash.
-	// (PrevManifestHashFrom returns the hash of the last C2PA block)
+	// PrevManifestHashFrom on the final PDF must return the second manifest's hash.
 	extracted := PrevManifestHashFrom(result2.UpdatedPDF)
-	// The second update appended the second manifest, whose block hash equals result2.ManifestHash.
-	// The first manifest hash is embedded in the second assertion payload, not in the block header.
-	// Verify via ManifestHash chaining: result2.ManifestHash is the hash of the second JUMBF block.
-	h := sha256.Sum256(result2.UpdatedPDF) // just ensure no panic
-	_ = h
-	assert.NotEmpty(t, extracted)
 	assert.Equal(t, result2.ManifestHash, extracted)
 }
 
@@ -125,10 +145,15 @@ func TestPrevManifestHashFrom_NoManifest(t *testing.T) {
 }
 
 func TestPrevManifestHashFrom_ExtractsLastHash(t *testing.T) {
-	pdf := []byte("%PDF-1.4\n%%EOF\n")
-	pdf = append(pdf, []byte("\n%%C2PA-MANIFEST-BEGIN aabbcc\nDATA\n%%C2PA-MANIFEST-END\n")...)
-	pdf = append(pdf, []byte("\n%%C2PA-MANIFEST-BEGIN ddeeff\nDATA2\n%%C2PA-MANIFEST-END\n")...)
+	// Simulate a PDF that already has two DCS-C2PA-HASH comments from prior increments.
+	h1 := sha256.Sum256([]byte("manifest1"))
+	h2 := sha256.Sum256([]byte("manifest2"))
+	hex1 := hex.EncodeToString(h1[:])
+	hex2 := hex.EncodeToString(h2[:])
 
-	h := PrevManifestHashFrom(pdf)
-	assert.Equal(t, "ddeeff", h)
+	pdf := []byte("%PDF-1.4\n%%EOF\n")
+	pdf = append(pdf, []byte("%% DCS-C2PA-HASH: "+hex1+"\n")...)
+	pdf = append(pdf, []byte("%% DCS-C2PA-HASH: "+hex2+"\n")...)
+
+	assert.Equal(t, hex2, PrevManifestHashFrom(pdf))
 }

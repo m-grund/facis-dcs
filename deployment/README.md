@@ -72,6 +72,8 @@ This starts all dependencies as NodePort services forwarded to `localhost`:
 | Neo4j HTTP           | `http://localhost:30474`         |
 | Neo4j Bolt           | `bolt://localhost:30687`         |
 | Federated Catalogue  | `http://localhost:30081`         |
+| IPFS Document Manager | `http://localhost:30800`        |
+| IPFS Kubo RPC        | `http://localhost:30501`         |
 
 The Keycloak `gaia-x` realm is imported automatically on first start.
 

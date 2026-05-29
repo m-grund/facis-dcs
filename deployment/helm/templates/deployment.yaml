@@ -95,29 +95,20 @@ spec:
               value: {{ include "digital-contracting-service.apiPath" . | quote }}
             - name: DCS_UI_PATH
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
-            # ---- Signing / C2PA provenance (Vault transit) -------------------------
-            - name: VAULT_ADDR
-              {{- if .Values.signing.vaultAddrSecretRef.name }}
+            # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
+            - name: CRYPTO_PROVIDER_URL
+              {{- if .Values.signing.cryptoProviderURLSecretRef.name }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.signing.vaultAddrSecretRef.name | quote }}
-                  key: {{ .Values.signing.vaultAddrSecretRef.key | quote }}
+                  name: {{ .Values.signing.cryptoProviderURLSecretRef.name | quote }}
+                  key: {{ .Values.signing.cryptoProviderURLSecretRef.key | quote }}
               {{- else }}
-              value: {{ include "digital-contracting-service.vaultAddr" . | quote }}
+              value: {{ include "digital-contracting-service.cryptoProviderURL" . | quote }}
               {{- end }}
-            - name: VAULT_TOKEN
-              {{- if .Values.signing.vaultTokenSecretRef.name }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.signing.vaultTokenSecretRef.name | quote }}
-                  key: {{ .Values.signing.vaultTokenSecretRef.key | quote }}
-              {{- else }}
-              value: {{ .Values.signing.vaultToken | quote }}
-              {{- end }}
-            - name: VAULT_TRANSIT_MOUNT
-              value: {{ include "digital-contracting-service.vaultTransitMount" . | quote }}
-            - name: VAULT_TRANSIT_KEY
-              value: {{ include "digital-contracting-service.vaultTransitKey" . | quote }}
+            - name: CRYPTO_PROVIDER_NAMESPACE
+              value: {{ include "digital-contracting-service.cryptoProviderNamespace" . | quote }}
+            - name: CRYPTO_PROVIDER_KEY
+              value: {{ include "digital-contracting-service.cryptoProviderKey" . | quote }}
             - name: ISSUER_DID
               {{- if .Values.signing.issuerDIDSecretRef.name }}
               valueFrom:

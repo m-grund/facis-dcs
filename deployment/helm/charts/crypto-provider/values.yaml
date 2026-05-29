@@ -33,3 +33,25 @@ transit:
 
   # Key algorithm. Options: ed25519, ecdsa-p256, rsa-2048, rsa-4096
   keyType: "ed25519"
+
+
+# XFSC Crypto Provider Service (signer HTTP API)
+signer:
+  image:
+    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/signer
+    tag: "v2.1.0"
+    pullPolicy: IfNotPresent
+  port: 8080
+  service:
+    type: ClusterIP
+    nodePort: null
+  resources: {}
+
+# XFSC Vault transit gRPC sidecar
+vaultPlugin:
+  image:
+    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/crypto-provider-hashicorp-vault-plugin
+    tag: "v2.0.3"
+    pullPolicy: IfNotPresent
+  grpcPort: 50051
+  resources: {}
