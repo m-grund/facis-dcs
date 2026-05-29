@@ -25,7 +25,7 @@
           :class="{ 'bg-primary/10': idx === safePlaceholderIndex }"
           @click="insertPlaceholder(opt)"
         >
-          <span class="font-medium">{{ opt.parameterName }}</span>
+          <span class="font-medium">{{ opt.label }}</span>
           <span class="ml-1 text-base-content/50">({{ opt.conditionName }})</span>
         </button>
         <p v-if="!filteredPlaceholderOptions.length" class="px-3 py-2 text-xs text-base-content/50 italic">
@@ -75,6 +75,7 @@ import {
   usePlaceholderDropdownPosition,
   type PlaceholderDropdownMode,
 } from '@template-repository/composables/usePlaceholderDropdownPosition'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import SemanticRuleList from '@template-repository/components/clauses-editor/SemanticRuleList.vue'
 
 const PLACEHOLDER_DROPDOWN_MODE: PlaceholderDropdownMode = 'caret'
@@ -193,7 +194,7 @@ function rememberEditorCursor() {
 
 const placeholderOptions = computed(() => {
   const usedKeys = usedPlaceholderKeys.value
-  const list: { insertText: string; parameterName: string; conditionName: string }[] = []
+  const list: { insertText: string; parameterName: string; label: string; conditionName: string }[] = []
   for (const c of props.semanticConditions) {
     for (const p of c.parameters) {
       if (p.fixedValue !== undefined) continue
@@ -201,6 +202,7 @@ const placeholderOptions = computed(() => {
       list.push({
         insertText: `{{${c.conditionId}.${p.parameterName}}}`,
         parameterName: p.parameterName,
+        label: semanticParameterLabel(p),
         conditionName: c.conditionName,
       })
     }
@@ -213,6 +215,7 @@ const filteredPlaceholderOptions = computed(() => {
   if (!q) return placeholderOptions.value
   return placeholderOptions.value.filter(
     (opt) =>
+      opt.label.toLowerCase().includes(q) ||
       opt.parameterName.toLowerCase().includes(q) ||
       opt.conditionName.toLowerCase().includes(q) ||
       opt.insertText.toLowerCase().includes(q),

@@ -35,6 +35,7 @@ import type { VerificationResult } from '@/modules/contract-workflow-engine/comp
 import PreviewParamInput from './PreviewParamInput.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 const props = defineProps<{
   blockId: string
@@ -77,7 +78,7 @@ const segments = computed<PreviewSegment[]>(() => {
         conditionId: seg.conditionId,
         parameterName: seg.parameterName,
         paramType,
-        label: seg.parameterName,
+        label: param ? semanticParameterLabel(param) : seg.parameterName,
         value: findSemanticValue(seg.conditionId, seg.parameterName),
         valueConstraint: param?.valueConstraint,
         isInvalid: !!findVerificationError(seg.conditionId, seg.parameterName),

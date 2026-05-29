@@ -238,13 +238,15 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     // Clauses operations: add, delete, update
     /** Adds a clause block to documentBlocks only */
-    addClause(payload: { title?: string; text: string; conditionIds: string[] }): string {
+    addClause(payload: { title?: string; text: string; conditionIds: string[]; schemaRef?: string; semanticPath?: string }): string {
       const blockId = crypto.randomUUID()
       const block = createBlockFromPayload(blockId, {
         blockType: DocumentBlockType.Clause,
         text: payload.text,
         title: payload.title,
         conditionIds: payload.conditionIds,
+        schemaRef: payload.schemaRef,
+        semanticPath: payload.semanticPath,
       })
       this.documentBlocks.push(block)
       return blockId
@@ -478,6 +480,7 @@ function createBlockFromPayload(blockId: string, payload: AddBlockPayload): Docu
         text,
         title: payload.title,
         conditionIds: payload.conditionIds ?? [],
+        ...blockMeta,
       }
     case DocumentBlockType.ApprovedTemplate:
       return {

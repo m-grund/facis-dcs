@@ -25,6 +25,43 @@
         @save="saveEditedClause"
         @cancel-edit="cancelEdit"
       />
+
+      <div v-if="uiStore.isTemplateEditable && ontologyClausePresets.length" class="mt-5 border-t border-base-300 pt-4">
+        <h4 class="mb-3 text-xs font-semibold uppercase text-base-content/50">Prebuilt clauses</h4>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div
+            v-for="preset in ontologyClausePresets"
+            :key="preset.id"
+            class="group grid min-h-[88px] grid-cols-1 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-3 shadow-sm transition-all hover:border-primary/50 hover:bg-base-200 hover:shadow md:grid-cols-[minmax(0,1fr)_minmax(11rem,14rem)_auto]"
+          >
+            <div class="min-w-0">
+              <span class="block text-sm font-medium text-base-content">{{ preset.label }}</span>
+              <span class="block text-xs text-base-content/50">{{ preset.fields.length }} ontology fields</span>
+            </div>
+            <label v-if="preset.roleRequired" class="mx-auto w-full max-w-56">
+              <span class="label-text mb-1 block text-xs text-base-content/60">Contract role</span>
+              <select
+                v-model="selectedPrebuiltRoles[preset.id]"
+                class="select select-bordered select-xs w-full text-left"
+              >
+                <option value="">Select role</option>
+                <option v-for="option in roleOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <span v-else class="hidden md:block" />
+            <button
+              type="button"
+              class="btn btn-secondary btn-xs justify-self-start transition-transform group-hover:translate-x-0.5 md:justify-self-end"
+              :disabled="preset.roleRequired && !selectedPrebuiltRoles[preset.id]"
+              @click="addPrebuiltClause(preset.id)"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -33,16 +70,30 @@
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { isClauseBlock, type ClauseBlock } from '@/modules/template-repository/models/contract-template'
+import {
+  SEMANTIC_CONDITION_SCHEMA_VERSION,
+  isClauseBlock,
+  type ClauseBlock,
+} from '@/modules/template-repository/models/contract-template'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import {
+  ONTOLOGY_CLAUSE_PRESETS,
+  buildOntologyClauseText,
+  buildOntologyConditionParameters,
+  ontologyRoleOptions,
+  roleLabelFor,
+} from '@template-repository/utils/ontology-clause-presets'
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { documentBlocks, semanticConditions: mainSemanticConditions, subTemplateSnapshots } = storeToRefs(store)
 
 const editingBlockId = ref<string | null>(null)
+const selectedPrebuiltRoles = ref<Record<string, string>>({})
+const ontologyClausePresets = ONTOLOGY_CLAUSE_PRESETS
+const roleOptions = ontologyRoleOptions
 
 /** Extract conditionIds from clause text placeholders {{conditionId.parameterName}}. */
 function conditionIdsFromText(text: string): string[] {
@@ -106,5 +157,34 @@ function saveEditedClause(payload: { blockId: string; title: string; text: strin
 function deleteClause(blockId: string) {
   store.deleteClause(blockId)
   if (editingBlockId.value === blockId) cancelEdit()
+}
+
+function addPrebuiltClause(presetId: string) {
+  const preset = ontologyClausePresets.find((item) => item.id === presetId)
+  if (!preset) return
+  const role = preset.roleRequired ? selectedPrebuiltRoles.value[preset.id] ?? '' : ''
+  if (preset.roleRequired && !role) return
+
+  const conditionId = `${preset.id}-${role || 'default'}-${crypto.randomUUID()}`
+  const roleLabel = role ? roleLabelFor(role) : ''
+  const title = roleLabel ? `${roleLabel} ${preset.label}` : preset.label
+  const parameters = buildOntologyConditionParameters(preset)
+  const text = buildOntologyClauseText(conditionId, preset, role)
+
+  store.semanticConditions.push({
+    conditionId,
+    conditionName: title,
+    schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
+    entityType: preset.entityType,
+    ...(role ? { entityRole: role } : {}),
+    parameters,
+  })
+  store.addClause({
+    title,
+    text,
+    conditionIds: [conditionId],
+    schemaRef: preset.fields[0]?.schemaRef,
+    semanticPath: preset.fields[0]?.semanticPath.split('.', 1)[0] ?? preset.id,
+  })
 }
 </script>
