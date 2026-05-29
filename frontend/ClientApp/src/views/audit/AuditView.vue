@@ -10,7 +10,7 @@ const report = ref<unknown>(null)
 const auditLoading = ref(false)
 const reportLoading = ref(false)
 const error = ref<string | null>(null)
-const selectedScope = ref<AuditScope>('templates')
+const selectedScope = ref<AuditScope>('contracts')
 const selectedAuditMode = ref<AuditMode>('repository_trail')
 const hasExecutedAudit = ref(false)
 type TableFilterKey = 'category' | 'status' | 'component' | 'did'
@@ -164,8 +164,6 @@ const policyText = ref(`{
 const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'templates', label: 'Templates' },
   { value: 'contracts', label: 'Contracts' },
-  { value: 'signatures', label: 'Signatures' },
-  { value: 'archive', label: 'Archive' },
 ]
 
 const auditModeOptions: { value: AuditMode; label: string }[] = [
