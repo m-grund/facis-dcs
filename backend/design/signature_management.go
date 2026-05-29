@@ -19,7 +19,7 @@ var SMContractListItem = Type("SMContractListItem", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSigningTaskItem = Type("SMContractSigningTaskItem", func() {
@@ -29,7 +29,7 @@ var SMContractSigningTaskItem = Type("SMContractSigningTaskItem", func() {
 	Attribute("reviewer", String, "The reviewer of the contract")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "reviewer", "created_at")
+	Required("did", "state", "reviewer", "created_at", "contract_version")
 })
 
 var SMContractRetrieveResponse = Type("SMContractRetrieveResponse", func() {
@@ -60,7 +60,7 @@ var SMContractItem = Type("SMContractItem", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {
