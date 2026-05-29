@@ -9,8 +9,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"digital-contracting-service/internal/pdfgeneration/c2pa"
 )
 
 // Result is returned by VerifyContract and VerifyTemplate.
@@ -39,9 +39,6 @@ type Result struct {
 	// VCProofValid is true when the embedded W3C VC Ed25519Signature2020 proof is
 	// cryptographically valid (DCS-OR-C2PA-006).
 	VCProofValid bool `json:"vc_proof_valid"`
-	// LifecycleStatus is the contract lifecycle status from the status list query.
-	// Values: "active", "suspended", "terminated", "expired", etc. Empty if not queried.
-	LifecycleStatus string `json:"lifecycle_status,omitempty"`
 	// StatusListURI is the URI of the status list service queried for revocation check.
 	StatusListURI string `json:"status_list_uri,omitempty"`
 }
@@ -57,14 +54,6 @@ type ContractVerifier struct {
 	// This implements the DCS-OR-C2PA-008 remote manifest fallback: the verifier
 	// fetches from IPFS if the embedded manifest has been stripped.
 	FetchFn func() ([]byte, error)
-
-	// StatusListURI is the URI of the status list service to query for revocation
-	// checks (DCS-OR-C2PA-006). If empty, status list queries are skipped.
-	StatusListURI string
-
-	// StatusListQueryFn queries the status list service for the contract's
-	// lifecycle status. If nil, status list checks are skipped.
-	StatusListQueryFn func(statusListURI, contractID string) (status string, err error)
 }
 
 // TemplateVerifier holds the dependencies for template re-rendering.
@@ -72,30 +61,23 @@ type TemplateVerifier struct {
 	BuildFn func(jsonld []byte) ([]byte, error)
 	// FetchFn mirrors ContractVerifier.FetchFn for templates (DCS-OR-C2PA-008).
 	FetchFn func() ([]byte, error)
-
-	// StatusListURI is the URI of the status list service (DCS-OR-C2PA-006).
-	StatusListURI string
-	// StatusListQueryFn queries the status list service.
-	StatusListQueryFn func(statusListURI, contractID string) (status string, err error)
 }
 
 // Verify extracts the embedded JSON-LD from pdfBytes, re-renders the base PDF,
-// and compares SHA-256 hashes. Also verifies C2PA signatures and status list.
+// and compares SHA-256 hashes. Also verifies C2PA signatures and extracts the status list URI from the VC.
 func (v *ContractVerifier) Verify(pdfBytes []byte) (*Result, error) {
-	return verify(pdfBytes, v.BuildFn, v.FetchFn, v.StatusListURI, v.StatusListQueryFn)
+	return verify(pdfBytes, v.BuildFn, v.FetchFn)
 }
 
 // Verify is the template counterpart.
 func (v *TemplateVerifier) Verify(pdfBytes []byte) (*Result, error) {
-	return verify(pdfBytes, v.BuildFn, v.FetchFn, v.StatusListURI, v.StatusListQueryFn)
+	return verify(pdfBytes, v.BuildFn, v.FetchFn)
 }
 
 func verify(
 	pdfBytes []byte,
 	buildFn func([]byte) ([]byte, error),
 	fetchFn func() ([]byte, error),
-	statusListURI string,
-	statusListQueryFn func(statusListURI, contractID string) (status string, err error),
 ) (*Result, error) {
 	manifestSource := "embedded"
 
@@ -122,10 +104,17 @@ func verify(
 	}
 
 	// Extract and verify C2PA manifest (DCS-OR-C2PA-006).
-	c2paManifestFound, c2paSignatureValid := extractAndVerifyC2PA(verifyPDFBytes)
+	c2paManifestFound, c2paSignatureValid := false, false
+	if isValid, _, err := c2pa.ExtractAndVerifyManifest(verifyPDFBytes); err == nil {
+		c2paManifestFound = isValid
+		c2paSignatureValid = isValid
+	}
 
 	// Extract and verify W3C VC proof (DCS-OR-C2PA-006).
-	vcProofValid := extractAndVerifyVC(verifyPDFBytes)
+	vcProofValid := false
+	if isValid, _, err := c2pa.ExtractAndVerifyVC(verifyPDFBytes); err == nil {
+		vcProofValid = isValid
+	}
 
 	// Strip any incremental updates (C2PA manifests, future PAdES) appended after
 	// the first %%EOF to recover the base PDF layer.
@@ -150,14 +139,15 @@ func verify(
 	basePDFHash := sha256hex(regenerated)
 	storedHash := sha256hex(basePDF)
 
-	// Query the status list for revocation status if available (DCS-OR-C2PA-006).
-	lifecycleStatus := ""
-	if statusListQueryFn != nil && statusListURI != "" {
-		// Extract contract ID from JSON-LD to query status list.
-		contractID := extractContractID(jsonld)
-		if contractID != "" {
-			status, _ := statusListQueryFn(statusListURI, contractID)
-			lifecycleStatus = status
+	// Extract the status list URI from the embedded VC if present (DCS-OR-C2PA-006).
+	// The VC contains credentialStatus.id which is the URI to the revocation status list.
+	// If the URI is unreachable when a client queries it, the status is treated as unknown/revoked
+	// per W3C StatusList2021/2023 specification.
+	statusListURI := ""
+	if vcProofValid {
+		// VC is present and proof is valid; extract its status list URI.
+		if vcIsValid, vcBytes, vcErr := c2pa.ExtractAndVerifyVC(pdfBytes); vcIsValid && vcErr == nil {
+			statusListURI = c2pa.ExtractStatusListURI(vcBytes)
 		}
 	}
 
@@ -170,70 +160,10 @@ func verify(
 		C2PAManifestFound: c2paManifestFound,
 		C2PASignatureValid: c2paSignatureValid,
 		VCProofValid:      vcProofValid,
-		LifecycleStatus:   lifecycleStatus,
 		StatusListURI:     statusListURI,
 	}, nil
 }
 
-// extractAndVerifyC2PA extracts the C2PA manifest from pdfBytes and verifies
-// the COSE_Sign1 signature. Returns (manifestFound, signatureValid).
-func extractAndVerifyC2PA(pdfBytes []byte) (bool, bool) {
-	// Look for the C2PA JUMBF manifest marker in the PDF.
-	c2paMarker := []byte("application#2Fc2pa")
-	if bytes.Index(pdfBytes, c2paMarker) < 0 {
-		return false, false
-	}
-
-	// Manifest found; for now, assume signature is valid if structure is present.
-	// A production verifier would extract the x5chain and verify the COSE_Sign1 signature.
-	// Since we co-deploy the signer and status list services, we accept the
-	// structural presence as valid (DCS-OR-C2PA-006).
-	return true, true
-}
-
-// extractAndVerifyVC extracts the W3C VC from pdfBytes and verifies the
-// Ed25519Signature2020 proof. Returns true if valid, false otherwise.
-func extractAndVerifyVC(pdfBytes []byte) bool {
-	// Look for the VC JSON file marker in the PDF.
-	vcMarker := []byte("contract-lifecycle-vc.json")
-	if bytes.Index(pdfBytes, vcMarker) < 0 {
-		return false
-	}
-
-	// VC found; for now, assume proof is valid if structure is present.
-	// A production verifier would extract the proof, verify Ed25519 signature.
-	// Since we co-deploy the VC issuer, we accept the structural presence as valid.
-	return true
-}
-
-// extractContractID extracts the contract DID from the JSON-LD bytes.
-func extractContractID(jsonld []byte) string {
-	// Simple extraction: look for "contract_id" or "did" field.
-	// This is a best-effort parser sufficient for status list queries.
-	var data map[string]interface{}
-	if err := json.Unmarshal(jsonld, &data); err != nil {
-		return ""
-	}
-
-	// Try common fields.
-	for _, key := range []string{"contract_id", "did", "credentialSubject"} {
-		if val, ok := data[key]; ok {
-			if str, ok := val.(string); ok {
-				return str
-			}
-			// If credentialSubject, it might be a nested object.
-			if obj, ok := val.(map[string]interface{}); ok {
-				if id, ok := obj["contract_id"].(string); ok {
-					return id
-				}
-				if id, ok := obj["did"].(string); ok {
-					return id
-				}
-			}
-		}
-	}
-	return ""
-}
 
 // extractBasePDF returns the bytes up to and including the first %%EOF marker,
 // discarding any incremental updates appended afterwards (C2PA, PAdES).

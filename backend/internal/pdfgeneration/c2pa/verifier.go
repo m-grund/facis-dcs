@@ -183,3 +183,36 @@ func verifyVCProof(vcBytes []byte) (bool, error) {
 	// and checking the Ed25519 signature over the canonicalized credential.
 	return true, nil
 }
+
+// ExtractStatusListURI extracts the credentialStatus.id from the VC JSON.
+// Returns empty string if not found or on parse error.
+func ExtractStatusListURI(vcBytes []byte) string {
+	var vcObj map[string]interface{}
+	if err := json.Unmarshal(vcBytes, &vcObj); err != nil {
+		return ""
+	}
+
+	// Extract credentialStatus field.
+	credStatusRaw, ok := vcObj["credentialStatus"]
+	if !ok {
+		return ""
+	}
+
+	credStatusObj, ok := credStatusRaw.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	// Extract the "id" field (the status list URI).
+	uriRaw, ok := credStatusObj["id"]
+	if !ok {
+		return ""
+	}
+
+	uri, ok := uriRaw.(string)
+	if !ok {
+		return ""
+	}
+
+	return uri
+}

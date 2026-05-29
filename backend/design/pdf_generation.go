@@ -17,7 +17,6 @@ var PDFVerifyResult = Type("PDFVerifyResult", func() {
 	Attribute("c2pa_manifest_found", Boolean, "True when a C2PA JUMBF manifest was found in the PDF")
 	Attribute("c2pa_signature_valid", Boolean, "True when the C2PA COSE_Sign1 signature is cryptographically valid")
 	Attribute("vc_proof_valid", Boolean, "True when the embedded W3C VC Ed25519 proof is cryptographically valid")
-	Attribute("lifecycle_status", String, "Contract lifecycle status from the status list (active, suspended, terminated, expired, etc.), or empty if not found")
 	Attribute("status_list_uri", String, "URI of the status list service queried for revocation check")
 
 	Required("match", "jsonld_hash", "base_pdf_hash", "stored_base_pdf_hash", "c2pa_manifest_found", "c2pa_signature_valid", "vc_proof_valid")
