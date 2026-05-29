@@ -180,12 +180,11 @@ func main() {
 	)
 
 	// Initialize Crypto Provider Service client for C2PA signing.
-	vaultAddr := os.Getenv("VAULT_ADDR")
-	vaultToken := os.Getenv("VAULT_TOKEN")
-	vaultTransitMount := os.Getenv("VAULT_TRANSIT_MOUNT")
-	vaultTransitKey := os.Getenv("VAULT_TRANSIT_KEY")
+	cryptoProviderURL := os.Getenv("CRYPTO_PROVIDER_URL")
+	cryptoProviderNamespace := os.Getenv("CRYPTO_PROVIDER_NAMESPACE")
+	cryptoProviderKey := os.Getenv("CRYPTO_PROVIDER_KEY")
 	issuerDID := os.Getenv("ISSUER_DID")
-	cryptoClient := cryptoprovider.NewClient(vaultAddr, vaultToken, vaultTransitMount, vaultTransitKey)
+	cryptoClient := cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
 	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
 
 	// Initialize the service.
@@ -219,7 +218,7 @@ func main() {
 	// Start the PDF lifecycle C2PA subscriber (appends C2PA assertions on state changes).
 	// Only start when a real signing URL is configured; without one, the subscriber
 	// would attempt signing on every CWE event and log spurious HTTP errors.
-	if vaultAddr != "" {
+	if cryptoProviderURL != "" {
 		pdfSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
 		if err != nil {
 			log.Fatalf(ctx, err, "Could not create PDF generation NATS subscriber")
