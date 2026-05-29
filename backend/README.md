@@ -122,3 +122,52 @@ REGISTRY="your-registry" REPO="your-repo" ./deployment/docker/build-image.sh v1.
 ```
 
 This builds a Docker image with the name: **your-registry/your-repo/digital-contracting-service:v1.0.0**
+
+## Linting
+
+This project uses **[golangci-lint](https://golangci-lint.run)** for static code analysis.
+
+Linting is automatically executed via a **pre-commit hook** before each commit, but you can also run it manually using the commands below.
+
+### Prerequisites
+
+Ensure `golangci-lint` is installed in the project's `./bin` directory. If it is not already present, follow the installation steps below.
+
+### Installation (Optional)
+
+> **Note:**
+> If you have already committed code in this repository, the pre-commit hook should have automatically installed the linter for you.
+
+If `golangci-lint` is not yet installed in `./bin`, run:
+
+```bash
+# Ensure the ./bin directory exists and install golangci-lint to the ./bin directory
+mkdir -p ./bin && curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b ./bin v2.12.2
+```
+
+Alternatively, if you have `golangci-lint` installed globally, you can copy it:
+
+```bash
+# Create directory and copy the global installation to ./bin
+mkdir -p ./bin && cp $(which golangci-lint) ./bin/golangci-lint
+```
+
+### Manual Linting
+
+To run the linter manually, use the following commands:
+
+```bash
+# Run linter on all files
+./bin/golangci-lint run
+
+# Run linter on a specific package
+./bin/golangci-lint run ./cmd/...
+
+# Run linter with verbose output
+./bin/golangci-lint run -v
+
+# Run linter and fix auto-fixable issues
+./bin/golangci-lint run --fix
+```
+
+You can also check the official [golangci-lint documentation](https://golangci-lint.run/docs) for additional configuration and command options.
