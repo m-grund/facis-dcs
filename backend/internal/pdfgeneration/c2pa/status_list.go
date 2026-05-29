@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"crypto/sha256"
@@ -126,6 +127,8 @@ func (p *OCMWStatusListPublisher) setRevoked(ctx context.Context, contractID str
 
 // PublishStatus updates the contract status in the XFSC status list (DCS-OR-C2PA-005).
 // Terminal states (terminated, expired, replaced, suspended) set the revocation bit.
+// Comparison is case-insensitive so CWE UPPERCASE states (TERMINATED, EXPIRED, …)
+// are handled correctly alongside the SRS lowercase vocabulary.
 // Active/draft/amended states are the default (not revoked) and require no HTTP call.
 func (p *OCMWStatusListPublisher) PublishStatus(
 	ctx context.Context,
@@ -134,7 +137,7 @@ func (p *OCMWStatusListPublisher) PublishStatus(
 	reason string,
 	effectiveAt time.Time,
 ) (statusListURI string, err error) {
-	switch status {
+	switch strings.ToLower(status) {
 	case "terminated", "expired", "replaced", "suspended":
 		if err := p.setRevoked(ctx, contractID); err != nil {
 			return "", fmt.Errorf("publish status %s for %s: %w", status, contractID, err)

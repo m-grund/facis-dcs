@@ -1,6 +1,9 @@
 package c2pa
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // LifecycleAssertion is the dcs.contract.lifecycle assertion carried in each C2PA
 // manifest (DCS-OR-C2PA-003). It records the contract's state at the time the
@@ -66,5 +69,45 @@ func NewLifecycleAssertion(contractID, fileHash, pdfHash, rendererVersion, statu
 		Authority:        authority,
 		VCId:             vcID,
 		PrevManifestHash: prevManifestHash,
+	}
+}
+
+// MapCWEStateToC2PA maps a CWE contract state (which may be uppercase, e.g.
+// "TERMINATED") to the canonical C2PA lifecycle vocabulary defined in
+// DCS-OR-C2PA-003: draft, active, amended, suspended, terminated, expired, replaced.
+//
+// CWE states that fall outside the SRS vocabulary are mapped to "active" as a
+// conservative default so that the resulting manifest remains spec-compliant.
+// The raw CWE state is preserved in LifecycleAssertion.Reason by the caller.
+func MapCWEStateToC2PA(cweState string) string {
+	switch strings.ToUpper(cweState) {
+	case "DRAFT":
+		return "draft"
+	case "SUBMITTED", "REVIEWED", "APPROVED":
+		// Reviewed/submitted/approved are intermediate steps toward an active
+		// contract; map to "active" as the closest SRS equivalent.
+		return "active"
+	case "NEGOTIATION", "REJECTED":
+		// Negotiation and rejection are amendment/review cycles before the
+		// contract becomes active; treated as "amended" (under negotiation)
+		// or "active" (re-submitted after rejection).
+		// Use "amended" because the content may have changed.
+		return "amended"
+	case "TERMINATED":
+		return "terminated"
+	case "EXPIRED":
+		return "expired"
+	case "SUSPENDED":
+		return "suspended"
+	case "REPLACED":
+		return "replaced"
+	default:
+		// Pass-through if the caller already uses the SRS vocabulary.
+		lower := strings.ToLower(cweState)
+		switch lower {
+		case "draft", "active", "amended", "suspended", "terminated", "expired", "replaced":
+			return lower
+		}
+		return "active"
 	}
 }

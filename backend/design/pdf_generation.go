@@ -5,14 +5,22 @@ import (
 )
 
 var PDFVerifyResult = Type("PDFVerifyResult", func() {
-	Description("Result of MR/HR hash consistency verification (DCS-FR-CWE-04, DCS-FR-CWE-05)")
+	Description("Result of MR/HR hash consistency and C2PA provenance verification (DCS-FR-CWE-04, DCS-FR-CWE-05, DCS-OR-C2PA-006)")
 
+	// MR/HR consistency (DCS-FR-CWE-04/05)
 	Attribute("match", Boolean, "True when the stored PDF was generated from the embedded JSON-LD without alteration")
 	Attribute("jsonld_hash", String, "SHA-256 hex of the extracted JSON-LD attachment")
 	Attribute("base_pdf_hash", String, "SHA-256 hex of the re-generated base PDF from the same JSON-LD")
 	Attribute("stored_base_pdf_hash", String, "SHA-256 hex of the stored PDF base layer (before any C2PA incremental updates)")
 
-	Required("match", "jsonld_hash", "base_pdf_hash", "stored_base_pdf_hash")
+	// C2PA provenance validation (DCS-OR-C2PA-006)
+	Attribute("c2pa_manifest_found", Boolean, "True when a C2PA JUMBF manifest was found in the PDF")
+	Attribute("c2pa_signature_valid", Boolean, "True when the C2PA COSE_Sign1 signature is cryptographically valid")
+	Attribute("vc_proof_valid", Boolean, "True when the embedded W3C VC Ed25519 proof is cryptographically valid")
+	Attribute("lifecycle_status", String, "Contract lifecycle status from the status list (active, suspended, terminated, expired, etc.), or empty if not found")
+	Attribute("status_list_uri", String, "URI of the status list service queried for revocation check")
+
+	Required("match", "jsonld_hash", "base_pdf_hash", "stored_base_pdf_hash", "c2pa_manifest_found", "c2pa_signature_valid", "vc_proof_valid")
 })
 
 // PDFGeneration Service  (/pdf/...)

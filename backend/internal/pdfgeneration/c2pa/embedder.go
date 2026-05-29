@@ -176,14 +176,14 @@ func writeC2PAIncrement(existingPDF, jumbfBytes []byte, manifestHash string, vcB
 		return nil, fmt.Errorf("read PDF catalog: %w", err)
 	}
 
-	// Per C2PA PDF binding, /Catalog/AF must point at the active manifest FileSpec.
-	var associatedFiles pdftypes.Array
-	if existing, ok := catDict["AF"]; ok {
-		if arr, err2 := xrt.DereferenceArray(existing); err2 == nil {
-			associatedFiles = arr
-		}
+	// Per C2PA PDF binding §7.2, /Catalog/AF must reference ONLY the active
+	// (most-recent) manifest FileSpec so that verifiers do not attempt to
+	// validate superseded manifests.  We therefore always replace the AF array
+	// rather than appending to it.  The full history is still accessible via
+	// the prev_manifest_hash chain embedded inside each JUMBF manifest.
+	associatedFiles := pdftypes.Array{
+		*pdftypes.NewIndirectRef(filespecObjNum, 0),
 	}
-	associatedFiles = append(associatedFiles, *pdftypes.NewIndirectRef(filespecObjNum, 0))
 	if len(vcBytes) > 0 {
 		associatedFiles = append(associatedFiles, *pdftypes.NewIndirectRef(vcFilespecObjNum, 0))
 	}

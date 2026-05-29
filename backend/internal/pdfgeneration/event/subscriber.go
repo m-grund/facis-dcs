@@ -167,6 +167,9 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		effectiveAt = time.Now().UTC()
 	}
 
+	// Map the raw CWE state to the SRS-defined C2PA vocabulary (DCS-OR-C2PA-003).
+	c2paState := c2pa.MapCWEStateToC2PA(state)
+
 	pdfHash := c2pa.BasePDFHashOf(existingPDF)
 
 	// Issue W3C VC for this lifecycle event when a VCIssuer is configured (DCS-OR-C2PA-004/005).
@@ -174,7 +177,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	var vcBytes []byte
 	if s.VCIssuer != nil {
 		vcID, vcBytes, err = s.VCIssuer.IssueContractLifecycleVC(
-			ctx, cweEvt.DID, fileHash, state, cweEvt.Reason, s.IssuerDID, effectiveAt,
+			ctx, cweEvt.DID, fileHash, c2paState, cweEvt.Reason, s.IssuerDID, effectiveAt,
 		)
 		if err != nil {
 			return fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
@@ -183,7 +186,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 
 	assertion := c2pa.NewLifecycleAssertion(
 		cweEvt.DID, fileHash, pdfHash, builder.RendererVersion,
-		state, cweEvt.Reason, s.IssuerDID, vcID, prevHash, effectiveAt,
+		c2paState, cweEvt.Reason, s.IssuerDID, vcID, prevHash, effectiveAt,
 	)
 
 	// Append the C2PA manifest; store the updated PDF in IPFS.

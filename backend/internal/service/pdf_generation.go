@@ -193,7 +193,7 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 	return io.NopCloser(bytes.NewReader(pdfBytes)), nil
 }
 
-// VerifyContractPdf verifies MR/HR hash consistency for a contract.
+// VerifyContractPdf verifies MR/HR hash consistency and C2PA provenance for a contract (DCS-OR-C2PA-006).
 func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.VerifyContractPdfPayload) (*pdfgen.PDFVerifyResult, error) {
 	pdfBytes, err := s.fetchOrBuildContractPDF(ctx, p.Did)
 	if err != nil {
@@ -207,20 +207,29 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 		// FetchFn fetches the canonical PDF (with C2PA manifests) from IPFS when the
 		// input PDF has been stripped of incremental updates (DCS-OR-C2PA-008).
 		FetchFn: s.contractIPFSFetchFn(ctx, p.Did),
+		// StatusListURI is used for revocation checks (DCS-OR-C2PA-006).
+		StatusListURI: s.statusListURI(),
+		// StatusListQueryFn queries the XFSC status list service.
+		StatusListQueryFn: s.queryStatusListStatus,
 	}
 	result, err := v.Verify(pdfBytes)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("verify contract PDF: %w", err))
 	}
 	return &pdfgen.PDFVerifyResult{
-		Match:             result.Match,
-		JsonldHash:        result.JSONLDHash,
-		BasePdfHash:       result.BasePDFHash,
-		StoredBasePdfHash: result.StoredBasePDFHash,
+		Match:              result.Match,
+		JsonldHash:         result.JSONLDHash,
+		BasePdfHash:        result.BasePDFHash,
+		StoredBasePdfHash:  result.StoredBasePDFHash,
+		C2paManifestFound:  result.C2PAManifestFound,
+		C2paSignatureValid: result.C2PASignatureValid,
+		VcProofValid:       result.VCProofValid,
+		LifecycleStatus:    ptrToString(result.LifecycleStatus),
+		StatusListURI:      ptrToString(result.StatusListURI),
 	}, nil
 }
 
-// VerifyTemplatePdf verifies MR/HR hash consistency for a template.
+// VerifyTemplatePdf verifies MR/HR hash consistency and C2PA provenance for a template (DCS-OR-C2PA-006).
 func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.VerifyTemplatePdfPayload) (*pdfgen.PDFVerifyResult, error) {
 	pdfBytes, err := s.fetchOrBuildTemplatePDF(ctx, p.Did)
 	if err != nil {
@@ -233,16 +242,25 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 		},
 		// FetchFn fetches the canonical PDF from IPFS when stripped (DCS-OR-C2PA-008).
 		FetchFn: s.templateIPFSFetchFn(ctx, p.Did),
+		// StatusListURI is used for revocation checks (DCS-OR-C2PA-006).
+		StatusListURI: s.statusListURI(),
+		// StatusListQueryFn queries the XFSC status list service.
+		StatusListQueryFn: s.queryStatusListStatus,
 	}
 	result, err := v.Verify(pdfBytes)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("verify template PDF: %w", err))
 	}
 	return &pdfgen.PDFVerifyResult{
-		Match:             result.Match,
-		JsonldHash:        result.JSONLDHash,
-		BasePdfHash:       result.BasePDFHash,
-		StoredBasePdfHash: result.StoredBasePDFHash,
+		Match:              result.Match,
+		JsonldHash:         result.JSONLDHash,
+		BasePdfHash:        result.BasePDFHash,
+		StoredBasePdfHash:  result.StoredBasePDFHash,
+		C2paManifestFound:  result.C2PAManifestFound,
+		C2paSignatureValid: result.C2PASignatureValid,
+		VcProofValid:       result.VCProofValid,
+		LifecycleStatus:    ptrToString(result.LifecycleStatus),
+		StatusListURI:      ptrToString(result.StatusListURI),
 	}, nil
 }
 
@@ -300,14 +318,17 @@ func (s *pdfGenerationSrvc) appendAndCache(
 	fileHash := c2pa.FileHashOf(jsonldBytes)
 	pdfHash := c2pa.BasePDFHashOf(pdfBytes)
 	prevHash := c2pa.PrevManifestHashFrom(pdfBytes)
-	
+
+	// Map the raw CWE/DB state to the SRS-defined C2PA vocabulary (DCS-OR-C2PA-003).
+	c2paState := c2pa.MapCWEStateToC2PA(state)
+
 	// Generate a reason based on the state transition (DCS-OR-C2PA-003).
-	reason := stateToReason(state)
-	
+	reason := stateToReason(c2paState)
+
 	// Issue a W3C VC for this lifecycle event (DCS-OR-C2PA-004).
 	// Status list publication is atomic with VC issuance (DCS-OR-C2PA-005).
 	vcID, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
-		ctx, did, fileHash, state, reason, s.IssuerDID, time.Now().UTC(),
+		ctx, did, fileHash, c2paState, reason, s.IssuerDID, time.Now().UTC(),
 	)
 	if err != nil {
 		return pdfBytes, fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
@@ -315,7 +336,7 @@ func (s *pdfGenerationSrvc) appendAndCache(
 
 	assertion := c2pa.NewLifecycleAssertion(
 		did, fileHash, pdfHash, builder.RendererVersion,
-		state, reason, s.IssuerDID, vcID, prevHash,
+		c2paState, reason, s.IssuerDID, vcID, prevHash,
 		time.Now().UTC(),
 	)
 	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, pdfBytes, vcBytes)
@@ -477,4 +498,32 @@ func stateToReason(state string) string {
 	default:
 		return "Contract state changed to: " + state
 	}
+}
+
+// statusListURI returns the URI of the status list service if available (DCS-OR-C2PA-006).
+func (s *pdfGenerationSrvc) statusListURI() string {
+	// The status list is managed by the VCIssuer's status list publisher,
+	// but the URI is not directly exposed. Return empty for now; future work
+	// should expose the status list service URL through the VCIssuer interface.
+	// TODO: add QueryStatusList(statusListURI, contractID) method to c2pa.VCIssuer
+	return ""
+}
+
+// queryStatusListStatus queries the XFSC status list service for the contract's
+// lifecycle status. Returns (status, error). If unavailable, returns ("", nil).
+// TODO: implement full HTTP query to statuslist-service GET /v1/tenants/{tenantID}/status/{listID}
+func (s *pdfGenerationSrvc) queryStatusListStatus(statusListURI, contractID string) (string, error) {
+	// Stub: status list queries require the HTTP client and specific tenant/list IDs,
+	// which are not yet wired into the service. This is a non-blocking field for now.
+	// Production implementation will call the XFSC statuslist-service to fetch the
+	// StatusList2021/2023 and check the revocation bitstring index for contractID.
+	return "", nil
+}
+
+// ptrToString converts a string to a *string pointer, handling empty strings.
+func ptrToString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
