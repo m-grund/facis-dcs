@@ -30,6 +30,6 @@ func GetDID() (*string, error) {
 		return nil, err
 	}
 
-	did := fmt.Sprintf("did:%s:%s", dcsIssuer, uuid)
+	did := fmt.Sprintf("did:web:%s:%s", dcsIssuer, uuid)
 	return &did, nil
 }
