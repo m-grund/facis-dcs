@@ -3,9 +3,10 @@ package base
 import (
 	"crypto/rand"
 	"fmt"
+	"os"
 )
 
-// UUID v4 generieren
+// UUID v4
 func generateUUID() (string, error) {
 	uuid := make([]byte, 16)
 	_, err := rand.Read(uuid)
@@ -22,10 +23,13 @@ func generateUUID() (string, error) {
 
 func GetDID() (*string, error) {
 
+	dcsIssuer := os.Getenv("DCS_ISSUER")
+
 	uuid, err := generateUUID()
 	if err != nil {
 		return nil, err
 	}
 
-	return &uuid, nil
+	did := fmt.Sprintf("did:%s:%s", dcsIssuer, uuid)
+	return &did, nil
 }
