@@ -3,6 +3,7 @@
 import requests
 from behave import given, then, when
 
+from core.utils import is_uuid
 from steps.support.services.template_service import TemplateService
 from steps.support.api_client import (
     template_archive_url,
@@ -373,6 +374,26 @@ def step_when_search_templates(context, keyword):
         timeout=context.http_timeout_seconds,
     )
 
+@when('I am authenticated with roles: "{roles}"')
+def step_when_authenticated_with_roles(context, roles):
+    role_list = [role.strip() for role in roles.split(",")]
+    AuthService.set_headers_for_roles(context, role_list)
+
+@when('I try to search for templates with name "{name}" "{count}"')
+def step_when_search_templates(context, name, count):
+    for _ in range(int(count)):
+        context.requests_response = requests.get(
+            template_search_url(context),
+            params={"name": name},
+            headers=getattr(context, "headers", {}),
+            timeout=context.http_timeout_seconds,
+        )
+
+@when('the request is denied because of too many failed attempts')
+def step_when_denied_to_many_attempts(context):
+    response = context.requests_response.json()
+    assert context.requests_response.status_code in (401, 403) and "too many failed attempts" in response["message"], response
+
 @when('I search for templates with name "{name}"')
 def step_when_search_templates(context, name):
     context.requests_response = requests.get(
@@ -398,19 +419,6 @@ def step_when_search_templates(context, title):
         params={"template_data": title},
         headers=getattr(context, "headers", {}),
         timeout=context.http_timeout_seconds,
-    )
-
-
-@when('I retrieve template "{name}"')
-def step_when_retrieve_template(context, name):
-    t = TemplateService.named(context, name)
-    if not t or not t.get("did"):
-        # No Given seeded this template; auto-create as test data.
-        did, updated_at = TemplateService.create_fresh_template(context)
-        TemplateService.store_named(context, name, did, updated_at)
-        t = TemplateService.named(context, name)
-    context.requests_response = get_with_headers(
-        context, template_retrieve_by_id_url(context, t["did"])
     )
 
 
@@ -597,6 +605,8 @@ def step_then_template_assigned_uuid(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert isinstance(did, str) and did.strip(), f"Expected identifier, got: {body}"
+    uuid = did.split(":")[-1]
+    assert is_uuid(uuid), f"Expected did {uuid} to be a valid UUID"
 
 
 @then('the template has a resolvable DID')
