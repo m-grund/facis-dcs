@@ -3,6 +3,7 @@
 import requests
 from behave import given, then, when
 
+from core.utils import is_uuid
 from steps.support.services.template_service import TemplateService
 from steps.support.api_client import (
     template_archive_url,
@@ -604,6 +605,7 @@ def step_then_template_assigned_uuid(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert isinstance(did, str) and did.strip(), f"Expected identifier, got: {body}"
+    assert is_uuid(did), f"Expected did {did} to be a valid UUID"
 
 
 @then('the template has a resolvable DID')
