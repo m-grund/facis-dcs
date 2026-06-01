@@ -2,43 +2,40 @@ package command
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-
-	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
-	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
+	event2 "digital-contracting-service/internal/signingmanagement/event"
+
+	"github.com/jmoiron/sqlx"
 )
 
-type ComplianceCmd struct {
+type SigningRequestCmd struct {
 	DID         string
-	CheckedBy string
-	Username    string
+	RequestedBy string
+	UpdatedAt   time.Time
 }
 
-type ComplianceValidator struct {
+type SigningRequester struct {
 	DB    *sqlx.DB
 	CRepo db.ContractRepo
 }
 
-func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) error {
-
-	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
-	defer cancel()
+func (h *SigningRequester) Handle(ctx context.Context, cmd SigningRequestCmd) error {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		err := tx.Rollback()
+		if err != nil {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -48,12 +45,19 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	evt := signingmanagementevents.ComplianceValidationEvent{
+	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		return errors.New("contract was updated elsewhere, please reload")
+	}
+
+	if processData.State == contractstate.Approved.String() {
+		return errors.New("current contract state is invalid")
+	}
+
+	evt := event2.SigningRequestEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
-		CheckedBy:       cmd.CheckedBy,
-		OccurredAt:      time.Now(),
-		Username:        cmd.Username,
+		RequestedBy:     cmd.RequestedBy,
+		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

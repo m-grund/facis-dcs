@@ -2,43 +2,37 @@ package command
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-
-	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
-	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
+	event2 "digital-contracting-service/internal/signingmanagement/event"
+
+	"github.com/jmoiron/sqlx"
 )
 
-type ComplianceCmd struct {
-	DID         string
-	CheckedBy string
-	Username    string
+type VerifyCmd struct {
+	DID        string
+	VerifiedBy string
 }
 
-type ComplianceValidator struct {
+type Verifier struct {
 	DB    *sqlx.DB
 	CRepo db.ContractRepo
 }
 
-func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) error {
-
-	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
-	defer cancel()
+func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		err := tx.Rollback()
+		if err != nil {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -48,12 +42,11 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	evt := signingmanagementevents.ComplianceValidationEvent{
+	evt := event2.VerifyEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
-		CheckedBy:       cmd.CheckedBy,
-		OccurredAt:      time.Now(),
-		Username:        cmd.Username,
+		VerifiedBy:      cmd.VerifiedBy,
+		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

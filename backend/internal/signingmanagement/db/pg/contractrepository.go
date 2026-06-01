@@ -165,7 +165,7 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
 		addParam("contract_data", data.ContractData)
 	}
-	if data.ContractVersion != nil {
+	if data.ContractVersion > 0 {
 		addParam("contract_version", data.ContractVersion)
 	}
 	if len(columns) == 0 {

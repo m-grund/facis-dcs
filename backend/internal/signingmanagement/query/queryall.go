@@ -24,7 +24,7 @@ type GetAllMetadataQry struct {
 
 type MetadataItem struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	Name            *string
 	Description     *string
 	State           contractstate.ContractState

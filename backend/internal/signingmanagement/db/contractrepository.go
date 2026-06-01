@@ -11,7 +11,7 @@ import (
 
 type Contract struct {
 	DID             string         `db:"did"`
-	ContractVersion *int           `db:"contract_version"`
+	ContractVersion int            `db:"contract_version"`
 	State           string         `db:"state"`
 	CreatedBy       string         `db:"created_by"`
 	CreatedAt       time.Time      `db:"created_at"`
@@ -23,7 +23,7 @@ type Contract struct {
 
 type ContractMetadata struct {
 	DID             string    `db:"did"`
-	ContractVersion *int      `db:"contract_version"`
+	ContractVersion int       `db:"contract_version"`
 	State           string    `db:"state"`
 	CreatedBy       string    `db:"created_by"`
 	CreatedAt       time.Time `db:"created_at"`
@@ -34,7 +34,7 @@ type ContractMetadata struct {
 
 type ContractProcessData struct {
 	DID             string    `db:"did"`
-	ContractVersion *int      `db:"contract_version"`
+	ContractVersion int       `db:"contract_version"`
 	State           string    `db:"state"`
 	CreatedBy       string    `db:"created_by"`
 	UpdatedAt       time.Time `db:"updated_at"`
@@ -42,7 +42,7 @@ type ContractProcessData struct {
 
 type ContractUpdateData struct {
 	DID             string         `db:"did"`
-	ContractVersion *int           `db:"contract_version"`
+	ContractVersion int            `db:"contract_version"`
 	State           string         `db:"state"`
 	Name            *string        `db:"name"`
 	Description     *string        `db:"description"`

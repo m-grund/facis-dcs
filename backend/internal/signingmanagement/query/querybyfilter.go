@@ -21,7 +21,7 @@ type GetAllMetadataByFilterQry struct {
 	RetrievedBy     string
 	Username        string
 	DID             *string
-	ContractVersion *int
+	ContractVersion int
 	State           *contractstate.ContractState
 	Name            *string
 	Description     *string
@@ -30,7 +30,7 @@ type GetAllMetadataByFilterQry struct {
 
 type GetAllMetadataByFilterResult struct {
 	DID             string
-	ContractVersion *int
+	ContractVersion int
 	State           contractstate.ContractState
 	Name            *string
 	Description     *string
@@ -62,7 +62,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 
 	searchValues := db.SearchValues{
 		DID:             query.DID,
-		ContractVersion: query.ContractVersion,
+		ContractVersion: &query.ContractVersion,
 		Name:            query.Name,
 		Description:     query.Description,
 		ContractData:    query.Filter,
