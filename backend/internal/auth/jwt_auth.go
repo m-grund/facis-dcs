@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log"
 	"time"
 
@@ -96,9 +98,8 @@ func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *
 		return
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -120,9 +121,8 @@ func (a JWTAuthenticator) checkAndLock(ctx context.Context, ip string) error {
 		return nil
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -145,9 +145,8 @@ func (a JWTAuthenticator) clearLock(ctx context.Context, ip string) {
 		return
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
