@@ -14,10 +14,6 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/contractworkflowengine/db"
-	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 )
 
 type GetTemplateDataByDIDQry struct {
