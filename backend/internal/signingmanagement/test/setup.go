@@ -2,20 +2,20 @@ package test
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/contractworkflowengine/command"
-	cwecommands "digital-contracting-service/internal/contractworkflowengine/command"
-	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
-	cwepg "digital-contracting-service/internal/contractworkflowengine/db/pg"
-	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
-	"digital-contracting-service/internal/signingmanagement/db"
-	"digital-contracting-service/internal/signingmanagement/db/pg"
 	"log"
 	"os"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+
+	"digital-contracting-service/internal/base/datatype"
+	cwecommands "digital-contracting-service/internal/contractworkflowengine/command"
+	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
+	cwepg "digital-contracting-service/internal/contractworkflowengine/db/pg"
+	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
+	"digital-contracting-service/internal/signingmanagement/db"
+	"digital-contracting-service/internal/signingmanagement/db/pg"
 )
 
 type TestRepo struct {
@@ -34,7 +34,12 @@ func setupTestDB(t *testing.T) *sqlx.DB {
 		log.Fatalln(err)
 	}
 
-	t.Cleanup(func() { database.Close() })
+	t.Cleanup(func() {
+		err := database.Close()
+		if err != nil {
+			t.Fatalf("could not close database connection")
+		}
+	})
 
 	return database
 }
@@ -140,40 +145,5 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 	_, err = db.Exec(updateStatement, cmd.DID, state)
 	if err != nil {
 		t.Fatalf("Failed to update state: %v", err)
-	}
-}
-
-func createTestContractWithData(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, state contractstate.ContractState, createdBy string, name string, description string, contractData map[string]interface{}) {
-	jsonContractData, err := datatype.NewJSON(contractData)
-	if err != nil {
-		t.Fatalf("Failed to create JSON data: %v", err)
-	}
-
-	ctx := context.Background()
-
-	cmd := command.CreateCmd{
-		DID:          *did,
-		CreatedBy:    createdBy,
-		Name:         &name,
-		Description:  &description,
-		ContractData: &jsonContractData,
-	}
-	createHandler := command.Creator{
-		DB:    db,
-		CRepo: repo.CWECRepo,
-	}
-	err = createHandler.Handle(ctx, cmd)
-	if err != nil {
-		t.Fatalf("Failed to create contract: %v", err)
-	}
-
-	updateStatement := `UPDATE contracts SET
-        	state = $2
-    	WHERE did = $1
-`
-
-	_, err = db.Exec(updateStatement, *did, state)
-	if err != nil {
-		t.Fatalf("Failed to update template state: %v", err)
 	}
 }

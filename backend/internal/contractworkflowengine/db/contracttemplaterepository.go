@@ -2,9 +2,10 @@ package db
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 type ContractTemplateRepo interface {

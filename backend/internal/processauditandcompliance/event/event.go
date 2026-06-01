@@ -1,9 +1,10 @@
 package event
 
 import (
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
-	"time"
 )
 
 // AuditEvent is emitted when the contract is audited

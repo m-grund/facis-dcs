@@ -2,15 +2,17 @@ package query
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	event2 "digital-contracting-service/internal/processauditandcompliance/event"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type GetAuditLogQry struct {
@@ -29,7 +31,12 @@ func (h *Auditor) Handle(ctx context.Context, cmd GetAuditLogQry) ([][]datatype.
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	result, err := h.ATrailReader.ReadAuditLogEntriesByComponent(ctx, tx, cmd.Scope)
 	if err != nil {

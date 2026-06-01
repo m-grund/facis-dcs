@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 
 	"fmt"
 	"io"
@@ -65,11 +66,9 @@ type FederatedCatalogueClient struct {
 const ParticipantsEndpointPath = "/participants"
 const SelfDescriptionsEndpointPath = "/self-descriptions"
 
-// Use distributed search query in the Federated Catalogue API
 const QueryEndpointPath = "/query/search"
 const VerificationEndpointPath = "/verification"
 
-// NewFederatedCatalogueClient creates a Federated Catalogue client.
 func NewFederatedCatalogueClient(apiURL string) *FederatedCatalogueClient {
 	return &FederatedCatalogueClient{
 		baseURL: normalizeBaseURL(apiURL),
@@ -176,7 +175,12 @@ func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string,
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
 
 	// Read the response body and limit the size to 1MB.
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

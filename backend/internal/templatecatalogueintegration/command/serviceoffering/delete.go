@@ -16,7 +16,6 @@ type DeleteCmd struct {
 	ParticipantID string
 }
 
-// DeleteServiceOffering handler deletes the service offering in the Federated Catalogue.
 type Deleter struct {
 	Ctx      context.Context
 	FCClient *client.FederatedCatalogueClient

@@ -51,6 +51,6 @@ func (h *ServiceOfferingExistsHandler) Handle(qry ServiceOfferingExistsQry) (*Se
 		return nil, err
 	}
 
-	exists := !(queryResp.TotalCount == 0 || len(queryResp.Items) == 0)
+	exists := queryResp.TotalCount != 0 && len(queryResp.Items) != 0
 	return &ServiceOfferingExistsResult{Exists: exists}, nil
 }

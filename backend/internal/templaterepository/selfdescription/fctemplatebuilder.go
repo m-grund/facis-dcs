@@ -1,12 +1,13 @@
 package selfdescription
 
 import (
-	"digital-contracting-service/internal/base/datatype"
-	tcselfdescription "digital-contracting-service/internal/templatecatalogueintegration/selfdescription"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"digital-contracting-service/internal/base/datatype"
+	tcselfdescription "digital-contracting-service/internal/templatecatalogueintegration/selfdescription"
 )
 
 type TemplateResourceInput struct {

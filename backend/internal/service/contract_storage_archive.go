@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	"digital-contracting-service/internal/auth"
 

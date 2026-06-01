@@ -5,6 +5,7 @@ tmp
 .DS_Store
 .claude/
 .codex
+node_modules
 backend/gen
 
 frontend/node_modules

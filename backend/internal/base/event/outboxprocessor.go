@@ -2,16 +2,17 @@ package event
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/conf"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/db"
-	"digital-contracting-service/internal/base/ipfs"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/db"
+	"digital-contracting-service/internal/base/ipfs"
 )
 
 type OutboxProcessor struct {
@@ -36,7 +37,12 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 		if err != nil {
 			return fmt.Errorf("could not start transaction: %w", err)
 		}
-		defer tx.Rollback()
+		defer func(tx *sqlx.Tx) {
+			err := tx.Rollback()
+			if err != nil {
+				log.Printf("failed to rollback transaction: %s", err)
+			}
+		}(tx)
 
 		rows, err := tx.QueryxContext(ctx, `
 			SELECT id, component, event_type, event_data, did, created_at
@@ -54,12 +60,18 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 		for rows.Next() {
 			var event datatype.OutboxEvent
 			if err := rows.StructScan(&event); err != nil {
-				rows.Close()
+				err := rows.Close()
+				if err != nil {
+					return err
+				}
 				return fmt.Errorf("could not scan event: %w", err)
 			}
 			events = append(events, event)
 		}
-		rows.Close()
+		err = rows.Close()
+		if err != nil {
+			return err
+		}
 
 		err = tx.Commit()
 		if err != nil {
@@ -93,7 +105,12 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	if err := j.PubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
 		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
@@ -137,7 +154,6 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	if err != nil {
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
 	}
-	globalLogPredCID = &result.Identifier.Value
 
 	switch event.Component {
 	case componenttype.ContractTemplateRepo.String():

@@ -16,7 +16,6 @@ type UpdateCmd struct {
 	Participant selfdescription.ParticipantSdInput
 }
 
-// UpdateParticipant handler updates the current participant in the Federated Catalogue.
 type Updater struct {
 	Ctx      context.Context
 	FCClient *client.FederatedCatalogueClient
