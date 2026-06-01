@@ -45,7 +45,7 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		return errors.New("version must be greater than 0")
 	}
 	if h.FCClient == nil {
-		return errors.New("federated catalogue is not configured")
+		return fcclient.ErrFederatedCatalogueNotConfigured
 	}
 
 	queryHandler := templatequery.GetByIDHandler{
