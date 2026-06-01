@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log"
 	"testing"
 	"time"
@@ -206,9 +208,8 @@ func TestNegotiation_AllNegotiatorsAcceptChangeRequest(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -246,9 +247,8 @@ func TestNegotiation_AllNegotiatorsAcceptChangeRequest(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -335,9 +335,8 @@ func TestNegotiation_OneNegotiatorRejectChangeRequest(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -375,9 +374,8 @@ func TestNegotiation_OneNegotiatorRejectChangeRequest(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -464,9 +462,8 @@ func TestNegotiation_OneAcceptionOneRejectionOfChangeRequest(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -521,9 +518,8 @@ func TestNegotiation_OneAcceptionOneRejectionOfChangeRequest(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -610,9 +606,8 @@ func TestNegotiation_TestForOpenNegotiationDecisions(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -647,9 +642,8 @@ func TestNegotiation_TestForOpenNegotiationDecisions(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
