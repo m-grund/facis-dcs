@@ -107,7 +107,7 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 	err := tx.GetContext(ctx, &ct, query, did)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("contract template with DID %s not found", did)
+			return nil, fmt.Errorf("%w: did=%s", db.ErrContractTemplateNotFound, did)
 		}
 		return nil, err
 	}

@@ -55,9 +55,9 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import type { TemplateCatalogueRetrieveByIdResponse } from '@/models/responses/template-catalogue-integration-response'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import CatalogueTemplateDetailsInfo from '@/modules/template-catalogue/components/CatalogueTemplateDetailsInfo.vue'
-import CatalogueTemplateMetaDataInfo from '@/modules/template-catalogue/components/CatalogueTemplateMetaDataInfo.vue'
-import CatalogueTemplatePreviewInfo from '@/modules/template-catalogue/components/CatalogueTemplatePreviewInfo.vue'
+import CatalogueTemplateDetailsInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateDetailsInfo.vue'
+import CatalogueTemplateMetaDataInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateMetaDataInfo.vue'
+import CatalogueTemplatePreviewInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplatePreviewInfo.vue'
 import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-templace'
 import { TemplateState } from '@/types/contract-template-state'
 import { ROUTES } from '@/router/router'
@@ -107,11 +107,11 @@ const isRegisterDisabled = computed(() => {
 
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
-function toTemplateType(templateType?: string): TemplateTypeValue {
-  if (templateType === TemplateType.frameContract || templateType === TemplateType.subContract) {
-    return templateType
+function toTemplateType(value: string | undefined): TemplateTypeValue {
+  if (value === TemplateType.frameContract || value === TemplateType.subContract) {
+    return value
   }
-  return TemplateType.frameContract
+  return TemplateType.subContract
 }
 
 watch(

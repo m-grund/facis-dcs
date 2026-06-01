@@ -12,6 +12,7 @@ import type {
   TemplateCatalogueDeleteServiceOfferingRequest,
   TemplateCatalogueGetCurrentServiceOfferingRequest,
   TemplateCatalogueUpdateServiceOfferingRequest,
+  TemplateCatalogueSearchRequest,
 } from '@/models/requests/template-catalogue-integration-request'
 import type {
   TemplateCatalogueCreateParticipantResponse,
@@ -149,5 +150,12 @@ export const templateCatalogueIntegrationService = {
         },
       })
       .then((res) => res.data ?? null)
+  },
+
+  async search_template(request: TemplateCatalogueSearchRequest): Promise<TemplateCatalogueRetrieveResponse> {
+    return http
+      .get<TemplateCatalogueRetrieveResponse>('/catalogue/template/search', { params: request })
+      .then((res) => res.data)
+      .catch(() => ({ totalCount: 0, items: [] }))
   },
 }

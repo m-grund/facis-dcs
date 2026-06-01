@@ -60,7 +60,7 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		return fmt.Errorf("could not retrieve template from Federated Catalogue: %w", err)
 	}
 	if fcTemplate == nil {
-		return errors.New("template not found in Federated Catalogue")
+		return fcclient.ErrTemplateNotFoundInFederatedCatalogue
 	}
 
 	templateData, err := templateDataFromAny(fcTemplate.TemplateData)
