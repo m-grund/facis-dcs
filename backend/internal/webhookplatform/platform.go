@@ -181,13 +181,17 @@ func (p *Platform) callback(w http.ResponseWriter, r *http.Request) {
 
 func jsonOK(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("webhookplatform: failed to encode JSON response: %v", err)
+	}
 }
 
 func jsonError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		log.Printf("webhookplatform: failed to encode JSON error response: %v", err)
+	}
 }
 
 func isKnownEvent(name string) bool {

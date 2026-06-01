@@ -1,9 +1,7 @@
 version: "2"
-
 run:
   timeout: 5m
   modules-download-mode: readonly
-
 linters:
   default: none
   enable:
@@ -12,7 +10,12 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-
+  settings:
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000"
+        - "-ST1001"
 formatters:
   enable:
     - gofmt

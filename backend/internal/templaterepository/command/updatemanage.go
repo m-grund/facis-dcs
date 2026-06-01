@@ -2,6 +2,11 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -10,9 +15,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -43,7 +45,12 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	oldData, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {
@@ -82,42 +89,37 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 
 	newState := oldData.State
 	if cmd.State != nil {
-		if *cmd.State == contracttemplatestate.Draft || *cmd.State == contracttemplatestate.Deleted || *cmd.State == contracttemplatestate.Deprecated {
-
+		switch *cmd.State {
+		case contracttemplatestate.Draft, contracttemplatestate.Deleted, contracttemplatestate.Deprecated:
 			err = h.RTRepo.Delete(ctx, tx, cmd.DID)
 			if err != nil {
 				return fmt.Errorf("could not delete review tasks: %w", err)
 			}
-
 			err = h.ATRepo.Delete(ctx, tx, cmd.DID)
 			if err != nil {
 				return fmt.Errorf("could not delete approval tasks: %w", err)
 			}
-
-		} else if *cmd.State == contracttemplatestate.Rejected || *cmd.State == contracttemplatestate.Submitted {
+		case contracttemplatestate.Rejected, contracttemplatestate.Submitted:
 			err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
 			if err != nil {
 				return err
 			}
-
 			err = h.ATRepo.ReopenTasks(ctx, tx, cmd.DID)
 			if err != nil {
 				return err
 			}
-		} else if *cmd.State == contracttemplatestate.Reviewed {
+		case contracttemplatestate.Reviewed:
 			err = h.RTRepo.UpdateStateForAllTasks(ctx, tx, cmd.DID, reviewtaskstate.Approved.String())
 			if err != nil {
 				return err
 			}
-
 			err = h.ATRepo.ReopenTasks(ctx, tx, cmd.DID)
 			if err != nil {
 				return err
 			}
-		} else {
+		default:
 			return errors.New("contract invalid state")
 		}
-
 		newState = cmd.State.String()
 	}
 
