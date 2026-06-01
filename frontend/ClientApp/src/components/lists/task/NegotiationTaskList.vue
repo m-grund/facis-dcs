@@ -46,7 +46,12 @@ const filteredTasks = computed(() => {
   if (stateFilterStore.hasFilters) {
     return sortedTasks.value.filter((task) => stateFilterStore.hasFilter(task.state))
   }
-  return sortedTasks.value
+  return sortedTasks.value.filter((task) => {
+    const contractState = contractsStore.findContractByDid(task.did)?.state
+    return (
+      contractState && ([ContractState.draft, ContractState.negotiation] as ContractState[]).includes(contractState)
+    )
+  })
 })
 
 const getContractName = (task: ContractNegotiationTask) => {
