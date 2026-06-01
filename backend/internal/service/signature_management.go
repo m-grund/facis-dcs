@@ -22,9 +22,6 @@ import (
 	db "digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
-
-	"github.com/jmoiron/sqlx"
-	"goa.design/clue/log"
 )
 
 type signatureManagementsrvc struct {

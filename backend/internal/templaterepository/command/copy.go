@@ -12,11 +12,6 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/templaterepository/db"
-	templateevents "digital-contracting-service/internal/templaterepository/event"
 )
 
 type CopyCmd struct {
