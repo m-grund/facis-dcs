@@ -18,9 +18,9 @@ import (
 )
 
 type ComplianceCmd struct {
-	DID         string
+	DID       string
 	CheckedBy string
-	Username    string
+	Username  string
 }
 
 type ComplianceValidator struct {
