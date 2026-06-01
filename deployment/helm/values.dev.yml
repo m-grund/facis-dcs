@@ -135,6 +135,11 @@ cryptoProvider:
     keyType: "ecdsa-p256"
     vcKey: "dcs-vc-signing-key"
     vcKeyType: "ed25519"
+  devCertChain:
+    enabled: true
+    overwrite: true
+    # Optional override; by default: <release>-crypto-provider-dev-cert-chain
+    secretName: ""
 
 # XFSC Status List Service (DCS-OR-C2PA-005)
 statuslistService:
