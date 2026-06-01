@@ -51,3 +51,7 @@ dependencies:
     repository: "file://charts/ipfs-document-manager"
     condition: ipfsDocumentManager.enabled
     alias: ipfsDocumentManager
+  - name: kube-prometheus-stack
+    version: "85.2.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: monitoring.enabled

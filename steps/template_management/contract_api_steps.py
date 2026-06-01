@@ -83,6 +83,8 @@ def step_then_contract_unique_id(context):
     did = body.get("did")
     assert is_uuid(did), f"Expected the DID {did} is UUID"
     assert isinstance(did, str) and did.strip(), f"Expected a contract DID, got: {body}"
+    uuid = did.split(":")[-1]
+    assert is_uuid(uuid), f"Expected {uuid} is a valid UUID"
 
 
 # ---------------------------------------------------------------------------

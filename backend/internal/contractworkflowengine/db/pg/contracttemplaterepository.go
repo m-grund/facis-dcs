@@ -3,11 +3,12 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/base/datatype"
 	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 type PostgresContractTemplateRepo struct {

@@ -2,15 +2,16 @@ package base
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/db"
 	"digital-contracting-service/internal/base/ipfs"
-	"encoding/json"
-	"fmt"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type AuditTrailReader struct {

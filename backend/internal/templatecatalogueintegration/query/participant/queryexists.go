@@ -51,6 +51,6 @@ func (h *ParticipantExistsHandler) Handle(qry ParticipantExistsQry) (*Participan
 		return nil, err
 	}
 
-	exists := !(queryResp.TotalCount == 0 || len(queryResp.Items) == 0)
+	exists := queryResp.TotalCount != 0 && len(queryResp.Items) != 0
 	return &ParticipantExistsResult{Exists: exists}, nil
 }

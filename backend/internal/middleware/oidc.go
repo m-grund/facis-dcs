@@ -10,7 +10,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// holds OIDC provider configuration
+// OIDCConfig holds OIDC provider configuration
 type OIDCConfig struct {
 	// Example: https://keycloak.example.com/auth/realms/dcs
 	IssuerURL string
@@ -18,7 +18,7 @@ type OIDCConfig struct {
 	ClientID string
 }
 
-// validate JWT tokens from OIDC providers
+// OIDCValidator validates JWT tokens from OIDC providers
 type OIDCValidator struct {
 	provider *oidc.Provider
 	verifier *oidc.IDTokenVerifier
@@ -31,7 +31,7 @@ const (
 	oidcDiscoveryInitialBackoff = 500 * time.Millisecond
 )
 
-// connects to the OIDC provider to get public keys
+// NewOIDCValidator connects to the OIDC provider to get public keys
 func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, error) {
 	provider, err := discoverOIDCProvider(ctx, config.IssuerURL)
 	if err != nil {
@@ -156,7 +156,7 @@ func toStringSlice(v interface{}) []string {
 	return out
 }
 
-// Expected format: "Authorization: Bearer <token>"
+// ExtractBearerToken expected format "Authorization: Bearer <token>"
 func ExtractBearerToken(authHeader string) (string, error) {
 	const bearerPrefix = "Bearer "
 	if !strings.HasPrefix(authHeader, bearerPrefix) {

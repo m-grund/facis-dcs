@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"time"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
@@ -17,7 +19,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
 	"digital-contracting-service/internal/templaterepository/db"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -64,7 +65,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
@@ -97,7 +98,7 @@ func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templatereposito
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}

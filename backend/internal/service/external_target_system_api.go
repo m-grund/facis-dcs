@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	externaltargetsystemapi "digital-contracting-service/gen/external_target_system_api"
 	"digital-contracting-service/internal/auth"
 

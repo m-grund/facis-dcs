@@ -2,6 +2,15 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"os"
+	"testing"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/templaterepository/command"
 	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
@@ -10,12 +19,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	database "digital-contracting-service/internal/templaterepository/db"
 	"digital-contracting-service/internal/templaterepository/db/pg"
-	"log"
-	"os"
-	"testing"
-
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
 )
 
 type TestRepo struct {
@@ -30,14 +33,19 @@ func setupTestDB(t *testing.T) *sqlx.DB {
 		t.Fatalf("DATABASE_URL isn't set")
 	}
 
-	database, err := sqlx.Connect("postgres", databaseURL)
+	db, err := sqlx.Connect("postgres", databaseURL)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	t.Cleanup(func() { database.Close() })
+	t.Cleanup(func() {
+		err := db.Close()
+		if err != nil {
+			t.Fatalf("could not close database connection")
+		}
+	})
 
-	return database
+	return db
 }
 
 func NewTestRepo() *TestRepo {
@@ -157,10 +165,14 @@ func createTestContractTemplateWithData(t *testing.T, db *sqlx.DB, repo *TestRep
 
 func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state reviewtaskstate.ReviewTaskState, submittedBy string, reviewers []string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	for _, reviewer := range reviewers {
 		reviewTask := database.ReviewTaskData{
@@ -183,10 +195,14 @@ func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *Tes
 
 func createApprovalTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state approvaltaskstate.ApprovalTaskState, submittedBy string, approver string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	approvalTask := database.ApprovalTaskData{
 		DID:       did,

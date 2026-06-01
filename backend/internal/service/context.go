@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	"digital-contracting-service/internal/pathutil"
 	"net/http"
+
+	"digital-contracting-service/internal/pathutil"
 )
 
 const apiPathPrefixEnv = "DCS_API_PATH"
