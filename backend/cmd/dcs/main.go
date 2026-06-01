@@ -185,6 +185,17 @@ func main() {
 		nil,
 	)
 
+	// Start the NATS→Webhook bridge: automatically fans out to all registered
+	// webhook subscribers whenever a DCS lifecycle event fires on the event bus.
+	webhookSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not create webhook NATS subscriber")
+	}
+	defer webhookSubClient.Close()
+	if err := webhookplatform.StartNATSBridge(webhookSubClient, webhookDispatcher); err != nil {
+		log.Fatalf(ctx, err, "Could not start webhook NATS bridge")
+	}
+
 	// Initialize the service.
 	var (
 		authSvc                         genauth.Service
