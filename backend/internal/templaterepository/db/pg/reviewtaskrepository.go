@@ -2,13 +2,14 @@ package pg
 
 import (
 	"context"
-	"digital-contracting-service/internal/templaterepository/db"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/templaterepository/db"
 )
 
 type PostgresReviewTaskRepo struct {

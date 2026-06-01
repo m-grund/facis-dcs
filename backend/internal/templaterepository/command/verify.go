@@ -2,6 +2,13 @@ package command
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -9,11 +16,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 	"digital-contracting-service/internal/templaterepository/selfdescription"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -38,7 +40,12 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {

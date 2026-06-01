@@ -2,14 +2,15 @@ package test
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCreate_CreateNewContract(t *testing.T) {

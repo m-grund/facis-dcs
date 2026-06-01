@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 
@@ -16,7 +17,11 @@ func mountSwaggerUI(mux goahttp.Muxer) {
 		specURL := "./openapi3.json"
 		html := buildSwaggerHTML(specURL)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(html))
+		_, err := w.Write([]byte(html))
+		if err != nil {
+			log.Println("Failed to write response:", err)
+			return
+		}
 	})
 	mux.Handle("GET", "/swagger/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "./swagger", http.StatusMovedPermanently)
@@ -58,7 +63,11 @@ func mountSwaggerUI(mux goahttp.Muxer) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Write(modifiedData)
+		_, err = w.Write(modifiedData)
+		if err != nil {
+			log.Println("Failed to write response:", err)
+			return
+		}
 	})
 }
 

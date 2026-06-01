@@ -3,13 +3,14 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/signingmanagement/db"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/signingmanagement/db"
 )
 
 type PostgresContractRepo struct {
@@ -135,7 +136,6 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	if values.ContractData != nil {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, *values.ContractData)
-		paramIndex++
 	}
 
 	l := len(" AND")

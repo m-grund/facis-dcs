@@ -2,6 +2,12 @@ package query
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -9,10 +15,6 @@ import (
 	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type GetAllMetadataByFilterQry struct {
@@ -50,7 +52,12 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 	if err != nil {
 		return nil, fmt.Errorf("could not create transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	searchValues := db.SearchValues{
 		DID:             query.DID,

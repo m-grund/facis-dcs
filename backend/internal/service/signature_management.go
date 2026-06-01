@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"time"
+
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
@@ -10,7 +12,6 @@ import (
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/query"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )

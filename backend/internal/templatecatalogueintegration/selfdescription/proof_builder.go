@@ -2,9 +2,10 @@ package selfdescription
 
 import "time"
 
-// TODO: replace with the actual verification method.
-// BuildProof returns a proof template.
 func BuildProof(_ map[string]interface{}, proofPurpose string) map[string]interface{} {
+
+	// TODO: replace with the actual verification method.
+
 	now := time.Now().UTC()
 
 	proof := map[string]interface{}{

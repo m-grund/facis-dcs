@@ -2,9 +2,10 @@ package base
 
 import (
 	"crypto/rand"
-	"digital-contracting-service/internal/base/datatype"
 	"fmt"
 	"os"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 // UUID v4
@@ -24,7 +25,10 @@ func generateUUID() (string, error) {
 
 func GetDID(resourceType datatype.ResourceType) (*string, error) {
 
-	dcsIssuer := os.Getenv("DCS_ISSUER")
+	dcsIssuer := "localhost"
+	if os.Getenv("DCS_ISSUER") != "" {
+		dcsIssuer = os.Getenv("DCS_ISSUER")
+	}
 
 	uuid, err := generateUUID()
 	if err != nil {

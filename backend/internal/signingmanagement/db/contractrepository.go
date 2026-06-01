@@ -2,10 +2,11 @@ package db
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 type Contract struct {

@@ -2,12 +2,14 @@ package contract
 
 import (
 	"context"
+	"fmt"
+	"log"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"fmt"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -31,7 +33,12 @@ func (h *Reviewer) Handle(ctx context.Context, cmd ReviewCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	evt := contractevents.ReviewEvent{
 		DID:        cmd.DID,

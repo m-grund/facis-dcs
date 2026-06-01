@@ -2,29 +2,29 @@ package test
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/contractworkflowengine/command"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
-	"digital-contracting-service/internal/contractworkflowengine/db"
-	database "digital-contracting-service/internal/contractworkflowengine/db"
-	"digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"log"
 	"os"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/contractworkflowengine/command"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
+	database "digital-contracting-service/internal/contractworkflowengine/db"
+	"digital-contracting-service/internal/contractworkflowengine/db/pg"
 )
 
 type TestRepo struct {
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NTRepo db.NegotiationTaskRepo
-	NRepo  db.NegotiationRepo
+	CRepo  database.ContractRepo
+	RTRepo database.ReviewTaskRepo
+	ATRepo database.ApprovalTaskRepo
+	NTRepo database.NegotiationTaskRepo
+	NRepo  database.NegotiationRepo
 }
 
 func setupTestDB(t *testing.T) *sqlx.DB {
@@ -38,7 +38,12 @@ func setupTestDB(t *testing.T) *sqlx.DB {
 		log.Fatalln(err)
 	}
 
-	t.Cleanup(func() { database.Close() })
+	t.Cleanup(func() {
+		err := database.Close()
+		if err != nil {
+			t.Errorf("could not close database connection")
+		}
+	})
 
 	return database
 }
@@ -141,47 +146,17 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 	}
 }
 
-func createTestContractWithData(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, state contractstate.ContractState, createdBy string, name string, description string, contractData map[string]interface{}) {
-	jsonContractData, err := datatype.NewJSON(contractData)
-	if err != nil {
-		t.Fatalf("Failed to create JSON data: %v", err)
-	}
-
-	ctx := context.Background()
-
-	cmd := command.CreateCmd{
-		DID:          *did,
-		CreatedBy:    createdBy,
-		Name:         &name,
-		Description:  &description,
-		ContractData: &jsonContractData,
-	}
-	createHandler := command.Creator{
-		DB:    db,
-		CRepo: repo.CRepo,
-	}
-	err = createHandler.Handle(ctx, cmd)
-	if err != nil {
-		t.Fatalf("Failed to create contract: %v", err)
-	}
-
-	updateStatement := `UPDATE contracts SET
-        	state = $2
-    	WHERE did = $1
-`
-
-	_, err = db.Exec(updateStatement, *did, state)
-	if err != nil {
-		t.Fatalf("Failed to update template state: %v", err)
-	}
-}
-
 func createNegotiationTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state negotiationtaskstate.NegotiationTaskState, submittedBy string, negotiators []string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	for _, negotiator := range negotiators {
 		negotiationTask := database.NegotiationTaskData{
@@ -204,10 +179,15 @@ func createNegotiationTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo
 
 func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state reviewtaskstate.ReviewTaskState, submittedBy string, reviewers []string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	for _, reviewer := range reviewers {
 		reviewTask := database.ReviewTaskData{
@@ -230,10 +210,15 @@ func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *Tes
 
 func createApprovalTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state approvaltaskstate.ApprovalTaskState, submittedBy string, approver string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	approvalTask := database.ApprovalTaskData{
 		DID:       did,

@@ -2,16 +2,17 @@ package test
 
 import (
 	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/templaterepository/command"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestArchive_ArchiveContractTemplateDataInDraftState(t *testing.T) {

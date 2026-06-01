@@ -2,6 +2,11 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
@@ -11,9 +16,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/contractworkflowengine/negotiationmerging"
-	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -87,7 +89,12 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -173,7 +180,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return fmt.Errorf("could not validate negotiator: %w", err)
 		}
 
-		if isValidNegotiator == false {
+		if !isValidNegotiator {
 			return errors.New("invalid user")
 		}
 
@@ -196,7 +203,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return fmt.Errorf("could not check if review task exists: %w", err)
 		}
 
-		if existOpenTasks == false {
+		if !existOpenTasks {
 
 			hasNegotiations, err := h.NRepo.HasNegotiationForContractVersion(ctx, tx, cmd.DID, processData.ContractVersion)
 			if err != nil {
@@ -250,39 +257,32 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		if cmd.ActionFlag != nil {
-			if *cmd.ActionFlag == actionflag.Approval {
-
+			switch *cmd.ActionFlag {
+			case actionflag.Approval:
 				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contractstate.Approved.String())
 				if err != nil {
 					return fmt.Errorf("could not update approval task: %w", err)
 				}
-
 				existOpenTasks, err := h.RTRepo.AnyTasksInState(ctx, tx, processData.DID, reviewtaskstate.Open.String())
 				if err != nil {
 					return fmt.Errorf("could not check if review task exists: %w", err)
 				}
-
 				if !existOpenTasks {
 					nextState = contractstate.Reviewed
 				}
-
-			} else if *cmd.ActionFlag == actionflag.Reject {
-
+			case actionflag.Reject:
 				err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
 					return err
 				}
-
 				err = h.NTRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
 					return err
 				}
-
 				err = h.ATRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
 					return err
 				}
-
 				nextState = contractstate.Negotiation
 			}
 

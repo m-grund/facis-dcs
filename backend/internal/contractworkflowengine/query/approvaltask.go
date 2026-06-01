@@ -2,13 +2,15 @@ package query
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/conf"
-	aopprovaltaskstate "digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
-	"digital-contracting-service/internal/contractworkflowengine/db"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/conf"
+	aopprovaltaskstate "digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
+	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
 type GetAllApprovalTasksForDIDQry struct {
@@ -40,7 +42,12 @@ func (h *GetAllApprovalTasksForDIDHandler) Handle(ctx context.Context, query Get
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Println("could not rollback transaction")
+		}
+	}(tx)
 
 	reviewTasks, err := h.ATRepo.ReadAll(ctx, tx, query.DID)
 	if err != nil {

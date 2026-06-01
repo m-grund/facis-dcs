@@ -2,16 +2,19 @@ package test
 
 import (
 	"context"
+	"log"
+	"testing"
+	"time"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
+	negotiationdescision "digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
-	"testing"
-	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -45,6 +48,10 @@ func TestNegotiation_CreateNegotiation(t *testing.T) {
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create change request: %v", err)
+	}
+
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -65,10 +72,15 @@ func TestNegotiation_CreateNegotiation(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Println("could not rollback transaction")
+		}
+	}(tx)
 
 	result, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
@@ -113,6 +125,10 @@ func TestNegotiation_CreateNegotiationWithInvalidUser(t *testing.T) {
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create change request: %v", err)
+	}
+
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  "Test User",
@@ -162,6 +178,10 @@ func TestNegotiation_AllNegotiatorsAcceptChangeRequest(t *testing.T) {
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create change request: %v", err)
+	}
+
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -182,10 +202,15 @@ func TestNegotiation_AllNegotiatorsAcceptChangeRequest(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	negotiations, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
@@ -217,15 +242,23 @@ func TestNegotiation_AllNegotiatorsAcceptChangeRequest(t *testing.T) {
 	}
 
 	tx, err = db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	acceptAmount := 0
 	rejectAmount := 0
 	closeAmount := 0
 	negotiations, err = repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
+	if err != nil {
+		t.Fatalf("Failed to read all negotiations for did: %v", err)
+	}
 	for _, negotiation := range negotiations {
 		if *negotiation.Decision == negotiationdescision.Accepted.String() {
 			acceptAmount++
@@ -275,6 +308,9 @@ func TestNegotiation_OneNegotiatorRejectChangeRequest(t *testing.T) {
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create change request: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -295,10 +331,15 @@ func TestNegotiation_OneNegotiatorRejectChangeRequest(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	negotiations, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
@@ -330,15 +371,23 @@ func TestNegotiation_OneNegotiatorRejectChangeRequest(t *testing.T) {
 	}
 
 	tx, err = db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	acceptAmount := 0
 	rejectAmount := 0
 	closeAmount := 0
 	negotiations, err = repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
+	if err != nil {
+		t.Fatalf("Failed to read all negotiations for did: %v", err)
+	}
 	for _, negotiation := range negotiations {
 		if *negotiation.Decision == negotiationdescision.Accepted.String() {
 			acceptAmount++
@@ -388,6 +437,9 @@ func TestNegotiation_OneAcceptionOneRejectionOfChangeRequest(t *testing.T) {
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to marshal change request: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -408,10 +460,15 @@ func TestNegotiation_OneAcceptionOneRejectionOfChangeRequest(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	negotiations, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
@@ -460,15 +517,23 @@ func TestNegotiation_OneAcceptionOneRejectionOfChangeRequest(t *testing.T) {
 	}
 
 	tx, err = db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	acceptAmount := 0
 	rejectAmount := 0
 	closeAmount := 0
 	negotiations, err = repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
+	if err != nil {
+		t.Fatalf("Failed to read all negotiations for did: %v", err)
+	}
 	for _, negotiation := range negotiations {
 		if *negotiation.Decision == negotiationdescision.Accepted.String() {
 			acceptAmount++
@@ -518,6 +583,9 @@ func TestNegotiation_TestForOpenNegotiationDecisions(t *testing.T) {
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create change request: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -538,10 +606,15 @@ func TestNegotiation_TestForOpenNegotiationDecisions(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	negotiations, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
@@ -570,10 +643,15 @@ func TestNegotiation_TestForOpenNegotiationDecisions(t *testing.T) {
 	}
 
 	tx, err = db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	hasOpenNegotiationDecisions, err := repo.NRepo.HasOpenNegotiationDecisions(ctx, tx, *did, 1, negotiations[0].Negotiator)
 	if err != nil {

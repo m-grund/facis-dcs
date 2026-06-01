@@ -2,14 +2,15 @@ package test
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
