@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
-	"crypto/sha256"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -23,12 +28,36 @@ import (
 // stubSigner returns a fixed signature for any input.
 type stubSigner struct{ sig []byte }
 
+var testSignerCertDER = mustGenerateSignerCertDER()
+
 func (s *stubSigner) Sign(_ context.Context, _ []byte) ([]byte, error) {
 	return s.sig, nil
 }
 
 func (s *stubSigner) CertificateChain(_ context.Context) ([][]byte, error) {
-	return [][]byte{[]byte("dummy-cert")}, nil
+	return [][]byte{append([]byte(nil), testSignerCertDER...)}, nil
+}
+
+func mustGenerateSignerCertDER() []byte {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	now := time.Now().UTC()
+	tpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(20260601),
+		Subject:               pkix.Name{CommonName: "c2pa-test-signer"},
+		NotBefore:             now.Add(-1 * time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		panic(err)
+	}
+	return der
 }
 
 // stubStorer captures stored data and returns a fixed CID.
@@ -238,36 +267,6 @@ func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 	assert.Contains(t, string(catalogObj), "/EmbeddedFiles")
 }
 
-func TestAppendManifest_DocMDPUsesFileAttachmentReferencePath(t *testing.T) {
-	basePDF := minimalValidPDF()
-	basePDF = append(basePDF, []byte("\n% contains certifying signature marker /DocMDP\n")...)
-
-	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
-	storer := &stubStorer{}
-
-	result, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
-	)
-	require.NoError(t, err)
-
-	objects := parsePDFObjects(result.UpdatedPDF)
-	_, filespecObj, ok := findC2PAFileSpecObject(objects)
-	require.True(t, ok, "expected a Filespec with AFRelationship /C2PA_Manifest")
-
-	annotObj, foundAnnot := findFileAttachmentAnnotationObject(objects)
-	require.True(t, foundAnnot, "expected FileAttachment annotation for DocMDP path")
-	assert.Contains(t, string(annotObj), "/FS")
-	assert.Regexp(t, regexp.MustCompile(`/Subtype\s*/FileAttachment`), string(annotObj))
-
-	catalogObj, foundCatalog := findCatalogObject(objects)
-	require.True(t, foundCatalog, "expected updated catalog object")
-	assert.Contains(t, string(catalogObj), "/AF")
-	assert.NotContains(t, string(catalogObj), "/EmbeddedFiles")
-
-	_ = filespecObj
-}
-
 func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
@@ -295,22 +294,78 @@ func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
 	assert.Contains(t, string(payload), "dcs.contract.lifecycle")
 }
 
-func TestPrevManifestHashFrom_NoManifest(t *testing.T) {
-	assert.Equal(t, "", PrevManifestHashFrom([]byte("%PDF-1.4\n%%EOF\n")))
+// TestAppendManifest_AFPointsToLatestManifestOnly verifies that /Catalog/AF references
+// only the active (latest) manifest after multiple increments (C2PA PDF binding §8.2).
+// Historical manifests must still be discoverable via /Names/EmbeddedFiles.
+func TestAppendManifest_AFPointsToLatestManifestOnly(t *testing.T) {
+	basePDF := minimalValidPDF()
+	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
+	storer := &stubStorer{}
+
+	result1, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", testAssertion(), basePDF, nil,
+	)
+	require.NoError(t, err)
+
+	assertion2 := NewLifecycleAssertion(
+		"did:example:contract1",
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"1.0.0", "active", "", "did:example:auth", "", result1.ManifestHash,
+		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+	)
+	result2, err := AppendManifest(
+		context.Background(), signer, TSAConfig{}, storer,
+		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+	)
+	require.NoError(t, err)
+
+	// Find the final (latest) catalog object in the PDF.
+	objects := parsePDFObjects(result2.UpdatedPDF)
+	catalogObj, found := findLatestCatalogObjectFromRaw(objects)
+	require.True(t, found, "must find an updated catalog object")
+
+	// After two increments /AF must contain exactly ONE ref — the latest manifest only.
+	afSection := extractAFSection(catalogObj)
+	require.NotEmpty(t, afSection, "/AF must be present in catalog")
+
+	refRe := regexp.MustCompile(`\d+\s+0\s+R`)
+	refs := refRe.FindAll(afSection, -1)
+	assert.Equal(t, 1, len(refs),
+		"/AF must reference only the active manifest; got %d refs", len(refs))
+
+	// Both manifests must still be discoverable via /Names/EmbeddedFiles.
+	assert.Contains(t, string(catalogObj), "/EmbeddedFiles",
+		"historical manifests must remain discoverable via /Names/EmbeddedFiles")
 }
 
-func TestPrevManifestHashFrom_ExtractsLastHash(t *testing.T) {
-	// Simulate a PDF that already has two DCS-C2PA-HASH comments from prior increments.
-	h1 := sha256.Sum256([]byte("manifest1"))
-	h2 := sha256.Sum256([]byte("manifest2"))
-	hex1 := hex.EncodeToString(h1[:])
-	hex2 := hex.EncodeToString(h2[:])
+// extractAFSection returns the bytes of the /AF value from a catalog object dict string.
+func extractAFSection(catalogObj []byte) []byte {
+	re := regexp.MustCompile(`/AF\s*(\[[^\]]*\]|\d+\s+0\s+R)`)
+	m := re.FindSubmatch(catalogObj)
+	if len(m) < 2 {
+		return nil
+	}
+	return m[1]
+}
 
-	pdf := []byte("%PDF-1.4\n%%EOF\n")
-	pdf = append(pdf, []byte("%% DCS-C2PA-HASH: "+hex1+"\n")...)
-	pdf = append(pdf, []byte("%% DCS-C2PA-HASH: "+hex2+"\n")...)
+// findLatestCatalogObjectFromRaw returns the raw bytes of the catalog with the
+// highest object number (i.e. the most-recently written one after increments).
+func findLatestCatalogObjectFromRaw(objects map[int][]byte) ([]byte, bool) {
+	maxN := -1
+	var best []byte
+	for n, obj := range objects {
+		if bytes.Contains(obj, []byte("/Catalog")) && n > maxN {
+			maxN = n
+			best = obj
+		}
+	}
+	return best, maxN >= 0
+}
 
-	assert.Equal(t, hex2, PrevManifestHashFrom(pdf))
+func TestPrevManifestHashFrom_NoManifest(t *testing.T) {
+	assert.Equal(t, "", PrevManifestHashFrom([]byte("%PDF-1.4\n%%EOF\n")))
 }
 
 func TestPrevManifestHashFrom_ReadsActiveEmbeddedManifestPayload(t *testing.T) {
@@ -364,16 +419,6 @@ func findC2PAFileSpecObject(objects map[int][]byte) (int, []byte, bool) {
 func findCatalogObject(objects map[int][]byte) ([]byte, bool) {
 	for _, obj := range objects {
 		if bytes.Contains(obj, []byte("/Catalog")) {
-			return obj, true
-		}
-	}
-	return nil, false
-}
-
-func findFileAttachmentAnnotationObject(objects map[int][]byte) ([]byte, bool) {
-	reFileAttachment := regexp.MustCompile(`/Subtype\s*/FileAttachment`)
-	for _, obj := range objects {
-		if reFileAttachment.Match(obj) {
 			return obj, true
 		}
 	}

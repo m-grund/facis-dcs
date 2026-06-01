@@ -151,6 +151,8 @@ signing:
   # Signer certificate chain (PEM) used for C2PA x5chain headers.
   # When enabled, the chart mounts the secret and sets
   # CRYPTO_PROVIDER_CERT_CHAIN_FILE automatically.
+  # With cryptoProvider.devCertChain.enabled=true, this is auto-wired even when
+  # certChain.enabled=false.
   certChain:
     enabled: false
     existingSecret:
@@ -202,6 +204,19 @@ cryptoProvider:
     keyType: "ecdsa-p256"
     vcKey: "dcs-vc-signing-key"
     vcKeyType: "ed25519"
+  devCertChain:
+    enabled: false
+    secretName: ""
+    secretKey: "chain.pem"
+    caCertKey: "ca.pem"
+    leafCommonName: "dcs-dev-signer"
+    caCommonName: "dcs-dev-local-ca"
+    validityDays: 3650
+    overwrite: true
+    image:
+      repository: alpine
+      tag: "3.20"
+      pullPolicy: IfNotPresent
 
 # XFSC Status List Service (DCS-OR-C2PA-005)
 # Manages verifiable credential status lists (Status List 2021/2023 format).

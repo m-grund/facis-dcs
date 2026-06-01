@@ -113,7 +113,9 @@ spec:
               value: {{ include "digital-contracting-service.cryptoProviderVCKey" . | quote }}
             - name: CRYPTO_PROVIDER_VC_SIGNATURE_TYPE
               value: {{ .Values.signing.vcSignatureType | quote }}
-            {{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name }}
+                {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
+                {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
+                {{- if and $certChainEnabled $certSecretName }}
             - name: CRYPTO_PROVIDER_CERT_CHAIN_FILE
               value: {{ printf "%s/%s" .Values.signing.certChain.mountPath .Values.signing.certChain.fileName | quote }}
             {{- end }}
@@ -159,14 +161,16 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.customCA.enabled .Values.volumeMounts (and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name) }}
+          {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
+          {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
+          {{- if or .Values.customCA.enabled .Values.volumeMounts (and $certChainEnabled $certSecretName) }}
           volumeMounts:
           {{- if .Values.customCA.enabled }}
             - name: custom-ca-certs
               mountPath: /usr/local/share/ca-certificates/custom
               readOnly: true
           {{- end }}
-          {{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name }}
+          {{- if and $certChainEnabled $certSecretName }}
             - name: signer-cert-chain
               mountPath: {{ .Values.signing.certChain.mountPath | quote }}
               readOnly: true
@@ -175,19 +179,21 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
-      {{- if or .Values.customCA.enabled .Values.volumes (and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name) }}
+      {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
+      {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
+      {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
           configMap:
             name: {{ .Values.customCA.configMapName }}
       {{- end }}
-      {{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name }}
+      {{- if and $certChainEnabled $certSecretName }}
         - name: signer-cert-chain
           secret:
-            secretName: {{ .Values.signing.certChain.existingSecret.name | quote }}
+            secretName: {{ $certSecretName | quote }}
             items:
-              - key: {{ .Values.signing.certChain.existingSecret.key | quote }}
+              - key: {{ include "digital-contracting-service.signingCertChainSecretKey" . | quote }}
                 path: {{ .Values.signing.certChain.fileName | quote }}
       {{- end }}
       {{- with .Values.volumes }}

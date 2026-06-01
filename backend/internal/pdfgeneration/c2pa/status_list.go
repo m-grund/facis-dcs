@@ -2,7 +2,9 @@ package c2pa
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -79,7 +81,10 @@ func (p *OCMWStatusListPublisher) statusListURI() string {
 // deriveIndex returns a stable bitstring index for contractID.
 // Uses the first 4 bytes of SHA-256(contractID) modulo listSize so the
 // index is deterministic without requiring a per-contract allocation table.
-func deriveIndex(contractID string) uint32 {
+// StatusListIndex returns the bitstring position for contractID.
+// Uses the first 4 bytes of SHA-256(contractID) modulo listSize so the
+// index is deterministic without requiring a per-contract allocation table.
+func StatusListIndex(contractID string) uint32 {
 	h := sha256.Sum256([]byte(contractID))
 	return binary.BigEndian.Uint32(h[:4]) % listSize
 }
@@ -98,7 +103,7 @@ func (p *OCMWStatusListPublisher) setRevoked(ctx context.Context, contractID str
 		// No service configured — silently skip (non-blocking for offline environments).
 		return nil
 	}
-	index := deriveIndex(contractID)
+	index := StatusListIndex(contractID)
 	url := fmt.Sprintf("%s/v1/tenants/%s/status/revoke/%d/%d", p.ServiceURL, p.TenantID, defaultListID, index)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(nil))
@@ -145,6 +150,71 @@ func (p *OCMWStatusListPublisher) PublishStatus(
 	}
 	// active, draft, approved, amended — default state = not revoked, no action required.
 	return p.statusListURI(), nil
+}
+
+// QueryStatusListStatus fetches the StatusList2021Credential at statusListCredential
+// and returns "revoked" if the bit at index is set, "active" otherwise (DCS-OR-C2PA-006).
+// The credential's credentialSubject.encodedList must be a base64url-encoded,
+// zlib-compressed bitstring as defined in the W3C StatusList2021 specification.
+func QueryStatusListStatus(ctx context.Context, client *http.Client, statusListCredential string, index uint32) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusListCredential, nil)
+	if err != nil {
+		return "", fmt.Errorf("build status list request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GET %s: %w", statusListCredential, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status list service returned %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read status list response: %w", err)
+	}
+
+	var slVC struct {
+		CredentialSubject struct {
+			EncodedList string `json:"encodedList"`
+		} `json:"credentialSubject"`
+	}
+	if err := json.Unmarshal(body, &slVC); err != nil {
+		return "", fmt.Errorf("parse status list VC: %w", err)
+	}
+	if slVC.CredentialSubject.EncodedList == "" {
+		return "", fmt.Errorf("encodedList absent from status list VC")
+	}
+
+	// StatusList2021 uses base64url without padding.
+	compressed, err := base64.RawURLEncoding.DecodeString(slVC.CredentialSubject.EncodedList)
+	if err != nil {
+		return "", fmt.Errorf("base64url decode encodedList: %w", err)
+	}
+
+	r, err := zlib.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return "", fmt.Errorf("create zlib reader for bitstring: %w", err)
+	}
+	defer r.Close()
+	bitstring, err := io.ReadAll(r)
+	if err != nil {
+		return "", fmt.Errorf("decompress bitstring: %w", err)
+	}
+
+	byteIdx := index / 8
+	// StatusList2021 §4: index 0 = MSB of byte 0; bit N is at bit 7-(N%8) of byte N/8.
+	bitIdx := uint(7 - (index % 8))
+	if int(byteIdx) >= len(bitstring) {
+		return "", fmt.Errorf("index %d out of range for bitstring of %d bytes", index, len(bitstring))
+	}
+	if bitstring[byteIdx]&(1<<bitIdx) != 0 {
+		return "revoked", nil
+	}
+	return "active", nil
 }
 
 // RevokeStatus marks the contract as revoked in the status list (DCS-OR-C2PA-005).

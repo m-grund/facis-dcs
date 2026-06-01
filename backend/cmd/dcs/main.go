@@ -39,6 +39,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -183,16 +184,17 @@ func main() {
 	cryptoProviderURL := os.Getenv("CRYPTO_PROVIDER_URL")
 	cryptoProviderNamespace := os.Getenv("CRYPTO_PROVIDER_NAMESPACE")
 	cryptoProviderKey := os.Getenv("CRYPTO_PROVIDER_KEY")
-	cryptoProviderCertChainFile := os.Getenv("CRYPTO_PROVIDER_CERT_CHAIN_FILE")
+	cryptoProviderCertChainFile := strings.TrimSpace(os.Getenv("CRYPTO_PROVIDER_CERT_CHAIN_FILE"))
 	issuerDID := os.Getenv("ISSUER_DID")
 	cryptoClient := cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
 
 	if cryptoProviderCertChainFile == "" {
-		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_CERT_CHAIN_FILE is required for C2PA x5chain support")
+		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_CERT_CHAIN_FILE is required")
 	}
 	if err := cryptoClient.SetCertificateChainFromPEMFile(cryptoProviderCertChainFile); err != nil {
-		log.Fatalf(ctx, err, "load crypto provider certificate chain")
+		log.Fatalf(ctx, err, "load crypto provider certificate chain from file")
 	}
+
 	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
 
 	// Probe crypto provider liveness before accepting traffic.
@@ -257,6 +259,7 @@ func main() {
 		DB:         db,
 		IPFSClient: ipfsAPIClient,
 		CRepo:      &cweRepo,
+		TRepo:      &ctRepo,
 		Signer:     cryptoClient,
 		TSACfg:     tsaCfg,
 		IssuerDID:  issuerDID,

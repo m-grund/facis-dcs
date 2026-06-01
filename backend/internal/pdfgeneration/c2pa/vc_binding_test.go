@@ -3,6 +3,7 @@ package c2pa
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestIssueLifecycleVC_IncludesInlineJSONLDContextAndSubjectID(t *testing.T) 
 	)
 
 	signer := &captureSigner{}
-	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", assertion)
+	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", "http://statuslist/v1/tenants/default/status/1", assertion)
 	require.NoError(t, err)
 	require.NotEmpty(t, signer.lastUnsigned)
 
@@ -67,6 +68,50 @@ func TestIssueLifecycleVC_IncludesInlineJSONLDContextAndSubjectID(t *testing.T) 
 	assert.Equal(t, assertion.ContractID, subject["contract_id"])
 }
 
+func TestIssueLifecycleVC_CredentialStatusIncludedWhenStatusListURISet(t *testing.T) {
+	effectiveAt := time.Date(2026, 5, 29, 16, 0, 0, 0, time.UTC)
+	contractID := "did:web:example.org:contracts:abc123"
+	statusURI := "http://statuslist/v1/tenants/default/status/1"
+	assertion := NewLifecycleAssertion(
+		contractID, "f00dbabe", "", "", "active", "approved",
+		"did:web:example.org:issuer", "", "", effectiveAt,
+	)
+
+	signer := &captureSigner{}
+	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", statusURI, assertion)
+	require.NoError(t, err)
+
+	var doc map[string]interface{}
+	require.NoError(t, json.Unmarshal(signer.lastUnsigned, &doc))
+
+	cs, ok := doc["credentialStatus"].(map[string]interface{})
+	require.True(t, ok, "credentialStatus must be present in unsigned VC")
+	assert.Equal(t, "StatusList2021Entry", cs["type"])
+	assert.Equal(t, "revocation", cs["statusPurpose"])
+
+	expectedIndex := StatusListIndex(contractID)
+	assert.Equal(t, statusURI, cs["statusListCredential"])
+	assert.Equal(t, fmt.Sprintf("%s#%d", statusURI, expectedIndex), cs["id"])
+	assert.Equal(t, fmt.Sprintf("%d", expectedIndex), cs["statusListIndex"])
+}
+
+func TestIssueLifecycleVC_CredentialStatusOmittedWhenStatusListURIEmpty(t *testing.T) {
+	effectiveAt := time.Date(2026, 5, 29, 16, 0, 0, 0, time.UTC)
+	assertion := NewLifecycleAssertion(
+		"did:web:example.org:contracts:abc123", "f00dbabe", "", "", "active", "approved",
+		"did:web:example.org:issuer", "", "", effectiveAt,
+	)
+
+	signer := &captureSigner{}
+	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", "", assertion)
+	require.NoError(t, err)
+
+	var doc map[string]interface{}
+	require.NoError(t, json.Unmarshal(signer.lastUnsigned, &doc))
+	_, hasCS := doc["credentialStatus"]
+	assert.False(t, hasCS, "credentialStatus must be absent when statusListURI is empty")
+}
+
 func TestIssueLifecycleVC_NormalizesNonURISubjectID(t *testing.T) {
 	effectiveAt := time.Date(2026, 5, 29, 16, 0, 0, 0, time.UTC)
 	assertion := NewLifecycleAssertion(
@@ -83,7 +128,7 @@ func TestIssueLifecycleVC_NormalizesNonURISubjectID(t *testing.T) {
 	)
 
 	signer := &captureSigner{}
-	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", assertion)
+	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", "http://statuslist/v1/tenants/default/status/1", assertion)
 	require.NoError(t, err)
 
 	var doc map[string]interface{}

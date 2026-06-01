@@ -24,14 +24,20 @@ type VCBinding struct {
 	Type              []string               `json:"type"`
 	ID                string                 `json:"id"`
 	Issuer            string                 `json:"issuer"`
-	IssuanceDate      time.Time              `json:"issuanceDate"`
+	IssuanceDate      time.Time             `json:"issuanceDate"`
 	CredentialSubject map[string]interface{} `json:"credentialSubject"`
+	// CredentialStatus links this VC to the XFSC status list entry so
+	// verifiers can check revocation (DCS-OR-C2PA-004, DCS-OR-C2PA-005).
+	CredentialStatus map[string]interface{} `json:"credentialStatus,omitempty"`
 }
 
 // IssueLifecycleVC builds and signs a W3C VC recording the lifecycle event.
+// statusListURI is the URL of the XFSC status list entry for this contract;
+// it is embedded as credentialStatus.id so verifiers can check revocation
+// (DCS-OR-C2PA-004, DCS-OR-C2PA-005).
 // The signed VC bytes are returned; the VC id is derived from the SHA-256 of
 // its content so it can be stored in LifecycleAssertion.VCId.
-func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID string, assertion LifecycleAssertion) (json.RawMessage, string, error) {
+func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusListURI string, assertion LifecycleAssertion) (json.RawMessage, string, error) {
 	subjectID := normalizeSubjectID(assertion.ContractID)
 	securityCtx := vcSecuritySuiteContext()
 
@@ -64,6 +70,7 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID string, as
 			"reason":       assertion.Reason,
 			"effective_at": assertion.EffectiveAt.UTC().Format(time.RFC3339),
 		},
+		CredentialStatus: buildCredentialStatus(statusListURI, assertion.ContractID),
 	}
 
 	raw, err := json.Marshal(unsignedVC)
@@ -86,6 +93,22 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID string, as
 	}
 
 	return signed, vcID, nil
+}
+
+// buildCredentialStatus constructs the W3C StatusList2021 credentialStatus
+// object that links this VC to the XFSC bitstring status list (DCS-OR-C2PA-005).
+// Returns nil when statusListURI is empty so the field is omitted from the VC.
+func buildCredentialStatus(statusListURI, contractID string) map[string]interface{} {
+	if statusListURI == "" {
+		return nil
+	}
+	return map[string]interface{}{
+		"id":                   fmt.Sprintf("%s#%d", statusListURI, StatusListIndex(contractID)),
+		"type":                 "StatusList2021Entry",
+		"statusPurpose":        "revocation",
+		"statusListIndex":      fmt.Sprintf("%d", StatusListIndex(contractID)),
+		"statusListCredential": statusListURI,
+	}
 }
 
 func vcSecuritySuiteContext() string {

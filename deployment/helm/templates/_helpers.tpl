@@ -290,6 +290,34 @@ ISSUER_DID: explicit value or secret ref.
 {{- end }}
 
 {{/*
+Resolve signer cert-chain secret name:
+1) explicit signing.certChain existingSecret
+2) auto-generated dev cert-chain from co-deployed crypto-provider
+*/}}
+{{- define "digital-contracting-service.signingCertChainSecretName" -}}
+{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
+{{- .Values.signing.certChain.existingSecret.name -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- default (printf "%s-crypto-provider-dev-cert-chain" .Release.Name) .Values.cryptoProvider.devCertChain.secretName -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve signer cert-chain secret key.
+*/}}
+{{- define "digital-contracting-service.signingCertChainSecretKey" -}}
+{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
+{{- .Values.signing.certChain.existingSecret.key -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- default "chain.pem" .Values.cryptoProvider.devCertChain.secretKey -}}
+{{- else -}}
+{{- "chain.pem" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 IPFS_MFS_BASE_URL: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.ipfsMFSBaseURL" -}}

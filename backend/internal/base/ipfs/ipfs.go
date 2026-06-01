@@ -237,8 +237,24 @@ func (c *APIClient) fetchKuboFile(cid string) (*IPFSResult, error) {
 		return nil, fmt.Errorf("read Kubo cat response: %w", err)
 	}
 
+	// Content written by createKuboFile is JSON-marshalled.
+	// If the stored value is a JSON string it was produced by base64Wrap (binary
+	// data); unmarshal and decode to recover the original bytes.
+	// Any other JSON type (object, array, …) is returned verbatim.
+	var dataStr string
+	var resultData []byte
+	if json.Unmarshal(body, &dataStr) == nil {
+		decoded, err := base64.StdEncoding.DecodeString(dataStr)
+		if err != nil {
+			return nil, fmt.Errorf("base64 decode Kubo file data: %w", err)
+		}
+		resultData = decoded
+	} else {
+		resultData = body
+	}
+
 	result := &IPFSResult{
-		Data: body,
+		Data: resultData,
 	}
 	result.Identifier.Format = "CID"
 	result.Identifier.Value = cid

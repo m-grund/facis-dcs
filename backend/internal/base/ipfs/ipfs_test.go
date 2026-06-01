@@ -2,7 +2,9 @@ package ipfs
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -103,4 +105,37 @@ func TestFetchFileUsesKuboWhenTenantBaseURLIsEmpty(t *testing.T) {
 	if string(result.Data) != `{"event":"created"}` {
 		t.Fatalf("unexpected result data %s", result.Data)
 	}
+}
+
+// TestFetchKuboFile_DecodesBase64WrapPayload verifies that binary data stored
+// via base64Wrap (a JSON-quoted base64 string) is correctly decoded on fetch.
+func TestFetchKuboFile_DecodesBase64WrapPayload(t *testing.T) {
+	payload := []byte("%PDF-1.3\nhello pdf content")
+	encoded := base64.StdEncoding.EncodeToString(payload)
+	stored := fmt.Sprintf("%q", encoded) // produces "JVBERi0x..."
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v0/cat" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(stored))
+	}))
+	defer server.Close()
+
+	client := NewClient("", server.URL)
+	result, err := client.FetchFile("bafy-binary-cid")
+	if err != nil {
+		t.Fatalf("FetchFile returned error: %v", err)
+	}
+	if string(result.Data) != string(payload) {
+		t.Fatalf("expected decoded binary payload, got %q", result.Data[:min(20, len(result.Data))])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

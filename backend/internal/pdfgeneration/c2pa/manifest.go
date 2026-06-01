@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -81,6 +84,8 @@ func BuildManifest(
 	tsaCfg TSAConfig,
 	issuerDID string,
 	assertion LifecycleAssertion,
+	dataHashExclusionStart int,
+	dataHashExclusionLength int,
 ) (manifestBytes []byte, manifestHash string, err error) {
 	// 1. Marshal the lifecycle assertion to JSON.
 	assertionJSON, err := json.Marshal(assertion)
@@ -98,6 +103,12 @@ func BuildManifest(
 		"name": "pdf-asset",
 		"hash": pdfHashBytes,
 		"pad":  []byte{},
+	}
+	if dataHashExclusionLength > 0 {
+		dataHashAssertionMap["exclusions"] = []map[string]int{{
+			"start":  dataHashExclusionStart,
+			"length": dataHashExclusionLength,
+		}}
 	}
 	encMode, err := cbor.CanonicalEncOptions().EncMode()
 	if err != nil {
@@ -152,6 +163,14 @@ func BuildManifest(
 	}
 	if len(certChain) == 0 {
 		return nil, "", fmt.Errorf("certificate chain is empty")
+	}
+	leafCert, err := x509.ParseCertificate(certChain[0])
+	if err != nil {
+		return nil, "", fmt.Errorf("parse x5chain leaf certificate: %w", err)
+	}
+	leafECPub, ok := leafCert.PublicKey.(*ecdsa.PublicKey)
+	if !ok || leafECPub.Curve != elliptic.P256() {
+		return nil, "", fmt.Errorf("x5chain leaf key must be ECDSA P-256 for ES256; got %T", leafCert.PublicKey)
 	}
 	protected["x5chain"] = certChain
 

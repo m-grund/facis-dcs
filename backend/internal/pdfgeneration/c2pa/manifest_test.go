@@ -111,7 +111,8 @@ func TestRequestTimestamp_HashMismatch(t *testing.T) {
 }
 
 func TestBuildManifest_FailsClosedWhenTSAConfiguredAndUnavailable(t *testing.T) {
-	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{[]byte("dummy-cert")}}
+	signerCert, _ := mustTSACert(t)
+	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
 	assertion := NewLifecycleAssertion(
 		"did:example:contract1",
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -131,13 +132,16 @@ func TestBuildManifest_FailsClosedWhenTSAConfiguredAndUnavailable(t *testing.T) 
 		TSAConfig{URL: "http://127.0.0.1:1"},
 		"did:example:issuer",
 		assertion,
+		0,
+		0,
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "request TSA timestamp")
 }
 
 func TestBuildManifest_WrapsManifestInManifestStore(t *testing.T) {
-	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{[]byte("dummy-cert")}}
+	signerCert, _ := mustTSACert(t)
+	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
 	assertion := NewLifecycleAssertion(
 		"did:example:contract1",
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -151,7 +155,7 @@ func TestBuildManifest_WrapsManifestInManifestStore(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 
-	manifestBytes, manifestHash, err := BuildManifest(context.Background(), signer, TSAConfig{}, "did:example:issuer", assertion)
+	manifestBytes, manifestHash, err := BuildManifest(context.Background(), signer, TSAConfig{}, "did:example:issuer", assertion, 0, 0)
 	require.NoError(t, err)
 	require.NotEmpty(t, manifestHash)
 	assert.Equal(t, "jumb", string(manifestBytes[4:8]))

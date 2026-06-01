@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/pdfgeneration/builder"
+	"digital-contracting-service/internal/pdfgeneration/c2pa"
 	"digital-contracting-service/internal/pdfgeneration/verify"
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
@@ -157,6 +159,9 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 		BuildFn: func(jsonld []byte) ([]byte, error) {
 			return s.rebuildContractPDFFromJSONLD(ctx, req.Did, jsonld)
 		},
+		FetchFn:         s.contractIPFSFetchFn(ctx, req.Did),
+		FetchManifestFn: s.contractManifestIPFSFetchFn(ctx, req.Did),
+		CheckStatusFn:   s.statusListCheckFn(ctx),
 	}
 	hashResult, err := contractVerifier.Verify(pdfBytes)
 	if err != nil {
@@ -165,12 +170,32 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 
 	jsonldHash := hashResult.JSONLDHash
 	basePDFHash := hashResult.BasePDFHash
+	findings := make([]string, 0, 4)
+	if hashResult.PDFSignatureCount == 0 {
+		findings = append(findings, "No PDF signature found")
+	} else if hashResult.PDFSignatureValid {
+		findings = append(findings, fmt.Sprintf("PDF signature verification passed (%d signature(s))", hashResult.PDFSignatureCount))
+	} else {
+		findings = append(findings, fmt.Sprintf("PDF signature verification failed (%d signature(s))", hashResult.PDFSignatureCount))
+	}
+	if !hashResult.C2PAManifestFound {
+		findings = append(findings, "C2PA manifest not found")
+	} else if !hashResult.C2PASignatureValid {
+		findings = append(findings, "C2PA signature invalid")
+	}
+	if !hashResult.VCProofValid {
+		findings = append(findings, "VC proof invalid or missing")
+	}
+	if status := strings.TrimSpace(hashResult.StatusListStatus); status != "" {
+		findings = append(findings, fmt.Sprintf("Status list state: %s", status))
+	}
 	return &signaturemanagement.SMContractVerifyResponse{
 		Did:         req.Did,
 		Match:       hashResult.Match,
 		JsonldHash:  &jsonldHash,
 		BasePdfHash: &basePDFHash,
 		SigCount:    vResult.ActiveSigCount,
+		Findings:    findings,
 	}, nil
 }
 
@@ -413,6 +438,9 @@ func (s *signatureManagementsrvc) collectValidationFindings(ctx context.Context,
 			BuildFn: func(jsonld []byte) ([]byte, error) {
 				return s.rebuildContractPDFFromJSONLD(ctx, did, jsonld)
 			},
+			FetchFn:         s.contractIPFSFetchFn(ctx, did),
+			FetchManifestFn: s.contractManifestIPFSFetchFn(ctx, did),
+			CheckStatusFn:   s.statusListCheckFn(ctx),
 		}
 		hashResult, verifyErr := contractVerifier.Verify(pdfBytes)
 		if verifyErr != nil {
@@ -536,6 +564,45 @@ func (s *signatureManagementsrvc) fetchContractPDFBytes(ctx context.Context, did
 		return nil, err
 	}
 	return []byte(result.Data), nil
+}
+
+// contractIPFSFetchFn returns a verifier FetchFn that retrieves the canonical
+// contract PDF from IPFS.
+func (s *signatureManagementsrvc) contractIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
+	if s.IPFSClient == nil {
+		return nil
+	}
+	return func() ([]byte, error) {
+		return s.fetchContractPDFBytes(ctx, did)
+	}
+}
+
+// contractManifestIPFSFetchFn returns a verifier FetchManifestFn that retrieves
+// the standalone remote manifest bytes for the given contract.
+func (s *signatureManagementsrvc) contractManifestIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
+	if s.IPFSClient == nil {
+		return nil
+	}
+	return func() ([]byte, error) {
+		var cidStr string
+		if err := s.DB.QueryRowContext(ctx,
+			`SELECT COALESCE(pdf_manifest_ipfs_cid,'') FROM contracts WHERE did = $1`, did,
+		).Scan(&cidStr); err != nil || cidStr == "" {
+			return nil, nil
+		}
+		result, err := s.IPFSClient.FetchFile(cidStr)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(result.Data), nil
+	}
+}
+
+func (s *signatureManagementsrvc) statusListCheckFn(ctx context.Context) func(string, uint32) (string, error) {
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	return func(statusListCredential string, index uint32) (string, error) {
+		return c2pa.QueryStatusListStatus(ctx, httpClient, statusListCredential, index)
+	}
 }
 
 // rebuildContractPDFFromJSONLD re-generates the base PDF from embedded JSON-LD bytes,

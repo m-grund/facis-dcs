@@ -45,7 +45,8 @@ func (v *LocalVCIssuer) IssueContractLifecycleVC(
 ) (vcID string, vcBytes json.RawMessage, err error) {
 	// Publish to status list FIRST, before VC ID generation.
 	// Hard fail if status list publication fails; required for compliance (DCS-OR-C2PA-005).
-	if _, err = v.statusListPublisher.PublishStatus(ctx, contractID, status, reason, effectiveAt); err != nil {
+	statusListURI, err := v.statusListPublisher.PublishStatus(ctx, contractID, status, reason, effectiveAt)
+	if err != nil {
 		return "", nil, fmt.Errorf("publish contract status to status list (DCS-OR-C2PA-005): %w", err)
 	}
 
@@ -54,7 +55,8 @@ func (v *LocalVCIssuer) IssueContractLifecycleVC(
 	assertion := NewLifecycleAssertion(contractID, fileHash, "", "", status, reason, authority, "", "", effectiveAt)
 
 	// Issue and sign the W3C VC via the Crypto Provider Service (DCS-IR-SI-10).
-	signedVC, vcID, err := IssueLifecycleVC(ctx, v.vcSigner, v.issuer, assertion)
+	// Pass the status list URI so credentialStatus is embedded in the VC (DCS-OR-C2PA-005).
+	signedVC, vcID, err := IssueLifecycleVC(ctx, v.vcSigner, v.issuer, statusListURI, assertion)
 	if err != nil {
 		return "", nil, fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
 	}

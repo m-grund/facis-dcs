@@ -106,6 +106,59 @@ func (s *stubStorer) CreateFile(_ context.Context, _ any) (*ipfs.IPFSResult, err
 	return r, nil
 }
 
+// TestC2PA_ChainLinkageWithRealPDF tests that a two-assertion chain is built
+// correctly on a real fpdf-generated PDF: the second manifest must have a
+// non-empty prev_manifest_hash pointing to the first, and PrevManifestHashFrom
+// must return the second manifest's hash (so a third append would chain correctly).
+func TestC2PA_ChainLinkageWithRealPDF(t *testing.T) {
+	pdf, err := BuildContract(fixedInput)
+	require.NoError(t, err)
+
+	signer := &stubSigner{}
+	storer := &stubStorer{}
+
+	fileHash := c2pa.FileHashOf(fixedJSONLD)
+	pdfHash := c2pa.BasePDFHashOf(pdf)
+
+	// First assertion: initial export (draft state, no prev hash).
+	assertion1 := c2pa.NewLifecycleAssertion(
+		fixedInput.DID, fileHash, pdfHash, "1.0.0",
+		"draft", "", "did:example:issuer", "", "", time.Now(),
+	)
+	result1, err := c2pa.AppendManifest(
+		context.Background(), signer, c2pa.TSAConfig{}, storer,
+		"did:example:issuer", assertion1, pdf, nil,
+	)
+	require.NoError(t, err, "first AppendManifest must succeed")
+	assert.NotEmpty(t, result1.ManifestHash, "first manifest hash must be non-empty")
+
+	// PrevManifestHashFrom must find the first manifest's hash in the PDF.
+	prevHash := c2pa.PrevManifestHashFrom(result1.UpdatedPDF)
+	assert.Equal(t, result1.ManifestHash, prevHash,
+		"PrevManifestHashFrom must return the first manifest hash on the real fpdf PDF")
+
+	// Second assertion: state advance to active, chaining from the first.
+	assertion2 := c2pa.NewLifecycleAssertion(
+		fixedInput.DID, fileHash, pdfHash, "1.0.0",
+		"active", "", "did:example:issuer", "", prevHash, time.Now(),
+	)
+	result2, err := c2pa.AppendManifest(
+		context.Background(), signer, c2pa.TSAConfig{}, storer,
+		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+	)
+	require.NoError(t, err, "second AppendManifest must succeed")
+	assert.NotEqual(t, result1.ManifestHash, result2.ManifestHash,
+		"second manifest hash must differ from first")
+
+	// The final PDF must contain prev_manifest_hash bytes from assertion2.
+	assert.True(t, bytes.Contains(result2.UpdatedPDF, []byte("prev_manifest_hash")),
+		"final PDF must contain prev_manifest_hash in the second manifest JUMBF")
+
+	// PrevManifestHashFrom on the two-manifest PDF must return the SECOND manifest's hash.
+	assert.Equal(t, result2.ManifestHash, c2pa.PrevManifestHashFrom(result2.UpdatedPDF),
+		"PrevManifestHashFrom must return the latest (second) manifest hash")
+}
+
 // TestC2PA_RoundTripWithRealPDF tests that AppendManifest produces a valid
 // incremental PDF update when given a real fpdf-generated PDF, and that
 // pdfcpu can parse the result without error.

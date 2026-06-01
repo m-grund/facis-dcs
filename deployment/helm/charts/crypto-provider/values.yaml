@@ -40,6 +40,29 @@ transit:
   # Key algorithm for the VC proof key.
   vcKeyType: "ed25519"
 
+# Dev-only signer certificate-chain provisioning for C2PA x5chain.
+# Generates a local CA and issues a leaf certificate whose public key is the
+# transit signing key public key. Stores leaf+CA chain in a Kubernetes Secret.
+devCertChain:
+  enabled: false
+  # Secret holding the generated certificate chain.
+  secretName: ""
+  # Key in the secret that stores the concatenated PEM chain (leaf first).
+  secretKey: "chain.pem"
+  # Additional key containing the generated dev CA certificate.
+  caCertKey: "ca.pem"
+  # Certificate metadata.
+  leafCommonName: "dcs-dev-signer"
+  caCommonName: "dcs-dev-local-ca"
+  validityDays: 3650
+  # Rotate and overwrite the secret on each install/upgrade hook run.
+  overwrite: true
+  # Container image used by the provisioning hook job.
+  image:
+    repository: alpine
+    tag: "3.20"
+    pullPolicy: IfNotPresent
+
 
 # XFSC Crypto Provider Service (signer HTTP API)
 signer:
