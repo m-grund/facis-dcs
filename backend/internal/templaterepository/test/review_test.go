@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log"
 	"testing"
 
@@ -47,9 +49,8 @@ func TestReview_CreateReviewTasks(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -110,9 +111,8 @@ func TestReview_CreateReviewTasksAndApproveThem(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
