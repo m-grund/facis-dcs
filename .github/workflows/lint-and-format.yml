@@ -51,7 +51,7 @@ jobs:
           echo "| :--- | :---: | :--- |" >> $GITHUB_STEP_SUMMARY
           echo "| Prettier / ESLint | ❌ Failed | Check logs for specific format or lint issues. |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> 💡 **Hint:** Run \`npm run lint\` or \`npx prettier --write .\` locally. If your commit skipped this, run \`npm install\` in the project root to activate Husky hooks!" >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 **Hint:** Run \`npm run lint:fix\` or \`npm run format\` locally. If your commit skipped this, run \`npm install\` in the project root to activate Husky hooks!" >> $GITHUB_STEP_SUMMARY
 
   validate-backend:
     runs-on: ubuntu-latest
