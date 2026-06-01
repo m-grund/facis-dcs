@@ -2,12 +2,14 @@ package command
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -28,7 +30,12 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
