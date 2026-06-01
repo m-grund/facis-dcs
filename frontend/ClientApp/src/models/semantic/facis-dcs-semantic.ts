@@ -31,29 +31,6 @@ export type DcsOperator =
   | 'Contains'
   | 'MatchesRegex'
 
-export type LegacySemanticOperate =
-  | 'equal'
-  | 'notEqual'
-  | 'greaterThan'
-  | 'greaterThanOrEqual'
-  | 'lessThan'
-  | 'lessThanOrEqual'
-  | 'between'
-  | 'contains'
-  | 'matchesRegex'
-
-export const LEGACY_OPERATOR_TO_DCS: Record<LegacySemanticOperate, DcsOperator> = {
-  equal: 'Equals',
-  notEqual: 'NotEquals',
-  greaterThan: 'GreaterThan',
-  greaterThanOrEqual: 'GreaterThanOrEqual',
-  lessThan: 'LessThan',
-  lessThanOrEqual: 'LessThanOrEqual',
-  between: 'Between',
-  contains: 'Contains',
-  matchesRegex: 'MatchesRegex',
-}
-
 export interface UiMetadata {
   label?: string
   description?: string
@@ -200,7 +177,7 @@ type SemanticConditionLike = {
     type: ParameterType
     isRequired?: boolean
     fixedValue?: unknown
-    operators?: Array<{ operate: LegacySemanticOperate | string; targets?: string[] } | LegacySemanticOperate | string>
+    operators?: Array<{ operate: DcsOperator; targets?: string[] } | DcsOperator>
   }[]
 }
 
@@ -303,8 +280,7 @@ export function buildSemanticRulesFromConditions(
 }
 
 export function normalizeSemanticOperator(value: string): DcsOperator | null {
-  if (isDcsOperator(value)) return value
-  return LEGACY_OPERATOR_TO_DCS[value as LegacySemanticOperate] ?? null
+  return isDcsOperator(value) ? value : null
 }
 
 function isDcsOperator(value: string): value is DcsOperator {

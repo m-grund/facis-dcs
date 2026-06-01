@@ -2,10 +2,11 @@
 @prefix sh:   <http://www.w3.org/ns/shacl#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
 
 <https://w3id.org/facis/dcs/shapes/v1>
-  a sh:NodeShape ;
-  sh:description "FACIS DCS starter SHACL package. Shapes are external validation assets and are not required for runtime operation." .
+  a owl:Ontology ;
+  sh:description "FACIS DCS starter SHACL package. Shapes are separate validation assets used by PACM contract content audits and external Semantic Hub/CI checks." .
 
 dcs:ContractShape
   a sh:NodeShape ;

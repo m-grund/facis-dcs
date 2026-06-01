@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,9 +27,10 @@ type OIDCValidator struct {
 }
 
 const (
-	oidcDiscoveryAttempts       = 5
-	oidcDiscoveryAttemptTimeout = 3 * time.Second
-	oidcDiscoveryInitialBackoff = 500 * time.Millisecond
+	oidcDiscoveryDefaultAttempts       = 30
+	oidcDiscoveryDefaultAttemptTimeout = 5 * time.Second
+	oidcDiscoveryDefaultInitialBackoff = 500 * time.Millisecond
+	oidcDiscoveryDefaultMaxBackoff     = 5 * time.Second
 )
 
 // NewOIDCValidator connects to the OIDC provider to get public keys
@@ -55,10 +57,13 @@ func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, e
 
 func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider, error) {
 	var lastErr error
-	backoff := oidcDiscoveryInitialBackoff
+	attempts := oidcDiscoveryAttempts()
+	attemptTimeout := oidcDiscoveryAttemptTimeout()
+	backoff := oidcDiscoveryInitialBackoff()
+	maxBackoff := oidcDiscoveryMaxBackoff()
 
-	for attempt := 1; attempt <= oidcDiscoveryAttempts; attempt++ {
-		attemptCtx, cancel := context.WithTimeout(ctx, oidcDiscoveryAttemptTimeout)
+	for attempt := 1; attempt <= attempts; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
 		provider, err := oidc.NewProvider(attemptCtx, issuerURL)
 		cancel()
 		if err == nil {
@@ -66,7 +71,7 @@ func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider
 		}
 		lastErr = err
 
-		if attempt == oidcDiscoveryAttempts {
+		if attempt == attempts {
 			break
 		}
 		select {
@@ -75,9 +80,40 @@ func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider
 		case <-time.After(backoff):
 		}
 		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
 	}
 
-	return nil, fmt.Errorf("OIDC discovery failed after %d attempts: %w", oidcDiscoveryAttempts, lastErr)
+	return nil, fmt.Errorf("OIDC discovery failed after %d attempts: %w", attempts, lastErr)
+}
+
+func oidcDiscoveryAttempts() int {
+	value, err := strconv.Atoi(os.Getenv("OIDC_DISCOVERY_ATTEMPTS"))
+	if err != nil || value < 1 {
+		return oidcDiscoveryDefaultAttempts
+	}
+	return value
+}
+
+func oidcDiscoveryAttemptTimeout() time.Duration {
+	return oidcDiscoveryDuration("OIDC_DISCOVERY_ATTEMPT_TIMEOUT", oidcDiscoveryDefaultAttemptTimeout)
+}
+
+func oidcDiscoveryInitialBackoff() time.Duration {
+	return oidcDiscoveryDuration("OIDC_DISCOVERY_INITIAL_BACKOFF", oidcDiscoveryDefaultInitialBackoff)
+}
+
+func oidcDiscoveryMaxBackoff() time.Duration {
+	return oidcDiscoveryDuration("OIDC_DISCOVERY_MAX_BACKOFF", oidcDiscoveryDefaultMaxBackoff)
+}
+
+func oidcDiscoveryDuration(envName string, fallback time.Duration) time.Duration {
+	value, err := time.ParseDuration(os.Getenv(envName))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 // TokenInfo holds the validated identity extracted from a JWT.

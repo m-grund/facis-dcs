@@ -437,68 +437,6 @@ slat:exclusion-force-majeure a sla:ForceMajeureExclusion ;
 slat:exclusion-customer-action a sla:CustomerCausedExclusion ;
   skos:prefLabel "customer-caused issue"@en, "kundenseitig verursachtes Problem"@de .
 
-slat:constraint-availability-percent a dcs:ValueConstraint ;
-  dcs:minInclusive 0 ;
-  dcs:maxInclusive 100 ;
-  dcs:format "percentage" ;
-  rdfs:label "SLA availability percentage constraint"@en, "SLA-Verfuegbarkeitsprozent-Constraint"@de .
-
-slat:constraint-duration-minutes-non-negative a dcs:ValueConstraint ;
-  dcs:minInclusive 0 ;
-  dcs:format "duration-minutes" ;
-  rdfs:label "Non-negative duration in minutes constraint"@en, "Nichtnegative Dauer in Minuten Constraint"@de .
-
-slat:field-service-sla-availability a dcs:DomainField ;
-  dcs:semanticPath "service.sla.availability" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:parameterType "decimal" ;
-  dcs:hasValueConstraint slat:constraint-availability-percent ;
-  rdfs:label "SLA availability"@en, "SLA-Verfuegbarkeit"@de .
-
-slat:field-service-sla-responseTime a dcs:DomainField ;
-  dcs:semanticPath "service.sla.responseTime" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:parameterType "integer" ;
-  dcs:hasValueConstraint slat:constraint-duration-minutes-non-negative ;
-  rdfs:label "SLA response time"@en, "SLA-Reaktionszeit"@de .
-
-slat:field-service-sla-resolutionTime a dcs:DomainField ;
-  dcs:semanticPath "service.sla.resolutionTime" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:parameterType "integer" ;
-  dcs:hasValueConstraint slat:constraint-duration-minutes-non-negative ;
-  rdfs:label "SLA resolution time"@en, "SLA-Loesungszeit"@de .
-
-slat:field-service-sla-supportHours a dcs:DomainField ;
-  dcs:semanticPath "service.sla.supportHours" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:parameterType "string" ;
-  rdfs:label "SLA support hours"@en, "SLA-Supportzeiten"@de .
-
-slat:block-sla-availability a dcs:BlockCatalogueEntry ;
-  dcs:blockCatalogueId "facis.block.sla.availability" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:semanticPath "service.sla.availability" ;
-  rdfs:label "SLA availability block"@en, "SLA-Verfuegbarkeitsblock"@de .
-
-slat:block-sla-response-time a dcs:BlockCatalogueEntry ;
-  dcs:blockCatalogueId "facis.block.sla.response-time" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:semanticPath "service.sla.responseTime" ;
-  rdfs:label "SLA response-time block"@en, "SLA-Reaktionszeitblock"@de .
-
-slat:block-sla-resolution-time a dcs:BlockCatalogueEntry ;
-  dcs:blockCatalogueId "facis.block.sla.resolution-time" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:semanticPath "service.sla.resolutionTime" ;
-  rdfs:label "SLA resolution-time block"@en, "SLA-Loesungszeitblock"@de .
-
-slat:block-sla-support a dcs:BlockCatalogueEntry ;
-  dcs:blockCatalogueId "facis.block.sla.support" ;
-  dcs:schemaRef "facis.dcs.service.v1" ;
-  dcs:semanticPath "service.sla.supportHours" ;
-  rdfs:label "SLA support block"@en, "SLA-Supportblock"@de .
-
 slat:slo-availability-99-9-monthly a sla:ServiceLevelObjective ;
   skos:prefLabel "99.9 percent monthly availability"@en, "99,9 Prozent monatliche Verfuegbarkeit"@de ;
   sla:hasMetric slat:metric-availability-percent ;
@@ -762,8 +700,8 @@ dcs:PolicyEnforcementPoint a rdfs:Class ;
 dcs:BlockCatalogueEntry a rdfs:Class ;
   rdfs:label "Block Catalogue Entry"@en .
 
-dcs:PaymentTerms a rdfs:Class ;
-  rdfs:label "Payment Terms"@en .
+dcs:PaymentTerm a rdfs:Class ;
+  rdfs:label "Payment Term"@en .
 
 dcs:LiabilityTerms a rdfs:Class ;
   rdfs:label "Liability Terms"@en .
@@ -1397,7 +1335,13 @@ dcst:constraint-eidas-signature-level a dcs:ValueConstraint ;
 dcst:constraint-sla-availability-percent a dcs:ValueConstraint ;
   dcs:minInclusive 0 ;
   dcs:maxInclusive 100 ;
+  dcs:format "percentage" ;
   rdfs:label "SLA Availability Percentage Constraint"@en .
+
+dcst:constraint-duration-minutes-non-negative a dcs:ValueConstraint ;
+  dcs:minInclusive 0 ;
+  dcs:format "duration-minutes" ;
+  rdfs:label "Non-negative Duration in Minutes Constraint"@en .
 
 dcst:constraint-contract-type a dcs:ValueConstraint ;
   dcs:format "controlled-vocabulary" ;
@@ -1698,7 +1642,7 @@ dcst:field-service-deliverable-acceptanceCriteria a dcs:DomainField ;
 dcst:field-service-sla-availability a dcs:DomainField ;
   dcs:semanticPath "service.sla.availability" ;
   dcs:statementField "slo.availability" ;
-  dcs:statementType dcs:ServiceLevelObjective ;
+  dcs:statementType dcs:SLO ;
   dcs:statementId "slo-availability" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "decimal" ;
@@ -1709,12 +1653,14 @@ dcst:field-service-sla-responseTime a dcs:DomainField ;
   dcs:semanticPath "service.sla.responseTime" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "integer" ;
+  dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative ;
   rdfs:label "SLA Response Time"@en .
 
 dcst:field-service-sla-resolutionTime a dcs:DomainField ;
   dcs:semanticPath "service.sla.resolutionTime" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "integer" ;
+  dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative ;
   rdfs:label "SLA Resolution Time"@en .
 
 dcst:field-service-sla-supportHours a dcs:DomainField ;

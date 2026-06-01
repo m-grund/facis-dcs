@@ -9,7 +9,6 @@
       "title": "Template uses FACIS schema references",
       "severity": "error",
       "builtin": "required_schema_refs",
-      "requirement": "DCS-IR-TR-03",
       "ontologyTerm": "dcst:validation-template-v1"
     },
     {
@@ -17,7 +16,6 @@
       "title": "Template declares required policy references",
       "severity": "error",
       "builtin": "required_policy_refs",
-      "requirement": "DCS-IR-TR-03",
       "ontologyTerm": "dcst:policy-template-structure-v1"
     },
     {
@@ -25,7 +23,6 @@
       "title": "Audited finished template is approved or registered",
       "severity": "info",
       "builtin": "finished_template_state",
-      "requirement": "DCS-IR-TR-06",
       "ontologyTerm": "dcs:LifecycleState",
       "parameters": {
         "states": [
@@ -39,7 +36,6 @@
       "title": "Finished template contains at least one clause with semantic rules",
       "severity": "error",
       "builtin": "finished_template_has_clause_semantics",
-      "requirement": "DCS-IR-TR-01",
       "ontologyTerm": "dcs:ClauseBlock"
     },
     {
@@ -47,7 +43,6 @@
       "title": "Template semantic parameters use canonical domain fields",
       "severity": "error",
       "builtin": "canonical_domain_fields",
-      "requirement": "DCS-IR-TR-03",
       "ontologyTerm": "dcs:DomainField"
     },
     {
@@ -55,7 +50,6 @@
       "title": "Constrained semantic parameters carry ontology constraints",
       "severity": "error",
       "builtin": "constrained_parameters_use_value_constraint",
-      "requirement": "DCS-IR-TR-03",
       "ontologyTerm": "dcs:ValueConstraint"
     },
     {
@@ -63,7 +57,6 @@
       "title": "Finished template exposes jurisdiction for policy checks",
       "severity": "warning",
       "builtin": "required_domain_fields",
-      "requirement": "DCS-IR-CWE-02",
       "ontologyTerm": "dcst:field-contract-jurisdiction",
       "parameters": {
         "semanticPaths": [
@@ -76,7 +69,6 @@
       "title": "Finished template exposes company country as ISO 3166-1 alpha-3",
       "severity": "warning",
       "builtin": "required_domain_fields",
-      "requirement": "DCS-IR-CWE-02",
       "ontologyTerm": "dcst:field-company-location-country",
       "parameters": {
         "semanticPaths": [
@@ -89,7 +81,6 @@
       "title": "Finished template declares required signature level",
       "severity": "warning",
       "builtin": "required_domain_fields",
-      "requirement": "DCS-IR-SM-07",
       "ontologyTerm": "dcst:field-signature-requiredLevel",
       "parameters": {
         "semanticPaths": [
@@ -102,7 +93,6 @@
       "title": "Template declares audit-relevant policy and semantic metadata",
       "severity": "warning",
       "builtin": "audit_metadata_complete",
-      "requirement": "DCS-IR-PACM-01",
       "ontologyTerm": "dcs:AuditEvent"
     }
   ]

@@ -1,7 +1,6 @@
 package validation
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,10 +20,11 @@ const (
 	ValidationRuleUnique         = "unique"
 	ValidationRuleComparison     = "comparison"
 	ValidationRuleReferences     = "references"
+	ValidationRuleValueIn        = "value_in"
+	ValidationRuleSignatureLevel = "signature_level_at_least"
 )
 
-//go:embed profiles/facis.sla.basic.v1.ttl
-var defaultContractStatementValidationProfileSHACL []byte
+const defaultContractStatementValidationProfileFile = "docs/semantic-ontology/validation/facis.sla.basic.v1.ttl"
 
 type ValidationProfile struct {
 	ID          string           `json:"id" yaml:"id"`
@@ -42,6 +42,7 @@ type ValidationRule struct {
 	Where           map[string]any       `json:"where,omitempty" yaml:"where,omitempty"`
 	Operator        string               `json:"operator,omitempty" yaml:"operator,omitempty"`
 	Value           any                  `json:"value,omitempty" yaml:"value,omitempty"`
+	Values          []string             `json:"values,omitempty" yaml:"values,omitempty"`
 	RequiredFields  []string             `json:"requiredFields,omitempty" yaml:"requiredFields,omitempty"`
 	ReferenceFields []StatementReference `json:"referenceFields,omitempty" yaml:"referenceFields,omitempty"`
 }
@@ -126,6 +127,15 @@ func ValidateValidationProfile(profile ValidationProfile) error {
 		if (rule.Type == ValidationRuleFieldValue || rule.Type == ValidationRuleComparison || rule.Type == ValidationRuleUnique) && strings.TrimSpace(rule.Target) == "" {
 			return fmt.Errorf("validation rule %q requires a target", rule.ID)
 		}
+		if (rule.Type == ValidationRuleValueIn || rule.Type == ValidationRuleSignatureLevel) && strings.TrimSpace(rule.Target) == "" {
+			return fmt.Errorf("validation rule %q requires a target", rule.ID)
+		}
+		if rule.Type == ValidationRuleValueIn && len(rule.Values) == 0 {
+			return fmt.Errorf("validation rule %q requires values", rule.ID)
+		}
+		if rule.Type == ValidationRuleSignatureLevel && rule.Value == nil {
+			return fmt.Errorf("validation rule %q requires a value", rule.ID)
+		}
 		if rule.Type == ValidationRuleRequiredFields && len(rule.RequiredFields) == 0 {
 			return fmt.Errorf("validation rule %q requires requiredFields", rule.ID)
 		}
@@ -161,6 +171,10 @@ func ValidateContractStatements(statements []map[string]any, profile ValidationP
 			issues = append(issues, evaluateComparisonRule(statements, rule)...)
 		case ValidationRuleReferences:
 			issues = append(issues, evaluateReferencesRule(statements, rule)...)
+		case ValidationRuleValueIn:
+			issues = append(issues, evaluateStatementValueInRule(statements, rule)...)
+		case ValidationRuleSignatureLevel:
+			issues = append(issues, evaluateStatementSignatureLevelRule(statements, rule)...)
 		default:
 			issues = append(issues, validationIssue(rule, "", fmt.Sprintf("unknown validation rule type %q", rule.Type)))
 		}
@@ -284,6 +298,30 @@ func evaluateReferencesRule(statements []map[string]any, rule ValidationRule) []
 	return issues
 }
 
+func evaluateStatementValueInRule(statements []map[string]any, rule ValidationRule) []ValidationIssue {
+	issues := []ValidationIssue{}
+	allowed := normalizedSet(rule.Values)
+	for _, statement := range FindStatements(statements, rule.Where) {
+		value, ok := statement[rule.Target]
+		if !ok || !allowed[strings.ToUpper(strings.TrimSpace(fmt.Sprint(value)))] {
+			issues = append(issues, validationIssue(rule, statementID(statement), ""))
+		}
+	}
+	return issues
+}
+
+func evaluateStatementSignatureLevelRule(statements []map[string]any, rule ValidationRule) []ValidationIssue {
+	issues := []ValidationIssue{}
+	required, _ := rule.Value.(string)
+	for _, statement := range FindStatements(statements, rule.Where) {
+		actual, _ := statement[rule.Target].(string)
+		if !signatureLevelSatisfies(actual, required) {
+			issues = append(issues, validationIssue(rule, statementID(statement), ""))
+		}
+	}
+	return issues
+}
+
 func statementReferenceExists(statements []map[string]any, id string, where map[string]any) bool {
 	for _, statement := range statements {
 		statementID, _ := statement["@id"].(string)
@@ -391,7 +429,7 @@ func statementID(statement map[string]any) string {
 
 func knownValidationRuleType(ruleType string) bool {
 	switch ruleType {
-	case ValidationRuleCount, ValidationRuleExists, ValidationRuleRequiredFields, ValidationRuleFieldValue, ValidationRuleUnique, ValidationRuleComparison, ValidationRuleReferences:
+	case ValidationRuleCount, ValidationRuleExists, ValidationRuleRequiredFields, ValidationRuleFieldValue, ValidationRuleUnique, ValidationRuleComparison, ValidationRuleReferences, ValidationRuleValueIn, ValidationRuleSignatureLevel:
 		return true
 	default:
 		return false
@@ -399,9 +437,38 @@ func knownValidationRuleType(ruleType string) bool {
 }
 
 func defaultContractStatementValidationProfile() ValidationProfile {
-	profile, err := LoadValidationProfileSHACL(defaultContractStatementValidationProfileSHACL)
+	profile, err := LoadValidationProfileFile(resolveDefaultContractStatementValidationProfileFile())
 	if err != nil {
 		panic(fmt.Sprintf("load default contract statement validation profile: %v", err))
 	}
+	return statementScopedValidationProfile(profile)
+}
+
+func statementScopedValidationProfile(profile ValidationProfile) ValidationProfile {
+	rules := make([]ValidationRule, 0, len(profile.Rules))
+	for _, rule := range profile.Rules {
+		if len(rule.Where) > 0 {
+			rules = append(rules, rule)
+		}
+	}
+	profile.Rules = rules
 	return profile
+}
+
+func resolveDefaultContractStatementValidationProfileFile() string {
+	if path := strings.TrimSpace(os.Getenv("FACIS_CONTRACT_STATEMENT_VALIDATION_PROFILE")); path != "" {
+		return path
+	}
+	for _, candidate := range []string{
+		defaultContractStatementValidationProfileFile,
+		filepath.Join("..", defaultContractStatementValidationProfileFile),
+		filepath.Join("..", "..", defaultContractStatementValidationProfileFile),
+		filepath.Join("..", "..", "..", defaultContractStatementValidationProfileFile),
+		filepath.Join("..", "..", "..", "..", defaultContractStatementValidationProfileFile),
+	} {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return defaultContractStatementValidationProfileFile
 }

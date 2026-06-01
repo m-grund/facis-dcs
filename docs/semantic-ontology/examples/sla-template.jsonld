@@ -111,7 +111,7 @@
             },
             "operators": [
               {
-                "operate": "matchesRegex",
+                "operate": "MatchesRegex",
                 "targets": [
                   "^https://"
                 ]
@@ -140,7 +140,7 @@
             },
             "operators": [
               {
-                "operate": "greaterThanOrEqual",
+                "operate": "GreaterThanOrEqual",
                 "targets": [
                   "99.95"
                 ]
@@ -159,7 +159,7 @@
             },
             "operators": [
               {
-                "operate": "equal",
+                "operate": "Equals",
                 "targets": [
                   "P1M"
                 ]
@@ -187,7 +187,7 @@
             },
             "operators": [
               {
-                "operate": "equal",
+                "operate": "Equals",
                 "targets": [
                   "DE"
                 ]
@@ -214,7 +214,7 @@
             },
             "operators": [
               {
-                "operate": "lessThanOrEqual",
+                "operate": "LessThanOrEqual",
                 "targets": [
                   "{{contractEndDate}}"
                 ]
@@ -242,7 +242,7 @@
             },
             "operators": [
               {
-                "operate": "between",
+                "operate": "Between",
                 "targets": [
                   "0",
                   "100"

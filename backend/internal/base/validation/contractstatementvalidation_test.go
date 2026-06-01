@@ -203,7 +203,7 @@ func TestLoadValidationProfileRejectsInvalidDefinitions(t *testing.T) {
 }
 
 func TestLoadValidationProfileSupportsSHACLJSONAndYAML(t *testing.T) {
-	shaclPath := filepath.Join("profiles", "facis.sla.basic.v1.ttl")
+	shaclPath := filepath.Join("..", "..", "..", "..", "docs", "semantic-ontology", "validation", "facis.sla.basic.v1.ttl")
 	raw, err := os.ReadFile(shaclPath)
 	require.NoError(t, err)
 

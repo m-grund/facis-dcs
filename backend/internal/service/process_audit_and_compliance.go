@@ -285,9 +285,6 @@ func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	policy := req.Policy
-	if policy == nil {
-		policy = defaultContractContentAuditPolicy()
-	}
 	for contractIndex, metadata := range contracts {
 		contract, err := s.CRepo.ReadDataByID(ctx, tx, metadata.DID)
 		if err != nil {
@@ -324,76 +321,6 @@ func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries
 		return nil, err
 	}
 	return result, nil
-}
-
-func defaultContractContentAuditPolicy() map[string]any {
-	return map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "v1",
-		"shaclShapes": []map[string]any{
-			{
-				"id":          "FACIS-CONTRACT-SHACL-SLA",
-				"title":       "Contract JSON-LD must satisfy the SLA SHACL shape",
-				"targetClass": "dcs:Contract",
-				"severity":    "error",
-				"requirement": "DCS-FR-PACM-03",
-				"properties": []map[string]any{
-					{"path": "@id", "name": "Contract identifier", "minCount": 1, "maxCount": 1, "datatype": "xsd:anyURI"},
-					{"path": "@type", "name": "Contract type", "minCount": 1, "in": []string{"dcs:Contract", "Contract"}},
-					{"path": "parties", "name": "Contract parties", "minCount": 2, "class": "dcs:CompanyParty"},
-					{"path": "contract.jurisdiction", "name": "Jurisdiction", "minCount": 1, "datatype": "xsd:string"},
-					{"path": "service.sla.availability", "name": "SLA availability", "minCount": 1, "datatype": "xsd:decimal"},
-				},
-			},
-		},
-		"rules": []map[string]any{
-			{
-				"id":           "FACIS-CONTRACT-STATIC-002",
-				"title":        "Contract jurisdiction must be allowed",
-				"builtin":      "value_in",
-				"semanticPath": "contract.jurisdiction",
-				"values":       []string{"DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA"},
-				"ontologyTerm": "dcs:Contract",
-				"requirement":  "DCS-FR-PACM-03",
-			},
-			{
-				"id":           "FACIS-CONTRACT-STATIC-003",
-				"title":        "Service availability must satisfy policy minimum",
-				"builtin":      "min_number",
-				"semanticPath": "service.sla.availability",
-				"min":          99.9,
-				"ontologyTerm": "sla:AvailabilityMetric",
-				"requirement":  "DCS-FR-CWE-09",
-			},
-			{
-				"id":           "FACIS-CONTRACT-STATIC-004",
-				"title":        "Service response time must satisfy policy maximum",
-				"builtin":      "max_number",
-				"semanticPath": "service.sla.responseTime",
-				"max":          15,
-				"ontologyTerm": "sla:ResponseTimeMetric",
-				"requirement":  "DCS-FR-CWE-09",
-			},
-			{
-				"id":           "FACIS-CONTRACT-STATIC-005",
-				"title":        "Service resolution time must satisfy policy maximum",
-				"builtin":      "max_number",
-				"semanticPath": "service.sla.resolutionTime",
-				"max":          240,
-				"ontologyTerm": "sla:ResolutionTimeMetric",
-				"requirement":  "DCS-FR-CWE-09",
-			},
-			{
-				"id":           "FACIS-CONTRACT-STATIC-006",
-				"title":        "Signature level must satisfy policy",
-				"builtin":      "signature_level_at_least",
-				"semanticPath": "signature.requiredLevel",
-				"required":     "AES",
-				"ontologyTerm": "dcs:SignatureLevelCode",
-				"requirement":  "DCS-FR-PACM-03",
-			},
-		},
-	}
 }
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {

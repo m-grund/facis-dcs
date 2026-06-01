@@ -38,6 +38,7 @@ func shaclRule(statement string) (ValidationRule, error) {
 		Where:          shaclWhereClause(ontologyStrings(statement, "facisv:where")),
 		Operator:       ontologyString(statement, "facisv:operator"),
 		Value:          shaclValue(statement),
+		Values:         ontologyStrings(statement, "facisv:allowedValue"),
 		RequiredFields: ontologyStrings(statement, "facisv:requiredField"),
 	}
 	referenceFields, err := shaclReferenceFields(ontologyStrings(statement, "facisv:referenceField"))
