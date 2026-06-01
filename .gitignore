@@ -4,6 +4,7 @@ tmp
 .vscode
 .DS_Store
 .claude/
+.codex
 backend/gen
 
 frontend/node_modules
