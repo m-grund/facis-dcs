@@ -191,6 +191,7 @@ import {
 } from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
 import { ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS } from '@/modules/template-repository/utils/ontology-domain-types'
+import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
@@ -252,7 +253,7 @@ const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rul
 const selectedDomainField = computed(() =>
   semanticRuleDomainFields.find((field) => field.semanticPath === selectedDomainPath.value),
 )
-const fixedValueOptions = computed(() => selectedDomainField.value?.valueConstraint?.allowedValues ?? [])
+const fixedValueOptions = computed(() => resolveAllowedValues(selectedDomainField.value?.valueConstraint))
 const fixedValueError = computed(() => validateDraftFixedValue())
 const groupedDomainFields = computed(() => {
   const query = domainFieldSearch.value.trim().toLowerCase()

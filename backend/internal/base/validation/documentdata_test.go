@@ -695,6 +695,14 @@ func TestNormalizeContractDataAcceptsSemanticValueInsideConstraint(t *testing.T)
 	require.NoError(t, err)
 }
 
+func TestValueConstraintResolvesAllowedValuesRef(t *testing.T) {
+	err := valueMatchesConstraint("DEU", &valueConstraint{AllowedValuesRef: "ISO 3166-1 alpha-3"})
+	require.NoError(t, err)
+
+	err = valueMatchesConstraint("ZZZ", &valueConstraint{AllowedValuesRef: "ISO 3166-1 alpha-3"})
+	require.ErrorContains(t, err, "expected one of")
+}
+
 func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any

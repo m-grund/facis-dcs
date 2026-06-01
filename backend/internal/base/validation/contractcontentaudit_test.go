@@ -127,6 +127,60 @@ func TestAuditContractContentReadsJSONLDSemanticPathThresholds(t *testing.T) {
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-003", "error"))
 }
 
+func TestAuditContractContentResolvesAllowedValuesRef(t *testing.T) {
+	contract := map[string]any{
+		"contract": map[string]any{
+			"jurisdiction": "ZZZ",
+		},
+	}
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.content.static",
+		"version":     "test",
+		"rules": []any{
+			map[string]any{
+				"id":           "FACIS-CONTRACT-STATIC-COUNTRY",
+				"title":        "Contract jurisdiction must use an allowed ISO country code",
+				"builtin":      "value_in",
+				"semanticPath": "contract.jurisdiction",
+				"valuesRef":    "ISO 3166-1 alpha-3",
+				"ontologyTerm": "dcs:CountryCode",
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "error"))
+}
+
+func TestAuditContractContentAcceptsAllowedValuesRef(t *testing.T) {
+	contract := map[string]any{
+		"contract": map[string]any{
+			"jurisdiction": "DEU",
+		},
+	}
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.content.static",
+		"version":     "test",
+		"rules": []any{
+			map[string]any{
+				"id":           "FACIS-CONTRACT-STATIC-COUNTRY",
+				"title":        "Contract jurisdiction must use an allowed ISO country code",
+				"builtin":      "value_in",
+				"semanticPath": "contract.jurisdiction",
+				"valuesRef":    "ISO 3166-1 alpha-3",
+				"ontologyTerm": "dcs:CountryCode",
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "info"))
+}
+
 func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 	contract := map[string]any{
 		"@context": []any{"https://w3id.org/facis/sla/ontology"},

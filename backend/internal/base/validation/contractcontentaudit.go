@@ -36,6 +36,7 @@ type ContractContentPolicyRule struct {
 	Builtin      string   `json:"builtin"`
 	SemanticPath string   `json:"semanticPath"`
 	Values       []string `json:"values"`
+	ValuesRef    string   `json:"valuesRef"`
 	Min          *float64 `json:"min"`
 	Max          *float64 `json:"max"`
 	Required     string   `json:"required"`
@@ -702,7 +703,11 @@ func auditValueInRule(contract map[string]any, rule ContractContentPolicyRule) [
 	if !ok {
 		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s is missing", rule.SemanticPath))}
 	}
-	allowed := normalizedSet(rule.Values)
+	allowedValues := rule.Values
+	if len(allowedValues) == 0 && strings.TrimSpace(rule.ValuesRef) != "" {
+		allowedValues = allowedValuesForConstraint(&valueConstraint{AllowedValuesRef: rule.ValuesRef})
+	}
+	allowed := normalizedSet(allowedValues)
 	normalized := strings.ToUpper(strings.TrimSpace(value))
 	if !allowed[normalized] {
 		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s %q is not allowed by current policy", rule.SemanticPath, normalized))}

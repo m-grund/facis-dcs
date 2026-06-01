@@ -1,7 +1,17 @@
 <template>
   <span class="tooltip tooltip-top inline-flex items-baseline" :data-tip="tipText">
+    <select
+      v-if="allowedValues.length && (type === 'string' || type === 'enum')"
+      v-model="stringValue"
+      :class="selectClass"
+      :aria-label="label"
+      @change="emitStringValue"
+    >
+      <option value=""></option>
+      <option v-for="option in allowedValues" :key="option" :value="option">{{ option }}</option>
+    </select>
     <input
-      v-if="type === 'string'"
+      v-else-if="type === 'string' || type === 'enum'"
       v-model="stringValue"
       type="text"
       :class="inputClass"
@@ -40,6 +50,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { SemanticParameterType, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
+import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 
 const props = defineProps<{
   type: SemanticParameterType
@@ -57,9 +68,13 @@ const stringValue = ref('')
 const numberValue = ref('')
 const dateValue = ref('')
 const booleanValue = ref(false)
+const allowedValues = computed(() => resolveAllowedValues(props.valueConstraint))
 const tipText = computed(() => props.invalidTip || props.valueConstraint?.description || props.label || '')
 const inputClass = computed(() =>
   `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
+)
+const selectClass = computed(() =>
+  `select select-xs h-7 min-h-0 w-28 rounded-md bg-transparent px-1 text-sm leading-relaxed ${props.isInvalid ? 'select-error text-error' : 'select-bordered'}`,
 )
 
 watch(

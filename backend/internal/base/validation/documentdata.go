@@ -44,9 +44,9 @@ func (constraint *valueConstraint) asMap() map[string]any {
 	if constraint.Pattern != "" {
 		result["pattern"] = constraint.Pattern
 	}
-	if len(constraint.AllowedValues) > 0 {
-		values := make([]any, len(constraint.AllowedValues))
-		for i, value := range constraint.AllowedValues {
+	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
+		values := make([]any, len(allowedValues))
+		for i, value := range allowedValues {
 			values[i] = value
 		}
 		result["allowedValues"] = values
@@ -1496,10 +1496,10 @@ func valueMatchesType(value any, paramType string) bool {
 }
 
 func valueMatchesConstraint(value any, constraint *valueConstraint) error {
-	if len(constraint.AllowedValues) > 0 {
+	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
 		text, ok := value.(string)
-		if !ok || !containsString(constraint.AllowedValues, text) {
-			return fmt.Errorf("expected one of %s", strings.Join(constraint.AllowedValues, ", "))
+		if !ok || !containsString(allowedValues, text) {
+			return fmt.Errorf("expected one of %s", strings.Join(allowedValues, ", "))
 		}
 	}
 	if constraint.Pattern != "" {

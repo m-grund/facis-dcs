@@ -470,6 +470,32 @@ func parseOntologyValueConstraint(statement string) *valueConstraint {
 	return constraint
 }
 
+func allowedValuesForConstraint(constraint *valueConstraint) []string {
+	if constraint == nil {
+		return nil
+	}
+	if len(constraint.AllowedValues) > 0 {
+		return append([]string(nil), constraint.AllowedValues...)
+	}
+	ref := normalizedAllowedValuesRef(constraint.AllowedValuesRef)
+	if ref == "" {
+		return nil
+	}
+	for _, field := range ontologyDomainFieldIndex {
+		if field.Constraint == nil || normalizedAllowedValuesRef(field.Constraint.AllowedValuesRef) != ref {
+			continue
+		}
+		if len(field.Constraint.AllowedValues) > 0 {
+			return append([]string(nil), field.Constraint.AllowedValues...)
+		}
+	}
+	return nil
+}
+
+func normalizedAllowedValuesRef(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(value), " "))
+}
+
 func ontologyString(statement string, predicate string) string {
 	values := ontologyStrings(statement, predicate)
 	if len(values) == 0 {
