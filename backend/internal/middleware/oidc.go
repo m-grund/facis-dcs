@@ -49,12 +49,13 @@ func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, e
 // TokenInfo holds the validated identity extracted from a JWT.
 type TokenInfo struct {
 	Roles         []string
+	DID           string
 	Username      string
 	ParticipantID string
 }
 
 // ValidateToken verifies the token signature, issuer, and azp claim, then
-// returns the caller's roles and username.
+// returns the caller's roles and did.
 func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*TokenInfo, error) {
 	idToken, err := v.verifier.Verify(ctx, token)
 	if err != nil {
@@ -76,12 +77,18 @@ func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*Token
 	if username == "" {
 		username, _ = claims["sub"].(string)
 	}
+
+	did, _ := claims["preferred_username"].(string)
+	if did == "" {
+		did, _ = claims["sub"].(string)
+	}
 	// This value is set by the Keycloak -> Clients -> <client_id>
 	// -> <client_id>-dedicated -> Configure a new mapper / Add mapper (by configuration) -> Hardcoded claim
 	participantID, _ := claims["participant-id"].(string)
 
 	return &TokenInfo{
 		Roles:         extractRoles(claims),
+		DID:           did,
 		Username:      username,
 		ParticipantID: participantID,
 	}, nil
@@ -137,6 +144,7 @@ type authCtxKey struct{}
 // AuthContext carries the validated caller identity through the request context.
 type AuthContext struct {
 	Roles         []string
+	DID           string
 	Username      string
 	ParticipantID string
 }
@@ -153,6 +161,14 @@ func GetRoles(ctx context.Context) []string {
 func GetUsername(ctx context.Context) string {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
 		return ac.Username
+	}
+	return ""
+}
+
+// GetDID extracts the authenticated DID from the request context.
+func GetDID(ctx context.Context) string {
+	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
+		return ac.DID
 	}
 	return ""
 }
@@ -176,6 +192,6 @@ func HasRole(ctx context.Context, requiredRole string) bool {
 }
 
 // InjectAuthContext injects the validated identity into the request context.
-func InjectAuthContext(ctx context.Context, roles []string, username string, participantID string) context.Context {
-	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, Username: username, ParticipantID: participantID})
+func InjectAuthContext(ctx context.Context, roles []string, did string, username string, participantID string) context.Context {
+	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, DID: did, Username: username, ParticipantID: participantID})
 }

@@ -23,6 +23,7 @@ import (
 
 type GetAllMetadataQry struct {
 	RetrievedBy string
+	Username    string
 }
 
 type MetadataItem struct {
@@ -91,6 +92,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	evt := templateevents.RetrieveAllEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		Username:    query.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

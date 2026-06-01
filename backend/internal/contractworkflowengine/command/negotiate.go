@@ -24,6 +24,7 @@ type NegotiationCmd struct {
 	NegotiatedBy  string
 	ChangeRequest *datatype.JSON
 	UpdatedAt     time.Time
+	Username      string
 }
 
 type Negotiator struct {
@@ -98,6 +99,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		ChangeRequest:   cmd.ChangeRequest,
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
+		Username:        cmd.Username,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

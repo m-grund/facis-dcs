@@ -18,6 +18,7 @@ type CreateEvent struct {
 	Description  *string        `json:"description"`
 	TemplateData *datatype.JSON `json:"template_data"`
 	OccurredAt   time.Time      `json:"occurred_at"`
+	Username     string         `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -37,6 +38,7 @@ type CopyEvent struct {
 	CopiedBy   string    `json:"copied_by"`
 	NewVersion int       `json:"new_version"`
 	OccurredAt time.Time `json:"occurred_at"`
+	Username   string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -61,6 +63,7 @@ type SubmitEvent struct {
 	Comments           []string               `json:"comments,omitempty"`
 	OccurredAt         time.Time              `json:"occurred_at"`
 	ResponsiblePersons *any                   `json:"responsible_persons,omitempty"`
+	Username           string                 `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -81,6 +84,7 @@ type ApproveEvent struct {
 	ApprovedBy     string    `json:"approved_by"`
 	DecisionNotes  []string  `json:"decision_notes,omitempty"`
 	OccurredAt     time.Time `json:"occurred_at"`
+	Username       string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -101,6 +105,7 @@ type RejectEvent struct {
 	RejectedBy     string    `json:"rejected_by"`
 	Reason         string    `json:"reason"`
 	OccurredAt     time.Time `json:"occurred_at"`
+	Username       string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -120,6 +125,7 @@ type VerifyEvent struct {
 	Version        int       `json:"version"`
 	VerifiedBy     string    `json:"verified_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
+	Username       string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -145,6 +151,7 @@ type UpdateEvent struct {
 	OldTemplateData   *datatype.JSON `json:"old_template_data,omitempty"`
 	NewTemplateData   *datatype.JSON `json:"new_template_data,omitempty"`
 	OccurredAt        time.Time      `json:"occurred_at"`
+	Username          string         `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -172,6 +179,7 @@ type UpdateManageEvent struct {
 	OldTemplateData   *datatype.JSON `json:"old_template_data,omitempty"`
 	NewTemplateData   *datatype.JSON `json:"new_template_data,omitempty"`
 	OccurredAt        time.Time      `json:"occurred_at"`
+	Username          string         `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -188,6 +196,7 @@ func (e UpdateManageEvent) GetDID() string {
 type SearchEvent struct {
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
+	Username    string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -204,6 +213,7 @@ func (e SearchEvent) GetDID() string {
 type RetrieveAllEvent struct {
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
+	Username    string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -223,6 +233,7 @@ type RetrieveByIDEvent struct {
 	Version        int       `json:"version"`
 	RetrievedBy    string    `json:"retrieved_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
+	Username       string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -242,6 +253,7 @@ type ArchiveEvent struct {
 	Version        int       `json:"version"`
 	ArchivedBy     string    `json:"archived_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
+	Username       string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -261,6 +273,7 @@ type RegisterEvent struct {
 	Version        int       `json:"version"`
 	RegisteredBy   string    `json:"registered_by"`
 	OccurredAt     time.Time `json:"occurred_at"`
+	Username       string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -279,6 +292,7 @@ type AuditEvt struct {
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
+	Username      string                      `json:"username"`
 }
 
 // EventType implements the Event interface.

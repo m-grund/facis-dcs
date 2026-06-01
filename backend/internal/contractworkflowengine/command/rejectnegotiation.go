@@ -22,6 +22,7 @@ type RejectNegotiationCmd struct {
 	DID             string
 	RejectedBy      string
 	RejectionReason *string
+	Username        string
 }
 
 type NegotiationRejector struct {
@@ -72,6 +73,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		RejectedBy:      cmd.RejectedBy,
 		RejectionReason: cmd.RejectionReason,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

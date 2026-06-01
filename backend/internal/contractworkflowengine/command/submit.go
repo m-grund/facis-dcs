@@ -30,6 +30,7 @@ type SubmitCmd struct {
 	Negotiators []string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
+	Username    string
 }
 
 type Submitter struct {
@@ -234,6 +235,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					NewContractVersion: processData.ContractVersion + 1,
 					SubmittedBy:        cmd.SubmittedBy,
 					OccurredAt:         time.Now().UTC(),
+					Username:           cmd.Username,
 				}
 				err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 				if err != nil {
@@ -333,6 +335,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			Comments:           cmd.Comments,
 			OccurredAt:         time.Now().UTC(),
 			ResponsiblePersons: responsiblePersons,
+			Username:           cmd.Username,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 		if err != nil {

@@ -18,6 +18,7 @@ type CopyCmd struct {
 	NewDID   string
 	CopyDID  string
 	CopiedBy string
+	Username string
 }
 
 type Copier struct {
@@ -49,6 +50,7 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 		CopiedBy:   cmd.CopiedBy,
 		NewVersion: version,
 		OccurredAt: time.Now(),
+		Username:   cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

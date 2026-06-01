@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/processauditandcompliance/query"
 
 	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
@@ -36,11 +37,11 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return nil, err
 	}
 
-	qry := query.GetAuditLogQry{
+	qry := qry2.GetAuditLogQry{
 		Scope:     scope,
 		AuditedBy: middleware.GetUsername(ctx),
 	}
-	handler := query.Auditor{
+	handler := qry2.Auditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}

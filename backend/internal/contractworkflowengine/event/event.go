@@ -14,6 +14,7 @@ import (
 // CreateEvent is emitted when a new contract is created.
 type CreateEvent struct {
 	DID          string         `json:"did"`
+	Username     string         `json:"username"`
 	TemplateDID  string         `json:"template_did"`
 	CreatedBy    string         `json:"created_by"`
 	Name         *string        `json:"name"`
@@ -35,6 +36,7 @@ func (e CreateEvent) GetDID() string {
 // UpdateEvent is emitted when contract data is updated.
 type UpdateEvent struct {
 	DID                string                             `json:"did"`
+	Username           string                             `json:"username"`
 	UpdatedBy          string                             `json:"updated_by"`
 	OldName            *string                            `json:"old_name,omitempty"`
 	NewName            *string                            `json:"new_name,omitempty"`
@@ -66,6 +68,7 @@ func (e UpdateEvent) GetDID() string {
 // SubmitEvent is emitted when a contract is submitted
 type SubmitEvent struct {
 	DID                string                 `json:"did"`
+	Username           string                 `json:"username"`
 	PreviousState      string                 `json:"previous_state"`
 	NewState           string                 `json:"new_state"`
 	SubmittedBy        string                 `json:"submitted_by"`
@@ -89,6 +92,7 @@ func (e SubmitEvent) GetDID() string {
 // RetrieveByIDEvent is emitted when contract data is retrieved.
 type RetrieveByIDEvent struct {
 	DID         string    `json:"did"`
+	Username    string    `json:"username"`
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
 }
@@ -106,6 +110,7 @@ func (e RetrieveByIDEvent) GetDID() string {
 // RetrieveHistoryByDIDEvent is emitted when contract data is retrieved.
 type RetrieveHistoryByDIDEvent struct {
 	DID         string    `json:"did"`
+	Username    string    `json:"username"`
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
 }
@@ -122,6 +127,7 @@ func (e RetrieveHistoryByDIDEvent) GetDID() string {
 
 // RetrieveAllEvent is emitted when contract data is retrieved.
 type RetrieveAllEvent struct {
+	Username    string    `json:"username"`
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
 }
@@ -139,6 +145,7 @@ func (e RetrieveAllEvent) GetDID() string {
 // VerifyEvent is emitted when a template is verified.
 type VerifyEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	VerifiedBy      string    `json:"verified_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
@@ -157,6 +164,7 @@ func (e VerifyEvent) GetDID() string {
 // NegotiationEvent is emitted when a template is verified.
 type NegotiationEvent struct {
 	DID             string         `json:"did"`
+	Username        string         `json:"username"`
 	ContractVersion int            `json:"contract_version"`
 	ChangeRequest   *datatype.JSON `json:"change_request,omitempty"`
 	NegotiatedBy    string         `json:"negotiated_by"`
@@ -177,6 +185,7 @@ func (e NegotiationEvent) GetDID() string {
 // AcceptNegotiationEvent is emitted when a template is verified.
 type AcceptNegotiationEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	AcceptedBy      string    `json:"accepted_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
@@ -195,6 +204,7 @@ func (e AcceptNegotiationEvent) GetDID() string {
 // RejectNegotiationEvent is emitted when a template is verified.
 type RejectNegotiationEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	RejectedBy      string    `json:"rejected_by"`
 	RejectionReason *string   `json:"rejection_reason,omitempty"`
@@ -214,6 +224,7 @@ func (e RejectNegotiationEvent) GetDID() string {
 // ApproveEvent is emitted when a contract is approved.
 type ApproveEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	ApprovedBy      string    `json:"approved_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
@@ -232,6 +243,7 @@ func (e ApproveEvent) GetDID() string {
 // RejectEvent is emitted when a contract is rejected.
 type RejectEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	RejectedBy      string    `json:"rejected_by"`
 	Reason          string    `json:"reason"`
@@ -251,6 +263,7 @@ func (e RejectEvent) GetDID() string {
 // TerminateEvent is emitted when a contract is terminated.
 type TerminateEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	Reason          string    `json:"reason"`
 	TerminatedBy    string    `json:"terminated_by"`
@@ -270,6 +283,7 @@ func (e TerminateEvent) GetDID() string {
 // RecordEvidenceEvent is emitted when an evidence is recorded
 type RecordEvidenceEvent struct {
 	DID             string    `json:"did"`
+	Username        string    `json:"username"`
 	ContractVersion int       `json:"contract_version"`
 	RecordedBy      string    `json:"recorded_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
@@ -288,6 +302,7 @@ func (e RecordEvidenceEvent) GetDID() string {
 // AuditEvent is emitted when the contract is audited
 type AuditEvent struct {
 	DID           string                      `json:"did"`
+	Username      string                      `json:"username"`
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
@@ -306,6 +321,7 @@ func (e AuditEvent) GetDID() string {
 // ReviewEvent is emitted when contract is reviewed.
 type ReviewEvent struct {
 	DID        string    `json:"did"`
+	Username   string    `json:"username"`
 	ReviewedBy string    `json:"reviewed_by"`
 	OccurredAt time.Time `json:"occurred_at"`
 }
@@ -323,6 +339,7 @@ func (e ReviewEvent) GetDID() string {
 // IncreaseContractVersionEvent is emitted when change requests for contract merged
 type IncreaseContractVersionEvent struct {
 	DID                string    `json:"did"`
+	Username           string    `json:"username"`
 	OldContractVersion int       `json:"old_contract_version"`
 	NewContractVersion int       `json:"new_contract_version"`
 	SubmittedBy        string    `json:"submitted_by"`
@@ -342,6 +359,7 @@ func (e IncreaseContractVersionEvent) GetDID() string {
 // ContractExpired is emitted when change requests for contract merged
 type ContractExpired struct {
 	DID             string                             `json:"did"`
+	Username        string                             `json:"username"`
 	ContractVersion int                                `json:"old_contract_version"`
 	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
 	OccurredAt      time.Time                          `json:"occurred_at"`

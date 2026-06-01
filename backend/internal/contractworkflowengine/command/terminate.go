@@ -22,6 +22,7 @@ type TerminateCmd struct {
 	TerminatedBy string
 	Reason       string
 	UpdatedAt    time.Time
+	Username     string
 }
 
 type Terminator struct {
@@ -84,6 +85,7 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 		TerminatedBy:    cmd.TerminatedBy,
 		Reason:          cmd.Reason,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

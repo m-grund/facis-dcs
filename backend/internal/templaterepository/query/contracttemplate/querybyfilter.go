@@ -29,6 +29,7 @@ type GetAllMetadataByFilterQry struct {
 	Name           string
 	Description    string
 	TemplateData   string
+	Username       string
 }
 
 type GetAllMetadataByFilterResult struct {
@@ -91,6 +92,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 	evt := templateevents.SearchEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		Username:    query.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

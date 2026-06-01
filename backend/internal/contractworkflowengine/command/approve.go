@@ -23,6 +23,7 @@ type ApproveCmd struct {
 	UpdatedAt     time.Time
 	ApprovedBy    string
 	DecisionNotes []string
+	Username      string
 }
 
 type Approver struct {
@@ -86,6 +87,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		ApprovedBy:      cmd.ApprovedBy,
+		Username:        cmd.Username,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

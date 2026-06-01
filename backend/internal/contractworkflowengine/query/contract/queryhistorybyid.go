@@ -23,6 +23,7 @@ import (
 type GetHistoryByIDQry struct {
 	DID         string
 	RetrievedBy string
+	Username    string
 }
 
 type GetHistoryByIDResult struct {
@@ -70,6 +71,7 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		DID:         query.DID,
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		Username:    query.Username,
 	}
 	err = event.Create(h.Ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

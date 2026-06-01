@@ -19,6 +19,7 @@ import (
 
 type GetAllMetadataQry struct {
 	RetrievedBy string
+	Username    string
 }
 
 type MetadataItem struct {

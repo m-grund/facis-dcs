@@ -27,6 +27,7 @@ type RegisterCmd struct {
 	RegisteredBy  string
 	ParticipantID string
 	Token         string
+	Username      string
 }
 
 type Registrar struct {
@@ -84,6 +85,7 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		Version:        processData.Version,
 		RegisteredBy:   cmd.RegisteredBy,
 		OccurredAt:     time.Now().UTC(),
+		Username:       cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

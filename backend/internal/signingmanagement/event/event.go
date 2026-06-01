@@ -12,6 +12,7 @@ type RetrieveByIDEvent struct {
 	DID         string    `json:"did"`
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
+	Username    string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -28,6 +29,7 @@ func (e RetrieveByIDEvent) GetDID() string {
 type RetrieveAllEvent struct {
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
+	Username    string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -46,6 +48,7 @@ type ValidateEvent struct {
 	ContractVersion *int      `json:"contract_version,omitempty"`
 	ValidatedBy     string    `json:"validated_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Username        string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -64,6 +67,7 @@ type AuditEvt struct {
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
+	Username      string                      `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -82,6 +86,7 @@ type RevokeEvent struct {
 	ContractVersion *int      `json:"contract_version,omitempty"`
 	RevokedBy       string    `json:"revoked_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Username        string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -99,6 +104,7 @@ type ComplianceValidationEvent struct {
 	ContractVersion *int      `json:"contract_version,omitempty"`
 	ValidatedBy     string    `json:"validated_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Username        string    `json:"username"`
 }
 
 // EventType implements the Event interface.

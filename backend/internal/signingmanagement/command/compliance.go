@@ -20,6 +20,7 @@ import (
 type ComplianceCmd struct {
 	DID         string
 	ValidatedBy string
+	Username    string
 }
 
 type ComplianceValidator struct {
@@ -52,6 +53,7 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		ContractVersion: processData.ContractVersion,
 		ValidatedBy:     cmd.ValidatedBy,
 		OccurredAt:      time.Now(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

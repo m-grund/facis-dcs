@@ -21,6 +21,7 @@ type AcceptNegotiationCmd struct {
 	ID         string
 	DID        string
 	AcceptedBy string
+	Username   string
 }
 
 type NegotiationAcceptor struct {
@@ -68,6 +69,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		AcceptedBy:      cmd.AcceptedBy,
+		Username:        cmd.Username,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

@@ -23,6 +23,7 @@ type RejectCmd struct {
 	UpdatedAt  time.Time
 	RejectedBy string
 	Reason     string
+	Username   string
 }
 
 type Rejecter struct {
@@ -82,6 +83,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		RejectedBy:      cmd.RejectedBy,
 		Reason:          cmd.Reason,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

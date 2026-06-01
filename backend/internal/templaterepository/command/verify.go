@@ -27,6 +27,7 @@ type VerifyCmd struct {
 	VerifiedBy    string
 	ParticipantID string
 	Token         string
+	Username      string
 }
 
 type Verifier struct {
@@ -82,6 +83,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		Version:        processData.Version,
 		VerifiedBy:     cmd.VerifiedBy,
 		OccurredAt:     time.Now().UTC(),
+		Username:       cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

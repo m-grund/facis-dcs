@@ -1,4 +1,4 @@
-package contract
+package command
 
 import (
 	"context"
@@ -19,6 +19,7 @@ import (
 type ReviewCmd struct {
 	DID        string
 	ReviewedBy string
+	Username   string
 }
 
 type Reviewer struct {
@@ -44,6 +45,7 @@ func (h *Reviewer) Handle(ctx context.Context, cmd ReviewCmd) error {
 	evt := contractevents.ReviewEvent{
 		DID:        cmd.DID,
 		ReviewedBy: cmd.ReviewedBy,
+		Username:   cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

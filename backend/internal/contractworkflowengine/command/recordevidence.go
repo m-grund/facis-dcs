@@ -21,6 +21,7 @@ type RecordEvidenceCmd struct {
 	DID        string
 	RecordedBy string
 	UpdatedAt  time.Time
+	Username   string
 }
 
 type EvidenceRecorder struct {
@@ -58,6 +59,7 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		ContractVersion: processData.ContractVersion,
 		RecordedBy:      cmd.RecordedBy,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

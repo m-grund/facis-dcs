@@ -20,6 +20,7 @@ import (
 type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
+	Username  string
 }
 
 type Auditor struct {
@@ -27,7 +28,7 @@ type Auditor struct {
 	ATrailReader base.AuditTrailReader
 }
 
-func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
+func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -39,16 +40,17 @@ func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.Au
 		}
 	}(tx)
 
-	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, qry.DID)
+	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, query.DID)
 	if err != nil {
 		return nil, err
 	}
 
 	evt := templateevents.AuditEvt{
-		DID:           qry.DID,
+		DID:           query.DID,
 		ComponentType: componenttype.ContractTemplateRepo,
-		AuditedBy:     qry.AuditedBy,
+		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
+		Username:      query.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

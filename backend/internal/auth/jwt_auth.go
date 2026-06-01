@@ -71,7 +71,7 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 	a.logAttempt(ctx, ip, &info.Username, true)
 	a.clearLock(ctx, ip)
 
-	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.Username, info.ParticipantID)
+	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.DID, info.Username, info.ParticipantID)
 	return ctx, nil
 }
 

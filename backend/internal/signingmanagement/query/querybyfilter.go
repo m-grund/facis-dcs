@@ -19,6 +19,7 @@ import (
 
 type GetAllMetadataByFilterQry struct {
 	RetrievedBy     string
+	Username        string
 	DID             *string
 	ContractVersion *int
 	State           *contractstate.ContractState
@@ -75,6 +76,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 	evt := signingmanagementevents.RetrieveAllEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now(),
+		Username:    query.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

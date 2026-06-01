@@ -86,7 +86,8 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 	cmd := command.CreateCmd{
 		DID:          *did,
 		TemplateDID:  req.Did,
-		CreatedBy:    middleware.GetUsername(ctx),
+		CreatedBy:    middleware.GetDID(ctx),
+		Username:     middleware.GetUsername(ctx),
 		ContractData: contractData,
 	}
 	createHandler := command.Creator{
@@ -150,7 +151,8 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
 		UpdatedAt:       updatedAt,
-		UpdatedBy:       middleware.GetUsername(ctx),
+		UpdatedBy:       middleware.GetDID(ctx),
+		Username:        middleware.GetUsername(ctx),
 		Name:            req.Name,
 		Description:     req.Description,
 		ContractData:    &metaData,
@@ -195,7 +197,8 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
 		UpdatedAt:   updatedAt,
-		SubmittedBy: middleware.GetUsername(ctx),
+		SubmittedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
 		Reviewers:   req.Reviewers,
@@ -217,13 +220,13 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 
 	qry := contract.GetProcessDataByIDQry{
 		DID:         req.Did,
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetDID(ctx),
 	}
-	queryHandler := contract.GetProcessDataByIDHandler{
+	qryHandler := contract.GetProcessDataByIDHandler{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
-	processData, err := queryHandler.Handle(ctx, qry)
+	processData, err := qryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -240,16 +243,17 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 	defer cancel()
 
 	qry := contract.GetAllMetadataQry{
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
 	}
-	queryHandler := contract.GetAllMetadataHandler{
+	qryHandler := contract.GetAllMetadataHandler{
 		DB:     s.DB,
 		CRepo:  s.CRepo,
 		RTRepo: s.RTRepo,
 		ATRepo: s.ATRepo,
 		NTRepo: s.NTRepo,
 	}
-	result, err := queryHandler.Handle(ctx, qry)
+	result, err := qryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -340,15 +344,16 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 
 	qry := contract.GetByIDQry{
 		DID:         req.Did,
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
 	}
-	queryHandler := contract.GetByIDHandler{
+	qryHandler := contract.GetByIDHandler{
 		Ctx:   ctx,
 		DB:    s.DB,
 		CRepo: s.CRepo,
 		NRepo: s.NRepo,
 	}
-	contractResult, err := queryHandler.Handle(ctx, qry)
+	contractResult, err := qryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
@@ -419,14 +424,15 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, re
 
 	qry := contract.GetHistoryByIDQry{
 		DID:         req.Did,
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
 	}
-	queryHandler := contract.GetHistoryByIDHandler{
+	qryHandler := contract.GetHistoryByIDHandler{
 		Ctx:   ctx,
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
-	result, err := queryHandler.Handle(ctx, qry)
+	result, err := qryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -491,7 +497,8 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 	cmd := command.NegotiationCmd{
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
-		NegotiatedBy:  middleware.GetUsername(ctx),
+		NegotiatedBy:  middleware.GetDID(ctx),
+		Username:      middleware.GetUsername(ctx),
 		ChangeRequest: &changeRequest,
 	}
 	handler := command.Negotiator{
@@ -526,7 +533,8 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		cmd := command.AcceptNegotiationCmd{
 			ID:         req.ID,
 			DID:        req.Did,
-			AcceptedBy: middleware.GetUsername(ctx),
+			AcceptedBy: middleware.GetDID(ctx),
+			Username:   middleware.GetUsername(ctx),
 		}
 		handler := command.NegotiationAcceptor{
 			DB:     s.DB,
@@ -542,7 +550,8 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		cmd := command.RejectNegotiationCmd{
 			ID:              req.ID,
 			DID:             req.Did,
-			RejectedBy:      middleware.GetUsername(ctx),
+			RejectedBy:      middleware.GetDID(ctx),
+			Username:        middleware.GetUsername(ctx),
 			RejectionReason: req.RejectionReason,
 		}
 		handler := command.NegotiationRejector{
@@ -567,11 +576,12 @@ func (s *contractWorkflowEnginesrvc) Review(ctx context.Context, req *contractwo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	cmd := contract.ReviewCmd{
+	cmd := command.ReviewCmd{
 		DID:        req.Did,
-		ReviewedBy: middleware.GetUsername(ctx),
+		ReviewedBy: middleware.GetDID(ctx),
+		Username:   middleware.GetUsername(ctx),
 	}
-	handler := contract.Reviewer{
+	handler := command.Reviewer{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
@@ -604,16 +614,17 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		DID:             *req.Did,
 		ContractVersion: *req.ContractVersion,
 		State:           state,
-		RetrievedBy:     middleware.GetUsername(ctx),
+		RetrievedBy:     middleware.GetDID(ctx),
+		Username:        middleware.GetUsername(ctx),
 		Name:            *req.Name,
 		Description:     *req.Description,
 		ContractData:    *req.ContractData,
 	}
-	queryHandler := contract.GetAllMetaDataByFilterHandler{
+	qryHandler := contract.GetAllMetaDataByFilterHandler{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
-	result, err := queryHandler.Handle(ctx, qry)
+	result, err := qryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -664,7 +675,8 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 	cmd := command.ApproveCmd{
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
-		ApprovedBy: middleware.GetUsername(ctx),
+		ApprovedBy: middleware.GetDID(ctx),
+		Username:   middleware.GetUsername(ctx),
 	}
 	handler := command.Approver{
 		DB:     s.DB,
@@ -694,7 +706,8 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 	cmd := command.RejectCmd{
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
-		RejectedBy: middleware.GetUsername(ctx),
+		RejectedBy: middleware.GetDID(ctx),
+		Username:   middleware.GetUsername(ctx),
 		Reason:     req.Reason,
 	}
 	handler := command.Rejecter{
@@ -725,7 +738,8 @@ func (s *contractWorkflowEnginesrvc) Store(ctx context.Context, req *contractwor
 
 	cmd := command.RecordEvidenceCmd{
 		DID:        req.Did,
-		RecordedBy: middleware.GetUsername(ctx),
+		RecordedBy: middleware.GetDID(ctx),
+		Username:   middleware.GetUsername(ctx),
 		UpdatedAt:  updatedAt,
 	}
 	handler := command.EvidenceRecorder{
@@ -755,7 +769,8 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 	cmd := command.TerminateCmd{
 		DID:          req.Did,
 		UpdatedAt:    updatedAt,
-		TerminatedBy: middleware.GetUsername(ctx),
+		TerminatedBy: middleware.GetDID(ctx),
+		Username:     middleware.GetUsername(ctx),
 		Reason:       req.Reason,
 	}
 	handler := command.Terminator{
@@ -783,7 +798,8 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 
 	qry := contract.GetAuditLogQry{
 		DID:       req.Did,
-		AuditedBy: middleware.GetUsername(ctx),
+		AuditedBy: middleware.GetDID(ctx),
+		Username:  middleware.GetUsername(ctx),
 	}
 	handler := contract.Auditor{
 		DB:           s.DB,

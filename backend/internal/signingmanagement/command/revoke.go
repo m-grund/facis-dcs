@@ -18,6 +18,7 @@ import (
 type RevokeCmd struct {
 	DID       string
 	RevokedBy string
+	Username  string
 }
 
 type Revoker struct {
@@ -51,6 +52,7 @@ func (h *Revoker) Handle(ctx context.Context, cmd RevokeCmd) error {
 		ContractVersion: processData.ContractVersion,
 		RevokedBy:       cmd.RevokedBy,
 		OccurredAt:      time.Now(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 type GetByIDQry struct {
 	DID         string
 	RetrievedBy string
+	Username    string
 }
 
 type GetByIDResult struct {
@@ -64,6 +65,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		DID:         query.DID,
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now(),
+		Username:    query.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {
