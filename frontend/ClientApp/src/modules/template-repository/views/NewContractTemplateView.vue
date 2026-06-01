@@ -81,7 +81,7 @@ watch(
             TemplateState.approved,
             TemplateState.deleted,
             TemplateState.deprecated,
-            TemplateState.registered,
+            TemplateState.published,
           ].map((s) => s.toLowerCase())
           templateEditorUiStore.setTemplateEditable(!uneditableStates.includes(template.state.toLowerCase()))
 

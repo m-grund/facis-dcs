@@ -26,7 +26,7 @@ func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx
             $1,
             document_number,
             CASE 
-                WHEN state IN ('APPROVED', 'REGISTERED') THEN version + 1
+                WHEN state IN ('APPROVED', 'PUBLISHED') THEN version + 1
                 ELSE 1
             END,
             'DRAFT', template_type, name, description, created_by, NOW(), NOW(), 
