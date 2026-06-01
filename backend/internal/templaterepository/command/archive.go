@@ -2,16 +2,18 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"errors"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type ArchiveCmd struct {
@@ -33,7 +35,12 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {

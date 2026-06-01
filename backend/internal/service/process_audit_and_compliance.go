@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"time"
+
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
@@ -9,7 +11,6 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/processauditandcompliance/query"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
@@ -72,9 +73,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		}
 
 		result = append(result, &processauditandcompliance.PACAuditResponse{
-			Component: req.Scope,
-			Did:       did,
-			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			Component:  req.Scope,
+			Did:        did,
+			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+			AuditTrail: history,
 		})
 	}
 

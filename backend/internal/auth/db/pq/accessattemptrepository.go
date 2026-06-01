@@ -3,12 +3,13 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/auth/db"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/auth/db"
 )
 
 type PostgresAccessAttemptRepo struct {

@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
+
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/middleware"
@@ -12,8 +15,6 @@ import (
 	serviceofferingquery "digital-contracting-service/internal/templatecatalogueintegration/query/serviceoffering"
 	templatequery "digital-contracting-service/internal/templatecatalogueintegration/query/template"
 	selfdescription "digital-contracting-service/internal/templatecatalogueintegration/selfdescription"
-	"errors"
-	"fmt"
 )
 
 type templateCatalogueIntegrationsrvc struct {

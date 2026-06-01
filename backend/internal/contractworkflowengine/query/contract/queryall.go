@@ -2,6 +2,12 @@ package contract
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -14,10 +20,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	events "digital-contracting-service/internal/contractworkflowengine/event"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type GetAllMetadataQry struct {
@@ -89,7 +91,12 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	if err != nil {
 		return nil, fmt.Errorf("could not create transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	contractsMetadata, err := h.CRepo.ReadAllMetaData(ctx, tx)
 	if err != nil {

@@ -2,16 +2,18 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"errors"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type AcceptNegotiationCmd struct {
@@ -33,7 +35,12 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -49,7 +56,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
 
-	if isValidNegotiator == false {
+	if !isValidNegotiator {
 		return errors.New("invalid user")
 	}
 

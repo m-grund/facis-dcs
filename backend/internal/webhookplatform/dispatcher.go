@@ -101,8 +101,16 @@ func (d *Dispatcher) notify(sub Subscription, payload WebhookPayload) {
 		log.Printf("webhookplatform: notify %s [%s]: %v", sub.CallbackURL, payload.Event, err)
 		return
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("webhookplatform: close response body: %v", err)
+		}
+	}(resp.Body)
+	_, err = io.Copy(io.Discard, resp.Body)
+	if err != nil {
+		log.Printf("webhookplatform: read response body: %v", err)
+	}
 
 	log.Printf("webhookplatform: notified %s [%s] → HTTP %d", sub.CallbackURL, payload.Event, resp.StatusCode)
 }

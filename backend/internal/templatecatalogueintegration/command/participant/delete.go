@@ -14,7 +14,6 @@ type DeleteCmd struct {
 	Token string
 }
 
-// DeleteParticipant handler deletes a participant from the Federated Catalogue.
 type Deleter struct {
 	Ctx      context.Context
 	FCClient *fcclient.FederatedCatalogueClient
