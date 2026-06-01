@@ -2,6 +2,14 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -9,11 +17,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 	"digital-contracting-service/internal/templaterepository/selfdescription"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -40,7 +43,11 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {

@@ -55,7 +55,9 @@ const filteredTasks = computed(() => {
   if (stateFilterStore.hasFilters) {
     return sortedTasks.value.filter((task) => stateFilterStore.hasFilter(task.state))
   }
-  return sortedTasks.value
+  return sortedTasks.value.filter(
+    (task) => !([ReviewTaskState.approved, ReviewTaskState.rejected] as ReviewTaskState[]).includes(task.state),
+  )
 })
 
 const getTemplateName = (task: ContractTemplateReviewTask) => {

@@ -2,12 +2,16 @@ package contract
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -42,7 +46,11 @@ func (h *GetProcessDataByIDHandler) Handle(ctx context.Context, query GetProcess
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	data, err := h.CRepo.ReadProcessData(ctx, tx, query.DID)
 	if err != nil {

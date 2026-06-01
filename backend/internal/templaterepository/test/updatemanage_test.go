@@ -2,6 +2,12 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"testing"
+	"time"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -10,9 +16,8 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"testing"
-	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -996,10 +1001,14 @@ func TestUpdateManage_SetContractTemplateStateFromSubmittedToDraft(t *testing.T)
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	reviewTasksExist, err := repo.RTRepo.TaskExist(ctx, tx, cmd.DID)
 	if err != nil {
@@ -1098,10 +1107,14 @@ func TestUpdateManage_SetContractTemplateStateFromReviewedToDraft(t *testing.T) 
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	reviewTasksExist, err := repo.RTRepo.TaskExist(ctx, tx, cmd.DID)
 	if err != nil {
@@ -1258,10 +1271,14 @@ func TestUpdateManage_SetContractTemplateStateFromReviewedToSubmitted(t *testing
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	reviewTasksExist, err := repo.RTRepo.ReadAllByDID(ctx, tx, cmd.DID)
 	if err != nil {

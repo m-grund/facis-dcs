@@ -58,9 +58,9 @@ type PendingCallback struct {
 // SubscriptionStore is a thread-safe in-memory store for subscriptions and
 // pending callbacks.
 type SubscriptionStore struct {
-	mu       sync.RWMutex
-	subs     map[string][]Subscription // event name → subscriptions
-	pending  map[string]PendingCallback // event_id → pending
+	mu      sync.RWMutex
+	subs    map[string][]Subscription  // event name → subscriptions
+	pending map[string]PendingCallback // event_id → pending
 }
 
 // NewSubscriptionStore returns an empty store.

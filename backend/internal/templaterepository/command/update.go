@@ -2,6 +2,12 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -9,9 +15,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -40,7 +43,11 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	oldData, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {

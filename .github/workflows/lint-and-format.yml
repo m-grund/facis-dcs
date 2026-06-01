@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  validate:
+  validate-frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,3 +33,80 @@ jobs:
 
       - name: Check Formatting (Prettier)
         run: npm run format:check
+
+      - name: Write frontend success summary
+        if: success()
+        run: |
+          echo "## 🎨 Frontend Quality Check" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Action Required |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :---: | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| ESLint Code Quality | ✅ Passed | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prettier Formatting | ✅ Passed | None |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Write frontend failure summary
+        if: failure()
+        run: |
+          echo "## 🎨 Frontend Quality Check" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Action Required |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :---: | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prettier / ESLint | ❌ Failed | Check logs for specific format or lint issues. |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 **Hint:** Run \`npm run lint:fix\` or \`npm run format\` locally. If your commit skipped this, run \`npm install\` in the project root to activate Husky hooks!" >> $GITHUB_STEP_SUMMARY
+
+  validate-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'backend/go.mod'
+          cache: true
+          cache-dependency-path: 'backend/go.sum'
+
+      - name: Verify Go modules
+        run: |
+          go mod tidy
+          if [ -n "$(git status --porcelain go.mod go.sum)" ]; then
+            echo "::error file=backend/go.mod,line=1::go.mod or go.sum are not tidy! Please run 'go mod tidy' locally."
+            git diff go.mod go.sum
+            exit 1
+          fi
+
+      - name: Install Goa
+        run: go install goa.design/goa/v3/cmd/goa@v3
+
+      - name: Generate Goa code
+        run: goa gen digital-contracting-service/design
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          working-directory: backend
+
+      - name: Write backend success summary
+        if: success()
+        run: |
+          echo "## ⚙️ Backend Quality Check" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Action Required |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :---: | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Modules Tidy | ✅ Tidy | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| Goa Code Generation | ✅ Done | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| golangci-lint | ✅ Passed | None |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Write backend failure summary
+        if: failure()
+        run: |
+          echo "## ⚙️ Backend Quality Check" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Action Required |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :---: | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Verification | ❌ Failed | Check annotations or logs for tidy, generation, or lint errors. |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 **Hint:** If your local commit didn't catch this, make sure you ran \`go mod tidy\` and have \`npm install\` executed in the project root to initialize Husky hooks." >> $GITHUB_STEP_SUMMARY

@@ -2,6 +2,13 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -9,9 +16,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"fmt"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type CreateCmd struct {
@@ -34,7 +38,11 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	data := db.ContractTemplate{
 		DID:          cmd.DID,

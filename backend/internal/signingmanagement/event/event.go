@@ -1,9 +1,10 @@
 package event
 
 import (
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/signingmanagement/datatype/eventtype"
-	"time"
 )
 
 // RetrieveByIDEvent is emitted when contract data is retrieved.
@@ -75,7 +76,7 @@ func (e AuditEvt) GetDID() string {
 	return e.DID
 }
 
-// AuditEvent is emitted when a signature is revoked
+// RevokeEvent is emitted when a signature is revoked
 type RevokeEvent struct {
 	DID             string    `json:"did"`
 	ContractVersion *int      `json:"contract_version,omitempty"`
@@ -93,7 +94,6 @@ func (e RevokeEvent) GetDID() string {
 	return e.DID
 }
 
-// ComplianceValidation is emitted when compliance check ist started
 type ComplianceValidationEvent struct {
 	DID             string    `json:"did"`
 	ContractVersion *int      `json:"contract_version,omitempty"`

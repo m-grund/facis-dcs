@@ -2,14 +2,19 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"testing"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	db2 "digital-contracting-service/internal/templaterepository/db"
-	"testing"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,10 +45,14 @@ func TestReview_CreateReviewTasks(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	for _, assignee := range assignees {
 		reviewTask := db2.ReviewTaskData{
@@ -98,10 +107,14 @@ func TestReview_CreateReviewTasksAndApproveThem(t *testing.T) {
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	for _, assignee := range assignees {
 		reviewTask := db2.ReviewTaskData{

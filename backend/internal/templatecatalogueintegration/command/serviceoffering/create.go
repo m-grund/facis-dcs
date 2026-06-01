@@ -22,13 +22,11 @@ type CreateCmd struct {
 	Description        string
 }
 
-// CreateServiceOffering handler creates a service offering in the Federated Catalogue.
 type Creator struct {
 	Ctx      context.Context
 	FCClient *client.FederatedCatalogueClient
 }
 
-// ErrServiceOfferingAlreadyExists indicates that a serviceOffering with the same serviceOfferingID
 var ErrServiceOfferingAlreadyExists = errors.New("ServiceOffering already exists")
 
 type CreateResult struct {

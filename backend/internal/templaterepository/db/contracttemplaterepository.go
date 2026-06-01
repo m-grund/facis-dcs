@@ -3,12 +3,13 @@ package db
 import (
 	"context"
 	"database/sql/driver"
-	"digital-contracting-service/internal/base/datatype"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 type ResponsiblePersons struct {

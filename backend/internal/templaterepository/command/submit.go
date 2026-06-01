@@ -2,6 +2,12 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/actionflag"
@@ -9,9 +15,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -67,7 +70,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -148,43 +155,35 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		if cmd.ActionFlag != nil {
-			if *cmd.ActionFlag == actionflag.Approval {
-
+			switch *cmd.ActionFlag {
+			case actionflag.Approval:
 				exist, err := h.RTRepo.TaskExistsInState(ctx, tx, processData.DID, cmd.SubmittedBy, reviewtaskstate.Open.String())
 				if err != nil {
 					return err
 				}
-
 				if exist {
 					return errors.New("contract template needs to be verified before")
 				}
-
 				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contracttemplatestate.Approved.String())
 				if err != nil {
 					return fmt.Errorf("could not update review task: %w", err)
 				}
-
 				existOpenTasks, err := h.RTRepo.AnyTasksInState(ctx, tx, processData.DID, reviewtaskstate.Open.String(), reviewtaskstate.Verified.String())
 				if err != nil {
 					return fmt.Errorf("could not check if review task exists: %w", err)
 				}
-
 				if !existOpenTasks {
 					nextTemplateState = contracttemplatestate.Reviewed
 				}
-
-			} else if *cmd.ActionFlag == actionflag.Draft {
-
+			case actionflag.Draft:
 				err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
 					return err
 				}
-
 				err = h.ATRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
 					return err
 				}
-
 				nextTemplateState = contracttemplatestate.Rejected
 			}
 		} else {

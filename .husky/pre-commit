@@ -1,0 +1,23 @@
+echo "🚀 Run Pre-Commit Hooks"
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$HOOK_DIR")"
+
+echo "🎨 Checking Frontend..."
+cd "$PROJECT_ROOT/frontend/ClientApp" && npx lint-staged || exit 1
+
+echo "⚙️ Checking Backend..."
+
+# Define the local binary directory path
+LOCAL_BIN="$PROJECT_ROOT/backend/bin"
+GCL="$LOCAL_BIN/golangci-lint"
+
+# If golangci-lint does not exist locally, download it
+if [ ! -f "$GCL" ]; then
+    echo "📥 Installing golangci-lint locally for the project..."
+    curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $LOCAL_BIN v2.12.2
+fi
+
+cd "$PROJECT_ROOT/backend" && $GCL run --new-from-rev=HEAD || exit 1
+
+echo "🎉 Hooks successfully run"

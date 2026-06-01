@@ -2,6 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"slices"
+	"time"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
@@ -18,10 +23,6 @@ import (
 	contracttemplatequery "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 	"digital-contracting-service/internal/middleware"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
-	"fmt"
-	"maps"
-	"slices"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -520,8 +521,8 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		return nil, contractworkflowengine.MakeInternalError(fmt.Errorf("unknown action flag: %s", req.ActionFlag))
 	}
 
-	if actionFlag == negotiationactionflag.Accepting {
-
+	switch actionFlag {
+	case negotiationactionflag.Accepting:
 		cmd := command.AcceptNegotiationCmd{
 			ID:         req.ID,
 			DID:        req.Did,
@@ -537,9 +538,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		if err != nil {
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
-
-	} else if actionFlag == negotiationactionflag.Rejecting {
-
+	case negotiationactionflag.Rejecting:
 		cmd := command.RejectNegotiationCmd{
 			ID:              req.ID,
 			DID:             req.Did,

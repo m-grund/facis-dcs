@@ -2,6 +2,13 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"slices"
+	"testing"
+	"time"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -13,10 +20,8 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/query"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	"slices"
-	"testing"
-	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -251,6 +256,9 @@ func TestSubmit_SubmitContractInNegotiationStateWithOpenNegotiations(t *testing.
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to marshal change request: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -319,6 +327,9 @@ func TestSubmit_SubmitContractInNegotiationStateWithRejectedNegotiations(t *test
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create negotiation: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -339,10 +350,14 @@ func TestSubmit_SubmitContractInNegotiationStateWithRejectedNegotiations(t *test
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	negotiations, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
