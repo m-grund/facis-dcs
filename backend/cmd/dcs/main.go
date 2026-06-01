@@ -38,6 +38,7 @@ import (
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
 	"digital-contracting-service/migrations"
+	"digital-contracting-service/migrations/fcschemas"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/nats-io/nats.go"
@@ -189,6 +190,9 @@ func main() {
 		})
 		if err != nil {
 			log.Fatalf(ctx, err, "failed to initialize Federated Catalogue client")
+		}
+		if err := fcschemas.Sync(ctx, templateCatalogueClient); err != nil {
+			log.Fatalf(ctx, err, "failed to sync federated catalogue schemas")
 		}
 	}
 
