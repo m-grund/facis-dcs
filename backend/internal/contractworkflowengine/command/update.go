@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -51,9 +52,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 

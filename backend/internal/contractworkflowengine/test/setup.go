@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log"
 	"os"
 	"testing"
@@ -152,9 +154,8 @@ func createNegotiationTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -183,9 +184,8 @@ func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *Tes
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -214,9 +214,8 @@ func createApprovalTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *T
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 

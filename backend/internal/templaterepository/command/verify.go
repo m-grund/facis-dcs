@@ -2,7 +2,9 @@ package command
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -41,9 +43,8 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
