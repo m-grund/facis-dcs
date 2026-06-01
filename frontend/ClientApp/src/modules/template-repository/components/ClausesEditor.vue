@@ -4,9 +4,9 @@
     <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
       <ClauseEditorForm
         mode="create"
-        initial-title=""
-        initial-text=""
-        :semantic-conditions="semanticConditions"
+        :initial-title="newClauseTitle"
+        :initial-text="newClauseText"
+        :semantic-conditions="newClauseSemanticConditions"
         @submit="addClause"
       />
     </section>
@@ -26,22 +26,22 @@
         @cancel-edit="cancelEdit"
       />
 
-      <div v-if="uiStore.isTemplateEditable && ontologyClausePresets.length" class="mt-5 border-t border-base-300 pt-4">
-        <h4 class="mb-3 text-xs font-semibold uppercase text-base-content/50">Prebuilt clauses</h4>
+      <div v-if="uiStore.isTemplateEditable && ontologyDomainTypes.length" class="mt-5 border-t border-base-300 pt-4">
+        <h4 class="mb-3 text-xs font-semibold uppercase text-base-content/50">Domain types</h4>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div
-            v-for="preset in ontologyClausePresets"
-            :key="preset.id"
+            v-for="domainType in ontologyDomainTypes"
+            :key="domainType.id"
             class="group grid min-h-[88px] grid-cols-1 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-3 shadow-sm transition-all hover:border-primary/50 hover:bg-base-200 hover:shadow md:grid-cols-[minmax(0,1fr)_minmax(11rem,14rem)_auto]"
           >
             <div class="min-w-0">
-              <span class="block text-sm font-medium text-base-content">{{ preset.label }}</span>
-              <span class="block text-xs text-base-content/50">{{ preset.fields.length }} ontology fields</span>
+              <span class="block text-sm font-medium text-base-content">{{ domainType.label }}</span>
+              <span class="block text-xs text-base-content/50">{{ domainType.fields.length }} domain fields</span>
             </div>
-            <label v-if="preset.roleRequired" class="mx-auto w-full max-w-56">
+            <label v-if="domainType.roleRequired" class="mx-auto w-full max-w-56">
               <span class="label-text mb-1 block text-xs text-base-content/60">Contract role</span>
               <select
-                v-model="selectedPrebuiltRoles[preset.id]"
+                v-model="selectedDomainTypeRoles[domainType.id]"
                 class="select select-bordered select-xs w-full text-left"
               >
                 <option value="">Select role</option>
@@ -54,10 +54,10 @@
             <button
               type="button"
               class="btn btn-secondary btn-xs justify-self-start transition-transform group-hover:translate-x-0.5 md:justify-self-end"
-              :disabled="preset.roleRequired && !selectedPrebuiltRoles[preset.id]"
-              @click="addPrebuiltClause(preset.id)"
+              :disabled="domainType.roleRequired && !selectedDomainTypeRoles[domainType.id]"
+              @click="describeNewClauseFromDomainType(domainType.id)"
             >
-              Add
+              Use
             </button>
           </div>
         </div>
@@ -74,25 +74,30 @@ import {
   SEMANTIC_CONDITION_SCHEMA_VERSION,
   isClauseBlock,
   type ClauseBlock,
+  type SemanticCondition,
 } from '@/modules/template-repository/models/contract-template'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import {
-  ONTOLOGY_CLAUSE_PRESETS,
-  buildOntologyClauseText,
-  buildOntologyConditionParameters,
+  ONTOLOGY_DOMAIN_TYPES,
+  buildOntologyDomainTypeClauseText,
+  buildOntologyDomainTypeParameters,
   ontologyRoleOptions,
   roleLabelFor,
-} from '@template-repository/utils/ontology-clause-presets'
+} from '@template-repository/utils/ontology-domain-types'
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { documentBlocks, semanticConditions: mainSemanticConditions, subTemplateSnapshots } = storeToRefs(store)
 
 const editingBlockId = ref<string | null>(null)
-const selectedPrebuiltRoles = ref<Record<string, string>>({})
-const ontologyClausePresets = ONTOLOGY_CLAUSE_PRESETS
+const selectedDomainTypeRoles = ref<Record<string, string>>({})
+const newClauseTitle = ref('')
+const newClauseText = ref('')
+const draftDomainTypeCondition = ref<SemanticCondition | null>(null)
+const draftDomainTypeMeta = ref<{ schemaRef?: string; semanticPath?: string } | null>(null)
+const ontologyDomainTypes = ONTOLOGY_DOMAIN_TYPES
 const roleOptions = ontologyRoleOptions
 
 /** Extract conditionIds from clause text placeholders {{conditionId.parameterName}}. */
@@ -124,14 +129,30 @@ const semanticConditions = computed(() => {
   return [...mainSemanticConditions.value, ...subTemplateConditions]
 })
 
+const newClauseSemanticConditions = computed(() => (
+  draftDomainTypeCondition.value
+    ? [...semanticConditions.value, draftDomainTypeCondition.value]
+    : semanticConditions.value
+))
+
 function addClause(payload: { title: string; text: string }) {
   const text = payload.text
   if (!text.trim()) return
+  const conditionIds = conditionIdsFromText(text)
+  const draftCondition = draftDomainTypeCondition.value
+  const usesDraftCondition = !!draftCondition && conditionIds.includes(draftCondition.conditionId)
+  if (usesDraftCondition) store.semanticConditions.push(draftCondition)
   store.addClause({
     title: payload.title.trim(),
     text,
-    conditionIds: conditionIdsFromText(text),
+    conditionIds,
+    schemaRef: usesDraftCondition ? draftDomainTypeMeta.value?.schemaRef : undefined,
+    semanticPath: usesDraftCondition ? draftDomainTypeMeta.value?.semanticPath : undefined,
   })
+  newClauseTitle.value = ''
+  newClauseText.value = ''
+  draftDomainTypeCondition.value = null
+  draftDomainTypeMeta.value = null
 }
 
 function startEditClause(blockId: string) {
@@ -159,33 +180,31 @@ function deleteClause(blockId: string) {
   if (editingBlockId.value === blockId) cancelEdit()
 }
 
-function addPrebuiltClause(presetId: string) {
-  const preset = ontologyClausePresets.find((item) => item.id === presetId)
-  if (!preset) return
-  const role = preset.roleRequired ? selectedPrebuiltRoles.value[preset.id] ?? '' : ''
-  if (preset.roleRequired && !role) return
+function describeNewClauseFromDomainType(domainTypeId: string) {
+  const domainType = ontologyDomainTypes.find((item) => item.id === domainTypeId)
+  if (!domainType) return
+  const role = domainType.roleRequired ? selectedDomainTypeRoles.value[domainType.id] ?? '' : ''
+  if (domainType.roleRequired && !role) return
 
-  const conditionId = `${preset.id}-${role || 'default'}-${crypto.randomUUID()}`
+  const conditionId = `${domainType.id}-${role || 'default'}-${crypto.randomUUID()}`
   const roleLabel = role ? roleLabelFor(role) : ''
-  const title = roleLabel ? `${roleLabel} ${preset.label}` : preset.label
-  const parameters = buildOntologyConditionParameters(preset)
-  const text = buildOntologyClauseText(conditionId, preset, role)
+  const title = roleLabel ? `${roleLabel} ${domainType.label}` : domainType.label
+  const parameters = buildOntologyDomainTypeParameters(domainType)
+  const text = buildOntologyDomainTypeClauseText(conditionId, domainType, role)
 
-  store.semanticConditions.push({
+  draftDomainTypeCondition.value = {
     conditionId,
     conditionName: title,
     schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
-    entityType: preset.entityType,
+    entityType: domainType.entityType,
     ...(role ? { entityRole: role } : {}),
     parameters,
-  })
-  const blockId = store.addClause({
-    title,
-    text,
-    conditionIds: conditionIdsFromText(text),
-    schemaRef: preset.fields[0]?.schemaRef,
-    semanticPath: preset.fields[0]?.semanticPath.split('.', 1)[0] ?? preset.id,
-  })
-  editingBlockId.value = blockId
+  }
+  draftDomainTypeMeta.value = {
+    schemaRef: domainType.fields[0]?.schemaRef,
+    semanticPath: domainType.fields[0]?.semanticPath.split('.', 1)[0] ?? domainType.id,
+  }
+  newClauseTitle.value = title
+  newClauseText.value = text
 }
 </script>

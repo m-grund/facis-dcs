@@ -6,7 +6,7 @@ import type {
 } from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS, ONTOLOGY_ENTITY_ROLES, ONTOLOGY_ENTITY_TYPES } from './ontology-domain-fields'
 
-export interface OntologyClausePreset {
+export interface OntologyDomainType {
   id: string
   label: string
   entityType: string
@@ -16,15 +16,15 @@ export interface OntologyClausePreset {
 
 export const ontologyRoleOptions = ONTOLOGY_ENTITY_ROLES
 
-export const ONTOLOGY_CLAUSE_PRESETS: readonly OntologyClausePreset[] = buildOntologyClausePresets()
-export const ONTOLOGY_TYPE_DOMAIN_FIELD_PATHS: ReadonlySet<string> = new Set(
-  ONTOLOGY_CLAUSE_PRESETS.flatMap((preset) => preset.fields.map((field) => field.semanticPath)),
+export const ONTOLOGY_DOMAIN_TYPES: readonly OntologyDomainType[] = buildOntologyDomainTypes()
+export const ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS: ReadonlySet<string> = new Set(
+  ONTOLOGY_DOMAIN_TYPES.flatMap((domainType) => domainType.fields.map((field) => field.semanticPath)),
 )
 
-export function buildOntologyConditionParameters(
-  preset: OntologyClausePreset,
+export function buildOntologyDomainTypeParameters(
+  domainType: OntologyDomainType,
 ): SemanticConditionParameter[] {
-  return preset.fields.map((field) => ({
+  return domainType.fields.map((field) => ({
     parameterName: field.semanticPath,
     type: field.type,
     schemaRef: field.schemaRef,
@@ -37,14 +37,14 @@ export function buildOntologyConditionParameters(
   }))
 }
 
-export function buildOntologyClauseText(
+export function buildOntologyDomainTypeClauseText(
   conditionId: string,
-  preset: OntologyClausePreset,
+  domainType: OntologyDomainType,
   role?: SemanticEntityRole,
 ): string {
   const roleLabel = role ? roleLabelFor(role) : ''
-  const title = roleLabel ? `${roleLabel} ${preset.label}` : preset.label
-  const fieldLines = preset.fields.map((field) => buildOntologyClauseFieldLine(conditionId, field))
+  const title = roleLabel ? `${roleLabel} ${domainType.label}` : domainType.label
+  const fieldLines = domainType.fields.map((field) => buildDomainTypeClauseFieldLine(conditionId, field))
   return [
     title,
     '',
@@ -56,17 +56,17 @@ export function roleLabelFor(role: SemanticEntityRole): string {
   return ONTOLOGY_ENTITY_ROLES.find((option) => option.value === role)?.label ?? role
 }
 
-function buildOntologyClauseFieldLine(conditionId: string, field: DomainFieldDefinition): string {
+function buildDomainTypeClauseFieldLine(conditionId: string, field: DomainFieldDefinition): string {
   const label = field.label || field.semanticPath
   return `${label}: {{${conditionId}.${field.semanticPath}}}`
 }
 
-function buildOntologyClausePresets(): OntologyClausePreset[] {
-  const presets: OntologyClausePreset[] = []
+function buildOntologyDomainTypes(): OntologyDomainType[] {
+  const domainTypes: OntologyDomainType[] = []
   for (const entityType of ONTOLOGY_ENTITY_TYPES) {
     const fields = fieldsForEntityType(entityType.value)
     if (!fields.length) continue
-    presets.push({
+    domainTypes.push({
         id: entityType.value,
         label: entityType.label,
         entityType: entityType.value,
@@ -74,7 +74,7 @@ function buildOntologyClausePresets(): OntologyClausePreset[] {
         fields,
     })
   }
-  return presets
+  return domainTypes
 }
 
 function fieldsForEntityType(entityType: string): DomainFieldDefinition[] {

@@ -190,7 +190,7 @@ import {
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
-import { ONTOLOGY_TYPE_DOMAIN_FIELD_PATHS } from '@/modules/template-repository/utils/ontology-clause-presets'
+import { ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS } from '@/modules/template-repository/utils/ontology-domain-types'
 import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
@@ -227,7 +227,7 @@ function defaultParam(): SemanticConditionParameter {
 }
 
 const semanticRuleDomainFields = ONTOLOGY_DOMAIN_FIELDS.filter(
-  (field) => !ONTOLOGY_TYPE_DOMAIN_FIELD_PATHS.has(field.semanticPath),
+  (field) => !ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS.has(field.semanticPath),
 )
 
 function getDefaultNewCondition(): DraftConditionPayload {
