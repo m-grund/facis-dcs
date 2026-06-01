@@ -56,7 +56,8 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
-        FROM contract_history WHERE did = $1 
+        FROM contract_history
+        WHERE did = $1
         ORDER BY contract_version DESC NULLS LAST
     	LIMIT 1
     `
@@ -75,7 +76,8 @@ func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
-        FROM contract_history WHERE did = $1
+        FROM contract_history
+        WHERE did = $1
     `
 	var ct []db.ContractHistory
 	err := tx.SelectContext(ctx, &ct, query, did)
@@ -92,7 +94,8 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
-        FROM contracts_effective WHERE did = $1
+        FROM contracts_effective
+        WHERE did = $1
     `
 	var ct db.Contract
 	err := tx.GetContext(ctx, &ct, query, did)
