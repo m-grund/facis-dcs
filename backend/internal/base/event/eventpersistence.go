@@ -2,13 +2,14 @@ package event
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/db"
 	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/db"
 )
 
 type Event interface {

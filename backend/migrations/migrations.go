@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"database/sql"
 	"embed"
 	"io/fs"
 	"log"
@@ -34,7 +35,12 @@ func Run(db *sqlx.DB) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(rows)
 	for rows.Next() {
 		var filename string
 		if err := rows.Scan(&filename); err != nil {
@@ -79,13 +85,19 @@ func Run(db *sqlx.DB) error {
 		}
 
 		if _, err := tx.Exec(string(content)); err != nil {
-			tx.Rollback()
+			err := tx.Rollback()
+			if err != nil {
+				return err
+			}
 			return err
 		}
 
 		// Record migration as applied
 		if _, err := tx.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", fileName); err != nil {
-			tx.Rollback()
+			err := tx.Rollback()
+			if err != nil {
+				return err
+			}
 			return err
 		}
 

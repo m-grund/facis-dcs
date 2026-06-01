@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	orchestrationwebhooks "digital-contracting-service/gen/orchestration_webhooks"
 	"digital-contracting-service/internal/auth"
 

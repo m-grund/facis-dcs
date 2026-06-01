@@ -2,6 +2,12 @@ package contracttemplate
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -9,10 +15,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
 	"digital-contracting-service/internal/templaterepository/db"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type GetHistoryByIDQry struct {
@@ -48,7 +50,12 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	entries, err := h.CTRepo.ReadHistoryByDID(ctx, tx, query.DID)
 	if err != nil {

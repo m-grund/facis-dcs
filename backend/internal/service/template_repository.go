@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"time"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
@@ -16,7 +18,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
 	"digital-contracting-service/internal/templaterepository/db"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )

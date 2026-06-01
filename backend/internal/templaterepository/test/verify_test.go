@@ -2,14 +2,17 @@ package test
 
 import (
 	"context"
+	"log"
+	"testing"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/templaterepository/command"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
-	"testing"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,7 +58,12 @@ func TestVerify_VerifyContractTemplateAsReviewer(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	exists, err := repo.RTRepo.AnyTasksInState(ctx, tx, *did, reviewtaskstate.Verified.String())
 	if err != nil {

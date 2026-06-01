@@ -2,6 +2,10 @@ package test
 
 import (
 	"context"
+	"slices"
+	"sort"
+	"testing"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -9,9 +13,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"slices"
-	"sort"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 )

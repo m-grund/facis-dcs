@@ -2,16 +2,17 @@ package test
 
 import (
 	"context"
-	"digital-contracting-service/internal/base"
-	"digital-contracting-service/internal/base/conf"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
-	"digital-contracting-service/internal/signingmanagement/query"
 	"slices"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
+	"digital-contracting-service/internal/signingmanagement/query"
 )
 
 func TestRetrieve_RetrieveContractById(t *testing.T) {

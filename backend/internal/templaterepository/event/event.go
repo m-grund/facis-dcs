@@ -1,11 +1,12 @@
 package event
 
 import (
+	"time"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/templaterepository/datatype/actionflag"
 	"digital-contracting-service/internal/templaterepository/datatype/eventtype"
-	"time"
 )
 
 // CreateEvent is emitted when a new contract template is created.
@@ -162,10 +163,10 @@ type UpdateManageEvent struct {
 	UpdatedBy         string         `json:"updated_by"`
 	OldDocumentNumber *string        `json:"old_document_number,omitempty"`
 	NewDocumentNumber *string        `json:"new_document_number,omitempty"`
-	OldState          *string        `json:"old_state,omitempty,omitempty"`
-	NewState          *string        `json:"new_state,omitempty,omitempty"`
-	OldName           *string        `json:"old_name,omitempty,omitempty"`
-	NewName           *string        `json:"new_name,omitempty,omitempty"`
+	OldState          *string        `json:"old_state,omitempty"`
+	NewState          *string        `json:"new_state,omitempty"`
+	OldName           *string        `json:"old_name,omitempty"`
+	NewName           *string        `json:"new_name,omitempty"`
 	OldDescription    *string        `json:"old_description,omitempty"`
 	NewDescription    *string        `json:"new_description,omitempty"`
 	OldTemplateData   *datatype.JSON `json:"old_template_data,omitempty"`

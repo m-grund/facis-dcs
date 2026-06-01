@@ -2,6 +2,10 @@ package test
 
 import (
 	"context"
+	"log"
+	"testing"
+	"time"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -9,9 +13,8 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"testing"
-	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -688,7 +691,12 @@ func TestUpdate_UpdateContractTemplateAndReopenTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}(tx)
 
 	exists, err := repo.RTRepo.AnyTasksInState(ctx, tx, *did, contracttemplatestate.Approved.String(), reviewtaskstate.Verified.String(), contracttemplatestate.Rejected.String())
 	if err != nil {

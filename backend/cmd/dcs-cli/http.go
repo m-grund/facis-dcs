@@ -1,9 +1,10 @@
 package main
 
 import (
-	cli "digital-contracting-service/gen/http/cli/dcs"
 	"net/http"
 	"time"
+
+	cli "digital-contracting-service/gen/http/cli/dcs"
 
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
