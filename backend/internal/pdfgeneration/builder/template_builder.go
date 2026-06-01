@@ -38,26 +38,11 @@ func BuildTemplate(in TemplateInput) ([]byte, error) {
 	f.SetXmpMetadata(xmpMetadata(title, in.DID))
 	f.AddPage()
 
-	renderHeader(f, title, in.DID, in.State)
-
-	renderSection(f, "Template Details")
-	renderKV(f, "DID", in.DID)
-	renderKV(f, "Version", fmt.Sprintf("%d", in.Version))
-	renderKV(f, "State", in.State)
-	renderKV(f, "Type", in.TemplateType)
-	if in.DocumentNumber != "" {
-		renderKV(f, "Document No.", in.DocumentNumber)
-	}
-	if in.Description != "" {
-		renderKV(f, "Description", in.Description)
-	}
-	renderKV(f, "Created by", in.CreatedBy)
-	renderKV(f, "Created at", in.CreatedAt.UTC().Format(time.RFC3339))
-	renderKV(f, "Updated at", in.UpdatedAt.UTC().Format(time.RFC3339))
+	renderHeader(f, title, in.DID, "")
 
 	if len(in.TemplateData) > 0 {
-		renderSection(f, "Template Terms (JSON-LD)")
-		renderJSONLD(f, in.TemplateData)
+		renderSection(f, "Template Terms")
+		renderContractData(f, in.TemplateData)
 	}
 
 	if len(in.TemplateData) > 0 {

@@ -2,9 +2,7 @@ package builder
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/go-pdf/fpdf"
@@ -56,8 +54,8 @@ func BuildContract(in ContractInput) ([]byte, error) {
 	renderKV(f, "Updated at", in.UpdatedAt.UTC().Format(time.RFC3339))
 
 	if len(in.ContractData) > 0 {
-		renderSection(f, "Contract Terms (JSON-LD)")
-		renderJSONLD(f, in.ContractData)
+		renderSection(f, "Contract Terms")
+		renderContractData(f, in.ContractData)
 	}
 
 	// Embed the JSON-LD as an attachment so it can be extracted for MR/HR
@@ -79,53 +77,3 @@ func BuildContract(in ContractInput) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// renderJSONLD pretty-prints top-level JSON fields into the PDF.
-// Keys are sorted for deterministic rendering.
-func renderJSONLD(f *fpdf.Fpdf, raw []byte) {
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		// Fall back to raw display if parsing fails.
-		f.SetFont(fontFamily, fontRegular, sizeSmall)
-		f.MultiCell(bodyWidth, lineHeight, string(raw), "", "L", false)
-		return
-	}
-
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		var val any
-		if err := json.Unmarshal(m[k], &val); err != nil {
-			continue
-		}
-		rendered := renderValue(val, 0)
-		renderKV(f, k, rendered)
-	}
-}
-
-func renderValue(v any, depth int) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case float64:
-		return fmt.Sprintf("%g", t)
-	case bool:
-		if t {
-			return "true"
-		}
-		return "false"
-	case nil:
-		return ""
-	case map[string]any:
-		b, _ := json.MarshalIndent(t, "", "  ")
-		return string(b)
-	case []any:
-		b, _ := json.MarshalIndent(t, "", "  ")
-		return string(b)
-	default:
-		return fmt.Sprintf("%v", t)
-	}
-}
