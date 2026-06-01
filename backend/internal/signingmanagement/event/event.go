@@ -159,11 +159,12 @@ type ApplyEvent struct {
 	ContractVersion int       `json:"contract_version"`
 	AppliedBy       string    `json:"applied_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Username        string    `json:"username"`
 }
 
 // EventType implements the Event interface.
 func (e ApplyEvent) EventType() string {
-	return eventtype.SigningRequest.String()
+	return eventtype.Applied.String()
 }
 
 // GetDID implements the Event interface.
