@@ -56,7 +56,7 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
-        FROM contract_history WHERE did = $1
+        FROM contract_history WHERE did = $1 
         ORDER BY contract_version DESC NULLS LAST
     	LIMIT 1
     `

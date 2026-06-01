@@ -17,6 +17,7 @@ const (
 	Audit                EventType = "AUDIT_CONTRACT_TEMPLATE"
 	SigningRequest       EventType = "SIGNING_REQUEST"
 	Applied              EventType = "APPLIED"
+	Search               EventType = "SEARCH"
 )
 
 var validStates = map[EventType]bool{
@@ -29,6 +30,7 @@ var validStates = map[EventType]bool{
 	Audit:                true,
 	SigningRequest:       true,
 	Applied:              true,
+	Search:               true,
 }
 
 func NewEventType(s string) (EventType, error) {

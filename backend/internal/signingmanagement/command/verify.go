@@ -2,6 +2,8 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -17,6 +19,7 @@ import (
 type VerifyCmd struct {
 	DID        string
 	VerifiedBy string
+	Username   string
 }
 
 type Verifier struct {
@@ -31,8 +34,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -47,6 +49,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		ContractVersion: processData.ContractVersion,
 		VerifiedBy:      cmd.VerifiedBy,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

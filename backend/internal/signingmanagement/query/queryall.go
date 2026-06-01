@@ -2,17 +2,22 @@ package query
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 
+	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
+	"digital-contracting-service/internal/signingmanagement/datatype/signingtaskstate"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 )
@@ -23,23 +28,39 @@ type GetAllMetadataQry struct {
 }
 
 type MetadataItem struct {
+	DID                string
+	ContractVersion    int
+	Name               *string
+	Description        *string
+	State              contractstate.ContractState
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	MetaData           datatype.JSON
+	CreatedBy          string
+	StartDate          *time.Time
+	ExpDate            *time.Time
+	ExpPolicy          *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod    *int
+	ResponsiblePersons *db.ResponsiblePersons
+}
+
+type SigningTaskItem struct {
 	DID             string
 	ContractVersion int
-	Name            *string
-	Description     *string
-	State           contractstate.ContractState
+	State           signingtaskstate.SigningTaskState
+	Signer          string
 	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	MetaData        datatype.JSON
 }
 
 type GetAllMetadataResult struct {
-	Contracts []MetadataItem
+	Contracts    []MetadataItem
+	SigningTasks []SigningTaskItem
 }
 
 type GetAllMetadataHandler struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB     *sqlx.DB
+	CRepo  db.ContractRepo
+	STRepo db.SigningTaskRepo
 }
 
 func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadataQry) (*GetAllMetadataResult, error) {
@@ -52,9 +73,8 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		return nil, fmt.Errorf("could not create transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Println("could not rollback transaction")
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
@@ -63,9 +83,15 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		return nil, fmt.Errorf("could not read all contracts: %w", err)
 	}
 
+	signingTasks, err := h.STRepo.ReadAllBySigner(ctx, tx, query.RetrievedBy)
+	if err != nil {
+		return nil, fmt.Errorf("could not read all signing tasks: %w", err)
+	}
+
 	evt := signingmanagementevents.RetrieveAllEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now(),
+		Username:    query.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {
@@ -86,21 +112,60 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			return nil, fmt.Errorf("could not create contract state: %w", err)
 		}
 
+		var expPolicy *expirationpolicy.ExpirationPolicy
+		if data.ExpPolicy != nil {
+			policy, err := expirationpolicy.NewExpirationPolicy(*data.ExpPolicy)
+			if err != nil {
+				return nil, contractworkflowengine.MakeInternalError(err)
+			}
+			expPolicy = &policy
+		}
+
 		metadata := MetadataItem{
-			DID:             data.DID,
-			ContractVersion: data.ContractVersion,
-			State:           state,
-			Name:            data.Name,
-			Description:     data.Description,
-			CreatedAt:       data.CreatedAt,
-			UpdatedAt:       data.UpdatedAt,
+			DID:                data.DID,
+			ContractVersion:    data.ContractVersion,
+			State:              state,
+			Name:               data.Name,
+			Description:        data.Description,
+			CreatedBy:          data.CreatedBy,
+			CreatedAt:          data.CreatedAt,
+			UpdatedAt:          data.UpdatedAt,
+			StartDate:          data.StartDate,
+			ExpDate:            data.ExpDate,
+			ExpPolicy:          expPolicy,
+			ExpNoticePeriod:    data.ExpNoticePeriod,
+			ResponsiblePersons: data.ResponsiblePersons,
 		}
 		contractItems = append(contractItems, metadata)
 
 		didToMetadata[data.DID] = metadata
 	}
 
+	var signingTaskItems []SigningTaskItem
+	for _, data := range signingTasks {
+
+		state, err := signingtaskstate.NewSigningTaskState(data.State)
+		if err != nil {
+			return nil, fmt.Errorf("could not create signing task state: %w", err)
+		}
+
+		metadata, exists := didToMetadata[data.DID]
+		var contractVersion int
+		if exists {
+			contractVersion = metadata.ContractVersion
+		}
+
+		signingTaskItems = append(signingTaskItems, SigningTaskItem{
+			DID:             data.DID,
+			State:           state,
+			ContractVersion: contractVersion,
+			Signer:          data.Signer,
+			CreatedAt:       data.CreatedAt,
+		})
+	}
+
 	return &GetAllMetadataResult{
-		Contracts: contractItems,
+		Contracts:    contractItems,
+		SigningTasks: signingTaskItems,
 	}, nil
 }

@@ -150,6 +150,7 @@ func main() {
 	cweCronJob.Start(ctx, db)
 
 	smCRepo := smrepo.PostgresContractRepo{}
+	smSTRepo := smrepo.PostgresSigningTaskRepo{}
 
 	// Initialize IPFS client
 	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
@@ -219,7 +220,7 @@ func main() {
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smSTRepo, auditTrailReader)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}

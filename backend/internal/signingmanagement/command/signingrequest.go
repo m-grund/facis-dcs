@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -20,6 +21,7 @@ type SigningRequestCmd struct {
 	DID         string
 	RequestedBy string
 	UpdatedAt   time.Time
+	Username    string
 }
 
 type SigningRequester struct {
@@ -34,8 +36,7 @@ func (h *SigningRequester) Handle(ctx context.Context, cmd SigningRequestCmd) er
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -58,6 +59,7 @@ func (h *SigningRequester) Handle(ctx context.Context, cmd SigningRequestCmd) er
 		ContractVersion: processData.ContractVersion,
 		RequestedBy:     cmd.RequestedBy,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

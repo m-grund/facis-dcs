@@ -42,6 +42,23 @@ func (e RetrieveAllEvent) GetDID() string {
 	return "*"
 }
 
+// SearchEvent is emitted when template data is searched.
+type SearchEvent struct {
+	RetrievedBy string    `json:"retrieved_by"`
+	OccurredAt  time.Time `json:"occurred_at"`
+	Username    string    `json:"username"`
+}
+
+// EventType implements the Event interface.
+func (e SearchEvent) EventType() string {
+	return eventtype.Search.String()
+}
+
+// GetDID implements the Event interface.
+func (e SearchEvent) GetDID() string {
+	return "*"
+}
+
 // ValidateEvent is emitted when a signature is validated.
 type ValidateEvent struct {
 	DID             string    `json:"did"`
@@ -67,6 +84,7 @@ type VerifyEvent struct {
 	ContractVersion int       `json:"contract_version,omitempty"`
 	VerifiedBy      string    `json:"verified_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Username        string    `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -141,6 +159,7 @@ type SigningRequestEvent struct {
 	ContractVersion int       `json:"contract_version"`
 	RequestedBy     string    `json:"requested_by"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Username        string    `json:"username"`
 }
 
 // EventType implements the Event interface.
