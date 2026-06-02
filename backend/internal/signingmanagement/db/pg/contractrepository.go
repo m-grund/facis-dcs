@@ -45,10 +45,10 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
     `
 
 	var params []any
-	if pagination.PageSize > 0 {
-		offset := (pagination.StartIndex - 1) * pagination.PageSize
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
 		query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
-		params = append(params, pagination.PageSize, offset)
+		params = append(params, pagination.Limit, offset)
 	}
 
 	var cts []db.ContractMetadata
@@ -74,11 +74,11 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 		query += " AND " + *conditions
 	}
 
-	if pagination.PageSize > 0 {
-		offset := (pagination.StartIndex - 1) * pagination.PageSize
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
 		n := len(params) + 1
 		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
-		params = append(params, pagination.PageSize, offset)
+		params = append(params, pagination.Limit, offset)
 	}
 
 	var cts []db.ContractMetadata

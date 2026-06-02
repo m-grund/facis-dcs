@@ -242,8 +242,8 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 	defer cancel()
 
 	pagination := datatype.Pagination{
-		StartIndex: derefInt(req.StartIndex),
-		PageSize:   derefInt(req.PageSize),
+		Offset: derefInt(req.Offset),
+		Limit:  derefInt(req.Limit),
 	}
 
 	qry := contract.GetAllMetadataQry{
@@ -616,8 +616,8 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 	}
 
 	pagination := datatype.Pagination{
-		StartIndex: derefInt(req.StartIndex),
-		PageSize:   derefInt(req.PageSize),
+		Offset: derefInt(req.Offset),
+		Limit:  derefInt(req.Limit),
 	}
 
 	qry := contract.GetAllMetadataByFilterQry{

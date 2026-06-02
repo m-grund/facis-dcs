@@ -9,8 +9,8 @@ var SMContractRetrieveRequest = Type("SMContractRetrieveRequest", func() {
 
 	Token("token", String, "JWT token")
 
-	Attribute("start_index", Int, "Start index of results")
-	Attribute("page_size", Int, "Page size of results")
+	Attribute("offset", Int, "Start index of results")
+	Attribute("limit", Int, "Page size of results")
 })
 
 var SMContractListItem = Type("SMContractListItem", func() {

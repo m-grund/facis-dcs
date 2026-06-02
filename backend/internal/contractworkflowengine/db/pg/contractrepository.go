@@ -118,12 +118,12 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
     ORDER BY created_at DESC
 `
 	var cts []db.ContractMetadata
-	if pagination.PageSize > 0 {
-		offset := (pagination.StartIndex - 1) * pagination.PageSize
-		query += ` LIMIT :page_size OFFSET :offset`
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
+		query += ` LIMIT :limit OFFSET :offset`
 
 		err := tx.SelectContext(ctx, &cts, query,
-			sql.Named("page_size", pagination.PageSize),
+			sql.Named("limit", pagination.Limit),
 			sql.Named("offset", offset),
 		)
 		if err != nil {
@@ -153,11 +153,11 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 		query += " WHERE " + *conditions
 	}
 
-	if pagination.PageSize > 0 {
-		offset := (pagination.StartIndex - 1) * pagination.PageSize
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
 		n := len(params) + 1
 		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
-		params = append(params, pagination.PageSize, offset)
+		params = append(params, pagination.Limit, offset)
 	}
 
 	var cts []db.ContractMetadata

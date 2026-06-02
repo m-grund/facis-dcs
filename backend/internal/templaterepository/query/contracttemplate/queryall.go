@@ -86,7 +86,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	}(tx)
 
 	var contractTemplates []db.ContractTemplateMetadata
-	if query.Pagination.PageSize >= 0 {
+	if query.Pagination.Limit >= 0 {
 		contractTemplates, err = h.CTRepo.ReadAllMetaData(ctx, tx, query.Pagination)
 		if err != nil {
 			return nil, fmt.Errorf("could not read all contract templates: %w", err)

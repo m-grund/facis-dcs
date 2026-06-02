@@ -301,8 +301,8 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 	}
 
 	pagination := datatype.Pagination{
-		StartIndex: derefInt(req.StartIndex),
-		PageSize:   derefInt(req.PageSize),
+		Offset: derefInt(req.Offset),
+		Limit:  derefInt(req.Limit),
 	}
 
 	qry := contracttemplate.GetAllMetadataByFilterQry{
@@ -393,8 +393,8 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 	defer cancel()
 
 	pagination := datatype.Pagination{
-		StartIndex: derefInt(req.StartIndex),
-		PageSize:   derefInt(req.PageSize),
+		Offset: derefInt(req.Offset),
+		Limit:  derefInt(req.Limit),
 	}
 
 	qry := contracttemplate.GetAllMetadataQry{

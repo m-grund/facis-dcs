@@ -102,7 +102,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	}(tx)
 
 	var contractsMetadata []db.ContractMetadata
-	if query.Pagination.PageSize >= 0 {
+	if query.Pagination.Limit >= 0 {
 		contractsMetadata, err = h.CRepo.ReadAllMetaData(ctx, tx, query.Pagination)
 		if err != nil {
 			return nil, fmt.Errorf("could not read all contracts: %w", err)

@@ -1,6 +1,6 @@
 package datatype
 
 type Pagination struct {
-	StartIndex int
-	PageSize   int
+	Offset int
+	Limit  int
 }
