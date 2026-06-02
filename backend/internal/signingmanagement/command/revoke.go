@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/conf"
@@ -21,6 +23,7 @@ type RevokeCmd struct {
 	DID       string
 	RevokedBy string
 	Username  string
+	Roles     userrole.UserRoles
 }
 
 type Revoker struct {

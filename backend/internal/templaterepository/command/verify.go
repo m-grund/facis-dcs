@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
@@ -28,6 +29,7 @@ type VerifyCmd struct {
 	ParticipantID string
 	Token         string
 	Username      string
+	Roles         userrole.UserRoles
 }
 
 type Verifier struct {

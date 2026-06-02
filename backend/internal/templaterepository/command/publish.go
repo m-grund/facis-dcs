@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -27,6 +28,7 @@ type PublishCmd struct {
 	PublishedBy   string
 	Username      string
 	ParticipantID string
+	Roles         userrole.UserRoles
 }
 
 type Publisher struct {

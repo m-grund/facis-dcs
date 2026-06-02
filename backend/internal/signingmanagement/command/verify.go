@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
@@ -20,6 +21,7 @@ type VerifyCmd struct {
 	DID        string
 	VerifiedBy string
 	Username   string
+	Roles      userrole.UserRoles
 }
 
 type Verifier struct {

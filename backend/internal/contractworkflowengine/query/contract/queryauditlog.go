@@ -13,6 +13,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	event2 "digital-contracting-service/internal/contractworkflowengine/event"
 )
@@ -21,6 +22,7 @@ type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
 	Username  string
+	Roles     userrole.UserRoles
 }
 
 type Auditor struct {

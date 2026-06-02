@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -22,6 +23,7 @@ type AcceptNegotiationCmd struct {
 	DID        string
 	AcceptedBy string
 	Username   string
+	Roles      userrole.UserRoles
 }
 
 type NegotiationAcceptor struct {

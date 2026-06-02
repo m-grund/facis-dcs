@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/actionflag"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -28,6 +29,7 @@ type SubmitCmd struct {
 	Reviewers   []string
 	Approver    *string
 	Username    string
+	Roles       userrole.UserRoles
 }
 
 type Submitter struct {

@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -24,6 +26,7 @@ type GetByIDQry struct {
 	DID         string
 	RetrievedBy string
 	Username    string
+	Roles       userrole.UserRoles
 }
 
 type GetByIDResult struct {

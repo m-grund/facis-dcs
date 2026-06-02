@@ -10,6 +10,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
@@ -29,6 +30,7 @@ type UpdateCmd struct {
 	Description    *string
 	TemplateData   *datatype.JSON
 	Username       string
+	Roles          userrole.UserRoles
 }
 
 type Updater struct {

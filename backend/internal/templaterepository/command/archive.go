@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/db"
@@ -21,6 +22,7 @@ type ArchiveCmd struct {
 	UpdatedAt  time.Time
 	ArchivedBy string
 	Username   string
+	Roles      userrole.UserRoles
 }
 
 type Archiver struct {

@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -25,6 +26,7 @@ type GetAllMetadataQry struct {
 	RetrievedBy string
 	Username    string
 	Pagination  datatype.Pagination
+	Roles       userrole.UserRoles
 }
 
 type MetadataItem struct {

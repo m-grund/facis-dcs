@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base"
@@ -21,6 +23,7 @@ type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
 	Username  string
+	Roles     userrole.UserRoles
 }
 
 type Auditor struct {

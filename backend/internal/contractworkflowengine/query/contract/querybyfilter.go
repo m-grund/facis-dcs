@@ -13,6 +13,7 @@ import (
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
@@ -30,6 +31,7 @@ type GetAllMetadataByFilterQry struct {
 	ContractData    string
 	Username        string
 	Pagination      datatype.Pagination
+	Roles           userrole.UserRoles
 }
 
 type GetAllMetadataByFilterResult struct {

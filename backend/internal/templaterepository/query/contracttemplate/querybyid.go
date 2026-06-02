@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
@@ -23,6 +24,7 @@ type GetByIDQry struct {
 	DID         string
 	RetrievedBy string
 	Username    string
+	Roles       userrole.UserRoles
 }
 
 type GetByIDResult struct {

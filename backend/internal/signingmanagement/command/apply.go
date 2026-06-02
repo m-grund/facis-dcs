@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
@@ -20,6 +21,7 @@ type ApplyCmd struct {
 	DID       string
 	AppliedBy string
 	Username  string
+	Roles     userrole.UserRoles
 }
 
 type Applier struct {

@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -23,6 +25,7 @@ type RejectNegotiationCmd struct {
 	RejectedBy      string
 	RejectionReason *string
 	Username        string
+	Roles           userrole.UserRoles
 }
 
 type NegotiationRejector struct {

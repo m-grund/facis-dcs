@@ -1,5 +1,9 @@
 package userrole
 
+import (
+	"fmt"
+)
+
 type UserRole string
 
 const (
@@ -37,6 +41,14 @@ const (
 	ContractTargetSystem   UserRole = "Contract Target System"
 )
 
+func NewUserRole(s string) (UserRole, error) {
+	ts := UserRole(s)
+	if !ts.IsValid() {
+		return "", fmt.Errorf("invalid user role state: %s", s)
+	}
+	return ts, nil
+}
+
 // IsValid checks if the UserRole is a valid role
 func (r UserRole) IsValid() bool {
 	switch r {
@@ -70,4 +82,15 @@ func (r UserRole) IsSystemRole() bool {
 // IsHumanRole returns true if the role is a human user role
 func (r UserRole) IsHumanRole() bool {
 	return r.IsValid() && !r.IsSystemRole()
+}
+
+type UserRoles []UserRole
+
+func (r UserRoles) HasRole(requiredRole UserRole) bool {
+	for _, role := range r {
+		if role == requiredRole {
+			return true
+		}
+	}
+	return false
 }

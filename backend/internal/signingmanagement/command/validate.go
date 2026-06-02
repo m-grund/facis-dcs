@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
@@ -21,6 +22,7 @@ type ValidateCmd struct {
 	DID         string
 	ValidatedBy string
 	Username    string
+	Roles       userrole.UserRoles
 }
 
 type Validator struct {

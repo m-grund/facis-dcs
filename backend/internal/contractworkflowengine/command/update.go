@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -31,6 +33,7 @@ type UpdateCmd struct {
 	Description     *string
 	ContractData    *datatype.JSON
 	Username        string
+	Roles           userrole.UserRoles
 }
 
 type Updater struct {

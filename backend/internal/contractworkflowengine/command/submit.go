@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
@@ -31,6 +33,7 @@ type SubmitCmd struct {
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
 	Username    string
+	Roles       userrole.UserRoles
 }
 
 type Submitter struct {

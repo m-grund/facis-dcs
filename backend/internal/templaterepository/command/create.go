@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -26,6 +28,7 @@ type CreateCmd struct {
 	Description  *string
 	TemplateData *datatype.JSON
 	Username     string
+	Roles        userrole.UserRoles
 }
 
 type Creator struct {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -24,6 +25,7 @@ type RejectCmd struct {
 	RejectedBy string
 	Reason     string
 	Username   string
+	Roles      userrole.UserRoles
 }
 
 type Rejecter struct {

@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -24,6 +26,7 @@ type ApproveCmd struct {
 	ApprovedBy    string
 	DecisionNotes []string
 	Username      string
+	Roles         userrole.UserRoles
 }
 
 type Approver struct {

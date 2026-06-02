@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -22,6 +23,7 @@ type RecordEvidenceCmd struct {
 	RecordedBy string
 	UpdatedAt  time.Time
 	Username   string
+	Roles      userrole.UserRoles
 }
 
 type EvidenceRecorder struct {
