@@ -93,7 +93,7 @@ function normalizeFinding(
 
 function categoryFromEvent(eventType?: string, severity?: string): AuditFinding['category'] {
   const normalizedSeverity = severity?.trim().toLowerCase()
-  if (normalizedSeverity === 'error' || normalizedSeverity === 'critical' || normalizedSeverity === 'failed') {
+  if (normalizedSeverity === 'error' || normalizedSeverity === 'critical' || normalizedSeverity === 'blocking' || normalizedSeverity === 'failed') {
     return 'violation'
   }
   if (normalizedSeverity === 'warning' || normalizedSeverity === 'warn') {

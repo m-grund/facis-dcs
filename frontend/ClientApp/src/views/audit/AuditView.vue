@@ -127,6 +127,7 @@ const selectedFindingDetailRows = computed(() => {
     ].filter((row) => row.value !== emptyValueLabel)
   }
   return [
+    { label: 'Checked', value: stringDetail(checkAssertion(finding)) },
     { label: 'Rule ID', value: stringDetail(eventData?.ruleId) },
     { label: 'Policy Set', value: stringDetail(eventData?.policySetId) },
     { label: 'Policy Version', value: stringDetail(eventData?.policyVersion) },
@@ -312,10 +313,10 @@ function auditItemKind(finding: AuditFinding): 'check' | 'event' {
 
 function auditResult(finding: AuditFinding): AuditResult {
   const value = finding.status?.trim().toLowerCase()
-  if (value === 'passed' || value === 'pass' || value === 'success' || value === 'successful' || value === 'ok' || value === 'compliant') {
+  if (value === 'passed' || value === 'pass' || value === 'success' || value === 'successful' || value === 'ok' || value === 'compliant' || value === 'info') {
     return 'passed'
   }
-  if (value === 'failed' || value === 'fail' || value === 'error' || value === 'critical' || value === 'violation' || value === 'non_compliant') {
+  if (value === 'failed' || value === 'fail' || value === 'error' || value === 'critical' || value === 'blocking' || value === 'violation' || value === 'non_compliant') {
     return 'failed'
   }
   if (value === 'warning' || value === 'warn') {
@@ -342,14 +343,28 @@ function auditResultLabel(finding: AuditFinding) {
 }
 
 function auditResultSummary(finding: AuditFinding) {
+  const assertion = checkAssertion(finding)
   const result = auditResult(finding)
   if (result === 'passed') {
-    return 'Check passed'
+    return assertion ? `Passed: ${assertion}` : 'Check passed'
   }
   if (result === 'failed') {
-    return 'Check failed'
+    return assertion ? `Failed: ${assertion}` : 'Check failed'
   }
-  return 'Review required'
+  return assertion ? `Review: ${assertion}` : 'Review required'
+}
+
+function checkAssertion(finding: AuditFinding) {
+  const eventData = eventDataFromFinding(finding)
+  const message = stringDetail(eventData?.message)
+  if (message !== emptyValueLabel) {
+    return message
+  }
+  const descriptionLine = finding.description
+    ?.split('\n')
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith('Object DID:') && !line.startsWith('Rule:') && !line.startsWith('Semantic path:'))
+  return descriptionLine || ''
 }
 
 function severityLabel(finding: AuditFinding) {
@@ -358,13 +373,13 @@ function severityLabel(finding: AuditFinding) {
 
 function severityBadgeClass(finding: AuditFinding) {
   const severity = finding.status?.trim().toLowerCase()
-  if (severity === 'error' || severity === 'critical' || severity === 'failed' || severity === 'violation') {
+  if (severity === 'error' || severity === 'critical' || severity === 'blocking' || severity === 'failed' || severity === 'violation') {
     return 'badge-error'
   }
   if (severity === 'warning' || severity === 'warn') {
     return 'badge-warning'
   }
-  if (severity === 'passed' || severity === 'pass' || severity === 'success' || severity === 'ok' || severity === 'compliant') {
+  if (severity === 'passed' || severity === 'pass' || severity === 'success' || severity === 'ok' || severity === 'compliant' || severity === 'info') {
     return 'badge-success'
   }
   return 'badge-ghost'
@@ -600,7 +615,8 @@ function formatDateTime(value?: string) {
               </td>
               <td>{{ finding.did ?? '-' }}</td>
               <td class="min-w-72 max-w-xl">
-                <div class="font-medium">{{ finding.title ?? 'Audit finding' }}</div>
+                <div class="font-medium">{{ checkAssertion(finding) || finding.title || 'Audit finding' }}</div>
+                <div v-if="checkAssertion(finding) && finding.title" class="text-xs opacity-70">{{ finding.title }}</div>
                 <div class="text-xs opacity-70">{{ auditResultSummary(finding) }}</div>
               </td>
             </tr>
@@ -669,7 +685,10 @@ function formatDateTime(value?: string) {
             <div class="mb-2 badge" :class="findingBadgeClass(selectedFinding)">
               {{ auditResultLabel(selectedFinding) }}
             </div>
-            <h4 class="font-bold leading-snug">{{ selectedFinding.title ?? 'Audit finding' }}</h4>
+            <h4 class="font-bold leading-snug">{{ checkAssertion(selectedFinding) || selectedFinding.title || 'Audit finding' }}</h4>
+            <div v-if="checkAssertion(selectedFinding) && selectedFinding.title" class="mt-1 text-sm opacity-70">
+              {{ selectedFinding.title }}
+            </div>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-xs opacity-80">
               <span>{{ formatLabel(selectedFinding.category) }}</span>
               <span class="badge badge-outline badge-sm" :class="severityBadgeClass(selectedFinding)">
