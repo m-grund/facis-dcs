@@ -26,7 +26,6 @@ type VerifyCmd struct {
 	DID           string
 	VerifiedBy    string
 	ParticipantID string
-	Token         string
 }
 
 type Verifier struct {
@@ -93,10 +92,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 
 func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cmd VerifyCmd, processData *db.ContractTemplateProcessData, fullTemplate *db.ContractTemplate) error {
 	if h.FCClient == nil {
-		return fmt.Errorf("federated catalogue client is nil")
-	}
-	if cmd.Token == "" {
-		return fmt.Errorf("federated catalogue token is empty")
+		return fcclient.ErrFederatedCatalogueNotConfigured
 	}
 	if cmd.ParticipantID == "" {
 		return fmt.Errorf("participant id is empty")
@@ -147,7 +143,7 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 	query.Set("verifyVPSignature", "false")
 	query.Set("verifyVCSignature", "false")
 
-	resp, err := h.FCClient.Post(ctx, fcclient.VerificationEndpointPath, cmd.Token, query, body)
+	resp, err := h.FCClient.Post(ctx, fcclient.VerificationEndpointPath, query, body)
 	if err != nil {
 		return fmt.Errorf("verify template resource self-description failed: %w", err)
 	}
