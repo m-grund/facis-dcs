@@ -11,7 +11,6 @@ import (
 // GetByParticipantQry fetches a service offering by participant-id.
 type GetByParticipantQry struct {
 	ParticipantID string
-	Token         string
 }
 
 type GetByParticipantResult struct {
@@ -44,7 +43,7 @@ LIMIT 1
 
 func (h *GetByParticipantHandler) Handle(qry GetByParticipantQry) (*GetByParticipantResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if qry.ParticipantID == "" {
 		return nil, fmt.Errorf("participant id is empty")
@@ -57,7 +56,7 @@ func (h *GetByParticipantHandler) Handle(qry GetByParticipantQry) (*GetByPartici
 		},
 	}
 
-	queryResp, err := h.FCClient.Query(h.Ctx, qry.Token, reqBody)
+	queryResp, err := h.FCClient.Query(h.Ctx, reqBody)
 	if err != nil {
 		return nil, err
 	}

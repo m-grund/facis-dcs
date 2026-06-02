@@ -193,7 +193,7 @@ const isSelected = (t: SubcontractKey) => selectedSubcontracts.value.some((s) =>
 
 const filteredSubcontractTemplates = computed(() => {
   const q = subcontractSearchQuery.value.toLowerCase()
-  const selectableStates = new Set<string>([TemplateState.approved, TemplateState.registered])
+  const selectableStates = new Set<string>([TemplateState.approved, TemplateState.published])
   return allTemplates.value.filter(
     (t) =>
       !isSelected(t) &&

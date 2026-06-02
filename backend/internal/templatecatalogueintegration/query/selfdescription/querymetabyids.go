@@ -9,8 +9,7 @@ import (
 
 // GetSelfDescriptionsMetaByIDsQry fetches FC /self-descriptions metadata (meta.sdHash) by SelfDescription ids.
 type GetSelfDescriptionsMetaByIDsQry struct {
-	IDs   []string
-	Token string
+	IDs []string
 }
 
 type GetSelfDescriptionsMetaByIDsResult struct {
@@ -26,13 +25,13 @@ type GetSelfDescriptionsMetaByIDsHandler struct {
 
 func (h *GetSelfDescriptionsMetaByIDsHandler) Handle(qry GetSelfDescriptionsMetaByIDsQry) (*GetSelfDescriptionsMetaByIDsResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if len(qry.IDs) == 0 {
 		return nil, fmt.Errorf("self-description ids is empty")
 	}
 
-	resp, err := h.FCClient.GetSelfDescriptions(h.Ctx, qry.Token, client.GetSelfDescriptionsRequest{
+	resp, err := h.FCClient.GetSelfDescriptions(h.Ctx, client.GetSelfDescriptionsRequest{
 		IDs: qry.IDs,
 	})
 	if err != nil {
