@@ -453,7 +453,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
-			Scope("Sys. Contract Creator")
+			Scope("System Contract Creator")
 		})
 
 		Payload(ContractCreateRequest)
@@ -477,7 +477,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
-			Scope("Sys. Contract Creator")
+			Scope("System Contract Creator")
 		})
 
 		Payload(ContractUpdateRequest)
@@ -504,11 +504,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
-			Scope("Sys. Contract Creator")
+			Scope("System Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 		})
 
 		Payload(ContractSubmitRequest)
@@ -534,7 +534,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 		})
 
 		Payload(ContractNegotiationRequest)
@@ -560,7 +560,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 		})
 
 		Payload(ContractNegotiationRespondRequest)
@@ -613,11 +613,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(ContractRetrieveRequest)
@@ -646,11 +646,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(ContractRetrieveByIDRequest)
@@ -677,11 +677,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(ContractHistoryRetrieveByIDRequest)
@@ -709,11 +709,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Sys. Contract Reviewer")
+			Scope("System Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(ContractSearchRequest)
@@ -745,7 +745,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 		})
 
 		Payload(ContractApproveRequest)
@@ -771,7 +771,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Approver")
-			Scope("Sys. Contract Approver")
+			Scope("System Contract Approver")
 		})
 
 		Payload(ContractRejectRequest)
@@ -796,7 +796,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(ContractStoreRequest)
@@ -821,7 +821,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(ContractTerminateRequest)
