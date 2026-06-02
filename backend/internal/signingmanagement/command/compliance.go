@@ -22,7 +22,7 @@ type ComplianceCmd struct {
 	DID       string
 	CheckedBy string
 	Username  string
-	Roles     userrole.UserRoles
+	UserRoles userrole.UserRoles
 }
 
 type ComplianceValidator struct {

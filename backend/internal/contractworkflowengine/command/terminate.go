@@ -24,7 +24,7 @@ type TerminateCmd struct {
 	Reason       string
 	UpdatedAt    time.Time
 	Username     string
-	Roles        userrole.UserRoles
+	UserRoles    userrole.UserRoles
 }
 
 type Terminator struct {

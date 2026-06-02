@@ -32,7 +32,7 @@ type GetAllMetadataByFilterQry struct {
 	TemplateData   string
 	Username       string
 	Pagination     datatype.Pagination
-	Roles          userrole.UserRoles
+	UserRoles      userrole.UserRoles
 }
 
 type GetAllMetadataByFilterResult struct {

@@ -26,7 +26,7 @@ type GetAllMetadataQry struct {
 	RetrievedBy string
 	Username    string
 	Pagination  datatype.Pagination
-	Roles       userrole.UserRoles
+	UserRoles   userrole.UserRoles
 }
 
 type MetadataItem struct {

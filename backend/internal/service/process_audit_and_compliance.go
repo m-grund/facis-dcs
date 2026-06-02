@@ -41,7 +41,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		Scope:     scope,
 		AuditedBy: middleware.GetDID(ctx),
 		Username:  middleware.GetUsername(ctx),
-		Roles:     middleware.GetRoles(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := qry2.Auditor{
 		DB:           s.DB,

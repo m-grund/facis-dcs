@@ -22,7 +22,7 @@ type GetAuditLogQry struct {
 	Scope     componenttype.ComponentType
 	AuditedBy string
 	Username  string
-	Roles     userrole.UserRoles
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {

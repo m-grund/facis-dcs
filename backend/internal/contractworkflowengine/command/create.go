@@ -27,7 +27,7 @@ type CreateCmd struct {
 	Description  *string
 	ContractData *datatype.JSON
 	Username     string
-	Roles        userrole.UserRoles
+	UserRoles    userrole.UserRoles
 }
 
 type Creator struct {

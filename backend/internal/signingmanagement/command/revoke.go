@@ -23,7 +23,7 @@ type RevokeCmd struct {
 	DID       string
 	RevokedBy string
 	Username  string
-	Roles     userrole.UserRoles
+	UserRoles userrole.UserRoles
 }
 
 type Revoker struct {

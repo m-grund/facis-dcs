@@ -25,7 +25,7 @@ type RejectNegotiationCmd struct {
 	RejectedBy      string
 	RejectionReason *string
 	Username        string
-	Roles           userrole.UserRoles
+	UserRoles       userrole.UserRoles
 }
 
 type NegotiationRejector struct {

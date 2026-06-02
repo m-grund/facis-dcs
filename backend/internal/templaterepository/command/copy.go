@@ -16,11 +16,11 @@ import (
 )
 
 type CopyCmd struct {
-	NewDID   string
-	CopyDID  string
-	CopiedBy string
-	Username string
-	Roles    userrole.UserRoles
+	NewDID    string
+	CopyDID   string
+	CopiedBy  string
+	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type Copier struct {

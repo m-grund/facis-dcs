@@ -25,7 +25,7 @@ type ApproveCmd struct {
 	ApprovedBy    string
 	DecisionNotes []string
 	Username      string
-	Roles         userrole.UserRoles
+	UserRoles     userrole.UserRoles
 }
 
 type Approver struct {

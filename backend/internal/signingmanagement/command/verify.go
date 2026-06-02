@@ -21,7 +21,7 @@ type VerifyCmd struct {
 	DID        string
 	VerifiedBy string
 	Username   string
-	Roles      userrole.UserRoles
+	UserRoles  userrole.UserRoles
 }
 
 type Verifier struct {

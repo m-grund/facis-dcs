@@ -29,7 +29,7 @@ type SubmitCmd struct {
 	Reviewers   []string
 	Approver    *string
 	Username    string
-	Roles       userrole.UserRoles
+	UserRoles   userrole.UserRoles
 }
 
 type Submitter struct {

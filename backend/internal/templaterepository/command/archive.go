@@ -22,7 +22,7 @@ type ArchiveCmd struct {
 	UpdatedAt  time.Time
 	ArchivedBy string
 	Username   string
-	Roles      userrole.UserRoles
+	UserRoles  userrole.UserRoles
 }
 
 type Archiver struct {

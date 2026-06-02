@@ -22,7 +22,7 @@ type ValidateCmd struct {
 	DID         string
 	ValidatedBy string
 	Username    string
-	Roles       userrole.UserRoles
+	UserRoles   userrole.UserRoles
 }
 
 type Validator struct {

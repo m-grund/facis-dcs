@@ -29,7 +29,7 @@ type VerifyCmd struct {
 	ParticipantID string
 	Token         string
 	Username      string
-	Roles         userrole.UserRoles
+	UserRoles     userrole.UserRoles
 }
 
 type Verifier struct {

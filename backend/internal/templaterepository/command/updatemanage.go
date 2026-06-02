@@ -33,7 +33,7 @@ type UpdateManageCmd struct {
 	TemplateData   *datatype.JSON
 	IsManager      bool
 	Username       string
-	Roles          userrole.UserRoles
+	UserRoles      userrole.UserRoles
 }
 
 type UpdateManager struct {

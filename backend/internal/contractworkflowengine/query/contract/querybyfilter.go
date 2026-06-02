@@ -31,7 +31,7 @@ type GetAllMetadataByFilterQry struct {
 	ContractData    string
 	Username        string
 	Pagination      datatype.Pagination
-	Roles           userrole.UserRoles
+	UserRoles       userrole.UserRoles
 }
 
 type GetAllMetadataByFilterResult struct {

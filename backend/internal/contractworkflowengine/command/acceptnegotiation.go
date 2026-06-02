@@ -23,7 +23,7 @@ type AcceptNegotiationCmd struct {
 	DID        string
 	AcceptedBy string
 	Username   string
-	Roles      userrole.UserRoles
+	UserRoles  userrole.UserRoles
 }
 
 type NegotiationAcceptor struct {

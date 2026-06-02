@@ -153,8 +153,8 @@ type AuthContext struct {
 	ParticipantID string
 }
 
-// GetRoles extracts roles from the request context.
-func GetRoles(ctx context.Context) []userrole.UserRole {
+// GetUserRoles extracts roles from the request context.
+func GetUserRoles(ctx context.Context) []userrole.UserRole {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
 		userRoles := make([]userrole.UserRole, len(ac.Roles))
 		for i, role := range ac.Roles {

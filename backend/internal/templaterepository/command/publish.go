@@ -28,7 +28,7 @@ type PublishCmd struct {
 	PublishedBy   string
 	Username      string
 	ParticipantID string
-	Roles         userrole.UserRoles
+	UserRoles     userrole.UserRoles
 }
 
 type Publisher struct {

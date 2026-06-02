@@ -3,16 +3,19 @@ package event
 import (
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/signingmanagement/datatype/eventtype"
 )
 
 // RetrieveByIDEvent is emitted when contract data is retrieved.
 type RetrieveByIDEvent struct {
-	DID         string    `json:"did"`
-	RetrievedBy string    `json:"retrieved_by"`
-	OccurredAt  time.Time `json:"occurred_at"`
-	Username    string    `json:"username"`
+	DID         string               `json:"did"`
+	RetrievedBy string               `json:"retrieved_by"`
+	OccurredAt  time.Time            `json:"occurred_at"`
+	Username    string               `json:"username"`
+	UserRoles   []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -27,9 +30,10 @@ func (e RetrieveByIDEvent) GetDID() string {
 
 // RetrieveAllEvent is emitted when contract data is retrieved.
 type RetrieveAllEvent struct {
-	RetrievedBy string    `json:"retrieved_by"`
-	OccurredAt  time.Time `json:"occurred_at"`
-	Username    string    `json:"username"`
+	RetrievedBy string               `json:"retrieved_by"`
+	OccurredAt  time.Time            `json:"occurred_at"`
+	Username    string               `json:"username"`
+	UserRoles   []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -44,9 +48,10 @@ func (e RetrieveAllEvent) GetDID() string {
 
 // SearchEvent is emitted when template data is searched.
 type SearchEvent struct {
-	RetrievedBy string    `json:"retrieved_by"`
-	OccurredAt  time.Time `json:"occurred_at"`
-	Username    string    `json:"username"`
+	RetrievedBy string               `json:"retrieved_by"`
+	OccurredAt  time.Time            `json:"occurred_at"`
+	Username    string               `json:"username"`
+	UserRoles   []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -61,11 +66,12 @@ func (e SearchEvent) GetDID() string {
 
 // ValidateEvent is emitted when a signature is validated.
 type ValidateEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version,omitempty"`
-	ValidatedBy     string    `json:"validated_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-	Username        string    `json:"username"`
+	DID             string               `json:"did"`
+	ContractVersion int                  `json:"contract_version,omitempty"`
+	ValidatedBy     string               `json:"validated_by"`
+	OccurredAt      time.Time            `json:"occurred_at"`
+	Username        string               `json:"username"`
+	UserRoles       []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -80,11 +86,12 @@ func (e ValidateEvent) GetDID() string {
 
 // VerifyEvent is emitted when a signature is validated.
 type VerifyEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version,omitempty"`
-	VerifiedBy      string    `json:"verified_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-	Username        string    `json:"username"`
+	DID             string               `json:"did"`
+	ContractVersion int                  `json:"contract_version,omitempty"`
+	VerifiedBy      string               `json:"verified_by"`
+	OccurredAt      time.Time            `json:"occurred_at"`
+	Username        string               `json:"username"`
+	UserRoles       []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -104,6 +111,7 @@ type AuditEvt struct {
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
 	Username      string                      `json:"username"`
+	UserRoles     []userrole.UserRoles        `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -118,11 +126,12 @@ func (e AuditEvt) GetDID() string {
 
 // RevokeEvent is emitted when a signature is revoked
 type RevokeEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version,omitempty"`
-	RevokedBy       string    `json:"revoked_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-	Username        string    `json:"username"`
+	DID             string               `json:"did"`
+	ContractVersion int                  `json:"contract_version,omitempty"`
+	RevokedBy       string               `json:"revoked_by"`
+	OccurredAt      time.Time            `json:"occurred_at"`
+	Username        string               `json:"username"`
+	UserRoles       []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -136,11 +145,12 @@ func (e RevokeEvent) GetDID() string {
 }
 
 type ComplianceValidationEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version,omitempty"`
-	CheckedBy       string    `json:"checked_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-	Username        string    `json:"username"`
+	DID             string               `json:"did"`
+	ContractVersion int                  `json:"contract_version,omitempty"`
+	CheckedBy       string               `json:"checked_by"`
+	OccurredAt      time.Time            `json:"occurred_at"`
+	Username        string               `json:"username"`
+	UserRoles       []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -155,11 +165,12 @@ func (e ComplianceValidationEvent) GetDID() string {
 
 // SigningRequestEvent is emitted when contract is reviewed.
 type SigningRequestEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version"`
-	RequestedBy     string    `json:"requested_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-	Username        string    `json:"username"`
+	DID             string               `json:"did"`
+	ContractVersion int                  `json:"contract_version"`
+	RequestedBy     string               `json:"requested_by"`
+	OccurredAt      time.Time            `json:"occurred_at"`
+	Username        string               `json:"username"`
+	UserRoles       []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
@@ -174,11 +185,12 @@ func (e SigningRequestEvent) GetDID() string {
 
 // ApplyEvent is emitted when contract is reviewed.
 type ApplyEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version"`
-	AppliedBy       string    `json:"applied_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-	Username        string    `json:"username"`
+	DID             string               `json:"did"`
+	ContractVersion int                  `json:"contract_version"`
+	AppliedBy       string               `json:"applied_by"`
+	OccurredAt      time.Time            `json:"occurred_at"`
+	Username        string               `json:"username"`
+	UserRoles       []userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.

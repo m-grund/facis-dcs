@@ -33,7 +33,7 @@ type UpdateCmd struct {
 	Description     *string
 	ContractData    *datatype.JSON
 	Username        string
-	Roles           userrole.UserRoles
+	UserRoles       userrole.UserRoles
 }
 
 type Updater struct {

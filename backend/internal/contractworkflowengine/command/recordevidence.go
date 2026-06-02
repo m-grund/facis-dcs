@@ -23,7 +23,7 @@ type RecordEvidenceCmd struct {
 	RecordedBy string
 	UpdatedAt  time.Time
 	Username   string
-	Roles      userrole.UserRoles
+	UserRoles  userrole.UserRoles
 }
 
 type EvidenceRecorder struct {

@@ -33,7 +33,7 @@ type SubmitCmd struct {
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
 	Username    string
-	Roles       userrole.UserRoles
+	UserRoles   userrole.UserRoles
 }
 
 type Submitter struct {

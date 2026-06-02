@@ -24,7 +24,7 @@ type GetHistoryByIDQry struct {
 	DID         string
 	RetrievedBy string
 	Username    string
-	Roles       userrole.UserRoles
+	UserRoles   userrole.UserRoles
 }
 
 type GetHistoryByIDResult struct {

@@ -25,7 +25,7 @@ type RejectCmd struct {
 	RejectedBy string
 	Reason     string
 	Username   string
-	Roles      userrole.UserRoles
+	UserRoles  userrole.UserRoles
 }
 
 type Rejecter struct {

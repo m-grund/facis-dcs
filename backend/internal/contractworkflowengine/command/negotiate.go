@@ -26,7 +26,7 @@ type NegotiationCmd struct {
 	ChangeRequest *datatype.JSON
 	UpdatedAt     time.Time
 	Username      string
-	Roles         userrole.UserRoles
+	UserRoles     userrole.UserRoles
 }
 
 type Negotiator struct {

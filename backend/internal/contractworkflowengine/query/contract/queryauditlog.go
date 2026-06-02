@@ -22,7 +22,7 @@ type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
 	Username  string
-	Roles     userrole.UserRoles
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {

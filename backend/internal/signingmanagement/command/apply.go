@@ -21,7 +21,7 @@ type ApplyCmd struct {
 	DID       string
 	AppliedBy string
 	Username  string
-	Roles     userrole.UserRoles
+	UserRoles userrole.UserRoles
 }
 
 type Applier struct {

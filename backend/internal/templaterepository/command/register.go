@@ -28,7 +28,7 @@ type RegisterCmd struct {
 	Version      int
 	RegisteredBy string
 	Username     string
-	Roles        userrole.UserRoles
+	UserRoles    userrole.UserRoles
 }
 
 type Registrar struct {
