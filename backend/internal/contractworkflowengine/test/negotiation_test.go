@@ -78,9 +78,8 @@ func TestNegotiation_CreateNegotiation(t *testing.T) {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Println("could not rollback transaction")
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
