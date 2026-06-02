@@ -268,11 +268,15 @@ func (e ArchiveEvent) GetDID() string {
 
 // RegisterEvent is emitted when template data is registered.
 type RegisterEvent struct {
-	DID            string    `json:"did"`
-	DocumentNumber *string   `json:"document_number,omitempty"`
-	Version        int       `json:"version"`
-	RegisteredBy   string    `json:"registered_by"`
-	OccurredAt     time.Time `json:"occurred_at"`
+	DID           string         `json:"did"`
+	RegisteredBy  string         `json:"registered_by"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	Name          *string        `json:"name"`
+	Description   *string        `json:"description"`
+	TemplateData  *datatype.JSON `json:"template_data"`
+	SourceDID     string         `json:"source_did"`
+	SourceVersion int            `json:"source_version"`
+	OccurredAt    time.Time      `json:"occurred_at"`
 	Username       string    `json:"username"`
 }
 
@@ -302,5 +306,24 @@ func (e AuditEvt) EventType() string {
 
 // GetDID implements the Event interface.
 func (e AuditEvt) GetDID() string {
+	return e.DID
+}
+
+// PublishEvent is emitted when template data is published to the Federated Catalogue.
+type PublishEvent struct {
+	DID            string    `json:"did"`
+	DocumentNumber *string   `json:"document_number,omitempty"`
+	Version        int       `json:"version"`
+	PublishedBy    string    `json:"published_by"`
+	OccurredAt     time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e PublishEvent) EventType() string {
+	return eventtype.Publish.String()
+}
+
+// GetDID implements the Event interface.
+func (e PublishEvent) GetDID() string {
 	return e.DID
 }

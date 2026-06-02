@@ -12,7 +12,6 @@ import (
 )
 
 type DeleteCmd struct {
-	Token         string
 	ParticipantID string
 }
 
@@ -27,7 +26,7 @@ type DeleteResult struct {
 
 func (h *Deleter) Handle(ctx context.Context, cmd DeleteCmd) (*DeleteResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if cmd.ParticipantID == "" {
 		return nil, fmt.Errorf("participant id is empty")
@@ -43,8 +42,7 @@ func (h *Deleter) Handle(ctx context.Context, cmd DeleteCmd) (*DeleteResult, err
 		FCClient: h.FCClient,
 	}
 	hashResult, err := hashHandler.Handle(selfdescriptionquery.GetSelfDescriptionsMetaByIDsQry{
-		IDs:   []string{serviceOfferingID},
-		Token: cmd.Token,
+		IDs: []string{serviceOfferingID},
 	})
 	if err != nil {
 		return nil, err
@@ -60,7 +58,7 @@ func (h *Deleter) Handle(ctx context.Context, cmd DeleteCmd) (*DeleteResult, err
 	// 2. Delete the service offering
 	path := client.SelfDescriptionsEndpointPath + "/" + url.PathEscape(sdHash)
 
-	resp, err := h.FCClient.Delete(h.Ctx, path, cmd.Token, nil)
+	resp, err := h.FCClient.Delete(h.Ctx, path, nil)
 	if err != nil {
 		return nil, err
 	}

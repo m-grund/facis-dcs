@@ -10,7 +10,6 @@ import (
 // ServiceOfferingExistsQry checks whether a service offering node exists by serviceOfferingId.
 type ServiceOfferingExistsQry struct {
 	ServiceOfferingID string
-	Token             string
 }
 
 type ServiceOfferingExistsResult struct {
@@ -33,7 +32,7 @@ LIMIT 1
 
 func (h *ServiceOfferingExistsHandler) Handle(qry ServiceOfferingExistsQry) (*ServiceOfferingExistsResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if qry.ServiceOfferingID == "" {
 		return nil, fmt.Errorf("service offering id is empty")
@@ -46,7 +45,7 @@ func (h *ServiceOfferingExistsHandler) Handle(qry ServiceOfferingExistsQry) (*Se
 		},
 	}
 
-	queryResp, err := h.FCClient.Query(h.Ctx, qry.Token, reqBody)
+	queryResp, err := h.FCClient.Query(h.Ctx, reqBody)
 	if err != nil {
 		return nil, err
 	}
