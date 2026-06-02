@@ -4,10 +4,19 @@ import (
 	. "goa.design/goa/v3/dsl"
 )
 
+var SMContractPagination = Type("SMContractPagination", func() {
+	Description("Pagination results")
+
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
+})
+
 var SMContractRetrieveRequest = Type("SMContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("ContractPagination", ContractPagination, "Pagination results")
 })
 
 var SMContractListItem = Type("SMContractListItem", func() {
@@ -211,7 +220,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
+			Scope("System Contract Signer")
 		})
 
 		Payload(SMContractRetrieveRequest)
@@ -237,7 +246,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
+			Scope("System Contract Signer")
 		})
 
 		Payload(SMContractRetrieveByIDRequest)
@@ -262,7 +271,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
+			Scope("System Contract Signer")
 		})
 
 		Payload(SMContractVerifyRequest)
@@ -287,7 +296,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
+			Scope("System Contract Signer")
 		})
 
 		Payload(SMContractApplyRequest)
@@ -312,9 +321,9 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
+			Scope("System Contract Signer")
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(SMContractValidateRequest)
@@ -339,7 +348,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(SMContractRevokeRequest)
@@ -391,7 +400,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
+			Scope("System Contract Manager")
 		})
 
 		Payload(SMContractComplianceRequest)

@@ -158,10 +158,19 @@ var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func
 	Required("did", "state", "template_type", "created_at", "updated_at", "version")
 })
 
+var ContractTemplatePagination = Type("ContractTemplatePagination", func() {
+	Description("Pagination results")
+
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
+})
+
 var ContractTemplateRetrieveRequest = Type("ContractTemplateRetrieveRequest", func() {
 	Description("Contract template retrieve request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("pagination", ContractTemplatePagination, "Pagination results")
 })
 
 var ContractTemplateItem = Type("ContractTemplateItem", func() {

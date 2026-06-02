@@ -109,10 +109,19 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
+var ContractPagination = Type("ContractPagination", func() {
+	Description("Pagination results")
+
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
+})
+
 var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("ContractPagination", ContractPagination, "Pagination results")
 })
 
 var ContractItem = Type("ContractItem", func() {
