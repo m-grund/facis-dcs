@@ -2,13 +2,15 @@ package test
 
 import (
 	"context"
-	"digital-contracting-service/internal/base"
-	"digital-contracting-service/internal/base/conf"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 	"slices"
 	"sort"
 	"testing"
+
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -19,7 +21,7 @@ func TestRetrieve_RetrieveContractById(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -58,7 +60,7 @@ func TestRetrieve_RetrieveNonExistingContractById(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -72,7 +74,7 @@ func TestRetrieve_RetrieveNonExistingContractById(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	did2, err := base.GetDID()
+	did2, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -105,7 +107,7 @@ func TestRetrieve_RetrieveAllContracts(t *testing.T) {
 
 	dids := make([]string, 0, 10)
 	for i := 0; i < 10; i++ {
-		did, err := base.GetDID()
+		did, err := base.GetDID(datatype.ContractResourceType)
 		if err != nil {
 			t.Fatalf("Failed to get new DID: %v", err)
 		}

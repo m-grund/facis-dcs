@@ -3,7 +3,6 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/templaterepository/db"
 	"errors"
 	"fmt"
 	"strconv"
@@ -11,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/templaterepository/db"
 )
 
 type PostgresContractTemplateRepo struct {
@@ -234,7 +235,6 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	if len(values.TemplateData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.TemplateData)
-		paramIndex++
 	}
 	l := len(" AND")
 	if len(conditions) > l {

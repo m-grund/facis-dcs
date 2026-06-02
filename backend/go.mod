@@ -5,6 +5,7 @@ go 1.25.7
 require (
 	github.com/cloudevents/sdk-go/v2 v2.15.0
 	github.com/coreos/go-oidc/v3 v3.17.0
+	github.com/digitorus/pkcs7 v0.0.0-20230713084857-e76b763bdc49
 	github.com/digitorus/timestamp v0.0.0-20250524132541-c45532741eea
 	github.com/eclipse-xfsc/cloud-event-provider v0.1.5
 	github.com/fxamacker/cbor/v2 v2.5.0
@@ -39,7 +40,6 @@ require (
 	github.com/cloudevents/sdk-go/protocol/nats/v2 v2.14.0 // indirect
 	github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2 v2.14.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/digitorus/pkcs7 v0.0.0-20230713084857-e76b763bdc49 // indirect
 	github.com/dimfeld/httppath v0.0.0-20170720192232-ee938bf73598 // indirect
 	github.com/eapache/go-resiliency v1.5.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect

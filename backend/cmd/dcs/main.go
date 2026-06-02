@@ -2,6 +2,19 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"github.com/jmoiron/sqlx"
+	"github.com/nats-io/nats.go"
+	"goa.design/clue/debug"
+	"goa.design/clue/log"
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -33,19 +46,7 @@ import (
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
 	"digital-contracting-service/migrations"
-	"flag"
-	"fmt"
-	"net"
-	"net/url"
-	"os"
-	"os/signal"
-	"strings"
-	"sync"
-	"syscall"
 
-	"github.com/nats-io/nats.go"
-	"goa.design/clue/debug"
-	"goa.design/clue/log"
 )
 
 func main() {
@@ -81,7 +82,12 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not connect to database")
 	}
-	defer db.Close()
+	defer func(db *sqlx.DB) {
+		err := db.Close()
+		if err != nil {
+			fmt.Printf("could not close database connection: %v\n", err)
+		}
+	}(db)
 
 	log.Printf(ctx, "Connecting to database")
 
@@ -89,6 +95,14 @@ func main() {
 	if err := migrations.Run(db); err != nil {
 		log.Fatalf(ctx, err, "Could not run database migrations")
 		os.Exit(1)
+	}
+
+	if os.Getenv("DCS_ISSUER") == "" {
+		log.Printf(ctx, "DCS_ISSUER configuration missing: DCS_ISSUER will be set to localhost as issuer")
+	} else {
+		if strings.Contains(os.Getenv("DCS_ISSUER"), ":") {
+			log.Fatalf(ctx, nil, "DCS_ISSUER must not contain service port")
+		}
 	}
 
 	// Connect to NATS (use NATS_URL env var or default)
@@ -101,7 +115,12 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not connect to events publisher")
 	}
-	defer cepPubClient.Close()
+	defer func(cepPubClient *event.CloudEventPubClient) {
+		err := cepPubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close cloud event publisher")
+		}
+	}(cepPubClient)
 
 	// Initialize OIDC validator and JWT authenticator.
 	oidcIssuerURL := os.Getenv("OIDC_ISSUER_URL")
@@ -117,9 +136,9 @@ func main() {
 		log.Fatalf(ctx, err, "failed to initialize OIDC validator")
 	}
 
-	laRepo := &pg.PostgresLoginAttemptRepo{}
+	aAttemptRepo := &pg.PostgresAccessAttemptRepo{}
 	lockRepo := &pg.PostgresIPLockoutRepo{}
-	jwtAuth := auth.NewJWTAuthenticator(oidcValidator, db, laRepo, lockRepo)
+	jwtAuth := auth.NewJWTAuthenticator(oidcValidator, db, aAttemptRepo, lockRepo)
 
 	ctRepo := tplrepo.PostgresContractTemplateRepo{}
 	ctRTRepo := tplrepo.PostgresReviewTaskRepo{}
@@ -150,7 +169,10 @@ func main() {
 		IPFSClient: ipfsAPIClient,
 		ARepo:      &aRepo,
 	}
-	outboxProcessor.Start(ctx)
+	err = outboxProcessor.Start(ctx)
+	if err != nil {
+		log.Fatalf(ctx, err, "failed to start outbox processor")
+	}
 
 	auditTrailReader := base.AuditTrailReader{
 		IPFSClient: ipfsAPIClient,

@@ -8,6 +8,7 @@ import (
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -30,7 +31,12 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	version, err := h.CTRepo.CopyFromDID(ctx, tx, cmd.CopyDID, cmd.NewDID)
 	if err != nil {

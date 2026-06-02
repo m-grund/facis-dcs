@@ -2,12 +2,14 @@ package query
 
 import (
 	"context"
-	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
-	"digital-contracting-service/internal/templaterepository/db"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
+	"digital-contracting-service/internal/templaterepository/db"
 )
 
 type GetAllReviewTasksForDIDQry struct {
@@ -35,7 +37,12 @@ func (h *GetAllReviewTasksForDIDHandler) Handle(ctx context.Context, query GetAl
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Println("could not rollback transaction")
+		}
+	}(tx)
 
 	reviewTasks, err := h.RTRepo.ReadAll(ctx, tx, query.DID)
 	if err != nil {

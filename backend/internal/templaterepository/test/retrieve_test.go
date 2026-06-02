@@ -2,15 +2,17 @@ package test
 
 import (
 	"context"
+	"slices"
+	"sort"
+	"testing"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
-	"slices"
-	"sort"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -21,7 +23,7 @@ func TestRetrieve_RetrieveContractTemplateById(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -58,7 +60,7 @@ func TestRetrieve_RetrieveNonExistingContractTemplateById(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -72,7 +74,7 @@ func TestRetrieve_RetrieveNonExistingContractTemplateById(t *testing.T) {
 
 	createContractTemplate(t, db, repo, did, contracttemplatestate.Draft, creator)
 
-	did2, err := base.GetDID()
+	did2, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get another DID: %v", err)
 	}
@@ -105,7 +107,7 @@ func TestRetrieve_RetrieveAllContractTemplates(t *testing.T) {
 
 	dids := make([]string, 0, 10)
 	for i := 0; i < 10; i++ {
-		did, err := base.GetDID()
+		did, err := base.GetDID(datatype.TemplateResourceType)
 		if err != nil {
 			t.Fatalf("Failed to get new DID: %v", err)
 		}

@@ -20,7 +20,6 @@ type UpdateCmd struct {
 	Description        string
 }
 
-// UpdateServiceOffering handler updates the service offering in the Federated Catalogue.
 type Updater struct {
 	Ctx      context.Context
 	FCClient *client.FederatedCatalogueClient

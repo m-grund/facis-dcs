@@ -2,13 +2,19 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"testing"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/templaterepository/command"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
-	"testing"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,7 +24,7 @@ func TestVerify_VerifyContractTemplateAsReviewer(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -54,7 +60,11 @@ func TestVerify_VerifyContractTemplateAsReviewer(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	exists, err := repo.RTRepo.AnyTasksInState(ctx, tx, *did, reviewtaskstate.Verified.String())
 	if err != nil {
@@ -75,7 +85,7 @@ func TestVerify_VerifyNonExistingContractTemplate(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}

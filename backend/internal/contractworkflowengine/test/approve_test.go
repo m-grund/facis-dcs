@@ -2,16 +2,18 @@ package test
 
 import (
 	"context"
-	"digital-contracting-service/internal/base"
-	"digital-contracting-service/internal/base/conf"
-	"digital-contracting-service/internal/contractworkflowengine/command"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/contractworkflowengine/command"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 )
 
 func TestApprove_ApproveContractInReviewedState(t *testing.T) {
@@ -20,7 +22,7 @@ func TestApprove_ApproveContractInReviewedState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -79,7 +81,7 @@ func TestApprove_ApproveNonExistingContract(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -112,7 +114,7 @@ func TestApprove_ApproveContractInReviewedStateWithInvalidUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -151,7 +153,7 @@ func TestApprove_ApproveContractInDraftState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -188,7 +190,7 @@ func TestApprove_ApproveContractInApprovedState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -225,7 +227,7 @@ func TestApprove_ApproveContractAfterUpdate(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}

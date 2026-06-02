@@ -192,6 +192,19 @@ export interface SLAAgreement {
   exclusionEvents?: ExclusionEvent[]
 }
 
+export interface CompanyParty {
+  '@type'?: 'CompanyParty' | 'dcs:CompanyParty'
+  '@id'?: string
+  role: string
+  legalName?: string
+  identifier?: string
+  name?: string
+  location?: {
+    country?: string
+    address?: string
+  }
+}
+
 type SemanticConditionLike = {
   conditionId: string
   conditionName?: string

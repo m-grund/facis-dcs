@@ -2,12 +2,12 @@ package participant
 
 import (
 	"context"
-	"digital-contracting-service/internal/templatecatalogueintegration/client"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
+	"digital-contracting-service/internal/templatecatalogueintegration/client"
 	participantquery "digital-contracting-service/internal/templatecatalogueintegration/query/participant"
 	"digital-contracting-service/internal/templatecatalogueintegration/selfdescription"
 )

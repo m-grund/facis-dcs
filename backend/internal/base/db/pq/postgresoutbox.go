@@ -2,10 +2,11 @@ package pq
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype/componenttype"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype/componenttype"
 )
 
 func PostgresPersistEvent(ctx context.Context, tx *sqlx.Tx, component componenttype.ComponentType, eventType string, eventJSON []byte, did string) error {

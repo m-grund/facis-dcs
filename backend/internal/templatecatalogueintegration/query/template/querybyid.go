@@ -2,9 +2,9 @@ package template
 
 import (
 	"context"
-	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"fmt"
 
+	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templatecatalogueintegration/internal/ptr"
 )

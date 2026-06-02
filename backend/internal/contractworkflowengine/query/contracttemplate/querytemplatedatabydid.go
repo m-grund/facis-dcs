@@ -2,12 +2,15 @@ package contracttemplate
 
 import (
 	"context"
+	"database/sql"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -82,7 +85,11 @@ func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx con
 	if err != nil {
 		return nil, fmt.Errorf("could not create transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	templateData, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, templateDID)
 	if err != nil {

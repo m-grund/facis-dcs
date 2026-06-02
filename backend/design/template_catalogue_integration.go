@@ -41,7 +41,7 @@ var TemplateCatalogueRetrieveResponse = Type("TemplateCatalogueRetrieveResponse"
 	Required("totalCount", "items")
 })
 
-var TemplateCatalogueRetrieveByIdRequest = Type("TemplateCatalogueRetrieveByIdRequest", func() {
+var TemplateCatalogueRetrieveByIDRequest = Type("TemplateCatalogueRetrieveByIDRequest", func() {
 	Description("Retrieve a template catalogue by did")
 
 	Token("token", String, "JWT token")
@@ -50,7 +50,7 @@ var TemplateCatalogueRetrieveByIdRequest = Type("TemplateCatalogueRetrieveByIdRe
 	Required("did")
 })
 
-var TemplateCatalogueRetrieveByIdResponse = Type("TemplateCatalogueRetrieveByIdResponse", func() {
+var TemplateCatalogueRetrieveByIDResponse = Type("TemplateCatalogueRetrieveByIDResponse", func() {
 	Description("Template catalogue detail response")
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
@@ -314,8 +314,8 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 			Scope("Contract Signer")
 		})
 
-		Payload(TemplateCatalogueRetrieveByIdRequest)
-		Result(TemplateCatalogueRetrieveByIdResponse)
+		Payload(TemplateCatalogueRetrieveByIDRequest)
+		Result(TemplateCatalogueRetrieveByIDResponse)
 
 		Error("bad_request", ErrorResult, "Bad request")
 		Error("internal_error", ErrorResult, "Internal server error")

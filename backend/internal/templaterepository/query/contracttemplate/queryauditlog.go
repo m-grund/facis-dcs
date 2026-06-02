@@ -2,15 +2,19 @@ package contracttemplate
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type GetAuditLogQry struct {
@@ -29,7 +33,11 @@ func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.Au
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, qry.DID)
 	if err != nil {

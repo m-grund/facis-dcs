@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+	"sync"
+	"time"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -27,10 +32,6 @@ import (
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/service"
 	"digital-contracting-service/internal/webhookplatform"
-	"net/http"
-	"net/url"
-	"sync"
-	"time"
 
 	"errors"
 
