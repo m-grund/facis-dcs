@@ -143,6 +143,16 @@ func TestPDFA3_EmbeddedFileMIME(t *testing.T) {
 	}
 }
 
+func TestPDFA3_EmbeddedFileModDate(t *testing.T) {
+	for _, tc := range pdfa3Cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			pdf := tc.build(t)
+			assert.Contains(t, string(pdf), "/ModDate (D:19700101000000)")
+		})
+	}
+}
+
 func TestPDFA3_Determinism(t *testing.T) {
 	for _, tc := range pdfa3Cases {
 		tc := tc

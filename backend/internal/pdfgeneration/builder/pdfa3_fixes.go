@@ -134,6 +134,10 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 	if len(streamPayload) == 0 {
 		return nil, fmt.Errorf("embedded stream payload not found")
 	}
+	embeddedStreamDict.Dict.Update("Params", pdftypes.Dict{
+		"Size":    pdftypes.Integer(len(streamPayload)),
+		"ModDate": pdftypes.StringLiteral(pdftypes.DateString(epochTime)),
+	})
 
 	idHash := sha256.Sum256(idSeed)
 	idHex := hex.EncodeToString(idHash[:16])

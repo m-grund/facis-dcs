@@ -15,7 +15,7 @@ func TestLifecycleAssertion_AllFieldsPresent(t *testing.T) {
 		"did:example:contract123",
 		"abc123hash",
 		"pdfhash",
-		"1.0.0",
+		"1.0.1",
 		"draft",
 		"initial creation",
 		"did:example:authority",
@@ -116,7 +116,7 @@ func TestMapCWEStateToC2PA_AllSRSStatesCovered(t *testing.T) {
 
 func TestLifecycleAssertion_OptionalFieldsOmittedWhenEmpty(t *testing.T) {
 	a := NewLifecycleAssertion(
-		"did:example:c1", "hash1", "pdfhash1", "1.0.0",
+		"did:example:c1", "hash1", "pdfhash1", "1.0.1",
 		"active", "", "did:example:auth", "", "",
 		time.Now(),
 	)

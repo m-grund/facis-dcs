@@ -36,7 +36,7 @@ const (
 	// embedded in every C2PA lifecycle assertion so that future verification can
 	// select the exact renderer that produced a given PDF (required for the
 	// bytewise-match check to remain valid after renderer upgrades).
-	RendererVersion = "1.0.0"
+	RendererVersion = "1.0.1"
 )
 
 // epochTime is used as a fixed creation/modification date so the PDF bytes are

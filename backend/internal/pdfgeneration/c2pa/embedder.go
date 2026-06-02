@@ -17,6 +17,10 @@ import (
 	"digital-contracting-service/internal/base/ipfs"
 )
 
+const embeddedFileModDate = "D:19700101000000"
+
+var trailerIDRe = regexp.MustCompile(`(?s)/ID\s*\[\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\]`)
+
 // IPFSStorer stores bytes and returns their CID.
 type IPFSStorer interface {
 	CreateFile(ctx context.Context, data any) (*ipfs.IPFSResult, error)
@@ -181,7 +185,7 @@ func writeC2PAIncrement(existingPDF, jumbfBytes []byte, manifestHash string, vcB
 	// --- Object: EmbeddedFile stream (C2PA JUMBF) ----------------------------
 	offsets[jumbfObjNum] = base + int64(inc.Len())
 	fmt.Fprintf(&inc, "%d 0 obj\n", jumbfObjNum)
-	fmt.Fprintf(&inc, "<</Type /EmbeddedFile /Subtype /application#2Fc2pa /Params <</Size %d>> /Length %d>>\n", len(jumbfBytes), len(jumbfBytes))
+	fmt.Fprintf(&inc, "<</Type /EmbeddedFile /Subtype /application#2Fc2pa /Params <</Size %d /ModDate (%s)>> /Length %d>>\n", len(jumbfBytes), embeddedFileModDate, len(jumbfBytes))
 	inc.WriteString("stream\n")
 	inc.Write(jumbfBytes)
 	inc.WriteString("\nendstream\nendobj\n")
@@ -199,7 +203,7 @@ func writeC2PAIncrement(existingPDF, jumbfBytes []byte, manifestHash string, vcB
 	if len(vcBytes) > 0 {
 		offsets[vcStreamObjNum] = base + int64(inc.Len())
 		fmt.Fprintf(&inc, "%d 0 obj\n", vcStreamObjNum)
-		fmt.Fprintf(&inc, "<</Type /EmbeddedFile /Subtype /application#2Fjson /Params <</Size %d>> /Length %d>>\n", len(vcBytes), len(vcBytes))
+		fmt.Fprintf(&inc, "<</Type /EmbeddedFile /Subtype /application#2Fjson /Params <</Size %d /ModDate (%s)>> /Length %d>>\n", len(vcBytes), embeddedFileModDate, len(vcBytes))
 		inc.WriteString("stream\n")
 		inc.Write(vcBytes)
 		inc.WriteString("\nendstream\nendobj\n")
@@ -334,7 +338,12 @@ func writeC2PAIncrement(existingPDF, jumbfBytes []byte, manifestHash string, vcB
 	}
 	newSize := newMaxObjNum + 1
 	inc.WriteString("trailer\n<<\n")
-	fmt.Fprintf(&inc, "/Size %d\n/Root %d 0 R\n/Prev %d\n", newSize, catalogObjNum, prevStartXRef)
+	idHex, ok := extractTrailerIDHex(existingPDF)
+	if !ok {
+		idHash := sha256.Sum256(existingPDF)
+		idHex = hex.EncodeToString(idHash[:16])
+	}
+	fmt.Fprintf(&inc, "/Size %d\n/Root %d 0 R\n/Prev %d\n/ID [<%s> <%s>]\n", newSize, catalogObjNum, prevStartXRef, idHex, idHex)
 	inc.WriteString(">>\n")
 	fmt.Fprintf(&inc, "startxref\n%d\n%%%%EOF\n", xrefOffset)
 
@@ -342,6 +351,14 @@ func writeC2PAIncrement(existingPDF, jumbfBytes []byte, manifestHash string, vcB
 	result = append(result, existingPDF...)
 	result = append(result, inc.Bytes()...)
 	return result, nil
+}
+
+func extractTrailerIDHex(pdf []byte) (string, bool) {
+	matches := trailerIDRe.FindSubmatch(pdf)
+	if len(matches) != 3 {
+		return "", false
+	}
+	return string(matches[1]), true
 }
 
 // extractLastStartXRef returns the numeric value of the last startxref keyword

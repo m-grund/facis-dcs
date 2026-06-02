@@ -262,7 +262,7 @@ func TestVerifier_C2PAManifestFoundAndSignatureValid(t *testing.T) {
 		"did:ex:10",
 		c2pa.FileHashOf(jsonld),
 		c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "active", "", "did:ex:auth", "", "",
+		"1.0.1", "active", "", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
@@ -305,7 +305,7 @@ func TestVerifier_VCProofValidWhenVCEmbedded(t *testing.T) {
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
 		"did:ex:11", c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "active", "", "did:ex:auth", "", "",
+		"1.0.1", "active", "", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
@@ -347,7 +347,7 @@ func TestVerifier_StatusListURIExtractedFromVC(t *testing.T) {
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
 		"did:ex:12", c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "active", "", "did:ex:auth", "", "",
+		"1.0.1", "active", "", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
@@ -378,7 +378,7 @@ func TestVerifier_LifecycleStatusExtractedFromManifest(t *testing.T) {
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
 		"did:ex:14", c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "active", "approved", "did:ex:auth", "", "",
+		"1.0.1", "active", "approved", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
@@ -509,7 +509,7 @@ func TestVerifier_CheckStatusFnCalledWithCorrectFields(t *testing.T) {
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
 		contractID, c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "active", "", "did:ex:auth", "", "",
+		"1.0.1", "active", "", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
@@ -584,7 +584,7 @@ func TestVerifier_UsesLatestVCInChainedPDF(t *testing.T) {
 	storer := &c2paStubStorer{}
 	assertionV1 := c2pa.NewLifecycleAssertion(
 		contractID, c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "draft", "", "did:ex:auth", "", "",
+		"1.0.1", "draft", "", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	res1, err := c2pa.AppendManifest(
@@ -595,7 +595,7 @@ func TestVerifier_UsesLatestVCInChainedPDF(t *testing.T) {
 
 	assertionV2 := c2pa.NewLifecycleAssertion(
 		contractID, c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(res1.UpdatedPDF),
-		"1.0.0", "active", "", "did:ex:auth", "", c2pa.PrevManifestHashFrom(res1.UpdatedPDF),
+		"1.0.1", "active", "", "did:ex:auth", "", c2pa.PrevManifestHashFrom(res1.UpdatedPDF),
 		time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC),
 	)
 	res2, err := c2pa.AppendManifest(
@@ -652,7 +652,7 @@ func TestVerifier_RemoteCanonicalVCUsedForStatusCheck(t *testing.T) {
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
 		contractID, c2pa.FileHashOf(jsonld), c2pa.BasePDFHashOf(basePDF),
-		"1.0.0", "active", "", "did:ex:auth", "", "",
+		"1.0.1", "active", "", "did:ex:auth", "", "",
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	res, err := c2pa.AppendManifest(

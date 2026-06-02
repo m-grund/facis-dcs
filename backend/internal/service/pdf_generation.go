@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -64,6 +65,14 @@ func NewPDFGeneration(
 	}
 }
 
+func readCachedPDFMetadata(ctx context.Context, queryRow func(context.Context, string, ...any) *sql.Row, table, did string) (cidStr, c2paState, rendererVersion string, err error) {
+	query := fmt.Sprintf(`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_c2pa_state,''), COALESCE(pdf_renderer_version,'') FROM %s WHERE did=$1`, table)
+	if err := queryRow(ctx, query, did).Scan(&cidStr, &c2paState, &rendererVersion); err != nil {
+		return "", "", "", err
+	}
+	return cidStr, c2paState, rendererVersion, nil
+}
+
 // ExportContractPdf exports a contract as a PDF/A-3 document.
 // If a PDF is already stored in IPFS (from a prior C2PA append cycle) it is
 // returned directly; otherwise a fresh PDF is built from the JSON-LD.
@@ -88,10 +97,8 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 		jsonldBytes = b
 	}
 
-	var cidStr, lastC2PAState string
-	if scanErr := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_c2pa_state,'') FROM contracts WHERE did=$1`,
-		p.Did).Scan(&cidStr, &lastC2PAState); scanErr != nil {
+	cidStr, lastC2PAState, lastRendererVersion, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contracts", p.Did)
+	if scanErr != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached contract PDF metadata for %s: %w", p.Did, scanErr))
 	}
 	currentC2PAState, err := c2pa.MapCWEStateToC2PAStrict(contract.State)
@@ -100,7 +107,7 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 	}
 	log.Printf("pdfgeneration: ExportContractPdf %s cidStr=%q lastC2PAState=%q currentState=%s c2paState=%q",
 		p.Did, cidStr, lastC2PAState, contract.State, currentC2PAState)
-	if cidStr != "" {
+	if cidStr != "" && lastRendererVersion == builder.RendererVersion {
 		r, err := s.IPFSClient.FetchFile(cidStr)
 		if err != nil || len(r.Data) == 0 {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached PDF from IPFS %s: %w", cidStr, err))
@@ -129,6 +136,9 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("commit contract PDF append tx for %s: %w", p.Did, err))
 		}
 		return io.NopCloser(bytes.NewReader(pdfBytes)), nil
+	}
+	if cidStr != "" && lastRendererVersion != builder.RendererVersion {
+		log.Printf("pdfgeneration: ExportContractPdf %s cached renderer %q != current %q; rebuilding", p.Did, lastRendererVersion, builder.RendererVersion)
 	}
 
 	// No cached PDF — build from scratch.
@@ -188,10 +198,8 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 		jsonldBytes = b
 	}
 
-	var cidStr, lastC2PAState string
-	if scanErr := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_c2pa_state,'') FROM contract_templates WHERE did=$1`,
-		p.Did).Scan(&cidStr, &lastC2PAState); scanErr != nil {
+	cidStr, lastC2PAState, lastRendererVersion, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contract_templates", p.Did)
+	if scanErr != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached template PDF metadata for %s: %w", p.Did, scanErr))
 	}
 	currentC2PAState, err := c2pa.MapCWEStateToC2PAStrict(tpl.State)
@@ -200,7 +208,7 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 	}
 	log.Printf("pdfgeneration: ExportTemplatePdf %s cidStr=%q lastC2PAState=%q currentState=%s c2paState=%q",
 		p.Did, cidStr, lastC2PAState, tpl.State, currentC2PAState)
-	if cidStr != "" {
+	if cidStr != "" && lastRendererVersion == builder.RendererVersion {
 		r, err := s.IPFSClient.FetchFile(cidStr)
 		if err != nil || len(r.Data) == 0 {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached PDF from IPFS %s: %w", cidStr, err))
@@ -233,6 +241,9 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("commit template PDF append tx for %s: %w", p.Did, err))
 		}
 		return io.NopCloser(bytes.NewReader(pdfBytes)), nil
+	}
+	if cidStr != "" && lastRendererVersion != builder.RendererVersion {
+		log.Printf("pdfgeneration: ExportTemplatePdf %s cached renderer %q != current %q; rebuilding", p.Did, lastRendererVersion, builder.RendererVersion)
 	}
 
 	// No cached PDF — build from scratch.
@@ -467,13 +478,14 @@ func (s *pdfGenerationSrvc) contractIPFSFetchFn(ctx context.Context, did string)
 		return nil
 	}
 	return func() ([]byte, error) {
-		var cidStr string
-		if err := s.DB.QueryRowContext(ctx,
-			`SELECT COALESCE(pdf_ipfs_cid,'') FROM contracts WHERE did=$1`, did,
-		).Scan(&cidStr); err != nil {
+		cidStr, _, rendererVersion, err := readCachedPDFMetadata(ctx, s.DB.QueryRowContext, "contracts", did)
+		if err != nil {
 			return nil, fmt.Errorf("read contract pdf_ipfs_cid for %s: %w", did, err)
 		}
-		if cidStr == "" {
+		if cidStr == "" || rendererVersion != builder.RendererVersion {
+			if cidStr != "" && rendererVersion != builder.RendererVersion {
+				log.Printf("pdfgeneration: fetchOrBuildContractPDF %s cached renderer %q != current %q; rebuilding", did, rendererVersion, builder.RendererVersion)
+			}
 			return nil, nil
 		}
 		r, err := s.IPFSClient.FetchFile(cidStr)
@@ -490,13 +502,14 @@ func (s *pdfGenerationSrvc) templateIPFSFetchFn(ctx context.Context, did string)
 		return nil
 	}
 	return func() ([]byte, error) {
-		var cidStr string
-		if err := s.DB.QueryRowContext(ctx,
-			`SELECT COALESCE(pdf_ipfs_cid,'') FROM contract_templates WHERE did=$1`, did,
-		).Scan(&cidStr); err != nil {
+		cidStr, _, rendererVersion, err := readCachedPDFMetadata(ctx, s.DB.QueryRowContext, "contract_templates", did)
+		if err != nil {
 			return nil, fmt.Errorf("read template pdf_ipfs_cid for %s: %w", did, err)
 		}
-		if cidStr == "" {
+		if cidStr == "" || rendererVersion != builder.RendererVersion {
+			if cidStr != "" && rendererVersion != builder.RendererVersion {
+				log.Printf("pdfgeneration: fetchOrBuildTemplatePDF %s cached renderer %q != current %q; rebuilding", did, rendererVersion, builder.RendererVersion)
+			}
 			return nil, nil
 		}
 		r, err := s.IPFSClient.FetchFile(cidStr)

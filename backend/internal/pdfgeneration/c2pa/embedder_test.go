@@ -77,7 +77,7 @@ func testAssertion() LifecycleAssertion {
 		"did:example:contract1",
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		"1.0.0",
+		"1.0.1",
 		"draft",
 		"",
 		"did:example:auth",
@@ -161,7 +161,7 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 
 	// Second assertion referencing the first via PrevManifestHash.
 	assertion2 := NewLifecycleAssertion(
-		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.0",
+		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.1",
 		"active", "", "did:example:auth", "", prevHash, time.Now(),
 	)
 
@@ -188,7 +188,7 @@ func TestAppendManifest_FailsOnPrevManifestHashMismatch(t *testing.T) {
 		context.Background(), signer, TSAConfig{}, storer,
 		"did:example:issuer",
 		NewLifecycleAssertion(
-			"did:example:contract1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "1.0.0",
+			"did:example:contract1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "1.0.1",
 			"draft", "", "did:example:auth", "", "deadbeef",
 			time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		),
@@ -210,7 +210,7 @@ func TestAppendManifest_PreservesPreviousManifestNameTreeEntries(t *testing.T) {
 	require.NoError(t, err)
 
 	assertion2 := NewLifecycleAssertion(
-		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.0",
+		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.1",
 		"active", "", "did:example:auth", "", result1.ManifestHash,
 		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 	)
@@ -257,6 +257,7 @@ func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 	assert.Contains(t, string(streamObj), "/Type /EmbeddedFile")
 	assert.Contains(t, string(streamObj), "/Subtype /application#2Fc2pa")
 	assert.Contains(t, string(streamObj), "/Params <</Size ")
+	assert.Contains(t, string(streamObj), "/ModDate (D:19700101000000)")
 	assert.NotZero(t, filespecObjNum)
 
 	catalogObj, foundCatalog := findCatalogObject(objects)
@@ -265,6 +266,7 @@ func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 	assert.Regexp(t, regexp.MustCompile(`/AF\s*\[.*\d+\s+0\s+R.*\]`), string(catalogObj), "catalog /AF should contain the active manifest FileSpec")
 	assert.Contains(t, string(catalogObj), "/Names")
 	assert.Contains(t, string(catalogObj), "/EmbeddedFiles")
+	assert.Contains(t, string(result.UpdatedPDF), "/ID [<")
 }
 
 func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
@@ -312,7 +314,7 @@ func TestAppendManifest_AFPointsToLatestManifestOnly(t *testing.T) {
 		"did:example:contract1",
 		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		"1.0.0", "active", "", "did:example:auth", "", result1.ManifestHash,
+		"1.0.1", "active", "", "did:example:auth", "", result1.ManifestHash,
 		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 	)
 	result2, err := AppendManifest(
@@ -380,7 +382,7 @@ func TestPrevManifestHashFrom_ReadsActiveEmbeddedManifestPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	assertion2 := NewLifecycleAssertion(
-		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.0",
+		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.1",
 		"active", "", "did:example:auth", "", result1.ManifestHash,
 		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 	)
