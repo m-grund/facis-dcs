@@ -14,7 +14,7 @@ import (
 var (
 	ontologyQuotedValue      = regexp.MustCompile(`"([^"]*)"`)
 	ontologyNumberValue      = regexp.MustCompile(`[-+]?[0-9]+(?:\.[0-9]+)?`)
-	ontologyDomainFieldsPath = "docs/semantic-ontology/ontology/facis-dcs-ontology.ttl"
+	ontologyDomainFieldsPath = "docs/ontology/facis-sla-ontology.ttl"
 	ontologyPrefixIndex      = mustLoadOntologyPrefixes()
 	ontologyDomainFieldIndex = mustLoadOntologyDomainFields()
 	ontologyClassIndex       = mustLoadOntologyClasses()
@@ -468,6 +468,32 @@ func parseOntologyValueConstraint(statement string) *valueConstraint {
 	constraint.Min = ontologyNumber(statement, "dcs:minInclusive")
 	constraint.Max = ontologyNumber(statement, "dcs:maxInclusive")
 	return constraint
+}
+
+func allowedValuesForConstraint(constraint *valueConstraint) []string {
+	if constraint == nil {
+		return nil
+	}
+	if len(constraint.AllowedValues) > 0 {
+		return append([]string(nil), constraint.AllowedValues...)
+	}
+	ref := normalizedAllowedValuesRef(constraint.AllowedValuesRef)
+	if ref == "" {
+		return nil
+	}
+	for _, field := range ontologyDomainFieldIndex {
+		if field.Constraint == nil || normalizedAllowedValuesRef(field.Constraint.AllowedValuesRef) != ref {
+			continue
+		}
+		if len(field.Constraint.AllowedValues) > 0 {
+			return append([]string(nil), field.Constraint.AllowedValues...)
+		}
+	}
+	return nil
+}
+
+func normalizedAllowedValuesRef(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(value), " "))
 }
 
 func ontologyString(statement string, predicate string) string {

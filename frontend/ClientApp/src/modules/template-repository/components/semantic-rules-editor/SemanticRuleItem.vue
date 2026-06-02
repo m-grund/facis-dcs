@@ -19,8 +19,8 @@
           :key="i"
           class="badge badge-ghost badge-sm gap-1"
         >
-          <span>{{ p.parameterName }}</span>
-          <span class="opacity-70">({{ p.type }}, {{ p.fixedValue !== undefined ? `fixed: ${p.fixedValue}` : p.isRequired ? 'required' : 'optional' }})</span>
+          <span>{{ semanticParameterLabel(p) }}</span>
+          <span class="opacity-70">({{ semanticParameterTypeLabel(p.type) }}, {{ p.fixedValue !== undefined ? `fixed: ${p.fixedValue}` : p.isRequired ? 'required' : 'optional' }})</span>
         </div>
       </div>
     </div>
@@ -52,6 +52,7 @@
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import IconEdit from '@/core/components/icons/IconEdit.vue'
 import IconRemove from '@/core/components/icons/IconRemove.vue'
+import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
 
 defineProps<{
   condition: SemanticCondition

@@ -441,7 +441,7 @@ func TestNormalizeContractDataDoesNotInferRoleFromCustomerEntityType(t *testing.
 	require.ErrorContains(t, err, "unsupported entityType")
 }
 
-func TestNormalizeContractDataRejectsLegacySemanticPathAliases(t *testing.T) {
+func TestNormalizeContractDataRejectsNonCanonicalSemanticPathAliases(t *testing.T) {
 	data := validSemanticContractData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
@@ -695,6 +695,14 @@ func TestNormalizeContractDataAcceptsSemanticValueInsideConstraint(t *testing.T)
 	require.NoError(t, err)
 }
 
+func TestValueConstraintResolvesAllowedValuesRef(t *testing.T) {
+	err := valueMatchesConstraint("DEU", &valueConstraint{AllowedValuesRef: "ISO 3166-1 alpha-3"})
+	require.NoError(t, err)
+
+	err = valueMatchesConstraint("ZZZ", &valueConstraint{AllowedValuesRef: "ISO 3166-1 alpha-3"})
+	require.ErrorContains(t, err, "expected one of")
+}
+
 func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
@@ -705,7 +713,7 @@ func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *test
 	param := params[0].(map[string]any)
 	param["operators"] = []any{
 		map[string]any{
-			"operate": "greaterThanOrEqual",
+			"operate": "GreaterThanOrEqual",
 			"targets": []any{"99.95"},
 		},
 	}
@@ -727,7 +735,7 @@ func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *test
 	require.Equal(t, "semanticCondition", rules[0].(map[string]any)["source"])
 }
 
-func TestNormalizeTemplateDataNormalizesExistingSemanticRuleOperator(t *testing.T) {
+func TestNormalizeTemplateDataAcceptsCanonicalSemanticRuleOperator(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
@@ -736,7 +744,7 @@ func TestNormalizeTemplateDataNormalizesExistingSemanticRuleOperator(t *testing.
 			"@type":           "SemanticRule",
 			"ruleId":          "existing-rule",
 			"leftOperand":     "$.country",
-			"operator":        "equal",
+			"operator":        "Equals",
 			"rightOperand":    "DEU",
 			"appliesToClause": []any{"clause-1"},
 			"valueType":       "string",
@@ -755,6 +763,29 @@ func TestNormalizeTemplateDataNormalizesExistingSemanticRuleOperator(t *testing.
 	require.Equal(t, "Equals", rule["operator"])
 	require.Equal(t, "DEU", rule["rightOperand"])
 	require.Equal(t, []any{"clause-1"}, rule["appliesToClause"])
+}
+
+func TestNormalizeTemplateDataRejectsNonCanonicalSemanticRuleOperator(t *testing.T) {
+	data := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	decoded["semanticRules"] = []any{
+		map[string]any{
+			"@type":           "SemanticRule",
+			"ruleId":          "existing-rule",
+			"leftOperand":     "$.country",
+			"operator":        "equal",
+			"rightOperand":    "DEU",
+			"appliesToClause": []any{"clause-1"},
+			"valueType":       "string",
+			"severity":        "error",
+		},
+	}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&raw)
+	require.ErrorContains(t, err, "unsupported semantic rule operator")
 }
 
 func TestNormalizeTemplateDataRejectsUnsupportedSemanticOperator(t *testing.T) {

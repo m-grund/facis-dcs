@@ -34,7 +34,6 @@ func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
 				"semanticPath": "provider.company.location.country",
 				"values":       []any{"RUS"},
 				"ontologyTerm": "dcs:CountryCode",
-				"requirement":  "DCS-FR-PACM-03",
 			},
 		},
 	}
@@ -79,7 +78,7 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 		"rules": []any{
 			map[string]any{"id": "FACIS-CONTRACT-STATIC-001", "title": "Company country must not be blacklisted", "builtin": "value_not_in", "semanticPath": "company.location.country", "values": []any{"RUS"}, "ontologyTerm": "dcs:CountryCode"},
 			map[string]any{"id": "FACIS-CONTRACT-STATIC-002", "title": "Governing law must be allowed", "builtin": "value_in", "semanticPath": "contract.governingLaw", "values": []any{"DE", "AT", "CH"}, "ontologyTerm": "dcs:Contract"},
-			map[string]any{"id": "FACIS-CONTRACT-STATIC-003", "title": "Payment amount must satisfy policy maximum", "builtin": "max_number", "semanticPath": "contract.payment.amount", "max": 10000, "ontologyTerm": "dcs:PaymentTerms"},
+			map[string]any{"id": "FACIS-CONTRACT-STATIC-003", "title": "Payment amount must satisfy policy maximum", "builtin": "max_number", "semanticPath": "contract.payment.amount", "max": 10000, "ontologyTerm": "dcs:PaymentTerm"},
 			map[string]any{"id": "FACIS-CONTRACT-STATIC-004", "title": "Signature level must satisfy policy", "builtin": "signature_level_at_least", "semanticPath": "signature.requiredLevel", "required": "AES", "ontologyTerm": "dcs:SignatureLevelCode"},
 		},
 	}
@@ -128,12 +127,94 @@ func TestAuditContractContentReadsJSONLDSemanticPathThresholds(t *testing.T) {
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-003", "error"))
 }
 
-func TestAuditContractContentRequiresPolicyDocument(t *testing.T) {
-	findings, err := AuditContractContent(map[string]any{}, nil, ContractContentAuditMetadata{})
+func TestAuditContractContentResolvesAllowedValuesRef(t *testing.T) {
+	contract := map[string]any{
+		"contract": map[string]any{
+			"jurisdiction": "ZZZ",
+		},
+	}
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.content.static",
+		"version":     "test",
+		"rules": []any{
+			map[string]any{
+				"id":           "FACIS-CONTRACT-STATIC-COUNTRY",
+				"title":        "Contract jurisdiction must use an allowed ISO country code",
+				"builtin":      "value_in",
+				"semanticPath": "contract.jurisdiction",
+				"valuesRef":    "ISO 3166-1 alpha-3",
+				"ontologyTerm": "dcs:CountryCode",
+			},
+		},
+	}
 
-	require.Error(t, err)
-	require.Nil(t, findings)
-	require.Contains(t, err.Error(), "contract content policy is required")
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "error"))
+}
+
+func TestAuditContractContentAcceptsAllowedValuesRef(t *testing.T) {
+	contract := map[string]any{
+		"contract": map[string]any{
+			"jurisdiction": "DEU",
+		},
+	}
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.content.static",
+		"version":     "test",
+		"rules": []any{
+			map[string]any{
+				"id":           "FACIS-CONTRACT-STATIC-COUNTRY",
+				"title":        "Contract jurisdiction must use an allowed ISO country code",
+				"builtin":      "value_in",
+				"semanticPath": "contract.jurisdiction",
+				"valuesRef":    "ISO 3166-1 alpha-3",
+				"ontologyTerm": "dcs:CountryCode",
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "info"))
+}
+
+func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
+	contract := map[string]any{
+		"@context": []any{"https://w3id.org/facis/sla/ontology"},
+		"@id":      "urn:facis:dcs:contract:sla:example-001",
+		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
+		"parties": []any{
+			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier"},
+			map[string]any{"@type": "dcs:CompanyParty", "role": "customer"},
+		},
+		"contract": map[string]any{
+			"jurisdiction": "DEU",
+		},
+		"service": map[string]any{
+			"sla": map[string]any{
+				"availability":   99.95,
+				"responseTime":   10,
+				"resolutionTime": 120,
+			},
+		},
+		"signature": map[string]any{
+			"requiredLevel": "AES",
+		},
+	}
+
+	findings, err := AuditContractContent(contract, nil, ContractContentAuditMetadata{})
+	policy, policyErr := normalizeContractContentPolicy(nil, ContractContentAuditMetadata{})
+
+	require.NoError(t, err)
+	require.NoError(t, policyErr)
+	require.NotEmpty(t, policy.SHACLFiles)
+	require.NotEmpty(t, policy.SHACLShapes)
+	require.NotEmpty(t, findings)
+	require.Contains(t, policyFindingRuleIDs(findings), "dcs:ContractShape-PROP-002")
+	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-POLICY-003", "info"))
 }
 
 func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
@@ -168,7 +249,6 @@ func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
 	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-JSONLD-001", "info"))
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "info"))
 	require.False(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
 }

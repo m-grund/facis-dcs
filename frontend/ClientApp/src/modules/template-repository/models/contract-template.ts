@@ -1,4 +1,4 @@
-import type { LegacySemanticOperate, ParameterType, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable, PlaceholderBinding, UiMetadata } from '@/models/semantic/facis-dcs-semantic'
+import type { DcsOperator, ParameterType, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable, PlaceholderBinding, UiMetadata } from '@/models/semantic/facis-dcs-semantic'
 
 export interface DocumentStructure {
     '@context'?: string
@@ -45,26 +45,26 @@ export type SemanticEntityType = string
 export type SemanticEntityRole = string
 
 export const SemanticOperate = {
-    lessThan: 'lessThan',
-    lessThanOrEqual: 'lessThanOrEqual',
-    greaterThan: 'greaterThan',
-    greaterThanOrEqual: 'greaterThanOrEqual',
-    equal: 'equal',
-    notEqual: 'notEqual',
-    between: 'between',
-    contains: 'contains',
-    matchesRegex: 'matchesRegex',
+    lessThan: 'LessThan',
+    lessThanOrEqual: 'LessThanOrEqual',
+    greaterThan: 'GreaterThan',
+    greaterThanOrEqual: 'GreaterThanOrEqual',
+    equal: 'Equals',
+    notEqual: 'NotEquals',
+    between: 'Between',
+    contains: 'Contains',
+    matchesRegex: 'MatchesRegex',
 } as const
 
-export type SemanticOperateType = (typeof SemanticOperate)[keyof typeof SemanticOperate] | LegacySemanticOperate
+export type SemanticOperateType = DcsOperator
 
 export interface SemanticParameterOperator {
   operate: SemanticOperateType
   /**
    * Target could be other parameters or basic value,
    * for example:
-   * { "operate": "greaterThan", "value": "100" }
-   * { "operate": "greaterThan", "value": "{{startDate}}" }
+   * { "operate": "GreaterThan", "value": "100" }
+   * { "operate": "GreaterThan", "value": "{{startDate}}" }
    */
   targets: string[]
 }

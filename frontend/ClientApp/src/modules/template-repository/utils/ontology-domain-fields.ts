@@ -1,4 +1,4 @@
-import ontologyText from '../../../../../../docs/semantic-ontology/ontology/facis-dcs-ontology.ttl?raw'
+import ontologyText from '../../../../../../docs/ontology/facis-sla-ontology.ttl?raw'
 import type {
   DomainFieldDefinition,
   SemanticEntityRole,

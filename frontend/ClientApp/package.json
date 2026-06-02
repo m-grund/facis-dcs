@@ -11,7 +11,8 @@
     "lint": "eslint ./src *.ts",
     "lint:fix": "eslint ./src *.ts --fix",
     "format": "prettier --write .",
-    "format:check": "prettier . --check"
+    "format:check": "prettier . --check",
+    "prepare": "cd ../.. && husky frontend/ClientApp/.husky"
   },
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
@@ -37,6 +38,7 @@
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "~10.9.1",
+    "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",

@@ -3,7 +3,7 @@
 Status: production-near PoC profile  
 Canonical runtime format: JSON-LD  
 Interoperability format: RDF/RDFS/OWL Turtle  
-Validation format: JSON Schema now, SHACL later/externalized  
+Validation format: deterministic backend checks, validation profiles, and SHACL shapes  
 Primary integration points: Template Repository, Contract Workflow Engine, Signature Management, Contract Storage and Archive, Process Audit and Compliance, Node-RED/XFSC orchestration
 
 ## SRS Alignment
@@ -78,9 +78,9 @@ Each step carries the same JSON-LD contract envelope and appends validation,
 signature, deployment, or provenance evidence.
 
 Diagram B - Semantic validation boundary
-Frontend fast checks -> Backend runtime validator -> optional Semantic Hub SHACL
+Frontend fast checks -> Backend runtime validator -> PACM SHACL/profile checks
   -> PACM validation report -> archive evidence hash.
-The workflow never depends on OWL inference; SHACL is an external gate.
+The workflow never depends on OWL inference. Contract content audits load the configured SHACL shapes and validation profiles through `docs/policies/facis-contract-content-audit-policies.json`.
 
 Diagram C - Policy deployment boundary
 Signed contract JSON-LD -> policy bundle extractor -> Node-RED deployment flow
@@ -92,17 +92,18 @@ Signed contract JSON-LD -> policy bundle extractor -> Node-RED deployment flow
 ```text
 docs/semantic-ontology/
   README.md
-  ontology/
-    facis-dcs-ontology.ttl
   shapes/
     facis-dcs-shapes.ttl
+  validation/
+    facis.sla.basic.v1.ttl
   contexts/
     facis-dcs-context.jsonld
   examples/
     sla-template.jsonld
     machine-readable-contract.jsonld
-  types/
-    facis-dcs-semantic.ts
+
+docs/ontology/
+  facis-sla-ontology.ttl
 ```
 
 Recommended future implementation modules:
@@ -124,16 +125,16 @@ The profile is intentionally small:
 | Decision | Rationale |
 | --- | --- |
 | JSON-LD-first | Existing APIs already expose JSON payloads. JSON-LD adds semantics without changing Goa endpoints. |
-| Additive profile | `semanticConditions`, `templateDataJSON`, `contract_data`, and `change_request` remain compatible. |
+| Additive profile | `semanticConditions`, `templateDataJSON`, `contract_data`, and `change_request` remain part of the current profile. |
 | Shallow RDFS/OWL | Classes and properties document meaning. Runtime validation uses deterministic checks. |
-| SHACL-ready | Shapes are separate and can run in Semantic Hub/PACM or CI, not inside critical workflow paths. |
+| SHACL-ready | Shapes are separate validation assets and are loaded by PACM contract content audits or external Semantic Hub/CI checks. |
 | Clause-level versioning | Contract adjustments can target `Clause`/`documentBlocks.blockId` without regenerating the whole contract. |
 | Workflow-aware | Lifecycle, approvals, negotiation, signing, deployment, archive, and revocation are first-class events. |
 | Policy-ready | Rules can be exported as ODRL-like constraints or target-specific policy bundles. |
 
-## 4. OWL/RDFS Turtle Ontologie
+## 4. Turtle SLA/DCS Ontologie
 
-The ontology is in [facis-dcs-ontology.ttl](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/ontology/facis-dcs-ontology.ttl). It declares the required classes:
+The merged runtime ontology is in [facis-sla-ontology.ttl](../ontology/facis-sla-ontology.ttl). It combines the DCS contract/template vocabulary with the SLA-specific vocabulary and declares the required classes:
 
 Core: `Contract`, `ContractTemplate`, `ContractObject`, `ContractVersion`, `Clause`, `Section`, `ContractCondition`, `SemanticCondition`.
 
@@ -151,7 +152,7 @@ Domain catalogue and constraints: `DomainField`, `ValueConstraint`, `CountryCode
 
 ## 5. JSON-LD Context
 
-The runtime context is in [facis-dcs-context.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/contexts/facis-dcs-context.jsonld). The profile uses compact DCS field names already close to the current frontend/backend model:
+The runtime context is in [facis-dcs-context.jsonld](contexts/facis-dcs-context.jsonld). The profile uses compact DCS field names already close to the current frontend/backend model:
 
 ```json
 {
@@ -182,7 +183,7 @@ Current DCS payload:
       "type": "decimal",
       "isRequired": true,
       "operators": [
-        { "operate": "greaterThanOrEqual", "targets": ["99.95"] }
+        { "operate": "GreaterThanOrEqual", "targets": ["99.95"] }
       ],
       "value": null
     }
@@ -201,22 +202,10 @@ Semantic mapping:
 | `parameterName` | `dcs:parameterName` | Also used by placeholders. |
 | `type` | `dcs:parameterType` | `string`, `decimal`, `integer`, `boolean`, `date`, `enum`. |
 | `isRequired` | `dcs:required` | Boolean validation flag. |
-| `operators[]` | `dcs:Constraint` / `dcs:Operator` | Existing values are normalized to ontology operators. |
+| `operators[]` | `dcs:Constraint` / `dcs:Operator` | Use canonical ontology operators such as `Equals`, `GreaterThanOrEqual`, or `MatchesRegex`. |
 | `targets[]` | `dcs:rightOperand` | Literal or placeholder reference, e.g. `{{contractEndDate}}`. |
 | `semanticConditionValues[]` | `dcs:ParameterValue` | Contract instance values keyed by `blockId`, `conditionId`, `parameterName`. |
 | `documentBlocks[].conditionIds` | `dcs:appliesToClause` | Links a semantic rule to a clause. |
-
-Operator compatibility:
-
-| Current operator | Ontology operator |
-| --- | --- |
-| `equal` | `Equals` |
-| `notEqual` | `NotEquals` |
-| `greaterThan` | `GreaterThan` |
-| `greaterThanOrEqual` | `GreaterThanOrEqual` |
-| `lessThan` | `LessThan` |
-| `lessThanOrEqual` | `LessThanOrEqual` |
-| new | `Between`, `Contains`, `MatchesRegex` |
 
 ## 7. Beispiel-Regeln
 
@@ -273,7 +262,7 @@ Evaluation contract:
 
 ## 8. Beispiel-SLA-Template
 
-See [sla-template.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/examples/sla-template.jsonld). The example models:
+See [sla-template.jsonld](examples/sla-template.jsonld). The example models:
 
 | Template element | Representation |
 | --- | --- |
@@ -290,11 +279,11 @@ See [sla-template.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-on
 
 ## 9. Beispiel-Machine-readable-Contract
 
-See [machine-readable-contract.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/examples/machine-readable-contract.jsonld). The instance shows:
+See [machine-readable-contract.jsonld](examples/machine-readable-contract.jsonld). The instance shows:
 
 | Concern | Field |
 | --- | --- |
-| Current DB compatibility | `did`, `contractVersion`, `state`, `contractData` |
+| Stored DCS fields | `did`, `contractVersion`, `state`, `contractData` |
 | Template traceability | `derivedFromTemplate`, `templateVersion` |
 | Clause-level versioning | `contractVersions[].changedClauses[]`, `clauses[].version` |
 | Semantic conditions | `contractData.semanticConditions` and `semanticConditionValues` |
@@ -305,18 +294,18 @@ See [machine-readable-contract.jsonld](/c:/Work/Projects/facis_dcs/facis-dcs/doc
 
 ## 10. SHACL-Strategie
 
-SHACL is optional and externalized:
+SHACL is a separate validation asset:
 
 | Phase | Validation mechanism |
 | --- | --- |
 | Template authoring | Fast frontend checks, TypeScript types, and JSON Schema-like validation. |
-| Template verification | Semantic Hub runs JSON-LD parsing plus SHACL shapes. |
+| Template verification | Semantic Hub or CI runs JSON-LD parsing plus SHACL shapes. |
 | Contract creation | Backend validates required parameters, placeholder bindings, and rule syntax. |
-| Review/approval | PACM can run SHACL and policy checks and return findings. |
+| Review/approval | PACM runs configured SHACL and profile checks and returns findings. |
 | Pre-deployment | Blocking validation before deployment payload is sent. |
 | Archive | Persist validation report hash and evidence. |
 
-The starter shapes are in [facis-dcs-shapes.ttl](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/shapes/facis-dcs-shapes.ttl).
+The starter shapes are in [facis-dcs-shapes.ttl](shapes/facis-dcs-shapes.ttl). The active contract content audit manifest is [facis-contract-content-audit-policies.json](../policies/facis-contract-content-audit-policies.json), which references these shapes and [facis.sla.basic.v1.ttl](validation/facis.sla.basic.v1.ttl).
 
 ## 11. Repository-Struktur
 
@@ -341,7 +330,7 @@ deployment/node-red/src/engine
 
 ## 12. TypeScript Interfaces
 
-See [facis-dcs-semantic.ts](/c:/Work/Projects/facis_dcs/facis-dcs/docs/semantic-ontology/types/facis-dcs-semantic.ts). These types are designed to extend the existing frontend interfaces:
+See the active frontend model [facis-dcs-semantic.ts](../../frontend/ClientApp/src/models/semantic/facis-dcs-semantic.ts). These types extend the existing frontend interfaces:
 
 ```ts
 type ContractData = ExistingContractData & SemanticContractDataExtension
@@ -631,3 +620,8 @@ WHERE contract_data @? '$.sla.services[*].slos[*] ? (@.sloType == "availability"
 5. Emit semantic NATS/CloudEvents for validation, lifecycle, signing, deployment, and revocation.
 6. Export deployment policy bundles from approved/signed contracts.
 7. Add optional SHACL validation in PACM/CI once RDF expansion is operational.
+docs/ontology/
+  facis-sla-ontology.ttl
+```
+
+```text

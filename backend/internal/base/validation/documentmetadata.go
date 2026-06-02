@@ -10,7 +10,7 @@ const (
 	SchemaServiceV1           = "facis.dcs.service.v1"
 	SchemaSignatureV1         = "facis.dcs.signature.v1"
 	SchemaJSONLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
-	SchemaOntologyV1          = "https://w3id.org/facis/dcs/ontology/v1"
+	SchemaOntologyV1          = "https://w3id.org/facis/sla/ontology"
 	SchemaSHACLShapesV1       = "https://w3id.org/facis/dcs/shapes/v1"
 	SemanticProfileName       = "FACIS DCS Semantic Contract Profile"
 	SemanticProfileVersionV1  = "v1"

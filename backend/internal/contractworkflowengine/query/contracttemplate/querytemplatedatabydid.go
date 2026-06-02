@@ -3,10 +3,6 @@ package contracttemplate
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/validation"
-	"digital-contracting-service/internal/contractworkflowengine/db"
-	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +10,11 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
+	"digital-contracting-service/internal/contractworkflowengine/db"
+	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 )
 
 type GetTemplateDataByDIDQry struct {

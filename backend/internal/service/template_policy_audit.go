@@ -20,7 +20,6 @@ func templatePolicyFindingEventData(finding validation.PolicyFinding, template *
 		"path":          finding.Path,
 		"semanticPath":  finding.SemanticPath,
 		"ontologyTerm":  finding.OntologyTerm,
-		"requirement":   finding.Requirement,
 	}
 	if template == nil {
 		return data
@@ -51,7 +50,6 @@ func contractContentPolicyFindingEventData(finding validation.PolicyFinding, met
 		"path":            finding.Path,
 		"semanticPath":    finding.SemanticPath,
 		"ontologyTerm":    finding.OntologyTerm,
-		"requirement":     finding.Requirement,
 		"objectType":      "contract",
 		"objectDid":       metadata.ContractDID,
 		"contractVersion": metadata.ContractVersion,
@@ -89,7 +87,6 @@ func templateApprovalProvenanceFindingEventData(finding validation.PolicyFinding
 		"path":          finding.Path,
 		"semanticPath":  finding.SemanticPath,
 		"ontologyTerm":  finding.OntologyTerm,
-		"requirement":   finding.Requirement,
 		"objectType":    "contractTemplate",
 		"objectDid":     did,
 	}

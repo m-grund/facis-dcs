@@ -74,7 +74,7 @@
                     "isRequired": false,
                     "operators": [
                         {
-                            "operate": "lessThanOrEqual",
+                            "operate": "LessThanOrEqual",
                             "targets": [
                                 "{{sc-001.start date}}"
                             ]

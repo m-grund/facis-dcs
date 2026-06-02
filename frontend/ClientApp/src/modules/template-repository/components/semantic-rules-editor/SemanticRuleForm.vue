@@ -17,31 +17,6 @@
       <p v-if="isRuleNameDuplicate" class="mt-0.5 text-xs text-error">Rule name already exists.</p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div>
-        <label class="label-text text-xs text-base-content/60 block mb-1">Entity type</label>
-        <select v-model="newCondition.entityType" class="select select-bordered select-sm w-full">
-          <option value="">None</option>
-          <option v-for="option in entityTypeOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </div>
-      <div>
-        <label class="label-text text-xs text-base-content/60 block mb-1">Entity role</label>
-        <select
-          v-model="newCondition.entityRole"
-          class="select select-bordered select-sm w-full"
-          :disabled="!isPartyEntityType(newCondition.entityType)"
-        >
-          <option value="">None</option>
-          <option v-for="option in entityRoleOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </div>
-    </div>
-
     <div class="space-y-4">
       <p class="label-text mb-1 text-xs text-base-content/60">Parameters</p>
       <div
@@ -171,13 +146,13 @@
           <li v-for="(param, idx) in newCondition.parameters" :key="idx"
             class="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-base-100 border border-base-300">
             <span class="font-mono text-sm font-medium border border-base-300 rounded px-2 py-0.5 bg-base-200/50">{{
-              param.parameterName }}</span>
+              semanticParameterLabel(param) }}</span>
             <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
             <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">fixed: {{ param.fixedValue }}</span>
             <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
               {{ formatValueConstraint(param.valueConstraint) }}
             </span>
-            <span class="badge badge-ghost badge-sm">{{ param.type }}</span>
+            <span class="badge badge-ghost badge-sm">{{ semanticParameterTypeLabel(param.type) }}</span>
             <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
             <button
               type="button"
@@ -214,11 +189,10 @@ import {
   type SemanticEntityType,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
-import {
-  ONTOLOGY_DOMAIN_FIELDS,
-  ONTOLOGY_ENTITY_ROLES,
-  ONTOLOGY_ENTITY_TYPES,
-} from '@/modules/template-repository/utils/ontology-domain-fields'
+import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
+import { ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS } from '@/modules/template-repository/utils/ontology-domain-types'
+import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
+import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
 type DraftConditionPayload = NewConditionPayload & {
@@ -239,18 +213,23 @@ const emit = defineEmits<{
 }>()
 
 function defaultParam(): SemanticConditionParameter {
-  const defaultField = ONTOLOGY_DOMAIN_FIELDS[0]!
+  const defaultField = semanticRuleDomainFields[0] ?? ONTOLOGY_DOMAIN_FIELDS[0]!
   return {
     parameterName: '',
     type: defaultField.type,
     schemaRef: defaultField.schemaRef,
     semanticPath: defaultField.semanticPath,
     valueConstraint: cloneValueConstraint(defaultField.valueConstraint),
+    uiMetadata: { label: defaultField.label },
     isRequired: true,
     operators: [],
     value: undefined,
   }
 }
+
+const semanticRuleDomainFields = ONTOLOGY_DOMAIN_FIELDS.filter(
+  (field) => !ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS.has(field.semanticPath),
+)
 
 function getDefaultNewCondition(): DraftConditionPayload {
   return {
@@ -271,19 +250,14 @@ const showDomainFieldOptions = ref(false)
 const isEditMode = computed(() => props.mode === 'edit')
 const formTitle = computed(() => (isEditMode.value ? 'Edit rule' : 'New rule'))
 const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rule'))
-const entityTypeOptions = computed(() => ONTOLOGY_ENTITY_TYPES)
-const entityRoleOptions = computed(() => ONTOLOGY_ENTITY_ROLES)
 const selectedDomainField = computed(() =>
-  ONTOLOGY_DOMAIN_FIELDS.find((field) => field.semanticPath === selectedDomainPath.value),
+  semanticRuleDomainFields.find((field) => field.semanticPath === selectedDomainPath.value),
 )
-const fixedValueOptions = computed(() => selectedDomainField.value?.valueConstraint?.allowedValues ?? [])
+const fixedValueOptions = computed(() => resolveAllowedValues(selectedDomainField.value?.valueConstraint))
 const fixedValueError = computed(() => validateDraftFixedValue())
-const selectableDomainFields = computed(() =>
-  ONTOLOGY_DOMAIN_FIELDS.filter((field) => domainFieldAllowedForEntityType(field.semanticPath, newCondition.value.entityType)),
-)
 const groupedDomainFields = computed(() => {
   const query = domainFieldSearch.value.trim().toLowerCase()
-  const filtered = selectableDomainFields.value.filter((field) => {
+  const filtered = semanticRuleDomainFields.filter((field) => {
     if (!query) return true
     return [
       field.label,
@@ -325,8 +299,8 @@ watch(
     newCondition.value = {
       conditionName: props.initialCondition.conditionName,
       schemaVersion: props.initialCondition.schemaVersion,
-      entityType: normalizeEntityTypeForForm(props.initialCondition.entityType),
-      entityRole: normalizeEntityRoleForForm(props.initialCondition.entityRole, props.initialCondition.entityType),
+      entityType: props.initialCondition.entityType ?? '',
+      entityRole: props.initialCondition.entityRole ?? '',
       parameters: props.initialCondition.parameters.map((p) => ({ ...p, valueConstraint: cloneValueConstraint(p.valueConstraint) })),
     }
     draftParameter.value = defaultParam()
@@ -339,7 +313,7 @@ watch(
 )
 
 watch(selectedDomainPath, (path) => {
-  const field = ONTOLOGY_DOMAIN_FIELDS.find((item) => item.semanticPath === path)
+  const field = semanticRuleDomainFields.find((item) => item.semanticPath === path)
   if (!field) {
     draftParameter.value = defaultParam()
     return
@@ -350,25 +324,12 @@ watch(selectedDomainPath, (path) => {
     schemaRef: field.schemaRef,
     semanticPath: field.semanticPath,
     valueConstraint: cloneValueConstraint(field.valueConstraint),
+    uiMetadata: { label: field.label },
     type: field.type,
   }
   domainFieldSearch.value = formatDomainFieldLabel(field)
   draftFixedValue.value = ''
 })
-
-watch(
-  () => newCondition.value.entityType,
-  (entityType) => {
-    if (!isPartyEntityType(entityType)) newCondition.value.entityRole = ''
-    if (selectedDomainField.value && !domainFieldAllowedForEntityType(selectedDomainField.value.semanticPath, entityType)) {
-      draftParameter.value = defaultParam()
-      draftFixedValue.value = ''
-      selectedDomainPath.value = ''
-      domainFieldSearch.value = ''
-      showDomainFieldOptions.value = false
-    }
-  },
-)
 
 function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
   if (!constraint) return undefined
@@ -393,19 +354,8 @@ function formatDomainFieldLabel(field: (typeof ONTOLOGY_DOMAIN_FIELDS)[number]) 
 }
 
 function selectDomainField(path: DomainSemanticPath) {
-  if (!domainFieldAllowedForEntityType(path, newCondition.value.entityType)) return
   selectedDomainPath.value = path
   showDomainFieldOptions.value = false
-}
-
-function domainFieldAllowedForEntityType(path: DomainSemanticPath, entityType: string): boolean {
-  const isPartyField = path === 'company' || path.startsWith('company.')
-  if (isPartyEntityType(entityType)) return isPartyField
-  return !isPartyField
-}
-
-function isPartyEntityType(entityType: string): boolean {
-  return entityType === 'CompanyParty'
 }
 
 function handleDomainFieldInput() {
@@ -544,28 +494,4 @@ function validateDraftFixedValue(): string {
   return ''
 }
 
-function normalizeEntityTypeForForm(value?: string): SemanticEntityType {
-  const normalized = (value ?? '').trim().toLowerCase()
-  if (!normalized) return ''
-  const exactOption = entityTypeOptions.value.find((option) => option.value.toLowerCase() === normalized)
-  if (exactOption) return exactOption.value
-  if (normalized.endsWith('#party')) return 'Party'
-  if (normalized.endsWith('#company')) return 'Company'
-  if (entityRoleOptions.value.some((option) => option.value.toLowerCase() === normalized)) return 'Party'
-  return ''
-}
-
-function normalizeEntityRoleForForm(value?: string, entityType?: string): SemanticEntityRole {
-  const normalized = (value ?? entityType ?? '').trim().toLowerCase()
-  if (!normalized || normalized === 'party' || normalized === 'company' || normalized.endsWith('#party')) return ''
-  const exactOption = entityRoleOptions.value.find((option) => option.value.toLowerCase() === normalized)
-  if (exactOption) return exactOption.value
-  if (normalized.endsWith('#role-customer')) return roleOptionValue('customer')
-  if (normalized.endsWith('#role-provider')) return roleOptionValue('provider')
-  return ''
-}
-
-function roleOptionValue(value: string): SemanticEntityRole {
-  return entityRoleOptions.value.find((option) => option.value === value)?.value ?? ''
-}
 </script>

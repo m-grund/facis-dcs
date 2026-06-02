@@ -36,7 +36,7 @@ facisv:AvailabilitySLORequiredShape a sh:NodeShape ;
   facisv:ruleType "required_fields" ;
   sh:severity sh:Violation ;
   sh:message "Availability SLO is incomplete." ;
-  facisv:where "@type=dcs:ServiceLevelObjective" ;
+  facisv:where "@type=dcs:SLO" ;
   facisv:requiredField "availability" .
 
 facisv:PaymentRequiredShape a sh:NodeShape ;
@@ -60,3 +60,63 @@ facisv:PaymentAmountPositiveShape a sh:NodeShape ;
   facisv:target "amount" ;
   facisv:operator "gt" ;
   facisv:value 0 .
+
+facisv:ContractJurisdictionAllowedShape a sh:NodeShape ;
+  facisv:profile facisv:SLABasicProfile ;
+  facisv:ruleId "FACIS-CONTRACT-POLICY-002" ;
+  facisv:ruleType "value_in" ;
+  sh:severity sh:Violation ;
+  sh:message "Contract jurisdiction must be allowed." ;
+  facisv:target "contract.jurisdiction" ;
+  facisv:allowedValue "DEU" ;
+  facisv:allowedValue "AUT" ;
+  facisv:allowedValue "CHE" ;
+  facisv:allowedValue "FRA" ;
+  facisv:allowedValue "NLD" ;
+  facisv:allowedValue "BEL" ;
+  facisv:allowedValue "LUX" ;
+  facisv:allowedValue "POL" ;
+  facisv:allowedValue "CZE" ;
+  facisv:allowedValue "ESP" ;
+  facisv:allowedValue "ITA" ;
+  facisv:allowedValue "GBR" ;
+  facisv:allowedValue "USA" .
+
+facisv:ServiceAvailabilityMinimumShape a sh:NodeShape ;
+  facisv:profile facisv:SLABasicProfile ;
+  facisv:ruleId "FACIS-CONTRACT-POLICY-003" ;
+  facisv:ruleType "comparison" ;
+  sh:severity sh:Violation ;
+  sh:message "Service availability must satisfy policy minimum." ;
+  facisv:target "service.sla.availability" ;
+  facisv:operator "gte" ;
+  facisv:value 99.9 .
+
+facisv:ServiceResponseTimeMaximumShape a sh:NodeShape ;
+  facisv:profile facisv:SLABasicProfile ;
+  facisv:ruleId "FACIS-CONTRACT-POLICY-004" ;
+  facisv:ruleType "comparison" ;
+  sh:severity sh:Violation ;
+  sh:message "Service response time must satisfy policy maximum." ;
+  facisv:target "service.sla.responseTime" ;
+  facisv:operator "lte" ;
+  facisv:value 15 .
+
+facisv:ServiceResolutionTimeMaximumShape a sh:NodeShape ;
+  facisv:profile facisv:SLABasicProfile ;
+  facisv:ruleId "FACIS-CONTRACT-POLICY-005" ;
+  facisv:ruleType "comparison" ;
+  sh:severity sh:Violation ;
+  sh:message "Service resolution time must satisfy policy maximum." ;
+  facisv:target "service.sla.resolutionTime" ;
+  facisv:operator "lte" ;
+  facisv:value 240 .
+
+facisv:SignatureLevelMinimumShape a sh:NodeShape ;
+  facisv:profile facisv:SLABasicProfile ;
+  facisv:ruleId "FACIS-CONTRACT-POLICY-006" ;
+  facisv:ruleType "signature_level_at_least" ;
+  sh:severity sh:Violation ;
+  sh:message "Signature level must satisfy policy." ;
+  facisv:target "signature.requiredLevel" ;
+  facisv:value "AES" .

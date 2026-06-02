@@ -16,7 +16,7 @@ export const FACIS_DCS_SEMANTIC_PROFILE: SemanticProfile = {
   name: 'FACIS DCS Semantic Contract Profile',
   version: 'v1',
   context: 'https://w3id.org/facis/dcs/context/v1',
-  ontology: 'https://w3id.org/facis/dcs/ontology/v1',
+  ontology: 'https://w3id.org/facis/sla/ontology',
   shapes: 'https://w3id.org/facis/dcs/shapes/v1',
 }
 
@@ -30,29 +30,6 @@ export type DcsOperator =
   | 'Between'
   | 'Contains'
   | 'MatchesRegex'
-
-export type LegacySemanticOperate =
-  | 'equal'
-  | 'notEqual'
-  | 'greaterThan'
-  | 'greaterThanOrEqual'
-  | 'lessThan'
-  | 'lessThanOrEqual'
-  | 'between'
-  | 'contains'
-  | 'matchesRegex'
-
-export const LEGACY_OPERATOR_TO_DCS: Record<LegacySemanticOperate, DcsOperator> = {
-  equal: 'Equals',
-  notEqual: 'NotEquals',
-  greaterThan: 'GreaterThan',
-  greaterThanOrEqual: 'GreaterThanOrEqual',
-  lessThan: 'LessThan',
-  lessThanOrEqual: 'LessThanOrEqual',
-  between: 'Between',
-  contains: 'Contains',
-  matchesRegex: 'MatchesRegex',
-}
 
 export interface UiMetadata {
   label?: string
@@ -213,7 +190,7 @@ type SemanticConditionLike = {
     type: ParameterType
     isRequired?: boolean
     fixedValue?: unknown
-    operators?: Array<{ operate: LegacySemanticOperate | string; targets?: string[] } | LegacySemanticOperate | string>
+    operators?: Array<{ operate: DcsOperator; targets?: string[] } | DcsOperator>
   }[]
 }
 
@@ -316,8 +293,7 @@ export function buildSemanticRulesFromConditions(
 }
 
 export function normalizeSemanticOperator(value: string): DcsOperator | null {
-  if (isDcsOperator(value)) return value
-  return LEGACY_OPERATOR_TO_DCS[value as LegacySemanticOperate] ?? null
+  return isDcsOperator(value) ? value : null
 }
 
 function isDcsOperator(value: string): value is DcsOperator {

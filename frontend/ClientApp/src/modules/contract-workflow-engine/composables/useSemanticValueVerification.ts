@@ -12,6 +12,7 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
+import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 
 export interface VerificationResult {
   isValid: boolean
@@ -130,9 +131,10 @@ export function useSemanticValueVerification() {
 
   function validateValueConstraint(value: string | number | boolean, constraint?: SemanticValueConstraint): string | null {
     if (!constraint) return null
-    if (constraint.allowedValues?.length) {
-      if (typeof value !== 'string' || !constraint.allowedValues.includes(value)) {
-        return `Expected one of: ${constraint.allowedValues.join(', ')}.`
+    const allowedValues = resolveAllowedValues(constraint)
+    if (allowedValues.length) {
+      if (typeof value !== 'string' || !allowedValues.includes(value)) {
+        return `Expected one of: ${allowedValues.join(', ')}.`
       }
     }
     if (constraint.pattern) {

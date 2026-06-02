@@ -2,6 +2,7 @@ import http from '@/api/http'
 import type { AuditRequest } from '@/models/requests/auditing-request'
 import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/responses/auditing-response'
 import type { AuditingService } from '@/models/services/auditing-service'
+import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 
 type RawAuditTrailEntry = {
   id?: number | string
@@ -78,7 +79,7 @@ function normalizeFinding(
   return {
     id: useFallbackId ? fallbackId : item.id ?? fallbackId,
     category,
-    title: item.title ?? stringValue(policyData?.title) ?? eventType ?? 'Audit finding',
+    title: item.title ?? stringValue(policyData?.title) ?? contractAuditEventDisplayText(eventType, eventData),
     description: item.description ?? descriptionFromEventData(eventData),
     component: item.component ?? fallbackComponent,
     status,
@@ -92,7 +93,7 @@ function normalizeFinding(
 
 function categoryFromEvent(eventType?: string, severity?: string): AuditFinding['category'] {
   const normalizedSeverity = severity?.trim().toLowerCase()
-  if (normalizedSeverity === 'error' || normalizedSeverity === 'critical' || normalizedSeverity === 'failed') {
+  if (normalizedSeverity === 'error' || normalizedSeverity === 'critical' || normalizedSeverity === 'blocking' || normalizedSeverity === 'failed') {
     return 'violation'
   }
   if (normalizedSeverity === 'warning' || normalizedSeverity === 'warn') {

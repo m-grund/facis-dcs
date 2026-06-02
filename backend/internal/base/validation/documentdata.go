@@ -44,9 +44,9 @@ func (constraint *valueConstraint) asMap() map[string]any {
 	if constraint.Pattern != "" {
 		result["pattern"] = constraint.Pattern
 	}
-	if len(constraint.AllowedValues) > 0 {
-		values := make([]any, len(constraint.AllowedValues))
-		for i, value := range constraint.AllowedValues {
+	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
+		values := make([]any, len(allowedValues))
+		for i, value := range allowedValues {
 			values[i] = value
 		}
 		result["allowedValues"] = values
@@ -77,6 +77,9 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	}
 	normalizeTemplateMetadata(data)
 	if err := validateCommonStructure(data); err != nil {
+		return nil, err
+	}
+	if err := validateSemanticRules(data); err != nil {
 		return nil, err
 	}
 	if err := validateSchemaRefs(data, true); err != nil {
@@ -121,6 +124,9 @@ func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*dat
 		return nil, err
 	}
 	normalizeContractSemanticRuntime(data)
+	if err := validateSemanticRules(data); err != nil {
+		return nil, err
+	}
 	if err := validateContractSemanticsData(data, requireSemanticValues); err != nil {
 		return nil, err
 	}
@@ -141,8 +147,7 @@ func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, require
 }
 
 // BuildContractStatements derives machine-readable contract statements from
-// semantic condition values. The input may use canonical ontology URIs or legacy
-// dot-path semanticPath aliases.
+// semantic condition values.
 func BuildContractStatements(raw *datatype.JSON) ([]map[string]any, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
@@ -526,24 +531,6 @@ func normalizeSemanticOperator(value string) string {
 	switch value {
 	case "Equals", "NotEquals", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "Between", "Contains", "MatchesRegex":
 		return value
-	case "equal":
-		return "Equals"
-	case "notEqual":
-		return "NotEquals"
-	case "greaterThan":
-		return "GreaterThan"
-	case "greaterThanOrEqual":
-		return "GreaterThanOrEqual"
-	case "lessThan":
-		return "LessThan"
-	case "lessThanOrEqual":
-		return "LessThanOrEqual"
-	case "between":
-		return "Between"
-	case "contains":
-		return "Contains"
-	case "matchesRegex":
-		return "MatchesRegex"
 	default:
 		return ""
 	}
@@ -903,6 +890,25 @@ func validateContractSemanticsData(data documentData, requireCompleteStatements 
 	if requireCompleteStatements && hasContractStatementIntent(data) {
 		if err := validateContractStatementCompleteness(data); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateSemanticRules(data documentData) error {
+	rules, ok := asArray(data["semanticRules"])
+	if !ok {
+		return errors.New("semanticRules must be an array")
+	}
+	for _, item := range rules {
+		rule, ok := item.(map[string]any)
+		if !ok {
+			return errors.New("semanticRules entries must be objects")
+		}
+		ruleID, _ := rule["ruleId"].(string)
+		operator, _ := rule[semanticRuleOperatorProperty].(string)
+		if normalizeSemanticOperator(operator) == "" {
+			return fmt.Errorf("semantic rule %q uses unsupported semantic rule operator %q", ruleID, operator)
 		}
 	}
 	return nil
@@ -1490,10 +1496,10 @@ func valueMatchesType(value any, paramType string) bool {
 }
 
 func valueMatchesConstraint(value any, constraint *valueConstraint) error {
-	if len(constraint.AllowedValues) > 0 {
+	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
 		text, ok := value.(string)
-		if !ok || !containsString(constraint.AllowedValues, text) {
-			return fmt.Errorf("expected one of %s", strings.Join(constraint.AllowedValues, ", "))
+		if !ok || !containsString(allowedValues, text) {
+			return fmt.Errorf("expected one of %s", strings.Join(allowedValues, ", "))
 		}
 	}
 	if constraint.Pattern != "" {

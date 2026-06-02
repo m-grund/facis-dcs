@@ -43,7 +43,6 @@ type templatePolicyRule struct {
 	Title        string         `json:"title"`
 	Severity     string         `json:"severity"`
 	Builtin      string         `json:"builtin"`
-	Requirement  string         `json:"requirement"`
 	OntologyTerm string         `json:"ontologyTerm"`
 	Parameters   map[string]any `json:"parameters"`
 }
@@ -61,7 +60,6 @@ func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetad
 				Message:       err.Error(),
 				Path:          "template_data",
 				OntologyTerm:  "dcs:DocumentStructure",
-				Requirement:   "DCS-IR-TR-03",
 			},
 		}, nil
 	}
@@ -329,6 +327,5 @@ func newPolicyFinding(policySet *templatePolicySet, rule templatePolicyRule, mes
 		Path:          path,
 		SemanticPath:  semanticPath,
 		OntologyTerm:  rule.OntologyTerm,
-		Requirement:   rule.Requirement,
 	}
 }
