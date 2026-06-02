@@ -111,15 +111,33 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 }
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
-	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
-        FROM contracts_effective_metadata
-    `
 	var cts []db.ContractMetadata
-	err := tx.SelectContext(ctx, &cts, query)
-	if err != nil {
-		return []db.ContractMetadata{}, err
+
+	query := `
+    SELECT did, state, name, description, created_by, created_at, updated_at,
+           contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+    FROM contracts_effective_metadata
+    ORDER BY created_at DESC
+`
+
+	if pagination.PageSize > 0 {
+		offset := (pagination.StartIndex - 1) * pagination.PageSize
+		query += ` LIMIT :page_size OFFSET :offset`
+
+		err := tx.SelectContext(ctx, &cts, query,
+			sql.Named("page_size", pagination.PageSize),
+			sql.Named("offset", offset),
+		)
+		if err != nil {
+			return []db.ContractMetadata{}, err
+		}
+	} else {
+		err := tx.SelectContext(ctx, &cts, query)
+		if err != nil {
+			return []db.ContractMetadata{}, err
+		}
 	}
+
 	return cts, nil
 }
 
