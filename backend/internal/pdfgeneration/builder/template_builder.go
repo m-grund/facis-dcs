@@ -49,7 +49,7 @@ func BuildTemplate(in TemplateInput) ([]byte, error) {
 		f.SetAttachments([]fpdf.Attachment{
 			{
 				Content:     in.TemplateData,
-				Filename:    "contract.jsonld",
+				Filename:    "template.jsonld",
 				Description: "Machine-readable JSON-LD source for this template",
 			},
 		})
