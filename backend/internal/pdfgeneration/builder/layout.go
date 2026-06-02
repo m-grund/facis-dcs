@@ -53,6 +53,7 @@ func newBase() *fpdf.Fpdf {
 		Size:       fpdf.SizeType{Wd: pageWidth, Ht: pageHeight},
 		FontDirStr: "",
 	})
+	semanticReset(f)
 	f.SetMargins(marginLeft, marginTop, marginRight)
 	f.SetAutoPageBreak(true, marginBottom)
 	f.SetProducer(producer, false)
@@ -74,12 +75,16 @@ func newBase() *fpdf.Fpdf {
 func renderHeader(f *fpdf.Fpdf, title, did, state string) {
 	f.SetFont(fontFamily, fontBold, sizeTitle)
 	f.SetTextColor(30, 30, 30)
-	f.CellFormat(bodyWidth, 10, title, "", 1, "L", false, 0, "")
+	semanticWithTag(f, "H1", func() {
+		f.CellFormat(bodyWidth, 10, title, "", 1, "L", false, 0, "")
+	})
 
 	f.SetFont(fontFamily, fontRegular, sizeSmall)
 	f.SetTextColor(100, 100, 100)
-	f.CellFormat(bodyWidth/2, 5, "DID: "+did, "", 0, "L", false, 0, "")
-	f.CellFormat(bodyWidth/2, 5, "Status: "+state, "", 1, "R", false, 0, "")
+	semanticWithTag(f, "P", func() {
+		f.CellFormat(bodyWidth/2, 5, "DID: "+did, "", 0, "L", false, 0, "")
+		f.CellFormat(bodyWidth/2, 5, "Status: "+state, "", 1, "R", false, 0, "")
+	})
 	f.Ln(3)
 
 	// Horizontal rule
@@ -95,15 +100,19 @@ func renderHeader(f *fpdf.Fpdf, title, did, state string) {
 func renderSection(f *fpdf.Fpdf, heading string) {
 	f.SetFont(fontFamily, fontBold, sizeHeading)
 	f.Ln(3)
-	f.CellFormat(bodyWidth, 7, heading, "", 1, "L", false, 0, "")
+	semanticWithTag(f, "H2", func() {
+		f.CellFormat(bodyWidth, 7, heading, "", 1, "L", false, 0, "")
+	})
 }
 
 // renderKV renders a key-value row.
 func renderKV(f *fpdf.Fpdf, key, value string) {
-	f.SetFont(fontFamily, fontBold, sizeBody)
-	f.CellFormat(50, lineHeight, key+":", "", 0, "L", false, 0, "")
-	f.SetFont(fontFamily, fontRegular, sizeBody)
-	f.MultiCell(bodyWidth-50, lineHeight, value, "", "L", false)
+	semanticWithTag(f, "P", func() {
+		f.SetFont(fontFamily, fontBold, sizeBody)
+		f.CellFormat(50, lineHeight, key+":", "", 0, "L", false, 0, "")
+		f.SetFont(fontFamily, fontRegular, sizeBody)
+		f.MultiCell(bodyWidth-50, lineHeight, value, "", "L", false)
+	})
 }
 
 // registerFooter adds page number footer to every page via SetFooterFunc.
@@ -112,7 +121,9 @@ func registerFooter(f *fpdf.Fpdf) {
 		f.SetY(-15)
 		f.SetFont(fontFamily, fontRegular, sizeSmall)
 		f.SetTextColor(150, 150, 150)
-		f.CellFormat(0, 10, strconv.Itoa(f.PageNo()), "", 0, "C", false, 0, "")
+		semanticArtifact(f, func() {
+			f.CellFormat(0, 10, strconv.Itoa(f.PageNo()), "", 0, "C", false, 0, "")
+		})
 	})
 }
 

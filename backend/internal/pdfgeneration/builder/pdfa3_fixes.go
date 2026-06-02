@@ -106,6 +106,24 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 	iccObjNum := maxObjNum + 1
 	outputIntentObjNum := maxObjNum + 2
 
+	taggedPages, err := buildTaggedPageUpdates(xrt)
+	if err != nil {
+		return nil, err
+	}
+	nextObjNum := outputIntentObjNum + 1
+
+	structTreeRootObjNum := nextObjNum
+	docStructElemObjNum := nextObjNum + 1
+	parentTreeObjNum := nextObjNum + 2
+	nextObjNum += 3
+	for i := range taggedPages {
+		taggedPages[i].structElemObjNums = make([]int, len(taggedPages[i].markers))
+		for j := range taggedPages[i].markers {
+			taggedPages[i].structElemObjNums[j] = nextObjNum
+			nextObjNum++
+		}
+	}
+
 	catDict, err := xrt.Catalog()
 	if err != nil {
 		return nil, fmt.Errorf("read PDF catalog: %w", err)
@@ -116,6 +134,9 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 		catDict.Update("Metadata", *pdftypes.NewIndirectRef(metadataObjNum, 0))
 	}
 	catDict.Update("AF", pdftypes.Array{*pdftypes.NewIndirectRef(fileSpecObjNum, 0)})
+	catDict.Update("StructTreeRoot", *pdftypes.NewIndirectRef(structTreeRootObjNum, 0))
+	catDict.Update("MarkInfo", pdftypes.Dict{"Marked": pdftypes.Boolean(true)})
+	catDict.Update("Lang", pdftypes.StringLiteral("en-US"))
 
 	fileSpecDict, err := dereferenceDictByObjNum(xrt, fileSpecObjNum)
 	if err != nil {
@@ -159,6 +180,35 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 	fmt.Fprintf(&inc, "<</Type /OutputIntent /S /GTS_PDFA1 /OutputConditionIdentifier (sRGB IEC61966-2.1) /Info (sRGB IEC61966-2.1) /DestOutputProfile %d 0 R>>\n", iccObjNum)
 	inc.WriteString("endobj\n")
 
+	offsets[parentTreeObjNum] = base + int64(inc.Len())
+	fmt.Fprintf(&inc, "%d 0 obj\n", parentTreeObjNum)
+	fmt.Fprintf(&inc, "<</Nums [%s]>>\n", buildParentTreeNums(taggedPages))
+	inc.WriteString("endobj\n")
+
+	offsets[docStructElemObjNum] = base + int64(inc.Len())
+	fmt.Fprintf(&inc, "%d 0 obj\n", docStructElemObjNum)
+	fmt.Fprintf(&inc, "<</Type /StructElem /S /Document /P %d 0 R /K [%s]>>\n", structTreeRootObjNum, buildStructElemRefList(taggedPages))
+	inc.WriteString("endobj\n")
+
+	offsets[structTreeRootObjNum] = base + int64(inc.Len())
+	fmt.Fprintf(&inc, "%d 0 obj\n", structTreeRootObjNum)
+	fmt.Fprintf(&inc, "<</Type /StructTreeRoot /K [%d 0 R] /ParentTree %d 0 R /ParentTreeNextKey %d /RoleMap <</Document /Document /P /P>>>>\n", docStructElemObjNum, parentTreeObjNum, len(taggedPages))
+	inc.WriteString("endobj\n")
+
+	for _, tp := range taggedPages {
+		for i, marker := range tp.markers {
+			elemObjNum := tp.structElemObjNums[i]
+			offsets[elemObjNum] = base + int64(inc.Len())
+			fmt.Fprintf(&inc, "%d 0 obj\n", elemObjNum)
+			fmt.Fprintf(&inc, "<</Type /StructElem /S /%s /P %d 0 R /Pg %d 0 R /K <</Type /MCR /Pg %d 0 R /MCID %d>>>>\n", marker.tag, docStructElemObjNum, tp.pageObjNum, tp.pageObjNum, marker.mcid)
+			inc.WriteString("endobj\n")
+		}
+
+		offsets[tp.pageObjNum] = base + int64(inc.Len())
+		pageStr := canonicalizeDictString(tp.updatedPageDict.PDFString())
+		fmt.Fprintf(&inc, "%d 0 obj\n%s\nendobj\n", tp.pageObjNum, pageStr)
+	}
+
 	offsets[catalogObjNum] = base + int64(inc.Len())
 	catStr := canonicalizeDictString(catDict.PDFString())
 	fmt.Fprintf(&inc, "%d 0 obj\n%s\nendobj\n", catalogObjNum, catStr)
@@ -195,7 +245,7 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 		i = j
 	}
 
-	newMax := outputIntentObjNum
+	newMax := nextObjNum - 1
 	inc.WriteString("trailer\n<<\n")
 	fmt.Fprintf(&inc, "/Size %d\n/Root %d 0 R\n/Prev %d\n/ID [<%s> <%s>]\n", newMax+1, catalogObjNum, prevStartXRef, idHex, idHex)
 	inc.WriteString(">>\n")
@@ -205,6 +255,93 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 	out = append(out, pdf...)
 	out = append(out, inc.Bytes()...)
 	return out, nil
+}
+
+type taggedPageUpdate struct {
+	pageObjNum       int
+	updatedPageDict  pdftypes.Dict
+	markers          []semanticMarker
+	structElemObjNums []int
+}
+
+type semanticMarker struct {
+	tag  string
+	mcid int
+}
+
+var semanticMarkerRe = regexp.MustCompile(`/([A-Za-z][A-Za-z0-9]*)\s*<</MCID\s+([0-9]+)>>\s*BDC`)
+
+func buildTaggedPageUpdates(xrt *model.XRefTable) ([]taggedPageUpdate, error) {
+	if xrt.PageCount <= 0 {
+		if err := xrt.EnsurePageCount(); err != nil {
+			return nil, fmt.Errorf("ensure page count: %w", err)
+		}
+	}
+	updates := make([]taggedPageUpdate, 0, xrt.PageCount)
+	for pageNr := 1; pageNr <= xrt.PageCount; pageNr++ {
+		pageDict, pageRef, _, err := xrt.PageDict(pageNr, false)
+		if err != nil || pageRef == nil {
+			return nil, fmt.Errorf("read page %d: %w", pageNr, err)
+		}
+		content, err := xrt.PageContent(pageDict, pageNr)
+		if err != nil {
+			return nil, fmt.Errorf("read page content %d: %w", pageNr, err)
+		}
+		markers := extractSemanticMarkers(content)
+		if len(markers) == 0 {
+			markers = []semanticMarker{{tag: "P", mcid: 0}}
+		}
+
+		pageDict.Update("StructParents", pdftypes.Integer(pageNr-1))
+		updates = append(updates, taggedPageUpdate{
+			pageObjNum:      int(pageRef.ObjectNumber),
+			updatedPageDict: pageDict,
+			markers:         markers,
+		})
+	}
+	return updates, nil
+}
+
+func extractSemanticMarkers(content []byte) []semanticMarker {
+	matches := semanticMarkerRe.FindAllSubmatch(content, -1)
+	out := make([]semanticMarker, 0, len(matches))
+	for _, m := range matches {
+		if len(m) != 3 {
+			continue
+		}
+		tag := string(m[1])
+		if tag == "Artifact" {
+			continue
+		}
+		mcid, err := strconv.Atoi(string(m[2]))
+		if err != nil {
+			continue
+		}
+		out = append(out, semanticMarker{tag: tag, mcid: mcid})
+	}
+	return out
+}
+
+func buildStructElemRefList(pages []taggedPageUpdate) string {
+	parts := make([]string, 0, len(pages)*2)
+	for _, p := range pages {
+		for _, objNum := range p.structElemObjNums {
+			parts = append(parts, fmt.Sprintf("%d 0 R", objNum))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func buildParentTreeNums(pages []taggedPageUpdate) string {
+	parts := make([]string, 0, len(pages))
+	for i, p := range pages {
+		refs := make([]string, 0, len(p.structElemObjNums))
+		for _, objNum := range p.structElemObjNums {
+			refs = append(refs, fmt.Sprintf("%d 0 R", objNum))
+		}
+		parts = append(parts, fmt.Sprintf("%d [%s]", i, strings.Join(refs, " ")))
+	}
+	return strings.Join(parts, " ")
 }
 
 func patchClassicXRefOffsets(pdf []byte, xrefOffset int, delta int64) bool {

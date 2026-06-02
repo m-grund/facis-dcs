@@ -195,18 +195,21 @@ func renderSectionBlock(f *fpdf.Fpdf, ctx *contractRenderCtx, block baseBlockJSO
 func renderContractHeading(f *fpdf.Fpdf, text string, level int) {
 	var size float64
 	var topMargin float64
+	var tag string
 	switch level {
 	case 1:
-		size, topMargin = sizeTitle, 6
+		size, topMargin, tag = sizeTitle, 6, "H1"
 	case 2:
-		size, topMargin = 14.0, 4
+		size, topMargin, tag = 14.0, 4, "H2"
 	default:
-		size, topMargin = sizeHeading, 2
+		size, topMargin, tag = sizeHeading, 2, "H3"
 	}
 	f.Ln(topMargin)
 	f.SetFont(fontFamily, fontBold, size)
 	f.SetTextColor(31, 41, 55) // #1f2937
-	f.MultiCell(bodyWidth, lineHeight, text, "", "L", false)
+	semanticWithTag(f, tag, func() {
+		f.MultiCell(bodyWidth, lineHeight, text, "", "L", false)
+	})
 }
 
 func renderTextBlock(f *fpdf.Fpdf, block baseBlockJSON) {
@@ -215,7 +218,9 @@ func renderTextBlock(f *fpdf.Fpdf, block baseBlockJSON) {
 	}
 	f.SetFont(fontFamily, fontRegular, sizeHeading) // 12pt to match frontend
 	f.SetTextColor(55, 65, 81)                       // #374151
-	f.MultiCell(bodyWidth, lineHeight, block.Text, "", "L", false)
+	semanticWithTag(f, "P", func() {
+		f.MultiCell(bodyWidth, lineHeight, block.Text, "", "L", false)
+	})
 	f.Ln(1)
 }
 
@@ -226,7 +231,9 @@ func renderClauseBlock(f *fpdf.Fpdf, ctx *contractRenderCtx, block baseBlockJSON
 	text := resolvePlaceholders(block.Text, block.BlockID, ctx)
 	f.SetFont(fontFamily, fontRegular, sizeHeading)
 	f.SetTextColor(55, 65, 81)
-	f.MultiCell(bodyWidth, lineHeight, text, "", "L", false)
+	semanticWithTag(f, "P", func() {
+		f.MultiCell(bodyWidth, lineHeight, text, "", "L", false)
+	})
 	f.Ln(1)
 }
 
@@ -253,7 +260,9 @@ func renderContractData(f *fpdf.Fpdf, raw []byte) {
 	if err := json.Unmarshal(raw, &data); err != nil {
 		f.SetFont(fontFamily, fontRegular, sizeSmall)
 		f.SetTextColor(30, 30, 30)
-		f.MultiCell(bodyWidth, lineHeight, string(raw), "", "L", false)
+		semanticWithTag(f, "P", func() {
+			f.MultiCell(bodyWidth, lineHeight, string(raw), "", "L", false)
+		})
 		return
 	}
 
@@ -261,7 +270,9 @@ func renderContractData(f *fpdf.Fpdf, raw []byte) {
 	if len(ctx.rootBlockIDs) == 0 {
 		f.SetFont(fontFamily, fontRegular, sizeBody)
 		f.SetTextColor(150, 150, 150)
-		f.MultiCell(bodyWidth, lineHeight, "(No contract content)", "", "L", false)
+		semanticWithTag(f, "P", func() {
+			f.MultiCell(bodyWidth, lineHeight, "(No contract content)", "", "L", false)
+		})
 		return
 	}
 

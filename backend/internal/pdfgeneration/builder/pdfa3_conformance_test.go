@@ -119,6 +119,22 @@ func TestPDFA3_MetadataLinked(t *testing.T) {
 			pdf := tc.build(t)
 			assert.Contains(t, string(pdf), "/Type /Metadata")
 			assert.True(t, hasCatalogWithMetadataLink(pdf), "catalog must contain /Metadata link")
+			assert.Contains(t, string(pdf), "<pdfaid:conformance>A</pdfaid:conformance>")
+		})
+	}
+}
+
+func TestPDFA3_TaggingMarkers(t *testing.T) {
+	for _, tc := range pdfa3Cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			pdf := tc.build(t)
+			assert.Contains(t, string(pdf), "/StructTreeRoot")
+			assert.Contains(t, string(pdf), "/MarkInfo")
+			assert.Contains(t, string(pdf), "/Marked true")
+				assert.Contains(t, string(pdf), "/Lang")
+			assert.Contains(t, string(pdf), "/ParentTree")
+			assert.Contains(t, string(pdf), "/MCID 0")
 		})
 	}
 }

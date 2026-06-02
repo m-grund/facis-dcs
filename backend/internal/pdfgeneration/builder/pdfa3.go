@@ -2,8 +2,8 @@ package builder
 
 import "fmt"
 
-// xmpMetadata returns the XMP metadata stream bytes for PDF/A-3 conformance level U.
-// This is injected via fpdf.SetXmpMetadata so the PDF is marked as PDF/A-3U,
+// xmpMetadata returns the XMP metadata stream bytes for PDF/A-3 conformance level A.
+// This is injected via fpdf.SetXmpMetadata so the PDF is marked as PDF/A-3A,
 // allowing embedded file attachments (DCS-FR-SM-27, DCS-FR-CSA-06).
 func xmpMetadata(title, did string) []byte {
 	return []byte(fmt.Sprintf(`<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
@@ -14,7 +14,7 @@ func xmpMetadata(title, did string) []byte {
         xmlns:dc="http://purl.org/dc/elements/1.1/"
         xmlns:xmp="http://ns.adobe.com/xap/1.0/">
       <pdfaid:part>3</pdfaid:part>
-      <pdfaid:conformance>U</pdfaid:conformance>
+      <pdfaid:conformance>A</pdfaid:conformance>
       <dc:title>
         <rdf:Alt>
           <rdf:li xml:lang="x-default">%s</rdf:li>
