@@ -30,6 +30,7 @@ type GetAllMetadataByFilterQry struct {
 	Description    string
 	TemplateData   string
 	Username       string
+	Pagination     datatype.Pagination
 }
 
 type GetAllMetadataByFilterResult struct {
@@ -84,7 +85,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		TemplateData:   query.TemplateData,
 	}
 
-	contractTemplates, err := h.CTRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues)
+	contractTemplates, err := h.CTRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues, query.Pagination)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all contract templates: %w", err)
 	}

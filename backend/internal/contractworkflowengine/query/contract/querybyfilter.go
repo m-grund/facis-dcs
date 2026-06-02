@@ -29,6 +29,7 @@ type GetAllMetadataByFilterQry struct {
 	Description     string
 	ContractData    string
 	Username        string
+	Pagination      datatype.Pagination
 }
 
 type GetAllMetadataByFilterResult struct {
@@ -78,7 +79,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		ContractData:    query.ContractData,
 	}
 
-	contracts, err := h.CRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues)
+	contracts, err := h.CRepo.ReadAllMetaDataByFilter(ctx, tx, searchValues, query.Pagination)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all contract: %w", err)
 	}

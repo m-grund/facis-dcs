@@ -300,6 +300,11 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 		state = &tState
 	}
 
+	pagination := datatype.Pagination{
+		StartIndex: derefInt(req.StartIndex),
+		PageSize:   derefInt(req.PageSize),
+	}
+
 	qry := contracttemplate.GetAllMetadataByFilterQry{
 		RetrievedBy:    middleware.GetDID(ctx),
 		Username:       middleware.GetUsername(ctx),
@@ -310,6 +315,7 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 		Name:           derefString(req.Name),
 		Description:    derefString(req.Description),
 		TemplateData:   derefString(req.TemplateData),
+		Pagination:     pagination,
 	}
 	queryHandler := contracttemplate.GetAllMetaDataByFilterHandler{
 		DB:     s.DB,
@@ -386,9 +392,15 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	pagination := datatype.Pagination{
+		StartIndex: derefInt(req.StartIndex),
+		PageSize:   derefInt(req.PageSize),
+	}
+
 	qry := contracttemplate.GetAllMetadataQry{
 		RetrievedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
+		Pagination:  pagination,
 	}
 	queryHandler := contracttemplate.GetAllMetadataHandler{
 		DB:     s.DB,
@@ -595,8 +607,8 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 		DID:          req.Did,
 		NewDID:       *newDID,
 		Version:      req.Version,
-		RegisteredBy:  middleware.GetDID(ctx),
-		Username:      middleware.GetUsername(ctx),
+		RegisteredBy: middleware.GetDID(ctx),
+		Username:     middleware.GetUsername(ctx),
 	}
 	handler := command.Registrar{
 		DB:       s.DB,
@@ -683,13 +695,6 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 	return history, nil
 }
 
-func derefInt(i *int) int {
-	if i != nil {
-		return *i
-	}
-	return 0
-}
-
 // publish approved template to Federated Catalogue.
 func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepository.ContractTemplatePublishRequest) (res *templaterepository.ContractTemplatePublishResponse, err error) {
 
@@ -705,7 +710,7 @@ func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepos
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
 		PublishedBy:   middleware.GetUsername(ctx),
-		Username: middleware.GetUsername(ctx),
+		Username:      middleware.GetUsername(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}
 	handler := command.Publisher{

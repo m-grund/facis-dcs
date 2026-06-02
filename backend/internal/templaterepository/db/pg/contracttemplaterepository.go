@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/templaterepository/db"
@@ -114,7 +116,7 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 	return &ct, nil
 }
 
-func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractTemplateMetadata, error) {
+func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
         SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible_persons
         FROM contract_templates
@@ -127,7 +129,7 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 	return cts, nil
 }
 
-func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractTemplateMetadata, error) {
+func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
         SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible_persons
         FROM contract_templates

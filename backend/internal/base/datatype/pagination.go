@@ -1,4 +1,4 @@
-package pagination
+package datatype
 
 type Pagination struct {
 	StartIndex int

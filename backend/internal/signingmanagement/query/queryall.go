@@ -25,6 +25,7 @@ import (
 type GetAllMetadataQry struct {
 	RetrievedBy string
 	Username    string
+	Pagination  datatype.Pagination
 }
 
 type MetadataItem struct {
@@ -78,9 +79,12 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 	}(tx)
 
-	contractsMetadata, err := h.CRepo.ReadAllMetaData(ctx, tx)
-	if err != nil {
-		return nil, fmt.Errorf("could not read all contracts: %w", err)
+	var contractsMetadata []db.ContractMetadata
+	if query.Pagination.PageSize >= 0 {
+		contractsMetadata, err = h.CRepo.ReadAllMetaData(ctx, tx, query.Pagination)
+		if err != nil {
+			return nil, fmt.Errorf("could not read all contracts: %w", err)
+		}
 	}
 
 	signingTasks, err := h.STRepo.ReadAllBySigner(ctx, tx, query.RetrievedBy)

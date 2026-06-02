@@ -4,19 +4,13 @@ import (
 	. "goa.design/goa/v3/dsl"
 )
 
-var SMContractPagination = Type("SMContractPagination", func() {
-	Description("Pagination results")
-
-	Attribute("start_index", Int, "Start index of results")
-	Attribute("page_size", Int, "Page size of results")
-})
-
 var SMContractRetrieveRequest = Type("SMContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
 
-	Attribute("ContractPagination", ContractPagination, "Pagination results")
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
 })
 
 var SMContractListItem = Type("SMContractListItem", func() {

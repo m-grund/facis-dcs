@@ -387,12 +387,3 @@ func (s *templateCatalogueIntegrationsrvc) SearchTemplate(ctx context.Context, r
 	}
 	return result, nil
 }
-
-// derefString safely dereferences a *string.
-// It returns an empty string when the pointer is nil.
-func derefString(v *string) string {
-	if v == nil {
-		return ""
-	}
-	return *v
-}

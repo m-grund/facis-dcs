@@ -127,6 +127,9 @@ var ContractTemplateSearchRequest = Type("ContractTemplateSearchRequest", func()
 
 	Token("token", String, "JWT token")
 
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
+
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 	Attribute("document_number", String, "The number of the contract template")
 	Attribute("version", Int, "The version of the contract template")
@@ -158,19 +161,13 @@ var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func
 	Required("did", "state", "template_type", "created_at", "updated_at", "version")
 })
 
-var ContractTemplatePagination = Type("ContractTemplatePagination", func() {
-	Description("Pagination results")
-
-	Attribute("start_index", Int, "Start index of results")
-	Attribute("page_size", Int, "Page size of results")
-})
-
 var ContractTemplateRetrieveRequest = Type("ContractTemplateRetrieveRequest", func() {
 	Description("Contract template retrieve request")
 
 	Token("token", String, "JWT token")
 
-	Attribute("pagination", ContractTemplatePagination, "Pagination results")
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
 })
 
 var ContractTemplateItem = Type("ContractTemplateItem", func() {
@@ -597,6 +594,9 @@ var _ = Service("TemplateRepository", func() {
 
 		HTTP(func() {
 			GET("/template/search")
+			Param("start_index")
+			Param("page_size")
+
 			Param("did")
 			Param("document_number")
 			Param("version")
@@ -633,6 +633,8 @@ var _ = Service("TemplateRepository", func() {
 
 		HTTP(func() {
 			GET("/template/retrieve")
+			Param("start_index")
+			Param("page_size")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

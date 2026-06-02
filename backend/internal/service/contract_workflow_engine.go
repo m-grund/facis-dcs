@@ -241,9 +241,15 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	pagination := datatype.Pagination{
+		StartIndex: derefInt(req.StartIndex),
+		PageSize:   derefInt(req.PageSize),
+	}
+
 	qry := contract.GetAllMetadataQry{
 		RetrievedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
+		Pagination:  pagination,
 	}
 	qryHandler := contract.GetAllMetadataHandler{
 		DB:     s.DB,
@@ -609,6 +615,11 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		state = &tState
 	}
 
+	pagination := datatype.Pagination{
+		StartIndex: derefInt(req.StartIndex),
+		PageSize:   derefInt(req.PageSize),
+	}
+
 	qry := contract.GetAllMetadataByFilterQry{
 		DID:             *req.Did,
 		ContractVersion: *req.ContractVersion,
@@ -618,6 +629,7 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		Name:            *req.Name,
 		Description:     *req.Description,
 		ContractData:    *req.ContractData,
+		Pagination:      pagination,
 	}
 	qryHandler := contract.GetAllMetaDataByFilterHandler{
 		DB:    s.DB,

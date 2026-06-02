@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
@@ -40,9 +42,15 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	pagination := datatype.Pagination{
+		StartIndex: derefInt(req.StartIndex),
+		PageSize:   derefInt(req.PageSize),
+	}
+
 	qry := query.GetAllMetadataQry{
 		RetrievedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
+		Pagination:  pagination,
 	}
 	queryHandler := query.GetAllMetadataHandler{
 		DB:     s.DB,

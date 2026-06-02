@@ -109,19 +109,13 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
-var ContractPagination = Type("ContractPagination", func() {
-	Description("Pagination results")
-
-	Attribute("start_index", Int, "Start index of results")
-	Attribute("page_size", Int, "Page size of results")
-})
-
 var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
 
-	Attribute("ContractPagination", ContractPagination, "Pagination results")
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
 })
 
 var ContractItem = Type("ContractItem", func() {
@@ -264,6 +258,9 @@ var ContractSearchRequest = Type("ContractSearchRequest", func() {
 	Description("Contract search request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("start_index", Int, "Start index of results")
+	Attribute("page_size", Int, "Page size of results")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("contract_version", Int, "The version number of the contract")
@@ -607,6 +604,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		HTTP(func() {
 			GET("/contract/review")
 			Param("did")
+
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -637,7 +635,8 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			GET("/contract/retrieve")
-
+			Param("start_index")
+			Param("page_size")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -733,6 +732,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			GET("/contract/search")
+			Param("start_index")
+			Param("page_size")
+
 			Param("did")
 			Param("contract_version")
 			Param("state")

@@ -24,6 +24,7 @@ import (
 type GetAllMetadataQry struct {
 	RetrievedBy string
 	Username    string
+	Pagination  datatype.Pagination
 }
 
 type MetadataItem struct {
@@ -84,9 +85,12 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 	}(tx)
 
-	contractTemplates, err := h.CTRepo.ReadAllMetaData(ctx, tx)
-	if err != nil {
-		return nil, fmt.Errorf("could not read all contract templates: %w", err)
+	var contractTemplates []db.ContractTemplateMetadata
+	if query.Pagination.PageSize >= 0 {
+		contractTemplates, err = h.CTRepo.ReadAllMetaData(ctx, tx, query.Pagination)
+		if err != nil {
+			return nil, fmt.Errorf("could not read all contract templates: %w", err)
+		}
 	}
 
 	evt := templateevents.RetrieveAllEvent{
