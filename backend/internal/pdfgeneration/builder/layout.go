@@ -1,6 +1,9 @@
 package builder
 
 import (
+	"bytes"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/go-pdf/fpdf"
@@ -103,13 +106,23 @@ func renderKV(f *fpdf.Fpdf, key, value string) {
 	f.MultiCell(bodyWidth-50, lineHeight, value, "", "L", false)
 }
 
-// renderFooter adds page number footer to every page via SetFooterFunc.
+// registerFooter adds page number footer to every page via SetFooterFunc.
 func registerFooter(f *fpdf.Fpdf) {
 	f.SetFooterFunc(func() {
 		f.SetY(-15)
 		f.SetFont(fontFamily, fontRegular, sizeSmall)
 		f.SetTextColor(150, 150, 150)
-		f.CellFormat(0, 10, "{nb}", "", 0, "C", false, 0, "")
+		f.CellFormat(0, 10, strconv.Itoa(f.PageNo()), "", 0, "C", false, 0, "")
 	})
-	f.AliasNbPages("{nb}")
+}
+
+// renderPDF serialises f and applies the PDF/A-3U post-processing pipeline.
+// All builders must call this instead of f.Output directly so that
+// fixPDFA3 is never bypassed by accident.
+func renderPDF(f *fpdf.Fpdf) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := f.Output(&buf); err != nil {
+		return nil, fmt.Errorf("fpdf output: %w", err)
+	}
+	return fixPDFA3(buf.Bytes()), nil
 }

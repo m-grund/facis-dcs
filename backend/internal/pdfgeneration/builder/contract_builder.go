@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
@@ -70,10 +69,9 @@ func BuildContract(in ContractInput) ([]byte, error) {
 		})
 	}
 
-	var buf bytes.Buffer
-	if err := f.Output(&buf); err != nil {
+	pdf, err := renderPDF(f)
+	if err != nil {
 		return nil, fmt.Errorf("render contract PDF: %w", err)
 	}
-	return buf.Bytes(), nil
+	return pdf, nil
 }
-
