@@ -24,7 +24,7 @@ const (
 	// Human User Roles - System Administration
 	ArchiveManager      UserRole = "Archive Manager"
 	Auditor             UserRole = "Auditor"
-	SystemAdministrator UserRole = "System Administrator"
+	SystemAdministrator UserRole = "Sys. Administrator"
 	ComplianceOfficer   UserRole = "Compliance Officer"
 	IntegrationManager  UserRole = "Ingestion Manager"
 
@@ -33,11 +33,11 @@ const (
 	Validator           UserRole = "Validator"
 
 	// System User Roles - API/Automated
-	SystemContractCreator  UserRole = "System Contract Creator"
-	SystemContractReviewer UserRole = "System Contract Reviewer"
-	SystemContractApprover UserRole = "System Contract Approver"
-	SystemContractManager  UserRole = "System Contract Manager"
-	SystemContractSigner   UserRole = "System Contract Signer"
+	SystemContractCreator  UserRole = "Sys. Contract Creator"
+	SystemContractReviewer UserRole = "Sys. Contract Reviewer"
+	SystemContractApprover UserRole = "Sys. Contract Approver"
+	SystemContractManager  UserRole = "Sys. Contract Manager"
+	SystemContractSigner   UserRole = "Sys. Contract Signer"
 	ContractTargetSystem   UserRole = "Contract Target System"
 )
 

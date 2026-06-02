@@ -214,7 +214,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractRetrieveRequest)
@@ -240,7 +240,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractRetrieveByIDRequest)
@@ -265,7 +265,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractVerifyRequest)
@@ -290,7 +290,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractApplyRequest)
@@ -315,9 +315,9 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(SMContractValidateRequest)
@@ -342,7 +342,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(SMContractRevokeRequest)
@@ -368,7 +368,7 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(SMContractAuditRequest)
@@ -394,7 +394,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(SMContractComplianceRequest)
