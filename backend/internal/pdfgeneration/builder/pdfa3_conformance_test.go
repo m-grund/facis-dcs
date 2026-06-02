@@ -132,7 +132,7 @@ func TestPDFA3_TaggingMarkers(t *testing.T) {
 			assert.Contains(t, string(pdf), "/StructTreeRoot")
 			assert.Contains(t, string(pdf), "/MarkInfo")
 			assert.Contains(t, string(pdf), "/Marked true")
-				assert.Contains(t, string(pdf), "/Lang")
+			assert.Contains(t, string(pdf), "/Lang")
 			assert.Contains(t, string(pdf), "/ParentTree")
 			assert.Contains(t, string(pdf), "/MCID 0")
 		})

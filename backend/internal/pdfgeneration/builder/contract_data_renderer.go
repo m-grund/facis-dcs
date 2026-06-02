@@ -11,10 +11,10 @@ import (
 // ---- JSON structs mirroring the frontend ContractData / DocumentBlock model ----
 
 type contractDataJSON struct {
-	DocumentOutline         []outlineNodeJSON        `json:"documentOutline"`
-	DocumentBlocks          []json.RawMessage        `json:"documentBlocks"`
-	SemanticConditions      []semanticConditionJSON  `json:"semanticConditions"`
-	SemanticConditionValues []conditionValueJSON     `json:"semanticConditionValues"`
+	DocumentOutline         []outlineNodeJSON         `json:"documentOutline"`
+	DocumentBlocks          []json.RawMessage         `json:"documentBlocks"`
+	SemanticConditions      []semanticConditionJSON   `json:"semanticConditions"`
+	SemanticConditionValues []conditionValueJSON      `json:"semanticConditionValues"`
 	SubTemplateSnapshots    []subTemplateSnapshotJSON `json:"subTemplateSnapshots"`
 }
 
@@ -217,7 +217,7 @@ func renderTextBlock(f *fpdf.Fpdf, block baseBlockJSON) {
 		return
 	}
 	f.SetFont(fontFamily, fontRegular, sizeHeading) // 12pt to match frontend
-	f.SetTextColor(55, 65, 81)                       // #374151
+	f.SetTextColor(55, 65, 81)                      // #374151
 	semanticWithTag(f, "P", func() {
 		f.MultiCell(bodyWidth, lineHeight, block.Text, "", "L", false)
 	})

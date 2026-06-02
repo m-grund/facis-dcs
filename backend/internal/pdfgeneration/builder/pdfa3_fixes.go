@@ -258,9 +258,9 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 }
 
 type taggedPageUpdate struct {
-	pageObjNum       int
-	updatedPageDict  pdftypes.Dict
-	markers          []semanticMarker
+	pageObjNum        int
+	updatedPageDict   pdftypes.Dict
+	markers           []semanticMarker
 	structElemObjNums []int
 }
 
