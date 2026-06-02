@@ -69,6 +69,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		ContractData: cmd.ContractData,
 		OccurredAt:   *createdAt,
 		Username:     cmd.Username,
+		UserRoles:    cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

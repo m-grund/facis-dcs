@@ -116,6 +116,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		PublishedBy:    cmd.PublishedBy,
 		Username:       cmd.Username,
 		OccurredAt:     time.Now().UTC(),
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

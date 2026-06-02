@@ -70,6 +70,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		TemplateData: cmd.TemplateData,
 		OccurredAt:   *createdAt,
 		Username:     cmd.Username,
+		UserRoles:    cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

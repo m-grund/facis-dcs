@@ -17,7 +17,7 @@ type AuditEvent struct {
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
 	Scope         componenttype.ComponentType `json:"scope"`
-	UserRoles     []userrole.UserRoles        `json:"user_roles"`
+	UserRoles     userrole.UserRoles          `json:"user_roles"`
 }
 
 // EventType implements the Event interface.

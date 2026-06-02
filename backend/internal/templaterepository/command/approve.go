@@ -87,6 +87,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		DecisionNotes:  cmd.DecisionNotes,
 		OccurredAt:     time.Now().UTC(),
 		Username:       cmd.Username,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

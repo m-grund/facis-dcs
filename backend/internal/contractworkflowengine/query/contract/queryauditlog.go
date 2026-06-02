@@ -53,6 +53,7 @@ func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.Au
 		AuditedBy:     qry.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
 		Username:      qry.Username,
+		UserRoles:     qry.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

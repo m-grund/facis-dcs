@@ -53,6 +53,7 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 		NewVersion: version,
 		OccurredAt: time.Now(),
 		Username:   cmd.Username,
+		UserRoles:  cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

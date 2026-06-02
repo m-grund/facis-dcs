@@ -91,6 +91,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		ContractVersion: processData.ContractVersion,
 		ApprovedBy:      cmd.ApprovedBy,
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

@@ -81,6 +81,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(h.Ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

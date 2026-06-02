@@ -238,6 +238,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			OccurredAt:         time.Now().UTC(),
 			ResponsiblePersons: responsiblePersons,
 			Username:           cmd.Username,
+			UserRoles:          cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 		if err != nil {

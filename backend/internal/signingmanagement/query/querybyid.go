@@ -78,6 +78,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

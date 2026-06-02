@@ -239,6 +239,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					SubmittedBy:        cmd.SubmittedBy,
 					OccurredAt:         time.Now().UTC(),
 					Username:           cmd.Username,
+					UserRoles:          cmd.UserRoles,
 				}
 				err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 				if err != nil {
@@ -339,6 +340,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			OccurredAt:         time.Now().UTC(),
 			ResponsiblePersons: responsiblePersons,
 			Username:           cmd.Username,
+			UserRoles:          cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 		if err != nil {

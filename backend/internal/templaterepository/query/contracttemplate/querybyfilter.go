@@ -96,6 +96,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

@@ -102,6 +102,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

@@ -88,6 +88,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		Reason:         cmd.Reason,
 		OccurredAt:     time.Now().UTC(),
 		Username:       cmd.Username,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
