@@ -121,8 +121,16 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
         SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible_persons
         FROM contract_templates
     `
+
+	var params []any
+	if pagination.PageSize > 0 {
+		offset := (pagination.StartIndex - 1) * pagination.PageSize
+		query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+		params = append(params, pagination.PageSize, offset)
+	}
+
 	var cts []db.ContractTemplateMetadata
-	err := tx.SelectContext(ctx, &cts, query)
+	err := tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
 		return []db.ContractTemplateMetadata{}, err
 	}
@@ -134,6 +142,7 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Conte
         SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible_persons
         FROM contract_templates
     `
+
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
 		return nil, err
@@ -142,10 +151,17 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Conte
 		query += " WHERE " + *conditions
 	}
 
+	if pagination.PageSize > 0 {
+		offset := (pagination.StartIndex - 1) * pagination.PageSize
+		n := len(params) + 1
+		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
+		params = append(params, pagination.PageSize, offset)
+	}
+
 	var cts []db.ContractTemplateMetadata
 	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
-		return []db.ContractTemplateMetadata{}, err
+		return nil, err
 	}
 	return cts, nil
 }

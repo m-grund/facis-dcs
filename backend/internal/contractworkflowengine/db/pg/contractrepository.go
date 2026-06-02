@@ -111,15 +111,13 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 }
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
-	var cts []db.ContractMetadata
-
 	query := `
     SELECT did, state, name, description, created_by, created_at, updated_at,
            contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
     FROM contracts_effective_metadata
     ORDER BY created_at DESC
 `
-
+	var cts []db.ContractMetadata
 	if pagination.PageSize > 0 {
 		offset := (pagination.StartIndex - 1) * pagination.PageSize
 		query += ` LIMIT :page_size OFFSET :offset`
@@ -146,12 +144,20 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
         FROM contracts_effective_metadata
     `
+
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
 		return nil, err
 	}
 	if len(params) > 0 {
 		query += " WHERE " + *conditions
+	}
+
+	if pagination.PageSize > 0 {
+		offset := (pagination.StartIndex - 1) * pagination.PageSize
+		n := len(params) + 1
+		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
+		params = append(params, pagination.PageSize, offset)
 	}
 
 	var cts []db.ContractMetadata

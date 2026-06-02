@@ -24,7 +24,7 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
                created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
         FROM contracts
         WHERE did = $1
-         AND state = 'APPROVED' OR state = 'SIGNED'
+         AND state IN ('APPROVED', 'SIGNED')
     `
 	var ct db.Contract
 	err := tx.GetContext(ctx, &ct, query, did)
@@ -41,10 +41,18 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
         FROM contracts
-        WHERE state = 'APPROVED' OR 'SIGNED'
+        WHERE state IN ('APPROVED', 'SIGNED')
     `
+
+	var params []any
+	if pagination.PageSize > 0 {
+		offset := (pagination.StartIndex - 1) * pagination.PageSize
+		query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+		params = append(params, pagination.PageSize, offset)
+	}
+
 	var cts []db.ContractMetadata
-	err := tx.SelectContext(ctx, &cts, query)
+	err := tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
 		return []db.ContractMetadata{}, err
 	}
@@ -55,20 +63,28 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
         FROM contracts
-        WHERE state = 'APPROVED' OR 'SIGNED'
+        WHERE state IN ('APPROVED', 'SIGNED')
     `
+
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
 		return nil, err
 	}
 	if len(params) > 0 {
-		query += " WHERE " + *conditions
+		query += " AND " + *conditions
+	}
+
+	if pagination.PageSize > 0 {
+		offset := (pagination.StartIndex - 1) * pagination.PageSize
+		n := len(params) + 1
+		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
+		params = append(params, pagination.PageSize, offset)
 	}
 
 	var cts []db.ContractMetadata
 	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
-		return []db.ContractMetadata{}, err
+		return nil, err
 	}
 	return cts, nil
 }
