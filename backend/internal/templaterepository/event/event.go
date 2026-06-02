@@ -277,7 +277,7 @@ type RegisterEvent struct {
 	SourceDID     string         `json:"source_did"`
 	SourceVersion int            `json:"source_version"`
 	OccurredAt    time.Time      `json:"occurred_at"`
-	Username       string    `json:"username"`
+	Username      string         `json:"username"`
 }
 
 // EventType implements the Event interface.
@@ -315,6 +315,7 @@ type PublishEvent struct {
 	DocumentNumber *string   `json:"document_number,omitempty"`
 	Version        int       `json:"version"`
 	PublishedBy    string    `json:"published_by"`
+	Username       string    `json:"username"`
 	OccurredAt     time.Time `json:"occurred_at"`
 }
 

@@ -25,6 +25,7 @@ type PublishCmd struct {
 	DID           string
 	UpdatedAt     time.Time
 	PublishedBy   string
+	Username      string
 	ParticipantID string
 }
 
@@ -111,6 +112,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		DocumentNumber: processData.DocumentNumber,
 		Version:        processData.Version,
 		PublishedBy:    cmd.PublishedBy,
+		Username:       cmd.Username,
 		OccurredAt:     time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
