@@ -45,7 +45,7 @@ type GetByIDResult struct {
 	ExpDate            *time.Time
 	ExpPolicy          *expirationpolicy.ExpirationPolicy
 	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	ResponsiblePersons *db.Responsible
 }
 
 type GetByIDHandler struct {
@@ -118,6 +118,6 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		ExpDate:            data.ExpDate,
 		ExpPolicy:          expPolicy,
 		ExpNoticePeriod:    data.ExpNoticePeriod,
-		ResponsiblePersons: data.ResponsiblePersons,
+		ResponsiblePersons: data.Responsible,
 	}, nil
 }

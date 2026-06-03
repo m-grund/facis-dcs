@@ -44,7 +44,7 @@ type MetadataItem struct {
 	ExpDate            *time.Time
 	ExpPolicy          *expirationpolicy.ExpirationPolicy
 	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	ResponsiblePersons *db.Responsible
 }
 
 type SigningTaskItem struct {
@@ -141,7 +141,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			ExpDate:            data.ExpDate,
 			ExpPolicy:          expPolicy,
 			ExpNoticePeriod:    data.ExpNoticePeriod,
-			ResponsiblePersons: data.ResponsiblePersons,
+			ResponsiblePersons: data.Responsible,
 		}
 		contractItems = append(contractItems, metadata)
 

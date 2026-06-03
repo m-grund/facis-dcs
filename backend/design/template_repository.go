@@ -156,7 +156,7 @@ var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_at", "updated_at", "version")
 })
@@ -181,7 +181,7 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("created_by", String, "Created by")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
 })
@@ -249,7 +249,7 @@ var ContractTemplateHistoryRetrieveByIDResponse = Type("ContractTemplateHistoryR
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data", "version")
@@ -284,7 +284,7 @@ var ContractTemplateRetrieveByIDResponse = Type("ContractTemplateRetrieveByIDRes
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data", "version")

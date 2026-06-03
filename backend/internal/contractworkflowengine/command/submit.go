@@ -129,7 +129,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approvers provided")
 		}
 
-		respPersons := db.ResponsiblePersons{
+		respPersons := db.Responsible{
 			Creator:     processData.CreatedBy,
 			Reviewers:   cmd.Reviewers,
 			Approvers:   cmd.Approvers,
@@ -139,8 +139,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		responsiblePersons = &anyRespPerson
 
 		updateData := db.ContractUpdateData{
-			DID:                cmd.DID,
-			ResponsiblePersons: &respPersons,
+			DID:         cmd.DID,
+			Responsible: &respPersons,
 		}
 		err := h.CRepo.Update(ctx, tx, updateData)
 		if err != nil {

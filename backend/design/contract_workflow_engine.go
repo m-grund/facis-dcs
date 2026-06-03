@@ -103,7 +103,7 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("contract_data", Any, "The data of that contract")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
@@ -131,7 +131,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
@@ -227,7 +227,7 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Attribute("contract_data", Any, "The data of that contract")
 
@@ -285,7 +285,7 @@ var ContractSearchResponse = Type("ContractSearchResponse", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approver, reviewers, and negotiators")
 
 	Attribute("created_at", String, "The timestamp when the contract template was created")
 

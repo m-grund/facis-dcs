@@ -104,7 +104,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approver provided")
 		}
 
-		respPersons := db.ResponsiblePersons{
+		respPersons := db.Responsible{
 			Creator:   processData.CreatedBy,
 			Reviewers: cmd.Reviewers,
 			Approver:  *cmd.Approver,
@@ -113,8 +113,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		responsiblePersons = &anyRespPerson
 
 		updateData := db.ContractTemplateUpdateData{
-			DID:                cmd.DID,
-			ResponsiblePersons: &respPersons,
+			DID:         cmd.DID,
+			Responsible: &respPersons,
 		}
 		err := h.CTRepo.Update(ctx, tx, updateData)
 		if err != nil {

@@ -35,19 +35,19 @@ type GetAllMetadataByFilterQry struct {
 }
 
 type GetAllMetadataByFilterResult struct {
-	DID                string
-	ContractVersion    int
-	State              contractstate.ContractState
-	Name               *string
-	Description        *string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	MetaData           datatype.JSON
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	DID             string
+	ContractVersion int
+	State           contractstate.ContractState
+	Name            *string
+	Description     *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	MetaData        datatype.JSON
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
+	Responsible     *db.Responsible
 }
 
 type GetAllMetaDataByFilterHandler struct {
@@ -120,18 +120,18 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		}
 
 		result[i] = GetAllMetadataByFilterResult{
-			DID:                data.DID,
-			ContractVersion:    data.ContractVersion,
-			State:              contractState,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			StartDate:          data.StartDate,
-			ExpDate:            data.ExpDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    data.ExpNoticePeriod,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:             data.DID,
+			ContractVersion: data.ContractVersion,
+			State:           contractState,
+			Name:            data.Name,
+			Description:     data.Description,
+			CreatedAt:       data.CreatedAt,
+			UpdatedAt:       data.UpdatedAt,
+			StartDate:       data.StartDate,
+			ExpDate:         data.ExpDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: data.ExpNoticePeriod,
+			Responsible:     data.Responsible,
 		}
 	}
 

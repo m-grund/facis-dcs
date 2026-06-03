@@ -28,18 +28,18 @@ type GetByIDQry struct {
 }
 
 type GetByIDResult struct {
-	DID                string
-	DocumentNumber     *string
-	Version            int
-	State              contracttemplatestate.ContractTemplateState
-	TemplateType       contracttemplatetype.ContractTemplateType
-	Name               *string
-	Description        *string
-	CreatedBy          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	ResponsiblePersons *db.ResponsiblePersons
-	TemplateData       *datatype.JSON
+	DID            string
+	DocumentNumber *string
+	Version        int
+	State          contracttemplatestate.ContractTemplateState
+	TemplateType   contracttemplatetype.ContractTemplateType
+	Name           *string
+	Description    *string
+	CreatedBy      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Responsible    *db.Responsible
+	TemplateData   *datatype.JSON
 }
 
 type GetByIDHandler struct {
@@ -94,17 +94,17 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 	}
 
 	return &GetByIDResult{
-		DID:                query.DID,
-		DocumentNumber:     data.DocumentNumber,
-		Version:            data.Version,
-		State:              state,
-		TemplateType:       templateType,
-		Name:               data.Name,
-		Description:        data.Description,
-		CreatedBy:          data.CreatedBy,
-		CreatedAt:          data.CreatedAt,
-		UpdatedAt:          data.UpdatedAt,
-		ResponsiblePersons: data.ResponsiblePersons,
-		TemplateData:       data.TemplateData,
+		DID:            query.DID,
+		DocumentNumber: data.DocumentNumber,
+		Version:        data.Version,
+		State:          state,
+		TemplateType:   templateType,
+		Name:           data.Name,
+		Description:    data.Description,
+		CreatedBy:      data.CreatedBy,
+		CreatedAt:      data.CreatedAt,
+		UpdatedAt:      data.UpdatedAt,
+		Responsible:    data.Responsible,
+		TemplateData:   data.TemplateData,
 	}, nil
 }

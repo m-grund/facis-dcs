@@ -33,20 +33,20 @@ type GetAllMetadataQry struct {
 }
 
 type MetadataItem struct {
-	DID                string
-	ContractVersion    int
-	Name               *string
-	Description        *string
-	State              contractstate.ContractState
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	MetaData           datatype.JSON
-	CreatedBy          string
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	DID             string
+	ContractVersion int
+	Name            *string
+	Description     *string
+	State           contractstate.ContractState
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	MetaData        datatype.JSON
+	CreatedBy       string
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
+	Responsible     *db.Responsible
 }
 
 type ReviewTaskItem struct {
@@ -161,19 +161,19 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata := MetadataItem{
-			DID:                data.DID,
-			ContractVersion:    data.ContractVersion,
-			State:              state,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedBy:          data.CreatedBy,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			StartDate:          data.StartDate,
-			ExpDate:            data.ExpDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    data.ExpNoticePeriod,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:             data.DID,
+			ContractVersion: data.ContractVersion,
+			State:           state,
+			Name:            data.Name,
+			Description:     data.Description,
+			CreatedBy:       data.CreatedBy,
+			CreatedAt:       data.CreatedAt,
+			UpdatedAt:       data.UpdatedAt,
+			StartDate:       data.StartDate,
+			ExpDate:         data.ExpDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: data.ExpNoticePeriod,
+			Responsible:     data.Responsible,
 		}
 		contractItems = append(contractItems, metadata)
 
