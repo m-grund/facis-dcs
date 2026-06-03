@@ -62,7 +62,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	// This avoids that update on different DCS are possible
+	// This avoids that updates on different DCS are possible
 	if oldData.CreatedBy != cmd.UpdatedBy {
 		return errors.New("invalid participant")
 	}
