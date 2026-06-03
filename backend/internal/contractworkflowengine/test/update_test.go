@@ -35,10 +35,7 @@ func TestUpdate_UpdateContractDataInDraftState(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	contractData := map[string]interface{}{
-		"test": "update",
-	}
-	jsonContractData, err := datatype.NewJSON(contractData)
+	jsonContractData, err := datatype.NewJSON(validTestContractData())
 	if err != nil {
 		t.Fatalf("Failed to create JSON  data: %v", err)
 	}
@@ -136,10 +133,7 @@ func TestUpdate_UpdateContractDataInDraftStateWithInvalidUser(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	contractData := map[string]interface{}{
-		"test": "update",
-	}
-	jsonContractData, err := datatype.NewJSON(contractData)
+	jsonContractData, err := datatype.NewJSON(validTestContractData())
 	if err != nil {
 		t.Fatalf("Failed to create JSON data: %v", err)
 	}
@@ -184,10 +178,7 @@ func TestUpdate_UpdateContractDataInInvalidState(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Submitted, creator)
 
-	contractData := map[string]interface{}{
-		"test": "update",
-	}
-	jsonContractData, err := datatype.NewJSON(contractData)
+	jsonContractData, err := datatype.NewJSON(validTestContractData())
 	if err != nil {
 		t.Fatalf("Failed to create JSON data: %v", err)
 	}

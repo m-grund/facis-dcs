@@ -12,7 +12,6 @@ import (
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/db"
 	"digital-contracting-service/internal/base/ipfs"
 )
@@ -122,20 +121,10 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	}
 
 	var resLogPredCID *string
-	switch event.Component {
-	case componenttype.ContractTemplateRepo.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
-			if err != nil {
-				return fmt.Errorf("could not read log CID: %w", err)
-			}
-		}
-	case componenttype.ContractWorkflowEngine.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
-			if err != nil {
-				return fmt.Errorf("could not read log CID: %w", err)
-			}
+	if isResourceDID(event.DID) {
+		resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
+		if err != nil {
+			return fmt.Errorf("could not read log CID: %w", err)
 		}
 	}
 
@@ -155,18 +144,9 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
 	}
 
-	switch event.Component {
-	case componenttype.ContractTemplateRepo.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
-				return fmt.Errorf("could not update log CID: %w", err)
-			}
-		}
-	case componenttype.ContractWorkflowEngine.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
-				return fmt.Errorf("could not update log CID: %w", err)
-			}
+	if isResourceDID(event.DID) {
+		if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
+			return fmt.Errorf("could not update log CID: %w", err)
 		}
 	}
 
@@ -180,4 +160,8 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	}
 
 	return tx.Commit()
+}
+
+func isResourceDID(did *string) bool {
+	return did != nil && len(*did) > 1 && *did != "*"
 }

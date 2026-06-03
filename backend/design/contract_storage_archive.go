@@ -4,6 +4,17 @@ import (
 	. "goa.design/goa/v3/dsl"
 )
 
+var ArchiveRetrieveRequest = Type("ArchiveRetrieveRequest", func() {
+	Description("Archive retrieve request")
+
+	Token("token", String, "JWT token")
+})
+var ArchiveRetrieveResponse = Type("ArchiveRetrieveResponse", func() {
+	Description("Result for retrieving the archive")
+
+	Attribute("contracts", ArrayOf(ContractItem), "A list of contracts")
+})
+
 // Contract Storage & Archive Service  (/archive/...)
 var _ = Service("ContractStorageArchive", func() {
 	Description("Contract Storage & Archive APIs (/archive/...)")
@@ -13,18 +24,24 @@ var _ = Service("ContractStorageArchive", func() {
 		Meta("dcs:requirements", "DCS-IR-CSA-01", "DCS-IR-CSA-05")
 		Meta("dcs:ui", "Archive Manager Dashboard", "Archive Access")
 		Meta("dcs:csa:components", "Signed Contract Archive")
+
 		Security(JWTAuth, func() {
 			Scope("Archive Manager")
 			Scope("Contract Observer")
 		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
+
+		Payload(ArchiveRetrieveRequest)
+		Result(ArchiveRetrieveResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			GET("/archive/retrieve")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(Any)
 	})
 
 	Method("search", func() {
@@ -119,4 +136,5 @@ var _ = Service("ContractStorageArchive", func() {
 		})
 		Result(ArrayOf(String))
 	})
+
 })

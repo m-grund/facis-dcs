@@ -27,8 +27,7 @@ func TestCreate_CreateNewContract(t *testing.T) {
 	name := "Test Contract"
 	description := "Test Description"
 
-	contractData := map[string]interface{}{}
-	templateData, err := datatype.NewJSON(contractData)
+	templateData, err := datatype.NewJSON(validTestContractData())
 	if err != nil {
 		t.Fatalf("Failed to create JSON data: %v", err)
 	}

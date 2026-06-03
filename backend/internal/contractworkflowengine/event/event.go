@@ -126,6 +126,22 @@ type RetrieveAllEvent struct {
 	OccurredAt  time.Time `json:"occurred_at"`
 }
 
+// RetrieveArchivedEvent is emitted when archive data is retrieved.
+type RetrieveArchivedEvent struct {
+	RetrievedBy string    `json:"retrieved_by"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// EventType implements [event.Event].
+func (r RetrieveArchivedEvent) EventType() string {
+	return eventtype.RetrieveAll.String()
+}
+
+// GetDID implements [event.Event].
+func (r RetrieveArchivedEvent) GetDID() string {
+	return "*"
+}
+
 // EventType implements the Event interface.
 func (e RetrieveAllEvent) EventType() string {
 	return eventtype.RetrieveAll.String()

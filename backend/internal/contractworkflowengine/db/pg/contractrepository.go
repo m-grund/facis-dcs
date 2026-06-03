@@ -155,7 +155,7 @@ func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx,
 	return &processData, nil
 }
 
-func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
     SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
     FROM contracts
@@ -163,6 +163,20 @@ func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx
     AND exp_date < NOW()
     AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED')
 `
+	var cts []db.ContractMetadata
+	err := tx.SelectContext(ctx, &cts, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return cts, nil
+}
+
+func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	query := `
+    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+    FROM contracts_archive_metadata
+	`
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
 	if err != nil {

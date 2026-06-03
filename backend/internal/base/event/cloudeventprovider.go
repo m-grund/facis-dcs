@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 
 	"github.com/cloudevents/sdk-go/v2/event"
 	cloudeventprovider "github.com/eclipse-xfsc/cloud-event-provider"
@@ -22,14 +21,14 @@ func (c CloudEventPubClient) Close() error {
 	return c.client.Close()
 }
 
-func (c CloudEventPubClient) Publish(eventSource string, eventType string, payload []byte) interface{} {
+func (c CloudEventPubClient) Publish(eventSource string, eventType string, payload []byte) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	event, err := cloudeventprovider.NewEvent(eventSource, eventType, data)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return c.client.PubCtx(c.ctx, event)

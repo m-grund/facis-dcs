@@ -135,6 +135,27 @@ FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
 
+CREATE OR REPLACE VIEW contracts_archive_metadata AS
+SELECT
+    did,
+    created_by,
+    created_at,
+    updated_at,
+    start_date,
+    exp_date,
+    exp_policy,
+    exp_notice_period,
+    state,
+    contract_version,
+    name,
+    description,
+    responsible_persons
+FROM contracts_effective_metadata
+WHERE state = 'APPROVED'
+  AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP);
+
+------------------------------------------------------------------------------------------------------------------------
+
 CREATE OR REPLACE VIEW contracts_effective_process_data AS
 SELECT
     did,

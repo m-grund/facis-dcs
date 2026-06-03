@@ -19,6 +19,7 @@ const (
 	Verify                  EventType = "VERIFY_CONTRACT"
 	Update                  EventType = "UPDATE_CONTRACT"
 	RetrieveAll             EventType = "RETRIEVE_ALL_CONTRACTS"
+	RetrieveArchived        EventType = "RETRIEVE_ARCHIVED_CONTRACTS"
 	RetrieveByID            EventType = "RETRIEVE_CONTRACT_BY_ID"
 	RetrieveHistoryByDID    EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
 	Search                  EventType = "SEARCH_CONTRACT"

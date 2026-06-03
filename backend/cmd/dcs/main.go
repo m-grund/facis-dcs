@@ -11,10 +11,12 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/nats-io/nats.go"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -46,7 +48,6 @@ import (
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
 	"digital-contracting-service/migrations"
-
 )
 
 func main() {
@@ -158,7 +159,7 @@ func main() {
 	// Initialize IPFS client
 	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
 	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
-	if oidcIssuerURL == "" || oidcClientID == "" {
+	if ipfsTenantBaseURL == "" && mfsBaseURL == "" {
 		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
 	}
 	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
@@ -254,7 +255,7 @@ func main() {
 	)
 	{
 		authSvc = service.NewAuth()
-		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
+		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)

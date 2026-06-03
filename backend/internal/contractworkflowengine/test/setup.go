@@ -12,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -111,10 +112,7 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 	name := "Test Contract"
 	description := "Test Description"
 
-	contractData := map[string]interface{}{
-		"key": "value",
-	}
-	jsonContractData, err := datatype.NewJSON(contractData)
+	jsonContractData, err := datatype.NewJSON(validTestContractData())
 	if err != nil {
 		t.Fatalf("Failed to create JSON contract data: %v", err)
 	}
@@ -145,6 +143,89 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 	_, err = db.Exec(updateStatement, cmd.DID, state)
 	if err != nil {
 		t.Fatalf("Failed to update state: %v", err)
+	}
+}
+
+func validTestContractData() map[string]any {
+	return map[string]any{
+		"documentOutline": []any{
+			map[string]any{"blockId": "root", "isRoot": true, "children": []any{"clause-main"}},
+		},
+		"documentBlocks": []any{
+			map[string]any{
+				"blockId":      "clause-main",
+				"type":         "CLAUSE",
+				"text":         "Provider {{provider.legalName}} from {{provider.country}}. Customer {{customer.legalName}} from {{customer.country}}. Payment {{payment.amount}} {{payment.currency}} due {{payment.dueDate}}. Availability {{sla.availability}}.",
+				"conditionIds": []any{"provider", "customer", "payment", "sla"},
+			},
+		},
+		"semanticConditions": []any{
+			partyTestCondition("provider", "Provider"),
+			partyTestCondition("customer", "Customer"),
+			map[string]any{
+				"conditionId":   "payment",
+				"conditionName": "Payment",
+				"schemaVersion": "v1",
+				"parameters": []any{
+					testSemanticParam("amount", "decimal", validation.SchemaContractV1, "contract.payment.amount"),
+					testSemanticParam("currency", "string", validation.SchemaContractV1, "contract.payment.currency"),
+					testSemanticParam("dueDate", "date", validation.SchemaContractV1, "contract.payment.dueDate"),
+				},
+			},
+			map[string]any{
+				"conditionId":   "sla",
+				"conditionName": "SLA Availability",
+				"schemaVersion": "v1",
+				"parameters": []any{
+					testSemanticParam("availability", "decimal", validation.SchemaServiceV1, "service.sla.availability"),
+				},
+			},
+		},
+		"semanticConditionValues": []any{
+			testSemanticValue("clause-main", "provider", "legalName", "Provider GmbH"),
+			testSemanticValue("clause-main", "provider", "country", "DEU"),
+			testSemanticValue("clause-main", "customer", "legalName", "Customer GmbH"),
+			testSemanticValue("clause-main", "customer", "country", "DEU"),
+			testSemanticValue("clause-main", "payment", "amount", 1000.0),
+			testSemanticValue("clause-main", "payment", "currency", "EUR"),
+			testSemanticValue("clause-main", "payment", "dueDate", "2026-06-19"),
+			testSemanticValue("clause-main", "sla", "availability", 99.9),
+		},
+		"customMetaData": []any{},
+	}
+}
+
+func partyTestCondition(id string, name string) map[string]any {
+	return map[string]any{
+		"conditionId":   id,
+		"conditionName": name,
+		"schemaVersion": "v1",
+		"entityType":    "CompanyParty",
+		"entityRole":    id,
+		"parameters": []any{
+			testSemanticParam("legalName", "string", validation.SchemaPartyV1, "company.legalName"),
+			testSemanticParam("country", "string", validation.SchemaPartyV1, "company.location.country"),
+		},
+	}
+}
+
+func testSemanticParam(name string, paramType string, schemaRef string, semanticPath string) map[string]any {
+	return map[string]any{
+		"parameterName": name,
+		"type":          paramType,
+		"schemaRef":     schemaRef,
+		"semanticPath":  semanticPath,
+		"isRequired":    true,
+		"operators":     []any{},
+	}
+}
+
+func testSemanticValue(blockID string, conditionID string, parameterName string, value any) map[string]any {
+	return map[string]any{
+		"blockId":        blockID,
+		"conditionId":    conditionID,
+		"parameterName":  parameterName,
+		"parameterValue": value,
 	}
 }
 

@@ -40,7 +40,7 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo database.Contra
 			}
 		}(tx)
 
-		expiredContracts, err := repo.ReadExpiredContacts(ctx, tx)
+		expiredContracts, err := repo.ReadExpiredContracts(ctx, tx)
 		if err != nil {
 			return nil, fmt.Errorf("could not read expired contracts: %w", err)
 		}

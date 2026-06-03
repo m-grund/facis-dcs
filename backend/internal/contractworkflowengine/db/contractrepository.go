@@ -133,7 +133,8 @@ type ContractRepo interface {
 	ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)
 	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractMetadata, error)
-	ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
+	ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
+	ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractUpdateData) error
 }
