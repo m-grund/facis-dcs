@@ -42,6 +42,7 @@ var validStates = map[EventType]bool{
 	Verify:                  true,
 	Update:                  true,
 	RetrieveAll:             true,
+	RetrieveArchived:        true,
 	RetrieveByID:            true,
 	RetrieveHistoryByDID:    true,
 	Search:                  true,
