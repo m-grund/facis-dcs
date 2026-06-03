@@ -198,7 +198,7 @@ async function registerTemplate() {
     })
 
     await templatesStore.loadTemplates()
-    await router.push({ name: ROUTES.TEMPLATES.VIEW, params: { did: registered.did } })
+    await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: registered.did } })
   } catch (e: unknown) {
     error.value = e instanceof Error && e.message ? e.message : 'Registration failed'
   } finally {
