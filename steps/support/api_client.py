@@ -122,3 +122,21 @@ def get_with_headers(context, url: str, headers=None):
         headers=h,
         timeout=context.http_timeout_seconds,
     )
+
+
+# PDF generation URL builders
+
+def contract_export_pdf_url(context, did: str) -> str:
+    return f"{context.base_url}/pdf/export/contract/{did}"
+
+
+def template_export_pdf_url(context, did: str) -> str:
+    return f"{context.base_url}/pdf/export/template/{did}"
+
+
+def contract_verify_pdf_url(context, did: str) -> str:
+    return f"{context.base_url}/pdf/verify/contract/{did}"
+
+
+def template_verify_pdf_url(context, did: str) -> str:
+    return f"{context.base_url}/pdf/verify/template/{did}"

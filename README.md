@@ -13,4 +13,18 @@ npm install
 ```
 
 ## DCS Backend
-- You can find instruction for the DCS Backend here: [DCS Backend](./implementation/backend/README.md)
+- You can find instruction for the DCS Backend here: [DCS Backend](./backend/README.md)
+
+## Development Quick Start (Rancher Desktop + Helm)
+This repository uses Helm-managed dependencies in Kubernetes for local development.
+
+1. Start Rancher Desktop with Kubernetes enabled.
+2. From project root, run:
+
+```bash
+bash dev-stack.sh
+```
+
+This sets up Helm dependencies, prepares backend env and C2PA cert-chain, then starts frontend (Vite) and backend (air).
+
+For step-by-step manual commands and troubleshooting, see [deployment/README.md](./deployment/README.md#local-development).

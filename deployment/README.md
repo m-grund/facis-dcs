@@ -55,12 +55,39 @@ Generate the required glue code under `gen/` with the Goa CLI:
 goa gen digital-contracting-service/design
 ```
 
-### 1. Deploy dependencies
+### Recommended: One-command full stack startup
+
+From the project root:
 
 ```bash
-helm dependency build ./deployment/helm
+bash dev-stack.sh
+```
+
+What this command does:
+1. Runs Helm dependency update and upgrade using `deployment/helm/values.dev.yml`
+2. Creates `backend/.env` from `backend/.env.dev` if missing
+3. Fetches the C2PA cert chain from Kubernetes secret `dcs-crypto-provider-dev-cert-chain` into `backend/certs/dev/chain.pem`
+4. Starts frontend Vite dev server
+5. Starts backend with air hot reload
+
+Stop everything with `Ctrl+C` in the same terminal.
+
+### Manual startup (equivalent steps)
+
+Use this if you prefer separate terminals or step-by-step debugging.
+
+#### 1. Deploy dependencies
+
+```bash
+helm dependency update ./deployment/helm
 helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 ```
+
+The dev values enable automatic signer certificate-chain provisioning for C2PA:
+- Vault transit key is initialized as `ecdsa-p256`
+- a Helm hook job creates a local dev CA
+- a leaf certificate is issued for the active transit public key
+- the chain is stored in a Kubernetes Secret and auto-wired to DCS chart mounts/env
 
 This starts all dependencies as NodePort services forwarded to `localhost`:
 
@@ -72,27 +99,42 @@ This starts all dependencies as NodePort services forwarded to `localhost`:
 | Neo4j HTTP           | `http://localhost:30474`         |
 | Neo4j Bolt           | `bolt://localhost:30687`         |
 | Federated Catalogue  | `http://localhost:30081`         |
+| IPFS Document Manager | `http://localhost:30800`        |
+| IPFS Kubo RPC        | `http://localhost:30501`         |
 
 The Keycloak `gaia-x` realm is imported automatically on first start.
 
 > To upgrade after chart changes: `helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml`
 
-### 2. Run the backend
+#### 2. Prepare backend runtime config and cert-chain
 
 ```bash
 cp backend/.env.dev backend/.env
+mkdir -p backend/certs/dev
+kubectl -n default get secret dcs-crypto-provider-dev-cert-chain \
+  -o jsonpath='{.data.chain\.pem}' | base64 -d > backend/certs/dev/chain.pem
+test -s backend/certs/dev/chain.pem
+```
+
+The backend reads the C2PA signer certificate chain from `CRYPTO_PROVIDER_CERT_CHAIN_FILE` (set to `certs/dev/chain.pem` in `.env.dev`).
+
+#### 3. Run backend and frontend
+
+Terminal 1:
+
+```bash
 cd backend && air
 ```
 
-The backend listens on `http://localhost:8991`.
-
-### 3. Run the frontend
+Terminal 2:
 
 ```bash
 cd frontend/ClientApp
 npm install
 npm run dev
 ```
+
+The backend listens on `http://localhost:8991`.
 
 The Vite dev server starts at `http://localhost:5173` and proxies `/api` requests to the backend automatically.
 
@@ -151,6 +193,43 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 ---
 
 ## Production Deployment
+
+### C2PA certificate chain (x5chain)
+
+DCS requires a signer certificate chain (PEM) for C2PA manifests. Configure it via Kubernetes Secret.
+
+For local Helm development with the co-deployed crypto-provider, you can enable automatic in-chart provisioning instead of creating a secret manually:
+
+```yaml
+cryptoProvider:
+  enabled: true
+  devCertChain:
+    enabled: true
+```
+
+This creates/updates a secret named `<release>-crypto-provider-dev-cert-chain` by default and auto-wires `CRYPTO_PROVIDER_CERT_CHAIN_FILE` in the DCS deployment.
+
+Create the secret (example):
+
+```bash
+kubectl -n <namespace> create secret generic dcs-c2pa-cert-chain \
+  --from-file=chain.pem=./chain.pem
+```
+
+Enable it in your Helm values override:
+
+```yaml
+signing:
+  certChain:
+    enabled: true
+    existingSecret:
+      name: dcs-c2pa-cert-chain
+      key: chain.pem
+```
+
+When enabled, the chart automatically:
+- mounts the secret into the DCS container
+- sets `CRYPTO_PROVIDER_CERT_CHAIN_FILE` to the mounted PEM path
 
 ### Keycloak
 - Use a properly secured external Keycloak instance (not the bundled sub-chart)

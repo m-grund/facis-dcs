@@ -205,6 +205,126 @@ UI path override or derived default.
 {{- end }}
 
 {{/*
+IPFS Document Manager tenant base URL (auto-wired when ipfsDocumentManager sub-chart is enabled).
+*/}}
+{{- define "digital-contracting-service.ipfsTenantBaseURL" -}}
+{{- if .Values.ipfsClient.tenantBaseURL -}}
+{{- .Values.ipfsClient.tenantBaseURL -}}
+{{- else if .Values.ipfsDocumentManager.enabled -}}
+{{- $host := printf "%s-ipfs-document-manager" .Release.Name -}}
+{{- $port := default 8080 .Values.ipfsDocumentManager.service.port -}}
+{{- $tenant := default "tenant_space" .Values.ipfsClient.tenantName -}}
+{{- printf "http://%s:%v/v1/tenants/%s" $host $port $tenant -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_URL: explicit override, or derived from the co-deployed signer service.
+VAULT_ADDR: explicit override, or derived from the co-deployed Vault instance.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderURL" -}}
+{{- if .Values.signing.cryptoProviderURL -}}
+{{- .Values.signing.cryptoProviderURL -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- printf "http://%s-crypto-provider-signer:%v" .Release.Name .Values.cryptoProvider.signer.port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.mount.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderNamespace" -}}
+{{- if .Values.signing.cryptoProviderNamespace -}}
+{{- .Values.signing.cryptoProviderNamespace -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.mount -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
+*/}}
+{{- define "digital-contracting-service.ipfsMfsBaseURL" -}}
+{{- if .Values.ipfsClient.mfsBaseURL -}}
+{{- .Values.ipfsClient.mfsBaseURL -}}
+{{- else if .Values.ipfs.enabled -}}
+{{- $host := printf "%s-ipfs" .Release.Name -}}
+{{- $port := default 5001 .Values.ipfs.service.apiPort -}}
+{{- printf "http://%s:%v" $host $port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_KEY: explicit override or taken from subchart transit.key.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderKey" -}}
+{{- if .Values.signing.cryptoProviderKey -}}
+{{- .Values.signing.cryptoProviderKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.key -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_VC_KEY: explicit override or taken from subchart transit.vcKey.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderVCKey" -}}
+{{- if .Values.signing.cryptoProviderVCKey -}}
+{{- .Values.signing.cryptoProviderVCKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.vcKey -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+ISSUER_DID: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.issuerDID" -}}
+{{- .Values.signing.issuerDID -}}
+{{- end }}
+
+{{/*
+Resolve signer cert-chain secret name:
+1) explicit signing.certChain existingSecret
+2) auto-generated dev cert-chain from co-deployed crypto-provider
+*/}}
+{{- define "digital-contracting-service.signingCertChainSecretName" -}}
+{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
+{{- .Values.signing.certChain.existingSecret.name -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- default (printf "%s-crypto-provider-dev-cert-chain" .Release.Name) .Values.cryptoProvider.devCertChain.secretName -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve signer cert-chain secret key.
+*/}}
+{{- define "digital-contracting-service.signingCertChainSecretKey" -}}
+{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
+{{- .Values.signing.certChain.existingSecret.key -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- default "chain.pem" .Values.cryptoProvider.devCertChain.secretKey -}}
+{{- else -}}
+{{- "chain.pem" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+IPFS_MFS_BASE_URL: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
+{{- .Values.ipfs.mfsBaseURL -}}
+{{- end }}
+
+{{/*
 Normalize Keycloak route path (leading slash, no trailing slash).
 */}}
 {{- define "digital-contracting-service.keycloakRoutePath" -}}

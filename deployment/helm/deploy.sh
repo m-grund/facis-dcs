@@ -95,8 +95,8 @@ if [ -f Chart.lock ]; then
 fi
 
 if [ -d charts ]; then
-  rm -rf charts
-  log "✅ Removed charts/ directory"
+  find charts -maxdepth 1 -name "*.tgz" -delete
+  log "✅ Removed packaged charts (*.tgz)"
 fi
 
 # Check dependencies

@@ -9,14 +9,10 @@ import AuditView from '@/modules/contract-workflow-engine/components/AuditView.v
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import ContractHistoryDiffView from '@/modules/contract-workflow-engine/components/ContractHistoryDiffView.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
 import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
-import { buildContractPdfArchive } from '@/modules/contract-workflow-engine/utils/buildContractPdfArchive'
-import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
-import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
@@ -44,13 +40,12 @@ const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 const contractContentValuesStore = useContractContentValuesStore()
 const scrollStore = useScrollStore()
-const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 
 const username = computed(() => authStore.user?.username)
 const isSubmitting = ref(false)
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
-  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
+  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
@@ -251,6 +246,11 @@ function applyContractDataToDraft(contractData?: unknown) {
     semanticConditions: cd.semanticConditions ?? [],
     subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
     templateDataVersion: cd.templateDataVersion,
+    semanticProfile: cd.semanticProfile,
+    templateVariables: cd.templateVariables ?? [],
+    placeholderBindings: cd.placeholderBindings ?? [],
+    semanticRules: cd.semanticRules ?? [],
+    sla: cd.sla ?? null,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
 }
@@ -370,16 +370,14 @@ const hasActiveNegotiations = computed(() => {
 })
 
 const exportPdf = async () => {
-  const id = route.params.did
-  if (!id || Array.isArray(id)) return
-  const contract = await contractWorkflowService.retrieveById({ did: id })
-  if (!contract) return
-  const blocks = convertContractToPlainTextBlocks(contract.contract_data)
-  const pdfData = toPdfData(blocks)
-  const archive = await buildContractPdfArchive(contract)
-  const title = `${contract.name ?? 'contract'}`
-  const filename = `${title}.pdf`
-  downloadContractPdf(pdfData, filename, title, { displayTitleInContent: true, archive })
+  const did = route.params.did as string
+  const blob = await contractWorkflowService.exportPdf(did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `contract-${did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 

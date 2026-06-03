@@ -2,16 +2,16 @@ package command
 
 import (
 	"context"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
+	"digital-contracting-service/internal/templaterepository/db"
+	templateevents "digital-contracting-service/internal/templaterepository/event"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/templaterepository/db"
-	templateevents "digital-contracting-service/internal/templaterepository/event"
 )
 
 type CopyCmd struct {
@@ -41,6 +41,22 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 	version, err := h.CTRepo.CopyFromDID(ctx, tx, cmd.CopyDID, cmd.NewDID)
 	if err != nil {
 		return fmt.Errorf("could not copy contract template: %w", err)
+	}
+
+	copiedTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.NewDID)
+	if err != nil {
+		return fmt.Errorf("could not read copied contract template: %w", err)
+	}
+	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(copiedTemplate.TemplateData, cmd.NewDID)
+	if err != nil {
+		return fmt.Errorf("copied template data validation failed: %w", err)
+	}
+	err = h.CTRepo.Update(ctx, tx, db.ContractTemplateUpdateData{
+		DID:          cmd.NewDID,
+		TemplateData: normalizedTemplateData,
+	})
+	if err != nil {
+		return fmt.Errorf("could not normalize copied contract template data: %w", err)
 	}
 
 	evt := templateevents.CopyEvent{

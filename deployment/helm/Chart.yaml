@@ -22,11 +22,45 @@ dependencies:
     version: "0.1.0"
     repository: "file://charts/neo4j"
     condition: neo4j.enabled
+  - name: orce
+    version: "0.1.0"
+    repository: "file://charts/orce"
+    condition: orce.enabled
   - name: federated-catalogue
     version: "0.1.0"
     repository: "file://charts/federated-catalogue"
     condition: federatedCatalogue.enabled
     alias: federatedCatalogue
+  - name: custom-policy-agent
+    version: "0.1.0"
+    repository: "file://charts/custom-policy-agent"
+    condition: customPolicyAgent.enabled
+    alias: customPolicyAgent
+  - name: mongodb
+    version: "0.1.0"
+    repository: "file://charts/mongodb"
+    condition: mongodb.enabled
+    alias: mongodb
+  - name: ipfs
+    version: "0.1.0"
+    repository: "file://charts/ipfs"
+    condition: ipfs.enabled
+    alias: ipfs
+  - name: ipfs-document-manager
+    version: "0.1.0"
+    repository: "file://charts/ipfs-document-manager"
+    condition: ipfsDocumentManager.enabled
+    alias: ipfsDocumentManager
+  - name: crypto-provider
+    version: "0.1.0"
+    repository: "file://charts/crypto-provider"
+    condition: cryptoProvider.enabled
+    alias: cryptoProvider
+  - name: statuslist-service
+    version: "0.1.0"
+    repository: "file://charts/statuslist-service"
+    condition: statuslistService.enabled
+    alias: statuslistService
   - name: kube-prometheus-stack
     version: "85.2.0"
     repository: "https://prometheus-community.github.io/helm-charts"

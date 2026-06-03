@@ -4,3 +4,4 @@
 from core import *
 from template_management import *
 from frontend import *
+from pdf_generation import *

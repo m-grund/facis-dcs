@@ -5,7 +5,7 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { TemplateState } from '@/types/contract-template-state'
 import { defineStore } from 'pinia'
 import { computed, ref, type Ref } from 'vue'
-import { TemplateType } from '@template-repository/models/contract-templace.ts'
+import {TemplateType} from "@/modules/template-repository/models/contract-template";
 
 export const useContractTemplatesStore = defineStore('contractTemplates', () => {
   const contractTemplates: Ref<PartialContractTemplate[]> = ref([])

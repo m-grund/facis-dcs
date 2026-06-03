@@ -94,6 +94,27 @@ func (e RevokeEvent) GetDID() string {
 	return e.DID
 }
 
+// ApplyEvent is emitted when a digital signature is applied to a contract.
+type ApplyEvent struct {
+	DID             string    `json:"did"`
+	ContractVersion *int      `json:"contract_version,omitempty"`
+	SignerDID       string    `json:"signer_did"`
+	CredentialType  string    `json:"credential_type"`
+	AppliedBy       string    `json:"applied_by"`
+	OccurredAt      time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e ApplyEvent) EventType() string {
+	return eventtype.Apply.String()
+}
+
+// GetDID implements the Event interface.
+func (e ApplyEvent) GetDID() string {
+	return e.DID
+}
+
+// ComplianceValidation is emitted when compliance check ist started
 type ComplianceValidationEvent struct {
 	DID             string    `json:"did"`
 	ContractVersion *int      `json:"contract_version,omitempty"`

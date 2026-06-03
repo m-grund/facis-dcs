@@ -83,7 +83,7 @@ spec:
               value: {{ include "digital-contracting-service.natsURL" . | quote }}
               {{- end }}
             - name: FEDERATED_CATALOGUE_API_URL
-              {{- if .Values.federatedCatalogue.secretRef.name }}
+              {{- if and .Values.federatedCatalogue.secretRef .Values.federatedCatalogue.secretRef.name }}
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.federatedCatalogue.secretRef.name | quote }}
@@ -106,6 +106,53 @@ spec:
               value: {{ include "digital-contracting-service.apiPath" . | quote }}
             - name: DCS_UI_PATH
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
+            # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
+            - name: CRYPTO_PROVIDER_URL
+              {{- if .Values.signing.cryptoProviderURLSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signing.cryptoProviderURLSecretRef.name | quote }}
+                  key: {{ .Values.signing.cryptoProviderURLSecretRef.key | quote }}
+              {{- else }}
+              value: {{ include "digital-contracting-service.cryptoProviderURL" . | quote }}
+              {{- end }}
+            - name: CRYPTO_PROVIDER_NAMESPACE
+              value: {{ include "digital-contracting-service.cryptoProviderNamespace" . | quote }}
+            - name: CRYPTO_PROVIDER_KEY
+              value: {{ include "digital-contracting-service.cryptoProviderKey" . | quote }}
+            - name: CRYPTO_PROVIDER_VC_KEY
+              value: {{ include "digital-contracting-service.cryptoProviderVCKey" . | quote }}
+            - name: CRYPTO_PROVIDER_VC_SIGNATURE_TYPE
+              value: {{ .Values.signing.vcSignatureType | quote }}
+                {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
+                {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
+                {{- if and $certChainEnabled $certSecretName }}
+            - name: CRYPTO_PROVIDER_CERT_CHAIN_FILE
+              value: {{ printf "%s/%s" .Values.signing.certChain.mountPath .Values.signing.certChain.fileName | quote }}
+            {{- end }}
+            - name: ISSUER_DID
+              {{- if .Values.signing.issuerDIDSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signing.issuerDIDSecretRef.name | quote }}
+                  key: {{ .Values.signing.issuerDIDSecretRef.key | quote }}
+              {{- else }}
+              value: {{ include "digital-contracting-service.issuerDID" . | quote }}
+              {{- end }}
+            - name: TSA_URL
+              value: {{ .Values.signing.tsaURL | quote }}
+            # ---- IPFS storage -------------------------------------------------------
+            - name: IPFS_TENANT_BASE_URL
+              {{- if .Values.ipfs.tenantBaseURLSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.ipfs.tenantBaseURLSecretRef.name | quote }}
+                  key: {{ .Values.ipfs.tenantBaseURLSecretRef.key | quote }}
+              {{- else }}
+              value: {{ include "digital-contracting-service.ipfsTenantBaseURL" . | quote }}
+              {{- end }}
+            - name: IPFS_MFS_BASE_URL
+              value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -125,23 +172,40 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.customCA.enabled .Values.volumeMounts }}
+          {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
+          {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
+          {{- if or .Values.customCA.enabled .Values.volumeMounts (and $certChainEnabled $certSecretName) }}
           volumeMounts:
           {{- if .Values.customCA.enabled }}
             - name: custom-ca-certs
               mountPath: /usr/local/share/ca-certificates/custom
               readOnly: true
           {{- end }}
+          {{- if and $certChainEnabled $certSecretName }}
+            - name: signer-cert-chain
+              mountPath: {{ .Values.signing.certChain.mountPath | quote }}
+              readOnly: true
+          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
-      {{- if or .Values.customCA.enabled .Values.volumes }}
+      {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
+      {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
+      {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
           configMap:
             name: {{ .Values.customCA.configMapName }}
+      {{- end }}
+      {{- if and $certChainEnabled $certSecretName }}
+        - name: signer-cert-chain
+          secret:
+            secretName: {{ $certSecretName | quote }}
+            items:
+              - key: {{ include "digital-contracting-service.signingCertChainSecretKey" . | quote }}
+                path: {{ .Values.signing.certChain.fileName | quote }}
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

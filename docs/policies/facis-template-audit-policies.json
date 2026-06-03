@@ -1,0 +1,99 @@
+{
+  "policySetId": "facis.dcs.template.audit",
+  "version": "v1",
+  "ontology": "https://w3id.org/facis/dcs/ontology/v1",
+  "description": "Example policy rules for auditing finished FACIS DCS contract templates against the shared ontology and SRS validation expectations.",
+  "rules": [
+    {
+      "id": "FACIS-TPL-STRUCT-001",
+      "title": "Template uses FACIS schema references",
+      "severity": "error",
+      "builtin": "required_schema_refs",
+      "ontologyTerm": "dcst:validation-template-v1"
+    },
+    {
+      "id": "FACIS-TPL-POLICY-001",
+      "title": "Template declares required policy references",
+      "severity": "error",
+      "builtin": "required_policy_refs",
+      "ontologyTerm": "dcst:policy-template-structure-v1"
+    },
+    {
+      "id": "FACIS-TPL-LIFECYCLE-001",
+      "title": "Audited finished template is approved or registered",
+      "severity": "info",
+      "builtin": "finished_template_state",
+      "ontologyTerm": "dcs:LifecycleState",
+      "parameters": {
+        "states": [
+          "APPROVED",
+          "REGISTERED"
+        ]
+      }
+    },
+    {
+      "id": "FACIS-TPL-CLAUSE-001",
+      "title": "Finished template contains at least one clause with semantic rules",
+      "severity": "error",
+      "builtin": "finished_template_has_clause_semantics",
+      "ontologyTerm": "dcs:ClauseBlock"
+    },
+    {
+      "id": "FACIS-TPL-DOMAIN-001",
+      "title": "Template semantic parameters use canonical domain fields",
+      "severity": "error",
+      "builtin": "canonical_domain_fields",
+      "ontologyTerm": "dcs:DomainField"
+    },
+    {
+      "id": "FACIS-TPL-CONSTRAINT-001",
+      "title": "Constrained semantic parameters carry ontology constraints",
+      "severity": "error",
+      "builtin": "constrained_parameters_use_value_constraint",
+      "ontologyTerm": "dcs:ValueConstraint"
+    },
+    {
+      "id": "FACIS-TPL-LEGAL-001",
+      "title": "Finished template exposes jurisdiction for policy checks",
+      "severity": "warning",
+      "builtin": "required_domain_fields",
+      "ontologyTerm": "dcst:field-contract-jurisdiction",
+      "parameters": {
+        "semanticPaths": [
+          "contract.jurisdiction"
+        ]
+      }
+    },
+    {
+      "id": "FACIS-TPL-PARTY-001",
+      "title": "Finished template exposes company country as ISO 3166-1 alpha-3",
+      "severity": "warning",
+      "builtin": "required_domain_fields",
+      "ontologyTerm": "dcst:field-company-location-country",
+      "parameters": {
+        "semanticPaths": [
+          "company.location.country"
+        ]
+      }
+    },
+    {
+      "id": "FACIS-TPL-SIGN-001",
+      "title": "Finished template declares required signature level",
+      "severity": "warning",
+      "builtin": "required_domain_fields",
+      "ontologyTerm": "dcst:field-signature-requiredLevel",
+      "parameters": {
+        "semanticPaths": [
+          "signature.requiredLevel"
+        ]
+      }
+    },
+    {
+      "id": "FACIS-TPL-AUDIT-001",
+      "title": "Template declares audit-relevant policy and semantic metadata",
+      "severity": "warning",
+      "builtin": "audit_metadata_complete",
+      "ontologyTerm": "dcs:AuditEvent"
+    }
+  ]
+}

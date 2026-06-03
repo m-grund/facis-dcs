@@ -88,14 +88,14 @@ import type {
   DocumentOutline,
   SectionBlock,
   SemanticCondition,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   isSectionBlock,
   isTextBlock,
   isClauseBlock,
   isApprovedTemplateBlock,
   isMergedApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
 import PreviewSectionBlock from './PreviewSectionBlock.vue'

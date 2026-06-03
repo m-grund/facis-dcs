@@ -6,7 +6,9 @@ import ViewContractTemplateView from '@/modules/template-repository/views/ViewCo
 import { authenticationService } from '@/services/authentication-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
+import AuditView from '@/views/audit/AuditView.vue'
 import AuthSuccessView from '@/views/auth/AuthSuccessView.vue'
+import SigningDashboardView from '@/views/signing/SigningDashboardView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import ApproveContractView from '@/views/contract/ApproveContractView.vue'
@@ -21,8 +23,10 @@ import TemplateCatalogueView from '@/modules/template-catalogue/views/TemplateCa
 import {
   ArrowsRightLeftIcon,
   CheckCircleIcon,
+  ClipboardDocumentListIcon,
   DocumentTextIcon,
   EyeIcon,
+  PencilSquareIcon,
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
@@ -47,6 +51,9 @@ const ROUTES = {
     LIST: 'template.catalogues.list',
     VIEW: 'template.catalogues.view',
   },
+  AUDIT: {
+    LIST: 'audit.list',
+  },
   AUTH: {
     SUCCESS: 'auth.success',
   },
@@ -58,6 +65,9 @@ const ROUTES = {
     NEGOTIATE: 'contracts.negotiate',
     REVIEW: 'contracts.review',
     APPROVE: 'contracts.approve',
+  },
+  SIGNING: {
+    DASHBOARD: 'signing.dashboard',
   },
 } as const
 
@@ -207,6 +217,19 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/audit',
+    name: ROUTES.AUDIT.LIST,
+    component: AuditView,
+    meta: {
+      name: 'Audit',
+      icon: ClipboardDocumentListIcon,
+      requiresAuth: true,
+      title: 'DCS - Audit',
+      order: 5,
+      roles: ['AUDITOR'],
+    },
+  },
+  {
     path: '/contracts',
     name: ROUTES.CONTRACTS.LIST,
     component: ContractListView,
@@ -289,6 +312,19 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Approve Contract',
       roles: ['CONTRACT_APPROVER'],
+    },
+  },
+  {
+    path: '/signing',
+    name: ROUTES.SIGNING.DASHBOARD,
+    component: SigningDashboardView,
+    meta: {
+      name: 'Signing Dashboard',
+      icon: PencilSquareIcon,
+      requiresAuth: true,
+      title: 'DCS - Signing Dashboard',
+      order: 5,
+      roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER'],
     },
   },
   {
