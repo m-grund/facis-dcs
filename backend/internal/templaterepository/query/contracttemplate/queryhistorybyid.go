@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -23,22 +24,23 @@ type GetHistoryByIDQry struct {
 	DID         string
 	RetrievedBy string
 	Username    string
+	UserRoles   userrole.UserRoles
 }
 
 type GetHistoryByIDResult struct {
-	ID                 string
-	DID                string
-	DocumentNumber     *string
-	Version            int
-	State              contracttemplatestate.ContractTemplateState
-	TemplateType       contracttemplatetype.ContractTemplateType
-	Name               *string
-	Description        *string
-	CreatedBy          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	ResponsiblePersons *db.ResponsiblePersons
-	TemplateData       *datatype.JSON
+	ID             string
+	DID            string
+	DocumentNumber *string
+	Version        int
+	State          contracttemplatestate.ContractTemplateState
+	TemplateType   contracttemplatetype.ContractTemplateType
+	Name           *string
+	Description    *string
+	CreatedBy      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Responsible    *db.Responsible
+	TemplateData   *datatype.JSON
 }
 
 type GetHistoryByIDHandler struct {
@@ -69,6 +71,7 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(h.Ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
@@ -94,19 +97,19 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		}
 
 		result[idx] = GetHistoryByIDResult{
-			ID:                 entry.ID,
-			DID:                entry.DID,
-			DocumentNumber:     entry.DocumentNumber,
-			Version:            entry.Version,
-			State:              state,
-			Name:               entry.Name,
-			Description:        entry.Description,
-			CreatedBy:          entry.CreatedBy,
-			CreatedAt:          entry.CreatedAt,
-			UpdatedAt:          entry.UpdatedAt,
-			TemplateData:       entry.TemplateData,
-			TemplateType:       ctType,
-			ResponsiblePersons: entry.ResponsiblePersons,
+			ID:             entry.ID,
+			DID:            entry.DID,
+			DocumentNumber: entry.DocumentNumber,
+			Version:        entry.Version,
+			State:          state,
+			Name:           entry.Name,
+			Description:    entry.Description,
+			CreatedBy:      entry.CreatedBy,
+			CreatedAt:      entry.CreatedAt,
+			UpdatedAt:      entry.UpdatedAt,
+			TemplateData:   entry.TemplateData,
+			TemplateType:   ctType,
+			Responsible:    entry.Responsible,
 		}
 	}
 

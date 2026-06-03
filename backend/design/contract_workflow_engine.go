@@ -103,7 +103,7 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("contract_data", Any, "The data of that contract")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
@@ -131,7 +131,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
@@ -227,7 +227,7 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Attribute("contract_data", Any, "The data of that contract")
 
@@ -285,7 +285,7 @@ var ContractSearchResponse = Type("ContractSearchResponse", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approver, reviewers, and negotiators")
 
 	Attribute("created_at", String, "The timestamp when the contract template was created")
 
@@ -459,7 +459,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
-			Scope("System Contract Creator")
+			Scope("Sys. Contract Creator")
 		})
 
 		Payload(ContractCreateRequest)
@@ -483,7 +483,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
-			Scope("System Contract Creator")
+			Scope("Sys. Contract Creator")
 		})
 
 		Payload(ContractUpdateRequest)
@@ -510,11 +510,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
-			Scope("System Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 		})
 
 		Payload(ContractSubmitRequest)
@@ -539,8 +539,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 		})
 
 		Payload(ContractNegotiationRequest)
@@ -565,8 +566,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 		})
 
 		Payload(ContractNegotiationRespondRequest)
@@ -591,8 +593,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Contract Approver")
+			Scope("Sys. Contract Reviewer")
 		})
 
 		Payload(ContractReviewRequest)
@@ -620,11 +623,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(ContractRetrieveRequest)
@@ -654,11 +657,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(ContractRetrieveByIDRequest)
@@ -685,11 +688,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(ContractHistoryRetrieveByIDRequest)
@@ -717,11 +720,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("System Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(ContractSearchRequest)
@@ -756,7 +759,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 		})
 
 		Payload(ContractApproveRequest)
@@ -782,7 +785,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Approver")
-			Scope("System Contract Approver")
+			Scope("Sys. Contract Approver")
 		})
 
 		Payload(ContractRejectRequest)
@@ -807,7 +810,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(ContractStoreRequest)
@@ -832,7 +835,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(ContractTerminateRequest)
@@ -858,7 +861,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(ContractAuditRequest)

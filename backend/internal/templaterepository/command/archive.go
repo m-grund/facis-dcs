@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/db"
@@ -21,6 +22,7 @@ type ArchiveCmd struct {
 	UpdatedAt  time.Time
 	ArchivedBy string
 	Username   string
+	UserRoles  userrole.UserRoles
 }
 
 type Archiver struct {
@@ -79,6 +81,7 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		ArchivedBy:     cmd.ArchivedBy,
 		OccurredAt:     time.Now().UTC(),
 		Username:       cmd.Username,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

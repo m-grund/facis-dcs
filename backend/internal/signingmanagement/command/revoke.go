@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/conf"
@@ -21,6 +23,7 @@ type RevokeCmd struct {
 	DID       string
 	RevokedBy string
 	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type Revoker struct {
@@ -54,6 +57,7 @@ func (h *Revoker) Handle(ctx context.Context, cmd RevokeCmd) error {
 		RevokedBy:       cmd.RevokedBy,
 		OccurredAt:      time.Now(),
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

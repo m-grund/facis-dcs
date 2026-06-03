@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base"
@@ -21,6 +23,7 @@ type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
 	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {
@@ -51,6 +54,7 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([]datatype.
 		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
 		Username:      query.Username,
+		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

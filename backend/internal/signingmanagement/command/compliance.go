@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
@@ -21,6 +22,7 @@ type ComplianceCmd struct {
 	DID       string
 	CheckedBy string
 	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type ComplianceValidator struct {
@@ -54,6 +56,7 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		CheckedBy:       cmd.CheckedBy,
 		OccurredAt:      time.Now(),
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

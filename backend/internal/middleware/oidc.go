@@ -3,8 +3,11 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 )
@@ -150,12 +153,21 @@ type AuthContext struct {
 	ParticipantID string
 }
 
-// GetRoles extracts roles from the request context.
-func GetRoles(ctx context.Context) []string {
+// GetUserRoles extracts roles from the request context.
+func GetUserRoles(ctx context.Context) []userrole.UserRole {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.Roles
+		userRoles := make([]userrole.UserRole, len(ac.Roles))
+		for i, role := range ac.Roles {
+			userRole, err := userrole.NewUserRole(role)
+			if err != nil {
+				log.Printf("failed to parse user role %q: %v", role, err)
+			}
+			userRoles[i] = userRole
+		}
+		return userRoles
+
 	}
-	return []string{}
+	return []userrole.UserRole{}
 }
 
 // GetUsername extracts the authenticated username from the request context.
@@ -180,16 +192,6 @@ func GetParticipantID(ctx context.Context) string {
 		return ac.ParticipantID
 	}
 	return ""
-}
-
-// HasRole checks if the context contains a specific role.
-func HasRole(ctx context.Context, requiredRole string) bool {
-	for _, role := range GetRoles(ctx) {
-		if role == requiredRole {
-			return true
-		}
-	}
-	return false
 }
 
 // InjectAuthContext injects the validated identity into the request context.

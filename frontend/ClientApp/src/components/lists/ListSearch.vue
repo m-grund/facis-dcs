@@ -42,9 +42,6 @@ const searchedItems = computed(() => {
   if (searchResults.value.length === 0) return []
 
   return searchResults.value
-  // const backendIds = new Set(searchResults.value.map((item) => item.did))
-
-  // return props.items.filter((item) => backendIds.has(item.did))
 })
 
 const inputValue: Ref<T> = computed(() => {

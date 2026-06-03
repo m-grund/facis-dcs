@@ -7,6 +7,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -23,6 +25,7 @@ type ApproveCmd struct {
 	ApprovedBy    string
 	DecisionNotes []string
 	Username      string
+	UserRoles     userrole.UserRoles
 }
 
 type Approver struct {
@@ -84,6 +87,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		DecisionNotes:  cmd.DecisionNotes,
 		OccurredAt:     time.Now().UTC(),
 		Username:       cmd.Username,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

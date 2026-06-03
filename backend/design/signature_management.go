@@ -26,7 +26,7 @@ var SMContractListItem = Type("SMContractListItem", func() {
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
@@ -214,7 +214,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractRetrieveRequest)
@@ -240,7 +240,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractRetrieveByIDRequest)
@@ -265,7 +265,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractVerifyRequest)
@@ -290,7 +290,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
-			Scope("System Contract Signer")
+			Scope("Sys. Contract Signer")
 		})
 
 		Payload(SMContractApplyRequest)
@@ -314,10 +314,8 @@ var _ = Service("SignatureManagement", func() {
 		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Signer")
-			Scope("System Contract Signer")
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(SMContractValidateRequest)
@@ -342,7 +340,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(SMContractRevokeRequest)
@@ -368,7 +366,7 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(SMContractAuditRequest)
@@ -394,7 +392,7 @@ var _ = Service("SignatureManagement", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
-			Scope("System Contract Manager")
+			Scope("Sys. Contract Manager")
 		})
 
 		Payload(SMContractComplianceRequest)

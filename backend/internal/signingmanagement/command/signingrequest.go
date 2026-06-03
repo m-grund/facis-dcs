@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
@@ -22,6 +24,7 @@ type SigningRequestCmd struct {
 	RequestedBy string
 	UpdatedAt   time.Time
 	Username    string
+	UserRoles   userrole.UserRoles
 }
 
 type SigningRequester struct {
@@ -60,6 +63,7 @@ func (h *SigningRequester) Handle(ctx context.Context, cmd SigningRequestCmd) er
 		RequestedBy:     cmd.RequestedBy,
 		OccurredAt:      time.Now().UTC(),
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

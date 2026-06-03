@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatetype"
@@ -31,20 +32,21 @@ type GetAllMetadataByFilterQry struct {
 	TemplateData   string
 	Username       string
 	Pagination     datatype.Pagination
+	UserRoles      userrole.UserRoles
 }
 
 type GetAllMetadataByFilterResult struct {
-	DID                string
-	DocumentNumber     *string
-	Version            int
-	State              contracttemplatestate.ContractTemplateState
-	TemplateType       contracttemplatetype.ContractTemplateType
-	Name               *string
-	Description        *string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	ResponsiblePersons *db.ResponsiblePersons
-	MetaData           datatype.JSON
+	DID            string
+	DocumentNumber *string
+	Version        int
+	State          contracttemplatestate.ContractTemplateState
+	TemplateType   contracttemplatetype.ContractTemplateType
+	Name           *string
+	Description    *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Responsible    *db.Responsible
+	MetaData       datatype.JSON
 }
 
 type GetAllMetaDataByFilterHandler struct {
@@ -94,6 +96,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
@@ -119,16 +122,16 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		}
 
 		result[i] = GetAllMetadataByFilterResult{
-			DID:                data.DID,
-			DocumentNumber:     data.DocumentNumber,
-			Version:            data.Version,
-			State:              ctState,
-			TemplateType:       ctType,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:            data.DID,
+			DocumentNumber: data.DocumentNumber,
+			Version:        data.Version,
+			State:          ctState,
+			TemplateType:   ctType,
+			Name:           data.Name,
+			Description:    data.Description,
+			CreatedAt:      data.CreatedAt,
+			UpdatedAt:      data.UpdatedAt,
+			Responsible:    data.Responsible,
 		}
 	}
 

@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -25,21 +26,22 @@ type GetAllMetadataQry struct {
 	RetrievedBy string
 	Username    string
 	Pagination  datatype.Pagination
+	UserRoles   userrole.UserRoles
 }
 
 type MetadataItem struct {
-	DID                string
-	DocumentNumber     *string
-	Version            int
-	State              contracttemplatestate.ContractTemplateState
-	TemplateType       contracttemplatetype.ContractTemplateType
-	Name               *string
-	Description        *string
-	CreatedBy          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	ResponsiblePersons *db.ResponsiblePersons
-	MetaData           datatype.JSON
+	DID            string
+	DocumentNumber *string
+	Version        int
+	State          contracttemplatestate.ContractTemplateState
+	TemplateType   contracttemplatetype.ContractTemplateType
+	Name           *string
+	Description    *string
+	CreatedBy      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	*db.Responsible
+	MetaData datatype.JSON
 }
 
 type ReviewTaskItem struct {
@@ -97,6 +99,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
@@ -133,17 +136,17 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata := MetadataItem{
-			DID:                data.DID,
-			DocumentNumber:     data.DocumentNumber,
-			Version:            data.Version,
-			State:              state,
-			TemplateType:       templateType,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedBy:          data.CreatedBy,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:            data.DID,
+			DocumentNumber: data.DocumentNumber,
+			Version:        data.Version,
+			State:          state,
+			TemplateType:   templateType,
+			Name:           data.Name,
+			Description:    data.Description,
+			CreatedBy:      data.CreatedBy,
+			CreatedAt:      data.CreatedAt,
+			UpdatedAt:      data.UpdatedAt,
+			Responsible:    data.Responsible,
 		}
 		contractTemplatesItems = append(contractTemplatesItems, metadata)
 

@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -22,6 +23,7 @@ type AcceptNegotiationCmd struct {
 	DID        string
 	AcceptedBy string
 	Username   string
+	UserRoles  userrole.UserRoles
 }
 
 type NegotiationAcceptor struct {
@@ -68,6 +70,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 	evt := contractevents.AcceptNegotiationEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
+		UserRoles:       cmd.UserRoles,
 		AcceptedBy:      cmd.AcceptedBy,
 		Username:        cmd.Username,
 		OccurredAt:      time.Now().UTC(),

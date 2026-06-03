@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -27,6 +28,7 @@ type PublishCmd struct {
 	PublishedBy   string
 	Username      string
 	ParticipantID string
+	UserRoles     userrole.UserRoles
 }
 
 type Publisher struct {
@@ -114,6 +116,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		PublishedBy:    cmd.PublishedBy,
 		Username:       cmd.Username,
 		OccurredAt:     time.Now().UTC(),
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

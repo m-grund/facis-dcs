@@ -50,6 +50,7 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 	qry := query.GetAllMetadataQry{
 		RetrievedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 		Pagination:  pagination,
 	}
 	queryHandler := query.GetAllMetadataHandler{
@@ -84,19 +85,19 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 		}
 
 		contracts = append(contracts, &signaturemanagement.SMContractListItem{
-			Did:                item.DID,
-			ContractVersion:    item.ContractVersion,
-			State:              item.State.String(),
-			Name:               item.Name,
-			Description:        item.Description,
-			CreatedBy:          item.CreatedBy,
-			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
-			StartDate:          startDate,
-			ExpDate:            expDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    item.ExpNoticePeriod,
-			ResponsiblePersons: item.ResponsiblePersons,
+			Did:             item.DID,
+			ContractVersion: item.ContractVersion,
+			State:           item.State.String(),
+			Name:            item.Name,
+			Description:     item.Description,
+			CreatedBy:       item.CreatedBy,
+			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			StartDate:       startDate,
+			ExpDate:         expDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: item.ExpNoticePeriod,
+			Responsible:     item.Responsible,
 		})
 	}
 
@@ -125,6 +126,7 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 	qry := query.GetByIDQry{
 		RetrievedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := query.GetByIDHandler{
 		DB:    s.DB,
@@ -163,6 +165,7 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 		DID:        req.Did,
 		VerifiedBy: middleware.GetDID(ctx),
 		Username:   middleware.GetUsername(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := command.Verifier{
 		DB:    s.DB,
@@ -185,6 +188,7 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		DID:       req.Did,
 		AppliedBy: middleware.GetDID(ctx),
 		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := command.Applier{
 		DB:    s.DB,
@@ -207,6 +211,7 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 		DID:         req.Did,
 		ValidatedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.Validator{
 		DB:    s.DB,
@@ -231,6 +236,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 		DID:       req.Did,
 		RevokedBy: middleware.GetUsername(ctx),
 		Username:  middleware.GetDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.Revoker{
 		DB:    s.DB,
@@ -255,6 +261,7 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 		DID:       req.Did,
 		AuditedBy: middleware.GetDID(ctx),
 		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := query.Auditor{
 		DB:           s.DB,
@@ -291,6 +298,7 @@ func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signature
 		DID:       req.Did,
 		CheckedBy: middleware.GetDID(ctx),
 		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.ComplianceValidator{
 		DB:    s.DB,

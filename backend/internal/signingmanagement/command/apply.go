@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
@@ -20,6 +21,7 @@ type ApplyCmd struct {
 	DID       string
 	AppliedBy string
 	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type Applier struct {
@@ -50,6 +52,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		AppliedBy:       cmd.AppliedBy,
 		OccurredAt:      time.Now().UTC(),
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

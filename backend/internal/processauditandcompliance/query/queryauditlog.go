@@ -13,6 +13,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	event2 "digital-contracting-service/internal/processauditandcompliance/event"
 )
@@ -21,6 +22,7 @@ type GetAuditLogQry struct {
 	Scope     componenttype.ComponentType
 	AuditedBy string
 	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {
@@ -51,6 +53,7 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatyp
 		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
 		Username:      query.Username,
+		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance)
 	if err != nil {

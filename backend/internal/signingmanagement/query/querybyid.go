@@ -17,6 +17,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
@@ -27,23 +28,24 @@ type GetByIDQry struct {
 	DID         string
 	RetrievedBy string
 	Username    string
+	UserRoles   userrole.UserRoles
 }
 
 type GetByIDResult struct {
-	DID                string
-	ContractVersion    int
-	State              contractstate.ContractState
-	Name               *string
-	Description        *string
-	CreatedBy          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	ContractData       *datatype.JSON
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	DID             string
+	ContractVersion int
+	State           contractstate.ContractState
+	Name            *string
+	Description     *string
+	CreatedBy       string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ContractData    *datatype.JSON
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
+	Responsible     *db.Responsible
 }
 
 type GetByIDHandler struct {
@@ -76,6 +78,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {
@@ -102,19 +105,19 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 	}
 
 	return &GetByIDResult{
-		DID:                query.DID,
-		ContractVersion:    data.ContractVersion,
-		State:              state,
-		Name:               data.Name,
-		Description:        data.Description,
-		CreatedBy:          data.CreatedBy,
-		CreatedAt:          data.CreatedAt,
-		UpdatedAt:          data.UpdatedAt,
-		ContractData:       data.ContractData,
-		StartDate:          data.StartDate,
-		ExpDate:            data.ExpDate,
-		ExpPolicy:          expPolicy,
-		ExpNoticePeriod:    data.ExpNoticePeriod,
-		ResponsiblePersons: data.ResponsiblePersons,
+		DID:             query.DID,
+		ContractVersion: data.ContractVersion,
+		State:           state,
+		Name:            data.Name,
+		Description:     data.Description,
+		CreatedBy:       data.CreatedBy,
+		CreatedAt:       data.CreatedAt,
+		UpdatedAt:       data.UpdatedAt,
+		ContractData:    data.ContractData,
+		StartDate:       data.StartDate,
+		ExpDate:         data.ExpDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: data.ExpNoticePeriod,
+		Responsible:     data.Responsible,
 	}, nil
 }

@@ -14,6 +14,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
@@ -26,23 +27,24 @@ type GetAllMetadataQry struct {
 	RetrievedBy string
 	Username    string
 	Pagination  datatype.Pagination
+	UserRoles   userrole.UserRoles
 }
 
 type MetadataItem struct {
-	DID                string
-	ContractVersion    int
-	Name               *string
-	Description        *string
-	State              contractstate.ContractState
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	MetaData           datatype.JSON
-	CreatedBy          string
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	DID             string
+	ContractVersion int
+	Name            *string
+	Description     *string
+	State           contractstate.ContractState
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	MetaData        datatype.JSON
+	CreatedBy       string
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
+	Responsible     *db.Responsible
 }
 
 type SigningTaskItem struct {
@@ -96,6 +98,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now(),
 		Username:    query.Username,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {
@@ -126,19 +129,19 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata := MetadataItem{
-			DID:                data.DID,
-			ContractVersion:    data.ContractVersion,
-			State:              state,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedBy:          data.CreatedBy,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			StartDate:          data.StartDate,
-			ExpDate:            data.ExpDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    data.ExpNoticePeriod,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:             data.DID,
+			ContractVersion: data.ContractVersion,
+			State:           state,
+			Name:            data.Name,
+			Description:     data.Description,
+			CreatedBy:       data.CreatedBy,
+			CreatedAt:       data.CreatedAt,
+			UpdatedAt:       data.UpdatedAt,
+			StartDate:       data.StartDate,
+			ExpDate:         data.ExpDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: data.ExpNoticePeriod,
+			Responsible:     data.Responsible,
 		}
 		contractItems = append(contractItems, metadata)
 

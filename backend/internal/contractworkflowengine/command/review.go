@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -20,6 +22,7 @@ type ReviewCmd struct {
 	DID        string
 	ReviewedBy string
 	Username   string
+	UserRoles  userrole.UserRoles
 }
 
 type Reviewer struct {
@@ -46,6 +49,7 @@ func (h *Reviewer) Handle(ctx context.Context, cmd ReviewCmd) error {
 		DID:        cmd.DID,
 		ReviewedBy: cmd.ReviewedBy,
 		Username:   cmd.Username,
+		UserRoles:  cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

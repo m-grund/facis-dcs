@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
@@ -20,6 +21,7 @@ type VerifyCmd struct {
 	DID        string
 	VerifiedBy string
 	Username   string
+	UserRoles  userrole.UserRoles
 }
 
 type Verifier struct {
@@ -50,6 +52,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		VerifiedBy:      cmd.VerifiedBy,
 		OccurredAt:      time.Now().UTC(),
 		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {
