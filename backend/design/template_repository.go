@@ -504,6 +504,7 @@ var _ = Service("TemplateRepository", func() {
 			Scope("Template Creator")
 			Scope("Template Reviewer")
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateSubmitRequest)
@@ -832,9 +833,9 @@ var _ = Service("TemplateRepository", func() {
 		Meta("dcs:ui", "Template Management Dashboard")
 
 		Security(JWTAuth, func() {
+			Scope("Template Manager")
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
 		})
 
 		Payload(ContractTemplateAuditRequest)

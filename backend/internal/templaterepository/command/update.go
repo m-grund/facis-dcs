@@ -61,26 +61,30 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	if oldData.State != contracttemplatestate.Draft.String() &&
-		oldData.State != contracttemplatestate.Rejected.String() &&
-		oldData.State != contracttemplatestate.Submitted.String() {
-		return errors.New("invalid contract template state")
-	}
+	if oldData.State == contracttemplatestate.Draft.String() && oldData.State != contracttemplatestate.Rejected.String() {
 
-	isValidUser := false
-	if (oldData.State == contracttemplatestate.Draft.String() || oldData.State == contracttemplatestate.Rejected.String()) &&
-		oldData.CreatedBy == cmd.UpdatedBy {
-		isValidUser = true
-	} else if oldData.State == contracttemplatestate.Submitted.String() {
-		valid, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.UpdatedBy)
-		if err != nil {
-			return err
+		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator, userrole.TemplateManager) {
+			return errors.New("invalid user permission")
 		}
-		isValidUser = valid
-	}
 
-	if !isValidUser {
-		return fmt.Errorf("invalid user")
+	} else if oldData.State != contracttemplatestate.Submitted.String() {
+
+		if !cmd.UserRoles.HasRoles(userrole.TemplateReviewer, userrole.TemplateManager) {
+			return errors.New("invalid user permission")
+		}
+
+		if !cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
+			isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.UpdatedBy)
+			if err != nil {
+				return err
+			}
+			if !isValidReviewer {
+				return errors.New("user is not a valid reviewer for that contract template")
+			}
+		}
+
+	} else {
+		return errors.New("current contract template state is invalid")
 	}
 
 	err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)

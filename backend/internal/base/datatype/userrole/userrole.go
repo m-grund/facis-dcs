@@ -7,13 +7,11 @@ import (
 type UserRole string
 
 const (
-	// Human User Roles - Template Management
 	TemplateCreator  UserRole = "Template Creator"
 	TemplateReviewer UserRole = "Template Reviewer"
 	TemplateApprover UserRole = "Template Approver"
 	TemplateManager  UserRole = "Template Manager"
 
-	// Human User Roles - Contract Management
 	ContractCreator  UserRole = "Contract Creator"
 	ContractReviewer UserRole = "Contract Reviewer"
 	ContractApprover UserRole = "Contract Approver"
@@ -21,18 +19,15 @@ const (
 	ContractSigner   UserRole = "Contract Signer"
 	ContractObserver UserRole = "Contract Observer"
 
-	// Human User Roles - System Administration
 	ArchiveManager      UserRole = "Archive Manager"
 	Auditor             UserRole = "Auditor"
 	SystemAdministrator UserRole = "Sys. Administrator"
 	ComplianceOfficer   UserRole = "Compliance Officer"
 	IntegrationManager  UserRole = "Ingestion Manager"
 
-	// Human User Roles - Process Management
 	ProcessOrchestrator UserRole = "Process Orchestrator"
 	Validator           UserRole = "Validator"
 
-	// System User Roles - API/Automated
 	SystemContractCreator  UserRole = "Sys. Contract Creator"
 	SystemContractReviewer UserRole = "Sys. Contract Reviewer"
 	SystemContractApprover UserRole = "Sys. Contract Approver"
@@ -90,6 +85,17 @@ func (r UserRoles) HasRole(requiredRole UserRole) bool {
 	for _, role := range r {
 		if role == requiredRole {
 			return true
+		}
+	}
+	return false
+}
+
+func (r UserRoles) HasRoles(requiredRoles ...UserRole) bool {
+	for _, requiredRole := range requiredRoles {
+		for _, role := range r {
+			if role == requiredRole {
+				return true
+			}
 		}
 	}
 	return false
