@@ -314,8 +314,6 @@ var _ = Service("SignatureManagement", func() {
 		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
 		})

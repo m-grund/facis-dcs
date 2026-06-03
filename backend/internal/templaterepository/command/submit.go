@@ -92,7 +92,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	var nextTemplateState contracttemplatestate.ContractTemplateState
 	if processData.State == contracttemplatestate.Draft.String() {
 
-		if !cmd.UserRoles.HasRole(userrole.TemplateCreator) {
+		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator) {
 			return errors.New("invalid user permission")
 		}
 
@@ -148,7 +148,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Submitted.String() {
 
-		if cmd.UserRoles.HasRoles(userrole.TemplateReviewer) {
+		if !cmd.UserRoles.HasRoles(userrole.TemplateReviewer) {
 			return errors.New("invalid user permission")
 		}
 
@@ -199,7 +199,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Reviewed.String() {
 
-		if cmd.UserRoles.HasRoles(userrole.TemplateApprover) {
+		if !cmd.UserRoles.HasRoles(userrole.TemplateApprover) {
 			return errors.New("invalid user permission")
 		}
 
