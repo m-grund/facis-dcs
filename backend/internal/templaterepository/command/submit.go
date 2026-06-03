@@ -92,7 +92,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	var nextTemplateState contracttemplatestate.ContractTemplateState
 	if processData.State == contracttemplatestate.Draft.String() {
 
-		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator, userrole.TemplateManager) {
+		if !cmd.UserRoles.HasRole(userrole.TemplateCreator) {
 			return errors.New("invalid user permission")
 		}
 
@@ -130,7 +130,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Rejected.String() {
 
-		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator, userrole.TemplateManager) {
+		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator) {
 			return errors.New("invalid user permission")
 		}
 
@@ -148,44 +148,37 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Submitted.String() {
 
-		if !cmd.UserRoles.HasRoles(userrole.TemplateReviewer, userrole.TemplateManager) {
+		if cmd.UserRoles.HasRoles(userrole.TemplateReviewer) {
 			return errors.New("invalid user permission")
 		}
 
-		if cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
-			isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.SubmittedBy)
-			if err != nil {
-				return err
-			}
-			if !isValidReviewer {
-				return errors.New("user is not a valid reviewer for that contract template")
-			}
+		isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.SubmittedBy)
+		if err != nil {
+			return err
+		}
+		if !isValidReviewer {
+			return errors.New("user is not a valid reviewer for that contract template")
 		}
 
 		if cmd.ActionFlag != nil {
 			switch *cmd.ActionFlag {
 			case actionflag.Approval:
-
-				if cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
-					exist, err := h.RTRepo.TaskExistsInState(ctx, tx, processData.DID, cmd.SubmittedBy, reviewtaskstate.Open.String())
-					if err != nil {
-						return err
-					}
-					if exist {
-						return errors.New("contract template needs to be verified before")
-					}
-					err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contracttemplatestate.Approved.String())
-					if err != nil {
-						return fmt.Errorf("could not update review task: %w", err)
-					}
-					existOpenTasks, err := h.RTRepo.AnyTasksInState(ctx, tx, processData.DID, reviewtaskstate.Open.String(), reviewtaskstate.Verified.String())
-					if err != nil {
-						return fmt.Errorf("could not check if review task exists: %w", err)
-					}
-					if !existOpenTasks {
-						nextTemplateState = contracttemplatestate.Reviewed
-					}
-				} else {
+				exist, err := h.RTRepo.TaskExistsInState(ctx, tx, processData.DID, cmd.SubmittedBy, reviewtaskstate.Open.String())
+				if err != nil {
+					return err
+				}
+				if exist {
+					return errors.New("contract template needs to be verified before")
+				}
+				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contracttemplatestate.Approved.String())
+				if err != nil {
+					return fmt.Errorf("could not update review task: %w", err)
+				}
+				existOpenTasks, err := h.RTRepo.AnyTasksInState(ctx, tx, processData.DID, reviewtaskstate.Open.String(), reviewtaskstate.Verified.String())
+				if err != nil {
+					return fmt.Errorf("could not check if review task exists: %w", err)
+				}
+				if !existOpenTasks {
 					nextTemplateState = contracttemplatestate.Reviewed
 				}
 
@@ -206,18 +199,16 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Reviewed.String() {
 
-		if !cmd.UserRoles.HasRoles(userrole.TemplateApprover, userrole.TemplateManager) {
+		if cmd.UserRoles.HasRoles(userrole.TemplateApprover) {
 			return errors.New("invalid user permission")
 		}
 
-		if cmd.UserRoles.HasRole(userrole.TemplateApprover) {
-			isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
-			if err != nil {
-				return err
-			}
-			if !isValid {
-				return errors.New("user is not a valid approver for that contract template")
-			}
+		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
+		if err != nil {
+			return err
+		}
+		if !isValid {
+			return errors.New("user is not a valid approver for that contract template")
 		}
 
 		err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
