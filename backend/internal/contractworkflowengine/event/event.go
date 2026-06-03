@@ -132,6 +132,12 @@ type RetrieveArchivedEvent struct {
 	OccurredAt  time.Time `json:"occurred_at"`
 }
 
+// SearchEvent is emitted when contract data is searched.
+type SearchEvent struct {
+	RetrievedBy string    `json:"retrieved_by"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
 // EventType implements [event.Event].
 func (r RetrieveArchivedEvent) EventType() string {
 	return eventtype.RetrieveArchived.String()
@@ -139,6 +145,16 @@ func (r RetrieveArchivedEvent) EventType() string {
 
 // GetDID implements [event.Event].
 func (r RetrieveArchivedEvent) GetDID() string {
+	return "*"
+}
+
+// EventType implements the Event interface.
+func (e SearchEvent) EventType() string {
+	return eventtype.Search.String()
+}
+
+// GetDID implements the Event interface.
+func (e SearchEvent) GetDID() string {
 	return "*"
 }
 

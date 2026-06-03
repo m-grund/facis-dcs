@@ -33,6 +33,16 @@ type GetArchivedContractsQry struct {
 	RetrievedBy string
 }
 
+type SearchArchivedContractsQry struct {
+	RetrievedBy     string
+	DID             string
+	ContractVersion int
+	State           *contractstate.ContractState
+	Name            string
+	Description     string
+	ContractData    string
+}
+
 func (h *GetArchivedContractsHandler) Handle(ctx context.Context, query GetArchivedContractsQry) (*GetArchivedContractsResult, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
@@ -68,9 +78,78 @@ func (h *GetArchivedContractsHandler) Handle(ctx context.Context, query GetArchi
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
 
-	didToMetadata := make(map[string]MetadataItem)
+	contractItems, err := toMetadataItems(archivedContractsMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetArchivedContractsResult{
+		Contracts: contractItems,
+	}, nil
+}
+
+func (h *GetArchivedContractsHandler) Search(ctx context.Context, query SearchArchivedContractsQry) (*GetArchivedContractsResult, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := h.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not create transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	var state string
+	if query.State != nil {
+		state = query.State.String()
+	}
+
+	searchValues := db.SearchValues{
+		DID:             query.DID,
+		ContractVersion: query.ContractVersion,
+		State:           state,
+		Name:            query.Name,
+		Description:     query.Description,
+		ContractData:    query.ContractData,
+	}
+
+	archivedContractsMetadata, err := h.CRepo.ReadArchivedContractsByFilter(ctx, tx, searchValues)
+	if err != nil {
+		return nil, fmt.Errorf("could not search archived contracts: %w", err)
+	}
+
+	evt := events.SearchEvent{
+		RetrievedBy: query.RetrievedBy,
+		OccurredAt:  time.Now().UTC(),
+	}
+
+	err = event.Create(ctx, tx, evt, componenttype.ContractStorageArchive)
+	if err != nil {
+		return nil, fmt.Errorf("could not create event: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("could not commit transaction: %w", err)
+	}
+
+	contractItems, err := toMetadataItems(archivedContractsMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetArchivedContractsResult{
+		Contracts: contractItems,
+	}, nil
+}
+
+func toMetadataItems(contractsMetadata []db.ContractMetadata) ([]MetadataItem, error) {
 	var contractItems []MetadataItem
-	for _, data := range archivedContractsMetadata {
+	for _, data := range contractsMetadata {
 
 		state, err := contractstate.NewContractState(data.State)
 		if err != nil {
@@ -102,11 +181,7 @@ func (h *GetArchivedContractsHandler) Handle(ctx context.Context, query GetArchi
 			ResponsiblePersons: data.ResponsiblePersons,
 		}
 		contractItems = append(contractItems, metadata)
-
-		didToMetadata[data.DID] = metadata
 	}
 
-	return &GetArchivedContractsResult{
-		Contracts: contractItems,
-	}, nil
+	return contractItems, nil
 }

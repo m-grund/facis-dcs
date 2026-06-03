@@ -149,8 +149,9 @@ SELECT
     contract_version,
     name,
     description,
+    search_vector,
     responsible_persons
-FROM contracts_effective_metadata
+FROM contracts_effective
 WHERE state = 'APPROVED'
   AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP);
 

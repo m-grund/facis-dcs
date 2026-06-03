@@ -186,6 +186,27 @@ func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sq
 	return cts, nil
 }
 
+func (r *PostgresContractRepo) ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
+	query := `
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        FROM contracts_archive_metadata
+    `
+	conditions, params, err := createSearchConditions(values)
+	if err != nil {
+		return nil, err
+	}
+	if len(params) > 0 {
+		query += " WHERE " + *conditions
+	}
+
+	var cts []db.ContractMetadata
+	err = tx.SelectContext(ctx, &cts, query, params...)
+	if err != nil {
+		return nil, err
+	}
+	return cts, nil
+}
+
 func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
         UPDATE contracts SET state = $2

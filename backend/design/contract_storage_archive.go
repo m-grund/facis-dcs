@@ -15,6 +15,19 @@ var ArchiveRetrieveResponse = Type("ArchiveRetrieveResponse", func() {
 	Attribute("contracts", ArrayOf(ContractItem), "A list of contracts")
 })
 
+var ArchiveSearchRequest = Type("ArchiveSearchRequest", func() {
+	Description("Archive search request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("contract_version", Int, "The version number of the contract")
+	Attribute("state", String, "The state of the contract")
+	Attribute("name", String, "The name of the contract")
+	Attribute("description", String, "A description for that contract")
+	Attribute("contract_data", String, "Search value for full text search in contract data")
+})
+
 // Contract Storage & Archive Service  (/archive/...)
 var _ = Service("ContractStorageArchive", func() {
 	Description("Contract Storage & Archive APIs (/archive/...)")
@@ -53,14 +66,24 @@ var _ = Service("ContractStorageArchive", func() {
 			Scope("Archive Manager")
 			Scope("Contract Observer")
 		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
+		Payload(ArchiveSearchRequest)
+		Result(ArrayOfRequired(ContractItem))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			GET("/archive/search")
+			Param("did")
+			Param("contract_version")
+			Param("state")
+			Param("name")
+			Param("description")
+			Param("contract_data")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(ArrayOf(Any))
 	})
 
 	Method("store", func() {
