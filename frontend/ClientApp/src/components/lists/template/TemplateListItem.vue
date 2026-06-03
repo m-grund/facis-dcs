@@ -9,8 +9,6 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   template: PartialContractTemplate
-  hasReviewTask: boolean
-  hasApprovalTask: boolean
 }>()
 
 const authStore = useAuthStore()
@@ -20,20 +18,25 @@ const canEdit = computed(() => {
   return (
     (props.template.created_by === authStore.user?.username &&
       (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected)) ||
-    (props.template.state === TemplateState.submitted && props.hasReviewTask)
+    (props.template.state === TemplateState.submitted && templateStore.hasReviewTask(props.template))
   )
 })
 
 const canReview = computed(() => {
   const task = templateStore.reviewTasks.find((task) => task.did === props.template.did)
-  return props.template.state === TemplateState.submitted && props.hasReviewTask && !!task && task.state !== 'APPROVED'
+  return (
+    props.template.state === TemplateState.submitted &&
+    templateStore.hasReviewTask(props.template) &&
+    !!task &&
+    task.state !== 'APPROVED'
+  )
 })
 
 const resolveViewRouteName = computed(() => {
   if (canReview.value) {
     return ROUTES.TEMPLATES.REVIEW
   }
-  if (props.template.state === TemplateState.reviewed && props.hasApprovalTask) {
+  if (props.template.state === TemplateState.reviewed && templateStore.hasApprovalTask(props.template)) {
     return ROUTES.TEMPLATES.APPROVE
   }
   return ROUTES.TEMPLATES.VIEW

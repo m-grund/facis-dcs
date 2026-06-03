@@ -8,6 +8,7 @@ import { computed, ref, type Ref } from 'vue'
 
 export const useContractsStore = defineStore('contracts', () => {
   const contracts: Ref<Contract[]> = ref([])
+  const paginatedContracts: Ref<Contract[]> = ref([])
   const reviewTasks: Ref<ContractReviewTask[]> = ref([])
   const approvalTasks: Ref<ContractApprovalTask[]> = ref([])
   const negotiationTasks: Ref<ContractNegotiationTask[]> = ref([])
@@ -19,17 +20,34 @@ export const useContractsStore = defineStore('contracts', () => {
 
   const findContractByDid = (did: string) => contracts.value.find((contract) => contract.did === did)
 
+  const fetchContracts = async (limit?: number, offset?: number) =>
+    await contractWorkflowService.retrieve({ limit, offset })
+
   async function loadContracts() {
     loading.value = true
     error.value = null
     try {
-      const data = await contractWorkflowService.retrieve()
+      const data = await fetchContracts()
       contracts.value = data.contracts
       reviewTasks.value = data.review_tasks.map((task) => ({ ...task, type: 'contract' }))
       approvalTasks.value = data.approval_tasks.map((task) => ({ ...task, type: 'contract' }))
       negotiationTasks.value = data.negotiation_tasks.map((task) => ({ ...task, type: 'contract' }))
     } catch (err: unknown) {
       error.value = err instanceof Error && err.message ? err.message : 'Error loading the contracts'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadPaginatedContracts(currentPage: number, limit: number) {
+    loading.value = true
+    error.value = null
+    try {
+      const offset = currentPage
+      const paginatedResult = await fetchContracts(limit, offset)
+      paginatedContracts.value = paginatedResult.contracts
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Error loading contracts'
     } finally {
       loading.value = false
     }
@@ -53,8 +71,10 @@ export const useContractsStore = defineStore('contracts', () => {
     approvalTasks,
     negotiationTasks,
     hasContracts,
+    paginatedContracts,
     findContractByDid,
     loadContracts,
+    loadPaginatedContracts,
     loading,
     error,
     hasNegotiationTask,

@@ -115,7 +115,6 @@ async function approve() {
     console.error('Missing did or updated_at for approval')
     return
   }
-  isSubmitting.value = true
   try {
     const decisionNoteResult = await decisionNoteDialog.value?.reveal({
       message: 'Add decision note?',
@@ -126,6 +125,7 @@ async function approve() {
     } else if (decisionNoteResult?.data) {
       decisionNote.value = decisionNoteResult.data
     }
+    isSubmitting.value = true
     await contractTemplateService.approve({
       did,
       updated_at: updatedAt,
@@ -146,7 +146,6 @@ async function resubmit() {
     console.error('Missing did or updated_at for reopen reviews')
     return
   }
-  isSubmitting.value = true
   try {
     const decisionNoteResult = await decisionNoteDialog.value?.reveal({
       message: 'Add decision note?',
@@ -157,6 +156,7 @@ async function resubmit() {
     } else if (decisionNoteResult?.data) {
       decisionNote.value = decisionNoteResult.data
     }
+    isSubmitting.value = true
     await contractTemplateService.submit({
       did,
       updated_at: updatedAt,

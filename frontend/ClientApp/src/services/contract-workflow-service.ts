@@ -8,6 +8,7 @@ import type {
   ContractNegotiationRespondRequest,
   ContractRejectRequest,
   ContractRetrieveByIdRequest,
+  ContractRetrieveRequest,
   ContractReviewRequest,
   ContractSearchRequest,
   ContractStoreRequest,
@@ -59,9 +60,9 @@ export const contractWorkflowService: ContractWorkflowService = {
     return http.get<ContractReviewResponse>('/contract/review', { params: request }).then((res) => res.data)
   },
 
-  async retrieve() {
+  async retrieve(request?: ContractRetrieveRequest) {
     return http
-      .get<ContractRetrieveResponse>('/contract/retrieve')
+      .get<ContractRetrieveResponse>('/contract/retrieve', { params: request })
       .then((res) => res.data)
       .catch((err: unknown) => {
         console.error('Retrieve Error:', err)

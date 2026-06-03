@@ -113,12 +113,14 @@ watch(
 )
 
 const verifyContract = () => {
+  isSubmitting.value = true
   if (!contract.value || !verificationResult?.value?.isValid) {
     verificationResult?.value?.errors.forEach((error) => errorStore.add(error.message))
     contractEditorUiStore.setActiveTab('content')
   } else {
     errorStore.add('Contract is valid', 'info')
   }
+  isSubmitting.value = false
 }
 
 const forwardToApproval = async () => {
@@ -135,6 +137,7 @@ const forwardToApproval = async () => {
     })
     if (confirmationResult?.isCanceled) return
     const comment = confirmationResult?.data
+    isSubmitting.value = true
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -146,6 +149,8 @@ const forwardToApproval = async () => {
     }
   } catch (err) {
     console.error('Failed to submit', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -158,6 +163,7 @@ const returnToNegotiation = async () => {
     })
     if (confirmationResult?.isCanceled) return
     const comment = confirmationResult?.data
+    isSubmitting.value = true
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -169,6 +175,8 @@ const returnToNegotiation = async () => {
     }
   } catch (err) {
     console.error('Failed to return to negotiation', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 

@@ -9,7 +9,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  searchResult: [value: PartialContractTemplate[]]
+  searchResult: [value: PartialContractTemplate[] | null]
 }>()
 
 const filterLabels: Partial<Record<keyof PartialContractTemplate, string>> = {

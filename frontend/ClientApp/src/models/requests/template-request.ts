@@ -47,6 +47,8 @@ export interface ContractTemplateUpdateManageRequest {
 }
 
 export interface ContractTemplateSearchRequest {
+  offset?: number
+  limit?: number
   did?: string
   document_number?: string
   version?: number
@@ -57,7 +59,10 @@ export interface ContractTemplateSearchRequest {
   filter?: string
 }
 
-export type ContractTemplateRetrieveRequest = Record<string, unknown>
+export interface ContractTemplateRetrieveRequest {
+  offset?: number
+  limit?: number
+}
 
 export interface ContractTemplateRetrieveByIdRequest {
   did: string

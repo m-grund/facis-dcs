@@ -71,8 +71,8 @@ const search = (request: Record<string, unknown>): Promise<Searchable[]> => {
   )
 }
 
-const handleSearchResult = (searchResults: Searchable[]) => {
-  const resultDids = new Set(searchResults.map((item) => item.did))
+const handleSearchResult = (searchResults: Searchable[] | null) => {
+  const resultDids = new Set(searchResults?.map((item) => item.did))
   const filteredTasks = props.tasks.filter((task) => resultDids.has(task.did))
   emit('searchResult', filteredTasks)
 }
