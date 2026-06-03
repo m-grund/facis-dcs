@@ -85,19 +85,19 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 		}
 
 		contracts = append(contracts, &signaturemanagement.SMContractListItem{
-			Did:                item.DID,
-			ContractVersion:    item.ContractVersion,
-			State:              item.State.String(),
-			Name:               item.Name,
-			Description:        item.Description,
-			CreatedBy:          item.CreatedBy,
-			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
-			StartDate:          startDate,
-			ExpDate:            expDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    item.ExpNoticePeriod,
-			ResponsiblePersons: item.ResponsiblePersons,
+			Did:             item.DID,
+			ContractVersion: item.ContractVersion,
+			State:           item.State.String(),
+			Name:            item.Name,
+			Description:     item.Description,
+			CreatedBy:       item.CreatedBy,
+			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			StartDate:       startDate,
+			ExpDate:         expDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: item.ExpNoticePeriod,
+			Responsible:     item.Responsible,
 		})
 	}
 
