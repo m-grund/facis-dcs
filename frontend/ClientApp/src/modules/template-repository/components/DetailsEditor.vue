@@ -124,15 +124,15 @@
         <div class="collapse-content grid px-0">
           <ul class="list col-start-1 row-start-1">
             <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Creator</li>
-            <li class="list-row py-0">{{ responsible_persons?.creator }}</li>
+            <li class="list-row py-0">{{ responsible?.creator }}</li>
           </ul>
           <ul class="list col-start-2 row-start-1">
             <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Approver</li>
-            <li class="list-row py-0">{{ responsible_persons?.approver }}</li>
+            <li class="list-row py-0">{{ responsible?.approver }}</li>
           </ul>
           <ul class="list col-start-1 row-start-2">
             <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Reviewers</li>
-            <li v-for="(reviewer, i) in responsible_persons?.reviewers" :key="i + reviewer" class="list-row py-0">
+            <li v-for="(reviewer, i) in responsible?.reviewers" :key="i + reviewer" class="list-row py-0">
               {{ reviewer }}
             </li>
           </ul>
@@ -161,7 +161,7 @@ interface SubcontractKey {
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, responsible_persons, version } = storeToRefs(store)
+const { templateType, documentBlocks, subTemplateSnapshots, state, responsible, version } = storeToRefs(store)
 
 const name = computed({
   get: () => store.name,

@@ -84,12 +84,12 @@
           <div class="collapse-content grid">
             <ul class="list col-start-1 row-start-1">
               <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Creator</li>
-              <li class="list-row py-0">{{ contract.responsible_persons?.creator }}</li>
+              <li class="list-row py-0">{{ contract.responsible?.creator }}</li>
             </ul>
             <ul class="list col-start-2 row-start-1">
               <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Approvers:</li>
               <li
-                v-for="(approver, i) in contract.responsible_persons?.approvers"
+                v-for="(approver, i) in contract.responsible?.approvers"
                 :key="i + approver"
                 class="list-row py-0"
               >
@@ -99,7 +99,7 @@
             <ul class="list col-start-1 row-start-2">
               <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Negotiators:</li>
               <li
-                v-for="(negotiator, i) in contract.responsible_persons?.negotiators"
+                v-for="(negotiator, i) in contract.responsible?.negotiators"
                 :key="i + negotiator"
                 class="list-row py-0"
               >
@@ -109,7 +109,7 @@
             <ul class="list col-start-2 row-start-2">
               <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Reviewers</li>
               <li
-                v-for="(reviewer, i) in contract.responsible_persons?.reviewers"
+                v-for="(reviewer, i) in contract.responsible?.reviewers"
                 :key="i + reviewer"
                 class="list-row py-0"
               >

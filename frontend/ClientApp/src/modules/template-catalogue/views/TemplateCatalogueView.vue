@@ -161,7 +161,7 @@ watch(
         version: data.version ?? null,
         updated_at: data.updated_at ?? null,
         created_by: '',
-        responsible_persons: null,
+        responsible: null,
       })
     } catch (e: unknown) {
       error.value = e instanceof Error && e.message ? e.message : 'Error loading template catalogue'
