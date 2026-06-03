@@ -58,7 +58,7 @@ import { useTemplateDraftStore } from '@template-repository/store/templateDraftS
 import CatalogueTemplateDetailsInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateDetailsInfo.vue'
 import CatalogueTemplateMetaDataInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateMetaDataInfo.vue'
 import CatalogueTemplatePreviewInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplatePreviewInfo.vue'
-import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-templace'
+import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-template'
 import { TemplateState } from '@/types/contract-template-state'
 import { ROUTES } from '@/router/router'
 import { storeToRefs } from 'pinia'

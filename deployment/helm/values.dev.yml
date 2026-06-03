@@ -103,18 +103,17 @@ neo4j:
 # See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
   enabled: true
-  # URL the DCS backend uses to reach the Federated Catalogue API
-  apiURL: ""
-  secretRef:
-    name: ""
-    key: "FEDERATED_CATALOGUE_API_URL"
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
+  service:
+    type: NodePort
+    nodePort: 30081
+  keycloak:
+    hostname: "localhost:30080"
+    issuerScheme: "http"
+  oauth:
+    clientID: "dcs-fc-client"
+  # Allow POSTing self-descriptions without signature verification in dev
+  verificationVpSignature: false
+  verificationVcSignature: false
 
 cryptoProvider:
   enabled: true
@@ -188,7 +187,7 @@ oidc:
   keycloakScheme: "http"
 
 orce:
-  enabled: false
+  enabled: true
   persistence:
     enabled: false
   service:
