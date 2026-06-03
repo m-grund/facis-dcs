@@ -630,15 +630,15 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 	}
 
 	qry := contract.GetAllMetadataByFilterQry{
-		DID:             *req.Did,
-		ContractVersion: *req.ContractVersion,
+		DID:             derefString(req.Did),
+		ContractVersion: derefInt(req.ContractVersion),
 		State:           state,
 		RetrievedBy:     middleware.GetDID(ctx),
 		Username:        middleware.GetUsername(ctx),
 		UserRoles:       middleware.GetUserRoles(ctx),
-		Name:            *req.Name,
-		Description:     *req.Description,
-		ContractData:    *req.ContractData,
+		Name:            derefString(req.Name),
+		Description:     derefString(req.Description),
+		ContractData:    derefString(req.ContractData),
 		Pagination:      pagination,
 	}
 	qryHandler := contract.GetAllMetaDataByFilterHandler{
