@@ -109,7 +109,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	var responsiblePersons *any
+	var responsible *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
@@ -136,7 +136,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			Negotiators: cmd.Negotiators,
 		}
 		anyRespPerson := any(respPersons)
-		responsiblePersons = &anyRespPerson
+		responsible = &anyRespPerson
 
 		updateData := db.ContractUpdateData{
 			DID:         cmd.DID,
@@ -330,17 +330,17 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		evt := contractevents.SubmitEvent{
-			DID:                cmd.DID,
-			ContractVersion:    processData.ContractVersion,
-			SubmittedBy:        cmd.SubmittedBy,
-			PreviousState:      processData.State,
-			NewState:           nextState.String(),
-			ActionFlag:         cmd.ActionFlag,
-			Comments:           cmd.Comments,
-			OccurredAt:         time.Now().UTC(),
-			ResponsiblePersons: responsiblePersons,
-			Username:           cmd.Username,
-			UserRoles:          cmd.UserRoles,
+			DID:             cmd.DID,
+			ContractVersion: processData.ContractVersion,
+			SubmittedBy:     cmd.SubmittedBy,
+			PreviousState:   processData.State,
+			NewState:        nextState.String(),
+			ActionFlag:      cmd.ActionFlag,
+			Comments:        cmd.Comments,
+			OccurredAt:      time.Now().UTC(),
+			Responsible:     responsible,
+			Username:        cmd.Username,
+			UserRoles:       cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 		if err != nil {

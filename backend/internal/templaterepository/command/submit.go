@@ -88,7 +88,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	var responsiblePersons *any
+	var responsible *any
 	var nextTemplateState contracttemplatestate.ContractTemplateState
 	if processData.State == contracttemplatestate.Draft.String() {
 
@@ -104,17 +104,17 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approver provided")
 		}
 
-		respPersons := db.Responsible{
+		resp := db.Responsible{
 			Creator:   processData.CreatedBy,
 			Reviewers: cmd.Reviewers,
 			Approver:  *cmd.Approver,
 		}
-		anyRespPerson := any(respPersons)
-		responsiblePersons = &anyRespPerson
+		anyResp := any(resp)
+		responsible = &anyResp
 
 		updateData := db.ContractTemplateUpdateData{
 			DID:         cmd.DID,
-			Responsible: &respPersons,
+			Responsible: &resp,
 		}
 		err := h.CTRepo.Update(ctx, tx, updateData)
 		if err != nil {
@@ -252,7 +252,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			ActionFlag:     cmd.ActionFlag,
 			Comments:       cmd.Comments,
 			OccurredAt:     time.Now().UTC(),
-			Responsible:    responsiblePersons,
+			Responsible:    responsible,
 			Username:       cmd.Username,
 			UserRoles:      cmd.UserRoles,
 		}

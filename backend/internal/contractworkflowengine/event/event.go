@@ -71,17 +71,17 @@ func (e UpdateEvent) GetDID() string {
 
 // SubmitEvent is emitted when a contract is submitted
 type SubmitEvent struct {
-	DID                string                 `json:"did"`
-	Username           string                 `json:"username"`
-	PreviousState      string                 `json:"previous_state"`
-	NewState           string                 `json:"new_state"`
-	SubmittedBy        string                 `json:"submitted_by"`
-	OccurredAt         time.Time              `json:"occurred_at"`
-	ContractVersion    int                    `json:"contract_version"`
-	ActionFlag         *actionflag.ActionFlag `json:"action_flag,omitempty"`
-	Comments           []string               `json:"comments"`
-	ResponsiblePersons *any                   `json:"responsible_persons,omitempty"`
-	UserRoles          userrole.UserRoles     `json:"user_roles"`
+	DID             string                 `json:"did"`
+	Username        string                 `json:"username"`
+	PreviousState   string                 `json:"previous_state"`
+	NewState        string                 `json:"new_state"`
+	SubmittedBy     string                 `json:"submitted_by"`
+	OccurredAt      time.Time              `json:"occurred_at"`
+	ContractVersion int                    `json:"contract_version"`
+	ActionFlag      *actionflag.ActionFlag `json:"action_flag,omitempty"`
+	Comments        []string               `json:"comments"`
+	Responsible     *any                   `json:"responsible,omitempty"`
+	UserRoles       userrole.UserRoles     `json:"user_roles"`
 }
 
 // EventType implements the Event interface.

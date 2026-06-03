@@ -32,20 +32,20 @@ type GetByIDQry struct {
 }
 
 type GetByIDResult struct {
-	DID                string
-	ContractVersion    int
-	State              contractstate.ContractState
-	Name               *string
-	Description        *string
-	CreatedBy          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	ContractData       *datatype.JSON
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
-	ResponsiblePersons *db.Responsible
+	DID             string
+	ContractVersion int
+	State           contractstate.ContractState
+	Name            *string
+	Description     *string
+	CreatedBy       string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ContractData    *datatype.JSON
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
+	Responsible     *db.Responsible
 }
 
 type GetByIDHandler struct {
@@ -105,19 +105,19 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 	}
 
 	return &GetByIDResult{
-		DID:                query.DID,
-		ContractVersion:    data.ContractVersion,
-		State:              state,
-		Name:               data.Name,
-		Description:        data.Description,
-		CreatedBy:          data.CreatedBy,
-		CreatedAt:          data.CreatedAt,
-		UpdatedAt:          data.UpdatedAt,
-		ContractData:       data.ContractData,
-		StartDate:          data.StartDate,
-		ExpDate:            data.ExpDate,
-		ExpPolicy:          expPolicy,
-		ExpNoticePeriod:    data.ExpNoticePeriod,
-		ResponsiblePersons: data.Responsible,
+		DID:             query.DID,
+		ContractVersion: data.ContractVersion,
+		State:           state,
+		Name:            data.Name,
+		Description:     data.Description,
+		CreatedBy:       data.CreatedBy,
+		CreatedAt:       data.CreatedAt,
+		UpdatedAt:       data.UpdatedAt,
+		ContractData:    data.ContractData,
+		StartDate:       data.StartDate,
+		ExpDate:         data.ExpDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: data.ExpNoticePeriod,
+		Responsible:     data.Responsible,
 	}, nil
 }
