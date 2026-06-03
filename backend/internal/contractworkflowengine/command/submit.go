@@ -117,7 +117,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		// This avoids that update on different DCS are possible
+		// This avoids that state changes on different DCS are possible
 		if cmd.SubmittedBy != processData.CreatedBy {
 			return errors.New("invalid participant")
 		}
@@ -165,7 +165,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		// This avoids that update on different DCS are possible
+		// This avoids that state changes on different DCS are possible
 		if cmd.SubmittedBy != processData.CreatedBy {
 			return errors.New("invalid participant")
 		}
