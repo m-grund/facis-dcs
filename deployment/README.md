@@ -80,7 +80,7 @@ Use this if you prefer separate terminals or step-by-step debugging.
 
 ```bash
 helm dependency update ./deployment/helm
-helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
+helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 ```
 
 The dev values enable automatic signer certificate-chain provisioning for C2PA:

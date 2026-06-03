@@ -54,6 +54,9 @@ const ROUTES = {
   AUDIT: {
     LIST: 'audit.list',
   },
+  AUDIT: {
+    LIST: 'audit.list',
+  },
   AUTH: {
     SUCCESS: 'auth.success',
   },
@@ -214,6 +217,19 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Template Catalogue View',
       roles: ['TEMPLATE_MANAGER'],
+    },
+  },
+  {
+    path: '/audit',
+    name: ROUTES.AUDIT.LIST,
+    component: AuditView,
+    meta: {
+      name: 'Audit',
+      icon: ClipboardDocumentListIcon,
+      requiresAuth: true,
+      title: 'DCS - Audit',
+      order: 5,
+      roles: ['AUDITOR'],
     },
   },
   {

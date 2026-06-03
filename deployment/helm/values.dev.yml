@@ -103,6 +103,51 @@ neo4j:
 # See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
   enabled: true
+  # URL the DCS backend uses to reach the Federated Catalogue API
+  apiURL: ""
+  secretRef:
+    name: ""
+    key: "FEDERATED_CATALOGUE_API_URL"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+cryptoProvider:
+  enabled: true
+  vault:
+    dev:
+      enabled: true
+      rootToken: "root"
+    service:
+      type: ClusterIP
+      port: 8200
+  signer:
+    service:
+      type: NodePort
+      nodePort: 30808
+  transit:
+    mount: "transit"
+    key: "dcs-signing-key-p256"
+    keyType: "ecdsa-p256"
+    vcKey: "dcs-vc-signing-key"
+    vcKeyType: "ed25519"
+  devCertChain:
+    enabled: true
+    overwrite: true
+    # Optional override; by default: <release>-crypto-provider-dev-cert-chain
+    secretName: ""
+
+# XFSC Status List Service (DCS-OR-C2PA-005)
+statuslistService:
+  enabled: true
+  image:
+    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
+    tag: "main"
+    pullPolicy: IfNotPresent
   service:
     type: NodePort
     nodePort: 30081
