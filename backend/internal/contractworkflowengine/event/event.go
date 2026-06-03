@@ -134,7 +134,7 @@ type RetrieveArchivedEvent struct {
 
 // EventType implements [event.Event].
 func (r RetrieveArchivedEvent) EventType() string {
-	return eventtype.RetrieveAll.String()
+	return eventtype.RetrieveArchived.String()
 }
 
 // GetDID implements [event.Event].
