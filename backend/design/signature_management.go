@@ -26,7 +26,7 @@ var SMContractListItem = Type("SMContractListItem", func() {
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })

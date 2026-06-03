@@ -57,18 +57,18 @@ func (e CopyEvent) GetDID() string {
 
 // SubmitEvent is emitted when a template is submitted
 type SubmitEvent struct {
-	DID                string                 `json:"did"`
-	DocumentNumber     *string                `json:"document_number,omitempty"`
-	Version            int                    `json:"version"`
-	PreviousState      string                 `json:"previous_state"`
-	NewState           string                 `json:"new_state"`
-	SubmittedBy        string                 `json:"submitted_by"`
-	ActionFlag         *actionflag.ActionFlag `json:"action_flag"`
-	Comments           []string               `json:"comments,omitempty"`
-	OccurredAt         time.Time              `json:"occurred_at"`
-	ResponsiblePersons *any                   `json:"responsible_persons,omitempty"`
-	Username           string                 `json:"username"`
-	UserRoles          userrole.UserRoles     `json:"user_roles"`
+	DID            string                 `json:"did"`
+	DocumentNumber *string                `json:"document_number,omitempty"`
+	Version        int                    `json:"version"`
+	PreviousState  string                 `json:"previous_state"`
+	NewState       string                 `json:"new_state"`
+	SubmittedBy    string                 `json:"submitted_by"`
+	ActionFlag     *actionflag.ActionFlag `json:"action_flag"`
+	Comments       []string               `json:"comments,omitempty"`
+	OccurredAt     time.Time              `json:"occurred_at"`
+	Responsible    *any                   `json:"responsible,omitempty"`
+	Username       string                 `json:"username"`
+	UserRoles      userrole.UserRoles     `json:"user_roles"`
 }
 
 // EventType implements the Event interface.
