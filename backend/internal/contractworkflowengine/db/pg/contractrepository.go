@@ -42,11 +42,11 @@ func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx 
         INSERT INTO contract_history 
             (did, state, name, description, created_by, created_at, updated_at, 
              contract_version, contract_data, start_date, exp_date, exp_policy, 
-             exp_notice_period, responsible_persons)
+             exp_notice_period, responsible)
         SELECT 
             did, state, name, description, created_by, created_at, updated_at, 
             contract_version, contract_data, start_date, exp_date, exp_policy, 
-            exp_notice_period, responsible_persons
+            exp_notice_period, responsible
         FROM contracts_effective 
         WHERE did = $1
     `
@@ -57,7 +57,7 @@ func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx 
 func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractHistory, error) {
 	query := `
         SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contract_history
         WHERE did = $1
         ORDER BY contract_version DESC NULLS LAST
@@ -77,7 +77,7 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
 	query := `
         SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contract_history
         WHERE did = $1
     `
@@ -95,7 +95,7 @@ func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts_effective
         WHERE did = $1
     `
@@ -113,7 +113,7 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
     SELECT did, state, name, description, created_by, created_at, updated_at,
-           contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+           contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
     FROM contracts_effective_metadata
     ORDER BY created_at DESC
 `
@@ -141,7 +141,7 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 
 func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts_effective_metadata
     `
 
@@ -186,7 +186,7 @@ func (r *PostgresContractRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx,
 
 func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons
+    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
     FROM contracts
     WHERE exp_date IS NOT NULL
     AND exp_date < NOW()
@@ -299,8 +299,8 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	if data.ExpNoticePeriod != nil {
 		addParam("exp_notice_period", data.ExpNoticePeriod)
 	}
-	if data.ResponsiblePersons != nil {
-		addParam("responsible_persons", data.ResponsiblePersons)
+	if data.Responsible != nil {
+		addParam("responsible", data.Responsible)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")
