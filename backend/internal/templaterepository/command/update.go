@@ -73,7 +73,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		if !cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
+		if cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
 			isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.UpdatedBy)
 			if err != nil {
 				return err

@@ -152,7 +152,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		if !cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
+		if cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
 			isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.SubmittedBy)
 			if err != nil {
 				return err
@@ -164,25 +164,31 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 		if cmd.ActionFlag != nil {
 			switch *cmd.ActionFlag {
-			case actionflag.Approval: // ToDo: The task need to be approved for manager
-				exist, err := h.RTRepo.TaskExistsInState(ctx, tx, processData.DID, cmd.SubmittedBy, reviewtaskstate.Open.String())
-				if err != nil {
-					return err
-				}
-				if exist {
-					return errors.New("contract template needs to be verified before")
-				}
-				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contracttemplatestate.Approved.String())
-				if err != nil {
-					return fmt.Errorf("could not update review task: %w", err)
-				}
-				existOpenTasks, err := h.RTRepo.AnyTasksInState(ctx, tx, processData.DID, reviewtaskstate.Open.String(), reviewtaskstate.Verified.String())
-				if err != nil {
-					return fmt.Errorf("could not check if review task exists: %w", err)
-				}
-				if !existOpenTasks {
+			case actionflag.Approval:
+
+				if cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
+					exist, err := h.RTRepo.TaskExistsInState(ctx, tx, processData.DID, cmd.SubmittedBy, reviewtaskstate.Open.String())
+					if err != nil {
+						return err
+					}
+					if exist {
+						return errors.New("contract template needs to be verified before")
+					}
+					err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contracttemplatestate.Approved.String())
+					if err != nil {
+						return fmt.Errorf("could not update review task: %w", err)
+					}
+					existOpenTasks, err := h.RTRepo.AnyTasksInState(ctx, tx, processData.DID, reviewtaskstate.Open.String(), reviewtaskstate.Verified.String())
+					if err != nil {
+						return fmt.Errorf("could not check if review task exists: %w", err)
+					}
+					if !existOpenTasks {
+						nextTemplateState = contracttemplatestate.Reviewed
+					}
+				} else {
 					nextTemplateState = contracttemplatestate.Reviewed
 				}
+
 			case actionflag.Draft:
 				err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
@@ -195,7 +201,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 				nextTemplateState = contracttemplatestate.Rejected
 			}
 		} else {
-			return errors.New("action flags is missing")
+			return errors.New("action flag is missing")
 		}
 
 	} else if processData.State == contracttemplatestate.Reviewed.String() {
@@ -204,7 +210,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		if !cmd.UserRoles.HasRole(userrole.TemplateApprover) {
+		if cmd.UserRoles.HasRole(userrole.TemplateApprover) {
 			isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
 			if err != nil {
 				return err

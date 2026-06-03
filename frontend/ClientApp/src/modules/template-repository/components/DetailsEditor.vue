@@ -29,10 +29,6 @@
     </fieldset>
 
     <fieldset class="fieldset border-none p-0">
-      <legend class="fieldset-legend">Version {{ version }}</legend>
-    </fieldset>
-
-    <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Global Name</legend>
       <input
         v-model="name"
