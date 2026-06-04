@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -26,9 +27,14 @@ type ApproveCmd struct {
 }
 
 type Approver struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	ATRepo db.ApprovalTaskRepo
+	DB         *sqlx.DB
+	CRepo      db.ContractRepo
+	ATRepo     db.ApprovalTaskRepo
+	IPFSStorer ArchiveSnapshotStorer
+}
+
+type ArchiveSnapshotStorer interface {
+	CreateFile(ctx context.Context, data any) (*ipfs.IPFSResult, error)
 }
 
 func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
@@ -89,6 +95,18 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not build archive entry: %w", err)
 		}
+		if h.IPFSStorer == nil {
+			return errors.New("archive snapshot IPFS storer is required")
+		}
+		snapshotResult, err := h.IPFSStorer.CreateFile(ctx, archiveEntry.ContractSnapshot)
+		if err != nil {
+			return fmt.Errorf("could not store archive snapshot in IPFS: %w", err)
+		}
+		if snapshotResult == nil || snapshotResult.Identifier.Value == "" {
+			return errors.New("archive snapshot IPFS storer returned empty CID")
+		}
+		archiveEntry.SnapshotCID = snapshotResult.Identifier.Value
+
 		err = h.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
 		if err != nil {
 			return fmt.Errorf("could not store contract in archive: %w", err)
@@ -99,6 +117,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			ContractVersion: processData.ContractVersion,
 			StoredBy:        cmd.ApprovedBy,
 			ContentHash:     archiveEntry.ContentHash,
+			SnapshotCID:     archiveEntry.SnapshotCID,
 			ArchiveStatus:   "STORED",
 			EvidenceSummary: contractevents.ArchiveEvidenceSummary{
 				SnapshotHashAlgorithm: archiveSnapshotHashAlgorithm,

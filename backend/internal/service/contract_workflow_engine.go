@@ -13,6 +13,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -37,12 +38,13 @@ type contractWorkflowEnginesrvc struct {
 	CTRepo       db.ContractTemplateRepo
 	FCClient     *fcclient.FederatedCatalogueClient
 	ATrailReader base.AuditTrailReader
+	IPFSClient   *ipfs.APIClient
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader) contractworkflowengine.Service {
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, ipfsClient *ipfs.APIClient) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -55,6 +57,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		CTRepo:           ctRepo,
 		FCClient:         fcClient,
 		ATrailReader:     auditTrailReader,
+		IPFSClient:       ipfsClient,
 	}
 }
 
@@ -667,9 +670,10 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		ApprovedBy: middleware.GetUsername(ctx),
 	}
 	handler := command.Approver{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		ATRepo: s.ATRepo,
+		DB:         s.DB,
+		CRepo:      s.CRepo,
+		ATRepo:     s.ATRepo,
+		IPFSStorer: s.IPFSClient,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

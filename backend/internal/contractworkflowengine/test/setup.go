@@ -173,6 +173,7 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 		if err != nil {
 			t.Fatalf("Failed to build archive entry: %v", err)
 		}
+		archiveEntry.SnapshotCID = "bafy-test-contract-snapshot"
 		err = repo.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
 		if err != nil {
 			t.Fatalf("Failed to store archive entry: %v", err)

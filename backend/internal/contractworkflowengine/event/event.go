@@ -138,6 +138,7 @@ type StoreArchivedEvent struct {
 	ContractVersion int                    `json:"contract_version"`
 	StoredBy        string                 `json:"stored_by"`
 	ContentHash     string                 `json:"content_hash"`
+	SnapshotCID     string                 `json:"snapshot_cid"`
 	ArchiveStatus   string                 `json:"archive_status"`
 	EvidenceSummary ArchiveEvidenceSummary `json:"evidence_summary"`
 	OccurredAt      time.Time              `json:"occurred_at"`

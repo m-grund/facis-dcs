@@ -117,20 +117,22 @@ type ContractHistory struct {
 }
 
 type ContractArchiveEntry struct {
-	DID              string         `db:"did"`
-	ContractVersion  int            `db:"contract_version"`
-	StoredBy         string         `db:"stored_by"`
-	StoredAt         time.Time      `db:"stored_at"`
-	ArchiveStatus    string         `db:"archive_status"`
-	ContractSnapshot datatype.JSON  `db:"contract_snapshot"`
-	ContentHash      string         `db:"content_hash"`
-	SignatureMeta    *datatype.JSON `db:"signature_metadata"`
-	CredentialHashes *datatype.JSON `db:"credential_hashes"`
-	Evidence         *datatype.JSON `db:"evidence"`
-	RetentionUntil   *time.Time     `db:"retention_until"`
-	DeletedAt        *time.Time     `db:"deleted_at"`
-	DeletedBy        *string        `db:"deleted_by"`
-	DeletionReason   *string        `db:"deletion_reason"`
+	DID                  string         `db:"did"`
+	ContractVersion      int            `db:"contract_version"`
+	StoredBy             string         `db:"stored_by"`
+	StoredAt             time.Time      `db:"stored_at"`
+	ArchiveStatus        string         `db:"archive_status"`
+	ContractSnapshot     datatype.JSON  `db:"contract_snapshot"`
+	ContentHash          string         `db:"content_hash"`
+	SnapshotCID          string         `db:"snapshot_cid"`
+	SnapshotCIDCreatedAt time.Time      `db:"snapshot_cid_created_at"`
+	SignatureMeta        *datatype.JSON `db:"signature_metadata"`
+	CredentialHashes     *datatype.JSON `db:"credential_hashes"`
+	Evidence             *datatype.JSON `db:"evidence"`
+	RetentionUntil       *time.Time     `db:"retention_until"`
+	DeletedAt            *time.Time     `db:"deleted_at"`
+	DeletedBy            *string        `db:"deleted_by"`
+	DeletionReason       *string        `db:"deletion_reason"`
 }
 
 type SearchValues struct {

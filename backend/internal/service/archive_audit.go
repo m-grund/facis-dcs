@@ -37,6 +37,8 @@ func (s *processAuditAndCompliancesrvc) auditArchiveTrailEntries(ctx context.Con
 				"storedBy":             entry.StoredBy,
 				"storedAt":             entry.StoredAt.UTC().Format(time.RFC3339),
 				"contentHash":          entry.ContentHash,
+				"snapshotCid":          entry.SnapshotCID,
+				"snapshotCidCreatedAt": entry.SnapshotCIDCreatedAt.UTC().Format(time.RFC3339),
 				"snapshotPresent":      entry.ContractSnapshot.IsNotNullValue(),
 				"signatureStatus":      archiveJSONStatus(entry.SignatureMeta),
 				"credentialHashStatus": archiveJSONStatus(entry.CredentialHashes),

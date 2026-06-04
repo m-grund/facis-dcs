@@ -175,9 +175,9 @@ func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sql
 func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data db.ContractArchiveEntry) error {
 	statement := `
         INSERT INTO contract_archive_entries (
-            did, contract_version, stored_by, contract_snapshot, content_hash, signature_metadata,
+            did, contract_version, stored_by, contract_snapshot, content_hash, snapshot_cid, signature_metadata,
             credential_hashes, evidence, retention_until
-        ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::jsonb, '{}'::jsonb), COALESCE($7::jsonb, '{}'::jsonb), COALESCE($8::jsonb, '{}'::jsonb), $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::jsonb, '{}'::jsonb), COALESCE($8::jsonb, '{}'::jsonb), COALESCE($9::jsonb, '{}'::jsonb), $10)
         ON CONFLICT (did, contract_version) DO NOTHING
     `
 	_, err := tx.ExecContext(ctx, statement,
@@ -186,6 +186,7 @@ func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.T
 		data.StoredBy,
 		data.ContractSnapshot,
 		data.ContentHash,
+		data.SnapshotCID,
 		data.SignatureMeta,
 		data.CredentialHashes,
 		data.Evidence,
@@ -197,7 +198,7 @@ func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.T
 func (r *PostgresContractRepo) ReadArchiveEntries(ctx context.Context, tx *sqlx.Tx) ([]db.ContractArchiveEntry, error) {
 	query := `
         SELECT did, contract_version, archive_status, stored_by, stored_at, contract_snapshot,
-               content_hash, signature_metadata, credential_hashes, evidence, retention_until,
+               content_hash, snapshot_cid, snapshot_cid_created_at, signature_metadata, credential_hashes, evidence, retention_until,
                deleted_at, deleted_by, deletion_reason
         FROM contract_archive_entries
         ORDER BY stored_at, did, contract_version

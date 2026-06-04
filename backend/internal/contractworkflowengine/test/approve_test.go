@@ -13,12 +13,31 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 )
+
+const testArchiveSnapshotCID = "bafy-test-archive-snapshot"
+
+type archiveSnapshotStorerStub struct {
+	cid      string
+	payloads []any
+}
+
+func (s *archiveSnapshotStorerStub) CreateFile(_ context.Context, data any) (*ipfs.IPFSResult, error) {
+	s.payloads = append(s.payloads, data)
+	cid := s.cid
+	if cid == "" {
+		cid = testArchiveSnapshotCID
+	}
+	result := &ipfs.IPFSResult{}
+	result.Identifier.Value = cid
+	return result, nil
+}
 
 func TestApprove_ApproveContractInReviewedState(t *testing.T) {
 
@@ -51,10 +70,10 @@ func TestApprove_ApproveContractInReviewedState(t *testing.T) {
 		DecisionNotes: []string{},
 	}
 	handler := command.Approver{
-
-		DB:     db,
-		CRepo:  repo.CRepo,
-		ATRepo: repo.ATRepo,
+		DB:         db,
+		CRepo:      repo.CRepo,
+		ATRepo:     repo.ATRepo,
+		IPFSStorer: &archiveSnapshotStorerStub{},
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -105,10 +124,12 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 		ApprovedBy:    approver,
 		DecisionNotes: []string{},
 	}
+	storer := &archiveSnapshotStorerStub{}
 	handler := command.Approver{
-		DB:     db,
-		CRepo:  repo.CRepo,
-		ATRepo: repo.ATRepo,
+		DB:         db,
+		CRepo:      repo.CRepo,
+		ATRepo:     repo.ATRepo,
+		IPFSStorer: storer,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -119,6 +140,7 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 		StoredBy          string        `db:"stored_by"`
 		ArchiveStatus     string        `db:"archive_status"`
 		ContentHash       string        `db:"content_hash"`
+		SnapshotCID       string        `db:"snapshot_cid"`
 		ContractSnapshot  datatype.JSON `db:"contract_snapshot"`
 		SignatureMetadata datatype.JSON `db:"signature_metadata"`
 		CredentialHashes  datatype.JSON `db:"credential_hashes"`
@@ -136,7 +158,7 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 
 	var entry archiveEntry
 	err = db.GetContext(ctx, &entry, `
-		SELECT stored_by, archive_status, content_hash, contract_snapshot,
+		SELECT stored_by, archive_status, content_hash, snapshot_cid, contract_snapshot,
 		       signature_metadata, credential_hashes, evidence
 		FROM contract_archive_entries
 		WHERE did = $1 AND contract_version = $2
@@ -150,10 +172,14 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 	assert.Equal(t, approver, entry.StoredBy)
 	assert.Equal(t, "STORED", entry.ArchiveStatus)
 	assert.True(t, strings.HasPrefix(entry.ContentHash, "sha256:"))
+	assert.Equal(t, testArchiveSnapshotCID, entry.SnapshotCID)
 	assert.True(t, entry.ContractSnapshot.IsNotNullValue())
 	assert.True(t, entry.SignatureMetadata.IsNotNullValue())
 	assert.True(t, entry.CredentialHashes.IsNotNullValue())
 	assert.True(t, entry.Evidence.IsNotNullValue())
+	if assert.Len(t, storer.payloads, 1) {
+		assert.Equal(t, string(entry.ContractSnapshot), string(storer.payloads[0].(datatype.JSON)))
+	}
 
 	var snapshot map[string]any
 	err = json.Unmarshal(entry.ContractSnapshot, &snapshot)
@@ -182,7 +208,8 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 		  AND (event_data->>'contract_version')::int = $5
 		  AND event_data->>'content_hash' = $6
 		  AND event_data->>'archive_status' = $7
-	`, componenttype.ContractStorageArchive.String(), eventtype.StoreArchived.String(), *did, approver, 1, entry.ContentHash, "STORED")
+		  AND event_data->>'snapshot_cid' = $8
+	`, componenttype.ContractStorageArchive.String(), eventtype.StoreArchived.String(), *did, approver, 1, entry.ContentHash, "STORED", entry.SnapshotCID)
 	if err != nil {
 		t.Fatalf("Failed to read archive store event: %v", err)
 	}
@@ -214,6 +241,13 @@ func TestApprove_ArchiveEntryIsAppendOnly(t *testing.T) {
 	assert.Error(t, err)
 
 	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET snapshot_cid = 'bafy-changed'
+		WHERE did = $1
+	`, *did)
+	assert.Error(t, err)
+
+	_, err = db.ExecContext(ctx, `
 		DELETE FROM contract_archive_entries
 		WHERE did = $1
 	`, *did)
@@ -229,6 +263,49 @@ func TestApprove_ArchiveEntryIsAppendOnly(t *testing.T) {
 		t.Fatalf("Failed to count archive entries: %v", err)
 	}
 	assert.Equal(t, 1, count)
+}
+
+func TestApprove_FinalApproveRequiresArchiveSnapshotIPFSStorer(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Reviewed, creator)
+
+	approver := "Test User 1"
+	createApprovalTasks(t, ctx, db, repo, *did, approvaltaskstate.Open, creator, approver)
+
+	handler := command.Approver{
+		DB:     db,
+		CRepo:  repo.CRepo,
+		ATRepo: repo.ATRepo,
+	}
+	err = handler.Handle(ctx, command.ApproveCmd{
+		DID:        *did,
+		UpdatedAt:  time.Now().UTC(),
+		ApprovedBy: approver,
+	})
+	assert.Error(t, err)
+
+	var archiveCount int
+	err = db.GetContext(ctx, &archiveCount, `
+		SELECT COUNT(*)
+		FROM contract_archive_entries
+		WHERE did = $1
+	`, *did)
+	if err != nil {
+		t.Fatalf("Failed to count archive entries: %v", err)
+	}
+	assert.Equal(t, 0, archiveCount)
 }
 
 func TestApprove_ArchiveEntryValidatesStatusTransitions(t *testing.T) {

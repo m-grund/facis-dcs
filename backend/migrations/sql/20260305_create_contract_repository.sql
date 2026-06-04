@@ -101,6 +101,8 @@ CREATE TABLE IF NOT EXISTS contract_archive_entries
 
     contract_snapshot  JSONB NOT NULL,
     content_hash       TEXT NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    snapshot_cid       TEXT NOT NULL CHECK (snapshot_cid <> ''),
+    snapshot_cid_created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     signature_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     credential_hashes  JSONB NOT NULL DEFAULT '{}'::jsonb,
     evidence           JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -163,6 +165,8 @@ BEGIN
         OR NEW.stored_at IS DISTINCT FROM OLD.stored_at
         OR NEW.contract_snapshot IS DISTINCT FROM OLD.contract_snapshot
         OR NEW.content_hash IS DISTINCT FROM OLD.content_hash
+        OR NEW.snapshot_cid IS DISTINCT FROM OLD.snapshot_cid
+        OR NEW.snapshot_cid_created_at IS DISTINCT FROM OLD.snapshot_cid_created_at
         OR NEW.signature_metadata IS DISTINCT FROM OLD.signature_metadata
         OR NEW.credential_hashes IS DISTINCT FROM OLD.credential_hashes
         OR NEW.evidence IS DISTINCT FROM OLD.evidence THEN
