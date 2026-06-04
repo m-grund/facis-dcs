@@ -17,7 +17,7 @@ const { loading, error } = storeToRefs(contractsStore)
 
 const contracts: Ref<Contract[]> = ref([])
 
-const pageLimits = ref([2, 25, 50, 100])
+const pageLimits = ref([25, 50, 100])
 const limit = computed(() => pageLimits.value[0] ?? 25)
 const currentPage = ref(1)
 const hasNextPage = ref(true)

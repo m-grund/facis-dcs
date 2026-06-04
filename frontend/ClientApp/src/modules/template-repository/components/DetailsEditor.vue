@@ -2,7 +2,7 @@
   <div class="grid grid-cols-1 gap-4">
     <!-- Contract Kind -->
     <fieldset class="fieldset border-none p-0">
-      <legend class="fieldset-legend">Version: {{ version }}</legend>
+      <legend v-if="store.did" class="fieldset-legend">Version: {{ version }}</legend>
     </fieldset>
     <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Contract Type</legend>

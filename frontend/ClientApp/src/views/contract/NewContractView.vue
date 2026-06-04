@@ -52,9 +52,12 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 
 const contract: Ref<Contract | null> = ref(null)
 
-const canSubmit = computed(
-  () => isEditMode.value || (hasApprovedOrPublishedTemplates.value && selectedTemplate.value !== null),
-)
+const canSubmit = computed(() => {
+  if (!isEditMode.value) {
+    return hasApprovedOrPublishedTemplates.value && selectedTemplate.value !== null
+  }
+  return !!contract.value?.name?.trim().length
+})
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
@@ -65,6 +68,7 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
 const submit = async () => {
+  if (!canSubmit.value) return
   isSubmitting.value = true
   try {
     if (!isEditMode.value && !!selectedTemplate.value) {
