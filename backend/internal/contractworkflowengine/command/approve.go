@@ -80,6 +80,15 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not update current template state: %w", err)
 		}
+
+		err = h.CRepo.StoreArchiveEntry(ctx, tx, db.ContractArchiveEntry{
+			DID:             cmd.DID,
+			ContractVersion: processData.ContractVersion,
+			StoredBy:        cmd.ApprovedBy,
+		})
+		if err != nil {
+			return fmt.Errorf("could not store contract in archive: %w", err)
+		}
 	}
 
 	evt := contractevents.ApproveEvent{

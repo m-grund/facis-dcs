@@ -104,24 +104,6 @@ var _ = Service("ContractStorageArchive", func() {
 		Result(String)
 	})
 
-	Method("terminate", func() {
-		Description("terminate contract/archive entry.")
-		Meta("dcs:requirements", "DCS-IR-CSA-03", "DCS-IR-CSA-06")
-		Meta("dcs:ui", "Archive Manager Dashboard")
-		Meta("dcs:csa:components", "Automated Alerts")
-		Security(JWTAuth, func() {
-			Scope("Archive Manager")
-		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
-		HTTP(func() {
-			POST("/archive/terminate")
-			Response(StatusOK)
-		})
-		Result(Int)
-	})
-
 	Method("delete", func() {
 		Description("permanently delete entry.")
 		Meta("dcs:requirements", "DCS-IR-CSA-03", "DCS-IR-CSA-06")

@@ -62,11 +62,20 @@ func NewTestRepo() *TestRepo {
 }
 
 func cleanupContractTable(t *testing.T, db *sqlx.DB) {
+	cleanArchiveEntriesStatement := `
+	-- noinspection SqlWithoutWhere
+	DELETE FROM contract_archive_entries;
+`
+	_, err := db.Exec(cleanArchiveEntriesStatement)
+	if err != nil {
+		t.Fatalf("Failed to clean table: %v", err)
+	}
+
 	cleanApprovalTasksStatement := `
 	-- noinspection SqlWithoutWhere
 	DELETE FROM contract_approval_task;
 `
-	_, err := db.Exec(cleanApprovalTasksStatement)
+	_, err = db.Exec(cleanApprovalTasksStatement)
 	if err != nil {
 		t.Fatalf("Failed to clean table: %v", err)
 	}
@@ -143,6 +152,32 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 	_, err = db.Exec(updateStatement, cmd.DID, state)
 	if err != nil {
 		t.Fatalf("Failed to update state: %v", err)
+	}
+
+	if state == contractstate.Approved {
+		tx, err := db.BeginTxx(ctx, nil)
+		if err != nil {
+			t.Fatalf("Failed to begin transaction: %v", err)
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
+			}
+		}(tx)
+
+		err = repo.CRepo.StoreArchiveEntry(ctx, tx, database.ContractArchiveEntry{
+			DID:             cmd.DID,
+			ContractVersion: 1,
+			StoredBy:        createdBy,
+		})
+		if err != nil {
+			t.Fatalf("Failed to store archive entry: %v", err)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			t.Fatalf("Failed to commit archive entry: %v", err)
+		}
 	}
 }
 

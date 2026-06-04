@@ -141,11 +141,6 @@ func (s *contractStorageArchivesrvc) Store(ctx context.Context, p *contractstora
 	return
 }
 
-func (s *contractStorageArchivesrvc) Terminate(ctx context.Context, p *contractstoragearchive.TerminatePayload) (res int, err error) {
-	log.Printf(ctx, "contractStorageArchive.terminate")
-	return
-}
-
 func (s *contractStorageArchivesrvc) Delete(ctx context.Context, p *contractstoragearchive.DeletePayload) (res int, err error) {
 	log.Printf(ctx, "contractStorageArchive.delete")
 	return

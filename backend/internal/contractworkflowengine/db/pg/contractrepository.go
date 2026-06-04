@@ -172,6 +172,27 @@ func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sql
 	return cts, nil
 }
 
+func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data db.ContractArchiveEntry) error {
+	statement := `
+        INSERT INTO contract_archive_entries (
+            did, contract_version, stored_by, content_hash, signature_metadata,
+            credential_hashes, evidence, retention_until
+        ) VALUES ($1, $2, $3, $4, COALESCE($5::jsonb, '{}'::jsonb), COALESCE($6::jsonb, '{}'::jsonb), COALESCE($7::jsonb, '{}'::jsonb), $8)
+        ON CONFLICT (did, contract_version) DO NOTHING
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID,
+		data.ContractVersion,
+		data.StoredBy,
+		data.ContentHash,
+		data.SignatureMeta,
+		data.CredentialHashes,
+		data.Evidence,
+		data.RetentionUntil,
+	)
+	return err
+}
+
 func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
     SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible_persons

@@ -85,6 +85,42 @@ CREATE TABLE IF NOT EXISTS contract_history
 
 ------------------------------------------------------------------------------------------------------------------------
 
+CREATE TYPE contract_archive_status AS ENUM ('STORED', 'RETAINED', 'DELETION_REQUESTED', 'DELETED');
+
+CREATE TABLE IF NOT EXISTS contract_archive_entries
+(
+    id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    did                VARCHAR(255) NOT NULL CHECK (did <> ''),
+    contract_version   INT          NOT NULL,
+
+    archive_status     contract_archive_status NOT NULL DEFAULT 'STORED',
+
+    stored_by          VARCHAR(255) NOT NULL,
+    stored_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    content_hash       TEXT,
+    signature_metadata JSONB DEFAULT '{}'::jsonb,
+    credential_hashes  JSONB DEFAULT '{}'::jsonb,
+    evidence           JSONB DEFAULT '{}'::jsonb,
+
+    retention_until    TIMESTAMP,
+    deleted_at         TIMESTAMP,
+    deleted_by         VARCHAR(255),
+    deletion_reason    TEXT,
+
+    CONSTRAINT fk_contract_archive_entry_contract
+        FOREIGN KEY (did)
+            REFERENCES contracts (did),
+    CONSTRAINT uq_contract_archive_entry_contract_version
+        UNIQUE (did, contract_version)
+);
+
+CREATE INDEX idx_contract_archive_entries_status ON contract_archive_entries (archive_status);
+CREATE INDEX idx_contract_archive_entries_did_version ON contract_archive_entries (did, contract_version);
+
+------------------------------------------------------------------------------------------------------------------------
+
 CREATE OR REPLACE VIEW contracts_effective AS
 SELECT
     did,
@@ -137,23 +173,25 @@ FROM contracts;
 
 CREATE OR REPLACE VIEW contracts_archive_metadata AS
 SELECT
-    did,
-    created_by,
-    created_at,
-    updated_at,
-    start_date,
-    exp_date,
-    exp_policy,
-    exp_notice_period,
-    state,
-    contract_version,
-    name,
-    description,
-    search_vector,
-    responsible_persons
-FROM contracts_effective
-WHERE state = 'APPROVED'
-  AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP);
+    c.did,
+    c.created_by,
+    c.created_at,
+    c.updated_at,
+    c.start_date,
+    c.exp_date,
+    c.exp_policy,
+    c.exp_notice_period,
+    c.state,
+    c.contract_version,
+    c.name,
+    c.description,
+    c.search_vector,
+    c.responsible_persons
+FROM contracts_effective c
+         INNER JOIN contract_archive_entries a
+                    ON a.did = c.did
+                        AND a.contract_version = c.contract_version
+WHERE a.archive_status <> 'DELETED';
 
 ------------------------------------------------------------------------------------------------------------------------
 
