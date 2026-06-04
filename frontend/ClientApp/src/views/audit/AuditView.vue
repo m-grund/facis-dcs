@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuditMode, AuditScope } from '@/models/requests/auditing-request'
+import type { AuditScope } from '@/models/requests/auditing-request'
 import type { AuditFinding } from '@/models/responses/auditing-response'
 import { auditingService } from '@/services/auditing-service'
 import { computed, ref, watch } from 'vue'
@@ -11,7 +11,6 @@ const auditLoading = ref(false)
 const reportLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedScope = ref<AuditScope>('contracts')
-const selectedAuditMode = ref<AuditMode>('repository_trail')
 const hasExecutedAudit = ref(false)
 type AuditResult = 'passed' | 'failed' | 'review'
 type AuditTab = 'checks' | 'timeline'
@@ -26,68 +25,12 @@ const tableFilters = ref<Record<TableFilterKey, Record<string, boolean>>>({
   component: {},
   did: {},
 })
-const contractDid = ref('urn:facis:dcs:contract:sla:example-001')
-const contractVersion = ref('v1')
-const policyVersion = ref('2026-05-18')
-const contractDocumentText = ref(`{
-  "@context": [],
-  "@id": "facis-contract-with-demo-errors",
-  "@type": [
-    "sla:ServiceLevelAgreement"
-  ],
-  "parties": [
-    {
-      "@id": "urn:facis:party:supplier-001",
-      "@type": "dcs:Organization",
-      "role": "supplier",
-      "legalName": "Example Supplier GmbH",
-      "location": {
-        "country": "RUS"
-      }
-    },
-    {
-      "@id": "urn:facis:party:customer-001",
-      "@type": "dcs:CompanyParty",
-      "role": "customer",
-      "legalName": "Example Customer AG",
-      "location": {
-        "country": "DEU"
-      }
-    }
-  ],
-  "contract": {
-    "type": "serviceAgreement",
-    "governingLaw": "DE"
-  },
-  "service": {
-    "sla": {
-      "availability": 99.72,
-      "responseTime": 20,
-      "resolutionTime": 180,
-      "supportHours": "24x7"
-    }
-  },
-  "signature": {
-    "requiredLevel": "AES"
-  }
-}`)
 
 const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'templates', label: 'Templates' },
   { value: 'contracts', label: 'Contracts' },
   { value: 'archive', label: 'Archive' },
 ]
-
-const auditModeOptions: { value: AuditMode; label: string }[] = [
-  { value: 'repository_trail', label: 'Repository Trail' },
-  { value: 'static_contract', label: 'JSON-LD / SHACL Contract' },
-]
-
-watch(selectedAuditMode, (mode) => {
-  if (mode === 'static_contract') {
-    selectedScope.value = 'contracts'
-  }
-})
 
 const filteredFindings = computed(() => {
   return checkFindings.value.filter((finding) => {
@@ -185,17 +128,7 @@ const executeAudit = async () => {
   report.value = null
   hasExecutedAudit.value = true
   try {
-    const request = selectedAuditMode.value === 'static_contract'
-      ? {
-          scope: selectedScope.value,
-          audit_mode: selectedAuditMode.value,
-          contract_document: parseJSONInput(contractDocumentText.value, 'Contract document'),
-          contract_did: contractDid.value.trim() || undefined,
-          contract_version: contractVersion.value.trim() || undefined,
-          policy_version: policyVersion.value.trim() || undefined,
-        }
-      : { scope: selectedScope.value, audit_mode: selectedAuditMode.value }
-    findings.value = await auditingService.audit(request)
+    findings.value = await auditingService.audit({ scope: selectedScope.value })
     selectedFindingId.value = null
     activeAuditTab.value = checkFindings.value.length > 0 ? 'checks' : 'timeline'
   } catch (err) {
@@ -221,14 +154,6 @@ const generateReport = async () => {
 
 const formatLabel = (value: string) => value.split('_').join(' ')
 
-const parseJSONInput = (value: string, label: string) => {
-  try {
-    return JSON.parse(value)
-  } catch {
-    throw new Error(`${label} is not valid JSON.`)
-  }
-}
-
 const reportText = computed(() => {
   if (!report.value) {
     return ''
@@ -244,10 +169,13 @@ const selectedFindingRawDetails = computed(() => {
 
 function tableValue(value?: string) {
   const trimmed = value?.trim()
-  return trimmed || emptyValueLabel
+  if (!trimmed) {
+    return emptyValueLabel
+  }
+  return trimmed
 }
 
-function uniqueTableValues(values: Array<string | undefined>) {
+function uniqueTableValues(values: (string | undefined)[]) {
   return Array.from(new Set(values.map(tableValue))).sort((a, b) => a.localeCompare(b))
 }
 
@@ -365,11 +293,15 @@ function checkAssertion(finding: AuditFinding) {
     ?.split('\n')
     .map((line) => line.trim())
     .find((line) => line && !line.startsWith('Object DID:') && !line.startsWith('Rule:') && !line.startsWith('Semantic path:'))
-  return descriptionLine || ''
+  return descriptionLine ?? ''
 }
 
 function severityLabel(finding: AuditFinding) {
-  return finding.status?.trim() || 'not set'
+  const severity = finding.status?.trim()
+  if (!severity) {
+    return 'not set'
+  }
+  return severity
 }
 
 function severityBadgeClass(finding: AuditFinding) {
@@ -457,22 +389,9 @@ function formatDateTime(value?: string) {
       <div class="flex flex-col gap-3 sm:flex-row">
         <label class="form-control w-full sm:w-48">
           <span class="label-text mb-1">Scope</span>
-          <select v-model="selectedScope" class="select select-bordered rounded-box" :disabled="auditLoading || reportLoading || selectedAuditMode === 'static_contract'">
+          <select v-model="selectedScope" class="select select-bordered rounded-box" :disabled="auditLoading || reportLoading">
             <option v-for="scope in scopeOptions" :key="scope.value" :value="scope.value">
               {{ scope.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="form-control w-full sm:w-48">
-          <span class="label-text mb-1">Mode</span>
-          <select
-            v-model="selectedAuditMode"
-            class="select select-bordered rounded-box"
-            :disabled="auditLoading || reportLoading"
-          >
-            <option v-for="mode in auditModeOptions" :key="mode.value" :value="mode.value">
-              {{ mode.label }}
             </option>
           </select>
         </label>
@@ -490,34 +409,6 @@ function formatDateTime(value?: string) {
           <span v-if="reportLoading" class="loading loading-spinner loading-sm"></span>
           <span v-else>Generate Report</span>
         </button>
-      </div>
-    </div>
-
-    <div v-if="selectedAuditMode === 'static_contract'" class="space-y-3">
-      <div class="space-y-3">
-        <div class="grid gap-3 sm:grid-cols-3">
-          <label class="form-control">
-            <span class="label-text mb-1">Contract DID</span>
-            <input v-model="contractDid" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">Contract Version</span>
-            <input v-model="contractVersion" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">Policy Version</span>
-            <input v-model="policyVersion" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
-          </label>
-        </div>
-        <label class="form-control">
-          <span class="label-text mb-1">Contract JSON-LD</span>
-          <textarea
-            v-model="contractDocumentText"
-            class="textarea textarea-bordered rounded-box min-h-96 font-mono text-xs leading-5"
-            spellcheck="false"
-            :disabled="auditLoading || reportLoading"
-          ></textarea>
-        </label>
       </div>
     </div>
 
