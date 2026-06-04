@@ -22,9 +22,9 @@ import type {
 import type { SignatureManagementService } from '@/models/services/signature-management-service'
 
 export const signatureManagementService: SignatureManagementService = {
-  async retrieve(_request?: SignatureRetrieveRequest) {
+  async retrieve(request?: SignatureRetrieveRequest) {
     return http
-      .get<SignatureRetrieveResponse>('/signature/retrieve')
+      .get<SignatureRetrieveResponse>('/signature/retrieve', { params: request })
       .then((res) => res.data)
       .catch((err: unknown) => {
         console.error('Retrieve Error:', err)

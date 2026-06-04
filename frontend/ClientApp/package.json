@@ -4,6 +4,7 @@
   "version": "0.0.10",
   "type": "module",
   "scripts": {
+    "predev": "node -e \"if (!require('fs').existsSync('../../node_modules/husky')) { console.error('\\x1b[31m%s\\x1b[0m', 'Error: Root dependencies are missing! Please run \\'npm install\\' in the root directory first to enable Husky.'); process.exit(1); }\"",
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:docker": "vite build",

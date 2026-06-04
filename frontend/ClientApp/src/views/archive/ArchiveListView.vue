@@ -15,7 +15,7 @@ onMounted(loadArchive)
     <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
       {{ $route.meta.name }}
     </h2>
-    <button class="btn btn-primary">Store Contract in Archive</button>
+    <button class="btn btn-primary" disabled>Store Contract in Archive</button>
   </div>
   <div class="m-5 text-xl">Test</div>
 </template>

@@ -1,4 +1,7 @@
-export type SignatureRetrieveRequest = Record<string, unknown>
+export interface SignatureRetrieveRequest {
+  offset?: number
+  limit?: number
+}
 
 export interface SignatureRetrieveByIDRequest {
   did: string

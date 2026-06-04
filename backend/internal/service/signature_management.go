@@ -124,6 +124,7 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 	defer cancel()
 
 	qry := query.GetByIDQry{
+		DID:         req.Did,
 		RetrievedBy: middleware.GetDID(ctx),
 		Username:    middleware.GetUsername(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),

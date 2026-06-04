@@ -16,6 +16,7 @@ export interface SignatureRetrieveByIDResponse {
 
 export interface SignatureVerifyResponse {
   did: string
+  findings?: string[]
 }
 
 export interface SignatureApplyResponse {

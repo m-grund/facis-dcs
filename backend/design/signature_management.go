@@ -225,6 +225,8 @@ var _ = Service("SignatureManagement", func() {
 
 		HTTP(func() {
 			GET("/signature/retrieve")
+			Param("offset")
+			Param("limit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
