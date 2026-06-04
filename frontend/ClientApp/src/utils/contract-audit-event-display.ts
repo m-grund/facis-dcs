@@ -19,6 +19,8 @@ const contractEventLabels: Record<string, string> = {
   RETRIEVE_CONTRACT_BY_ID: 'Retrieved contract',
   RETRIEVE_CONTRACT_HISTORY_BY_DID: 'Retrieved contract history',
   SEARCH_CONTRACT: 'Searched contracts',
+  STORE_ARCHIVED_CONTRACT: 'Stored contract in archive',
+  ARCHIVE_ENTRY_AUDIT_SUMMARY: 'Archive entry audit summary',
 }
 
 const submitTransitionLabels: Record<string, string> = {

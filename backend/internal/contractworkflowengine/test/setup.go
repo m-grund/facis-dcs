@@ -63,8 +63,8 @@ func NewTestRepo() *TestRepo {
 
 func cleanupContractTable(t *testing.T, db *sqlx.DB) {
 	cleanArchiveEntriesStatement := `
-	-- noinspection SqlWithoutWhere
-	DELETE FROM contract_archive_entries;
+	TRUNCATE contract_archive_entry_events;
+	TRUNCATE contract_archive_entries;
 `
 	_, err := db.Exec(cleanArchiveEntriesStatement)
 	if err != nil {
@@ -165,11 +165,15 @@ func createContract(t *testing.T, db *sqlx.DB, repo *TestRepo, did *string, stat
 			}
 		}(tx)
 
-		err = repo.CRepo.StoreArchiveEntry(ctx, tx, database.ContractArchiveEntry{
-			DID:             cmd.DID,
-			ContractVersion: 1,
-			StoredBy:        createdBy,
-		})
+		approvedContract, err := repo.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		if err != nil {
+			t.Fatalf("Failed to read approved contract: %v", err)
+		}
+		archiveEntry, err := command.BuildArchiveEntry(approvedContract, createdBy)
+		if err != nil {
+			t.Fatalf("Failed to build archive entry: %v", err)
+		}
+		err = repo.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
 		if err != nil {
 			t.Fatalf("Failed to store archive entry: %v", err)
 		}

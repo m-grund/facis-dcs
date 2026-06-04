@@ -52,11 +52,20 @@ func NewTestRepo() *TestRepo {
 }
 
 func cleanupContractTable(t *testing.T, db *sqlx.DB) {
+	cleanArchiveEntriesStatement := `
+	TRUNCATE contract_archive_entry_events;
+	TRUNCATE contract_archive_entries;
+`
+	_, err := db.Exec(cleanArchiveEntriesStatement)
+	if err != nil {
+		t.Fatalf("Failed to clean table: %v", err)
+	}
+
 	cleanApprovalTasksStatement := `
 	-- noinspection SqlWithoutWhere
 	DELETE FROM contract_approval_task;
 `
-	_, err := db.Exec(cleanApprovalTasksStatement)
+	_, err = db.Exec(cleanApprovalTasksStatement)
 	if err != nil {
 		t.Fatalf("Failed to clean table: %v", err)
 	}

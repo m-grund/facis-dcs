@@ -81,11 +81,15 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			return fmt.Errorf("could not update current template state: %w", err)
 		}
 
-		err = h.CRepo.StoreArchiveEntry(ctx, tx, db.ContractArchiveEntry{
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			StoredBy:        cmd.ApprovedBy,
-		})
+		approvedContract, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("could not read approved contract for archive storage: %w", err)
+		}
+		archiveEntry, err := BuildArchiveEntry(approvedContract, cmd.ApprovedBy)
+		if err != nil {
+			return fmt.Errorf("could not build archive entry: %w", err)
+		}
+		err = h.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
 		if err != nil {
 			return fmt.Errorf("could not store contract in archive: %w", err)
 		}
@@ -94,7 +98,14 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			DID:             cmd.DID,
 			ContractVersion: processData.ContractVersion,
 			StoredBy:        cmd.ApprovedBy,
-			OccurredAt:      time.Now().UTC(),
+			ContentHash:     archiveEntry.ContentHash,
+			ArchiveStatus:   "STORED",
+			EvidenceSummary: contractevents.ArchiveEvidenceSummary{
+				SnapshotHashAlgorithm: archiveSnapshotHashAlgorithm,
+				SignatureStatus:       "NOT_PERFORMED",
+				CredentialHashStatus:  "PENDING",
+			},
+			OccurredAt: time.Now().UTC(),
 		}
 		err = event.Create(ctx, tx, archiveEvt, componenttype.ContractStorageArchive)
 		if err != nil {

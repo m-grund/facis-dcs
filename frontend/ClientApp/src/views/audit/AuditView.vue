@@ -75,6 +75,7 @@ const contractDocumentText = ref(`{
 const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'templates', label: 'Templates' },
   { value: 'contracts', label: 'Contracts' },
+  { value: 'archive', label: 'Archive' },
 ]
 
 const auditModeOptions: { value: AuditMode; label: string }[] = [

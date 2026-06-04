@@ -96,6 +96,13 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			return nil, processauditandcompliance.MakeInternalError(err)
 		}
 	}
+	archiveEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
+	if scope == componenttype.ContractStorageArchive && s.CRepo != nil {
+		archiveEntriesByDID, err = s.auditArchiveTrailEntries(ctx)
+		if err != nil {
+			return nil, processauditandcompliance.MakeInternalError(err)
+		}
+	}
 
 	result := make([]*processauditandcompliance.PACAuditResponse, 0)
 	seenDIDs := map[string]bool{}
@@ -134,6 +141,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			history = append(history, contractContentEntriesByDID[did]...)
 			seenDIDs[did] = true
 		}
+		if scope == componenttype.ContractStorageArchive && did != "" {
+			history = append(history, archiveEntriesByDID[did]...)
+			seenDIDs[did] = true
+		}
 		if len(history) == 0 {
 			continue
 		}
@@ -162,6 +173,17 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		}
 		result = append(result, &processauditandcompliance.PACAuditResponse{
 			Component:  componenttype.ContractWorkflowEngine.String(),
+			Did:        did,
+			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+			AuditTrail: entries,
+		})
+	}
+	for did, entries := range archiveEntriesByDID {
+		if seenDIDs[did] || len(entries) == 0 {
+			continue
+		}
+		result = append(result, &processauditandcompliance.PACAuditResponse{
+			Component:  componenttype.ContractStorageArchive.String(),
 			Did:        did,
 			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
 			AuditTrail: entries,

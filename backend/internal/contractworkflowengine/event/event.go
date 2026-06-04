@@ -134,16 +134,25 @@ type RetrieveArchivedEvent struct {
 
 // StoreArchivedEvent is emitted when a contract is stored in the archive.
 type StoreArchivedEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version"`
-	StoredBy        string    `json:"stored_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
+	DID             string                 `json:"did"`
+	ContractVersion int                    `json:"contract_version"`
+	StoredBy        string                 `json:"stored_by"`
+	ContentHash     string                 `json:"content_hash"`
+	ArchiveStatus   string                 `json:"archive_status"`
+	EvidenceSummary ArchiveEvidenceSummary `json:"evidence_summary"`
+	OccurredAt      time.Time              `json:"occurred_at"`
 }
 
 // SearchEvent is emitted when contract data is searched.
 type SearchEvent struct {
 	RetrievedBy string    `json:"retrieved_by"`
 	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+type ArchiveEvidenceSummary struct {
+	SnapshotHashAlgorithm string `json:"snapshot_hash_algorithm"`
+	SignatureStatus       string `json:"signature_status"`
+	CredentialHashStatus  string `json:"credential_hash_status"`
 }
 
 // EventType implements [event.Event].

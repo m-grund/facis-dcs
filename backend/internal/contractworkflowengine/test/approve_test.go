@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,25 +116,60 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 	}
 
 	type archiveEntry struct {
-		Count         int    `db:"count"`
-		StoredBy      string `db:"stored_by"`
-		ArchiveStatus string `db:"archive_status"`
+		StoredBy          string        `db:"stored_by"`
+		ArchiveStatus     string        `db:"archive_status"`
+		ContentHash       string        `db:"content_hash"`
+		ContractSnapshot  datatype.JSON `db:"contract_snapshot"`
+		SignatureMetadata datatype.JSON `db:"signature_metadata"`
+		CredentialHashes  datatype.JSON `db:"credential_hashes"`
+		Evidence          datatype.JSON `db:"evidence"`
 	}
-	var entry archiveEntry
-	err = db.GetContext(ctx, &entry, `
-		SELECT COUNT(*) AS count,
-		       COALESCE(MAX(stored_by), '') AS stored_by,
-		       COALESCE(MAX(archive_status::text), '') AS archive_status
+	var count int
+	err = db.GetContext(ctx, &count, `
+		SELECT COUNT(*)
 		FROM contract_archive_entries
 		WHERE did = $1 AND contract_version = $2
+	`, *did, 1)
+	if err != nil {
+		t.Fatalf("Failed to count archive entries: %v", err)
+	}
+
+	var entry archiveEntry
+	err = db.GetContext(ctx, &entry, `
+		SELECT stored_by, archive_status, content_hash, contract_snapshot,
+		       signature_metadata, credential_hashes, evidence
+		FROM contract_archive_entries
+		WHERE did = $1 AND contract_version = $2
+		LIMIT 1
 	`, *did, 1)
 	if err != nil {
 		t.Fatalf("Failed to read archive entry: %v", err)
 	}
 
-	assert.Equal(t, 1, entry.Count)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, approver, entry.StoredBy)
 	assert.Equal(t, "STORED", entry.ArchiveStatus)
+	assert.True(t, strings.HasPrefix(entry.ContentHash, "sha256:"))
+	assert.True(t, entry.ContractSnapshot.IsNotNullValue())
+	assert.True(t, entry.SignatureMetadata.IsNotNullValue())
+	assert.True(t, entry.CredentialHashes.IsNotNullValue())
+	assert.True(t, entry.Evidence.IsNotNullValue())
+
+	var snapshot map[string]any
+	err = json.Unmarshal(entry.ContractSnapshot, &snapshot)
+	if err != nil {
+		t.Fatalf("Failed to decode archive snapshot: %v", err)
+	}
+	assert.Equal(t, *did, snapshot["did"])
+	assert.Equal(t, "APPROVED", snapshot["state"])
+
+	var evidence map[string]any
+	err = json.Unmarshal(entry.Evidence, &evidence)
+	if err != nil {
+		t.Fatalf("Failed to decode archive evidence: %v", err)
+	}
+	assert.Equal(t, approver, evidence["approved_by"])
+	assert.Equal(t, true, evidence["signed_pdf_out_of_scope"])
 
 	var eventCount int
 	err = db.GetContext(ctx, &eventCount, `
@@ -143,12 +180,228 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 		  AND did = $3
 		  AND event_data->>'stored_by' = $4
 		  AND (event_data->>'contract_version')::int = $5
-	`, componenttype.ContractStorageArchive.String(), eventtype.StoreArchived.String(), *did, approver, 1)
+		  AND event_data->>'content_hash' = $6
+		  AND event_data->>'archive_status' = $7
+	`, componenttype.ContractStorageArchive.String(), eventtype.StoreArchived.String(), *did, approver, 1, entry.ContentHash, "STORED")
 	if err != nil {
 		t.Fatalf("Failed to read archive store event: %v", err)
 	}
 
 	assert.Equal(t, 1, eventCount)
+}
+
+func TestApprove_ArchiveEntryIsAppendOnly(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Approved, creator)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET content_hash = 'sha256:changed'
+		WHERE did = $1
+	`, *did)
+	assert.Error(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		DELETE FROM contract_archive_entries
+		WHERE did = $1
+	`, *did)
+	assert.Error(t, err)
+
+	var count int
+	err = db.GetContext(ctx, &count, `
+		SELECT COUNT(*)
+		FROM contract_archive_entries
+		WHERE did = $1
+	`, *did)
+	if err != nil {
+		t.Fatalf("Failed to count archive entries: %v", err)
+	}
+	assert.Equal(t, 1, count)
+}
+
+func TestApprove_ArchiveEntryValidatesStatusTransitions(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Approved, creator)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET archive_status = 'RETAINED'
+		WHERE did = $1
+	`, *did)
+	assert.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET archive_status = 'STORED'
+		WHERE did = $1
+	`, *did)
+	assert.Error(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET archive_status = 'DELETION_REQUESTED'
+		WHERE did = $1
+	`, *did)
+	assert.Error(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET archive_status = 'DELETION_REQUESTED',
+		    deleted_by = $2,
+		    deletion_reason = $3
+		WHERE did = $1
+	`, *did, creator, "retention policy allows removal")
+	assert.NoError(t, err)
+}
+
+func TestApprove_ArchiveEntryBlocksDeletionBeforeRetentionUntil(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Approved, creator)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET retention_until = NOW() + INTERVAL '1 day'
+		WHERE did = $1
+	`, *did)
+	assert.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entries
+		SET archive_status = 'DELETED',
+		    deleted_at = NOW(),
+		    deleted_by = $2,
+		    deletion_reason = $3
+		WHERE did = $1
+	`, *did, creator, "test deletion")
+	assert.Error(t, err)
+}
+
+func TestApprove_ArchiveEntryEventsAreAppendOnly(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Approved, creator)
+
+	var archiveEntryID string
+	err = db.GetContext(ctx, &archiveEntryID, `
+		SELECT id::text
+		FROM contract_archive_entries
+		WHERE did = $1
+	`, *did)
+	if err != nil {
+		t.Fatalf("Failed to read archive entry ID: %v", err)
+	}
+
+	const eventHash = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO contract_archive_entry_events (
+			archive_entry_id, event_type, actor, reason, event_hash
+		) VALUES ($1, $2, $3, $4, $5)
+	`, archiveEntryID, "RETENTION_REVIEWED", creator, "test event", eventHash)
+	assert.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		UPDATE contract_archive_entry_events
+		SET reason = 'changed'
+		WHERE event_hash = $1
+	`, eventHash)
+	assert.Error(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		DELETE FROM contract_archive_entry_events
+		WHERE event_hash = $1
+	`, eventHash)
+	assert.Error(t, err)
+}
+
+func TestApprove_BuildArchiveEntryHashIsDeterministic(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Reviewed, creator)
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `UPDATE contracts SET state = $2 WHERE did = $1`, *did, contractstate.Approved.String())
+	if err != nil {
+		t.Fatalf("Failed to approve contract directly: %v", err)
+	}
+	approvedContract, err := repo.CRepo.ReadDataByID(ctx, tx, *did)
+	if err != nil {
+		t.Fatalf("Failed to read approved contract: %v", err)
+	}
+
+	first, err := command.BuildArchiveEntry(approvedContract, creator)
+	if err != nil {
+		t.Fatalf("Failed to build first archive entry: %v", err)
+	}
+	second, err := command.BuildArchiveEntry(approvedContract, creator)
+	if err != nil {
+		t.Fatalf("Failed to build second archive entry: %v", err)
+	}
+
+	assert.Equal(t, first.ContentHash, second.ContentHash)
+	assert.Equal(t, string(first.ContractSnapshot), string(second.ContractSnapshot))
 }
 
 func TestApprove_ApproveNonExistingContract(t *testing.T) {

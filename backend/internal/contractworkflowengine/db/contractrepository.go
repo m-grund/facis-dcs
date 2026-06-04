@@ -120,11 +120,17 @@ type ContractArchiveEntry struct {
 	DID              string         `db:"did"`
 	ContractVersion  int            `db:"contract_version"`
 	StoredBy         string         `db:"stored_by"`
-	ContentHash      *string        `db:"content_hash"`
+	StoredAt         time.Time      `db:"stored_at"`
+	ArchiveStatus    string         `db:"archive_status"`
+	ContractSnapshot datatype.JSON  `db:"contract_snapshot"`
+	ContentHash      string         `db:"content_hash"`
 	SignatureMeta    *datatype.JSON `db:"signature_metadata"`
 	CredentialHashes *datatype.JSON `db:"credential_hashes"`
 	Evidence         *datatype.JSON `db:"evidence"`
 	RetentionUntil   *time.Time     `db:"retention_until"`
+	DeletedAt        *time.Time     `db:"deleted_at"`
+	DeletedBy        *string        `db:"deleted_by"`
+	DeletionReason   *string        `db:"deletion_reason"`
 }
 
 type SearchValues struct {
@@ -146,6 +152,7 @@ type ContractRepo interface {
 	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractMetadata, error)
 	ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data ContractArchiveEntry) error
+	ReadArchiveEntries(ctx context.Context, tx *sqlx.Tx) ([]ContractArchiveEntry, error)
 	ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
