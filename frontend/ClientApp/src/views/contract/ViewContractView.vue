@@ -31,6 +31,10 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 
+defineProps<{
+  isRouteComponent?: boolean
+}>()
+
 const route = useRoute()
 const navStore = useNavStore()
 
@@ -287,7 +291,7 @@ const exportPdf = async () => {
         </div>
       </div>
     </div>
-    <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
+    <div v-if="isRouteComponent" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
