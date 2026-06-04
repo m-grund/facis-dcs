@@ -27,6 +27,7 @@ export default defineConfigWithVueTs(
           ignorePattern: '^_',
         },
       ],
+      'no-warning-comments': 'warn',
     },
   },
   skipFormattingConfig,

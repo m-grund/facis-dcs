@@ -6,6 +6,7 @@ import ViewContractTemplateView from '@/modules/template-repository/views/ViewCo
 import { authenticationService } from '@/services/authentication-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
+import ArchiveListView from '@/views/archive/ArchiveListView.vue'
 import AuthSuccessView from '@/views/auth/AuthSuccessView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
@@ -21,6 +22,7 @@ import TaskListView from '@/views/task/TaskListView.vue'
 import TemplateCatalogueListView from '@/modules/template-catalogue/views/TemplateCatalogueListView.vue'
 import TemplateCatalogueView from '@/modules/template-catalogue/views/TemplateCatalogueView.vue'
 import {
+  ArchiveBoxIcon,
   ArrowsRightLeftIcon,
   CheckCircleIcon,
   DocumentTextIcon,
@@ -67,6 +69,9 @@ const ROUTES = {
     VIEW: {
       CONTRACT: 'signature.management.view',
     },
+  },
+  ARCHIVE: {
+    LIST: 'archive.list',
   },
 } as const
 
@@ -326,6 +331,19 @@ const routes: RouteRecordRaw[] = [
       title: 'DCS - Secure Contract Viewer',
       roles: ['CONTRACT_SIGNER'],
     },
+  },
+  {
+    path: '/archive',
+    name: ROUTES.ARCHIVE.LIST,
+    meta: {
+      name: 'Archive',
+      icon: ArchiveBoxIcon,
+      requiresAuth: true,
+      title: 'DCS - Contract Archive',
+      order: 6,
+      roles: ['ARCHIVE_MANAGER', 'CONTRACT_OBSERVER'],
+    },
+    component: ArchiveListView,
   },
   {
     path: '/auth/success',
