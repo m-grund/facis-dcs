@@ -373,16 +373,25 @@ function formatDateTime(value?: string) {
     <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="stats stats-vertical sm:stats-horizontal bg-base-200 border border-base-content/10">
         <div class="stat">
-          <div class="stat-title">Failed Checks</div>
-          <div class="stat-value text-2xl text-error">{{ failedCheckCount }}</div>
+          <div class="stat-title flex items-center gap-2">
+            <span class="size-2 rounded-full bg-error/50"></span>
+            Failed Checks
+          </div>
+          <div class="stat-value text-2xl text-base-content">{{ failedCheckCount }}</div>
         </div>
         <div class="stat">
-          <div class="stat-title">Passed Checks</div>
-          <div class="stat-value text-2xl text-success">{{ passedCheckCount }}</div>
+          <div class="stat-title flex items-center gap-2">
+            <span class="size-2 rounded-full bg-success/50"></span>
+            Passed Checks
+          </div>
+          <div class="stat-value text-2xl text-base-content">{{ passedCheckCount }}</div>
         </div>
         <div class="stat">
-          <div class="stat-title">Needs Review</div>
-          <div class="stat-value text-2xl text-warning">{{ reviewCheckCount }}</div>
+          <div class="stat-title flex items-center gap-2">
+            <span class="size-2 rounded-full bg-warning/50"></span>
+            Needs Review
+          </div>
+          <div class="stat-value text-2xl text-base-content">{{ reviewCheckCount }}</div>
         </div>
       </div>
 
