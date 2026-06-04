@@ -89,6 +89,17 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not store contract in archive: %w", err)
 		}
+
+		archiveEvt := contractevents.StoreArchivedEvent{
+			DID:             cmd.DID,
+			ContractVersion: processData.ContractVersion,
+			StoredBy:        cmd.ApprovedBy,
+			OccurredAt:      time.Now().UTC(),
+		}
+		err = event.Create(ctx, tx, archiveEvt, componenttype.ContractStorageArchive)
+		if err != nil {
+			return fmt.Errorf("could not create archive store event: %w", err)
+		}
 	}
 
 	evt := contractevents.ApproveEvent{
