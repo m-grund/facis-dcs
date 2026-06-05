@@ -67,17 +67,24 @@ watch(
   (isEdit) => {
     templateEditorUiStore.reset()
     if (isEdit) {
-        hasChosenType.value = true
-        // load template data into draftStore
-        const did = `${route.params.did}`
-        contractTemplateService.retrieveById({ did })
-            .then(async template => {
-                if (!template) {
-                    draftStore.reset()
-                    return
-                }
-                const uneditableStates = [TemplateState.approved, TemplateState.deleted, TemplateState.deprecated, TemplateState.registered].map((s) => s.toLowerCase())
-                templateEditorUiStore.setTemplateEditable(!(uneditableStates.includes(template.state.toLowerCase())))
+      hasChosenType.value = true
+      // load template data into draftStore
+      const did = String(route.params.did ?? '')
+      contractTemplateService
+        .retrieveById({ did })
+        .then((template) => {
+          if (!template) {
+            draftStore.reset()
+            return
+          }
+          const uneditableStates = [
+            TemplateState.approved,
+            TemplateState.deleted,
+            TemplateState.deprecated,
+            TemplateState.registered,
+            TemplateState.published,
+          ].map((s) => s.toLowerCase())
+          templateEditorUiStore.setTemplateEditable(!uneditableStates.includes(template.state.toLowerCase()))
 
           draftStore.reset({
             did: template.did,

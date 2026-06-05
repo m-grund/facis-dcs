@@ -487,7 +487,6 @@ func (s *templateRepositorysrvc) Verify(ctx context.Context, req *templatereposi
 		DID:           req.Did,
 		VerifiedBy:    middleware.GetUsername(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	}
 	handler := command.Verifier{
 		DB:       s.DB,
@@ -576,23 +575,20 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	newDID, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
 	cmd := command.RegisterCmd{
-		DID:           req.Did,
-		UpdatedAt:     updatedAt,
-		RegisteredBy:  middleware.GetUsername(ctx),
-		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
+		DID:          req.Did,
+		NewDID:       *newDID,
+		Version:      req.Version,
+		RegisteredBy: middleware.GetUsername(ctx),
 	}
 	handler := command.Registrar{
 		DB:       s.DB,
 		CTRepo:   s.CTRepo,
-		RTRepo:   s.RTRepo,
-		ATRepo:   s.ATRepo,
 		FCClient: s.FCClient,
 	}
 	err = handler.Handle(ctx, cmd)
@@ -601,7 +597,7 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	}
 
 	return &templaterepository.ContractTemplateRegisterResponse{
-		Did: req.Did,
+		Did: *newDID,
 	}, nil
 }
 
@@ -720,4 +716,36 @@ func derefInt(i *int) int {
 		return *i
 	}
 	return 0
+}
+
+// publish approved template to Federated Catalogue.
+func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepository.ContractTemplatePublishRequest) (res *templaterepository.ContractTemplatePublishResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	cmd := command.PublishCmd{
+		DID:           req.Did,
+		UpdatedAt:     updatedAt,
+		PublishedBy:   middleware.GetUsername(ctx),
+		ParticipantID: middleware.GetParticipantID(ctx),
+	}
+	handler := command.Publisher{
+		DB:       s.DB,
+		CTRepo:   s.CTRepo,
+		FCClient: s.FCClient,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	return &templaterepository.ContractTemplatePublishResponse{
+		Did: req.Did,
+	}, nil
 }

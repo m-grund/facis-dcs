@@ -373,10 +373,9 @@ var ContractTemplateRegisterRequest = Type("ContractTemplateRegisterRequest", fu
 	Token("token", String, "JWT token")
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
+	Attribute("version", Int, "The version of the contract template")
 
-	Attribute("updated_at", String, "The timestamp when the contract template was updated")
-
-	Required("did", "updated_at")
+	Required("did", "version")
 })
 
 var ContractTemplateRegisterResponse = Type("ContractTemplateRegisterResponse", func() {
@@ -412,6 +411,28 @@ var ContractTemplateAuditResponse = Type("ContractTemplateAuditResponse", func()
 	Attribute("global_log_pred_cid", String, "Global audit trail predecessor on the IPFS chain")
 
 	Required("id", "component", "event_type", "event_data", "created_at")
+})
+
+var ContractTemplatePublishRequest = Type("ContractTemplatePublishRequest", func() {
+	Description("Contract template publish request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template")
+
+	Attribute("updated_at", String, "The timestamp when the contract template was updated")
+
+	Required("did", "updated_at")
+})
+
+var ContractTemplatePublishResponse = Type("ContractTemplatePublishResponse", func() {
+	Description("Result for publish a approved contract template")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template")
+
+	Required("did")
 })
 
 // Template Repository Service  (/template/...)
@@ -744,7 +765,7 @@ var _ = Service("TemplateRepository", func() {
 
 	// POST /template/register
 	Method("register", func() {
-		Description("register new template into the repository and the XFSC Catalogue.")
+		Description("register new template into the repository.")
 		Meta("dcs:requirements", "DCS-IR-TR-07")
 		Meta("dcs:tr:components", "Contract Templates Storage & Provenance")
 		Meta("dcs:ui", "Template Management Dashboard")
@@ -814,6 +835,28 @@ var _ = Service("TemplateRepository", func() {
 		HTTP(func() {
 			GET("/template/audit")
 			Param("did")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// POST /template/publish
+	Method("publish", func() {
+		Description("publish a local approved template to the XFSC Catalogue.")
+
+		Security(JWTAuth, func() {
+			Scope("Template Manager")
+		})
+
+		Payload(ContractTemplatePublishRequest)
+		Result(ContractTemplatePublishResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/template/publish")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

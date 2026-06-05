@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 )
+
+var ErrContractTemplateNotFound = errors.New("template not found")
 
 type ResponsiblePersons struct {
 	Creator   string   `json:"creator"`

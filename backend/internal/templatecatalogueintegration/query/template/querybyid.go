@@ -2,7 +2,10 @@ package template
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -10,8 +13,8 @@ import (
 )
 
 type GetByIDQry struct {
-	Token string
-	DID   string
+	DID     string
+	Version int
 }
 
 type GetByIDHandler struct {
@@ -21,7 +24,7 @@ type GetByIDHandler struct {
 
 const retrieveTemplateByIDStatement = `
 MATCH (ct:ContractTemplate)
-WHERE ct.did = $did
+WHERE ct.did = $did AND ct.version = $version
 OPTIONAL MATCH (ct)-[:operatedBy]->(p:Participant)
 OPTIONAL MATCH (p)-[:headquarterAddress]->(hq)
 OPTIONAL MATCH (p)-[:TermsAndConditions]->(tc)
@@ -30,6 +33,7 @@ RETURN {
   document_number: ct.documentNumber,
   version: ct.version,
   schema_version: ct.schemaVersion,
+	template_data_json: ct.templateDataJSON,
   name: ct.name,
   description: ct.description,
   template_type: ct.templateType,
@@ -52,16 +56,20 @@ LIMIT 1
 
 func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.TemplateCatalogueRetrieveByIDResponse, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if qry.DID == "" {
 		return nil, fmt.Errorf("did is empty")
 	}
+	if qry.Version < 1 {
+		return nil, fmt.Errorf("version must be greater than 0")
+	}
 
-	resp, err := h.FCClient.Query(h.Ctx, qry.Token, client.QueryRequest{
+	resp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
 		Statement: retrieveTemplateByIDStatement,
 		Parameters: map[string]string{
-			"did": qry.DID,
+			"did":     qry.DID,
+			"version": strconv.Itoa(qry.Version),
 		},
 	})
 	if err != nil {
@@ -79,7 +87,12 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		}
 	}
 	if n == nil {
-		return nil, fmt.Errorf("query projection missing projected map for did=%s", qry.DID)
+		return nil, fmt.Errorf("query projection missing projected map for did=%s version=%d", qry.DID, qry.Version)
+	}
+
+	templateData, err := parseTemplateDataJSON(ptr.StringFromMap(n, "template_data_json"))
+	if err != nil {
+		return nil, err
 	}
 
 	return &templatecatalogueintegration.TemplateCatalogueRetrieveByIDResponse{
@@ -87,6 +100,7 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		DocumentNumber: ptr.Ref(ptr.StringFromMap(n, "document_number")),
 		Version:        ptr.Ref(ptr.IntFromMap(n, "version")),
 		SchemaVersion:  ptr.Ref(ptr.IntFromMap(n, "schema_version")),
+		TemplateData:   templateData,
 		Name:           ptr.Ref(ptr.StringFromMap(n, "name")),
 		Description:    ptr.Ref(ptr.StringFromMap(n, "description")),
 		TemplateType:   ptr.Ref(ptr.StringFromMap(n, "template_type")),
@@ -94,6 +108,19 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		CreatedAt:      ptr.Ref(ptr.StringFromMap(n, "created_at")),
 		UpdatedAt:      ptr.Ref(ptr.StringFromMap(n, "updated_at")),
 	}, nil
+}
+
+func parseTemplateDataJSON(templateDataJSON string) (any, error) {
+	if strings.TrimSpace(templateDataJSON) == "" {
+		return nil, nil
+	}
+
+	var templateData map[string]interface{}
+	if err := json.Unmarshal([]byte(templateDataJSON), &templateData); err != nil {
+		return nil, fmt.Errorf("unmarshal templateDataJSON failed: %w", err)
+	}
+
+	return templateData, nil
 }
 
 func mapTemplateParticipantSummary(n map[string]interface{}) *templatecatalogueintegration.TemplateCatalogueParticipantSummary {

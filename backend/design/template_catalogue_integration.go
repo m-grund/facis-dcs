@@ -41,13 +41,30 @@ var TemplateCatalogueRetrieveResponse = Type("TemplateCatalogueRetrieveResponse"
 	Required("totalCount", "items")
 })
 
-var TemplateCatalogueRetrieveByIDRequest = Type("TemplateCatalogueRetrieveByIDRequest", func() {
-	Description("Retrieve a template catalogue by did")
+var TemplateCatalogueSearchRequest = Type("TemplateCatalogueSearchRequest", func() {
+	Description("Search template catalogues in Federated Catalogue")
 
 	Token("token", String, "JWT token")
 
 	Attribute("did", String, "Decentralized Identifier of the contract template")
-	Required("did")
+	Attribute("document_number", String, "The number of the contract template")
+	Attribute("version", Int, "The version of the contract template")
+	Attribute("name", String, "The name of the contract template")
+	Attribute("description", String, "A description for that template")
+	Attribute("offset", Int, "Pagination offset; values less than 1 start at the beginning")
+	Attribute("limit", Int, "Pagination limit; values less than 1 return all matches")
+
+	Required("offset", "limit")
+})
+
+var TemplateCatalogueRetrieveByIDRequest = Type("TemplateCatalogueRetrieveByIDRequest", func() {
+	Description("Retrieve a template catalogue by did and version")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract template")
+	Attribute("version", Int, "The version of the contract template")
+	Required("did", "version")
 })
 
 var TemplateCatalogueRetrieveByIDResponse = Type("TemplateCatalogueRetrieveByIDResponse", func() {
@@ -60,6 +77,7 @@ var TemplateCatalogueRetrieveByIDResponse = Type("TemplateCatalogueRetrieveByIDR
 	Attribute("description", String, "A description for that template")
 	Attribute("template_type", String, "The type of the template")
 	Attribute("schema_version", Int, "Schema version of the contract template")
+	Attribute("template_data", Any, "The template data of the contract template")
 	// Optional participant summary
 	Attribute("participant", TemplateCatalogueParticipantSummary, "Participant summary")
 	Attribute("created_at", String, "The timestamp when the contract template was created")
@@ -323,6 +341,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		HTTP(func() {
 			GET("/catalogue/template/retrieve/{did}")
 			Param("did")
+			Param("version")
 			Response(StatusOK)
 		})
 	})
@@ -546,6 +565,40 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 			DELETE("/catalogue/service-offering/delete")
 			Response(StatusOK)
 			Response("not_found", StatusNotFound)
+		})
+	})
+
+	// GET /catalogue/template/search
+	Method("search_template", func() {
+		Description("Search templates in XFSC Catalogue by metadata fields.")
+		Meta("dcs:requirements", "DCS-IR-SI-01")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Contract Manager")
+			Scope("Contract Signer")
+		})
+
+		Payload(TemplateCatalogueSearchRequest)
+		Result(TemplateCatalogueRetrieveResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/catalogue/template/search")
+			Param("did")
+			Param("document_number")
+			Param("version")
+			Param("name")
+			Param("description")
+			Param("offset")
+			Param("limit")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
 	})
 

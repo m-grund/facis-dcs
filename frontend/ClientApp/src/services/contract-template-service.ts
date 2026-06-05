@@ -13,6 +13,7 @@ import type {
   ContractTemplateSubmitRequest,
   ContractTemplateUpdateRequest,
   ContractTemplateVerifyRequest,
+  ContractTemplatePublishRequest,
 } from '@/models/requests/template-request'
 import type {
   ContractTemplateApproveResponse,
@@ -28,6 +29,7 @@ import type {
   ContractTemplateSubmitResponse,
   ContractTemplateUpdateResponse,
   ContractTemplateVerifyResponse,
+  ContractTemplatePublishResponse,
 } from '@/models/responses/template-response'
 import type { ContractTemplateService } from '@/models/services/contract-template-service'
 
@@ -146,5 +148,9 @@ export const contractTemplateService: ContractTemplateService = {
     return http
       .get(`/pdf/verify/template/${encodeURIComponent(did)}`)
       .then((res) => res.data)
+  },
+
+  async publish(request: ContractTemplatePublishRequest) {
+    return http.post<ContractTemplatePublishResponse>('/template/publish', request).then((res) => res.data)
   },
 }
