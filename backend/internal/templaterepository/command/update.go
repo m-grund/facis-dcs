@@ -61,19 +61,19 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	if oldData.State == contracttemplatestate.Draft.String() && oldData.State != contracttemplatestate.Rejected.String() {
+	if oldData.State == contracttemplatestate.Draft.String() && oldData.State == contracttemplatestate.Rejected.String() {
 
 		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator, userrole.TemplateManager) {
 			return errors.New("invalid user permission")
 		}
 
-	} else if oldData.State != contracttemplatestate.Submitted.String() {
+	} else if oldData.State == contracttemplatestate.Submitted.String() {
 
 		if !cmd.UserRoles.HasRoles(userrole.TemplateReviewer, userrole.TemplateManager) {
 			return errors.New("invalid user permission")
 		}
 
-		if cmd.UserRoles.HasRole(userrole.TemplateReviewer) {
+		if cmd.UserRoles.HasRoles(userrole.TemplateReviewer) {
 			isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.UpdatedBy)
 			if err != nil {
 				return err

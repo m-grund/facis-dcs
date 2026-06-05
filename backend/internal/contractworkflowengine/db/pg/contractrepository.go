@@ -115,27 +115,19 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
     SELECT did, state, name, description, created_by, created_at, updated_at,
            contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
     FROM contracts_effective_metadata
-    ORDER BY created_at DESC
 `
-	var cts []db.ContractMetadata
+	var params []any
 	if pagination.Limit > 0 {
 		offset := (pagination.Offset - 1) * pagination.Limit
-		query += ` LIMIT :limit OFFSET :offset`
-
-		err := tx.SelectContext(ctx, &cts, query,
-			sql.Named("limit", pagination.Limit),
-			sql.Named("offset", offset),
-		)
-		if err != nil {
-			return []db.ContractMetadata{}, err
-		}
-	} else {
-		err := tx.SelectContext(ctx, &cts, query)
-		if err != nil {
-			return []db.ContractMetadata{}, err
-		}
+		query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+		params = append(params, pagination.Limit, offset)
 	}
 
+	var cts []db.ContractMetadata
+	err := tx.SelectContext(ctx, &cts, query, params...)
+	if err != nil {
+		return []db.ContractMetadata{}, err
+	}
 	return cts, nil
 }
 

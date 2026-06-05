@@ -81,15 +81,6 @@ func (r UserRole) IsHumanRole() bool {
 
 type UserRoles []UserRole
 
-func (r UserRoles) HasRole(requiredRole UserRole) bool {
-	for _, role := range r {
-		if role == requiredRole {
-			return true
-		}
-	}
-	return false
-}
-
 func (r UserRoles) HasRoles(requiredRoles ...UserRole) bool {
 	for _, requiredRole := range requiredRoles {
 		for _, role := range r {

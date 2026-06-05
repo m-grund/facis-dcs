@@ -62,8 +62,9 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
+	// This avoids that updates on different DCS are possible
 	if oldData.CreatedBy != cmd.UpdatedBy {
-		return errors.New("invalid user")
+		return errors.New("invalid participant")
 	}
 
 	if oldData.State != contracttemplatestate.Draft.String() {

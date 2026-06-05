@@ -113,8 +113,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
+			return errors.New("invalid user permission")
+		}
+
+		// This avoids that state changes on different DCS are possible
 		if cmd.SubmittedBy != processData.CreatedBy {
-			return errors.New("invalid user")
+			return errors.New("invalid participant")
 		}
 
 		if len(cmd.Reviewers) == 0 {
@@ -156,8 +161,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contractstate.Rejected.String() {
 
-		if processData.CreatedBy != cmd.SubmittedBy {
-			return errors.New("invalid user")
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
+			return errors.New("invalid user permission")
+		}
+
+		// This avoids that state changes on different DCS are possible
+		if cmd.SubmittedBy != processData.CreatedBy {
+			return errors.New("invalid participant")
 		}
 
 		err := h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
@@ -178,6 +188,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		nextState = contractstate.Negotiation
 
 	} else if processData.State == contractstate.Negotiation.String() {
+
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator, userrole.ContractReviewer) {
+			return errors.New("invalid user permission")
+		}
 
 		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.SubmittedBy)
 		if err != nil {
@@ -253,6 +267,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contractstate.Submitted.String() {
 
+		if !cmd.UserRoles.HasRoles(userrole.ContractReviewer) {
+			return errors.New("invalid user permission")
+		}
+
 		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.SubmittedBy)
 		if err != nil {
 			return err
@@ -297,6 +315,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 	} else if processData.State == contractstate.Reviewed.String() {
+
+		if !cmd.UserRoles.HasRoles(userrole.ContractApprover) {
+			return errors.New("invalid user permission")
+		}
 
 		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
 		if err != nil {
