@@ -49,7 +49,7 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { TemplateType } from '@template-repository/models/contract-templace'
+import { TemplateType } from '@template-repository/models/contract-template'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 
 const { templateType, name, description, version } = storeToRefs(useTemplateDraftStore())
