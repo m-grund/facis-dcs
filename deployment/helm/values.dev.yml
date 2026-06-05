@@ -131,11 +131,6 @@ orce:
 route:
   basePath: "/api"
 
+# Local dev uses committed testWallet keys + static trust ConfigMap (no Vault seeding).
 vault:
-  enabled: true
-  injector:
-    enabled: false
-  server:
-    dev:
-      enabled: true
-      devRootToken: root
+  enabled: false

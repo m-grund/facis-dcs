@@ -1,13 +1,13 @@
 package oid4vp
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -44,33 +44,13 @@ func keySetKeyFunc(jwksRaw json.RawMessage, token *jwt.Token) (any, error) {
 	return nil, fmt.Errorf("no matching issuer jwk for kid %q", kid)
 }
 
-func holderKeyFunc(holderDID string, token *jwt.Token) (any, error) {
+func holderKeyFunc(ctx context.Context, resolver DIDResolver, holderDID string, token *jwt.Token) (any, error) {
 	_ = token
-	pub, err := publicJWKFromDIDJWK(holderDID)
+	pub, err := resolver.ResolvePublicJWK(ctx, holderDID)
 	if err != nil {
 		return nil, err
 	}
 	return ecPublicKey(pub.X, pub.Y)
-}
-
-func publicJWKFromDIDJWK(did string) (*jwkKey, error) {
-	const prefix = "did:jwk:"
-	if !strings.HasPrefix(did, prefix) {
-		return nil, fmt.Errorf("holder did must use did:jwk")
-	}
-	payload := strings.TrimPrefix(did, prefix)
-	raw, err := base64.RawURLEncoding.DecodeString(payload)
-	if err != nil {
-		return nil, fmt.Errorf("decode did:jwk payload: %w", err)
-	}
-	var key jwkKey
-	if err := json.Unmarshal(raw, &key); err != nil {
-		return nil, fmt.Errorf("parse did:jwk jwk: %w", err)
-	}
-	if key.Kty != "EC" || key.Crv != "P-256" || key.X == "" || key.Y == "" {
-		return nil, fmt.Errorf("did:jwk must be P-256 EC public key")
-	}
-	return &key, nil
 }
 
 func ecPublicKey(xB64, yB64 string) (*ecdsa.PublicKey, error) {

@@ -56,6 +56,12 @@ metadata:
 data:
   generate_dev_keys.py: |
 {{ .Files.Get "files/scripts/generate_dev_keys.py" | indent 4 }}
+  issuer-dev.jwk: |
+{{ .Files.Get "files/oid4vp/issuer-dev.jwk" | indent 4 }}
+  wallet.jwk: |
+{{ .Files.Get "files/oid4vp/wallet.jwk" | indent 4 }}
+  trust.dev.json: |
+{{ .Files.Get "files/oid4vp/trust.dev.json" | indent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -112,15 +118,17 @@ spec:
               cp /config/generate_dev_keys.py /scripts/generate_dev_keys.py
 
               if ! curl -sf -H "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/secret/data/dcs/demo/issuer-dev-jwk" >/dev/null; then
-                echo "Generating demo OID4VP material..."
-                python3 /scripts/generate_dev_keys.py \
-                  --issuer-did "$ISSUER_DID" \
-                  --keys-dir /work/keys \
-                  --trust-path /work/trust.dev.json \
-                  --credentials-dir /work/credentials \
-                  --regenerate-keys \
-                  --yes \
-                  --vault-write
+                cp /config/issuer-dev.jwk /work/keys/issuer-dev.jwk
+                cp /config/wallet.jwk /work/keys/wallet.jwk
+                cp /config/trust.dev.json /work/trust.dev.json
+                SEED_ARGS=(--issuer-did "$ISSUER_DID" --keys-dir /work/keys --trust-path /work/trust.dev.json --credentials-dir /work/credentials --yes --vault-write)
+                if [ "{{ .Values.oid4vp.demoWallet.autoGenerate }}" = "true" ]; then
+                  echo "Generating new demo OID4VP material (--regenerate-keys)..."
+                  python3 /scripts/generate_dev_keys.py "${SEED_ARGS[@]}" --regenerate-keys
+                else
+                  echo "Seeding Vault from committed dev OID4VP material..."
+                  python3 /scripts/generate_dev_keys.py "${SEED_ARGS[@]}"
+                fi
               else
                 echo "Demo OID4VP material already in Vault."
               fi

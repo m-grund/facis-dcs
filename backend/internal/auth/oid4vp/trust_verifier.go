@@ -1,6 +1,7 @@
 package oid4vp
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -22,11 +23,15 @@ type vpEnvelope struct {
 
 // TrustVerifier validates wallet presentations against trust.json issuers.
 type TrustVerifier struct {
-	trust *TrustConfig
+	trust    *TrustConfig
+	resolver DIDResolver
 }
 
 func NewTrustVerifier(trust *TrustConfig) *TrustVerifier {
-	return &TrustVerifier{trust: trust}
+	return &TrustVerifier{
+		trust:    trust,
+		resolver: NewUniversalResolverFromEnv(),
+	}
 }
 
 func (v *TrustVerifier) Verify(vpToken string, ctx PresentationContext) (*VerifiedLoginClaims, error) {
@@ -165,8 +170,11 @@ func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx Presentatio
 	if strings.TrimSpace(sub) == "" {
 		return fmt.Errorf("kb jwt missing sub")
 	}
+	resolveCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
-		return holderKeyFunc(sub, t)
+		return holderKeyFunc(resolveCtx, v.resolver, sub, t)
 	}, jwt.WithValidMethods([]string{"ES256"}))
 	if err != nil {
 		return fmt.Errorf("kb jwt signature: %w", err)

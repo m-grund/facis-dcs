@@ -65,6 +65,8 @@ oid4vp:
     issuerDID: did:web:dev.example:issuer:poa
   demoWallet:
     secretName: ""
+    # When false, vault-init seeds from chart files/oid4vp/*.
+    autoGenerate: false
 
 vault:
   enabled: false
