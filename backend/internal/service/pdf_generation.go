@@ -627,7 +627,7 @@ func (s *pdfGenerationSrvc) appendAndCache(
 		c2paState, reason, s.IssuerDID, vcID, prevHash,
 		time.Now().UTC(),
 	)
-	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, pdfBytes, vcBytes)
+	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, assertion, pdfBytes, vcBytes)
 	if err != nil {
 		return pdfBytes, err
 	}

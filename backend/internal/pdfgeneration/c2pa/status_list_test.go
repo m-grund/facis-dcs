@@ -134,13 +134,14 @@ func TestOCMWStatusListPublisher_RevokeStatus_PropagatesHTTPError(t *testing.T) 
 	assert.Contains(t, err.Error(), "statuslist-service revoke returned 500")
 }
 
-// TestOCMWStatusListPublisher_EmptyServiceURL_SkipsRevoke verifies that
-// a publisher with no URL configured silently skips revocation without error.
-// This supports offline / dev environments where the status list is optional.
-func TestOCMWStatusListPublisher_EmptyServiceURL_SkipsRevoke(t *testing.T) {
+// TestOCMWStatusListPublisher_EmptyServiceURL_HardFails verifies that a
+// publisher with no URL configured returns an error for terminal states.
+// Empty ServiceURL is a hard failure per project policy (DCS hard-fail policy).
+func TestOCMWStatusListPublisher_EmptyServiceURL_HardFails(t *testing.T) {
 	p := NewOCMWStatusListPublisher("", "did:example:issuer", "")
 	_, err := p.PublishStatus(context.Background(), "did:example:c1", "terminated", "", time.Now())
-	require.NoError(t, err, "empty ServiceURL must silently skip — no error for offline environments")
+	require.Error(t, err, "empty ServiceURL must hard-fail for terminal states (revocation is mandatory)")
+	assert.Contains(t, err.Error(), "ServiceURL must not be empty")
 }
 
 // TestOCMWStatusListPublisher_DefaultTenant verifies that an empty tenantID

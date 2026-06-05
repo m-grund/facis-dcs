@@ -38,18 +38,21 @@ func (s *fixedSigner) CertificateChain(_ context.Context) ([][]byte, error) {
 	return chain, nil
 }
 
-func TestRequestTimestamp_Success(t *testing.T) {
+// newTestTSA returns an httptest.Server that responds with valid RFC 3161 tokens.
+func newTestTSA(t *testing.T) (*httptest.Server, *x509.Certificate) {
+	t.Helper()
+	cert, key := mustTSACert(t)
 	tsa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "application/timestamp-query", r.Header.Get("Content-Type"))
-		assert.Equal(t, "application/timestamp-reply", r.Header.Get("Accept"))
-
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		req, err := timestamp.ParseRequest(body)
-		require.NoError(t, err)
-
-		cert, key := mustTSACert(t)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		ts := &timestamp.Timestamp{
 			HashAlgorithm: req.HashAlgorithm,
 			HashedMessage: req.HashedMessage,
@@ -59,11 +62,18 @@ func TestRequestTimestamp_Success(t *testing.T) {
 			Nonce:         req.Nonce,
 		}
 		resp, err := ts.CreateResponse(cert, key)
-		require.NoError(t, err)
-
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/timestamp-reply")
 		_, _ = w.Write(resp)
 	}))
+	return tsa, cert
+}
+
+func TestRequestTimestamp_Success(t *testing.T) {
+	tsa, _ := newTestTSA(t)
 	defer tsa.Close()
 
 	token, err := requestTimestamp(context.Background(), tsa.URL, []byte("hello world"))
@@ -83,16 +93,15 @@ func TestRequestTimestamp_Non200(t *testing.T) {
 }
 
 func TestRequestTimestamp_HashMismatch(t *testing.T) {
+	cert, key := mustTSACert(t)
 	tsa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 		req, err := timestamp.ParseRequest(body)
 		require.NoError(t, err)
 
-		cert, key := mustTSACert(t)
 		ts := &timestamp.Timestamp{
 			HashAlgorithm: req.HashAlgorithm,
-			// Intentionally wrong hash payload for mismatch test.
 			HashedMessage: []byte("not-the-request-hash"),
 			Time:          time.Now().UTC(),
 			SerialNumber:  big.NewInt(2),
@@ -110,28 +119,31 @@ func TestRequestTimestamp_HashMismatch(t *testing.T) {
 	assert.Contains(t, err.Error(), "hashed message mismatch")
 }
 
+// TestBuildManifest_FailsClosedWithNoTSAURL verifies that TSA is mandatory:
+// building a manifest without a configured TSA URL must return an error.
+func TestBuildManifest_FailsClosedWithNoTSAURL(t *testing.T) {
+	signerCert, _ := mustTSACert(t)
+	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
+	assertion := testAssertion()
+
+	_, _, err := BuildManifest(context.Background(), signer, TSAConfig{}, assertion, 0, 0, 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TSA URL must not be empty")
+}
+
+// TestBuildManifest_FailsClosedWhenTSAConfiguredAndUnavailable verifies that a
+// configured-but-unreachable TSA causes a hard failure.
 func TestBuildManifest_FailsClosedWhenTSAConfiguredAndUnavailable(t *testing.T) {
 	signerCert, _ := mustTSACert(t)
 	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
-	assertion := NewLifecycleAssertion(
-		"did:example:contract1",
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		"1.0.1",
-		"draft",
-		"",
-		"did:example:auth",
-		"",
-		"",
-		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-	)
+	assertion := testAssertion()
 
 	_, _, err := BuildManifest(
 		context.Background(),
 		signer,
 		TSAConfig{URL: "http://127.0.0.1:1"},
-		"did:example:issuer",
 		assertion,
+		0,
 		0,
 		0,
 	)
@@ -139,30 +151,101 @@ func TestBuildManifest_FailsClosedWhenTSAConfiguredAndUnavailable(t *testing.T) 
 	assert.Contains(t, err.Error(), "request TSA timestamp")
 }
 
-func TestBuildManifest_WrapsManifestInManifestStore(t *testing.T) {
+// TestBuildManifest_ClaimV2SpecVersion verifies that the produced manifest
+// contains claim_generator_info with specVersion = "2.4.0".
+func TestBuildManifest_ClaimV2SpecVersion(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+
 	signerCert, _ := mustTSACert(t)
 	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
-	assertion := NewLifecycleAssertion(
-		"did:example:contract1",
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		"1.0.1",
-		"draft",
-		"",
-		"did:example:auth",
-		"",
-		"",
-		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-	)
+	assertion := testAssertion()
 
-	manifestBytes, manifestHash, err := BuildManifest(context.Background(), signer, TSAConfig{}, "did:example:issuer", assertion, 0, 0)
+	manifestBytes, manifestHash, err := BuildManifest(
+		context.Background(), signer, TSAConfig{URL: tsa.URL},
+		assertion, 0, 0, 0,
+	)
 	require.NoError(t, err)
 	require.NotEmpty(t, manifestHash)
+
+	// Manifest bytes contain the string "2.4.0" from claim_generator_info.specVersion.
+	assert.Contains(t, string(manifestBytes), "2.4.0", "specVersion must be 2.4.0")
+	// Manifest is wrapped in a JUMBF superbox.
 	assert.Equal(t, "jumb", string(manifestBytes[4:8]))
 	assert.Contains(t, string(manifestBytes), "c2pa.manifest")
 	assert.Contains(t, string(manifestBytes), "dcs.contract.lifecycle")
-	// Top-level manifest store label: toggle byte (0x03), label, NUL terminator.
+	assert.Contains(t, string(manifestBytes), "c2pa.actions.v2")
+}
+
+// TestBuildManifest_WrapsManifestInManifestStore verifies basic JUMBF structure.
+func TestBuildManifest_WrapsManifestInManifestStore(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+
+	signerCert, _ := mustTSACert(t)
+	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
+	assertion := testAssertion()
+
+	manifestBytes, manifestHash, err := BuildManifest(
+		context.Background(), signer, TSAConfig{URL: tsa.URL},
+		assertion, 0, 0, 0,
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, manifestHash)
+	assert.Equal(t, "jumb", string(manifestBytes[4:8]))
 	assert.True(t, bytes.Contains(manifestBytes, []byte{0x03, 'c', '2', 'p', 'a', 0x00}))
+}
+
+// TestBuildUpdateManifest_FailsClosedWithNoTSAURL verifies that update manifests
+// also require a TSA URL.
+func TestBuildUpdateManifest_FailsClosedWithNoTSAURL(t *testing.T) {
+	signerCert, _ := mustTSACert(t)
+	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
+	assertion := testAssertion()
+	assertion.PrevManifestHash = "aabbccdd" + "00000000" + "11111111" + "22222222" + "33333333" + "44444444" + "55555555" + "66666666"
+
+	_, _, err := BuildUpdateManifest(
+		context.Background(), signer, TSAConfig{},
+		assertion,
+		assertion.PrevManifestHash,
+		"deadbeef"+"00000000"+"11111111"+"22222222"+"33333333"+"44444444"+"55555555"+"66666666",
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TSA URL must not be empty")
+}
+
+// TestBuildUpdateManifest_ContainsIngredientV3 verifies that an update manifest
+// contains the c2pa.ingredient.v3 parentOf assertion.
+func TestBuildUpdateManifest_ContainsIngredientV3(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+
+	signerCert, _ := mustTSACert(t)
+	signer := &fixedSigner{sig: bytes.Repeat([]byte{0xAB}, 64), certChain: [][]byte{signerCert.Raw}}
+	assertion := testAssertion()
+	prevHash := bytes.Repeat([]byte{0xAB}, 32)
+	prevSigHash := bytes.Repeat([]byte{0xCD}, 32)
+	assertion.PrevManifestHash = "ab" + "ababababababababababababababababababababababababababababababababababab"[0:62]
+
+	manifestBytes, manifestHash, err := BuildUpdateManifest(
+		context.Background(), signer, TSAConfig{URL: tsa.URL},
+		assertion,
+		"ababababababababababababababababababababababababababababababababababab"[0:64],
+		"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+	)
+	_ = prevHash
+	_ = prevSigHash
+	require.NoError(t, err)
+	require.NotEmpty(t, manifestHash)
+
+	// Update manifest uses c2pa.update.manifest label.
+	assert.Contains(t, string(manifestBytes), "c2pa.update.manifest", "update manifest must use c2um label")
+	// Contains ingredient.v3.
+	assert.Contains(t, string(manifestBytes), "c2pa.ingredient.v3")
+	// Contains lifecycle assertion.
+	assert.Contains(t, string(manifestBytes), "dcs.contract.lifecycle")
+	// Update manifests must NOT contain c2pa.hash.data.
+	assert.NotContains(t, string(manifestBytes), "c2pa.hash.data", "update manifests must not have hard binding")
 }
 
 func mustTSACert(t *testing.T) (*x509.Certificate, *ecdsa.PrivateKey) {

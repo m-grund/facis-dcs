@@ -3,13 +3,24 @@ package builder
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
+	"io"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/pdfgeneration/c2pa"
 
+	"github.com/digitorus/timestamp"
 	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/stretchr/testify/assert"
@@ -114,7 +125,9 @@ func TestC2PA_ChainLinkageWithRealPDF(t *testing.T) {
 	pdf, err := BuildContract(fixedInput)
 	require.NoError(t, err)
 
-	signer := &stubSigner{}
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+	signer := mustNewECDSASigner(t)
 	storer := &stubStorer{}
 
 	fileHash := c2pa.FileHashOf(fixedJSONLD)
@@ -126,8 +139,8 @@ func TestC2PA_ChainLinkageWithRealPDF(t *testing.T) {
 		"draft", "", "did:example:issuer", "", "", time.Now(),
 	)
 	result1, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:example:issuer", assertion1, pdf, nil,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion1, pdf, nil,
 	)
 	require.NoError(t, err, "first AppendManifest must succeed")
 	assert.NotEmpty(t, result1.ManifestHash, "first manifest hash must be non-empty")
@@ -143,8 +156,8 @@ func TestC2PA_ChainLinkageWithRealPDF(t *testing.T) {
 		"active", "", "did:example:issuer", "", prevHash, time.Now(),
 	)
 	result2, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion2, result1.UpdatedPDF, nil,
 	)
 	require.NoError(t, err, "second AppendManifest must succeed")
 	assert.NotEqual(t, result1.ManifestHash, result2.ManifestHash,
@@ -180,12 +193,13 @@ func TestC2PA_RoundTripWithRealPDF(t *testing.T) {
 		"draft", "", "did:example:issuer", "", "", time.Now(),
 	)
 
+	tsa2, _ := newTestTSA(t)
+	defer tsa2.Close()
 	result, err := c2pa.AppendManifest(
 		context.Background(),
-		&stubSigner{},
-		c2pa.TSAConfig{},
+		mustNewECDSASigner(t),
+		c2pa.TSAConfig{URL: tsa2.URL},
 		&stubStorer{},
-		"did:example:issuer",
 		assertion,
 		pdf,
 		nil,
@@ -203,4 +217,112 @@ func TestC2PA_RoundTripWithRealPDF(t *testing.T) {
 		"updated PDF must contain /AF array in catalog")
 	assert.True(t, bytes.Contains(result.UpdatedPDF, []byte("C2PA_Manifest")),
 		"updated PDF must reference AFRelationship /C2PA_Manifest")
+}
+
+// mustTSACert and newTestTSA are reproduced from c2pa/manifest_test.go to avoid
+// an import cycle (this file is in package builder, not package c2pa).
+
+func mustTSACert(t *testing.T) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	tpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(42),
+		Subject:               pkix.Name{CommonName: "test-tsa"},
+		NotBefore:             now.Add(-1 * time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageTimeStamping},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	return cert, key
+}
+
+func newTestTSA(t *testing.T) (*httptest.Server, *x509.Certificate) {
+	t.Helper()
+	cert, key := mustTSACert(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req, err := timestamp.ParseRequest(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		ts := &timestamp.Timestamp{
+			HashAlgorithm: req.HashAlgorithm,
+			HashedMessage: req.HashedMessage,
+			Time:          time.Now().UTC(),
+			SerialNumber:  big.NewInt(1),
+			Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
+			Nonce:         req.Nonce,
+		}
+		resp, err := ts.CreateResponse(cert, key)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/timestamp-reply")
+		_, _ = w.Write(resp)
+	}))
+	return srv, cert
+}
+
+// ecdsaBuilderSigner is an ECDSA-backed signer for builder tests.
+// The stubSigner's dummy cert is not valid DER, which can cause issues with
+// the TSA timestamp embedding. This signer uses a real self-signed cert.
+type ecdsaBuilderSigner struct {
+	priv    *ecdsa.PrivateKey
+	certDER []byte
+}
+
+func (s *ecdsaBuilderSigner) Sign(_ context.Context, data []byte) ([]byte, error) {
+	h := sha256.Sum256(data)
+	r, ss, err := ecdsa.Sign(rand.Reader, s.priv, h[:])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 64)
+	rb, sb := r.Bytes(), ss.Bytes()
+	copy(out[32-len(rb):32], rb)
+	copy(out[64-len(sb):], sb)
+	return out, nil
+}
+
+func (s *ecdsaBuilderSigner) CertificateChain(_ context.Context) ([][]byte, error) {
+	return [][]byte{append([]byte(nil), s.certDER...)}, nil
+}
+
+func mustNewECDSASigner(t *testing.T) *ecdsaBuilderSigner {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	tpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "builder-test-signer"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &priv.PublicKey, priv)
+	require.NoError(t, err)
+
+	return &ecdsaBuilderSigner{priv: priv, certDER: der}
 }

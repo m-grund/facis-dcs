@@ -116,6 +116,8 @@ func minimalValidPDF() []byte {
 }
 
 func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
 	storer := &stubStorer{}
@@ -123,9 +125,8 @@ func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
 	result, err := AppendManifest(
 		context.Background(),
 		signer,
-		TSAConfig{},
+		TSAConfig{URL: tsa.URL},
 		storer,
-		"did:example:issuer",
 		testAssertion(),
 		basePDF,
 		nil,
@@ -146,14 +147,17 @@ func TestAppendManifest_IncrementalUpdatePreservesBaseLayer(t *testing.T) {
 }
 
 func TestAppendManifest_ChainLinkage(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+	tsaCfg := TSAConfig{URL: tsa.URL}
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
 	storer := &stubStorer{}
 
 	// First assertion.
 	result1, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -166,8 +170,8 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	)
 
 	result2, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		assertion2, result1.UpdatedPDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -180,13 +184,14 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 }
 
 func TestAppendManifest_FailsOnPrevManifestHashMismatch(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
 	storer := &stubStorer{}
 
 	_, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer",
+		context.Background(), signer, TSAConfig{URL: tsa.URL}, storer,
 		NewLifecycleAssertion(
 			"did:example:contract1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "1.0.1",
 			"draft", "", "did:example:auth", "", "deadbeef",
@@ -199,13 +204,16 @@ func TestAppendManifest_FailsOnPrevManifestHashMismatch(t *testing.T) {
 }
 
 func TestAppendManifest_PreservesPreviousManifestNameTreeEntries(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+	tsaCfg := TSAConfig{URL: tsa.URL}
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
 	storer := &stubStorer{}
 
 	result1, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -215,8 +223,8 @@ func TestAppendManifest_PreservesPreviousManifestNameTreeEntries(t *testing.T) {
 		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 	)
 	result2, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		assertion2, result1.UpdatedPDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -232,13 +240,15 @@ func TestAppendManifest_PreservesPreviousManifestNameTreeEntries(t *testing.T) {
 }
 
 func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
 	storer := &stubStorer{}
 
 	result, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
+		context.Background(), signer, TSAConfig{URL: tsa.URL}, storer,
+		testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -270,13 +280,15 @@ func TestAppendManifest_EmbedsC2PAFileSpecAndStream(t *testing.T) {
 }
 
 func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0xAB}, 64)}
 	storer := &stubStorer{}
 
 	result, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
+		context.Background(), signer, TSAConfig{URL: tsa.URL}, storer,
+		testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -300,13 +312,16 @@ func TestAppendManifest_ContainsExpectedC2PAPayloadLabels(t *testing.T) {
 // only the active (latest) manifest after multiple increments (C2PA PDF binding §8.2).
 // Historical manifests must still be discoverable via /Names/EmbeddedFiles.
 func TestAppendManifest_AFPointsToLatestManifestOnly(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+	tsaCfg := TSAConfig{URL: tsa.URL}
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
 	storer := &stubStorer{}
 
 	result1, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -318,8 +333,8 @@ func TestAppendManifest_AFPointsToLatestManifestOnly(t *testing.T) {
 		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 	)
 	result2, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		assertion2, result1.UpdatedPDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -371,13 +386,16 @@ func TestPrevManifestHashFrom_NoManifest(t *testing.T) {
 }
 
 func TestPrevManifestHashFrom_ReadsActiveEmbeddedManifestPayload(t *testing.T) {
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
+	tsaCfg := TSAConfig{URL: tsa.URL}
 	basePDF := minimalValidPDF()
 	signer := &stubSigner{sig: bytes.Repeat([]byte{0x01}, 64)}
 	storer := &stubStorer{}
 
 	result1, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", testAssertion(), basePDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		testAssertion(), basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -387,8 +405,8 @@ func TestPrevManifestHashFrom_ReadsActiveEmbeddedManifestPayload(t *testing.T) {
 		time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 	)
 	result2, err := AppendManifest(
-		context.Background(), signer, TSAConfig{}, storer,
-		"did:example:issuer", assertion2, result1.UpdatedPDF, nil,
+		context.Background(), signer, tsaCfg, storer,
+		assertion2, result1.UpdatedPDF, nil,
 	)
 	require.NoError(t, err)
 

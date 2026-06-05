@@ -38,6 +38,15 @@ var (
 		0x00, 0x38, 0x9B, 0x71,
 	}
 
+	// c2paUpdateManifestUUID is the update manifest box UUID (c2um), used for
+	// lifecycle-event appends per C2PA 2.4 §10.3.
+	c2paUpdateManifestUUID = [16]byte{
+		0x63, 0x32, 0x75, 0x6D, // "c2um"
+		0x00, 0x11, 0x00, 0x10,
+		0x80, 0x00, 0x00, 0xAA,
+		0x00, 0x38, 0x9B, 0x71,
+	}
+
 	// c2paAssertionStoreUUID is the assertion store UUID (c2as).
 	c2paAssertionStoreUUID = [16]byte{
 		0x63, 0x32, 0x61, 0x73, // "c2as"

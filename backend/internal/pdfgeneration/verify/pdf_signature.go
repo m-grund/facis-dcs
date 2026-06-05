@@ -2,6 +2,7 @@ package verify
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"regexp"
@@ -17,10 +18,12 @@ var (
 )
 
 // VerifyPDFSignatures validates detached PDF signatures (PAdES/PKCS#7) found
-// via /ByteRange + /Contents pairs.
+// via /ByteRange + /Contents pairs.  When trustedRoots is non-nil each signer
+// certificate chain is validated against those roots (DCS-OR-C2PA-006); nil
+// skips chain validation (dev/test only).
 // Returns (signatureCount, allValid, error).
 // When no signatures are present: count=0, allValid=false, err=nil.
-func VerifyPDFSignatures(pdf []byte) (int, bool, error) {
+func VerifyPDFSignatures(pdf []byte, trustedRoots *x509.CertPool) (int, bool, error) {
 	matches := byteRangeRe.FindAllSubmatchIndex(pdf, -1)
 	if len(matches) == 0 {
 		return 0, false, nil
@@ -76,7 +79,13 @@ func VerifyPDFSignatures(pdf []byte) (int, bool, error) {
 			continue
 		}
 		p7.Content = signedContent
-		if err := p7.Verify(); err != nil {
+		var verifyErr error
+		if trustedRoots != nil {
+			verifyErr = p7.VerifyWithChain(trustedRoots)
+		} else {
+			verifyErr = p7.Verify()
+		}
+		if verifyErr != nil {
 			allValid = false
 		}
 	}

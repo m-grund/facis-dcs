@@ -9,15 +9,20 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/pdfgeneration/c2pa"
 
+	"github.com/digitorus/timestamp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -256,6 +261,8 @@ func TestVerifier_C2PAManifestFoundAndSignatureValid(t *testing.T) {
 	basePDF := makeC2PABasePDF(jsonld)
 
 	// Append a C2PA manifest so the verifier can find it.
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
@@ -266,8 +273,8 @@ func TestVerifier_C2PAManifestFoundAndSignatureValid(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertion, basePDF, nil,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion, basePDF, nil,
 	)
 	require.NoError(t, err)
 	pdfWithManifest := result.UpdatedPDF
@@ -301,6 +308,8 @@ func TestVerifier_VCProofValidWhenVCEmbedded(t *testing.T) {
 		}
 	}`)
 
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
@@ -309,8 +318,8 @@ func TestVerifier_VCProofValidWhenVCEmbedded(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertion, basePDF, vcJSON,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion, basePDF, vcJSON,
 	)
 	require.NoError(t, err)
 
@@ -343,6 +352,8 @@ func TestVerifier_StatusListURIExtractedFromVC(t *testing.T) {
 		}
 	}`)
 
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
@@ -351,8 +362,8 @@ func TestVerifier_StatusListURIExtractedFromVC(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertion, basePDF, vcJSON,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion, basePDF, vcJSON,
 	)
 	require.NoError(t, err)
 
@@ -374,6 +385,8 @@ func TestVerifier_LifecycleStatusExtractedFromManifest(t *testing.T) {
 	jsonld := []byte(`{"@type":"Contract","id":"did:ex:14"}`)
 	basePDF := makeC2PABasePDF(jsonld)
 
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
@@ -382,8 +395,8 @@ func TestVerifier_LifecycleStatusExtractedFromManifest(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertion, basePDF, nil,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion, basePDF, nil,
 	)
 	require.NoError(t, err)
 
@@ -505,6 +518,8 @@ func TestVerifier_CheckStatusFnCalledWithCorrectFields(t *testing.T) {
 		}
 	}`)
 
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
@@ -513,8 +528,8 @@ func TestVerifier_CheckStatusFnCalledWithCorrectFields(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	result, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertion, basePDF, vcJSON,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion, basePDF, vcJSON,
 	)
 	require.NoError(t, err)
 
@@ -580,6 +595,8 @@ func TestVerifier_UsesLatestVCInChainedPDF(t *testing.T) {
 		}
 	}`)
 
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertionV1 := c2pa.NewLifecycleAssertion(
@@ -588,8 +605,8 @@ func TestVerifier_UsesLatestVCInChainedPDF(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	res1, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertionV1, basePDF, vcV1,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertionV1, basePDF, vcV1,
 	)
 	require.NoError(t, err)
 
@@ -599,8 +616,8 @@ func TestVerifier_UsesLatestVCInChainedPDF(t *testing.T) {
 		time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC),
 	)
 	res2, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertionV2, res1.UpdatedPDF, vcV2,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertionV2, res1.UpdatedPDF, vcV2,
 	)
 	require.NoError(t, err)
 
@@ -648,6 +665,8 @@ func TestVerifier_RemoteCanonicalVCUsedForStatusCheck(t *testing.T) {
 		}
 	}`)
 
+	tsa, _ := newTestTSA(t)
+	defer tsa.Close()
 	signer := mustNewC2PAStubSigner(t)
 	storer := &c2paStubStorer{}
 	assertion := c2pa.NewLifecycleAssertion(
@@ -656,8 +675,8 @@ func TestVerifier_RemoteCanonicalVCUsedForStatusCheck(t *testing.T) {
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	)
 	res, err := c2pa.AppendManifest(
-		context.Background(), signer, c2pa.TSAConfig{}, storer,
-		"did:ex:issuer", assertion, basePDF, vcJSON,
+		context.Background(), signer, c2pa.TSAConfig{URL: tsa.URL}, storer,
+		assertion, basePDF, vcJSON,
 	)
 	require.NoError(t, err)
 
@@ -693,4 +712,66 @@ func TestSHA256Hex(t *testing.T) {
 	h := sha256.Sum256(data)
 	want := hex.EncodeToString(h[:])
 	assert.Equal(t, want, sha256hex(data))
+}
+
+// mustTSACert and newTestTSA are reproduced from c2pa/manifest_test.go to avoid
+// an import cycle (this file is in package verify, not package c2pa).
+
+func mustTSACert(t *testing.T) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	tpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(42),
+		Subject:               pkix.Name{CommonName: "test-tsa"},
+		NotBefore:             now.Add(-1 * time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageTimeStamping},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	return cert, key
+}
+
+func newTestTSA(t *testing.T) (*httptest.Server, *x509.Certificate) {
+	t.Helper()
+	cert, key := mustTSACert(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req, err := timestamp.ParseRequest(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		ts := &timestamp.Timestamp{
+			HashAlgorithm: req.HashAlgorithm,
+			HashedMessage: req.HashedMessage,
+			Time:          time.Now().UTC(),
+			SerialNumber:  big.NewInt(1),
+			Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
+			Nonce:         req.Nonce,
+		}
+		resp, err := ts.CreateResponse(cert, key)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/timestamp-reply")
+		_, _ = w.Write(resp)
+	}))
+	return srv, cert
 }

@@ -98,10 +98,10 @@ type revokeResponse struct {
 }
 
 // setRevoked calls POST /{tenantID}/status/{listID}/revoke/{index}.
+// ServiceURL must be non-empty; an empty URL is a hard failure (DCS hard-failure policy).
 func (p *OCMWStatusListPublisher) setRevoked(ctx context.Context, contractID string) error {
 	if p.ServiceURL == "" {
-		// No service configured — silently skip (non-blocking for offline environments).
-		return nil
+		return fmt.Errorf("status list ServiceURL must not be empty: required for revocation of %s", contractID)
 	}
 	index := StatusListIndex(contractID)
 	url := fmt.Sprintf("%s/v1/tenants/%s/status/revoke/%d/%d", p.ServiceURL, p.TenantID, defaultListID, index)
@@ -152,10 +152,10 @@ func (p *OCMWStatusListPublisher) PublishStatus(
 	return p.statusListURI(), nil
 }
 
-// QueryStatusListStatus fetches the StatusList2021Credential at statusListCredential
-// and returns "revoked" if the bit at index is set, "active" otherwise (DCS-OR-C2PA-006).
-// The credential's credentialSubject.encodedList must be a base64url-encoded,
-// zlib-compressed bitstring as defined in the W3C StatusList2021 specification.
+// QueryStatusListStatus fetches the BitstringStatusListCredential (or StatusList2021Credential)
+// at statusListCredential and returns "revoked" if the bit at index is set, "active" otherwise
+// (DCS-OR-C2PA-006). The credential's credentialSubject.encodedList must be a base64url-encoded,
+// zlib-compressed bitstring per W3C StatusList2021 / BitstringStatusList specification.
 func QueryStatusListStatus(ctx context.Context, client *http.Client, statusListCredential string, index uint32) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusListCredential, nil)
 	if err != nil {

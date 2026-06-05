@@ -183,7 +183,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	)
 
 	// Append the C2PA manifest; store the updated PDF in IPFS.
-	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, existingPDF, vcBytes)
+	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, assertion, existingPDF, vcBytes)
 	if err != nil {
 		return fmt.Errorf("append C2PA manifest for %s: %w", cweEvt.DID, err)
 	}
@@ -385,7 +385,7 @@ func (s *Subscriber) appendOneTemplateManifest(
 		c2paState, "", s.IssuerDID, vcID, prevHash, effectiveAt,
 	)
 
-	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, s.IssuerDID, assertion, pdfBytes, vcBytes)
+	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, assertion, pdfBytes, vcBytes)
 	if err != nil {
 		return nil, fmt.Errorf("append C2PA manifest: %w", err)
 	}

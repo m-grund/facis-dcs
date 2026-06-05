@@ -47,6 +47,8 @@ func TestIssueLifecycleVC_IncludesInlineJSONLDContextAndSubjectID(t *testing.T) 
 	ctxList, ok := doc["@context"].([]interface{})
 	require.True(t, ok)
 	require.Len(t, ctxList, 3)
+	// W3C VC Data Model 2.0: first context element MUST be the v2 URL.
+	assert.Equal(t, "https://www.w3.org/ns/credentials/v2", ctxList[0], "@context[0] must be VC DM 2.0")
 	assert.Equal(t, "https://w3id.org/security/suites/ed25519-2020/v1", ctxList[1])
 
 	inlineCtx, ok := ctxList[2].(map[string]interface{})
@@ -86,7 +88,8 @@ func TestIssueLifecycleVC_CredentialStatusIncludedWhenStatusListURISet(t *testin
 
 	cs, ok := doc["credentialStatus"].(map[string]interface{})
 	require.True(t, ok, "credentialStatus must be present in unsigned VC")
-	assert.Equal(t, "StatusList2021Entry", cs["type"])
+	// W3C VC DM 2.0: type must be BitstringStatusListEntry (DCS-OR-C2PA-005).
+	assert.Equal(t, "BitstringStatusListEntry", cs["type"])
 	assert.Equal(t, "revocation", cs["statusPurpose"])
 
 	expectedIndex := StatusListIndex(contractID)
@@ -140,4 +143,33 @@ func TestIssueLifecycleVC_NormalizesNonURISubjectID(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, strings.HasPrefix(subjectID, "urn:dcs:subject:"))
 	assert.Equal(t, assertion.ContractID, subject["contract_id"])
+}
+
+// TestIssueLifecycleVC_VCDM2ValidFromNotIssuanceDate verifies the W3C VC DM 2.0
+// field names: validFrom must be present, issuanceDate must be absent.
+func TestIssueLifecycleVC_VCDM2ValidFromNotIssuanceDate(t *testing.T) {
+	effectiveAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	assertion := NewLifecycleAssertion(
+		"did:web:example.org:contracts:dm2",
+		"f00dbabe",
+		"",
+		"",
+		"active",
+		"",
+		"did:web:example.org:issuer",
+		"",
+		"",
+		effectiveAt,
+	)
+
+	signer := &captureSigner{}
+	_, _, err := IssueLifecycleVC(context.Background(), signer, "did:web:example.org:issuer", "", assertion)
+	require.NoError(t, err)
+
+	var doc map[string]interface{}
+	require.NoError(t, json.Unmarshal(signer.lastUnsigned, &doc))
+
+	// DM 2.0: validFrom replaces issuanceDate.
+	assert.Contains(t, doc, "validFrom", "validFrom must be present (W3C VC DM 2.0)")
+	assert.NotContains(t, doc, "issuanceDate", "issuanceDate must be absent in DM 2.0")
 }
