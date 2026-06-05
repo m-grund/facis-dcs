@@ -130,3 +130,12 @@ orce:
 
 route:
   basePath: "/api"
+
+vault:
+  enabled: true
+  injector:
+    enabled: false
+  server:
+    dev:
+      enabled: true
+      devRootToken: root

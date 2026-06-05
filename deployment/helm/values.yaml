@@ -57,6 +57,24 @@ autoscaling:
 volumes: []
 volumeMounts: []
 
+oid4vp:
+  trust:
+    enabled: true
+    mountPath: /app/config/oid4vp
+    configMapName: ""
+    issuerDID: did:web:dev.example:issuer:poa
+  demoWallet:
+    secretName: ""
+
+vault:
+  enabled: false
+  injector:
+    enabled: false
+  server:
+    dev:
+      enabled: true
+      devRootToken: root
+
 customCA:
   enabled: false
   configMapName: ""

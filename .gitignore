@@ -22,6 +22,14 @@ frontend/ClientApp/.vite
 
 deployment/certs
 
+# OID4VP demo secrets, generate via testWallet/scripts/generate_dev_keys.py
+testWallet/dcs_wallet/__pycache__/
+testWallet/keys/*.jwk
+testWallet/credentials/*.json
+!testWallet/credentials/*.template.json
+backend/config/oid4vp/trust.dev.json
+deployment/helm/files/oid4vp/trust.dev.json
+
 # BDD test build artifacts
 bdd-executor
 tests/bdd/.coverage*

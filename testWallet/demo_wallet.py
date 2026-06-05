@@ -10,11 +10,13 @@ Usage (from repo root):
   # With /ui/ login open — paste presentation_url from QR or Copy link:
   python3 testWallet/demo_wallet.py
 
+  # Pick credential interactively after pasting the presentation link (lists roles).
+
   # Non-interactive:
-  python3 testWallet/demo_wallet.py --presentation-url 'openid4vp://?client_id=...&request_uri=...'
+  python3 testWallet/demo_wallet.py --credential neusta-gmbh_johndoe --presentation-url 'openid4vp://...'
 
   # Headless end-to-end (POST /auth/login, no browser tab):
-  python3 testWallet/demo_wallet.py --headless
+  python3 testWallet/demo_wallet.py --headless --credential acme-corp_test
 """
 
 from __future__ import annotations
@@ -23,13 +25,30 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 import urllib.error
 import urllib.request
 from http.cookiejar import CookieJar
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dcs_wallet.presentation import build_vp_token
+
 DEFAULT_API_BASE = os.environ.get("DCS_API_BASE", "http://localhost:8991/api")
+DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "acme-corp_test")
 REQUEST_URI_MARKER = "/auth/presentation/request/"
+_CREDENTIALS_DIR = Path(__file__).resolve().parent / "credentials"
+_KEYS_DIR = Path(__file__).resolve().parent / "keys"
+_REQUIRED_KEYS = ("issuer-dev.jwk", "wallet.jwk")
+_GENERATE_HINT = "python3 testWallet/scripts/generate_dev_keys.py"
+
+
+@dataclass(frozen=True)
+class CredentialOption:
+    stem: str
+    organization: str
+    roles: list[str]
 
 
 def log(step: str, msg: str, **extra: object) -> None:
@@ -179,6 +198,94 @@ def prompt_presentation_url() -> str:
     return resolve_https_request_uri(line)
 
 
+def list_available_credentials() -> list[CredentialOption]:
+    options: list[CredentialOption] = []
+    for path in sorted(_CREDENTIALS_DIR.glob("*.json")):
+        if path.name.endswith(".template.json"):
+            continue
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        roles_raw = data.get("roles") or []
+        roles = [r for r in roles_raw if isinstance(r, str)]
+        options.append(
+            CredentialOption(
+                stem=path.stem,
+                organization=str(data.get("organization") or "?"),
+                roles=roles,
+            )
+        )
+    return options
+
+
+def _format_roles(roles: list[str]) -> str:
+    if not roles:
+        return "(none)"
+    return ", ".join(roles)
+
+
+def prompt_credential_choice(options: list[CredentialOption]) -> str:
+    if len(options) == 1:
+        opt = options[0]
+        log(
+            "wallet",
+            "using only available credential",
+            credential=opt.stem,
+            organization=opt.organization,
+            roles_count=len(opt.roles),
+        )
+        return opt.stem
+
+    print("\nSelect credential to present:")
+    for index, opt in enumerate(options, start=1):
+        print(f"  [{index}] {opt.stem}")
+        print(f"      organization: {opt.organization}")
+        print(f"      roles ({len(opt.roles)}): {_format_roles(opt.roles)}")
+    print()
+
+    while True:
+        try:
+            line = input(f"Enter 1–{len(options)} [default 1]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raise SystemExit(130) from None
+        if not line:
+            return options[0].stem
+        try:
+            choice = int(line)
+        except ValueError:
+            print(f"Invalid input — enter a number from 1 to {len(options)}.")
+            continue
+        if 1 <= choice <= len(options):
+            chosen = options[choice - 1]
+            log(
+                "wallet",
+                "credential selected",
+                credential=chosen.stem,
+                organization=chosen.organization,
+                roles_count=len(chosen.roles),
+            )
+            return chosen.stem
+        print(f"Invalid choice — enter a number from 1 to {len(options)}.")
+
+
+def ensure_wallet_keys() -> bool:
+    missing = [name for name in _REQUIRED_KEYS if not (_KEYS_DIR / name).is_file()]
+    if not missing:
+        return True
+    log("wallet", "FAILED", error=f"missing keys: {', '.join(missing)} — run: {_GENERATE_HINT}")
+    return False
+
+
+def resolve_credential_name(credential_name: str | None) -> str | None:
+    if credential_name:
+        return credential_name
+    options = list_available_credentials()
+    if not options:
+        log("wallet", "FAILED", error=f"no credentials/*.json found — run: {_GENERATE_HINT}")
+        return None
+    return prompt_credential_choice(options)
+
+
 def state_from_request_uri(request_uri: str) -> str:
     parsed = urlparse(request_uri)
     path = parsed.path
@@ -192,7 +299,14 @@ def state_from_request_uri(request_uri: str) -> str:
     return state
 
 
-def run_wallet_flow(session: _Session, api: str, state: str, request_uri: str) -> int:
+def run_wallet_flow(
+    session: _Session,
+    api: str,
+    state: str,
+    request_uri: str,
+    *,
+    credential_name: str | None,
+) -> int:
     log("fetch", "GET OpenID4VP request object", url=request_uri[:120])
     try:
         r = session.get(request_uri, timeout=30)
@@ -215,11 +329,28 @@ def run_wallet_flow(session: _Session, api: str, state: str, request_uri: str) -
         nonce_prefix=str(req_obj.get("nonce") or "")[:12],
     )
 
-    log("present", "POST /auth/presentation/callback", vp_token="stub")
+    chosen = resolve_credential_name(credential_name)
+    if not chosen:
+        return 1
+    if not ensure_wallet_keys():
+        return 1
+
+    nonce = str(req_obj.get("nonce") or "")
+    client_id = str(req_obj.get("client_id") or "")
+    try:
+        vp_token = build_vp_token(
+            credential_name=chosen,
+            nonce=nonce,
+            client_id=client_id,
+        )
+    except Exception as exc:
+        log("present", "FAILED to build VP", error=str(exc))
+        return 1
+    log("present", "POST /auth/presentation/callback", credential=chosen)
     try:
         r = session.post(
             f"{api}/auth/presentation/callback",
-            json_body={"state": state, "vp_token": "stub"},
+            json_body={"state": state, "vp_token": vp_token},
             timeout=60,
         )
     except RuntimeError as exc:
@@ -268,7 +399,7 @@ def run_wallet_flow(session: _Session, api: str, state: str, request_uri: str) -
     return 0
 
 
-def present_for_browser_session(session: _Session, pasted: str) -> int:
+def present_for_browser_session(session: _Session, pasted: str, *, credential_name: str | None) -> int:
     try:
         request_uri = resolve_https_request_uri(pasted)
         state = state_from_request_uri(request_uri)
@@ -277,7 +408,7 @@ def present_for_browser_session(session: _Session, pasted: str) -> int:
         log("login", "FAILED", error=str(exc))
         return 1
     log("wallet", "present VP for browser login page", api_base=api, state_prefix=state[:16])
-    return run_wallet_flow(session, api, state, request_uri)
+    return run_wallet_flow(session, api, state, request_uri, credential_name=credential_name)
 
 
 def main() -> int:
@@ -293,6 +424,11 @@ def main() -> int:
         help="presentation_url (openid4vp://) or HTTPS request_uri; skips prompt",
     )
     parser.add_argument(
+        "--credential",
+        default=None,
+        help="Credential stem in testWallet/credentials/ (skip interactive picker when set)",
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="POST /auth/login and run full flow without a browser tab",
@@ -303,6 +439,7 @@ def main() -> int:
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
+    credential = args.credential or (DEFAULT_CREDENTIAL if args.headless else None)
 
     session = _Session()
 
@@ -315,7 +452,7 @@ def main() -> int:
             except ValueError as exc:
                 log("login", "FAILED", error=str(exc))
                 return 1
-        return present_for_browser_session(session, pasted)
+        return present_for_browser_session(session, pasted, credential_name=credential)
 
     api = args.api_base.rstrip("/")
     log("wallet", "headless login (new initiate)", api_base=api)
@@ -328,7 +465,7 @@ def main() -> int:
     state = init_body["state"]
     request_uri = init_body["request_uri"]
     log("login-ok", "initiate OK", request_uri_prefix=request_uri[:96], state_prefix=state[:16])
-    return run_wallet_flow(session, api, state, request_uri)
+    return run_wallet_flow(session, api, state, request_uri, credential_name=credential)
 
 
 if __name__ == "__main__":

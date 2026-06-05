@@ -221,3 +221,17 @@ Normalize Keycloak route path (leading slash, no trailing slash).
 {{- printf "/%s" (trimAll "/" (.Values.keycloak.route.path | toString)) -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+OID4VP trust ConfigMap name.
+*/}}
+{{- define "digital-contracting-service.oid4vpTrustConfigMapName" -}}
+{{- default (printf "%s-oid4vp-trust" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.trust.configMapName -}}
+{{- end }}
+
+{{/*
+Kubernetes secret holding demo wallet private keys (synced from Vault).
+*/}}
+{{- define "digital-contracting-service.demoWalletSecretName" -}}
+{{- default (printf "%s-demo-wallet" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.demoWallet.secretName -}}
+{{- end }}

@@ -28,17 +28,23 @@ type authSvc struct {
 	uiBasePath        string
 	publicAPIBase     string
 	presentations     authdb.PresentationAttemptRepo
-	stubVerifier      *oid4vp.StubVerifier
+	vpVerifier        oid4vp.Verifier
 }
 
 func NewAuth(presentations authdb.PresentationAttemptRepo) genauth.Service {
+	var trust *oid4vp.TrustConfig
+	if cfg, err := oid4vp.LoadTrustConfigFromEnv(); err == nil {
+		trust = cfg
+	} else if path := strings.TrimSpace(os.Getenv("OID4VP_TRUST_DATA_PATH")); path != "" {
+		log.Printf(context.Background(), "oid4vp trust config not loaded: %v", err)
+	}
 	return &authSvc{
 		hydra:             hydra.NewFromEnv(),
 		logoutRedirectURI: os.Getenv("HYDRA_POST_LOGOUT_REDIRECT_URI"),
 		uiBasePath:        pathutil.NormalizePath(os.Getenv("DCS_UI_PATH"), "/ui/", true),
 		publicAPIBase:     publicAPIBaseURL(),
 		presentations:     presentations,
-		stubVerifier:      oid4vp.NewStubVerifier(),
+		vpVerifier:        oid4vp.NewVerifier(trust),
 	}
 }
 

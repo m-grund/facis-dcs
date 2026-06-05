@@ -1,28 +1,14 @@
 package oid4vp
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+)
 
 // PoAVCT is the DCS Proof of Authority credential type (version 1).
 const PoAVCT = "urn:dcs:poa:v1"
-
-// PoAExampleIssuer is the illustrative issuer from Context.md (pre-issuance PoA example).
-const PoAExampleIssuer = "https://issuer.example.org"
-
-// StubPoACredentialTTL is how long stub iat/exp claims remain valid in development.
-const StubPoACredentialTTL = 365 * 24 * time.Hour
-
-// BuildStubPoACredentialClaims creates claims for a stub PoA credential, using provided subject/org/roles and current time for iat/exp.
-func BuildStubPoACredentialClaims(subject, organization string, roles []string, now time.Time) map[string]any {
-	return map[string]any{
-		"iss":          PoAExampleIssuer,
-		"sub":          subject,
-		"vct":          PoAVCT,
-		"organization": organization,
-		"roles":        roles,
-		"iat":          now.Unix(),
-		"exp":          now.Add(StubPoACredentialTTL).Unix(),
-	}
-}
 
 const poaCredentialQueryID = "dcs_poa_credential"
 
@@ -45,4 +31,16 @@ func DefaultDCQLQuery() map[string]any {
 			},
 		},
 	}
+}
+
+func LoadDCQLQuery() (any, error) {
+	raw := strings.TrimSpace(os.Getenv("OID4VP_DCQL_QUERY"))
+	if raw == "" {
+		return DefaultDCQLQuery(), nil
+	}
+	var q any
+	if err := json.Unmarshal([]byte(raw), &q); err != nil {
+		return nil, fmt.Errorf("invalid OID4VP_DCQL_QUERY JSON: %w", err)
+	}
+	return q, nil
 }

@@ -40,6 +40,7 @@ Routing is configured with `route.basePath` (e.g. `/tenant-a/dcs`) or explicit `
 - [Rancher Desktop](https://rancherdesktop.io/) with Kubernetes enabled (provides `kubectl`, `helm`, and NodePort forwarding to `localhost`)
 - Go with [air](https://github.com/air-verse/air) (`go install github.com/air-verse/air@latest`)
 - Node.js 20+
+- Python 3.10+
 - Goa **v3** – Installation: Follow the instructions on [Goa Quickstart](https://goa.design/docs/1-goa/quickstart/)
 
 
@@ -79,7 +80,15 @@ The Keycloak `gaia-x` realm is imported automatically on first start.
 
 > To upgrade after chart changes: `helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml`
 
-### 2. Run the backend
+### 2. Generate OID4VP demo keys
+
+From the repository root before step 3:
+
+```bash
+python3 testWallet/scripts/generate_dev_keys.py
+```
+
+### 3. Run the backend
 
 ```bash
 cp backend/.env.dev backend/.env
@@ -88,7 +97,7 @@ cd backend && air
 
 The backend listens on `http://localhost:8991`.
 
-### 3. Run the frontend
+### 4. Run the frontend
 
 ```bash
 cd frontend/ClientApp
@@ -97,6 +106,12 @@ npm run dev
 ```
 
 The Vite dev server starts at `http://localhost:5173` and proxies `/api` requests to the backend automatically.
+
+### 5. Sign in with the demo wallet
+
+```bash
+python3 testWallet/demo_wallet.py
+```
 
 ---
 

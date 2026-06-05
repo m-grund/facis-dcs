@@ -37,7 +37,7 @@
 ### Setup the Backend
 
 #### Initialize all dependencies
-Run the following command in **DCS/implementation/backend** to initialize all needed dependencies:
+Run the following command in **backend/** to initialize all needed dependencies:
 ```bash
 go mod tidy
 ```
@@ -60,9 +60,11 @@ export FEDERATED_CATALOGUE_CLIENT_SECRET="dcs-fc-client-secret"
 ```
 go test -v ./...
 ```
-**Note:** Every time you modify files in **DCS/implementation/backend/design**, you must regenerate the code.
+**Note:** Every time you modify files in **backend/design**, you must regenerate the code.
 
 ## Running the API Server
+
+For the local Helm stack, see [deployment/README.md](../deployment/README.md).
 
 ### Environment Variables
 ```bash
@@ -86,6 +88,8 @@ export HYDRA_REDIRECT_URI="http://localhost:5173/api/auth/callback"
 export HYDRA_POST_LOGOUT_REDIRECT_URI="http://localhost:5173/api/auth/logout-complete"
 export HYDRA_ADMIN_URL="http://localhost:30085"
 ```
+
+When using the local Helm stack, copy `backend/.env.dev` to `backend/.env`.
 
 ### Start the DCS backend service
 ```bash

@@ -186,10 +186,59 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 	if p.VpToken != nil {
 		vpToken = *p.VpToken
 	}
-	verified, err := s.stubVerifier.Verify(vpToken, nil)
+	verifier := s.vpVerifier
+	if cfg, err := oid4vp.LoadTrustConfigFromEnv(); err == nil {
+		verifier = oid4vp.NewVerifier(cfg)
+	}
+	verified, err := verifier.Verify(vpToken, oid4vp.PresentationContext{
+		Nonce:    attempt.Nonce,
+		ClientID: s.hydra.ClientID(),
+	})
 	if err != nil {
 		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
+		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+			PresentationState: attempt.PresentationState,
+			Success:           false,
+			ErrorMessage:      err.Error(),
+		})
 		return nil, goa.PermanentError("unauthorized", "vp verification failed: %v", err)
+	}
+	if err := oid4vp.CheckCredentialRevocation(verified.RawClaims); err != nil {
+		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
+		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+			PresentationState: attempt.PresentationState,
+			Success:           false,
+			SubjectDID:        verified.SubjectDID,
+			OrganizationID:    verified.OrganizationID,
+			Roles:             verified.Roles,
+			ErrorMessage:      err.Error(),
+		})
+		return nil, goa.PermanentError("unauthorized", "credential revocation check failed: %v", err)
+	}
+	if err := oid4vp.CheckDisclosedClaimsMeetDCQL(verified.RawClaims); err != nil {
+		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
+		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+			PresentationState: attempt.PresentationState,
+			Success:           false,
+			SubjectDID:        verified.SubjectDID,
+			OrganizationID:    verified.OrganizationID,
+			Roles:             verified.Roles,
+			ErrorMessage:      err.Error(),
+		})
+		return nil, goa.PermanentError("unauthorized", "presentation does not meet DCQL requirements: %v", err)
+	}
+	grantedRoles, err := oid4vp.EvaluateLoginPolicy(verified)
+	if err != nil {
+		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
+		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+			PresentationState: attempt.PresentationState,
+			Success:           false,
+			SubjectDID:        verified.SubjectDID,
+			OrganizationID:    verified.OrganizationID,
+			Roles:             verified.Roles,
+			ErrorMessage:      err.Error(),
+		})
+		return nil, goa.PermanentError("unauthorized", "login policy denied: %v", err)
 	}
 
 	redirectTo, err := s.hydra.AcceptLoginAndConsent(
@@ -197,17 +246,32 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		*attempt.HydraLoginChallenge,
 		verified.SubjectDID,
 		verified.OrganizationID,
-		verified.Roles,
+		grantedRoles,
 	)
 	if err != nil {
 		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
+		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+			PresentationState: attempt.PresentationState,
+			Success:           false,
+			SubjectDID:        verified.SubjectDID,
+			OrganizationID:    verified.OrganizationID,
+			Roles:             grantedRoles,
+			ErrorMessage:      err.Error(),
+		})
 		return nil, goa.PermanentError("unauthorized", "hydra login: %v", err)
 	}
 	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
-	rolesJSON, _ := json.Marshal(verified.Roles)
+	rolesJSON, _ := json.Marshal(grantedRoles)
 	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.OrganizationID, rolesJSON, continueURL); err != nil {
 		return nil, err
 	}
+	oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+		PresentationState: attempt.PresentationState,
+		Success:           true,
+		SubjectDID:        verified.SubjectDID,
+		OrganizationID:    verified.OrganizationID,
+		Roles:             grantedRoles,
+	})
 
 	return &genauth.PresentationCallbackResult{RedirectURI: continueURL}, nil
 }

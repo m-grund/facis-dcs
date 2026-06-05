@@ -110,6 +110,10 @@ spec:
               value: {{ include "digital-contracting-service.apiPath" . | quote }}
             - name: DCS_UI_PATH
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
+            {{- if .Values.oid4vp.trust.enabled }}
+            - name: OID4VP_TRUST_DATA_PATH
+              value: {{ printf "%s/trust.json" .Values.oid4vp.trust.mountPath | quote }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -129,23 +133,33 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.customCA.enabled .Values.volumeMounts }}
+          {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumeMounts }}
           volumeMounts:
           {{- if .Values.customCA.enabled }}
             - name: custom-ca-certs
               mountPath: /usr/local/share/ca-certificates/custom
               readOnly: true
           {{- end }}
+          {{- if .Values.oid4vp.trust.enabled }}
+            - name: oid4vp-trust
+              mountPath: {{ .Values.oid4vp.trust.mountPath | quote }}
+              readOnly: true
+          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
-      {{- if or .Values.customCA.enabled .Values.volumes }}
+      {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumes }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
           configMap:
             name: {{ .Values.customCA.configMapName }}
+      {{- end }}
+      {{- if .Values.oid4vp.trust.enabled }}
+        - name: oid4vp-trust
+          configMap:
+            name: {{ include "digital-contracting-service.oid4vpTrustConfigMapName" . }}
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
