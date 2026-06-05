@@ -90,7 +90,7 @@
       "enabled": true,
       "serviceAccountClientId": "dcs-fc-client",
       "realmRoles": [
-        "default-roles-gaia-x-1"
+        "default-roles-gaia-x"
       ],
       "clientRoles": {
         "federated-catalogue": [

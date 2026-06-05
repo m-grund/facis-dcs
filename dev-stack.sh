@@ -23,6 +23,11 @@ echo "Updating Helm dependencies and deploying to Kubernetes..."
 helm dependency update "$HELM_CHART_PATH"
 helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
 
+echo "Waiting for Federated Catalogue to become ready..."
+kubectl wait --for=condition=ready pod \
+  -l "app.kubernetes.io/instance=${HELM_RELEASE},app.kubernetes.io/name=federated-catalogue" \
+  --timeout=10m
+
 # Setup .env
 if [ ! -f backend/.env ]; then
   cp backend/.env.dev backend/.env
