@@ -1,5 +1,5 @@
-import { users } from '@/services/user-service'
-import type { UserRole } from '@/types/user-role'
+import { mapRoleLabelsToUserRoles, rolesFromJwtPayload, type UserRole } from '@/types/user-role'
+import { useJwt } from '@vueuse/integrations/useJwt'
 import { defineStore } from 'pinia'
 import { computed, ref, type Ref } from 'vue'
 import { useAuthTokenStore } from './auth-token-store'
@@ -8,7 +8,7 @@ interface User {
   id: string
   username: string
   name: string
-  roles?: UserRole[]
+  roles: UserRole[]
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -18,13 +18,29 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!user.value && authTokenStore.isAuthSet)
 
   function setUser(userId: string) {
-    const userProfile = users.value.find((user) => user.id === userId)
-    if (!userProfile) return console.error('User Error: User not set')
+    const authTokenStore = useAuthTokenStore()
+    const payload = useJwt<{
+      sub?: string
+      roles?: unknown
+      ext?: { roles?: unknown }
+    }>(authTokenStore.accessToken).payload.value
+
+    if (payload?.sub !== userId) {
+      console.error('User Error: JWT sub mismatch', { expected: userId, sub: payload?.sub })
+      return
+    }
+
+    const roles = mapRoleLabelsToUserRoles(rolesFromJwtPayload(payload))
+    if (roles.length === 0) {
+      console.error('User Error: Hydra access token has no mapped roles', { sub: payload.sub })
+      return
+    }
+
     user.value = {
-      id: userProfile.id,
-      username: userProfile.username,
-      name: userProfile.firstName + ' ' + userProfile.lastName,
-      roles: userProfile.roleIds,
+      id: userId,
+      username: userId,
+      name: userId,
+      roles,
     }
   }
 

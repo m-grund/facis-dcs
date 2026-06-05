@@ -5,6 +5,9 @@ dependencies:
 - name: keycloak
   repository: file://charts/keycloak
   version: 0.1.0
+- name: hydra
+  repository: file://charts/hydra
+  version: 0.1.0
 - name: nats
   repository: file://charts/nats
   version: 0.1.0
@@ -17,5 +20,5 @@ dependencies:
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 85.2.0
-digest: sha256:5d2d638158e3288fbac7acc3ac6ed00d5292060bd29135a3398d1c0128f1efd2
-generated: "2026-05-21T15:21:53.710407968+02:00"
+digest: sha256:6c65ad7173336747dc59d8ecc919d3ba13d11527cf5fda94441623bff33919ab
+generated: "2026-06-03T14:24:26.883159+02:00"

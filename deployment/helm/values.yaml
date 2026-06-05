@@ -78,18 +78,9 @@ paths:
   api: ""
   ui: ""
 
-# OIDC / authentication
-# issuerURL is derived from keycloak.route.path + istio/ingress host when not set explicitly
-oidc:
-  issuerURL: ""
-  clientID: "[oidc-client-id]"
-  redirectURI: "[oidc-redirect-uri]"
-  logoutRedirectURI: "[oidc-logout-redirect-uri]"
-  realm: "gaia-x"
-  keycloakScheme: "https"
-  issuerURLSecretRef:
-    name: ""
-    key: "OIDC_ISSUER_URL"
+# Keycloak realm URL for Federated Catalogue.
+fcKeycloak:
+  realmURL: ""
 
 # Database connection – derived from the postgresql sub-chart when not set explicitly
 database:
@@ -137,6 +128,10 @@ keycloak:
     port: 8080
   route:
     path: ""
+
+hydra:
+  enabled: false
+  clients: []
 
 nats:
   enabled: false

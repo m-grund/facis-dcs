@@ -9,9 +9,9 @@ Feature: Authentication Endpoints
     And the response JSON includes "<field>"
 
     Examples:
-      | method | endpoint     | field      |
-      | GET    | /auth/login  | auth_url   |
-      | GET    | /auth/logout | logout_url |
+      | method | endpoint     | field       |
+      | POST   | /auth/login  | request_uri |
+      | GET    | /auth/logout | logout_url  |
 
   Scenario Outline: Access restricted endpoint responds with access denied (CWE)
     When the system sends "<method>" request to endpoint "<endpoint>" with "<payload>"

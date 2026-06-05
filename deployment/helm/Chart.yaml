@@ -14,6 +14,10 @@ dependencies:
     version: "0.1.0"
     repository: "file://charts/keycloak"
     condition: keycloak.enabled
+  - name: hydra
+    version: "0.1.0"
+    repository: "file://charts/hydra"
+    condition: hydra.enabled
   - name: nats
     version: "0.1.0"
     repository: "file://charts/nats"

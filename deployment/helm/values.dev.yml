@@ -10,6 +10,8 @@
 # Services exposed on localhost via NodePort (Rancher Desktop forwards these automatically):
 #   PostgreSQL : localhost:30432
 #   Keycloak   : localhost:30080  →  realm: http://localhost:30080/realms/gaia-x
+#   Hydra public : localhost:30444
+#   Hydra admin  : localhost:30085
 #   NATS       : localhost:30422
 #   Neo4j HTTP : localhost:30474
 #   Neo4j Bolt : localhost:30687
@@ -30,7 +32,7 @@ postgresql:
     username: dcs
     password: dcs
     database: dcs
-  additionalDatabases: ["fc"]
+  additionalDatabases: ["fc", "hydra"]
   persistence:
     enabled: false
   service:
@@ -48,12 +50,6 @@ keycloak:
     adminPassword: admin
   realm:
     import: true
-    dcsClient:
-      redirectUris:
-        - "http://localhost:5173/api/auth/callback"
-        - "http://localhost:5173/api/auth/logout-complete"
-      webOrigins:
-        - "http://localhost:5173"
   extraEnv:
     - name: KC_HOSTNAME
       value: "localhost"
@@ -63,6 +59,34 @@ keycloak:
       value: "false"
     - name: KC_HTTP_ENABLED
       value: "true"
+
+hydra:
+  enabled: true
+  service:
+    type: NodePort
+    publicPort: 4444
+    adminPort: 4445
+    publicNodePort: 30444
+    adminNodePort: 30085
+  config:
+    dsn: "postgres://dcs:dcs@dcs-postgresql:5432/hydra?sslmode=disable"
+    dev: true
+    selfIssuerURL: "http://localhost:30444"
+    loginURL: "http://localhost:5173/ui/"
+    consentURL: "http://localhost:5173/api/auth/consent"
+    logoutURL: "http://localhost:5173/api/auth/logout-complete"
+  secrets:
+    system: "dev-hydra-system-secret-change-me"
+  clients:
+    - client_id: dcs-client
+      client_secret: dcs-secret
+      grant_types: ["authorization_code", "refresh_token"]
+      response_types: ["code"]
+      scope: "openid offline_access"
+      redirect_uris: ["http://localhost:5173/api/auth/callback"]
+      post_logout_redirect_uris: ["http://localhost:5173/api/auth/logout-complete"]
+      token_endpoint_auth_method: client_secret_post
+      skip_consent: true
 
 nats:
   enabled: true
@@ -93,14 +117,8 @@ federatedCatalogue:
   verificationVpSignature: false
   verificationVcSignature: false
 
-# OIDC / route values below are not used when replicaCount=0,
-# but kept here as documentation for the backend .env.dev file.
-oidc:
-  clientID: "dcs-client"
-  redirectURI: "http://localhost:5173/api/auth/callback"
-  logoutRedirectURI: "http://localhost:5173/api/auth/logout-complete"
-  realm: "gaia-x"
-  keycloakScheme: "http"
+fcKeycloak:
+  realmURL: "http://localhost:30080/realms/gaia-x"
 
 orce:
   enabled: false

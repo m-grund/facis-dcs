@@ -27,7 +27,7 @@ export function useTemplateList() {
       const isDidMatch = task.did === template.did
       const isVersionMatch = !template.version || task.version === template.version
       const isDocumentNumberMatch = !template.document_number || task.document_number === template.document_number
-      return isDidMatch && isVersionMatch && isDocumentNumberMatch && task.reviewer === currentUser.username
+      return isDidMatch && isVersionMatch && isDocumentNumberMatch && task.reviewer === currentUser.id
     })
   }
 
@@ -38,7 +38,7 @@ export function useTemplateList() {
       const isDidMatch = task.did === template.did
       const isVersionMatch = !template.version || task.version === template.version
       const isDocumentNumberMatch = !template.document_number || task.document_number === template.document_number
-      return isDidMatch && isVersionMatch && isDocumentNumberMatch && task.approver === currentUser.username
+      return isDidMatch && isVersionMatch && isDocumentNumberMatch && task.approver === currentUser.id
     })
   }
 

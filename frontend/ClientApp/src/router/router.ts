@@ -3,8 +3,10 @@ import { useScrollStore } from '@/core/store/scroll'
 import ApproveContractTemplateView from '@/modules/template-repository/views/ApproveContractTemplateView.vue'
 import ReviewContractTemplateView from '@/modules/template-repository/views/ReviewContractTemplateView.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
+import { OID4VP_STATE_KEY } from '@/hydra-login-guard'
 import { authenticationService } from '@/services/authentication-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useAuthTokenStore } from '@/stores/auth-token-store'
 import { useNavStore } from '@/stores/nav-store'
 import AuthSuccessView from '@/views/auth/AuthSuccessView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
@@ -305,11 +307,27 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  const authStore = useAuthStore()
+
+  // Refresh when localStorage has tokens and OID4VP state is absent. Redirect if authenticated.
+  if (to.name === ROUTES.HOME) {
+    if (!authStore.isAuthenticated) {
+      const hadAccessToken = useAuthTokenStore().isAuthSet
+      const oid4vpLoginActive = !!sessionStorage.getItem(OID4VP_STATE_KEY)
+      if (hadAccessToken && !oid4vpLoginActive) {
+        await authenticationService.refresh()
+      }
+    }
+    if (authStore.isAuthenticated) {
+      return { name: ROUTES.TEMPLATES.LIST }
+    }
+    return true
+  }
+
   if (to.meta.requiresAuth === false) {
     return true
   }
 
-  const authStore = useAuthStore()
   if (authStore.isAuthenticated) {
     return true
   }
@@ -317,12 +335,6 @@ router.beforeEach(async (to) => {
   await authenticationService.refresh()
   if (authStore.isAuthenticated) {
     return true
-  }
-
-  const loginUrl = await authenticationService.loginPath()
-  if (loginUrl) {
-    window.location.href = loginUrl
-    return false
   }
 
   return { name: ROUTES.HOME }

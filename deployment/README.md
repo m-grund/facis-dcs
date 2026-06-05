@@ -23,7 +23,7 @@ Key components:
 
 ## Helm Chart
 
-The parent chart bundles `postgresql`, `keycloak`, `nats`, `neo4j`, and `federated-catalogue` as optional sub-charts, each toggled via `<subchart>.enabled`.
+The parent chart bundles `postgresql`, `keycloak`, `hydra`, `nats`, `neo4j`, and `federated-catalogue` as optional sub-charts, each toggled via `<subchart>.enabled`.
 
 When sub-charts are disabled, point DCS to external services via:
 - `serviceDiscovery.postgresqlHost`
@@ -68,6 +68,8 @@ This starts all dependencies as NodePort services forwarded to `localhost`:
 |----------------------|----------------------------------|
 | PostgreSQL           | `localhost:30432`                |
 | Keycloak             | `http://localhost:30080`         |
+| Hydra (public OIDC)  | `http://localhost:30444`         |
+| Hydra (admin API)    | `http://localhost:30085`         |
 | NATS                 | `nats://localhost:30422`         |
 | Neo4j HTTP           | `http://localhost:30474`         |
 | Neo4j Bolt           | `bolt://localhost:30687`         |
@@ -152,12 +154,14 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 
 ## Production Deployment
 
-### Keycloak
-- Use a properly secured external Keycloak instance (not the bundled sub-chart)
-- Configure valid redirect URIs in your client settings:
+### Hydra
+- Enable `hydra.enabled` and set `hydra.config.selfIssuerURL` to the public issuer URL
+- Register `dcs-client` redirect URIs via `hydra.clients` (see `values.dev.yml`):
   - **Valid Redirect URIs**: `https://<domain>/<path>/api/auth/callback`
   - **Valid Post Logout Redirect URIs**: `https://<domain>/<path>/api/auth/logout-complete`
-- Enable **Client authentication**, **Standard flow enabled**
+
+### Keycloak (Federated Catalogue only)
+- FC integration uses `fcKeycloak.realmURL` / `FC_KEYCLOAK_REALM_URL`
 
 ### TLS
 - Use certificates from a trusted Certificate Authority
@@ -167,11 +171,18 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 Override the following at minimum:
 
 ```yaml
-oidc:
-  issuerURL: "https://keycloak.example.com/realms/gaia-x"
-  clientID: "dcs-client"
-  redirectURI: "https://example.com/dcs/ui/"
-  logoutRedirectURI: "https://example.com/dcs/ui/"
+hydra:
+  enabled: true
+  config:
+    selfIssuerURL: "https://hydra.example.com"
+  clients:
+    - client_id: dcs-client
+      client_secret: "<secret>"
+      redirect_uris: ["https://example.com/dcs/api/auth/callback"]
+      post_logout_redirect_uris: ["https://example.com/dcs/api/auth/logout-complete"]
+
+fcKeycloak:
+  realmURL: "https://keycloak.example.com/realms/gaia-x"
 
 route:
   basePath: "/dcs"

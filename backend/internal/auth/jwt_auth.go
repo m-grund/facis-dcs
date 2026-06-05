@@ -26,7 +26,7 @@ import (
 //	    auth.JWTAuthenticator
 //	}
 type JWTAuthenticator struct {
-	Validator    *middleware.OIDCValidator
+	Validator    *middleware.HydraJWTValidator
 	DB           *sqlx.DB
 	AAttemptRepo db.AccessAttemptRepo
 	LockRepo     db.IPLockoutRepo
@@ -34,12 +34,12 @@ type JWTAuthenticator struct {
 
 // NewJWTAuthenticator returns a JWTAuthenticator backed by the given OIDC
 // validator.
-func NewJWTAuthenticator(v *middleware.OIDCValidator, db *sqlx.DB, aAttemptRepo db.AccessAttemptRepo, lockRepo db.IPLockoutRepo) JWTAuthenticator {
+func NewJWTAuthenticator(v *middleware.HydraJWTValidator, db *sqlx.DB, aAttemptRepo db.AccessAttemptRepo, lockRepo db.IPLockoutRepo) JWTAuthenticator {
 	return JWTAuthenticator{Validator: v, DB: db, AAttemptRepo: aAttemptRepo, LockRepo: lockRepo}
 }
 
 // JWTAuth validates a JWT token via the OIDC provider and checks that the
-// caller possesses at least one of the required scopes (Keycloak realm roles).
+// caller possesses at least one of the required scopes (Hydra access-token roles).
 // It returns an enriched context with the caller's roles on success.
 func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *security.JWTScheme) (context.Context, error) {
 	ip := middleware.IPFromContext(ctx)
