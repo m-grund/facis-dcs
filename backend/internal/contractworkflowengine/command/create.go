@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -25,6 +27,8 @@ type CreateCmd struct {
 	Name         *string
 	Description  *string
 	ContractData *datatype.JSON
+	Username     string
+	UserRoles    userrole.UserRoles
 }
 
 type Creator struct {
@@ -70,6 +74,8 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		Description:  cmd.Description,
 		ContractData: cmd.ContractData,
 		OccurredAt:   *createdAt,
+		Username:     cmd.Username,
+		UserRoles:    cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

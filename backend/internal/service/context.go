@@ -10,6 +10,11 @@ import (
 const apiPathPrefixEnv = "DCS_API_PATH"
 const defaultAPIPathPrefix = ""
 
+const (
+	oauthStateCookieName = "oidc_state"
+	idTokenCookieName    = "id_token"
+)
+
 // contextKey is a private type for context keys in this package.
 type contextKey int
 
@@ -51,15 +56,112 @@ func SetRefreshTokenInContext(ctx context.Context, refreshToken string) {
 	if !ok || refreshToken == "" {
 		return
 	}
-	cookiePath := pathutil.JoinPaths(apiPathPrefixEnv, defaultAPIPathPrefix, "/auth/refresh")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     cookiePath,
+		Path:     authCookiePath(),
 		MaxAge:   7 * 24 * 60 * 60, // 7 days
+	})
+}
+
+// SetOAuthStateCookie stores OAuth state for the Hydra callback.
+func SetOAuthStateCookie(ctx context.Context, state string) {
+	w, ok := ResponseWriterFromContext(ctx)
+	if !ok || state == "" {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    state,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     oauthStateCookiePath(),
+		MaxAge:   10 * 60,
+	})
+}
+
+func ReadOAuthStateCookie(ctx context.Context) (string, error) {
+	r, ok := HTTPRequestFromContext(ctx)
+	if !ok {
+		return "", http.ErrNoCookie
+	}
+	cookie, err := r.Cookie(oauthStateCookieName)
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}
+
+func ClearOAuthStateCookie(ctx context.Context) {
+	w, ok := ResponseWriterFromContext(ctx)
+	if !ok {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    "",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     oauthStateCookiePath(),
+		MaxAge:   -1,
+	})
+}
+
+func oauthStateCookiePath() string {
+	return pathutil.JoinPaths(apiPathPrefixEnv, defaultAPIPathPrefix, "/auth/callback")
+}
+
+func authCookiePath() string {
+	return pathutil.JoinPaths(apiPathPrefixEnv, defaultAPIPathPrefix, "/auth")
+}
+
+// SetIDTokenCookie stores the Hydra id_token for RP-initiated logout (id_token_hint).
+func SetIDTokenCookie(ctx context.Context, idToken string) {
+	w, ok := ResponseWriterFromContext(ctx)
+	if !ok || idToken == "" {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     idTokenCookieName,
+		Value:    idToken,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     authCookiePath(),
+		MaxAge:   7 * 24 * 60 * 60,
+	})
+}
+
+func readIDTokenCookie(ctx context.Context) string {
+	r, ok := HTTPRequestFromContext(ctx)
+	if !ok {
+		return ""
+	}
+	cookie, err := r.Cookie(idTokenCookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+func ClearIDTokenCookie(ctx context.Context) {
+	w, ok := ResponseWriterFromContext(ctx)
+	if !ok {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     idTokenCookieName,
+		Value:    "",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     authCookiePath(),
+		MaxAge:   -1,
 	})
 }
 
@@ -69,14 +171,13 @@ func ClearRefreshTokenCookie(ctx context.Context) {
 	if !ok {
 		return
 	}
-	cookiePath := pathutil.JoinPaths(apiPathPrefixEnv, defaultAPIPathPrefix, "/auth/refresh")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-		Path:     cookiePath,
+		Path:     authCookiePath(),
 		MaxAge:   -1, // Delete the cookie
 	})
 }

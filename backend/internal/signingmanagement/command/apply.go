@@ -11,8 +11,8 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
-	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 	"digital-contracting-service/internal/signingmanagement/dss"
+	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 
 	"github.com/jmoiron/sqlx"
 )

@@ -1,4 +1,4 @@
-package query
+package qry
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	event2 "digital-contracting-service/internal/processauditandcompliance/event"
 )
@@ -20,6 +21,8 @@ import (
 type GetAuditLogQry struct {
 	Scope     componenttype.ComponentType
 	AuditedBy string
+	Username  string
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {
@@ -27,7 +30,7 @@ type Auditor struct {
 	ATrailReader base.AuditTrailReader
 }
 
-func (h *Auditor) Handle(ctx context.Context, cmd GetAuditLogQry) ([][]datatype.AuditLogEntry, error) {
+func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatype.AuditLogEntry, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -39,16 +42,18 @@ func (h *Auditor) Handle(ctx context.Context, cmd GetAuditLogQry) ([][]datatype.
 		}
 	}(tx)
 
-	result, err := h.ATrailReader.ReadAuditLogEntriesByComponent(ctx, tx, cmd.Scope)
+	result, err := h.ATrailReader.ReadAuditLogEntriesByComponent(ctx, tx, query.Scope)
 	if err != nil {
 		return nil, err
 	}
 
 	evt := event2.AuditEvent{
-		Scope:         cmd.Scope,
+		Scope:         query.Scope,
 		ComponentType: componenttype.ProcessAuditAndCompliance,
-		AuditedBy:     cmd.AuditedBy,
+		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
+		Username:      query.Username,
+		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance)
 	if err != nil {

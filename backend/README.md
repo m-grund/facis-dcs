@@ -37,7 +37,7 @@
 ### Setup the Backend
 
 #### Initialize all dependencies
-Run the following command in **DCS/implementation/backend** to initialize all needed dependencies:
+Run the following command in **backend/** to initialize all needed dependencies:
 ```bash
 go mod tidy
 ```
@@ -51,18 +51,20 @@ goa gen digital-contracting-service/design
 ## Running tests
 ```
 export DATABASE_URL="user=username password=password dbname=test_postgres sslmode=disable"
+export FC_KEYCLOAK_REALM_URL="http://localhost:30080/realms/gaia-x"
 export FEDERATED_CATALOGUE_API_URL="http://localhost:30081"
 export FEDERATED_CATALOGUE_CLIENT_ID="dcs-fc-client"
 export FEDERATED_CATALOGUE_CLIENT_SECRET="dcs-fc-client-secret"
-export OIDC_ISSUER_URL="http://localhost:30080/realms/gaia-x"
 ```
 
 ```
 go test -v ./...
 ```
-**Note:** Every time you modify files in **DCS/implementation/backend/design**, you must regenerate the code.
+**Note:** Every time you modify files in **backend/design**, you must regenerate the code.
 
 ## Running the API Server
+
+For the local Helm stack, see [deployment/README.md](../deployment/README.md).
 
 ### Environment Variables
 ```bash
@@ -73,16 +75,21 @@ export DATABASE_URL="user=username password=password dbname=postgres sslmode=dis
 export API_PATH_PREFIX="/api"
 
 # Federated Catalogue
+export FC_KEYCLOAK_REALM_URL="http://localhost:30080/realms/gaia-x"
 export FEDERATED_CATALOGUE_API_URL="http://localhost:8081"
 export FEDERATED_CATALOGUE_CLIENT_ID="dcs-fc-client"
 export FEDERATED_CATALOGUE_CLIENT_SECRET="dcs-fc-client-secret"
 
-# OIDC/Keycloak Authentication
-export OIDC_ISSUER_URL="https://keycloak.example.com/realms/yourrealm"
-export OIDC_CLIENT_ID="digital-contracting-service"
-export OIDC_REDIRECT_URI="http://localhost:5173/api/auth/callback"
-export OIDC_LOGOUT_REDIRECT_URI="http://localhost:8991/api/auth/logout-complete"
+# Hydra Authentication
+export HYDRA_ISSUER_URL="http://localhost:30444"
+export HYDRA_CLIENT_ID="dcs-client"
+export HYDRA_CLIENT_SECRET="dcs-secret"
+export HYDRA_REDIRECT_URI="http://localhost:5173/api/auth/callback"
+export HYDRA_POST_LOGOUT_REDIRECT_URI="http://localhost:5173/api/auth/logout-complete"
+export HYDRA_ADMIN_URL="http://localhost:30085"
 ```
+
+When using the local Helm stack, copy `backend/.env.dev` to `backend/.env`.
 
 ### Start the DCS backend service
 ```bash

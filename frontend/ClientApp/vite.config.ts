@@ -8,6 +8,22 @@ export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), 'DCS_')
   const basePath = env.DCS_UI_PATH || '/ui/'
 
+  const uiRedirectPlugin: Plugin = {
+    name: 'ui-root-redirect',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = req.url?.split('?')[0] ?? ''
+        if (path === '/' || path === '') {
+          const q = req.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+          res.writeHead(302, { Location: `${basePath}${q}` })
+          res.end()
+          return
+        }
+        next()
+      })
+    },
+  }
+
   // Plugin to inject base href in dev mode
   const baseHrefPlugin: Plugin = {
     name: 'base-href-inject',
@@ -27,7 +43,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     // during build, use relative paths such that we respect <base href>
     base: command === 'build' ? './' : basePath,
-    plugins: [baseHrefPlugin, vue(), tailwindcss()],
+    plugins: [uiRedirectPlugin, baseHrefPlugin, vue(), tailwindcss()],
     envPrefix: 'DCS_',
     resolve: {
       alias: {

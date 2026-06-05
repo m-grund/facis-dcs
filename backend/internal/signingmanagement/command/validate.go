@@ -2,6 +2,8 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -10,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
@@ -18,6 +21,8 @@ import (
 type ValidateCmd struct {
 	DID         string
 	ValidatedBy string
+	Username    string
+	UserRoles   userrole.UserRoles
 }
 
 type Validator struct {
@@ -35,8 +40,7 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -51,6 +55,8 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 		ContractVersion: processData.ContractVersion,
 		ValidatedBy:     cmd.ValidatedBy,
 		OccurredAt:      time.Now(),
+		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

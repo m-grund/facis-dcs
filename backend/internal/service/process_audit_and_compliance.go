@@ -6,15 +6,17 @@ import (
 	"strings"
 	"time"
 
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/validation"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/processauditandcompliance/query"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/jmoiron/sqlx"
@@ -69,11 +71,13 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return result, nil
 	}
 
-	qry := query.GetAuditLogQry{
+	qry := qry2.GetAuditLogQry{
 		Scope:     scope,
-		AuditedBy: middleware.GetUsername(ctx),
+		AuditedBy: middleware.GetDID(ctx),
+		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
-	handler := query.Auditor{
+	handler := qry2.Auditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}
@@ -179,7 +183,7 @@ func (s *processAuditAndCompliancesrvc) auditExistingTemplatePolicyTrailEntries(
 	}
 	defer tx.Rollback()
 
-	templates, err := s.CTRepo.ReadAllMetaData(ctx, tx)
+	templates, err := s.CTRepo.ReadAllMetaData(ctx, tx, datatype.Pagination{})
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +283,7 @@ func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries
 	}
 	defer tx.Rollback()
 
-	contracts, err := s.CRepo.ReadAllMetaData(ctx, tx)
+	contracts, err := s.CRepo.ReadAllMetaData(ctx, tx, datatype.Pagination{})
 	if err != nil {
 		return nil, err
 	}

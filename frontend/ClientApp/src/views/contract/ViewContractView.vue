@@ -22,6 +22,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import { assigneeIdsForRole } from '@/utils/submit-selection'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
@@ -111,9 +112,9 @@ const submitContract = async (result: SelectedUserRole[]) => {
   const isSemanticValueValid = verifySemanticValues()
   if (!isSemanticValueValid) return
   try {
-    const reviewers = result.filter((user) => user.role === 'CONTRACT_REVIEWER').map((user) => user.user.username)
-    const approvers = result.filter((user) => user.role === 'CONTRACT_APPROVER').map((user) => user.user.username)
-    const negotiators = result.filter((user) => user.role === 'CONTRACT_NEGOTIATOR').map((user) => user.user.username)
+    const reviewers = assigneeIdsForRole(result, 'CONTRACT_REVIEWER')
+    const approvers = assigneeIdsForRole(result, 'CONTRACT_APPROVER')
+    const negotiators = assigneeIdsForRole(result, 'CONTRACT_NEGOTIATOR')
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,

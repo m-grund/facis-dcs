@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
@@ -30,6 +32,8 @@ type SubmitCmd struct {
 	Negotiators []string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
+	Username    string
+	UserRoles   userrole.UserRoles
 }
 
 type Submitter struct {
@@ -105,12 +109,17 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	var responsiblePersons *any
+	var responsible *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
+			return errors.New("invalid user permission")
+		}
+
+		// This avoids that state changes on different DCS are possible
 		if cmd.SubmittedBy != processData.CreatedBy {
-			return errors.New("invalid user")
+			return errors.New("invalid participant")
 		}
 
 		if len(cmd.Reviewers) == 0 {
@@ -125,18 +134,18 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approvers provided")
 		}
 
-		respPersons := db.ResponsiblePersons{
+		respPersons := db.Responsible{
 			Creator:     processData.CreatedBy,
 			Reviewers:   cmd.Reviewers,
 			Approvers:   cmd.Approvers,
 			Negotiators: cmd.Negotiators,
 		}
 		anyRespPerson := any(respPersons)
-		responsiblePersons = &anyRespPerson
+		responsible = &anyRespPerson
 
 		updateData := db.ContractUpdateData{
-			DID:                cmd.DID,
-			ResponsiblePersons: &respPersons,
+			DID:         cmd.DID,
+			Responsible: &respPersons,
 		}
 		err := h.CRepo.Update(ctx, tx, updateData)
 		if err != nil {
@@ -152,8 +161,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contractstate.Rejected.String() {
 
-		if processData.CreatedBy != cmd.SubmittedBy {
-			return errors.New("invalid user")
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
+			return errors.New("invalid user permission")
+		}
+
+		// This avoids that state changes on different DCS are possible
+		if cmd.SubmittedBy != processData.CreatedBy {
+			return errors.New("invalid participant")
 		}
 
 		err := h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
@@ -174,6 +188,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		nextState = contractstate.Negotiation
 
 	} else if processData.State == contractstate.Negotiation.String() {
+
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator, userrole.ContractReviewer) {
+			return errors.New("invalid user permission")
+		}
 
 		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.SubmittedBy)
 		if err != nil {
@@ -234,6 +252,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					NewContractVersion: processData.ContractVersion + 1,
 					SubmittedBy:        cmd.SubmittedBy,
 					OccurredAt:         time.Now().UTC(),
+					Username:           cmd.Username,
+					UserRoles:          cmd.UserRoles,
 				}
 				err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 				if err != nil {
@@ -246,6 +266,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 	} else if processData.State == contractstate.Submitted.String() {
+
+		if !cmd.UserRoles.HasRoles(userrole.ContractReviewer) {
+			return errors.New("invalid user permission")
+		}
 
 		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.SubmittedBy)
 		if err != nil {
@@ -292,6 +316,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contractstate.Reviewed.String() {
 
+		if !cmd.UserRoles.HasRoles(userrole.ContractApprover) {
+			return errors.New("invalid user permission")
+		}
+
 		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
 		if err != nil {
 			return err
@@ -324,15 +352,17 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		evt := contractevents.SubmitEvent{
-			DID:                cmd.DID,
-			ContractVersion:    processData.ContractVersion,
-			SubmittedBy:        cmd.SubmittedBy,
-			PreviousState:      processData.State,
-			NewState:           nextState.String(),
-			ActionFlag:         cmd.ActionFlag,
-			Comments:           cmd.Comments,
-			OccurredAt:         time.Now().UTC(),
-			ResponsiblePersons: responsiblePersons,
+			DID:             cmd.DID,
+			ContractVersion: processData.ContractVersion,
+			SubmittedBy:     cmd.SubmittedBy,
+			PreviousState:   processData.State,
+			NewState:        nextState.String(),
+			ActionFlag:      cmd.ActionFlag,
+			Comments:        cmd.Comments,
+			OccurredAt:      time.Now().UTC(),
+			Responsible:     responsible,
+			Username:        cmd.Username,
+			UserRoles:       cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 		if err != nil {

@@ -10,6 +10,7 @@ require (
 	github.com/eclipse-xfsc/cloud-event-provider v0.1.5
 	github.com/fxamacker/cbor/v2 v2.5.0
 	github.com/go-pdf/fpdf v0.9.1-0.20250304164643-9dec53ef0ada
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
@@ -113,4 +114,5 @@ require (
 	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

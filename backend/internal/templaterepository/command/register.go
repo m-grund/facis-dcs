@@ -10,6 +10,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	templatequery "digital-contracting-service/internal/templatecatalogueintegration/query/template"
@@ -26,6 +27,8 @@ type RegisterCmd struct {
 	NewDID       string
 	Version      int
 	RegisteredBy string
+	Username     string
+	UserRoles    userrole.UserRoles
 }
 
 type Registrar struct {
@@ -119,6 +122,8 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		SourceDID:     cmd.DID,
 		SourceVersion: cmd.Version,
 		OccurredAt:    time.Now().UTC(),
+		Username:      cmd.Username,
+		UserRoles:     cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

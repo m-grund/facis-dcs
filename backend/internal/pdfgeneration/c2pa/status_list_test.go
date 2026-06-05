@@ -37,9 +37,9 @@ func makeStatusListVC(bitstringLen int, setIndex uint32, revoked bool) []byte {
 		"@context": []string{"https://www.w3.org/2018/credentials/v1"},
 		"type":     []string{"VerifiableCredential", "StatusList2021Credential"},
 		"credentialSubject": map[string]interface{}{
-			"type":           "StatusList2021",
-			"statusPurpose":  "revocation",
-			"encodedList":    encoded,
+			"type":          "StatusList2021",
+			"statusPurpose": "revocation",
+			"encodedList":   encoded,
 		},
 	}
 	b, _ := json.Marshal(vc)

@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -22,6 +24,8 @@ type RejectNegotiationCmd struct {
 	DID             string
 	RejectedBy      string
 	RejectionReason *string
+	Username        string
+	UserRoles       userrole.UserRoles
 }
 
 type NegotiationRejector struct {
@@ -72,6 +76,8 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		RejectedBy:      cmd.RejectedBy,
 		RejectionReason: cmd.RejectionReason,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

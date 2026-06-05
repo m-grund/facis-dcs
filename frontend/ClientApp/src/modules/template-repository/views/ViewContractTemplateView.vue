@@ -43,7 +43,8 @@ import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
+import { assigneeIdsForRole, firstAssigneeIdForRole } from '@/utils/submit-selection'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 import { ref, watch, type Ref } from 'vue'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
@@ -103,7 +104,7 @@ watch(
           document_number: template.document_number ?? null,
           updated_at: template.updated_at ?? null,
           created_by: template.created_by,
-          responsible_persons: template.responsible_persons ?? null,
+          responsible: template.responsible ?? null,
         })
       })
       .catch((error: unknown) => {
@@ -116,8 +117,9 @@ watch(
 const submitTemplate = async (result: SelectedUserRole[]) => {
   try {
     if (!draftStore.did || !draftStore.updated_at) return
-    const reviewers = result.filter((user) => user.role === 'TEMPLATE_REVIEWER').map((user) => user.user.username)
-    const approver = result.find((user) => user.role === 'TEMPLATE_APPROVER')!.user.username
+    const reviewers = assigneeIdsForRole(result, 'TEMPLATE_REVIEWER')
+    const approver = firstAssigneeIdForRole(result, 'TEMPLATE_APPROVER')
+    if (!approver) return
     const response = await contractTemplateService.submit({
       did: draftStore.did,
       updated_at: draftStore.updated_at,

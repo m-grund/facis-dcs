@@ -110,10 +110,10 @@ type hashedURI struct {
 
 // ingredientV3 is the C2PA ingredient.v3 assertion payload for update manifests.
 type ingredientV3 struct {
-	Title           string    `json:"title"`
-	Relationship    string    `json:"relationship"`
-	ActiveManifest  hashedURI `json:"activeManifest"`
-	ClaimSignature  hashedURI `json:"claimSignature"`
+	Title          string    `json:"title"`
+	Relationship   string    `json:"relationship"`
+	ActiveManifest hashedURI `json:"activeManifest"`
+	ClaimSignature hashedURI `json:"claimSignature"`
 }
 
 const manifestLabel = "c2pa.manifest"

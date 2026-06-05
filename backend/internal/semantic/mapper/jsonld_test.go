@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/base/datatype"
+	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/stretchr/testify/assert"
@@ -82,7 +82,7 @@ func minimalTemplateInner(t *testing.T) *datatype.JSON {
 		},
 		"schemaRefs": map[string]any{"documentStructure": "facis.dcs.document-structure.v1"},
 		"policyRefs": []any{},
-		"validation":  map[string]any{"schemaVersion": "v1"},
+		"validation": map[string]any{"schemaVersion": "v1"},
 		// Promoted fields that should appear at the outer envelope level.
 		"sla": map[string]any{
 			"@type": "SLAAgreement",
@@ -113,11 +113,11 @@ func minimalTemplateInner(t *testing.T) *datatype.JSON {
 		},
 		"provenance": []any{
 			map[string]any{
-				"@type":     "ProvenanceEvent",
-				"eventId":   "urn:uuid:aaa",
-				"eventType": "template.created",
-				"actor":     "did:web:actor",
-				"actorRole": "TemplateManager",
+				"@type":      "ProvenanceEvent",
+				"eventId":    "urn:uuid:aaa",
+				"eventType":  "template.created",
+				"actor":      "did:web:actor",
+				"actorRole":  "TemplateManager",
 				"occurredAt": "2026-05-21T10:00:00Z",
 			},
 		},
@@ -186,11 +186,11 @@ func minimalContractInner(t *testing.T) *datatype.JSON {
 		// Promoted fields.
 		"parties": []any{
 			map[string]any{
-				"@type":     "CompanyParty",
+				"@type":      "CompanyParty",
 				"identifier": "provider",
-				"role":      "supplier",
-				"name":      "Provider GmbH",
-				"legalName": "Provider GmbH",
+				"role":       "supplier",
+				"name":       "Provider GmbH",
+				"legalName":  "Provider GmbH",
 			},
 		},
 		"signatories": []any{
@@ -226,12 +226,12 @@ func minimalContractInner(t *testing.T) *datatype.JSON {
 		"contractVersions": []any{
 			map[string]any{"@type": "ContractVersion", "contractVersion": 1, "contentHash": "sha256:v1"},
 		},
-		"adjustments":    []any{},
-		"deployment":     map[string]any{"@type": "Deployment", "identifier": "dep-1"},
-		"provenance":     []any{map[string]any{"@type": "ProvenanceEvent", "eventId": "urn:uuid:bbb"}},
-		"c2paManifest":   map[string]any{"manifestUrl": "https://archive.example/manifest"},
+		"adjustments":      []any{},
+		"deployment":       map[string]any{"@type": "Deployment", "identifier": "dep-1"},
+		"provenance":       []any{map[string]any{"@type": "ProvenanceEvent", "eventId": "urn:uuid:bbb"}},
+		"c2paManifest":     map[string]any{"manifestUrl": "https://archive.example/manifest"},
 		"statusCredential": map[string]any{"id": "urn:uuid:ccc"},
-		"contentHash":    "sha256:contract-v1",
+		"contentHash":      "sha256:contract-v1",
 	})
 }
 
@@ -793,7 +793,7 @@ func TestSLAExampleStructure(t *testing.T) {
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "uptimePercentage",
-						"type": "decimal", "isRequired": true, "defaultValue": 99.95,
+						"type":          "decimal", "isRequired": true, "defaultValue": 99.95,
 						"operators": []any{
 							map[string]any{"operate": "greaterThanOrEqual", "targets": []any{"99.95"}},
 						},
@@ -806,7 +806,7 @@ func TestSLAExampleStructure(t *testing.T) {
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "organizationCountry",
-						"type": "string", "isRequired": true, "defaultValue": "DE",
+						"type":          "string", "isRequired": true, "defaultValue": "DE",
 						"operators": []any{
 							map[string]any{"operate": "equal", "targets": []any{"DE"}},
 						},
@@ -819,7 +819,7 @@ func TestSLAExampleStructure(t *testing.T) {
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "accessUntil",
-						"type": "date", "isRequired": true,
+						"type":          "date", "isRequired": true,
 						"operators": []any{
 							map[string]any{"operate": "lessThanOrEqual", "targets": []any{"{{contractEndDate}}"}},
 						},
@@ -832,7 +832,7 @@ func TestSLAExampleStructure(t *testing.T) {
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "creditPercentage",
-						"type": "decimal", "isRequired": true, "defaultValue": 10,
+						"type":          "decimal", "isRequired": true, "defaultValue": 10,
 						"operators": []any{
 							map[string]any{"operate": "between", "targets": []any{"0", "100"}},
 						},
@@ -852,8 +852,8 @@ func TestSLAExampleStructure(t *testing.T) {
 		},
 		"placeholderBindings": []any{
 			map[string]any{
-				"@type": "PlaceholderBinding",
-				"placeholder": "{{sc-uptime.uptimePercentage}}",
+				"@type":            "PlaceholderBinding",
+				"placeholder":      "{{sc-uptime.uptimePercentage}}",
 				"boundToCondition": "sc-uptime", "boundToParameter": "uptimePercentage",
 				"blockId": "clause-availability",
 			},
@@ -878,7 +878,7 @@ func TestSLAExampleStructure(t *testing.T) {
 			map[string]any{
 				"@type": "ThresholdRule", "ruleId": "rule-uptime-minimum",
 				"leftOperand": "{{sc-uptime.uptimePercentage}}",
-				"operator": "GreaterThanOrEqual", "rightOperand": 99.95,
+				"operator":    "GreaterThanOrEqual", "rightOperand": 99.95,
 				"valueType": "decimal", "severity": "blocking",
 			},
 		},

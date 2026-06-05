@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/base/datatype"
+	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 )
 

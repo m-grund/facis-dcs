@@ -201,7 +201,7 @@ const submitContract = async () => {
       if (response.current_state !== contract.value.state) {
         await navStore.goToPreviousRoute()
       } else {
-        const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
+        const otherNegotiatorsCount = (contract.value.responsible?.negotiators.length ?? 0) - 1
         errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
         await loadContract()
       }

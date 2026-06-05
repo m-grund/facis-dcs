@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -21,6 +22,8 @@ type RecordEvidenceCmd struct {
 	DID        string
 	RecordedBy string
 	UpdatedAt  time.Time
+	Username   string
+	UserRoles  userrole.UserRoles
 }
 
 type EvidenceRecorder struct {
@@ -58,6 +61,8 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		ContractVersion: processData.ContractVersion,
 		RecordedBy:      cmd.RecordedBy,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {
