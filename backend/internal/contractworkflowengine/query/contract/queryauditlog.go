@@ -21,7 +21,7 @@ import (
 type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
-	Username  string
+	HolderDID string
 	UserRoles userrole.UserRoles
 }
 
@@ -52,6 +52,7 @@ func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.Au
 		ComponentType: componenttype.ContractWorkflowEngine,
 		AuditedBy:     qry.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
+		HolderDID:     qry.HolderDID,
 		UserRoles:     qry.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

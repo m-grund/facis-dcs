@@ -27,7 +27,7 @@ type RegisterCmd struct {
 	NewDID       string
 	Version      int
 	RegisteredBy string
-	Username     string
+	HolderDID    string
 	UserRoles    userrole.UserRoles
 }
 
@@ -122,6 +122,7 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		SourceDID:     cmd.DID,
 		SourceVersion: cmd.Version,
 		OccurredAt:    time.Now().UTC(),
+		HolderDID:     cmd.HolderDID,
 		UserRoles:     cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

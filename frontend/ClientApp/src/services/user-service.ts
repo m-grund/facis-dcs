@@ -87,7 +87,7 @@ const mockUsers: UserProfile[] = [
       'CONTRACT_MANAGER',
       'AUDITOR',
     ],
-    id: 'user-000',
+    id: 'did:jwk:development-user',
     username: 'test',
   },
   {

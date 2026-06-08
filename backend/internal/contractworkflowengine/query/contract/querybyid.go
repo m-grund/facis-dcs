@@ -25,7 +25,7 @@ import (
 type GetByIDQry struct {
 	DID         string
 	RetrievedBy string
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -80,6 +80,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		DID:         query.DID,
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		HolderDID:   query.HolderDID,
 		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(h.Ctx, tx, evt, componenttype.ContractWorkflowEngine)

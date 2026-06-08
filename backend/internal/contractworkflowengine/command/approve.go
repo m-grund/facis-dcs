@@ -25,7 +25,7 @@ type ApproveCmd struct {
 	UpdatedAt     time.Time
 	ApprovedBy    string
 	DecisionNotes []string
-	Username      string
+	HolderDID     string
 	UserRoles     userrole.UserRoles
 }
 
@@ -90,6 +90,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		ApprovedBy:      cmd.ApprovedBy,
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}

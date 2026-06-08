@@ -21,7 +21,7 @@ import (
 type ReviewCmd struct {
 	DID        string
 	ReviewedBy string
-	Username   string
+	HolderDID  string
 	UserRoles  userrole.UserRoles
 }
 
@@ -48,6 +48,7 @@ func (h *Reviewer) Handle(ctx context.Context, cmd ReviewCmd) error {
 	evt := contractevents.ReviewEvent{
 		DID:        cmd.DID,
 		ReviewedBy: cmd.ReviewedBy,
+		HolderDID:  cmd.HolderDID,
 		UserRoles:  cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

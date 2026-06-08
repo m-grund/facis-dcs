@@ -26,7 +26,7 @@ type CreateCmd struct {
 	Name         *string
 	Description  *string
 	ContractData *datatype.JSON
-	Username     string
+	HolderDID    string
 	UserRoles    userrole.UserRoles
 }
 
@@ -68,6 +68,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		Description:  cmd.Description,
 		ContractData: cmd.ContractData,
 		OccurredAt:   *createdAt,
+		HolderDID:    cmd.HolderDID,
 		UserRoles:    cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

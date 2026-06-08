@@ -4,7 +4,6 @@ import type { Contract } from '@/models/contract/contract'
 import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
 import type { ContractNegotiationDecision } from '@/models/contract/contract-negotiation-decision'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
-import { useAuthStore } from '@/stores/auth-store'
 import { computed, ref, useTemplateRef } from 'vue'
 
 const props = defineProps<{
@@ -13,9 +12,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
-
-const authStore = useAuthStore()
-const username = computed(() => authStore.user?.username)
 
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
@@ -37,7 +33,7 @@ const sortedDecisions = (decisions: ContractNegotiationDecision[]) => {
 const isSubmitting = ref(false)
 
 const acceptNegotiation = async (negotiation: ContractNegotiation) => {
-  if (!username.value || !confirmationModal.value) return
+  if (!confirmationModal.value) return
   isSubmitting.value = true
   try {
     const { isCanceled } = await confirmationModal.value?.reveal({ message: 'Accept this change request?' })
@@ -45,13 +41,8 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
       const response = await contractWorkflowService.respond({
         id: negotiation.id,
         did: props.contract.did,
-        action_flag: 'ACCEPTING',
-        responded_by: username.value,
+        action_flag: 'ACCEPTING'
       })
-      if (response.id) {
-        const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
-        if (decision) decision.decision = 'ACCEPTED'
-      }
     }
   } catch (err) {
     console.error('Accepting the negotiation failed', err)
@@ -61,7 +52,7 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
 }
 
 const rejectNegotiation = async (negotiation: ContractNegotiation) => {
-  if (!username.value || !confirmationModal.value) return
+  if (!confirmationModal.value) return
   isSubmitting.value = true
   try {
     const rejectResult = await confirmationModal.value.reveal({
@@ -73,19 +64,8 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
         id: negotiation.id,
         did: props.contract.did,
         action_flag: 'REJECTING',
-        responded_by: username.value,
         rejection_reason: rejectResult.data,
       })
-      if (response.id) {
-        negotiation.negotiation_decisions.forEach((decision) => {
-          if (decision.negotiator === username.value) {
-            decision.decision = 'REJECTED'
-            decision.rejection_reason = rejectResult.data
-          } else {
-            decision.decision = 'CLOSED'
-          }
-        })
-      }
     }
   } catch (err) {
     console.error('Rejecting the negotiation failed', err)
@@ -95,8 +75,7 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
 }
 
 const isBtnDisabled = (negotiation: ContractNegotiation) => {
-  const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
-  return decision?.decision !== undefined
+  return false
 }
 
 const isNegotiationShown = ref<Map<string, boolean>>(new Map())

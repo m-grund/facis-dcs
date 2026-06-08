@@ -59,7 +59,6 @@ export interface ContractNegotiationRespondRequest {
   id: string
   did: string
   action_flag: NegotiationActionFlag
-  responded_by: string
   rejection_reason?: string
 }
 

@@ -26,9 +26,7 @@ type SubmitCmd struct {
 	SubmittedBy string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
-	Reviewers   []string
-	Approver    *string
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -40,26 +38,25 @@ type Submitter struct {
 }
 
 func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, cmd SubmitCmd) error {
-	for _, reviewer := range cmd.Reviewers {
-		reviewTask := db.ReviewTaskData{
-			DID:       cmd.DID,
-			Reviewer:  reviewer,
-			State:     reviewtaskstate.Open.String(),
-			CreatedBy: cmd.SubmittedBy,
-		}
-		_, err := rtRepo.Create(ctx, tx, reviewTask)
-		if err != nil {
-			return fmt.Errorf("could not create review tasks: %w", err)
-		}
+	reviewTask := db.ReviewTaskData{
+		DID:       cmd.DID,
+		Reviewer:  cmd.SubmittedBy,
+		State:     reviewtaskstate.Open.String(),
+		CreatedBy: cmd.SubmittedBy,
+	}
+	_, err := rtRepo.Create(ctx, tx, reviewTask)
+	if err != nil {
+		return fmt.Errorf("could not create review tasks: %w", err)
 	}
 
 	data := db.ApprovalTaskData{
 		DID:       cmd.DID,
 		CreatedBy: cmd.SubmittedBy,
-		Approver:  *cmd.Approver,
+		Approver:  cmd.SubmittedBy,
 		State:     reviewtaskstate.Open.String(),
 	}
-	_, err := atRepo.Create(ctx, tx, data)
+
+	_, err = atRepo.Create(ctx, tx, data)
 	if err != nil {
 		return fmt.Errorf("could not create approval task: %w", err)
 	}
@@ -96,18 +93,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewer provided")
-		}
-
-		if cmd.Approver == nil || len(*cmd.Approver) == 0 {
-			return errors.New("no approver provided")
-		}
-
 		resp := db.Responsible{
 			Creator:   processData.CreatedBy,
-			Reviewers: cmd.Reviewers,
-			Approver:  *cmd.Approver,
+			Reviewers: []string{cmd.SubmittedBy},
+			Approver:  cmd.SubmittedBy,
 		}
 		anyResp := any(resp)
 		responsible = &anyResp
@@ -244,6 +233,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			Comments:       cmd.Comments,
 			OccurredAt:     time.Now().UTC(),
 			Responsible:    responsible,
+			HolderDID:      cmd.HolderDID,
 			UserRoles:      cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

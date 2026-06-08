@@ -327,10 +327,9 @@ var ContractNegotiationRespondRequest = Type("ContractNegotiationRespondRequest"
 	Attribute("did", String, "Decentralized Identifier of the contract")
 
 	Attribute("action_flag", String, "Decision for that negotiation (ACCEPTING | REJECTING)")
-	Attribute("responded_by", String, "The user who responded to that negotiation")
 	Attribute("rejection_reason", String, "The reason for that rejection")
 
-	Required("id", "did", "action_flag", "responded_by")
+	Required("id", "did", "action_flag")
 })
 
 var ContractNegotiationRespondResponse = Type("ContractNegotiationRespondResponse", func() {
@@ -622,6 +621,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -656,6 +656,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -687,6 +688,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -719,6 +721,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")

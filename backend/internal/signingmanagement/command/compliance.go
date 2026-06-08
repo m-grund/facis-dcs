@@ -21,7 +21,7 @@ import (
 type ComplianceCmd struct {
 	DID       string
 	CheckedBy string
-	Username  string
+	HolderDID string
 	UserRoles userrole.UserRoles
 }
 
@@ -55,6 +55,7 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		ContractVersion: processData.ContractVersion,
 		CheckedBy:       cmd.CheckedBy,
 		OccurredAt:      time.Now(),
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

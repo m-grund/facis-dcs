@@ -23,7 +23,7 @@ import (
 type GetHistoryByIDQry struct {
 	DID         string
 	RetrievedBy string
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -66,10 +66,11 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		return nil, fmt.Errorf("could not get contract data: %w", err)
 	}
 
-	evt := contractevents.RetrieveByIDEvent{
+	evt := contractevents.RetrieveHistoryByDIDEvent{
 		DID:         query.DID,
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		HolderDID:   query.HolderDID,
 		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(h.Ctx, tx, evt, componenttype.ContractTemplateRepo)

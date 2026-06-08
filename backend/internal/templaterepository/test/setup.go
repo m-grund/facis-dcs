@@ -249,7 +249,7 @@ func federatedCatalogueClientConfigFromEnv(t *testing.T) testutil.FCClientConfig
 	apiURL := strings.TrimSpace(os.Getenv("FEDERATED_CATALOGUE_API_URL"))
 	clientID := strings.TrimSpace(os.Getenv("FEDERATED_CATALOGUE_CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("FEDERATED_CATALOGUE_CLIENT_SECRET"))
-	keycloakRealmURL := strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL"))
+	keycloakRealmURL := strings.TrimSpace(os.Getenv("FC_KEYCLOAK_REALM_URL"))
 
 	if apiURL == "" {
 		t.Fatalf("FEDERATED_CATALOGUE_API_URL isn't set")
@@ -261,7 +261,7 @@ func federatedCatalogueClientConfigFromEnv(t *testing.T) testutil.FCClientConfig
 		t.Fatalf("FEDERATED_CATALOGUE_CLIENT_SECRET isn't set")
 	}
 	if keycloakRealmURL == "" {
-		t.Fatalf("OIDC_ISSUER_URL isn't set")
+		t.Fatalf("FC_KEYCLOAK_REALM_URL isn't set")
 	}
 
 	return testutil.FCClientConfig{

@@ -29,7 +29,7 @@ type GetAllMetadataByFilterQry struct {
 	Name            string
 	Description     string
 	ContractData    string
-	Username        string
+	HolderDID       string
 	Pagination      datatype.Pagination
 	UserRoles       userrole.UserRoles
 }
@@ -89,6 +89,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 	evt := templateevents.SearchEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		HolderDID:   query.HolderDID,
 		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

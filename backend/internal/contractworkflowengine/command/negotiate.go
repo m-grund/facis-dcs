@@ -25,7 +25,7 @@ type NegotiationCmd struct {
 	NegotiatedBy  string
 	ChangeRequest *datatype.JSON
 	UpdatedAt     time.Time
-	Username      string
+	HolderDID     string
 	UserRoles     userrole.UserRoles
 }
 
@@ -101,6 +101,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		ChangeRequest:   cmd.ChangeRequest,
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}

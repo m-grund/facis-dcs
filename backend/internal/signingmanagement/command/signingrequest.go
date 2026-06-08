@@ -23,7 +23,7 @@ type SigningRequestCmd struct {
 	DID         string
 	RequestedBy string
 	UpdatedAt   time.Time
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -62,6 +62,7 @@ func (h *SigningRequester) Handle(ctx context.Context, cmd SigningRequestCmd) er
 		ContractVersion: processData.ContractVersion,
 		RequestedBy:     cmd.RequestedBy,
 		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

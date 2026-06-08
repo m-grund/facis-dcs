@@ -32,7 +32,7 @@ type UpdateManageCmd struct {
 	Description    *string
 	TemplateData   *datatype.JSON
 	IsManager      bool
-	Username       string
+	HolderDID      string
 	UserRoles      userrole.UserRoles
 }
 
@@ -164,6 +164,7 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 		NewTemplateData:   cmd.TemplateData,
 		UpdatedBy:         cmd.UpdatedBy,
 		OccurredAt:        time.Now().UTC(),
+		HolderDID:         cmd.HolderDID,
 		UserRoles:         cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

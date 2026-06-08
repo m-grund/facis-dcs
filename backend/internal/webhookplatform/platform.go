@@ -11,8 +11,8 @@ import (
 // CallbackHandler is called when ORCE sends a callback after processing a webhook.
 type CallbackHandler func(ctx context.Context, pending PendingCallback, status string, result json.RawMessage)
 
-// TokenValidator validates a Bearer token and returns the caller's username.
-type TokenValidator func(ctx context.Context, token string) (username string, err error)
+// TokenValidator validates a Bearer token and returns the caller's holderDID.
+type TokenValidator func(ctx context.Context, token string) (holderDID string, err error)
 
 // Platform is the webhook subscription HTTP handler.
 // Mount it on any path prefix with http.StripPrefix.
@@ -25,7 +25,7 @@ type Platform struct {
 }
 
 // New creates a ready-to-use Platform.
-// validate:   JWT validator — use middleware.OIDCValidator.ValidateToken
+// validate:   JWT validator — use middleware.HydraJWTValidator.ValidateToken
 // onCallback: called when ORCE POSTs to /callbacks (may be nil)
 func New(store *SubscriptionStore, dispatcher *Dispatcher, validate TokenValidator, onCallback CallbackHandler) *Platform {
 	p := &Platform{
@@ -71,25 +71,26 @@ func (p *Platform) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		token := strings.TrimPrefix(header, "Bearer ")
 
-		token, err := p.validate(r.Context(), token)
+		holderDID, err := p.validate(r.Context(), token)
 		if err != nil {
 			jsonError(w, http.StatusUnauthorized, "invalid token: "+err.Error())
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), ctxToken{}, token)
+		ctx := context.WithValue(r.Context(), ctxKeyHolderDID{}, holderDID)
 		next(w, r.WithContext(ctx))
 	}
 }
 
-type ctxToken struct{}
+type ctxKeyHolderDID struct{}
 
-func tokenFromCtx(ctx context.Context) string {
-	v, _ := ctx.Value(ctxToken{}).(string)
+func holderDIDFromCtx(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyHolderDID{}).(string)
 	return v
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
+
 func (p *Platform) health(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
@@ -126,7 +127,7 @@ func (p *Platform) subscribe(w http.ResponseWriter, r *http.Request) {
 
 	sub := p.store.Add(req.Event, req.CallbackURL, req.Secret)
 	log.Printf("webhookplatform: new subscription id=%s event=%s url=%s caller=%s",
-		sub.ID, sub.Event, sub.CallbackURL, tokenFromCtx(r.Context()))
+		sub.ID, sub.Event, sub.CallbackURL, holderDIDFromCtx(r.Context()))
 
 	w.WriteHeader(http.StatusCreated)
 	jsonOK(w, sub)
@@ -140,7 +141,7 @@ func (p *Platform) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("webhookplatform: deleted subscription id=%s caller=%s",
-		id, tokenFromCtx(r.Context()))
+		id, holderDIDFromCtx(r.Context()))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -167,7 +168,7 @@ func (p *Platform) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("webhookplatform: callback received event_id=%s event=%s did=%s status=%s caller=%s",
-		req.EventID, pending.Event, pending.DID, req.Status, tokenFromCtx(r.Context()))
+		req.EventID, pending.Event, pending.DID, req.Status, holderDIDFromCtx(r.Context()))
 
 	if p.onCallback != nil {
 		go p.onCallback(r.Context(), pending, req.Status, req.Result)

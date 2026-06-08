@@ -21,7 +21,7 @@ import (
 type ValidateCmd struct {
 	DID         string
 	ValidatedBy string
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -55,6 +55,7 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 		ContractVersion: processData.ContractVersion,
 		ValidatedBy:     cmd.ValidatedBy,
 		OccurredAt:      time.Now(),
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

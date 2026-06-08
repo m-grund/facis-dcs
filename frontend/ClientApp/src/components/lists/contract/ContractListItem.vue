@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Contract } from '@/models/contract/contract'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
-import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import { ContractState } from '@/types/contract-state'
 import { computed } from 'vue'
@@ -10,11 +10,12 @@ const props = defineProps<{
   contract: Contract
 }>()
 
-const authStore = useAuthStore()
+const { isCreator } = useContractPermissions()
+
 const contractsStore = useContractsStore()
 
 const canEdit = computed(() => {
-  return props.contract.created_by === authStore.user?.username && props.contract.state === ContractState.draft
+  return props.contract.state === ContractState.draft && isCreator.value
 })
 
 const hasNegotiationTask = computed(() => contractsStore.hasNegotiationTask(props.contract))

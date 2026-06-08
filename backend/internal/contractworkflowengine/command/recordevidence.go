@@ -22,7 +22,7 @@ type RecordEvidenceCmd struct {
 	DID        string
 	RecordedBy string
 	UpdatedAt  time.Time
-	Username   string
+	HolderDID  string
 	UserRoles  userrole.UserRoles
 }
 
@@ -61,6 +61,7 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		ContractVersion: processData.ContractVersion,
 		RecordedBy:      cmd.RecordedBy,
 		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

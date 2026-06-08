@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { PartialContractTemplate } from '@/models/contract-template'
 import { ROUTES } from '@/router/router'
-import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState } from '@/types/contract-template-state'
 import { toProperCase } from '@/utils/string'
@@ -13,13 +12,11 @@ const props = defineProps<{
   hasApprovalTask: boolean
 }>()
 
-const authStore = useAuthStore()
 const templateStore = useContractTemplatesStore()
 
 const canEdit = computed(() => {
   return (
-    (props.template.created_by === authStore.user?.username &&
-      (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected)) ||
+    (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) ||
     (props.template.state === TemplateState.submitted && props.hasReviewTask)
   )
 })

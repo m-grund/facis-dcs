@@ -29,7 +29,7 @@ type UpdateCmd struct {
 	Name           *string
 	Description    *string
 	TemplateData   *datatype.JSON
-	Username       string
+	HolderDID      string
 	UserRoles      userrole.UserRoles
 }
 
@@ -61,7 +61,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	if oldData.State == contracttemplatestate.Draft.String() && oldData.State == contracttemplatestate.Rejected.String() {
+	if oldData.State == contracttemplatestate.Draft.String() || oldData.State == contracttemplatestate.Rejected.String() {
 
 		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator, userrole.TemplateManager) {
 			return errors.New("invalid user permission")
@@ -132,6 +132,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewTemplateData:   cmd.TemplateData,
 		UpdatedBy:         cmd.UpdatedBy,
 		OccurredAt:        time.Now().UTC(),
+		HolderDID:         cmd.HolderDID,
 		UserRoles:         cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

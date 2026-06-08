@@ -27,7 +27,7 @@ type CreateCmd struct {
 	Name         *string
 	Description  *string
 	TemplateData *datatype.JSON
-	Username     string
+	HolderDID    string
 	UserRoles    userrole.UserRoles
 }
 
@@ -69,6 +69,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		Description:  cmd.Description,
 		TemplateData: cmd.TemplateData,
 		OccurredAt:   *createdAt,
+		HolderDID:    cmd.HolderDID,
 		UserRoles:    cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

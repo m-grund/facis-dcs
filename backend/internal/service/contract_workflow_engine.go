@@ -85,7 +85,8 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 	cmd := command.CreateCmd{
 		DID:          *did,
 		TemplateDID:  req.Did,
-		CreatedBy:    middleware.GetDID(ctx),
+		CreatedBy:    middleware.GetParticipantID(ctx),
+		HolderDID:    middleware.GetHolderDID(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
 		ContractData: contractData,
 	}
@@ -150,7 +151,8 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
 		UpdatedAt:       updatedAt,
-		UpdatedBy:       middleware.GetDID(ctx),
+		UpdatedBy:       middleware.GetParticipantID(ctx),
+		HolderDID:       middleware.GetHolderDID(ctx),
 		UserRoles:       middleware.GetUserRoles(ctx),
 		Name:            req.Name,
 		Description:     req.Description,
@@ -196,7 +198,8 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
 		UpdatedAt:   updatedAt,
-		SubmittedBy: middleware.GetDID(ctx),
+		SubmittedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
@@ -219,7 +222,8 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 
 	qry := contract.GetProcessDataByIDQry{
 		DID:         req.Did,
-		RetrievedBy: middleware.GetDID(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 	}
 	qryHandler := contract.GetProcessDataByIDHandler{
 		DB:    s.DB,
@@ -247,7 +251,8 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 	}
 
 	qry := contract.GetAllMetadataQry{
-		RetrievedBy: middleware.GetDID(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		Pagination:  pagination,
 	}
@@ -349,7 +354,8 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 
 	qry := contract.GetByIDQry{
 		DID:         req.Did,
-		RetrievedBy: middleware.GetDID(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	qryHandler := contract.GetByIDHandler{
@@ -429,7 +435,8 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, re
 
 	qry := contract.GetHistoryByIDQry{
 		DID:         req.Did,
-		RetrievedBy: middleware.GetDID(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	qryHandler := contract.GetHistoryByIDHandler{
@@ -502,7 +509,8 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 	cmd := command.NegotiationCmd{
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
-		NegotiatedBy:  middleware.GetDID(ctx),
+		NegotiatedBy:  middleware.GetParticipantID(ctx),
+		HolderDID:     middleware.GetHolderDID(ctx),
 		ChangeRequest: &changeRequest,
 		UserRoles:     middleware.GetUserRoles(ctx),
 	}
@@ -538,7 +546,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		cmd := command.AcceptNegotiationCmd{
 			ID:         req.ID,
 			DID:        req.Did,
-			AcceptedBy: middleware.GetDID(ctx),
+			AcceptedBy: middleware.GetParticipantID(ctx),
 			UserRoles:  middleware.GetUserRoles(ctx),
 		}
 		handler := command.NegotiationAcceptor{
@@ -555,7 +563,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		cmd := command.RejectNegotiationCmd{
 			ID:              req.ID,
 			DID:             req.Did,
-			RejectedBy:      middleware.GetDID(ctx),
+			RejectedBy:      middleware.GetParticipantID(ctx),
 			UserRoles:       middleware.GetUserRoles(ctx),
 			RejectionReason: req.RejectionReason,
 		}
@@ -583,7 +591,8 @@ func (s *contractWorkflowEnginesrvc) Review(ctx context.Context, req *contractwo
 
 	cmd := command.ReviewCmd{
 		DID:        req.Did,
-		ReviewedBy: middleware.GetDID(ctx),
+		ReviewedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := command.Reviewer{
@@ -624,7 +633,8 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		DID:             derefString(req.Did),
 		ContractVersion: derefInt(req.ContractVersion),
 		State:           state,
-		RetrievedBy:     middleware.GetDID(ctx),
+		RetrievedBy:     middleware.GetParticipantID(ctx),
+		HolderDID:       middleware.GetHolderDID(ctx),
 		UserRoles:       middleware.GetUserRoles(ctx),
 		Name:            derefString(req.Name),
 		Description:     derefString(req.Description),
@@ -686,7 +696,8 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 	cmd := command.ApproveCmd{
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
-		ApprovedBy: middleware.GetDID(ctx),
+		ApprovedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := command.Approver{
@@ -717,7 +728,8 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 	cmd := command.RejectCmd{
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
-		RejectedBy: middleware.GetDID(ctx),
+		RejectedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		Reason:     req.Reason,
 	}
@@ -749,7 +761,8 @@ func (s *contractWorkflowEnginesrvc) Store(ctx context.Context, req *contractwor
 
 	cmd := command.RecordEvidenceCmd{
 		DID:        req.Did,
-		RecordedBy: middleware.GetDID(ctx),
+		RecordedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		UpdatedAt:  updatedAt,
 	}
@@ -780,7 +793,8 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 	cmd := command.TerminateCmd{
 		DID:          req.Did,
 		UpdatedAt:    updatedAt,
-		TerminatedBy: middleware.GetDID(ctx),
+		TerminatedBy: middleware.GetParticipantID(ctx),
+		HolderDID:    middleware.GetHolderDID(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
 		Reason:       req.Reason,
 	}
@@ -809,7 +823,8 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 
 	qry := contract.GetAuditLogQry{
 		DID:       req.Did,
-		AuditedBy: middleware.GetDID(ctx),
+		AuditedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := contract.Auditor{
