@@ -1,217 +1,258 @@
+<template>
+  <button type="button" v-bind="$attrs" @click="openModal">Submit</button>
+  <Teleport to="body">
+    <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
+      <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
+        <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
+        <p class="py-2 text-sm opacity-80">Enter wallet DIDs</p>
+
+        <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Reviewers</span>
+            <ul v-if="reviewers.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in reviewers"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeReviewer(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="reviewerDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:jwk:..."
+                @input="reviewerError = ''"
+                @keydown.enter.prevent="addReviewer"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addReviewer">+</button>
+            </div>
+            <p v-if="reviewerError" class="text-xs text-error">{{ reviewerError }}</p>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Approvers</span>
+            <ul v-if="approvers.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in approvers"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeApprover(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="approverDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:jwk:..."
+                @input="approverError = ''"
+                @keydown.enter.prevent="addApprover"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addApprover">+</button>
+            </div>
+            <p v-if="approverError" class="text-xs text-error">{{ approverError }}</p>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Negotiators</span>
+            <ul v-if="negotiators.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in negotiators"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeNegotiator(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="negotiatorDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:jwk:..."
+                @input="negotiatorError = ''"
+                @keydown.enter.prevent="addNegotiator"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addNegotiator">+</button>
+            </div>
+            <p v-if="negotiatorError" class="text-xs text-error">{{ negotiatorError }}</p>
+          </section>
+        </div>
+
+        <div class="modal-action mt-2">
+          <button type="button" class="btn btn-outline" @click="onModalClose">Cancel</button>
+          <button type="button" class="btn btn-primary" @click="onModalSubmit">Apply</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit" aria-label="Close">close</button>
+      </form>
+    </dialog>
+  </Teleport>
+</template>
+
 <script setup lang="ts">
-import type { SelectedUserRole, UserProfile } from '@/models/user'
-import { userService } from '@/services/user-service'
-import type { UserRole } from '@/types/user-role'
-import { toProperCase } from '@/utils/string'
-import { computed, ref, useTemplateRef } from 'vue'
+import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
+import type { SubmitContractAssignees } from '@/utils/submit-selection'
+import { nextTick, ref, type Ref } from 'vue'
 
-interface User extends UserProfile {
-  availableRoles: (UserRole | 'CONTRACT_NEGOTIATOR')[]
-}
-
-interface SelectionRow {
-  user: User
-  selected: boolean
-  roles: (UserRole | 'CONTRACT_NEGOTIATOR')[]
-}
-
-const props = defineProps<{
-  dialogType: 'template' | 'contract'
-}>()
+defineOptions({ inheritAttrs: false })
 
 const emit = defineEmits<{
-  submit: [value: SelectedUserRole[]]
+  submit: [value: SubmitContractAssignees]
 }>()
 
-const userSelectionModal = useTemplateRef('user-selection-modal')
+const assigneeModal = ref<HTMLDialogElement | null>(null)
 
-const selectionRows = ref<SelectionRow[]>([])
-const isLoading = ref(true)
+const reviewers = ref<string[]>([])
+const approvers = ref<string[]>([])
+const negotiators = ref<string[]>([])
+const reviewerDraft = ref('')
+const approverDraft = ref('')
+const negotiatorDraft = ref('')
 
-const roles = computed(() => {
-  const roleMap: Record<typeof props.dialogType, { review: UserRole; approve: UserRole; negotiate?: UserRole }> = {
-    template: { review: 'TEMPLATE_REVIEWER', approve: 'TEMPLATE_APPROVER' },
-    contract: { review: 'CONTRACT_REVIEWER', approve: 'CONTRACT_APPROVER', negotiate: 'CONTRACT_CREATOR' },
-  }
-  return roleMap[props.dialogType]
-})
-const reviewRole = computed(() => roles.value.review)
-const approveRole = computed(() => roles.value.approve)
-const negotiateRole = computed(() => roles.value.negotiate)
+const reviewerError = ref('')
+const approverError = ref('')
+const negotiatorError = ref('')
 
-const selectedRows = computed(() => selectionRows.value.filter((row) => row.selected))
+function clearErrors() {
+  reviewerError.value = ''
+  approverError.value = ''
+  negotiatorError.value = ''
+}
 
-const allAssignedRoles = computed(() => selectedRows.value.flatMap((row) => row.roles))
-
-const hasSelectedUsers = computed(() => selectedRows.value.length > 0)
-const allSelectedUsersHaveRoles = computed(() => selectedRows.value.every((row) => row.roles.length > 0))
-const hasValidSelection = computed(() => {
-  const assigned = allAssignedRoles.value
-  const hasApprove = assigned.includes(approveRole.value)
-  const hasReview = assigned.includes(reviewRole.value)
-  const hasNegotiate = !negotiateRole.value || assigned.includes('CONTRACT_NEGOTIATOR')
-  return hasApprove && hasReview && hasNegotiate
-})
-const isSubmitDisabled = computed(
-  () => !hasSelectedUsers.value || !allSelectedUsersHaveRoles.value || !hasValidSelection.value,
-)
-
-function clearSelectionRows() {
-  selectionRows.value = []
+function clearAll() {
+  reviewers.value = []
+  approvers.value = []
+  negotiators.value = []
+  reviewerDraft.value = ''
+  approverDraft.value = ''
+  negotiatorDraft.value = ''
+  clearErrors()
 }
 
 async function openModal() {
-  clearSelectionRows()
-  isLoading.value = true
-  userSelectionModal.value?.showModal()
-
-  const receivedUsers = await userService.getAuthorizedUsersWithRoles(
-    approveRole.value,
-    reviewRole.value,
-    negotiateRole.value,
-  )
-  selectionRows.value = receivedUsers.map((user) => ({
-    user: {
-      ...user,
-      availableRoles:
-        user.roleIds?.reduce<(UserRole | 'CONTRACT_NEGOTIATOR')[]>((acc, role) => {
-          const newRole = 'CONTRACT_NEGOTIATOR'
-          if (role === 'CONTRACT_CREATOR') {
-            acc.push(newRole)
-          } else if (role === 'CONTRACT_REVIEWER') {
-            acc.push(role, newRole)
-          } else {
-            acc.push(role)
-          }
-          return [...new Set(acc)]
-        }, []) ?? [],
-    },
-    selected: false,
-    roles: [],
-  }))
-
-  isLoading.value = false
+  clearAll()
+  await nextTick()
+  assigneeModal.value?.showModal()
 }
 
-function onRowSelectedChange(row: SelectionRow) {
-  if (!row.selected) {
-    row.roles = []
+function addReviewer() {
+  reviewerError.value = ''
+  const trimmed = reviewerDraft.value.trim()
+  if (!trimmed) return
+  if (isDuplicateInList(trimmed, reviewers.value)) {
+    reviewerError.value = 'This reviewer is already in the list.'
+    return
+  }
+  reviewers.value.push(trimmed)
+  reviewerDraft.value = ''
+}
+
+function addApprover() {
+  approverError.value = ''
+  const trimmed = approverDraft.value.trim()
+  if (!trimmed) return
+  if (isDuplicateInList(trimmed, approvers.value)) {
+    approverError.value = 'This approver is already in the list.'
+    return
+  }
+  approvers.value.push(trimmed)
+  approverDraft.value = ''
+}
+
+function addNegotiator() {
+  negotiatorError.value = ''
+  const trimmed = negotiatorDraft.value.trim()
+  if (!trimmed) return
+  if (isDuplicateInList(trimmed, negotiators.value)) {
+    negotiatorError.value = 'This negotiator is already in the list.'
+    return
+  }
+  negotiators.value.push(trimmed)
+  negotiatorDraft.value = ''
+}
+
+function removeFromList(list: Ref<string[]>, did: string) {
+  list.value = list.value.filter((entry) => entry !== did)
+}
+
+function removeReviewer(did: string) {
+  removeFromList(reviewers, did)
+}
+
+function removeApprover(did: string) {
+  removeFromList(approvers, did)
+}
+
+function removeNegotiator(did: string) {
+  removeFromList(negotiators, did)
+}
+
+function collectAssignees(): SubmitContractAssignees {
+  return {
+    reviewers: mergeDraftIntoList(reviewers.value, reviewerDraft.value),
+    approvers: mergeDraftIntoList(approvers.value, approverDraft.value),
+    negotiators: mergeDraftIntoList(negotiators.value, negotiatorDraft.value),
   }
 }
 
-function roleDropdownLabel(row: SelectionRow) {
-  if (row.roles.length === 0) return 'No role'
-  return row.roles.map((role) => toProperCase(role)).join(', ')
-}
+function validateBeforeSubmit(): boolean {
+  clearErrors()
+  const { reviewers: finalReviewers, approvers: finalApprovers, negotiators: finalNegotiators } = collectAssignees()
+  let valid = true
 
-function isRoleChecked(row: SelectionRow, role: UserRole | 'CONTRACT_NEGOTIATOR') {
-  return row.roles.includes(role)
-}
-
-function toggleRole(row: SelectionRow, role: UserRole | 'CONTRACT_NEGOTIATOR', checked: boolean) {
-  if (checked) {
-    if (!row.roles.includes(role)) {
-      row.roles.push(role)
-    }
-  } else {
-    row.roles = row.roles.filter((r) => r !== role)
+  if (finalReviewers.length === 0) {
+    reviewerError.value = 'Add at least one reviewer.'
+    valid = false
   }
+  if (finalApprovers.length === 0) {
+    approverError.value = 'Add at least one approver.'
+    valid = false
+  }
+  if (finalNegotiators.length === 0) {
+    negotiatorError.value = 'Add at least one negotiator.'
+    valid = false
+  }
+
+  return valid
 }
 
 function onModalSubmit() {
-  if (isSubmitDisabled.value) return
-  const result: SelectedUserRole[] = selectedRows.value.flatMap(({ user, roles }) => {
-    const { availableRoles: _, ...profile } = user
-    return roles.map((role) => ({ user: profile, role }))
-  })
-  emit('submit', result)
-  onModalClose()
+  if (!validateBeforeSubmit()) return
+  emit('submit', collectAssignees())
+  assigneeModal.value?.close()
 }
 
 function onModalClose() {
-  userSelectionModal.value?.close()
-  clearSelectionRows()
-  isLoading.value = true
+  assigneeModal.value?.close()
 }
-
-const roleInfoText = computed(() => {
-  return props.dialogType === 'template'
-    ? 'Select users, then choose roles from the dropdown (one user may be Approver and Reviewer).'
-    : 'Select users, then choose roles from the dropdown (roles may overlap on one user).'
-})
 </script>
-
-<template>
-  <button :="$attrs" @click="openModal">Submit</button>
-  <dialog ref="user-selection-modal" class="modal modal-bottom transition-none sm:modal-middle" @close="onModalClose">
-    <div class="modal-box flex max-h-2/3 flex-col">
-      <h3 class="text-lg font-bold">
-        User Selection for {{ dialogType === 'template' ? 'Template' : 'Contract' }} Submission
-      </h3>
-      <p class="py-4 text-sm">
-        {{ roleInfoText }}
-      </p>
-      <div class="grow overflow-y-auto">
-        <div v-if="isLoading">Loading...</div>
-        <ul v-else class="list">
-          <li
-            v-for="row in selectionRows"
-            :key="row.user.id"
-            class="list-row mb-1 items-center border border-secondary py-2"
-          >
-            <label class="list-col-grow label min-w-0">
-              <input
-                v-model="row.selected"
-                type="checkbox"
-                class="checkbox mr-4 shrink-0 checkbox-primary"
-                @change="onRowSelectedChange(row)"
-              />
-              <span class="truncate">{{ `${row.user.firstName} ${row.user.lastName}` }}</span>
-            </label>
-            <div
-              class="dropdown dropdown-end w-full max-w-56 sm:max-w-64"
-              :class="{ 'pointer-events-none opacity-50': !row.selected }"
-            >
-              <div
-                tabindex="0"
-                role="button"
-                class="select w-full truncate select-sm text-left select-primary sm:select-md"
-                :aria-disabled="!row.selected"
-              >
-                {{ roleDropdownLabel(row) }}
-              </div>
-              <ul
-                tabindex="0"
-                class="dropdown-content menu z-20 mt-1 w-full min-w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"
-                @click.stop
-              >
-                <li v-for="role in row.user.availableRoles" :key="role" @click.stop>
-                  <label class="flex cursor-pointer items-center gap-3 px-2 py-2">
-                    <input
-                      type="checkbox"
-                      class="checkbox checkbox-sm checkbox-primary"
-                      :checked="isRoleChecked(row, role)"
-                      :disabled="!row.selected"
-                      @change="toggleRole(row, role, ($event.target as HTMLInputElement).checked)"
-                      @click.stop
-                    />
-                    <span>{{ toProperCase(role) }}</span>
-                  </label>
-                </li>
-              </ul>
-            </div>
-          </li>
-        </ul>
-      </div>
-      <div class="modal-action">
-        <div v-if="isSubmitDisabled" class="flex items-center text-sm text-error">
-          <span v-if="!hasSelectedUsers">Select at least one user</span>
-          <span v-else-if="!allSelectedUsersHaveRoles">Assign at least one role to each selected user</span>
-          <span v-else>{{ roleInfoText }}</span>
-        </div>
-        <button class="btn btn-outline" @click="onModalClose">Cancel</button>
-        <button :disabled="isSubmitDisabled" class="btn btn-primary" @click="onModalSubmit">Apply</button>
-      </div>
-    </div>
-  </dialog>
-</template>
