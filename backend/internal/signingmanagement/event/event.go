@@ -50,7 +50,7 @@ func (e RetrieveAllEvent) GetDID() string {
 type SearchEvent struct {
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
-	Username    string             `json:"username"`
+	HolderDID   string             `json:"holder_did"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 

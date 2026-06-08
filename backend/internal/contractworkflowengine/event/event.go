@@ -153,7 +153,7 @@ func (e RetrieveAllEvent) GetDID() string {
 // VerifyEvent is emitted when a template is verified.
 type VerifyEvent struct {
 	DID             string             `json:"did"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	ContractVersion int                `json:"contract_version"`
 	VerifiedBy      string             `json:"verified_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
@@ -378,7 +378,7 @@ func (e IncreaseContractVersionEvent) GetDID() string {
 // ContractExpired is emitted when change requests for contract merged
 type ContractExpired struct {
 	DID             string                             `json:"did"`
-	Username        string                             `json:"username"`
+	HolderDID       string                             `json:"holder_did"`
 	ContractVersion int                                `json:"old_contract_version"`
 	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
 	OccurredAt      time.Time                          `json:"occurred_at"`

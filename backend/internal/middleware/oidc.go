@@ -65,7 +65,7 @@ type Claims struct {
 }
 
 // ValidateToken verifies the token signature, issuer, and client binding, then
-// returns the caller's roles, DID, username, and participant ID.
+// returns the caller's roles, holder DID, and participant DID.
 func (v *HydraJWTValidator) ValidateToken(ctx context.Context, token string) (*TokenInfo, error) {
 	idToken, err := v.verifier.Verify(ctx, token)
 	if err != nil {
