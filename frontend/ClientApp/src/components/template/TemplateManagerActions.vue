@@ -4,6 +4,7 @@ import type { PartialContractTemplate } from '@/models/contract-template'
 import { useContractPlainTextConverter } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
 import { toPdfData } from '@/modules/contract-workflow-engine/utils/contractPdfConverter'
 import { downloadContractPdf } from '@/modules/contract-workflow-engine/utils/contractPdfExporter'
+import { TemplateType } from '@/modules/template-repository/models/contract-templace'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
@@ -51,7 +52,11 @@ const canArchive = computed(() => {
 })
 
 const showPublishButton = computed(() => {
-  return isManager.value && props.template.state === TemplateState.approved
+  return (
+    isManager.value &&
+    props.template.state === TemplateState.approved &&
+    props.template.template_type === TemplateType.frameContract
+  )
 })
 
 const archive = async () => {
