@@ -53,9 +53,6 @@ var ContractTemplateSubmitRequest = Type("ContractTemplateSubmitRequest", func()
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract template")
-	Attribute("approver", String, "The approver for that contract template")
-
 	Attribute("forward_to", String, "Action flag: approval | draft")
 	Attribute("comments", ArrayOf(String), "Optional comments")
 

@@ -30,6 +30,7 @@ import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -46,12 +47,10 @@ const { activeTab } = storeToRefs(contractEditorUiStore)
 
 const errorStore = useErrorStore()
 
+const { isCreator } = useContractPermissions()
+
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
-
-const isCreator = computed(() => {
-  return contract.value?.created_by === authStore.user?.username
-})
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
@@ -288,20 +287,18 @@ const exportPdf = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
-        <template v-if="isCreator">
-          <SubmitSelectionDialog
-            v-if="contract?.state === ContractState.draft"
+        <SubmitSelectionDialog
+            v-if="contract?.state === ContractState.draft && isCreator"
             class="btn flex-1 btn-primary"
             @submit="submitContract"
           />
           <button
-            v-else-if="contract?.state === ContractState.rejected"
+            v-else-if="contract?.state === ContractState.rejected && isCreator"
             class="btn flex-1 btn-primary"
             @click="submitRejectedTemplate"
           >
             Submit
           </button>
-        </template>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>

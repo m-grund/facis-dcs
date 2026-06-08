@@ -33,7 +33,6 @@
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
@@ -49,7 +48,6 @@ const props = defineProps<{
 }>()
 
 const navStore = useNavStore()
-const authStore = useAuthStore()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
@@ -107,13 +105,10 @@ watch(
 
 const submitTemplate = async () => {
   try {
-    const userId = authStore.user?.id?.trim()
-    if (!userId || !draftStore.did || !draftStore.updated_at) return
+    if (!draftStore.did || !draftStore.updated_at) return
     const response = await contractTemplateService.submit({
       did: draftStore.did,
       updated_at: draftStore.updated_at,
-      reviewers: [userId],
-      approver: userId,
     })
     if (response?.did) {
       await navStore.goToPreviousRoute()

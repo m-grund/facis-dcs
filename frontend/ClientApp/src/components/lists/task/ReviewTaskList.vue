@@ -78,8 +78,7 @@ const canEdit = (task: ReviewTask) => {
   const template = templatesStore.findTemplateByDid(task.did)
   const state = template?.state
   return (
-    (template?.created_by === authStore.user?.username &&
-      (state === TemplateState.draft || state === TemplateState.rejected)) ||
+    (state === TemplateState.draft || state === TemplateState.rejected) ||
     state === TemplateState.submitted
   )
 }

@@ -154,8 +154,6 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 		UserRoles:   middleware.GetUserRoles(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
-		Reviewers:   req.Reviewers,
-		Approver:    req.Approver,
 	}
 	handler := command.Submitter{
 		DB:     s.DB,
