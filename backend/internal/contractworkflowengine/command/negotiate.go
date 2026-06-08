@@ -11,6 +11,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -24,6 +25,8 @@ type NegotiationCmd struct {
 	NegotiatedBy  string
 	ChangeRequest *datatype.JSON
 	UpdatedAt     time.Time
+	Username      string
+	UserRoles     userrole.UserRoles
 }
 
 type Negotiator struct {
@@ -98,6 +101,8 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		ChangeRequest:   cmd.ChangeRequest,
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
+		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

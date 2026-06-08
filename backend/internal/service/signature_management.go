@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
@@ -14,34 +16,47 @@ import (
 	"digital-contracting-service/internal/signingmanagement/query"
 
 	"github.com/jmoiron/sqlx"
-	"goa.design/clue/log"
 )
 
 type signatureManagementsrvc struct {
 	DB           *sqlx.DB
 	CRepo        db.ContractRepo
+	STRepo       db.SigningTaskRepo
 	ATrailReader base.AuditTrailReader
 	auth.JWTAuthenticator
 }
 
-func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, auditTrailReader base.AuditTrailReader) signaturemanagement.Service {
+func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, stRepo db.SigningTaskRepo, auditTrailReader base.AuditTrailReader) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
+		STRepo:           stRepo,
 		ATrailReader:     auditTrailReader,
 	}
 }
 
 func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturemanagement.SMContractRetrieveRequest) (res *signaturemanagement.SMContractRetrieveResponse, err error) {
 
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	pagination := datatype.Pagination{
+		Offset: derefInt(req.Offset),
+		Limit:  derefInt(req.Limit),
+	}
+
 	qry := query.GetAllMetadataQry{
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+		Pagination:  pagination,
 	}
 	queryHandler := query.GetAllMetadataHandler{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:     s.DB,
+		CRepo:  s.CRepo,
+		STRepo: s.STRepo,
 	}
 	result, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
@@ -50,27 +65,68 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 
 	var contracts []*signaturemanagement.SMContractListItem
 	for _, item := range result.Contracts {
+
+		var startDate *string
+		if item.StartDate != nil {
+			s := item.StartDate.Format(time.RFC3339)
+			startDate = &s
+		}
+
+		var expDate *string
+		if item.ExpDate != nil {
+			s := item.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if item.ExpPolicy != nil {
+			s := item.ExpPolicy.String()
+			expPolicy = &s
+		}
+
 		contracts = append(contracts, &signaturemanagement.SMContractListItem{
 			Did:             item.DID,
 			ContractVersion: item.ContractVersion,
 			State:           item.State.String(),
 			Name:            item.Name,
 			Description:     item.Description,
+			CreatedBy:       item.CreatedBy,
 			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			StartDate:       startDate,
+			ExpDate:         expDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: item.ExpNoticePeriod,
+			Responsible:     item.Responsible,
+		})
+	}
+
+	var signingTasks []*signaturemanagement.SMContractSigningTaskItem
+	for _, item := range result.SigningTasks {
+		signingTasks = append(signingTasks, &signaturemanagement.SMContractSigningTaskItem{
+			Did:             item.DID,
+			ContractVersion: item.ContractVersion,
+			State:           item.State.String(),
+			Signer:          item.Signer,
+			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
 	return &signaturemanagement.SMContractRetrieveResponse{
-		Contracts: contracts,
+		Contracts:    contracts,
+		SigningTasks: signingTasks,
 	}, nil
 }
 
 func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signaturemanagement.SMContractRetrieveByIDRequest) (res *signaturemanagement.SMContractRetrieveByIDResponse, err error) {
 
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
 	qry := query.GetByIDQry{
-		DID:         req.Did,
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := query.GetByIDHandler{
 		DB:    s.DB,
@@ -101,22 +157,63 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 }
 
 func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemanagement.SMContractVerifyRequest) (res *signaturemanagement.SMContractVerifyResponse, err error) {
-	log.Printf(ctx, "signatureManagement.verify")
-	return
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.VerifyCmd{
+		DID:        req.Did,
+		VerifiedBy: middleware.GetDID(ctx),
+		Username:   middleware.GetUsername(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
+	}
+	handler := command.Verifier{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	return &signaturemanagement.SMContractVerifyResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanagement.SMContractApplyRequest) (res *signaturemanagement.SMContractApplyResponse, err error) {
-	log.Printf(ctx, "signatureManagement.apply")
-	return
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.ApplyCmd{
+		DID:       req.Did,
+		AppliedBy: middleware.GetDID(ctx),
+		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	}
+	handler := command.Applier{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	return &signaturemanagement.SMContractApplyResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturemanagement.SMContractValidateRequest) (res *signaturemanagement.SMContractValidateResponse, err error) {
 
-	qry := command.RevokeCmd{
-		DID:       req.Did,
-		RevokedBy: middleware.GetUsername(ctx),
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := command.ValidateCmd{
+		DID:         req.Did,
+		ValidatedBy: middleware.GetDID(ctx),
+		Username:    middleware.GetUsername(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
-	queryHandler := command.Revoker{
+	queryHandler := command.Validator{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
@@ -130,9 +227,29 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 	return &signaturemanagement.SMContractValidateResponse{}, nil
 }
 
-func (s *signatureManagementsrvc) Revoke(ctx context.Context, request *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
-	log.Printf(ctx, "signatureManagement.revoke")
-	return
+func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := command.RevokeCmd{
+		DID:       req.Did,
+		RevokedBy: middleware.GetUsername(ctx),
+		Username:  middleware.GetDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	}
+	queryHandler := command.Revoker{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+
+	err = queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+
+	}
+
+	return &signaturemanagement.SMContractRevokeResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanagement.SMContractAuditRequest) (res []*signaturemanagement.SMContractAuditResponse, err error) {
@@ -142,7 +259,9 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 
 	qry := query.GetAuditLogQry{
 		DID:       req.Did,
-		AuditedBy: middleware.GetUsername(ctx),
+		AuditedBy: middleware.GetDID(ctx),
+		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := query.Auditor{
 		DB:           s.DB,
@@ -172,9 +291,14 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 
 func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signaturemanagement.SMContractComplianceRequest) (res *signaturemanagement.SMContractComplianceResponse, err error) {
 
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
 	qry := command.ComplianceCmd{
-		DID:         req.Did,
-		ValidatedBy: middleware.GetUsername(ctx),
+		DID:       req.Did,
+		CheckedBy: middleware.GetDID(ctx),
+		Username:  middleware.GetUsername(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.ComplianceValidator{
 		DB:    s.DB,

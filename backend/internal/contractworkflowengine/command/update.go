@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -30,6 +32,8 @@ type UpdateCmd struct {
 	Name            *string
 	Description     *string
 	ContractData    *datatype.JSON
+	Username        string
+	UserRoles       userrole.UserRoles
 }
 
 type Updater struct {
@@ -58,8 +62,9 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
+	// This avoids that updates on different DCS are possible
 	if oldData.CreatedBy != cmd.UpdatedBy {
-		return errors.New("invalid user")
+		return errors.New("invalid participant")
 	}
 
 	if oldData.State != contracttemplatestate.Draft.String() {
@@ -134,6 +139,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewExpNoticePeriod: cmd.ExpNoticePeriod,
 		UpdatedBy:          cmd.UpdatedBy,
 		OccurredAt:         time.Now().UTC(),
+		Username:           cmd.Username,
+		UserRoles:          cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

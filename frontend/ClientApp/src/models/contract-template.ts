@@ -7,7 +7,7 @@ import type {
 import type { TemplateDataVersion } from '@/modules/template-repository/models/template-draft-store'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
-import type { ContractTemplateResponsiblePersons } from './contract-template-responsible-persons'
+import type { ContractTemplateResponsible } from './contract-template-responsible'
 
 export interface ContractTemplate {
   did: string
@@ -21,7 +21,7 @@ export interface ContractTemplate {
   description?: string
   template_data?: ContractTemplateData
   updated_at: string
-  responsible_persons?: ContractTemplateResponsiblePersons
+  responsible?: ContractTemplateResponsible
 }
 
 export type PartialContractTemplate = ContractTemplate

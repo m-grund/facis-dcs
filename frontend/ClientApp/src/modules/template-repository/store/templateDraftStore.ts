@@ -41,7 +41,7 @@ const defaultState: Readonly<TemplateDraftState> = {
   version: null,
   updated_at: null,
   created_by: '',
-  responsible_persons: null,
+  responsible: null,
   // This field is used to distinguish between contract and template workflows.
   workflow: 'template',
 }

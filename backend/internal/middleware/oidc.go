@@ -3,8 +3,11 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 )
@@ -49,12 +52,13 @@ func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, e
 // TokenInfo holds the validated identity extracted from a JWT.
 type TokenInfo struct {
 	Roles         []string
+	DID           string
 	Username      string
 	ParticipantID string
 }
 
 // ValidateToken verifies the token signature, issuer, and azp claim, then
-// returns the caller's roles and username.
+// returns the caller's roles and did.
 func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*TokenInfo, error) {
 	idToken, err := v.verifier.Verify(ctx, token)
 	if err != nil {
@@ -76,6 +80,11 @@ func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*Token
 	if username == "" {
 		username, _ = claims["sub"].(string)
 	}
+
+	did, _ := claims["preferred_username"].(string)
+	if did == "" {
+		did, _ = claims["sub"].(string)
+	}
 	// This value is set by the Keycloak -> Clients -> <client_id>
 	// -> <client_id>-dedicated -> Configure a new mapper / Add mapper (by configuration) -> Hardcoded claim
 	// TBD: use workaround solution until we have a proper participant ID in the credential.
@@ -83,6 +92,7 @@ func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*Token
 
 	return &TokenInfo{
 		Roles:         extractRoles(claims),
+		DID:           did,
 		Username:      username,
 		ParticipantID: participantID,
 	}, nil
@@ -138,22 +148,40 @@ type authCtxKey struct{}
 // AuthContext carries the validated caller identity through the request context.
 type AuthContext struct {
 	Roles         []string
+	DID           string
 	Username      string
 	ParticipantID string
 }
 
-// GetRoles extracts roles from the request context.
-func GetRoles(ctx context.Context) []string {
+// GetUserRoles extracts roles from the request context.
+func GetUserRoles(ctx context.Context) []userrole.UserRole {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.Roles
+		userRoles := make([]userrole.UserRole, len(ac.Roles))
+		for i, role := range ac.Roles {
+			userRole, err := userrole.NewUserRole(role)
+			if err != nil {
+				log.Printf("failed to parse user role %q: %v", role, err)
+			}
+			userRoles[i] = userRole
+		}
+		return userRoles
+
 	}
-	return []string{}
+	return []userrole.UserRole{}
 }
 
 // GetUsername extracts the authenticated username from the request context.
 func GetUsername(ctx context.Context) string {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
 		return ac.Username
+	}
+	return ""
+}
+
+// GetDID extracts the authenticated DID from the request context.
+func GetDID(ctx context.Context) string {
+	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
+		return ac.DID
 	}
 	return ""
 }
@@ -166,17 +194,7 @@ func GetParticipantID(ctx context.Context) string {
 	return ""
 }
 
-// HasRole checks if the context contains a specific role.
-func HasRole(ctx context.Context, requiredRole string) bool {
-	for _, role := range GetRoles(ctx) {
-		if role == requiredRole {
-			return true
-		}
-	}
-	return false
-}
-
 // InjectAuthContext injects the validated identity into the request context.
-func InjectAuthContext(ctx context.Context, roles []string, username string, participantID string) context.Context {
-	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, Username: username, ParticipantID: participantID})
+func InjectAuthContext(ctx context.Context, roles []string, did string, username string, participantID string) context.Context {
+	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, DID: did, Username: username, ParticipantID: participantID})
 }

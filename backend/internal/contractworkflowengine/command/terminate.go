@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -22,6 +23,8 @@ type TerminateCmd struct {
 	TerminatedBy string
 	Reason       string
 	UpdatedAt    time.Time
+	Username     string
+	UserRoles    userrole.UserRoles
 }
 
 type Terminator struct {
@@ -84,6 +87,8 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 		TerminatedBy:    cmd.TerminatedBy,
 		Reason:          cmd.Reason,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {
