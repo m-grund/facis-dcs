@@ -209,7 +209,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.ParticipantDID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -221,7 +221,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.ParticipantDID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -234,7 +234,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.ParticipantDID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -254,7 +254,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.ParticipantDID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             grantedRoles,
 			ErrorMessage:      err.Error(),
 		})
@@ -269,7 +269,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		PresentationState: attempt.PresentationState,
 		Success:           true,
 		SubjectDID:        verified.SubjectDID,
-		OrganizationID:    verified.ParticipantDID,
+		ParticipantDID:    verified.ParticipantDID,
 		Roles:             grantedRoles,
 	})
 
