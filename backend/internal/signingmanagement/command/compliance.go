@@ -55,7 +55,6 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		ContractVersion: processData.ContractVersion,
 		CheckedBy:       cmd.CheckedBy,
 		OccurredAt:      time.Now(),
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

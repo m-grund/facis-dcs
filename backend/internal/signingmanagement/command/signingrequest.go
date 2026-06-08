@@ -62,7 +62,6 @@ func (h *SigningRequester) Handle(ctx context.Context, cmd SigningRequestCmd) er
 		ContractVersion: processData.ContractVersion,
 		RequestedBy:     cmd.RequestedBy,
 		OccurredAt:      time.Now().UTC(),
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

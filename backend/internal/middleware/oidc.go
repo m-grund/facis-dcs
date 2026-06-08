@@ -53,7 +53,6 @@ func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, e
 type TokenInfo struct {
 	Roles         []string
 	DID           string
-	Username      string
 	ParticipantID string
 }
 
@@ -76,11 +75,6 @@ func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*Token
 		return nil, fmt.Errorf("azp claim %q does not match expected client ID %q", azp, v.config.ClientID)
 	}
 
-	username, _ := claims["preferred_username"].(string)
-	if username == "" {
-		username, _ = claims["sub"].(string)
-	}
-
 	did, _ := claims["preferred_username"].(string)
 	if did == "" {
 		did, _ = claims["sub"].(string)
@@ -93,7 +87,6 @@ func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*Token
 	return &TokenInfo{
 		Roles:         extractRoles(claims),
 		DID:           did,
-		Username:      username,
 		ParticipantID: participantID,
 	}, nil
 }
@@ -168,14 +161,6 @@ func GetUserRoles(ctx context.Context) []userrole.UserRole {
 
 	}
 	return []userrole.UserRole{}
-}
-
-// GetUsername extracts the authenticated username from the request context.
-func GetUsername(ctx context.Context) string {
-	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.Username
-	}
-	return ""
 }
 
 // GetDID extracts the authenticated DID from the request context.
