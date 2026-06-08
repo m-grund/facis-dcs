@@ -8,12 +8,9 @@
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <CopyTemplateButton v-if="isCreator || isManager" class="btn flex-1 btn-primary" />
         <template v-if="isCreator">
-          <SubmitSelectionDialog
-            v-if="state === TemplateState.draft"
-            dialog-type="template"
-            class="btn flex-1 btn-primary"
-            @submit="submitTemplate"
-          />
+          <button v-if="state === TemplateState.draft" class="btn flex-1 btn-primary" @click="submitTemplate">
+            Submit
+          </button>
           <button
             v-if="state === TemplateState.rejected"
             class="btn flex-1 btn-primary"
@@ -33,17 +30,15 @@
 </template>
 
 <script setup lang="ts">
-import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import type { SelectedUserRole } from '@/models/user'
 import { contractTemplateService } from '@/services/contract-template-service'
+import { useAuthStore } from '@/stores/auth-store'
 import { useNavStore } from '@/stores/nav-store'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { assigneeIdsForRole, firstAssigneeIdForRole } from '@/utils/submit-selection'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 import { ref, watch, type Ref } from 'vue'
@@ -54,6 +49,7 @@ const props = defineProps<{
 }>()
 
 const navStore = useNavStore()
+const authStore = useAuthStore()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
@@ -106,18 +102,18 @@ watch(
         console.error('Failed to load template for editing', error)
       })
   },
-  { immediate: true }
+  { immediate: true },
 )
 
-const submitTemplate = async (_: SelectedUserRole[]) => {
+const submitTemplate = async () => {
   try {
-    if (!draftStore.did || !draftStore.updated_at) return
-
+    const userId = authStore.user?.id?.trim()
+    if (!userId || !draftStore.did || !draftStore.updated_at) return
     const response = await contractTemplateService.submit({
       did: draftStore.did,
       updated_at: draftStore.updated_at,
-      reviewers: ['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
-      approver: 'did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9',
+      reviewers: [userId],
+      approver: userId,
     })
     if (response?.did) {
       await navStore.goToPreviousRoute()

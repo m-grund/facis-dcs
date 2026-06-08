@@ -1,11 +1,23 @@
-import type { SelectedUserRole } from '@/models/user'
-import type { UserRole } from '@/types/user-role'
+/** Assignee IDs must match JWT sub. */
 
-/** Assignee IDs must match JWT `sub` (see backend middleware.GetDID / task retrieve). */
-export function assigneeIdsForRole(selection: SelectedUserRole[], role: UserRole | 'CONTRACT_NEGOTIATOR'): string[] {
-  return [...new Set(selection.filter((item) => item.role === role).map((item) => item.user.id))]
+export interface SubmitContractAssignees {
+  reviewers: string[]
+  approvers: string[]
+  negotiators: string[]
 }
 
-export function firstAssigneeIdForRole(selection: SelectedUserRole[], role: UserRole): string | undefined {
-  return assigneeIdsForRole(selection, role)[0]
+/** True if DID already exists in the same role list. */
+export function isDuplicateInList(did: string, list: string[]): boolean {
+  const normalized = did.trim()
+  return list.some((entry) => entry === normalized)
+}
+
+/** Trim list entries, merge a pending draft if non-empty, drop blanks. */
+export function mergeDraftIntoList(list: string[], draft: string): string[] {
+  const result = list.map((entry) => entry.trim()).filter(Boolean)
+  const pending = draft.trim()
+  if (pending && !isDuplicateInList(pending, result)) {
+    result.push(pending)
+  }
+  return result
 }

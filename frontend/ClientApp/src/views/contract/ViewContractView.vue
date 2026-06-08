@@ -3,7 +3,7 @@ import ContractManagerActions from '@/components/contract/ContractManagerActions
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
-import type { SelectedUserRole } from '@/models/user'
+import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -26,7 +26,6 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
-import { assigneeIdsForRole } from '@/utils/submit-selection'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
@@ -112,18 +111,17 @@ watch(
   { deep: true },
 )
 
-const submitContract = async (_: SelectedUserRole[]) => {
+const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContractAssignees) => {
   if (!contract.value) return
   const isSemanticValueValid = verifySemanticValues()
   if (!isSemanticValueValid) return
   try {
-   
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
-      reviewers:['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
-      approvers:['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
-      negotiators:['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
+      reviewers,
+      approvers,
+      negotiators,
     })
     if (response.did) {
       await navStore.goToPreviousRoute()
@@ -293,7 +291,6 @@ const exportPdf = async () => {
         <template v-if="isCreator">
           <SubmitSelectionDialog
             v-if="contract?.state === ContractState.draft"
-            dialog-type="contract"
             class="btn flex-1 btn-primary"
             @submit="submitContract"
           />

@@ -186,8 +186,11 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 	if p.VpToken != nil {
 		vpToken = *p.VpToken
 	}
-	verifier := s.vpVerifier
-	if cfg, err := oid4vp.LoadTrustConfigFromEnv(); err == nil {
+	cfg, err := oid4vp.LoadTrustConfigFromEnv()
+	var verifier oid4vp.Verifier
+	if err != nil {
+		verifier = s.vpVerifier
+	} else {
 		verifier = oid4vp.NewVerifier(cfg)
 	}
 	verified, err := verifier.Verify(vpToken, oid4vp.PresentationContext{
