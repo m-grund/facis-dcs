@@ -25,7 +25,7 @@ type Platform struct {
 }
 
 // New creates a ready-to-use Platform.
-// validate:   JWT validator — use middleware.OIDCValidator.ValidateToken
+// validate:   JWT validator — use middleware.HydraJWTValidator.ValidateToken
 // onCallback: called when ORCE POSTs to /callbacks (may be nil)
 func New(store *SubscriptionStore, dispatcher *Dispatcher, validate TokenValidator, onCallback CallbackHandler) *Platform {
 	p := &Platform{
