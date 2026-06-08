@@ -209,7 +209,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			OrganizationID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -221,7 +221,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			OrganizationID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -234,7 +234,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			OrganizationID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -245,7 +245,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		ctx,
 		*attempt.HydraLoginChallenge,
 		verified.SubjectDID,
-		verified.OrganizationID,
+		verified.ParticipantDID,
 		grantedRoles,
 	)
 	if err != nil {
@@ -254,7 +254,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			OrganizationID:    verified.ParticipantDID,
 			Roles:             grantedRoles,
 			ErrorMessage:      err.Error(),
 		})
@@ -262,14 +262,14 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 	}
 	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
 	rolesJSON, _ := json.Marshal(grantedRoles)
-	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.OrganizationID, rolesJSON, continueURL); err != nil {
+	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.ParticipantDID, rolesJSON, continueURL); err != nil {
 		return nil, err
 	}
 	oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
 		PresentationState: attempt.PresentationState,
 		Success:           true,
 		SubjectDID:        verified.SubjectDID,
-		OrganizationID:    verified.OrganizationID,
+		OrganizationID:    verified.ParticipantDID,
 		Roles:             grantedRoles,
 	})
 

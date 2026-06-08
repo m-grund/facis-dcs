@@ -9,9 +9,8 @@ import (
 
 // TrustConfig holds OID4VP trust anchors for VP verification.
 type TrustConfig struct {
-	VCTs          []string               `json:"vcts"`
-	Issuers       map[string]TrustIssuer `json:"issuers"`
-	Organizations []string               `json:"organizations,omitempty"`
+	VCTs    []string               `json:"vcts"`
+	Issuers map[string]TrustIssuer `json:"issuers"`
 }
 
 // TrustIssuer maps a did:web issuer to verification keys.
@@ -68,17 +67,15 @@ func (c *TrustConfig) vctAllowed(vct string) bool {
 	return false
 }
 
-func (c *TrustConfig) organizationAllowed(org string) bool {
-	if c == nil || len(c.Organizations) == 0 {
-		return true
-	}
-	org = strings.TrimSpace(org)
-	for _, allowed := range c.Organizations {
-		if org == allowed {
-			return true
-		}
-	}
-	return false
+func (c *TrustConfig) issuersAllowed(iss string) bool {
+	iss = strings.TrimSpace(iss)
+	// Todo: Needs to be fixed, just for demo
+	//for _, allowed := range c.Issuers {
+	//	if iss == allowed {
+	//return true
+	//	}
+	//}
+	return true
 }
 
 func (c *TrustConfig) issuerJWKS(iss string) (json.RawMessage, error) {

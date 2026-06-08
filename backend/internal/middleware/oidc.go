@@ -74,15 +74,13 @@ func (v *HydraJWTValidator) ValidateToken(ctx context.Context, token string) (*T
 		return nil, fmt.Errorf("token is not bound to client ID %q", v.config.ClientID)
 	}
 
+	iss, _ := claims["iss"].(string)
 	sub, _ := claims["sub"].(string)
-
-	// TBD: use workaround solution until we have a proper participant ID in the credential.
-	participantID := "did:web:argo.asd-stack.eu:facis:participant:cfc9d0a5-cd79-4807-8eef-e245ab0ffee8"
 
 	return &TokenInfo{
 		Roles:         extractRoles(claims),
 		DID:           sub,
-		ParticipantID: participantID,
+		ParticipantID: iss,
 	}, nil
 }
 
