@@ -80,6 +80,7 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		Version:        processData.Version,
 		ArchivedBy:     cmd.ArchivedBy,
 		OccurredAt:     time.Now().UTC(),
+		Username:       cmd.Username,
 		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

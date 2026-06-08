@@ -70,6 +70,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		Version:        data.Version,
 		RetrievedBy:    query.RetrievedBy,
 		OccurredAt:     time.Now().UTC(),
+		Username:       query.Username,
 		UserRoles:      query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

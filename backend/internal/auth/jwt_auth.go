@@ -60,7 +60,7 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 
 	if len(scheme.RequiredScopes) > 0 {
 		if !hasAnyRole(info.Roles, scheme.RequiredScopes) {
-			a.logAttempt(ctx, ip, &info.DID, false)
+			a.logAttempt(ctx, ip, &info.Username, false)
 			if err := a.checkAndLock(ctx, ip); err != nil {
 				return ctx, err
 			}
@@ -68,10 +68,10 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 		}
 	}
 
-	a.logAttempt(ctx, ip, &info.DID, true)
+	a.logAttempt(ctx, ip, &info.Username, true)
 	a.clearLock(ctx, ip)
 
-	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.DID, info.DID, info.ParticipantID)
+	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.DID, info.Username, info.ParticipantID)
 	return ctx, nil
 }
 

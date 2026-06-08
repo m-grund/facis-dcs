@@ -51,6 +51,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		ContractVersion: processData.ContractVersion,
 		VerifiedBy:      cmd.VerifiedBy,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

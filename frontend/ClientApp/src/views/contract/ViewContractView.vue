@@ -112,20 +112,18 @@ watch(
   { deep: true },
 )
 
-const submitContract = async (result: SelectedUserRole[]) => {
+const submitContract = async (_: SelectedUserRole[]) => {
   if (!contract.value) return
   const isSemanticValueValid = verifySemanticValues()
   if (!isSemanticValueValid) return
   try {
-    const reviewers = assigneeIdsForRole(result, 'CONTRACT_REVIEWER')
-    const approvers = assigneeIdsForRole(result, 'CONTRACT_APPROVER')
-    const negotiators = assigneeIdsForRole(result, 'CONTRACT_NEGOTIATOR')
+   
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
-      reviewers,
-      approvers,
-      negotiators,
+      reviewers:['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
+      approvers:['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
+      negotiators:['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
     })
     if (response.did) {
       await navStore.goToPreviousRoute()

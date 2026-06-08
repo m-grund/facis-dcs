@@ -72,6 +72,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	cmd := command.CreateCmd{
 		DID:          *did,
 		CreatedBy:    middleware.GetParticipantID(ctx),
+		Username:     middleware.GetUsername(ctx),
 		TemplateType: templateType,
 		Name:         req.Name,
 		Description:  req.Description,
@@ -107,6 +108,7 @@ func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templatereposito
 		NewDID:    *did,
 		CopyDID:   req.Did,
 		CopiedBy:  middleware.GetParticipantID(ctx),
+		Username:  middleware.GetUsername(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	copyHandler := command.Copier{
@@ -148,6 +150,7 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 		DID:         req.Did,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
+		Username:    middleware.GetUsername(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
@@ -204,6 +207,7 @@ func (s *templateRepositorysrvc) Update(ctx context.Context, req *templatereposi
 		Description:    req.Description,
 		TemplateData:   &metaData,
 		UpdatedBy:      middleware.GetParticipantID(ctx),
+		Username:       middleware.GetUsername(ctx),
 		UserRoles:      middleware.GetUserRoles(ctx),
 	}
 	handler := command.Updater{
@@ -266,6 +270,7 @@ func (s *templateRepositorysrvc) UpdateManage(ctx context.Context, req *template
 		Description:    req.Description,
 		TemplateData:   &metaData,
 		UpdatedBy:      middleware.GetParticipantID(ctx),
+		Username:       middleware.GetUsername(ctx),
 		UserRoles:      middleware.GetUserRoles(ctx),
 	}
 	handler := command.UpdateManager{
@@ -307,6 +312,7 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 
 	qry := contracttemplate.GetAllMetadataByFilterQry{
 		RetrievedBy:    middleware.GetParticipantID(ctx),
+		Username:       middleware.GetUsername(ctx),
 		UserRoles:      middleware.GetUserRoles(ctx),
 		DID:            derefString(req.Did),
 		DocumentNumber: derefString(req.DocumentNumber),
@@ -352,6 +358,7 @@ func (s *templateRepositorysrvc) RetrieveHistoryByID(ctx context.Context, req *t
 	qry := contracttemplate.GetHistoryByIDQry{
 		DID:         req.Did,
 		RetrievedBy: middleware.GetParticipantID(ctx),
+		Username:    middleware.GetUsername(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := contracttemplate.GetHistoryByIDHandler{
@@ -399,6 +406,7 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 
 	qry := contracttemplate.GetAllMetadataQry{
 		RetrievedBy: middleware.GetParticipantID(ctx),
+		Username:    middleware.GetUsername(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		Pagination:  pagination,
 	}
@@ -470,6 +478,7 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 	qry := contracttemplate.GetByIDQry{
 		DID:         req.Did,
 		RetrievedBy: middleware.GetParticipantID(ctx),
+		Username:    middleware.GetUsername(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := contracttemplate.GetByIDHandler{
@@ -506,6 +515,7 @@ func (s *templateRepositorysrvc) Verify(ctx context.Context, req *templatereposi
 	cmd := command.VerifyCmd{
 		DID:           req.Did,
 		VerifiedBy:    middleware.GetParticipantID(ctx),
+		Username:      middleware.GetUsername(ctx),
 		UserRoles:     middleware.GetUserRoles(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}
@@ -540,6 +550,7 @@ func (s *templateRepositorysrvc) Approve(ctx context.Context, req *templaterepos
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
 		ApprovedBy:    middleware.GetParticipantID(ctx),
+		Username:      middleware.GetUsername(ctx),
 		UserRoles:     middleware.GetUserRoles(ctx),
 		DecisionNotes: req.DecisionNotes,
 	}
@@ -573,6 +584,7 @@ func (s *templateRepositorysrvc) Reject(ctx context.Context, req *templatereposi
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
 		RejectedBy: middleware.GetParticipantID(ctx),
+		Username:   middleware.GetUsername(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		Reason:     req.Reason,
 	}
@@ -608,6 +620,7 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 		NewDID:       *newDID,
 		Version:      req.Version,
 		RegisteredBy: middleware.GetParticipantID(ctx),
+		Username:     middleware.GetUsername(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
 	}
 	handler := command.Registrar{
@@ -640,6 +653,7 @@ func (s *templateRepositorysrvc) Archive(ctx context.Context, req *templaterepos
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
 		ArchivedBy: middleware.GetParticipantID(ctx),
+		Username:   middleware.GetUsername(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := command.Archiver{
@@ -667,6 +681,7 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 	qry := contracttemplate.GetAuditLogQry{
 		DID:       req.Did,
 		AuditedBy: middleware.GetParticipantID(ctx),
+		Username:  middleware.GetUsername(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := contracttemplate.Auditor{
@@ -710,6 +725,7 @@ func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepos
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
 		PublishedBy:   middleware.GetParticipantID(ctx),
+		Username:      middleware.GetUsername(ctx),
 		UserRoles:     middleware.GetUserRoles(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}

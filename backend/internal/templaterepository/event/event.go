@@ -20,6 +20,7 @@ type CreateEvent struct {
 	Description  *string            `json:"description"`
 	TemplateData *datatype.JSON     `json:"template_data"`
 	OccurredAt   time.Time          `json:"occurred_at"`
+	Username     string             `json:"username"`
 	UserRoles    userrole.UserRoles `json:"user_roles"`
 }
 
@@ -40,6 +41,7 @@ type CopyEvent struct {
 	CopiedBy   string             `json:"copied_by"`
 	NewVersion int                `json:"new_version"`
 	OccurredAt time.Time          `json:"occurred_at"`
+	Username   string             `json:"username"`
 	UserRoles  userrole.UserRoles `json:"user_roles"`
 }
 
@@ -65,6 +67,7 @@ type SubmitEvent struct {
 	Comments       []string               `json:"comments,omitempty"`
 	OccurredAt     time.Time              `json:"occurred_at"`
 	Responsible    *any                   `json:"responsible,omitempty"`
+	Username       string                 `json:"username"`
 	UserRoles      userrole.UserRoles     `json:"user_roles"`
 }
 
@@ -86,6 +89,7 @@ type ApproveEvent struct {
 	ApprovedBy     string             `json:"approved_by"`
 	DecisionNotes  []string           `json:"decision_notes,omitempty"`
 	OccurredAt     time.Time          `json:"occurred_at"`
+	Username       string             `json:"username"`
 	UserRoles      userrole.UserRoles `json:"user_roles"`
 }
 
@@ -107,6 +111,7 @@ type RejectEvent struct {
 	RejectedBy     string             `json:"rejected_by"`
 	Reason         string             `json:"reason"`
 	OccurredAt     time.Time          `json:"occurred_at"`
+	Username       string             `json:"username"`
 	UserRoles      userrole.UserRoles `json:"user_roles"`
 }
 
@@ -127,6 +132,7 @@ type VerifyEvent struct {
 	Version        int                `json:"version"`
 	VerifiedBy     string             `json:"verified_by"`
 	OccurredAt     time.Time          `json:"occurred_at"`
+	Username       string             `json:"username"`
 	UserRoles      userrole.UserRoles `json:"user_roles"`
 }
 
@@ -153,6 +159,7 @@ type UpdateEvent struct {
 	OldTemplateData   *datatype.JSON     `json:"old_template_data,omitempty"`
 	NewTemplateData   *datatype.JSON     `json:"new_template_data,omitempty"`
 	OccurredAt        time.Time          `json:"occurred_at"`
+	Username          string             `json:"username"`
 	UserRoles         userrole.UserRoles `json:"user_roles"`
 }
 
@@ -181,6 +188,7 @@ type UpdateManageEvent struct {
 	OldTemplateData   *datatype.JSON     `json:"old_template_data,omitempty"`
 	NewTemplateData   *datatype.JSON     `json:"new_template_data,omitempty"`
 	OccurredAt        time.Time          `json:"occurred_at"`
+	Username          string             `json:"username"`
 	UserRoles         userrole.UserRoles `json:"user_roles"`
 }
 
@@ -198,6 +206,7 @@ func (e UpdateManageEvent) GetDID() string {
 type SearchEvent struct {
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
+	Username    string             `json:"username"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -215,6 +224,7 @@ func (e SearchEvent) GetDID() string {
 type RetrieveAllEvent struct {
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
+	Username    string             `json:"username"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -235,6 +245,7 @@ type RetrieveByIDEvent struct {
 	Version        int                `json:"version"`
 	RetrievedBy    string             `json:"retrieved_by"`
 	OccurredAt     time.Time          `json:"occurred_at"`
+	Username       string             `json:"username"`
 	UserRoles      userrole.UserRoles `json:"user_roles"`
 }
 
@@ -255,6 +266,7 @@ type ArchiveEvent struct {
 	Version        int                `json:"version"`
 	ArchivedBy     string             `json:"archived_by"`
 	OccurredAt     time.Time          `json:"occurred_at"`
+	Username       string             `json:"username"`
 	UserRoles      userrole.UserRoles `json:"user_roles"`
 }
 
@@ -279,6 +291,7 @@ type RegisterEvent struct {
 	SourceDID     string             `json:"source_did"`
 	SourceVersion int                `json:"source_version"`
 	OccurredAt    time.Time          `json:"occurred_at"`
+	Username      string             `json:"username"`
 	UserRoles     userrole.UserRoles `json:"user_roles"`
 }
 
@@ -298,6 +311,7 @@ type AuditEvt struct {
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
+	Username      string                      `json:"username"`
 	UserRoles     userrole.UserRoles          `json:"user_roles"`
 }
 
@@ -317,6 +331,7 @@ type PublishEvent struct {
 	DocumentNumber *string            `json:"document_number,omitempty"`
 	Version        int                `json:"version"`
 	PublishedBy    string             `json:"published_by"`
+	Username       string             `json:"username"`
 	OccurredAt     time.Time          `json:"occurred_at"`
 	UserRoles      userrole.UserRoles `json:"user_roles"`
 }

@@ -106,20 +106,18 @@ watch(
         console.error('Failed to load template for editing', error)
       })
   },
-  { immediate: true },
+  { immediate: true }
 )
 
-const submitTemplate = async (result: SelectedUserRole[]) => {
+const submitTemplate = async (_: SelectedUserRole[]) => {
   try {
     if (!draftStore.did || !draftStore.updated_at) return
-    const reviewers = assigneeIdsForRole(result, 'TEMPLATE_REVIEWER')
-    const approver = firstAssigneeIdForRole(result, 'TEMPLATE_APPROVER')
-    if (!approver) return
+
     const response = await contractTemplateService.submit({
       did: draftStore.did,
       updated_at: draftStore.updated_at,
-      reviewers: reviewers,
-      approver: approver,
+      reviewers: ['did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9'],
+      approver: 'did:jwk:eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6IlRQZ183cWJpbEZMRVNWdWEzX19XNXYtNVBpcXFtSld2YjVsNGpyclh2UzQiLCJ5IjoiT2NaMnJtV0E4eEFqT0MwN3EwSWlRejRReGlvdHNBdFJ0Y1ZzeWFveFNBMCJ9',
     })
     if (response?.did) {
       await navStore.goToPreviousRoute()

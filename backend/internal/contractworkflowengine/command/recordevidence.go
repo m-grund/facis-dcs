@@ -61,6 +61,7 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		ContractVersion: processData.ContractVersion,
 		RecordedBy:      cmd.RecordedBy,
 		OccurredAt:      time.Now().UTC(),
+		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

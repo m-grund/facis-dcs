@@ -122,6 +122,7 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		SourceDID:     cmd.DID,
 		SourceVersion: cmd.Version,
 		OccurredAt:    time.Now().UTC(),
+		Username:      cmd.Username,
 		UserRoles:     cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

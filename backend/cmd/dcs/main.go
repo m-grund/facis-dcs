@@ -212,7 +212,7 @@ func main() {
 			if err != nil {
 				return "", err
 			}
-			return info.DID, nil
+			return info.Username, nil
 		},
 		nil,
 	)

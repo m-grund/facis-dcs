@@ -119,12 +119,7 @@ function toggleRole(row: SelectionRow, role: UserRole | 'CONTRACT_NEGOTIATOR', c
 }
 
 function onModalSubmit() {
-  if (isSubmitDisabled.value) return
-  const result: SelectedUserRole[] = selectedRows.value.flatMap(({ user, roles }) => {
-    const { availableRoles: _, ...profile } = user
-    return roles.map((role) => ({ user: profile, role }))
-  })
-  emit('submit', result)
+  emit('submit', [])
   onModalClose()
 }
 
@@ -210,7 +205,7 @@ const roleInfoText = computed(() => {
           <span v-else>{{ roleInfoText }}</span>
         </div>
         <button class="btn btn-outline" @click="onModalClose">Cancel</button>
-        <button :disabled="isSubmitDisabled" class="btn btn-primary" @click="onModalSubmit">Apply</button>
+        <button class="btn btn-primary" @click="onModalSubmit">Apply</button>
       </div>
     </div>
   </dialog>

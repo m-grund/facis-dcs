@@ -52,6 +52,7 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatyp
 		ComponentType: componenttype.ProcessAuditAndCompliance,
 		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
+		Username:      query.Username,
 		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance)

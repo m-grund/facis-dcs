@@ -56,6 +56,7 @@ func (h *Revoker) Handle(ctx context.Context, cmd RevokeCmd) error {
 		ContractVersion: processData.ContractVersion,
 		RevokedBy:       cmd.RevokedBy,
 		OccurredAt:      time.Now(),
+		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
