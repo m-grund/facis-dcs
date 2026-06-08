@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,30 @@ func (s *archiveSnapshotStorerStub) CreateFile(_ context.Context, data any) (*ip
 	result := &ipfs.IPFSResult{}
 	result.Identifier.Value = cid
 	return result, nil
+}
+
+type archiveNotaryStub struct {
+	err      error
+	payloads []command.ArchiveNotaryPayload
+	receipt  *command.ArchiveNotaryReceipt
+}
+
+func (s *archiveNotaryStub) NotarizeArchiveEntry(_ context.Context, payload command.ArchiveNotaryPayload) (*command.ArchiveNotaryReceipt, error) {
+	s.payloads = append(s.payloads, payload)
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.receipt != nil {
+		return s.receipt, nil
+	}
+	previousHash := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	return &command.ArchiveNotaryReceipt{
+		ReceiptType:    "ARCHIVE_NOTARY_RECEIPT",
+		ArchiveEntryID: payload.ArchiveEntryID,
+		EventHash:      "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+		PreviousHash:   &previousHash,
+		ReceivedAt:     time.Now().UTC(),
+	}, nil
 }
 
 func TestApprove_ApproveContractInReviewedState(t *testing.T) {
@@ -125,11 +150,13 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 		DecisionNotes: []string{},
 	}
 	storer := &archiveSnapshotStorerStub{}
+	notary := &archiveNotaryStub{}
 	handler := command.Approver{
-		DB:         db,
-		CRepo:      repo.CRepo,
-		ATRepo:     repo.ATRepo,
-		IPFSStorer: storer,
+		DB:            db,
+		CRepo:         repo.CRepo,
+		ATRepo:        repo.ATRepo,
+		IPFSStorer:    storer,
+		ArchiveNotary: notary,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -180,6 +207,15 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 	if assert.Len(t, storer.payloads, 1) {
 		assert.Equal(t, string(entry.ContractSnapshot), string(storer.payloads[0].(datatype.JSON)))
 	}
+	if assert.Len(t, notary.payloads, 1) {
+		assert.Equal(t, "ARCHIVE_STORED", notary.payloads[0].EventType)
+		assert.Equal(t, *did, notary.payloads[0].DID)
+		assert.Equal(t, 1, notary.payloads[0].ContractVersion)
+		assert.Equal(t, entry.ContentHash, notary.payloads[0].ContentHash)
+		assert.Equal(t, entry.SnapshotCID, notary.payloads[0].SnapshotCID)
+		assert.Equal(t, approver, notary.payloads[0].StoredBy)
+		assert.NotEmpty(t, notary.payloads[0].ArchiveEntryID)
+	}
 
 	var snapshot map[string]any
 	err = json.Unmarshal(entry.ContractSnapshot, &snapshot)
@@ -215,6 +251,67 @@ func TestApprove_ApproveContractInReviewedStateStoresArchiveEntry(t *testing.T) 
 	}
 
 	assert.Equal(t, 1, eventCount)
+
+	var notaryEventCount int
+	err = db.GetContext(ctx, &notaryEventCount, `
+		SELECT COUNT(*)
+		FROM outbox_events
+		WHERE component = $1
+		  AND event_type = $2
+		  AND did = $3
+		  AND event_data->'notary_receipt'->>'receiptType' = 'ARCHIVE_NOTARY_RECEIPT'
+		  AND event_data->'notary_receipt'->>'archiveEntryId' <> ''
+		  AND event_data->'notary_receipt'->>'eventHash' = 'sha256:2222222222222222222222222222222222222222222222222222222222222222'
+	`, componenttype.ContractStorageArchive.String(), eventtype.StoreArchived.String(), *did)
+	if err != nil {
+		t.Fatalf("Failed to read archive notary receipt event: %v", err)
+	}
+	assert.Equal(t, 1, notaryEventCount)
+}
+
+func TestApprove_FinalApproveFailsWhenArchiveNotaryFails(t *testing.T) {
+	db := setupTestDB(t)
+	cleanupContractTable(t, db)
+
+	did, err := base.GetDID(datatype.ContractResourceType)
+	if err != nil {
+		t.Fatalf("Failed to get new DID: %v", err)
+	}
+
+	creator := "Test User"
+	ctx, cancel := context.WithTimeout(context.Background(), conf.TransactionTimeout())
+	defer cancel()
+
+	repo := NewTestRepo()
+	createContract(t, db, repo, did, contractstate.Reviewed, creator)
+
+	approver := "Test User 1"
+	createApprovalTasks(t, ctx, db, repo, *did, approvaltaskstate.Open, creator, approver)
+
+	handler := command.Approver{
+		DB:            db,
+		CRepo:         repo.CRepo,
+		ATRepo:        repo.ATRepo,
+		IPFSStorer:    &archiveSnapshotStorerStub{},
+		ArchiveNotary: &archiveNotaryStub{err: errors.New("notary unavailable")},
+	}
+	err = handler.Handle(ctx, command.ApproveCmd{
+		DID:        *did,
+		UpdatedAt:  time.Now().UTC(),
+		ApprovedBy: approver,
+	})
+	assert.Error(t, err)
+
+	var archiveCount int
+	err = db.GetContext(ctx, &archiveCount, `
+		SELECT COUNT(*)
+		FROM contract_archive_entries
+		WHERE did = $1
+	`, *did)
+	if err != nil {
+		t.Fatalf("Failed to count archive entries: %v", err)
+	}
+	assert.Equal(t, 0, archiveCount)
 }
 
 func TestApprove_ArchiveEntryIsAppendOnly(t *testing.T) {

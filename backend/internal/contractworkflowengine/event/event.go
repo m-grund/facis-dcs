@@ -140,6 +140,7 @@ type StoreArchivedEvent struct {
 	ContentHash     string                 `json:"content_hash"`
 	SnapshotCID     string                 `json:"snapshot_cid"`
 	ArchiveStatus   string                 `json:"archive_status"`
+	NotaryReceipt   *ArchiveNotaryReceipt  `json:"notary_receipt,omitempty"`
 	EvidenceSummary ArchiveEvidenceSummary `json:"evidence_summary"`
 	OccurredAt      time.Time              `json:"occurred_at"`
 }
@@ -154,6 +155,14 @@ type ArchiveEvidenceSummary struct {
 	SnapshotHashAlgorithm string `json:"snapshot_hash_algorithm"`
 	SignatureStatus       string `json:"signature_status"`
 	CredentialHashStatus  string `json:"credential_hash_status"`
+}
+
+type ArchiveNotaryReceipt struct {
+	ReceiptType    string    `json:"receiptType"`
+	ArchiveEntryID string    `json:"archiveEntryId"`
+	EventHash      string    `json:"eventHash"`
+	PreviousHash   *string   `json:"previousHash"`
+	ReceivedAt     time.Time `json:"receivedAt"`
 }
 
 // EventType implements [event.Event].

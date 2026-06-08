@@ -27,14 +27,19 @@ type ApproveCmd struct {
 }
 
 type Approver struct {
-	DB         *sqlx.DB
-	CRepo      db.ContractRepo
-	ATRepo     db.ApprovalTaskRepo
-	IPFSStorer ArchiveSnapshotStorer
+	DB            *sqlx.DB
+	CRepo         db.ContractRepo
+	ATRepo        db.ApprovalTaskRepo
+	IPFSStorer    ArchiveSnapshotStorer
+	ArchiveNotary ArchiveNotary
 }
 
 type ArchiveSnapshotStorer interface {
 	CreateFile(ctx context.Context, data any) (*ipfs.IPFSResult, error)
+}
+
+type ArchiveNotary interface {
+	NotarizeArchiveEntry(ctx context.Context, payload ArchiveNotaryPayload) (*ArchiveNotaryReceipt, error)
 }
 
 func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
@@ -112,6 +117,23 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			return fmt.Errorf("could not store contract in archive: %w", err)
 		}
 
+		var notaryReceipt *ArchiveNotaryReceipt
+		if h.ArchiveNotary != nil {
+			notaryReceipt, err = h.ArchiveNotary.NotarizeArchiveEntry(ctx, ArchiveNotaryPayload{
+				EventType:       "ARCHIVE_STORED",
+				ArchiveEntryID:  archiveNotaryEntryID(cmd.DID, processData.ContractVersion),
+				DID:             cmd.DID,
+				ContractVersion: processData.ContractVersion,
+				ContentHash:     archiveEntry.ContentHash,
+				SnapshotCID:     archiveEntry.SnapshotCID,
+				StoredBy:        cmd.ApprovedBy,
+				StoredAt:        archiveEntry.StoredAt,
+			})
+			if err != nil {
+				return fmt.Errorf("could not notarize archive entry: %w", err)
+			}
+		}
+
 		archiveEvt := contractevents.StoreArchivedEvent{
 			DID:             cmd.DID,
 			ContractVersion: processData.ContractVersion,
@@ -119,6 +141,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			ContentHash:     archiveEntry.ContentHash,
 			SnapshotCID:     archiveEntry.SnapshotCID,
 			ArchiveStatus:   "STORED",
+			NotaryReceipt:   archiveNotaryEventReceipt(notaryReceipt),
 			EvidenceSummary: contractevents.ArchiveEvidenceSummary{
 				SnapshotHashAlgorithm: archiveSnapshotHashAlgorithm,
 				SignatureStatus:       "NOT_PERFORMED",

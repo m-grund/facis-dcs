@@ -29,22 +29,23 @@ import (
 )
 
 type contractWorkflowEnginesrvc struct {
-	DB           *sqlx.DB
-	CRepo        db.ContractRepo
-	RTRepo       db.ReviewTaskRepo
-	ATRepo       db.ApprovalTaskRepo
-	NTRepo       db.NegotiationTaskRepo
-	NRepo        db.NegotiationRepo
-	CTRepo       db.ContractTemplateRepo
-	FCClient     *fcclient.FederatedCatalogueClient
-	ATrailReader base.AuditTrailReader
-	IPFSClient   *ipfs.APIClient
+	DB            *sqlx.DB
+	CRepo         db.ContractRepo
+	RTRepo        db.ReviewTaskRepo
+	ATRepo        db.ApprovalTaskRepo
+	NTRepo        db.NegotiationTaskRepo
+	NRepo         db.NegotiationRepo
+	CTRepo        db.ContractTemplateRepo
+	FCClient      *fcclient.FederatedCatalogueClient
+	ATrailReader  base.AuditTrailReader
+	IPFSClient    *ipfs.APIClient
+	ArchiveNotary command.ArchiveNotary
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, ipfsClient *ipfs.APIClient) contractworkflowengine.Service {
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -58,6 +59,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		FCClient:         fcClient,
 		ATrailReader:     auditTrailReader,
 		IPFSClient:       ipfsClient,
+		ArchiveNotary:    archiveNotary,
 	}
 }
 
@@ -670,10 +672,11 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		ApprovedBy: middleware.GetUsername(ctx),
 	}
 	handler := command.Approver{
-		DB:         s.DB,
-		CRepo:      s.CRepo,
-		ATRepo:     s.ATRepo,
-		IPFSStorer: s.IPFSClient,
+		DB:            s.DB,
+		CRepo:         s.CRepo,
+		ATRepo:        s.ATRepo,
+		IPFSStorer:    s.IPFSClient,
+		ArchiveNotary: s.ArchiveNotary,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
