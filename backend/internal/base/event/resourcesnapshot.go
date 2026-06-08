@@ -80,7 +80,7 @@ func readCurrentResourceData(ctx context.Context, tx *sqlx.Tx, component string,
 				'created_by', created_by,
 				'created_at', created_at,
 				'updated_at', updated_at,
-				'expiration_date', expiration_date,
+				'exp_date', exp_date,
 				'contract_data', contract_data
 			)
 			FROM contracts_effective
