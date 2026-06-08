@@ -85,7 +85,6 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		Version:        processData.Version,
 		VerifiedBy:     cmd.VerifiedBy,
 		OccurredAt:     time.Now().UTC(),
-		Username:       cmd.Username,
 		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

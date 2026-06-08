@@ -55,7 +55,6 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 		ContractVersion: processData.ContractVersion,
 		ValidatedBy:     cmd.ValidatedBy,
 		OccurredAt:      time.Now(),
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

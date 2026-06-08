@@ -74,7 +74,6 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 		DID:         query.DID,
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
-		Username:    query.Username,
 		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(h.Ctx, tx, evt, componenttype.ContractWorkflowEngine)

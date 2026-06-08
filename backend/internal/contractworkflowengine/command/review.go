@@ -48,7 +48,6 @@ func (h *Reviewer) Handle(ctx context.Context, cmd ReviewCmd) error {
 	evt := contractevents.ReviewEvent{
 		DID:        cmd.DID,
 		ReviewedBy: cmd.ReviewedBy,
-		Username:   cmd.Username,
 		UserRoles:  cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

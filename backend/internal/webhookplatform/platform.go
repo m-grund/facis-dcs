@@ -71,26 +71,25 @@ func (p *Platform) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		token := strings.TrimPrefix(header, "Bearer ")
 
-		username, err := p.validate(r.Context(), token)
+		token, err := p.validate(r.Context(), token)
 		if err != nil {
 			jsonError(w, http.StatusUnauthorized, "invalid token: "+err.Error())
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), ctxKeyUsername{}, username)
+		ctx := context.WithValue(r.Context(), ctxToken{}, token)
 		next(w, r.WithContext(ctx))
 	}
 }
 
-type ctxKeyUsername struct{}
+type ctxToken struct{}
 
-func usernameFromCtx(ctx context.Context) string {
-	v, _ := ctx.Value(ctxKeyUsername{}).(string)
+func tokenFromCtx(ctx context.Context) string {
+	v, _ := ctx.Value(ctxToken{}).(string)
 	return v
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
-
 func (p *Platform) health(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
@@ -127,7 +126,7 @@ func (p *Platform) subscribe(w http.ResponseWriter, r *http.Request) {
 
 	sub := p.store.Add(req.Event, req.CallbackURL, req.Secret)
 	log.Printf("webhookplatform: new subscription id=%s event=%s url=%s caller=%s",
-		sub.ID, sub.Event, sub.CallbackURL, usernameFromCtx(r.Context()))
+		sub.ID, sub.Event, sub.CallbackURL, tokenFromCtx(r.Context()))
 
 	w.WriteHeader(http.StatusCreated)
 	jsonOK(w, sub)
@@ -141,7 +140,7 @@ func (p *Platform) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("webhookplatform: deleted subscription id=%s caller=%s",
-		id, usernameFromCtx(r.Context()))
+		id, tokenFromCtx(r.Context()))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -168,7 +167,7 @@ func (p *Platform) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("webhookplatform: callback received event_id=%s event=%s did=%s status=%s caller=%s",
-		req.EventID, pending.Event, pending.DID, req.Status, usernameFromCtx(r.Context()))
+		req.EventID, pending.Event, pending.DID, req.Status, tokenFromCtx(r.Context()))
 
 	if p.onCallback != nil {
 		go p.onCallback(r.Context(), pending, req.Status, req.Result)

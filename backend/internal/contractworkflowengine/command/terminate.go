@@ -87,7 +87,6 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 		TerminatedBy:    cmd.TerminatedBy,
 		Reason:          cmd.Reason,
 		OccurredAt:      time.Now().UTC(),
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

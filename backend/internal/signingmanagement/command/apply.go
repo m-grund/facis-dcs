@@ -51,7 +51,6 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		ContractVersion: processData.ContractVersion,
 		AppliedBy:       cmd.AppliedBy,
 		OccurredAt:      time.Now().UTC(),
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

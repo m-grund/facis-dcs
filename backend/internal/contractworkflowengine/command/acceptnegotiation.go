@@ -72,7 +72,6 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		ContractVersion: processData.ContractVersion,
 		UserRoles:       cmd.UserRoles,
 		AcceptedBy:      cmd.AcceptedBy,
-		Username:        cmd.Username,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

@@ -114,7 +114,6 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		DocumentNumber: processData.DocumentNumber,
 		Version:        processData.Version,
 		PublishedBy:    cmd.PublishedBy,
-		Username:       cmd.Username,
 		OccurredAt:     time.Now().UTC(),
 		UserRoles:      cmd.UserRoles,
 	}

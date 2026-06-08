@@ -90,7 +90,6 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		ApprovedBy:      cmd.ApprovedBy,
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}

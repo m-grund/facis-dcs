@@ -101,7 +101,6 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		ChangeRequest:   cmd.ChangeRequest,
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
-		Username:        cmd.Username,
 		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
