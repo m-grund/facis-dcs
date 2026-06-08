@@ -21,7 +21,7 @@ type ArchiveCmd struct {
 	DID        string
 	UpdatedAt  time.Time
 	ArchivedBy string
-	Username   string
+	HolderDID  string
 	UserRoles  userrole.UserRoles
 }
 
@@ -80,7 +80,7 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		Version:        processData.Version,
 		ArchivedBy:     cmd.ArchivedBy,
 		OccurredAt:     time.Now().UTC(),
-		Username:       cmd.Username,
+		HolderDID:      cmd.HolderDID,
 		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

@@ -29,7 +29,7 @@ type UpdateCmd struct {
 	Name           *string
 	Description    *string
 	TemplateData   *datatype.JSON
-	Username       string
+	HolderDID      string
 	UserRoles      userrole.UserRoles
 }
 
@@ -132,7 +132,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewTemplateData:   cmd.TemplateData,
 		UpdatedBy:         cmd.UpdatedBy,
 		OccurredAt:        time.Now().UTC(),
-		Username:          cmd.Username,
+		HolderDID:         cmd.HolderDID,
 		UserRoles:         cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

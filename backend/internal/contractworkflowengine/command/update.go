@@ -32,7 +32,7 @@ type UpdateCmd struct {
 	Name            *string
 	Description     *string
 	ContractData    *datatype.JSON
-	Username        string
+	HolderDID       string
 	UserRoles       userrole.UserRoles
 }
 
@@ -139,7 +139,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewExpNoticePeriod: cmd.ExpNoticePeriod,
 		UpdatedBy:          cmd.UpdatedBy,
 		OccurredAt:         time.Now().UTC(),
-		Username:           cmd.Username,
+		HolderDID:          cmd.HolderDID,
 		UserRoles:          cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

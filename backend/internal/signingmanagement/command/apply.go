@@ -20,7 +20,7 @@ import (
 type ApplyCmd struct {
 	DID       string
 	AppliedBy string
-	Username  string
+	HolderDID string
 	UserRoles userrole.UserRoles
 }
 
@@ -51,7 +51,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		ContractVersion: processData.ContractVersion,
 		AppliedBy:       cmd.AppliedBy,
 		OccurredAt:      time.Now().UTC(),
-		Username:        cmd.Username,
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

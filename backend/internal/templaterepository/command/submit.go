@@ -28,7 +28,7 @@ type SubmitCmd struct {
 	Comments    []string
 	Reviewers   []string
 	Approver    *string
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -244,7 +244,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			Comments:       cmd.Comments,
 			OccurredAt:     time.Now().UTC(),
 			Responsible:    responsible,
-			Username:       cmd.Username,
+			HolderDID:      cmd.HolderDID,
 			UserRoles:      cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

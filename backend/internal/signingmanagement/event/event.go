@@ -14,7 +14,7 @@ type RetrieveByIDEvent struct {
 	DID         string             `json:"did"`
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
-	Username    string             `json:"username"`
+	HolderDID   string             `json:"holder_did"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -32,7 +32,7 @@ func (e RetrieveByIDEvent) GetDID() string {
 type RetrieveAllEvent struct {
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
-	Username    string             `json:"username"`
+	HolderDID   string             `json:"holder_did"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -70,7 +70,7 @@ type ValidateEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	ValidatedBy     string             `json:"validated_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -90,7 +90,7 @@ type VerifyEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	VerifiedBy      string             `json:"verified_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -110,7 +110,7 @@ type AuditEvt struct {
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
-	Username      string                      `json:"username"`
+	HolderDID     string                      `json:"holder_did"`
 	UserRoles     userrole.UserRoles          `json:"user_roles"`
 }
 
@@ -130,7 +130,7 @@ type RevokeEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	RevokedBy       string             `json:"revoked_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -149,7 +149,7 @@ type ComplianceValidationEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	CheckedBy       string             `json:"checked_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -169,7 +169,7 @@ type SigningRequestEvent struct {
 	ContractVersion int                `json:"contract_version"`
 	RequestedBy     string             `json:"requested_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -189,7 +189,7 @@ type ApplyEvent struct {
 	ContractVersion int                `json:"contract_version"`
 	AppliedBy       string             `json:"applied_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 

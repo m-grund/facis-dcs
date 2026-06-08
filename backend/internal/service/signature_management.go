@@ -49,7 +49,7 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 
 	qry := query.GetAllMetadataQry{
 		RetrievedBy: middleware.GetParticipantID(ctx),
-		Username:    middleware.GetUsername(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		Pagination:  pagination,
 	}
@@ -125,7 +125,7 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 
 	qry := query.GetByIDQry{
 		RetrievedBy: middleware.GetParticipantID(ctx),
-		Username:    middleware.GetUsername(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := query.GetByIDHandler{
@@ -164,7 +164,7 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 	cmd := command.VerifyCmd{
 		DID:        req.Did,
 		VerifiedBy: middleware.GetParticipantID(ctx),
-		Username:   middleware.GetUsername(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := command.Verifier{
@@ -187,7 +187,7 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 	cmd := command.ApplyCmd{
 		DID:       req.Did,
 		AppliedBy: middleware.GetParticipantID(ctx),
-		Username:  middleware.GetUsername(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := command.Applier{
@@ -210,7 +210,7 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 	qry := command.ValidateCmd{
 		DID:         req.Did,
 		ValidatedBy: middleware.GetParticipantID(ctx),
-		Username:    middleware.GetUsername(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.Validator{
@@ -234,8 +234,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 
 	qry := command.RevokeCmd{
 		DID:       req.Did,
-		Username:  middleware.GetParticipantID(ctx),
-		Username:  middleware.GetUsername(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.Revoker{
@@ -260,7 +259,7 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 	qry := query.GetAuditLogQry{
 		DID:       req.Did,
 		AuditedBy: middleware.GetParticipantID(ctx),
-		Username:  middleware.GetUsername(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := query.Auditor{
@@ -297,7 +296,7 @@ func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signature
 	qry := command.ComplianceCmd{
 		DID:       req.Did,
 		CheckedBy: middleware.GetParticipantID(ctx),
-		Username:  middleware.GetUsername(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	queryHandler := command.ComplianceValidator{

@@ -20,7 +20,7 @@ import (
 type VerifyCmd struct {
 	DID        string
 	VerifiedBy string
-	Username   string
+	HolderDID  string
 	UserRoles  userrole.UserRoles
 }
 
@@ -51,7 +51,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		ContractVersion: processData.ContractVersion,
 		VerifiedBy:      cmd.VerifiedBy,
 		OccurredAt:      time.Now().UTC(),
-		Username:        cmd.Username,
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)

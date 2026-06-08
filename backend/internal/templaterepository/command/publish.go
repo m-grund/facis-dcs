@@ -26,7 +26,7 @@ type PublishCmd struct {
 	DID           string
 	UpdatedAt     time.Time
 	PublishedBy   string
-	Username      string
+	HolderDID     string
 	ParticipantID string
 	UserRoles     userrole.UserRoles
 }
@@ -114,7 +114,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		DocumentNumber: processData.DocumentNumber,
 		Version:        processData.Version,
 		PublishedBy:    cmd.PublishedBy,
-		Username:       cmd.Username,
+		HolderDID:      cmd.HolderDID,
 		OccurredAt:     time.Now().UTC(),
 		UserRoles:      cmd.UserRoles,
 	}
