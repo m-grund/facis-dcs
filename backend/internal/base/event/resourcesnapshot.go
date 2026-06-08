@@ -3,10 +3,11 @@ package event
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/datatype/componenttype"
 	"encoding/json"
 	"fmt"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 
 	"github.com/jmoiron/sqlx"
 )

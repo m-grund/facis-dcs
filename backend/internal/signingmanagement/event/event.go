@@ -114,7 +114,7 @@ func (e ApplyEvent) GetDID() string {
 	return e.DID
 }
 
-// ComplianceValidation is emitted when compliance check ist started
+// ComplianceValidationEvent is emitted when compliance check ist started
 type ComplianceValidationEvent struct {
 	DID             string    `json:"did"`
 	ContractVersion *int      `json:"contract_version,omitempty"`

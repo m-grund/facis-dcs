@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -21,6 +23,7 @@ import (
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
 
 	"github.com/jmoiron/sqlx"
+	"goa.design/clue/log"
 )
 
 // TemplateRepository service example implementation.
@@ -693,7 +696,11 @@ func (s *templateRepositorysrvc) auditTemplatePolicyFindings(ctx context.Context
 	if err != nil {
 		return nil, nil, err
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Errorf(ctx, err, "could not rollback transaction")
+		}
+	}(tx)
 
 	template, err := s.CTRepo.ReadDataByID(ctx, tx, did)
 	if err != nil {

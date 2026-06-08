@@ -1,10 +1,11 @@
 package selfdescription
 
 import (
-	"digital-contracting-service/internal/base/datatype"
 	"encoding/json"
 	"testing"
 	"time"
+
+	"digital-contracting-service/internal/base/datatype"
 
 	"github.com/stretchr/testify/require"
 )

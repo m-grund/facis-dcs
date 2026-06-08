@@ -24,6 +24,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -213,7 +214,12 @@ func (c *Client) signWithKey(ctx context.Context, key string, data []byte) ([]by
 	if err != nil {
 		return nil, fmt.Errorf("call /v1/sign: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

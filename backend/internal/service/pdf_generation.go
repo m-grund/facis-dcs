@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -81,7 +82,12 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	contract, err := s.CRepo.ReadDataByID(ctx, tx, p.Did)
 	if err != nil {
@@ -182,7 +188,12 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	tpl, err := s.TRepo.ReadDataByID(ctx, tx, p.Did)
 	if err != nil {
@@ -294,7 +305,12 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	contract, err := s.CRepo.ReadDataByID(ctx, tx, p.Did)
 	if err != nil {
@@ -387,7 +403,12 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	tpl, err := s.TRepo.ReadDataByID(ctx, tx, p.Did)
 	if err != nil {
@@ -654,7 +675,12 @@ func (s *pdfGenerationSrvc) fetchOrBuildContractPDF(ctx context.Context, did str
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	var cidStr string
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(pdf_ipfs_cid,'') FROM contracts WHERE did=$1`, did).Scan(&cidStr); err != nil {
@@ -701,7 +727,11 @@ func (s *pdfGenerationSrvc) rebuildContractFromJSONLD(ctx context.Context, did s
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 	contract, err := s.CRepo.ReadDataByID(ctx, tx, did)
 	if err != nil {
 		return nil, err
@@ -723,7 +753,11 @@ func (s *pdfGenerationSrvc) fetchOrBuildTemplatePDF(ctx context.Context, did str
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	var cidStr string
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(pdf_ipfs_cid,'') FROM contract_templates WHERE did=$1`, did).Scan(&cidStr); err != nil {
@@ -773,7 +807,11 @@ func (s *pdfGenerationSrvc) rebuildTemplateFromJSONLD(ctx context.Context, did s
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 	tpl, err := s.TRepo.ReadDataByID(ctx, tx, did)
 	if err != nil {
 		return nil, err

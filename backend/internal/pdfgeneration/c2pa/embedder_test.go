@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"regexp"
 	"sort"
@@ -448,7 +449,12 @@ func extractEmbeddedFilePayload(t *testing.T, streamObj []byte) []byte {
 	if bytes.Contains(dict, []byte("/Filter /FlateDecode")) {
 		zr, err := zlib.NewReader(bytes.NewReader(payload))
 		require.NoError(t, err)
-		defer zr.Close()
+		defer func(zr io.ReadCloser) {
+			err := zr.Close()
+			if err != nil {
+				log.Println("could not close zlib reader")
+			}
+		}(zr)
 		decoded, err := io.ReadAll(zr)
 		require.NoError(t, err)
 		return decoded

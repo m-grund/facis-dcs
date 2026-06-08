@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -256,7 +258,11 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Errorf(ctx, err, "could not rollback transaction")
+		}
+	}(tx)
 
 	now := time.Now().UTC()
 	_, err = tx.ExecContext(ctx,

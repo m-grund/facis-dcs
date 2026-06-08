@@ -1,12 +1,13 @@
 package service
 
 import (
+	"time"
+
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/validation"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
-	"time"
 )
 
 func templatePolicyFindingEventData(finding validation.PolicyFinding, template *templatedb.ContractTemplate) map[string]any {

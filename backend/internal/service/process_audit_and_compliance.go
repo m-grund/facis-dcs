@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -177,7 +179,11 @@ func (s *processAuditAndCompliancesrvc) auditExistingTemplatePolicyTrailEntries(
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Errorf(ctx, err, "could not rollback transaction")
+		}
+	}(tx)
 
 	templates, err := s.CTRepo.ReadAllMetaData(ctx, tx)
 	if err != nil {
@@ -277,7 +283,11 @@ func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Errorf(ctx, err, "could not rollback transaction")
+		}
+	}(tx)
 
 	contracts, err := s.CRepo.ReadAllMetaData(ctx, tx)
 	if err != nil {

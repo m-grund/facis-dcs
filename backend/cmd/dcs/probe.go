@@ -17,7 +17,10 @@ func probeHTTP(rawURL string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	err = resp.Body.Close()
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
@@ -62,6 +65,9 @@ func probeTCP(rawURL string) error {
 	if err != nil {
 		return err
 	}
-	conn.Close()
+	err = conn.Close()
+	if err != nil {
+		return err
+	}
 	return nil
 }

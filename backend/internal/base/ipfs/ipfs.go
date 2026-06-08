@@ -196,7 +196,12 @@ func (c *APIClient) createKuboFile(ctx context.Context, data []byte) (*IPFSResul
 	if err != nil {
 		return nil, fmt.Errorf("do Kubo add request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -210,7 +215,7 @@ func (c *APIClient) createKuboFile(ctx context.Context, data []byte) (*IPFSResul
 		return nil, fmt.Errorf("decode Kubo add response: %w", err)
 	}
 	if addResult.Hash == "" {
-		return nil, fmt.Errorf("Kubo add response did not include a CID")
+		return nil, fmt.Errorf("the Kubo add response does not include a CID")
 	}
 
 	result := &IPFSResult{
@@ -241,7 +246,12 @@ func (c *APIClient) fetchKuboFile(cid string) (*IPFSResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("do Kubo cat request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -293,7 +303,12 @@ func (c *APIClient) deleteKuboFile(cid string) error {
 	if err != nil {
 		return fmt.Errorf("do Kubo unpin request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

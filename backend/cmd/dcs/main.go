@@ -2,6 +2,16 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -34,15 +44,6 @@ import (
 	"digital-contracting-service/internal/webhookplatform"
 	"digital-contracting-service/migrations"
 	"digital-contracting-service/migrations/fcschemas"
-	"flag"
-	"fmt"
-	"net"
-	"net/url"
-	"os"
-	"os/signal"
-	"strings"
-	"sync"
-	"syscall"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/nats-io/nats.go"
@@ -222,7 +223,12 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not create webhook NATS subscriber")
 	}
-	defer webhookSubClient.Close()
+	defer func(webhookSubClient *event.CloudEventSubClient) {
+		err := webhookSubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "failed to close webhook subscriber")
+		}
+	}(webhookSubClient)
 	go func() {
 		if err := webhookplatform.StartNATSBridge(webhookSubClient, webhookDispatcher); err != nil {
 			log.Fatalf(ctx, err, "Could not start webhook NATS bridge")
@@ -303,7 +309,12 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not create PDF generation NATS subscriber")
 	}
-	defer pdfSubClient.Close()
+	defer func(pdfSubClient *event.CloudEventSubClient) {
+		err := pdfSubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close PDF subscriber")
+		}
+	}(pdfSubClient)
 	pdfSub := &pdfevent.Subscriber{
 		DB:         db,
 		IPFSClient: ipfsAPIClient,

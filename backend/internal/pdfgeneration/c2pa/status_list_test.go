@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,9 +38,9 @@ func makeStatusListVC(bitstringLen int, setIndex uint32, revoked bool) []byte {
 		"@context": []string{"https://www.w3.org/2018/credentials/v1"},
 		"type":     []string{"VerifiableCredential", "StatusList2021Credential"},
 		"credentialSubject": map[string]interface{}{
-			"type":           "StatusList2021",
-			"statusPurpose":  "revocation",
-			"encodedList":    encoded,
+			"type":          "StatusList2021",
+			"statusPurpose": "revocation",
+			"encodedList":   encoded,
 		},
 	}
 	b, _ := json.Marshal(vc)
@@ -62,7 +63,10 @@ func TestOCMWStatusListPublisher_PublishStatus_TerminalStatesCallRevoke(t *testi
 				if strings.Contains(r.URL.Path, "/revoke/") {
 					revokeCalled = true
 					w.WriteHeader(http.StatusOK)
-					fmt.Fprintf(w, `{"tenantId":"default","listId":1,"index":0,"status":"revoked"}`)
+					_, err := fmt.Fprintf(w, `{"tenantId":"default","listId":1,"index":0,"status":"revoked"}`)
+					if err != nil {
+						log.Println("could not write response:", err)
+					}
 					return
 				}
 				http.NotFound(w, r)
@@ -108,7 +112,10 @@ func TestOCMWStatusListPublisher_RevokeStatus_CallsCorrectPath(t *testing.T) {
 		capturedPath = r.URL.Path
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"tenantId":"default","listId":1,"index":42,"status":"revoked"}`)
+		_, err := fmt.Fprintf(w, `{"tenantId":"default","listId":1,"index":42,"status":"revoked"}`)
+		if err != nil {
+			log.Println("could not write response:", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -150,7 +157,10 @@ func TestOCMWStatusListPublisher_DefaultTenant(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"revoked"}`)
+		_, err := fmt.Fprintf(w, `{"status":"revoked"}`)
+		if err != nil {
+			log.Printf("could not write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -194,7 +204,10 @@ func TestQueryStatusListStatus_ActiveBitNotSet(t *testing.T) {
 	vcBody := makeStatusListVC(int(listSize/8), idx, false /* not revoked */)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(vcBody)
+		_, err := w.Write(vcBody)
+		if err != nil {
+			log.Printf("could not write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -212,7 +225,10 @@ func TestQueryStatusListStatus_RevokedBitSet(t *testing.T) {
 	vcBody := makeStatusListVC(int(listSize/8), idx, true /* revoked */)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(vcBody)
+		_, err := w.Write(vcBody)
+		if err != nil {
+			log.Printf("could not write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -238,7 +254,10 @@ func TestQueryStatusListStatus_HTTPErrorPropagates(t *testing.T) {
 // encodedList in credentialSubject returns an error.
 func TestQueryStatusListStatus_MissingEncodedList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"credentialSubject":{}}`))
+		_, err := w.Write([]byte(`{"credentialSubject":{}}`))
+		if err != nil {
+			log.Printf("could not write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 

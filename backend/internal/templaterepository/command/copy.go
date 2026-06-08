@@ -2,14 +2,15 @@ package command
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"fmt"
-	"log"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )

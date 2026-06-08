@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/signingmanagement/db"
@@ -38,7 +39,12 @@ func (h *SignatureVerifier) Handle(ctx context.Context, cmd VerifyCmd) (*VerifyR
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	// Validates APPROVED state via repo filter.
 	if _, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID); err != nil {

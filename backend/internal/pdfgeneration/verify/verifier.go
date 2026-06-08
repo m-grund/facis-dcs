@@ -8,9 +8,10 @@ package verify
 import (
 	"bytes"
 	"crypto/sha256"
-	"digital-contracting-service/internal/pdfgeneration/c2pa"
 	"encoding/hex"
 	"fmt"
+
+	"digital-contracting-service/internal/pdfgeneration/c2pa"
 )
 
 // Result is returned by VerifyContract and VerifyTemplate.
