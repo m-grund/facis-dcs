@@ -622,6 +622,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -656,6 +657,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -687,6 +689,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -719,6 +722,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
