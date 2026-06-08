@@ -123,7 +123,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewer provided")
+			return errors.New("no reviewers provided")
 		}
 
 		if len(cmd.Negotiators) == 0 {
