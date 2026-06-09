@@ -69,9 +69,9 @@ export const authenticationService: AuthenticationService = {
         const authTokenStore = useAuthTokenStore()
         authTokenStore.setTokens(res.data.token_type, res.data.access_token)
         const authStore = useAuthStore()
-        const userId = authTokenStore.getUserId
-        if (!userId) throw new Error('JWT Error')
-        authStore.setUser(userId)
+        const holder = authTokenStore.getHolder
+        if (!holder) throw new Error('JWT Error')
+        authStore.setHolder(holder)
         return authStore.isAuthenticated
       })
       .catch((err: unknown) => {

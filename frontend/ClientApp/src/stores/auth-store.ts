@@ -5,9 +5,8 @@ import { computed, ref, type Ref } from 'vue'
 import { useAuthTokenStore } from './auth-token-store'
 
 interface User {
-  id: string
-  username: string
-  name: string
+  issuer: string
+  holder: string
   roles: UserRole[]
 }
 
@@ -17,16 +16,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!user.value && authTokenStore.isAuthSet)
 
-  function setUser(userId: string) {
+  function setHolder(holder: string) {
     const authTokenStore = useAuthTokenStore()
     const payload = useJwt<{
       sub?: string
       roles?: unknown
-      ext?: { roles?: unknown }
+      ext?: { iss?: string, roles?: unknown }
     }>(authTokenStore.accessToken).payload.value
 
-    if (payload?.sub !== userId) {
-      console.error('User Error: JWT sub mismatch', { expected: userId, sub: payload?.sub })
+    if (payload?.sub !== holder) {
+      console.error('User Error: JWT sub mismatch', { expected: holder, sub: payload?.sub })
       return
     }
 
@@ -37,9 +36,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     user.value = {
-      id: userId,
-      username: userId,
-      name: userId,
+      holder: holder,
+      issuer: payload?.ext?.iss ?? '',
       roles,
     }
   }
@@ -48,5 +46,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, isAuthenticated, setUser, remove }
+  return { user, isAuthenticated, setHolder, remove }
 })

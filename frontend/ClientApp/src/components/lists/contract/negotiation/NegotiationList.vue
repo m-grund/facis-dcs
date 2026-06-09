@@ -4,12 +4,15 @@ import type { Contract } from '@/models/contract/contract'
 import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
 import type { ContractNegotiationDecision } from '@/models/contract/contract-negotiation-decision'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
+import { useAuthStore } from '@/stores/auth-store'
 import { computed, ref, useTemplateRef } from 'vue'
 
 const props = defineProps<{
   contract: Contract
   disabled?: boolean
 }>()
+
+const authStore = useAuthStore()
 
 const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
 
@@ -43,6 +46,10 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
         did: props.contract.did,
         action_flag: 'ACCEPTING'
       })
+      if (response.id) {
+        //const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
+        //if (decision) decision.decision = 'ACCEPTED'
+      }
     }
   } catch (err) {
     console.error('Accepting the negotiation failed', err)
@@ -66,6 +73,16 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
         action_flag: 'REJECTING',
         rejection_reason: rejectResult.data,
       })
+      if (response.id) {
+        //negotiation.negotiation_decisions.forEach((decision) => {
+        //  if (decision.negotiator === username.value) {
+        ///    decision.decision = 'REJECTED'
+        //    decision.rejection_reason = rejectResult.data
+        //  } else {
+        //    decision.decision = 'CLOSED'
+        //  }
+        //})
+      }
     }
   } catch (err) {
     console.error('Rejecting the negotiation failed', err)
@@ -75,7 +92,8 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
 }
 
 const isBtnDisabled = (negotiation: ContractNegotiation) => {
-  return false
+  const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
+  return decision?.decision !== undefined
 }
 
 const isNegotiationShown = ref<Map<string, boolean>>(new Map())
