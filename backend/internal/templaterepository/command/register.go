@@ -90,9 +90,9 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		}
 	}(tx)
 
-	existing, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.NewDID)
+	existing, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err == nil {
-		return fmt.Errorf("generated did already exists locally: %s", existing.DID)
+		return fmt.Errorf("this template already exists in local repository: %s", existing.DID)
 	}
 	if !errors.Is(err, db.ErrContractTemplateNotFound) {
 		return fmt.Errorf("could not read template: %w", err)
