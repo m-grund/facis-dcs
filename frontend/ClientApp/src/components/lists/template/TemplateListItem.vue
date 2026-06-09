@@ -37,7 +37,7 @@ const resolveViewRouteName = computed(() => {
   <li class="list-row w-full min-w-0">
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
-        <div class="flex -mt-9">
+        <div class="flex -mt-9 -ml-1">
         <div class="badge badge-accent badge-md">{{ toProperCase(template.template_type) }}</div>
       </div>
 
