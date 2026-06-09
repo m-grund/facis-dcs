@@ -25,7 +25,7 @@
     <span class="ml-2 font-normal opacity-50">| Dashboard</span>
   </div>
 
-  <PermissionList class="mr-2"/>
+  <PermissionList class="mr-2" />
   <AuthButton class="flex-none" />
 </template>
 

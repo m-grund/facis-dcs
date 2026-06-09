@@ -198,7 +198,6 @@ function applyContractDataToDraft(contractData?: unknown) {
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null
 }
-
 </script>
 
 <template>

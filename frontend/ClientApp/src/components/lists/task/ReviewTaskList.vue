@@ -75,10 +75,7 @@ const canEdit = (task: ReviewTask) => {
 
   const template = templatesStore.findTemplateByDid(task.did)
   const state = template?.state
-  return (
-    (state === TemplateState.draft || state === TemplateState.rejected) ||
-    state === TemplateState.submitted
-  )
+  return state === TemplateState.draft || state === TemplateState.rejected || state === TemplateState.submitted
 }
 
 const resolveViewRouteName = (task: ReviewTask) => {

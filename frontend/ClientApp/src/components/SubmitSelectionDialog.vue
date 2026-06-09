@@ -5,10 +5,8 @@
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
         <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
 
-        <button class="btn btn-primary mt-5 mb-2" @click="addLocalIssuers">
-            Add local Issuer
-        </button>
-        <p v-if="error" class="text-xs text-error mb-5">{{ error }}</p>
+        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalIssuers">Add local Issuer</button>
+        <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
 
         <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
           <section class="flex flex-col gap-2">
@@ -124,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/auth-store';
+import { useAuthStore } from '@/stores/auth-store'
 import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
 import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import { nextTick, ref, type Ref } from 'vue'
@@ -152,20 +150,19 @@ const approverError = ref('')
 const negotiatorError = ref('')
 
 function addLocalIssuers() {
-
   error.value = ''
 
   const issuer = authStore.user?.issuer ?? ''
 
-  if  (issuer === '') {
+  if (issuer === '') {
     error.value = 'No valid value for local issuer found'
     return
   }
-  
+
   if (!isDuplicateInList(issuer, negotiators.value)) {
     negotiators.value.push(issuer)
   }
-  
+
   if (!isDuplicateInList(issuer, reviewers.value)) {
     reviewers.value.push(issuer)
   }

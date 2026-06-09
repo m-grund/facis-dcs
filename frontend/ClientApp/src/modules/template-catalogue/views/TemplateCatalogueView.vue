@@ -103,7 +103,7 @@ const isRegisterDisabled = computed(() => {
   if (!catalogue.value) return true
   if (catalogue.value.version == null) return true
 
-  const result = contractTemplates.value.filter(contract => contract.did === did.value)
+  const result = contractTemplates.value.filter((contract) => contract.did === did.value)
   if (result.length > 0) {
     return true
   }

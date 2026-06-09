@@ -288,17 +288,17 @@ const exportPdf = async () => {
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
         <SubmitSelectionDialog
-            v-if="contract?.state === ContractState.draft && isCreator"
-            class="btn flex-1 btn-primary"
-            @submit="submitContract"
-          />
-          <button
-            v-else-if="contract?.state === ContractState.rejected && isCreator"
-            class="btn flex-1 btn-primary"
-            @click="submitRejectedTemplate"
-          >
-            Submit
-          </button>
+          v-if="contract?.state === ContractState.draft && isCreator"
+          class="btn flex-1 btn-primary"
+          @submit="submitContract"
+        />
+        <button
+          v-else-if="contract?.state === ContractState.rejected && isCreator"
+          class="btn flex-1 btn-primary"
+          @click="submitRejectedTemplate"
+        >
+          Submit
+        </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>

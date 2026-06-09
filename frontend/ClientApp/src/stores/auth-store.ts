@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
     const payload = useJwt<{
       sub?: string
       roles?: unknown
-      ext?: { iss?: string, roles?: unknown }
+      ext?: { iss?: string; roles?: unknown }
     }>(authTokenStore.accessToken).payload.value
 
     if (payload?.sub !== holder) {

@@ -10,10 +10,11 @@ const props = defineProps<{
   template: PartialContractTemplate
 }>()
 
-const { isCreator, isReviewer, isApprover} = useTemplatePermissions()
+const { isCreator, isReviewer, isApprover } = useTemplatePermissions()
 
 const canEdit = computed(() => {
-  const inDraftOrRejectedState = (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) && isCreator.value
+  const inDraftOrRejectedState =
+    (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) && isCreator.value
   const inSubmittedState = props.template.state === TemplateState.submitted && isReviewer.value
   return inDraftOrRejectedState || inSubmittedState
 })
@@ -37,19 +38,18 @@ const resolveViewRouteName = computed(() => {
   <li class="list-row w-full min-w-0">
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
-        <div class="flex -mt-9 -ml-1">
-        <div class="badge badge-accent badge-md">{{ toProperCase(template.template_type) }}</div>
-      </div>
+        <div class="-mt-9 -ml-1 flex">
+          <div class="badge badge-md badge-accent">{{ toProperCase(template.template_type) }}</div>
+        </div>
 
-        <h2 class="card-title justify-between items-start">
-  <div class="flex items-center gap-2 min-w-0 flex-1">
-    <div class="truncate">{{ template.name }}</div>
-  </div>
-  <div class="flex flex-col items-end gap-1 shrink-0">
-    <div class="badge badge-secondary">{{ template.state }}</div>
-    
-  </div>
-</h2>
+        <h2 class="card-title items-start justify-between">
+          <div class="flex min-w-0 flex-1 items-center gap-2">
+            <div class="truncate">{{ template.name }}</div>
+          </div>
+          <div class="flex shrink-0 flex-col items-end ml-10">
+            <div class="badge badge-secondary">{{ template.state }}</div>
+          </div>
+        </h2>
         <div class="flex justify-between">
           <div v-if="template.document_number">Document number: {{ template.document_number }}</div>
           <div v-if="template.version">Version: {{ template.version }}</div>

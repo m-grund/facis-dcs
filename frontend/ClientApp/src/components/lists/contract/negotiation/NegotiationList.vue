@@ -45,7 +45,7 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
       const response = await contractWorkflowService.respond({
         id: negotiation.id,
         did: props.contract.did,
-        action_flag: 'ACCEPTING'
+        action_flag: 'ACCEPTING',
       })
       if (response.id) {
         const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === issuer.value)
