@@ -5,9 +5,10 @@
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
         <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
 
-        <button class="btn btn-primary my-5" @click="addLocalIssuers">
-          Add local Issuer
+        <button class="btn btn-primary mt-5 mb-2" @click="addLocalIssuers">
+            Add local Issuer
         </button>
+        <p v-if="error" class="text-xs text-error mb-5">{{ error }}</p>
 
         <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
           <section class="flex flex-col gap-2">
@@ -145,15 +146,19 @@ const reviewerDraft = ref('')
 const approverDraft = ref('')
 const negotiatorDraft = ref('')
 
+const error = ref('')
 const reviewerError = ref('')
 const approverError = ref('')
 const negotiatorError = ref('')
 
 function addLocalIssuers() {
 
+  error.value = ''
+
   const issuer = authStore.user?.issuer ?? ''
+
   if  (issuer === '') {
-    negotiatorError.value = 'No valid value for local issuer'
+    error.value = 'No valid value for local issuer found'
     return
   }
   
@@ -174,6 +179,7 @@ function clearErrors() {
   reviewerError.value = ''
   approverError.value = ''
   negotiatorError.value = ''
+  error.value = ''
 }
 
 function clearAll() {
@@ -193,6 +199,7 @@ async function openModal() {
 }
 
 function addReviewer() {
+  error.value = ''
   reviewerError.value = ''
   const trimmed = reviewerDraft.value.trim()
   if (!trimmed) return
@@ -205,6 +212,7 @@ function addReviewer() {
 }
 
 function addApprover() {
+  error.value = ''
   approverError.value = ''
   const trimmed = approverDraft.value.trim()
   if (!trimmed) return
@@ -217,6 +225,7 @@ function addApprover() {
 }
 
 function addNegotiator() {
+  error.value = ''
   negotiatorError.value = ''
   const trimmed = negotiatorDraft.value.trim()
   if (!trimmed) return
