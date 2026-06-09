@@ -34,6 +34,8 @@ const route = useRoute()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
+const issuer = computed(() => authStore.user?.issuer)
+
 const errorStore = useErrorStore()
 
 const templateDraftStore = useTemplateDraftStore()
@@ -46,7 +48,6 @@ const contractContentValuesStore = useContractContentValuesStore()
 const scrollStore = useScrollStore()
 const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 
-const issuer = computed(() => authStore.user?.issuer)
 const isSubmitting = ref(false)
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {

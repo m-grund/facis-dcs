@@ -13,6 +13,7 @@ const props = defineProps<{
 }>()
 
 const authStore = useAuthStore()
+const issuer = computed(() => authStore.user?.issuer)
 
 const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
 
@@ -47,8 +48,8 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
         action_flag: 'ACCEPTING'
       })
       if (response.id) {
-        //const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
-        //if (decision) decision.decision = 'ACCEPTED'
+        const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === issuer.value)
+        if (decision) decision.decision = 'ACCEPTED'
       }
     }
   } catch (err) {
@@ -74,14 +75,14 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
         rejection_reason: rejectResult.data,
       })
       if (response.id) {
-        //negotiation.negotiation_decisions.forEach((decision) => {
-        //  if (decision.negotiator === username.value) {
-        ///    decision.decision = 'REJECTED'
-        //    decision.rejection_reason = rejectResult.data
-        //  } else {
-        //    decision.decision = 'CLOSED'
-        //  }
-        //})
+        negotiation.negotiation_decisions.forEach((decision) => {
+          if (decision.negotiator === issuer.value) {
+            decision.decision = 'REJECTED'
+            decision.rejection_reason = rejectResult.data
+          } else {
+            decision.decision = 'CLOSED'
+          }
+        })
       }
     }
   } catch (err) {
@@ -92,7 +93,7 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
 }
 
 const isBtnDisabled = (negotiation: ContractNegotiation) => {
-  const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
+  const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === issuer.value)
   return decision?.decision !== undefined
 }
 

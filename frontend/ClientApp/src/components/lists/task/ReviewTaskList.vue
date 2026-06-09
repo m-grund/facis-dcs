@@ -2,7 +2,6 @@
 import type { ContractTemplateReviewTask } from '@/models/contract-template-review-task'
 import type { ContractReviewTask } from '@/models/contract/contract-review-task'
 import { ROUTES } from '@/router/router'
-import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import { useReviewTaskStateFilterStore } from '@/stores/state-filter-store'
@@ -24,7 +23,6 @@ const props = defineProps<{
 
 const templatesStore = useContractTemplatesStore()
 const contractsStore = useContractsStore()
-const authStore = useAuthStore()
 const stateFilterStore = useReviewTaskStateFilterStore()
 
 const sorter = new Map<keyof ReviewTask, string>([
