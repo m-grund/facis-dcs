@@ -150,8 +150,13 @@ const approverError = ref('')
 const negotiatorError = ref('')
 
 function addLocalIssuers() {
-  const issuer = authStore.user?.issuer ?? ''
 
+  const issuer = authStore.user?.issuer ?? ''
+  if  (issuer === '') {
+    negotiatorError.value = 'No valid value for local issuer'
+    return
+  }
+  
   if (!isDuplicateInList(issuer, negotiators.value)) {
     negotiators.value.push(issuer)
   }
