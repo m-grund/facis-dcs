@@ -289,15 +289,6 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
           </div>
         </div>
       </div>
-      <div class="divider"></div>
-      <div v-if="(contract.negotiations?.length ?? -1) > 0" class="mx-auto max-w-4xl p-6">
-        <div class="text-lg">Active negotiations</div>
-        <NegotiationList
-          :contract="contract"
-          disabled
-          @selected-negotiation="(negotiation) => handleSelectedNegotiation(negotiation, contract)"
-        />
-      </div>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
