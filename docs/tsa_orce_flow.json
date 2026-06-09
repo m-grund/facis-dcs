@@ -110,7 +110,7 @@
                 "keyType": "Content-Type",
                 "keyValue": "",
                 "valueType": "other",
-                "valueValue": ""
+                "valueValue": "application/timestamp-query"
             }
         ],
         "x": 402.5,
