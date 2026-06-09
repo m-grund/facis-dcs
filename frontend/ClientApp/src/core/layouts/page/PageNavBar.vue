@@ -25,11 +25,13 @@
     <span class="ml-2 font-normal opacity-50">| Dashboard</span>
   </div>
 
-  <AuthButton class="flex-none mr-2" />
+  <PermissionList class="mr-2"/>
+  <AuthButton class="flex-none" />
 </template>
 
 <script setup lang="ts">
 import AuthButton from '@/components/AuthButton.vue'
+import PermissionList from '@/components/PermissionList.vue'
 import { usePageStore } from '@core/store/page'
 import { storeToRefs } from 'pinia'
 
