@@ -4,7 +4,10 @@
     <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
         <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
-        <p class="py-2 text-sm opacity-80">Enter wallet DIDs</p>
+
+        <button class="btn btn-primary my-5" @click="addLocalIssuers">
+          Add local Issuer
+        </button>
 
         <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
           <section class="flex flex-col gap-2">
@@ -31,7 +34,7 @@
                 v-model="reviewerDraft"
                 type="text"
                 class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:jwk:..."
+                placeholder="did:web:..."
                 @input="reviewerError = ''"
                 @keydown.enter.prevent="addReviewer"
               />
@@ -64,7 +67,7 @@
                 v-model="approverDraft"
                 type="text"
                 class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:jwk:..."
+                placeholder="did:web:..."
                 @input="approverError = ''"
                 @keydown.enter.prevent="addApprover"
               />
@@ -97,7 +100,7 @@
                 v-model="negotiatorDraft"
                 type="text"
                 class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:jwk:..."
+                placeholder="did:web:..."
                 @input="negotiatorError = ''"
                 @keydown.enter.prevent="addNegotiator"
               />
@@ -120,6 +123,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth-store';
 import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
 import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import { nextTick, ref, type Ref } from 'vue'
@@ -129,6 +133,8 @@ defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{
   submit: [value: SubmitContractAssignees]
 }>()
+
+const authStore = useAuthStore()
 
 const assigneeModal = ref<HTMLDialogElement | null>(null)
 
@@ -142,6 +148,22 @@ const negotiatorDraft = ref('')
 const reviewerError = ref('')
 const approverError = ref('')
 const negotiatorError = ref('')
+
+function addLocalIssuers() {
+  const issuer = authStore.user?.issuer ?? ''
+
+  if (!isDuplicateInList(issuer, negotiators.value)) {
+    negotiators.value.push(issuer)
+  }
+  
+  if (!isDuplicateInList(issuer, reviewers.value)) {
+    reviewers.value.push(issuer)
+  }
+
+  if (!isDuplicateInList(issuer, approvers.value)) {
+    approvers.value.push(issuer)
+  }
+}
 
 function clearErrors() {
   reviewerError.value = ''
