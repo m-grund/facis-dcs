@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PartialContractTemplate } from '@/models/contract-template'
+import { useTemplatePermissions } from '@/modules/template-repository/composables/useTemplatePermissions'
 import { ROUTES } from '@/router/router'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState } from '@/types/contract-template-state'
@@ -12,13 +13,14 @@ const props = defineProps<{
   hasApprovalTask: boolean
 }>()
 
+const { isCreator, isReviewer } = useTemplatePermissions()
+
 const templateStore = useContractTemplatesStore()
 
 const canEdit = computed(() => {
-  return (
-    (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) ||
-    (props.template.state === TemplateState.submitted && props.hasReviewTask)
-  )
+  const inDraftOrRejectedState = (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) && isCreator.value
+  const inSubmittedState = props.template.state === TemplateState.submitted && isReviewer.value
+  return inDraftOrRejectedState || inSubmittedState
 })
 
 const canReview = computed(() => {

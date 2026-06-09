@@ -120,7 +120,7 @@
     <fieldset v-if="state !== TemplateState.draft" class="fieldset border-none p-0">
       <div class="collapse-arrow collapse [&>input~.collapse-title::after]:scale-75">
         <input type="checkbox" name="responsibles" />
-        <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Persons</legend>
+        <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Participants</legend>
         <div class="collapse-content grid px-0">
           <ul class="list col-start-1 row-start-1">
             <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Creator</li>
