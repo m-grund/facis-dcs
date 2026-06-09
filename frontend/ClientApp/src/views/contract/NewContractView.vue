@@ -200,7 +200,10 @@ onBeforeRouteLeave(() => {
             {{ hasApprovedOrPublishedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
           <option v-for="template in approvedOrPublishedTemplates" :key="template.did" :value="template">
-            {{ template.name }}
+            <div class="flex flex-col">
+              <div class="font-bold">{{ template.name }}</div>
+              <div>{{ template.description?.slice(0, 160) }}{{ (template.description?.length ?? 0) > 160 ? '…' : '' }}</div>
+            </div>
           </option>
         </select>
       </div>
