@@ -28,13 +28,13 @@ type ApplyCmd struct {
 	AppliedBy      string
 	HolderDID      string
 	UserRoles      userrole.UserRoles
-	DSSClient      dss.Client
 }
 
 // Applier handles the ApplyCmd command.
 type Applier struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB       *sqlx.DB
+	CRepo    db.ContractRepo
+	DSClient dss.Client
 }
 
 // Handle applies a digital signature to a contract (DCS-FR-SM-16, DCS-IR-SI-10).
@@ -74,7 +74,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("marshal signing payload: %w", err)
 	}
 
-	sigBytes, err := cmd.DSSClient.Sign(ctx, payload, cmd.CredentialType)
+	sigBytes, err := h.DSClient.Sign(ctx, payload, cmd.CredentialType)
 	if err != nil {
 		return fmt.Errorf("DSS sign: %w", err)
 	}
