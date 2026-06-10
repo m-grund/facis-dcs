@@ -63,7 +63,8 @@ import { templateCatalogueIntegrationService } from '@/services/template-catalog
 import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
 import { toProperCase } from '@/utils/string'
 import { computed, ref } from 'vue'
-const pageSize = 20
+
+const Limit = 20
 const page = ref(0)
 const items = ref<TemplateResourcesItem[]>([])
 
@@ -75,8 +76,8 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const offset = page.value * pageSize
-    const resp = await templateCatalogueIntegrationService.retrieve_template({ offset, limit: pageSize })
+    const offset = page.value * Limit
+    const resp = await templateCatalogueIntegrationService.retrieve_template({ offset, limit: Limit })
     items.value = resp.items
     totalCount.value = resp.totalCount
   } catch (e: unknown) {
@@ -89,11 +90,11 @@ void load()
 
 const totalPages = computed(() => {
   if (loading.value) return 0
-  return totalCount.value > 0 ? Math.ceil(totalCount.value / pageSize) : 1
+  return totalCount.value > 0 ? Math.ceil(totalCount.value / Limit) : 1
 })
 
 const canPrev = computed(() => page.value > 0)
-const canNext = computed(() => (page.value + 1) * pageSize < totalCount.value)
+const canNext = computed(() => (page.value + 1) * Limit < totalCount.value)
 
 function goPrev() {
   if (!canPrev.value) return

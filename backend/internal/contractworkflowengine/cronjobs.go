@@ -2,6 +2,8 @@ package contractworkflowengine
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -34,9 +36,8 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo database.Contra
 			return nil, fmt.Errorf("could not start transaction: %w", err)
 		}
 		defer func(tx *sqlx.Tx) {
-			err := tx.Rollback()
-			if err != nil {
-				log.Println("could not rollback transaction")
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
 			}
 		}(tx)
 
@@ -60,9 +61,8 @@ func startExpiryScheduler(ctx context.Context, db *sqlx.DB, repo database.Contra
 			return fmt.Errorf("could not start transaction: %w", err)
 		}
 		defer func(tx *sqlx.Tx) {
-			err := tx.Rollback()
-			if err != nil {
-				log.Println("could not rollback transaction")
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
 			}
 		}(tx)
 

@@ -6,7 +6,7 @@ import type { ContractTemplateData, PartialContractTemplate } from '../contract-
 import type { ContractTemplateApprovalTask } from '../contract-template-approval-task'
 import type { ContractTemplateEvent } from '../contract-template-event'
 import type { ContractTemplateReviewTask } from '../contract-template-review-task'
-import type { ContractTemplateResponsiblePersons } from '../contract-template-responsible-persons'
+import type { ContractTemplateResponsible } from '../contract-template-responsible'
 
 export interface ContractTemplateCreateResponse {
   did: string
@@ -39,7 +39,7 @@ interface ContractTemplateSearchResponseItem {
   created_at: string
   created_by: string
   updated_at: string
-  responsible_persons?: ContractTemplateResponsiblePersons
+  responsible?: ContractTemplateResponsible
 }
 
 export type ContractTemplateSearchResponse = ContractTemplateSearchResponseItem[]
@@ -63,7 +63,7 @@ export interface ContractTemplateRetrieveByIdResponse {
   updated_at: string
   /** The template data of the contract template */
   template_data: ContractTemplateData
-  responsible_persons?: ContractTemplateResponsiblePersons
+  responsible?: ContractTemplateResponsible
 }
 
 export interface ContractTemplateApproveResponse {

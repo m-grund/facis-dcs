@@ -44,19 +44,13 @@ func TestSubmit_SubmitContractTemplateInDraftState(t *testing.T) {
 
 	createContractTemplate(t, db, repo, did, contracttemplatestate.Draft, creator)
 
-	approver := "Test User 5"
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
 		SubmittedBy: creator,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewers: []string{
-			"Test User 2",
-			"Test User 3",
-			"Test User 4",
-		},
-		Approver: &approver,
+		HolderDID:   creator,
 	}
 	handler := command.Submitter{
 		DB:     db,
@@ -791,8 +785,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: creator,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Reviewers:   reviewers,
-		Approver:    &approver,
+		HolderDID:   creator,
 	}
 	handler := command.Submitter{
 
@@ -1002,8 +995,7 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: creator,
 		ActionFlag:  nil,
 		Comments:    nil,
-		Approver:    &approver,
-		Reviewers:   reviewers,
+		HolderDID:   creator,
 	}
 	handler = command.Submitter{
 
@@ -1104,7 +1096,6 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: approver,
 		ActionFlag:  nil,
 		Comments:    []string{"Test Comment"},
-		Reviewers:   nil,
 	}
 	handler = command.Submitter{
 
@@ -1206,7 +1197,6 @@ func TestSubmit_SubmitContractTemplateWithResubmission(t *testing.T) {
 		SubmittedBy: approver,
 		ActionFlag:  nil,
 		Comments:    []string{"Test Comment"},
-		Reviewers:   nil,
 	}
 	handler = command.Submitter{
 

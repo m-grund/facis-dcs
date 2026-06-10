@@ -34,26 +34,30 @@
           </div>
 
           <div class="border-t border-base-300 pt-4">
-            <div class="flex flex-col gap-2 mb-2">
+            <div class="mb-2 flex flex-col gap-2">
               <p class="text-sm text-base-content/70">Defined clauses:</p>
               <input
                 v-model="clauseSearch"
                 type="search"
-                class="input input-bordered input-sm w-full"
+                class="input-bordered input input-sm w-full"
                 placeholder="Search clauses"
                 autocomplete="off"
               />
             </div>
-            <div class="flex flex-col gap-2 max-h-64 overflow-y-auto">
-              <button v-for="clause in filteredUnusedClauses" :key="clause.blockId" type="button"
-                class="text-left min-h-[44px] flex flex-col justify-center select-none rounded-lg border border-base-300 bg-base-100 px-3 py-2 cursor-pointer hover:bg-base-200 transition-colors"
-                @click="handleAddClause(clause.blockId)">
+            <div class="flex max-h-64 flex-col gap-2 overflow-y-auto">
+              <button
+                v-for="clause in filteredUnusedClauses"
+                :key="clause.blockId"
+                type="button"
+                class="flex min-h-[44px] cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+                @click="handleAddClause(clause.blockId)"
+              >
                 <span class="text-sm font-medium text-base-content">{{ clause.title || 'Untitled clause' }}</span>
                 <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
                   <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
                 </p>
               </button>
-              <p v-if="!filteredUnusedClauses.length" class="text-sm text-base-content/50 py-2">
+              <p v-if="!filteredUnusedClauses.length" class="py-2 text-sm text-base-content/50">
                 {{ unusedClauses.length ? 'No matching clauses.' : 'No unplaced clauses from the Clauses tab.' }}
               </p>
             </div>
@@ -73,17 +77,6 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import {
-  DocumentBlockType,
-  SEMANTIC_CONDITION_SCHEMA_VERSION,
-  isClauseBlock,
-  isApprovedTemplateBlock,
-  TemplateType,
-  type ClauseBlock,
-  type DomainFieldDefinition,
-  type SemanticConditionParameter,
-  type SemanticValueConstraint,
-} from '@/modules/template-repository/models/contract-template'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import {
@@ -93,6 +86,13 @@ import {
 } from '@template-repository/composables/useClauseTextChips'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import {
+  DocumentBlockType,
+  TemplateType,
+  isApprovedTemplateBlock,
+  type ClauseBlock,
+  isClauseBlock,
+} from '../../models/contract-template.ts'
 
 const draftStore = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
@@ -188,5 +188,4 @@ function handleAddClause(clauseBlockId: string) {
   })
   uiStore.closeAddBlockModal()
 }
-
 </script>

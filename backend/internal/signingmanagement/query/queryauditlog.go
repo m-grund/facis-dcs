@@ -2,9 +2,13 @@ package query
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/jmoiron/sqlx"
 
@@ -18,6 +22,8 @@ import (
 type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
+	HolderDID string
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {
@@ -25,29 +31,30 @@ type Auditor struct {
 	ATrailReader base.AuditTrailReader
 }
 
-func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
+func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
-	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.SignatureManagement, qry.DID)
+	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.SignatureManagement, query.DID)
 	if err != nil {
 		return nil, err
 	}
 
 	evt := signingmanagementevents.AuditEvt{
-		DID:           qry.DID,
+		DID:           query.DID,
 		ComponentType: componenttype.SignatureManagement,
-		AuditedBy:     qry.AuditedBy,
+		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
+		HolderDID:     query.HolderDID,
+		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -23,6 +24,8 @@ type RejectCmd struct {
 	UpdatedAt  time.Time
 	RejectedBy string
 	Reason     string
+	HolderDID  string
+	UserRoles  userrole.UserRoles
 }
 
 type Rejecter struct {
@@ -82,6 +85,8 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		RejectedBy:      cmd.RejectedBy,
 		Reason:          cmd.Reason,
 		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

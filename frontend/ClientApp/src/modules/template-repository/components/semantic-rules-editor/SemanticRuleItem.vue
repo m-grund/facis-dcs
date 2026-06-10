@@ -9,18 +9,17 @@
           (used in {{ usedInClauseCount }} clause{{ usedInClauseCount === 1 ? '' : 's' }})
         </span>
       </div>
-      <div v-if="condition.entityType" class="flex flex-wrap gap-2 mt-2">
+      <div v-if="condition.entityType" class="mt-2 flex flex-wrap gap-2">
         <span class="badge badge-outline badge-sm">{{ condition.entityType }}</span>
         <span v-if="condition.entityRole" class="badge badge-outline badge-sm">{{ condition.entityRole }}</span>
       </div>
-      <div class="flex flex-wrap gap-2 mt-2">
-        <div
-          v-for="(p, i) in condition.parameters"
-          :key="i"
-          class="badge badge-ghost badge-sm gap-1"
-        >
+      <div class="mt-2 flex flex-wrap gap-2">
+        <div v-for="(p, i) in condition.parameters" :key="i" class="badge gap-1 badge-ghost badge-sm">
           <span>{{ semanticParameterLabel(p) }}</span>
-          <span class="opacity-70">({{ semanticParameterTypeLabel(p.type) }}, {{ p.fixedValue !== undefined ? `fixed: ${p.fixedValue}` : p.isRequired ? 'required' : 'optional' }})</span>
+          <span class="opacity-70">
+            ({{ semanticParameterTypeLabel(p.type) }},
+            {{ p.fixedValue !== undefined ? `fixed: ${p.fixedValue}` : p.isRequired ? 'required' : 'optional' }})
+          </span>
         </div>
       </div>
     </div>

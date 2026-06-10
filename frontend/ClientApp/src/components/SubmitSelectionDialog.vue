@@ -1,170 +1,291 @@
+<template>
+  <button type="button" v-bind="$attrs" @click="openModal">Submit</button>
+  <Teleport to="body">
+    <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
+      <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
+        <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
+
+        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalIssuers">Add local Issuer</button>
+        <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
+
+        <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Reviewers</span>
+            <ul v-if="reviewers.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in reviewers"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeReviewer(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="reviewerDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:web:..."
+                @input="reviewerError = ''"
+                @keydown.enter.prevent="addReviewer"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addReviewer">+</button>
+            </div>
+            <p v-if="reviewerError" class="text-xs text-error">{{ reviewerError }}</p>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Approvers</span>
+            <ul v-if="approvers.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in approvers"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeApprover(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="approverDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:web:..."
+                @input="approverError = ''"
+                @keydown.enter.prevent="addApprover"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addApprover">+</button>
+            </div>
+            <p v-if="approverError" class="text-xs text-error">{{ approverError }}</p>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Negotiators</span>
+            <ul v-if="negotiators.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in negotiators"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeNegotiator(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="negotiatorDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:web:..."
+                @input="negotiatorError = ''"
+                @keydown.enter.prevent="addNegotiator"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addNegotiator">+</button>
+            </div>
+            <p v-if="negotiatorError" class="text-xs text-error">{{ negotiatorError }}</p>
+          </section>
+        </div>
+
+        <div class="modal-action mt-2">
+          <button type="button" class="btn btn-outline" @click="onModalClose">Cancel</button>
+          <button type="button" class="btn btn-primary" @click="onModalSubmit">Apply</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit" aria-label="Close">close</button>
+      </form>
+    </dialog>
+  </Teleport>
+</template>
+
 <script setup lang="ts">
-import type { SelectedUserRole, UserProfile } from '@/models/user'
-import { userService } from '@/services/user-service'
-import type { UserRole } from '@/types/user-role'
-import { toProperCase } from '@/utils/string'
-import { computed, ref, useTemplateRef, type Ref } from 'vue'
+import { useAuthStore } from '@/stores/auth-store'
+import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
+import type { SubmitContractAssignees } from '@/utils/submit-selection'
+import { nextTick, ref, type Ref } from 'vue'
 
-interface User extends UserProfile {
-  availableRoles: (UserRole | 'CONTRACT_NEGOTIATOR')[]
-}
-
-const props = defineProps<{
-  dialogType: 'template' | 'contract'
-}>()
+defineOptions({ inheritAttrs: false })
 
 const emit = defineEmits<{
-  submit: [value: SelectedUserRole[]]
+  submit: [value: SubmitContractAssignees]
 }>()
 
-const userSelectionModal = useTemplateRef('user-selection-modal')
+const authStore = useAuthStore()
 
-const users: Ref<User[]> = ref([])
-const isLoading = ref(true)
+const assigneeModal = ref<HTMLDialogElement | null>(null)
 
-const selectedUsers = ref<Record<string, boolean>>({})
-const selectedRole = ref<Record<string, UserRole | 'CONTRACT_NEGOTIATOR'>>({})
+const reviewers = ref<string[]>([])
+const approvers = ref<string[]>([])
+const negotiators = ref<string[]>([])
+const reviewerDraft = ref('')
+const approverDraft = ref('')
+const negotiatorDraft = ref('')
 
-const roles = computed(() => {
-  const roleMap: Record<typeof props.dialogType, { review: UserRole; approve: UserRole; negotiate?: UserRole }> = {
-    template: { review: 'TEMPLATE_REVIEWER', approve: 'TEMPLATE_APPROVER' },
-    contract: { review: 'CONTRACT_REVIEWER', approve: 'CONTRACT_APPROVER', negotiate: 'CONTRACT_CREATOR' },
+const error = ref('')
+const reviewerError = ref('')
+const approverError = ref('')
+const negotiatorError = ref('')
+
+function addLocalIssuers() {
+  error.value = ''
+
+  const issuer = authStore.user?.issuer ?? ''
+
+  if (issuer === '') {
+    error.value = 'No valid value for local issuer found'
+    return
   }
-  return roleMap[props.dialogType]
-})
-const reviewRole = computed(() => roles.value.review)
-const approveRole = computed(() => roles.value.approve)
-const negotiateRole = computed(() => roles.value.negotiate)
 
-const hasSelectedUsers = computed(() => {
-  return users.value.some((user) => selectedUsers.value[user.id])
-})
-const allSelectedUsersHaveRoles = computed(() => {
-  return users.value.every((user) => !selectedUsers.value[user.id] || selectedRole.value[user.id])
-})
-const hasValidSelection = computed(() => {
-  return (
-    users.value.some((user) => selectedRole.value[user.id] === approveRole.value) &&
-    users.value.some((user) => selectedRole.value[user.id] === reviewRole.value) &&
-    ((props.dialogType === 'template' && !negotiateRole.value) ||
-      (props.dialogType === 'contract' &&
-        users.value.some((user) => selectedRole.value[user.id] === 'CONTRACT_NEGOTIATOR')))
-  )
-})
-const isSubmitDisabled = computed(() => !hasValidSelection.value || !allSelectedUsersHaveRoles.value)
+  if (!isDuplicateInList(issuer, negotiators.value)) {
+    negotiators.value.push(issuer)
+  }
+
+  if (!isDuplicateInList(issuer, reviewers.value)) {
+    reviewers.value.push(issuer)
+  }
+
+  if (!isDuplicateInList(issuer, approvers.value)) {
+    approvers.value.push(issuer)
+  }
+}
+
+function clearErrors() {
+  reviewerError.value = ''
+  approverError.value = ''
+  negotiatorError.value = ''
+  error.value = ''
+}
+
+function clearAll() {
+  reviewers.value = []
+  approvers.value = []
+  negotiators.value = []
+  reviewerDraft.value = ''
+  approverDraft.value = ''
+  negotiatorDraft.value = ''
+  clearErrors()
+}
 
 async function openModal() {
-  userSelectionModal.value?.showModal()
-  const receivedUsers = await userService.getAuthorizedUsersWithRoles(
-    approveRole.value,
-    reviewRole.value,
-    negotiateRole.value,
-  )
-  users.value = receivedUsers.map((user) => ({
-    ...user,
-    availableRoles:
-      user.roleIds?.reduce<(UserRole | 'CONTRACT_NEGOTIATOR')[]>((acc, role) => {
-        const newRole = 'CONTRACT_NEGOTIATOR'
-        if (role === 'CONTRACT_CREATOR') {
-          acc.push(newRole)
-        } else if (role === 'CONTRACT_REVIEWER') {
-          acc.push(role, newRole)
-        } else {
-          acc.push(role)
-        }
-        return [...new Set(acc)]
-      }, []) ?? [],
-  }))
+  clearAll()
+  await nextTick()
+  assigneeModal.value?.showModal()
+}
 
-  isLoading.value = false
+function addReviewer() {
+  error.value = ''
+  reviewerError.value = ''
+  const trimmed = reviewerDraft.value.trim()
+  if (!trimmed) return
+  if (isDuplicateInList(trimmed, reviewers.value)) {
+    reviewerError.value = 'This reviewer is already in the list.'
+    return
+  }
+  reviewers.value.push(trimmed)
+  reviewerDraft.value = ''
+}
+
+function addApprover() {
+  error.value = ''
+  approverError.value = ''
+  const trimmed = approverDraft.value.trim()
+  if (!trimmed) return
+  if (isDuplicateInList(trimmed, approvers.value)) {
+    approverError.value = 'This approver is already in the list.'
+    return
+  }
+  approvers.value.push(trimmed)
+  approverDraft.value = ''
+}
+
+function addNegotiator() {
+  error.value = ''
+  negotiatorError.value = ''
+  const trimmed = negotiatorDraft.value.trim()
+  if (!trimmed) return
+  if (isDuplicateInList(trimmed, negotiators.value)) {
+    negotiatorError.value = 'This negotiator is already in the list.'
+    return
+  }
+  negotiators.value.push(trimmed)
+  negotiatorDraft.value = ''
+}
+
+function removeFromList(list: Ref<string[]>, did: string) {
+  list.value = list.value.filter((entry) => entry !== did)
+}
+
+function removeReviewer(did: string) {
+  removeFromList(reviewers, did)
+}
+
+function removeApprover(did: string) {
+  removeFromList(approvers, did)
+}
+
+function removeNegotiator(did: string) {
+  removeFromList(negotiators, did)
+}
+
+function collectAssignees(): SubmitContractAssignees {
+  return {
+    reviewers: mergeDraftIntoList(reviewers.value, reviewerDraft.value),
+    approvers: mergeDraftIntoList(approvers.value, approverDraft.value),
+    negotiators: mergeDraftIntoList(negotiators.value, negotiatorDraft.value),
+  }
+}
+
+function validateBeforeSubmit(): boolean {
+  clearErrors()
+  const { reviewers: finalReviewers, approvers: finalApprovers, negotiators: finalNegotiators } = collectAssignees()
+  let valid = true
+
+  if (finalReviewers.length === 0) {
+    reviewerError.value = 'Add at least one reviewer.'
+    valid = false
+  }
+  if (finalApprovers.length === 0) {
+    approverError.value = 'Add at least one approver.'
+    valid = false
+  }
+  if (finalNegotiators.length === 0) {
+    negotiatorError.value = 'Add at least one negotiator.'
+    valid = false
+  }
+
+  return valid
 }
 
 function onModalSubmit() {
-  if (isSubmitDisabled.value) return
-  const result = users.value
-    .filter((user) => selectedUsers.value[user.id] && selectedRole.value[user.id])
-    .map(({ availableRoles: _, ...user }): SelectedUserRole => ({ user: user, role: selectedRole.value[user.id]! }))
-  emit('submit', result)
-  onModalClose()
+  if (!validateBeforeSubmit()) return
+  emit('submit', collectAssignees())
+  assigneeModal.value?.close()
 }
 
 function onModalClose() {
-  userSelectionModal.value?.close()
-  selectedUsers.value = {}
-  selectedRole.value = {}
-  isLoading.value = true
+  assigneeModal.value?.close()
 }
-
-function isRoleDisabled(role: UserRole | 'CONTRACT_NEGOTIATOR', userId: string) {
-  if (props.dialogType === 'contract') return false
-  const roles = Object.values(selectedRole.value)
-  return role === approveRole.value && selectedRole.value[userId] !== role && roles.includes(role)
-}
-
-function onCheckboxChange(event: Event, userId: string) {
-  const checked = (event.target as HTMLInputElement).checked
-  if (!checked) {
-    delete selectedRole.value[userId]
-  }
-}
-
-const roleInfoText = computed(() => {
-  return props.dialogType === 'template'
-    ? 'Select one Approver and at least one Reviewer'
-    : 'Select at least one Approver, at least one Reviewer and at least one Negotiator'
-})
 </script>
-
-<template>
-  <button :="$attrs" @click="openModal">Submit</button>
-  <dialog ref="user-selection-modal" class="modal modal-bottom transition-none sm:modal-middle" @close="onModalClose">
-    <div class="modal-box flex max-h-2/3 flex-col">
-      <h3 class="text-lg font-bold">
-        User Selection for {{ dialogType === 'template' ? 'Template' : 'Contract' }} Submission
-      </h3>
-      <p class="py-4 text-sm">
-        {{ roleInfoText }}
-      </p>
-      <div class="grow overflow-y-auto">
-        <div v-if="isLoading">Loading...</div>
-        <ul v-else class="list">
-          <li v-for="user in users" :key="user.id" class="list-row mb-1 border border-secondary py-2">
-            <label class="list-col-grow label">
-              <input
-                v-model="selectedUsers[user.id]"
-                type="checkbox"
-                class="checkbox mr-4 checkbox-primary"
-                @change="onCheckboxChange($event, user.id)"
-              />
-              {{ `${user.firstName} ${user.lastName}` }}
-            </label>
-            <select
-              v-model="selectedRole[user.id]"
-              class="select select-sm select-primary sm:select-md"
-              :disabled="!selectedUsers[user.id]"
-            >
-              <option selected :value="selectedRole['']">No role</option>
-              <option
-                v-for="role in user.availableRoles"
-                :key="role"
-                :value="role"
-                :disabled="isRoleDisabled(role, user.id)"
-              >
-                {{ toProperCase(role) }}
-              </option>
-            </select>
-          </li>
-        </ul>
-      </div>
-      <div class="modal-action">
-        <div v-if="isSubmitDisabled" class="flex items-center text-sm text-error">
-          <span v-if="!hasSelectedUsers">Select at least one user</span>
-          <span v-else-if="!allSelectedUsersHaveRoles">Assign a role to all selected users</span>
-          <span v-else>{{ roleInfoText }}</span>
-        </div>
-        <button class="btn btn-outline" @click="onModalClose">Cancel</button>
-        <button :disabled="isSubmitDisabled" class="btn btn-primary" @click="onModalSubmit">Apply</button>
-      </div>
-    </div>
-  </dialog>
-</template>

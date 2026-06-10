@@ -53,9 +53,6 @@ var ContractTemplateSubmitRequest = Type("ContractTemplateSubmitRequest", func()
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract template")
-	Attribute("approver", String, "The approver for that contract template")
-
 	Attribute("forward_to", String, "Action flag: approval | draft")
 	Attribute("comments", ArrayOf(String), "Optional comments")
 
@@ -127,6 +124,9 @@ var ContractTemplateSearchRequest = Type("ContractTemplateSearchRequest", func()
 
 	Token("token", String, "JWT token")
 
+	Attribute("offset", Int, "Start index of results")
+	Attribute("limit", Int, "Page size of results")
+
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 	Attribute("document_number", String, "The number of the contract template")
 	Attribute("version", Int, "The version of the contract template")
@@ -153,7 +153,7 @@ var ContractTemplateSearchResponse = Type("ContractTemplateSearchResponse", func
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_at", "updated_at", "version")
 })
@@ -162,6 +162,9 @@ var ContractTemplateRetrieveRequest = Type("ContractTemplateRetrieveRequest", fu
 	Description("Contract template retrieve request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("offset", Int, "Start index of results")
+	Attribute("limit", Int, "Page size of results")
 })
 
 var ContractTemplateItem = Type("ContractTemplateItem", func() {
@@ -175,7 +178,7 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("created_by", String, "Created by")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
 })
@@ -243,7 +246,7 @@ var ContractTemplateHistoryRetrieveByIDResponse = Type("ContractTemplateHistoryR
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data", "version")
@@ -278,7 +281,7 @@ var ContractTemplateRetrieveByIDResponse = Type("ContractTemplateRetrieveByIDRes
 
 	Attribute("updated_at", String, "The timestamp when the contract template was updated")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "template_data", "version")
@@ -588,6 +591,9 @@ var _ = Service("TemplateRepository", func() {
 
 		HTTP(func() {
 			GET("/template/search")
+			Param("offset")
+			Param("limit")
+
 			Param("did")
 			Param("document_number")
 			Param("version")
@@ -624,6 +630,8 @@ var _ = Service("TemplateRepository", func() {
 
 		HTTP(func() {
 			GET("/template/retrieve")
+			Param("offset")
+			Param("limit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -821,9 +829,9 @@ var _ = Service("TemplateRepository", func() {
 		Meta("dcs:ui", "Template Management Dashboard")
 
 		Security(JWTAuth, func() {
+			Scope("Template Manager")
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
 		})
 
 		Payload(ContractTemplateAuditRequest)

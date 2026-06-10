@@ -2,18 +2,28 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
+	event2 "digital-contracting-service/internal/signingmanagement/event"
 
 	"github.com/jmoiron/sqlx"
 )
 
 // VerifyCmd carries the inputs for verifying a contract's signatures.
 type VerifyCmd struct {
-	DID string
+	DID        string
+	VerifiedBy string
+	HolderDID  string
+	UserRoles  userrole.UserRoles
 }
 
 // VerifyResult holds the signature verification summary.
@@ -40,14 +50,14 @@ func (h *SignatureVerifier) Handle(ctx context.Context, cmd VerifyCmd) (*VerifyR
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
 	// Validates APPROVED state via repo filter.
-	if _, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID); err != nil {
+	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	if err != nil {
 		return nil, fmt.Errorf("contract %s not available for verification: %w", cmd.DID, err)
 	}
 
@@ -57,6 +67,18 @@ func (h *SignatureVerifier) Handle(ctx context.Context, cmd VerifyCmd) (*VerifyR
 		cmd.DID,
 	).Scan(&count); err != nil {
 		return nil, fmt.Errorf("count signatures: %w", err)
+	}
+	evt := event2.VerifyEvent{
+		DID:             cmd.DID,
+		ContractVersion: processData.ContractVersion,
+		VerifiedBy:      cmd.VerifiedBy,
+		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
+	}
+	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
+	if err != nil {
+		return nil, fmt.Errorf("could not create event: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {

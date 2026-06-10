@@ -90,17 +90,19 @@ watch(selectedAuditMode, (mode) => {
 
 const filteredFindings = computed(() => {
   return checkFindings.value.filter((finding) => {
-    return tableFilterEnabled('result', auditResultLabel(finding))
-      && tableFilterEnabled('category', finding.category)
-      && tableFilterEnabled('status', finding.status)
-      && tableFilterEnabled('component', finding.component)
-      && tableFilterEnabled('did', finding.did)
+    return (
+      tableFilterEnabled('result', auditResultLabel(finding)) &&
+      tableFilterEnabled('category', finding.category) &&
+      tableFilterEnabled('status', finding.status) &&
+      tableFilterEnabled('component', finding.component) &&
+      tableFilterEnabled('did', finding.did)
+    )
   })
 })
 const selectedFinding = computed(() => {
   return findings.value.find((finding) => String(finding.id) === String(selectedFindingId.value)) ?? null
 })
-const selectedFindingKind = computed(() => selectedFinding.value ? auditItemKind(selectedFinding.value) : null)
+const selectedFindingKind = computed(() => (selectedFinding.value ? auditItemKind(selectedFinding.value) : null))
 const selectedFindingEventData = computed(() => {
   if (!selectedFinding.value) {
     return null
@@ -148,10 +150,18 @@ const timelineEvents = computed(() => {
     .filter((finding) => auditItemKind(finding) === 'event')
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
 })
-const failedCheckCount = computed(() => checkFindings.value.filter((finding) => auditResult(finding) === 'failed').length)
-const passedCheckCount = computed(() => checkFindings.value.filter((finding) => auditResult(finding) === 'passed').length)
-const reviewCheckCount = computed(() => checkFindings.value.filter((finding) => auditResult(finding) === 'review').length)
-const auditHasPassed = computed(() => hasExecutedAudit.value && !auditLoading.value && !error.value && checkFindings.value.length === 0)
+const failedCheckCount = computed(
+  () => checkFindings.value.filter((finding) => auditResult(finding) === 'failed').length,
+)
+const passedCheckCount = computed(
+  () => checkFindings.value.filter((finding) => auditResult(finding) === 'passed').length,
+)
+const reviewCheckCount = computed(
+  () => checkFindings.value.filter((finding) => auditResult(finding) === 'review').length,
+)
+const auditHasPassed = computed(
+  () => hasExecutedAudit.value && !auditLoading.value && !error.value && checkFindings.value.length === 0,
+)
 const tableFilterGroups: { key: TableFilterKey; label: string }[] = [
   { key: 'result', label: 'Result' },
   { key: 'category', label: 'Finding' },
@@ -167,16 +177,20 @@ const tableFilterOptions = computed<Record<TableFilterKey, string[]>>(() => ({
   did: uniqueTableValues(checkFindings.value.map((finding) => finding.did)),
 }))
 
-watch(tableFilterOptions, (options) => {
-  for (const group of tableFilterGroups) {
-    const current = tableFilters.value[group.key]
-    const next: Record<string, boolean> = {}
-    for (const option of options[group.key]) {
-      next[option] = current[option] ?? true
+watch(
+  tableFilterOptions,
+  (options) => {
+    for (const group of tableFilterGroups) {
+      const current = tableFilters.value[group.key]
+      const next: Record<string, boolean> = {}
+      for (const option of options[group.key]) {
+        next[option] = current[option] ?? true
+      }
+      tableFilters.value[group.key] = next
     }
-    tableFilters.value[group.key] = next
-  }
-}, { immediate: true })
+  },
+  { immediate: true },
+)
 
 const executeAudit = async () => {
   auditLoading.value = true
@@ -184,16 +198,17 @@ const executeAudit = async () => {
   report.value = null
   hasExecutedAudit.value = true
   try {
-    const request = selectedAuditMode.value === 'static_contract'
-      ? {
-          scope: selectedScope.value,
-          audit_mode: selectedAuditMode.value,
-          contract_document: parseJSONInput(contractDocumentText.value, 'Contract document'),
-          contract_did: contractDid.value.trim() || undefined,
-          contract_version: contractVersion.value.trim() || undefined,
-          policy_version: policyVersion.value.trim() || undefined,
-        }
-      : { scope: selectedScope.value, audit_mode: selectedAuditMode.value }
+    const request =
+      selectedAuditMode.value === 'static_contract'
+        ? {
+            scope: selectedScope.value,
+            audit_mode: selectedAuditMode.value,
+            contract_document: parseJSONInput(contractDocumentText.value, 'Contract document'),
+            contract_did: contractDid.value.trim() || undefined,
+            contract_version: contractVersion.value.trim() || undefined,
+            policy_version: policyVersion.value.trim() || undefined,
+          }
+        : { scope: selectedScope.value, audit_mode: selectedAuditMode.value }
     findings.value = await auditingService.audit(request)
     selectedFindingId.value = null
     activeAuditTab.value = checkFindings.value.length > 0 ? 'checks' : 'timeline'
@@ -241,40 +256,40 @@ const selectedFindingRawDetails = computed(() => {
   return JSON.stringify(selectedFinding.value.details, null, 2)
 })
 
-function tableValue(value?: string) {
+function tableValue(value?: string): string {
   const trimmed = value?.trim()
-  return trimmed || emptyValueLabel
+  return trimmed ?? emptyValueLabel
 }
 
-function uniqueTableValues(values: Array<string | undefined>) {
+function uniqueTableValues(values: (string | undefined)[]): string[] {
   return Array.from(new Set(values.map(tableValue))).sort((a, b) => a.localeCompare(b))
 }
 
-function tableFilterEnabled(key: TableFilterKey, value?: string) {
+function tableFilterEnabled(key: TableFilterKey, value?: string): boolean {
   const normalized = tableValue(value)
   return tableFilters.value[key][normalized] ?? true
 }
 
-function checkedTableFilterCount(key: TableFilterKey) {
+function checkedTableFilterCount(key: TableFilterKey): number {
   return tableFilterOptions.value[key].filter((option) => tableFilters.value[key][option]).length
 }
 
-function setAllTableFilters(key: TableFilterKey, enabled: boolean) {
+function setAllTableFilters(key: TableFilterKey, enabled: boolean): void {
   for (const option of tableFilterOptions.value[key]) {
     tableFilters.value[key][option] = enabled
   }
 }
 
-function selectFinding(finding: AuditFinding) {
+function selectFinding(finding: AuditFinding): void {
   selectedFindingId.value = finding.id
 }
 
-function selectTab(tab: AuditTab) {
+function selectTab(tab: AuditTab): void {
   activeAuditTab.value = tab
   selectedFindingId.value = null
 }
 
-function stringDetail(value: unknown) {
+function stringDetail(value: unknown): string {
   if (typeof value === 'string' && value.trim()) {
     return value
   }
@@ -288,7 +303,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function findingBadgeClass(finding: AuditFinding) {
+function findingBadgeClass(finding: AuditFinding): "badge-success" | "badge-error" | "badge-warning" {
   const result = auditResult(finding)
   if (result === 'passed') {
     return 'badge-success'
@@ -313,10 +328,26 @@ function auditItemKind(finding: AuditFinding): 'check' | 'event' {
 
 function auditResult(finding: AuditFinding): AuditResult {
   const value = finding.status?.trim().toLowerCase()
-  if (value === 'passed' || value === 'pass' || value === 'success' || value === 'successful' || value === 'ok' || value === 'compliant' || value === 'info') {
+  if (
+    value === 'passed' ||
+    value === 'pass' ||
+    value === 'success' ||
+    value === 'successful' ||
+    value === 'ok' ||
+    value === 'compliant' ||
+    value === 'info'
+  ) {
     return 'passed'
   }
-  if (value === 'failed' || value === 'fail' || value === 'error' || value === 'critical' || value === 'blocking' || value === 'violation' || value === 'non_compliant') {
+  if (
+    value === 'failed' ||
+    value === 'fail' ||
+    value === 'error' ||
+    value === 'critical' ||
+    value === 'blocking' ||
+    value === 'violation' ||
+    value === 'non_compliant'
+  ) {
     return 'failed'
   }
   if (value === 'warning' || value === 'warn') {
@@ -331,7 +362,7 @@ function auditResult(finding: AuditFinding): AuditResult {
   return 'review'
 }
 
-function auditResultLabel(finding: AuditFinding) {
+function auditResultLabel(finding: AuditFinding): "Passed" | "Failed" | "Needs review" {
   const result = auditResult(finding)
   if (result === 'passed') {
     return 'Passed'
@@ -342,7 +373,7 @@ function auditResultLabel(finding: AuditFinding) {
   return 'Needs review'
 }
 
-function auditResultSummary(finding: AuditFinding) {
+function auditResultSummary(finding: AuditFinding): string {
   const assertion = checkAssertion(finding)
   const result = auditResult(finding)
   if (result === 'passed') {
@@ -354,7 +385,7 @@ function auditResultSummary(finding: AuditFinding) {
   return assertion ? `Review: ${assertion}` : 'Review required'
 }
 
-function checkAssertion(finding: AuditFinding) {
+function checkAssertion(finding: AuditFinding): string {
   const eventData = eventDataFromFinding(finding)
   const message = stringDetail(eventData?.message)
   if (message !== emptyValueLabel) {
@@ -363,29 +394,45 @@ function checkAssertion(finding: AuditFinding) {
   const descriptionLine = finding.description
     ?.split('\n')
     .map((line) => line.trim())
-    .find((line) => line && !line.startsWith('Object DID:') && !line.startsWith('Rule:') && !line.startsWith('Semantic path:'))
-  return descriptionLine || ''
+    .find(
+      (line) =>
+        line && !line.startsWith('Object DID:') && !line.startsWith('Rule:') && !line.startsWith('Semantic path:'),
+    )
+  return descriptionLine ?? ''
 }
 
-function severityLabel(finding: AuditFinding) {
-  return finding.status?.trim() || 'not set'
+function severityLabel(finding: AuditFinding): string {
+  return finding.status?.trim() ?? 'not set'
 }
 
-function severityBadgeClass(finding: AuditFinding) {
+function severityBadgeClass(finding: AuditFinding): "badge-success" | "badge-error" | "badge-warning" | "badge-ghost" {
   const severity = finding.status?.trim().toLowerCase()
-  if (severity === 'error' || severity === 'critical' || severity === 'blocking' || severity === 'failed' || severity === 'violation') {
+  if (
+    severity === 'error' ||
+    severity === 'critical' ||
+    severity === 'blocking' ||
+    severity === 'failed' ||
+    severity === 'violation'
+  ) {
     return 'badge-error'
   }
   if (severity === 'warning' || severity === 'warn') {
     return 'badge-warning'
   }
-  if (severity === 'passed' || severity === 'pass' || severity === 'success' || severity === 'ok' || severity === 'compliant' || severity === 'info') {
+  if (
+    severity === 'passed' ||
+    severity === 'pass' ||
+    severity === 'success' ||
+    severity === 'ok' ||
+    severity === 'compliant' ||
+    severity === 'info'
+  ) {
     return 'badge-success'
   }
   return 'badge-ghost'
 }
 
-function eventDataFromFinding(finding: AuditFinding) {
+function eventDataFromFinding(finding: AuditFinding): Record<string, unknown> | null {
   if (!isObjectRecord(finding.details)) {
     return null
   }
@@ -393,7 +440,7 @@ function eventDataFromFinding(finding: AuditFinding) {
   return isObjectRecord(eventData) ? eventData : null
 }
 
-function rawEventType(finding: AuditFinding) {
+function rawEventType(finding: AuditFinding): string | undefined {
   if (!isObjectRecord(finding.details)) {
     return undefined
   }
@@ -401,7 +448,7 @@ function rawEventType(finding: AuditFinding) {
   return typeof eventType === 'string' ? eventType : undefined
 }
 
-function actorFromEventData(eventData: Record<string, unknown> | null) {
+function actorFromEventData(eventData: Record<string, unknown> | null): string | undefined {
   if (!eventData) {
     return undefined
   }
@@ -417,7 +464,7 @@ function actorFromEventData(eventData: Record<string, unknown> | null) {
   return undefined
 }
 
-function formatDateTime(value?: string) {
+function formatDateTime(value?: string): string {
   if (!value) {
     return emptyValueLabel
   }
@@ -430,15 +477,15 @@ function formatDateTime(value?: string) {
 </script>
 
 <template>
-  <div class="flex justify-between p-4 mb-4">
+  <div class="mb-4 flex justify-between p-4">
     <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
       {{ $route.meta.name }}
     </h2>
   </div>
 
-  <section class="px-4 space-y-4">
+  <section class="space-y-4 px-4">
     <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-      <div class="stats stats-vertical sm:stats-horizontal bg-base-200 border border-base-content/10">
+      <div class="stats stats-vertical border border-base-content/10 bg-base-200 sm:stats-horizontal">
         <div class="stat">
           <div class="stat-title">Failed Checks</div>
           <div class="stat-value text-2xl text-error">{{ failedCheckCount }}</div>
@@ -456,7 +503,11 @@ function formatDateTime(value?: string) {
       <div class="flex flex-col gap-3 sm:flex-row">
         <label class="form-control w-full sm:w-48">
           <span class="label-text mb-1">Scope</span>
-          <select v-model="selectedScope" class="select select-bordered rounded-box" :disabled="auditLoading || reportLoading || selectedAuditMode === 'static_contract'">
+          <select
+            v-model="selectedScope"
+            class="select-bordered select rounded-box"
+            :disabled="auditLoading || reportLoading || selectedAuditMode === 'static_contract'"
+          >
             <option v-for="scope in scopeOptions" :key="scope.value" :value="scope.value">
               {{ scope.label }}
             </option>
@@ -467,7 +518,7 @@ function formatDateTime(value?: string) {
           <span class="label-text mb-1">Mode</span>
           <select
             v-model="selectedAuditMode"
-            class="select select-bordered rounded-box"
+            class="select-bordered select rounded-box"
             :disabled="auditLoading || reportLoading"
           >
             <option v-for="mode in auditModeOptions" :key="mode.value" :value="mode.value">
@@ -476,17 +527,21 @@ function formatDateTime(value?: string) {
           </select>
         </label>
 
-        <button class="btn btn-primary rounded-box sm:self-end" :disabled="auditLoading || reportLoading" @click="executeAudit">
-          <span v-if="auditLoading" class="loading loading-spinner loading-sm"></span>
+        <button
+          class="btn rounded-box btn-primary sm:self-end"
+          :disabled="auditLoading || reportLoading"
+          @click="executeAudit"
+        >
+          <span v-if="auditLoading" class="loading loading-sm loading-spinner"></span>
           <span v-else>Execute Audit</span>
         </button>
 
         <button
-          class="btn btn-secondary rounded-box sm:self-end"
+          class="btn rounded-box btn-secondary sm:self-end"
           :disabled="reportLoading || auditLoading || !hasExecutedAudit"
           @click="generateReport"
         >
-          <span v-if="reportLoading" class="loading loading-spinner loading-sm"></span>
+          <span v-if="reportLoading" class="loading loading-sm loading-spinner"></span>
           <span v-else>Generate Report</span>
         </button>
       </div>
@@ -497,22 +552,34 @@ function formatDateTime(value?: string) {
         <div class="grid gap-3 sm:grid-cols-3">
           <label class="form-control">
             <span class="label-text mb-1">Contract DID</span>
-            <input v-model="contractDid" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
+            <input
+              v-model="contractDid"
+              class="input-bordered input rounded-box"
+              :disabled="auditLoading || reportLoading"
+            />
           </label>
           <label class="form-control">
             <span class="label-text mb-1">Contract Version</span>
-            <input v-model="contractVersion" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
+            <input
+              v-model="contractVersion"
+              class="input-bordered input rounded-box"
+              :disabled="auditLoading || reportLoading"
+            />
           </label>
           <label class="form-control">
             <span class="label-text mb-1">Policy Version</span>
-            <input v-model="policyVersion" class="input input-bordered rounded-box" :disabled="auditLoading || reportLoading" />
+            <input
+              v-model="policyVersion"
+              class="input-bordered input rounded-box"
+              :disabled="auditLoading || reportLoading"
+            />
           </label>
         </div>
         <label class="form-control">
           <span class="label-text mb-1">Contract JSON-LD</span>
           <textarea
             v-model="contractDocumentText"
-            class="textarea textarea-bordered rounded-box min-h-96 font-mono text-xs leading-5"
+            class="textarea-bordered textarea min-h-96 rounded-box font-mono text-xs leading-5"
             spellcheck="false"
             :disabled="auditLoading || reportLoading"
           ></textarea>
@@ -521,15 +588,15 @@ function formatDateTime(value?: string) {
     </div>
 
     <div v-if="auditLoading" class="p-4">Executing audit...</div>
-    <div v-else-if="error" class="alert alert-error rounded-box">{{ error }}</div>
-    <div v-if="auditHasPassed" class="alert alert-success rounded-box">
+    <div v-else-if="error" class="alert rounded-box alert-error">{{ error }}</div>
+    <div v-if="auditHasPassed" class="alert rounded-box alert-success">
       Audit passed. No failed checks or review findings were returned.
     </div>
 
     <div v-if="!auditLoading && !error" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <div class="overflow-x-auto border border-base-content/10 rounded-box">
+      <div class="overflow-x-auto rounded-box border border-base-content/10">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 px-4 py-3">
-          <div role="tablist" class="tabs tabs-box">
+          <div role="tablist" class="tabs-box tabs">
             <button
               type="button"
               role="tab"
@@ -538,7 +605,7 @@ function formatDateTime(value?: string) {
               @click="selectTab('checks')"
             >
               Checks
-              <span class="badge badge-sm ml-2">{{ checkFindings.length }}</span>
+              <span class="ml-2 badge badge-sm">{{ checkFindings.length }}</span>
             </button>
             <button
               type="button"
@@ -548,23 +615,31 @@ function formatDateTime(value?: string) {
               @click="selectTab('timeline')"
             >
               Timeline
-              <span class="badge badge-sm ml-2">{{ timelineEvents.length }}</span>
+              <span class="ml-2 badge badge-sm">{{ timelineEvents.length }}</span>
             </button>
           </div>
 
           <div v-if="activeAuditTab === 'checks'" class="flex flex-wrap items-center gap-2">
             <span class="text-sm font-medium opacity-70">Table filters</span>
             <details v-for="group in tableFilterGroups" :key="group.key" class="dropdown">
-              <summary class="btn btn-sm btn-outline rounded-box">
+              <summary class="btn rounded-box btn-outline btn-sm">
                 {{ group.label }}
-                <span class="badge badge-sm">{{ checkedTableFilterCount(group.key) }}/{{ tableFilterOptions[group.key].length }}</span>
+                <span class="badge badge-sm">
+                  {{ checkedTableFilterCount(group.key) }}/{{ tableFilterOptions[group.key].length }}
+                </span>
               </summary>
-              <div class="dropdown-content z-10 mt-2 w-72 rounded-box border border-base-content/10 bg-base-100 p-3 shadow">
+              <div
+                class="dropdown-content z-10 mt-2 w-72 rounded-box border border-base-content/10 bg-base-100 p-3 shadow"
+              >
                 <div class="mb-2 flex justify-between gap-2">
-                  <button type="button" class="btn btn-xs btn-ghost" @click="setAllTableFilters(group.key, true)">All</button>
-                  <button type="button" class="btn btn-xs btn-ghost" @click="setAllTableFilters(group.key, false)">None</button>
+                  <button type="button" class="btn btn-ghost btn-xs" @click="setAllTableFilters(group.key, true)">
+                    All
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-xs" @click="setAllTableFilters(group.key, false)">
+                    None
+                  </button>
                 </div>
-                <div class="max-h-64 overflow-auto space-y-1">
+                <div class="max-h-64 space-y-1 overflow-auto">
                   <label
                     v-for="option in tableFilterOptions[group.key]"
                     :key="option"
@@ -614,15 +689,19 @@ function formatDateTime(value?: string) {
                 </span>
               </td>
               <td>{{ finding.did ?? '-' }}</td>
-              <td class="min-w-72 max-w-xl">
+              <td class="max-w-xl min-w-72">
                 <div class="font-medium">{{ checkAssertion(finding) || finding.title || 'Audit finding' }}</div>
-                <div v-if="checkAssertion(finding) && finding.title" class="text-xs opacity-70">{{ finding.title }}</div>
+                <div v-if="checkAssertion(finding) && finding.title" class="text-xs opacity-70">
+                  {{ finding.title }}
+                </div>
                 <div class="text-xs opacity-70">{{ auditResultSummary(finding) }}</div>
               </td>
             </tr>
             <tr v-if="filteredFindings.length === 0">
-              <td colspan="4" class="text-center py-8 opacity-70">
-                {{ hasExecutedAudit ? 'No checks match the selected filters.' : 'Select a scope and execute an audit.' }}
+              <td colspan="4" class="py-8 text-center opacity-70">
+                {{
+                  hasExecutedAudit ? 'No checks match the selected filters.' : 'Select a scope and execute an audit.'
+                }}
               </td>
             </tr>
           </tbody>
@@ -649,7 +728,7 @@ function formatDateTime(value?: string) {
               @keydown.space.prevent="selectFinding(event)"
             >
               <td class="whitespace-nowrap">{{ formatDateTime(event.created_at) }}</td>
-              <td class="min-w-72 max-w-xl">
+              <td class="max-w-xl min-w-72">
                 <div class="font-medium">{{ event.title ?? formatLabel(rawEventType(event) ?? 'Audit event') }}</div>
                 <div class="text-xs opacity-70">{{ event.component ?? '-' }}</div>
               </td>
@@ -657,7 +736,7 @@ function formatDateTime(value?: string) {
               <td>{{ event.did ?? '-' }}</td>
             </tr>
             <tr v-if="timelineEvents.length === 0">
-              <td colspan="4" class="text-center py-8 opacity-70">
+              <td colspan="4" class="py-8 text-center opacity-70">
                 {{ hasExecutedAudit ? 'No timeline events were returned.' : 'Select a scope and execute an audit.' }}
               </td>
             </tr>
@@ -665,27 +744,24 @@ function formatDateTime(value?: string) {
         </table>
       </div>
 
-      <aside class="border border-base-content/10 rounded-box bg-base-100 min-h-80 xl:sticky xl:top-4 xl:self-start">
+      <aside class="min-h-80 rounded-box border border-base-content/10 bg-base-100 xl:sticky xl:top-4 xl:self-start">
         <div class="flex items-center justify-between border-b border-base-content/10 px-4 py-3">
           <h3 class="font-bold">{{ selectedFindingKind === 'event' ? 'Event Details' : 'Check Details' }}</h3>
-          <button
-            v-if="selectedFinding"
-            type="button"
-            class="btn btn-xs btn-ghost"
-            @click="selectedFindingId = null"
-          >
+          <button v-if="selectedFinding" type="button" class="btn btn-ghost btn-xs" @click="selectedFindingId = null">
             Close
           </button>
         </div>
         <div v-if="!selectedFinding" class="p-4 text-sm opacity-70">
           Select a row to inspect the corresponding audit evidence.
         </div>
-        <div v-else class="p-4 space-y-4">
+        <div v-else class="space-y-4 p-4">
           <div v-if="selectedFindingKind === 'check'">
             <div class="mb-2 badge" :class="findingBadgeClass(selectedFinding)">
               {{ auditResultLabel(selectedFinding) }}
             </div>
-            <h4 class="font-bold leading-snug">{{ checkAssertion(selectedFinding) || selectedFinding.title || 'Audit finding' }}</h4>
+            <h4 class="leading-snug font-bold">
+              {{ checkAssertion(selectedFinding) || selectedFinding.title || 'Audit finding' }}
+            </h4>
             <div v-if="checkAssertion(selectedFinding) && selectedFinding.title" class="mt-1 text-sm opacity-70">
               {{ selectedFinding.title }}
             </div>
@@ -699,11 +775,13 @@ function formatDateTime(value?: string) {
 
           <div v-else>
             <div class="mb-2 badge badge-outline">Timeline event</div>
-            <h4 class="font-bold leading-snug">{{ selectedFinding.title ?? formatLabel(rawEventType(selectedFinding) ?? 'Audit event') }}</h4>
+            <h4 class="leading-snug font-bold">
+              {{ selectedFinding.title ?? formatLabel(rawEventType(selectedFinding) ?? 'Audit event') }}
+            </h4>
             <div class="mt-2 text-xs opacity-80">{{ formatDateTime(selectedFinding.created_at) }}</div>
           </div>
 
-          <p class="text-sm whitespace-pre-wrap break-words opacity-80">{{ selectedFinding.description }}</p>
+          <p class="text-sm break-words whitespace-pre-wrap opacity-80">{{ selectedFinding.description }}</p>
 
           <dl class="divide-y divide-base-content/10 text-sm">
             <div
@@ -716,19 +794,22 @@ function formatDateTime(value?: string) {
             </div>
           </dl>
 
-          <details v-if="selectedFindingRawDetails" class="collapse collapse-arrow border border-base-content/10 rounded-box">
+          <details
+            v-if="selectedFindingRawDetails"
+            class="collapse-arrow collapse rounded-box border border-base-content/10"
+          >
             <summary class="collapse-title text-sm font-medium">Raw Details</summary>
             <div class="collapse-content">
-              <pre class="text-xs whitespace-pre-wrap break-words">{{ selectedFindingRawDetails }}</pre>
+              <pre class="text-xs break-words whitespace-pre-wrap">{{ selectedFindingRawDetails }}</pre>
             </div>
           </details>
         </div>
       </aside>
     </div>
 
-    <div v-if="report" class="border border-base-content/10 rounded-box p-4 bg-base-200">
-      <h3 class="font-bold mb-3">Structured Audit Report</h3>
-      <pre class="text-xs whitespace-pre-wrap break-words">{{ reportText }}</pre>
+    <div v-if="report" class="rounded-box border border-base-content/10 bg-base-200 p-4">
+      <h3 class="mb-3 font-bold">Structured Audit Report</h3>
+      <pre class="text-xs break-words whitespace-pre-wrap">{{ reportText }}</pre>
     </div>
   </section>
 </template>

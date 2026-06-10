@@ -57,11 +57,12 @@ import type {
   MergedApprovedTemplateBlock,
 } from '@template-repository/models/contract-template'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
+import { useFlattenedOutline, type FlattenedOutlineItem } from '@template-repository/composables/useFlattenedOutline'
 import {
-  useFlattenedOutline,
-  type FlattenedOutlineItem,
-} from '@template-repository/composables/useFlattenedOutline'
-import { isSectionBlock, isApprovedTemplateBlock, isMergedApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
+  isSectionBlock,
+  isApprovedTemplateBlock,
+  isMergedApprovedTemplateBlock,
+} from '@/modules/template-repository/models/contract-template'
 import EditorBlock from '@template-repository/components/builder-editor/document-block/EditorBlock.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId } from '@template-repository/utils/template-data-ref'

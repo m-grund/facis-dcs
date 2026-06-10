@@ -6,7 +6,7 @@ import {
   type DocumentBlock,
   type SemanticCondition,
   type SemanticValueConstraint,
-} from "@/modules/template-repository/models/contract-template";
+} from '@/modules/template-repository/models/contract-template'
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
@@ -129,7 +129,10 @@ export function useSemanticValueVerification() {
     }
   }
 
-  function validateValueConstraint(value: string | number | boolean, constraint?: SemanticValueConstraint): string | null {
+  function validateValueConstraint(
+    value: string | number | boolean,
+    constraint?: SemanticValueConstraint,
+  ): string | null {
     if (!constraint) return null
     const allowedValues = resolveAllowedValues(constraint)
     if (allowedValues.length) {

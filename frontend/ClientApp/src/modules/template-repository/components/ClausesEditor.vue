@@ -27,7 +27,7 @@
       />
 
       <div v-if="uiStore.isTemplateEditable && ontologyDomainTypes.length" class="mt-5 border-t border-base-300 pt-4">
-        <h4 class="mb-3 text-xs font-semibold uppercase text-base-content/50">Domain types</h4>
+        <h4 class="mb-3 text-xs font-semibold text-base-content/50 uppercase">Domain types</h4>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div
             v-for="domainType in ontologyDomainTypes"
@@ -42,7 +42,7 @@
               <span class="label-text mb-1 block text-xs text-base-content/60">Contract role</span>
               <select
                 v-model="selectedDomainTypeRoles[domainType.id]"
-                class="select select-bordered select-xs w-full text-left"
+                class="select-bordered select w-full select-xs text-left"
               >
                 <option value="">Select role</option>
                 <option v-for="option in roleOptions" :key="option.value" :value="option.value">
@@ -53,7 +53,7 @@
             <span v-else class="hidden md:block" />
             <button
               type="button"
-              class="btn btn-secondary btn-xs justify-self-start transition-transform group-hover:translate-x-0.5 md:justify-self-end"
+              class="btn justify-self-start transition-transform btn-xs btn-secondary group-hover:translate-x-0.5 md:justify-self-end"
               :disabled="domainType.roleRequired && !selectedDomainTypeRoles[domainType.id]"
               @click="describeNewClauseFromDomainType(domainType.id)"
             >
@@ -129,11 +129,11 @@ const semanticConditions = computed(() => {
   return [...mainSemanticConditions.value, ...subTemplateConditions]
 })
 
-const newClauseSemanticConditions = computed(() => (
+const newClauseSemanticConditions = computed(() =>
   draftDomainTypeCondition.value
     ? [...semanticConditions.value, draftDomainTypeCondition.value]
-    : semanticConditions.value
-))
+    : semanticConditions.value,
+)
 
 function addClause(payload: { title: string; text: string }) {
   const text = payload.text
@@ -183,7 +183,7 @@ function deleteClause(blockId: string) {
 function describeNewClauseFromDomainType(domainTypeId: string) {
   const domainType = ontologyDomainTypes.find((item) => item.id === domainTypeId)
   if (!domainType) return
-  const role = domainType.roleRequired ? selectedDomainTypeRoles.value[domainType.id] ?? '' : ''
+  const role = domainType.roleRequired ? (selectedDomainTypeRoles.value[domainType.id] ?? '') : ''
   if (domainType.roleRequired && !role) return
 
   const conditionId = `${domainType.id}-${role || 'default'}-${crypto.randomUUID()}`

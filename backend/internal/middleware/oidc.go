@@ -3,27 +3,30 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// OIDCConfig holds OIDC provider configuration
-type OIDCConfig struct {
-	// Example: https://keycloak.example.com/auth/realms/dcs
+// HydraJWTConfig holds OIDC provider configuration.
+type HydraJWTConfig struct {
+	// Example: http://localhost:30444
 	IssuerURL string
-	// Example: "dcs-service". "aud" claim in JWT must match this value.
+	// Example: "dcs-client". Hydra JWT access tokens use the client_id claim (RFC 9068).
 	ClientID string
 }
 
-// OIDCValidator validates JWT tokens from OIDC providers
-type OIDCValidator struct {
+// HydraJWTValidator validates JWT tokens from OIDC providers.
+type HydraJWTValidator struct {
 	provider *oidc.Provider
 	verifier *oidc.IDTokenVerifier
-	config   OIDCConfig
+	config   HydraJWTConfig
 }
 
 const (
@@ -33,22 +36,22 @@ const (
 	oidcDiscoveryDefaultMaxBackoff     = 5 * time.Second
 )
 
-// NewOIDCValidator connects to the OIDC provider to get public keys
-func NewOIDCValidator(ctx context.Context, config OIDCConfig) (*OIDCValidator, error) {
-	provider, err := discoverOIDCProvider(ctx, config.IssuerURL)
+// NewHydraJWTValidator connects to the OIDC provider to get public keys.
+func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWTValidator, error) {
+	provider, err := oidc.NewProvider(ctx, config.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover OIDC provider: %w", err)
 	}
 
-	// Skip audience check — Keycloak places the client ID in the "azp" claim,
-	// not in "aud". The token signature and issuer are still fully validated.
+	// Skip audience check — client binding is validated in ValidateToken via client_id (and aud).
+	// The token signature and issuer are still fully validated.
 	verifier := provider.Verifier(&oidc.Config{
 		ClientID:                   config.ClientID,
 		SkipClientIDCheck:          true,
 		InsecureSkipSignatureCheck: os.Getenv("JWT_ALG_NONE_SUPPORTED") == "true",
 	})
 
-	return &OIDCValidator{
+	return &HydraJWTValidator{
 		provider: provider,
 		verifier: verifier,
 		config:   config,
@@ -118,65 +121,75 @@ func oidcDiscoveryDuration(envName string, fallback time.Duration) time.Duration
 
 // TokenInfo holds the validated identity extracted from a JWT.
 type TokenInfo struct {
-	Roles         []string
-	Username      string
-	ParticipantID string
+	Roles          []string
+	HolderDID      string
+	ParticipantDID string
 }
 
-// ValidateToken verifies the token signature, issuer, and azp claim, then
-// returns the caller's roles and username.
-func (v *OIDCValidator) ValidateToken(ctx context.Context, token string) (*TokenInfo, error) {
+type Claims struct {
+	Subject  string                 `json:"sub"`
+	Issuer   string                 `json:"iss"`
+	Ext      map[string]interface{} `json:"ext"`
+	Audience interface{}            `json:"aud"`
+	ClientID string                 `json:"client_id"`
+}
+
+// ValidateToken verifies the token signature, issuer, and client binding, then
+// returns the caller's roles, holder DID, and participant DID.
+func (v *HydraJWTValidator) ValidateToken(ctx context.Context, token string) (*TokenInfo, error) {
 	idToken, err := v.verifier.Verify(ctx, token)
 	if err != nil {
 		return nil, fmt.Errorf("token verification failed: %w", err)
 	}
 
-	var claims map[string]interface{}
+	var claims Claims
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to parse token claims: %w", err)
 	}
 
-	// Validate that the authorized party matches our client ID.
-	azp, _ := claims["azp"].(string)
-	if azp != v.config.ClientID {
-		return nil, fmt.Errorf("azp claim %q does not match expected client ID %q", azp, v.config.ClientID)
+	if !matchesClientID(claims, v.config.ClientID) {
+		return nil, fmt.Errorf("token is not bound to client ID %q", v.config.ClientID)
 	}
 
-	username, _ := claims["preferred_username"].(string)
-	if username == "" {
-		username, _ = claims["sub"].(string)
+	issuer, ok := claims.Ext["iss"].(string)
+	if !ok {
+		return nil, fmt.Errorf("no iss claim in ext claim found in token")
 	}
-	// This value is set by the Keycloak -> Clients -> <client_id>
-	// -> <client_id>-dedicated -> Configure a new mapper / Add mapper (by configuration) -> Hardcoded claim
-	// TBD: use workaround solution until we have a proper participant ID in the credential.
-	participantID := "did:web:argo.asd-stack.eu:facis:participant:cfc9d0a5-cd79-4807-8eef-e245ab0ffee8"
 
 	return &TokenInfo{
-		Roles:         extractRoles(claims),
-		Username:      username,
-		ParticipantID: participantID,
+		Roles:          extractRoles(claims),
+		HolderDID:      claims.Subject,
+		ParticipantDID: issuer,
 	}, nil
 }
 
-// extractRoles extracts client-scoped roles from the
-// resource_access.<azp>.roles JWT claim.
-func extractRoles(claims map[string]interface{}) []string {
-	ra, ok := claims["resource_access"].(map[string]interface{})
-	if !ok {
-		return []string{}
-	}
-	azp, ok := claims["azp"].(string)
-	if !ok {
-		return []string{}
-	}
-	client, ok := ra[azp].(map[string]interface{})
-	if !ok {
-		return []string{}
-	}
-	if roles := toStringSlice(client["roles"]); len(roles) > 0 {
-		return roles
+// extractRoles extracts DCS roles from a Hydra access token.
+func extractRoles(claims Claims) []string {
+	if claims.Ext != nil {
+		if roles := toStringSlice(claims.Ext["roles"]); len(roles) > 0 {
+			return roles
+		}
 	}
 	return []string{}
+}
+
+// matchesClientID matches the JWT token to the expected OAuth client.
+func matchesClientID(claims Claims, clientID string) bool {
+
+	if claims.ClientID != "" {
+		return claims.ClientID == clientID
+	}
+	switch aud := claims.Audience.(type) {
+	case string:
+		return aud == clientID
+	case []interface{}:
+		for _, item := range aud {
+			if audience, ok := item.(string); ok && audience == clientID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func toStringSlice(v interface{}) []string {
@@ -208,22 +221,31 @@ type authCtxKey struct{}
 // AuthContext carries the validated caller identity through the request context.
 type AuthContext struct {
 	Roles         []string
-	Username      string
+	HolderDID     string
 	ParticipantID string
 }
 
-// GetRoles extracts roles from the request context.
-func GetRoles(ctx context.Context) []string {
+// GetUserRoles extracts roles from the request context.
+func GetUserRoles(ctx context.Context) []userrole.UserRole {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.Roles
+		userRoles := make([]userrole.UserRole, len(ac.Roles))
+		for i, role := range ac.Roles {
+			userRole, err := userrole.NewUserRole(role)
+			if err != nil {
+				log.Printf("failed to parse user role %q: %v", role, err)
+			}
+			userRoles[i] = userRole
+		}
+		return userRoles
+
 	}
-	return []string{}
+	return []userrole.UserRole{}
 }
 
-// GetUsername extracts the authenticated username from the request context.
-func GetUsername(ctx context.Context) string {
+// GetHolderDID extracts the authenticated DID from the request context.
+func GetHolderDID(ctx context.Context) string {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.Username
+		return ac.HolderDID
 	}
 	return ""
 }
@@ -236,17 +258,7 @@ func GetParticipantID(ctx context.Context) string {
 	return ""
 }
 
-// HasRole checks if the context contains a specific role.
-func HasRole(ctx context.Context, requiredRole string) bool {
-	for _, role := range GetRoles(ctx) {
-		if role == requiredRole {
-			return true
-		}
-	}
-	return false
-}
-
 // InjectAuthContext injects the validated identity into the request context.
-func InjectAuthContext(ctx context.Context, roles []string, username string, participantID string) context.Context {
-	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, Username: username, ParticipantID: participantID})
+func InjectAuthContext(ctx context.Context, roles []string, holderDID string, participantID string) context.Context {
+	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, HolderDID: holderDID, ParticipantID: participantID})
 }

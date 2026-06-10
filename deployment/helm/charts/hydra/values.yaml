@@ -1,0 +1,30 @@
+image:
+  repository: oryd/hydra
+  tag: "v2.2.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  publicPort: 4444
+  adminPort: 4445
+  publicNodePort: null
+  adminNodePort: null
+
+config:
+  # For production, use a persistent DSN (for example PostgreSQL).
+  dsn: "memory"
+  selfIssuerURL: ""
+  loginURL: ""
+  consentURL: ""
+  logoutURL: ""
+  publicTLS: false
+  adminTLS: false
+  # Enable Hydra dev mode (required when selfIssuerURL uses http://).
+  # Never set to true in production.
+  dev: false
+
+secrets:
+  # Required for non-dev deployments. Leave empty for generated fallback.
+  system: ""
+
+resources: {}

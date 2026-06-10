@@ -62,47 +62,50 @@ const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
 
-watch(hasDid, (hasDid) => {
-  templateEditorUiStore.reset()
-  if (!hasDid) return
+watch(
+  hasDid,
+  (hasDid) => {
+    templateEditorUiStore.reset()
+    if (!hasDid) return
 
-  hasChosenType.value = true
+    hasChosenType.value = true
     const did = String(route.params.did ?? '')
-  contractTemplateService.retrieveById({ did })
-    .then(template => {
-      if (!template) {
-        draftStore.reset()
-        return
-      }
-      templateEditorUiStore.setTemplateEditable(false)
-      contractTemplate.value = template
+    contractTemplateService
+      .retrieveById({ did })
+      .then((template) => {
+        if (!template) {
+          draftStore.reset()
+          return
+        }
+        templateEditorUiStore.setTemplateEditable(false)
+        contractTemplate.value = template
 
-      draftStore.reset({
-        did: template.did,
-        name: template.name,
-        description: template.description,
-        templateDataVersion: template.template_data?.templateDataVersion ?? 1,
-        documentOutline: template.template_data?.documentOutline ?? [],
-        documentBlocks: template.template_data?.documentBlocks ?? [],
-        semanticConditions: template.template_data?.semanticConditions ?? [],
-        customMetaData: template.template_data?.customMetaData ?? [],
-        semanticProfile: template.template_data?.semanticProfile,
-        templateVariables: template.template_data?.templateVariables ?? [],
-        placeholderBindings: template.template_data?.placeholderBindings ?? [],
-        semanticRules: template.template_data?.semanticRules ?? [],
-        sla: template.template_data?.sla ?? null,
-        subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
-        templateType: template.template_type,
-        state: template.state,
-        version: template.version ?? null,
-        document_number: template.document_number ?? null,
-        updated_at: template.updated_at ?? null,
-        responsible_persons: template.responsible_persons ?? null,
+        draftStore.reset({
+          did: template.did,
+          name: template.name,
+          description: template.description,
+          templateDataVersion: template.template_data?.templateDataVersion ?? 1,
+          documentOutline: template.template_data?.documentOutline ?? [],
+          documentBlocks: template.template_data?.documentBlocks ?? [],
+          semanticConditions: template.template_data?.semanticConditions ?? [],
+          customMetaData: template.template_data?.customMetaData ?? [],
+          semanticProfile: template.template_data?.semanticProfile,
+          templateVariables: template.template_data?.templateVariables ?? [],
+          placeholderBindings: template.template_data?.placeholderBindings ?? [],
+          semanticRules: template.template_data?.semanticRules ?? [],
+          sla: template.template_data?.sla ?? null,
+          subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
+          templateType: template.template_type,
+          state: template.state,
+          version: template.version ?? null,
+          document_number: template.document_number ?? null,
+          updated_at: template.updated_at ?? null,
+          responsible: template.responsible ?? null,
+        })
       })
-    })
-    .catch((error: unknown) => {
-      console.error('Failed to load template for editing', error)
-    })
+      .catch((error: unknown) => {
+        console.error('Failed to load template for editing', error)
+      })
   },
   { immediate: true },
 )

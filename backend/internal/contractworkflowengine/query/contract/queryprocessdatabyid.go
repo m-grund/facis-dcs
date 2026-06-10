@@ -19,6 +19,7 @@ import (
 type GetProcessDataByIDQry struct {
 	DID         string
 	RetrievedBy string
+	HolderDID   string
 }
 
 type GetProcessDataByIDResult struct {

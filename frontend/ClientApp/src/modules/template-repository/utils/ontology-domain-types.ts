@@ -21,9 +21,7 @@ export const ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS: ReadonlySet<string> = new Set(
   ONTOLOGY_DOMAIN_TYPES.flatMap((domainType) => domainType.fields.map((field) => field.semanticPath)),
 )
 
-export function buildOntologyDomainTypeParameters(
-  domainType: OntologyDomainType,
-): SemanticConditionParameter[] {
+export function buildOntologyDomainTypeParameters(domainType: OntologyDomainType): SemanticConditionParameter[] {
   return domainType.fields.map((field) => ({
     parameterName: field.semanticPath,
     type: field.type,
@@ -45,11 +43,7 @@ export function buildOntologyDomainTypeClauseText(
   const roleLabel = role ? roleLabelFor(role) : ''
   const title = roleLabel ? `${roleLabel} ${domainType.label}` : domainType.label
   const fieldLines = domainType.fields.map((field) => buildDomainTypeClauseFieldLine(conditionId, field))
-  return [
-    title,
-    '',
-    ...fieldLines,
-  ].join('\n')
+  return [title, '', ...fieldLines].join('\n')
 }
 
 export function roleLabelFor(role: SemanticEntityRole): string {
@@ -67,11 +61,11 @@ function buildOntologyDomainTypes(): OntologyDomainType[] {
     const fields = fieldsForEntityType(entityType.value)
     if (!fields.length) continue
     domainTypes.push({
-        id: entityType.value,
-        label: entityType.label,
-        entityType: entityType.value,
-        roleRequired: fields.some((field) => firstSemanticPathSegment(field.semanticPath) === 'company'),
-        fields,
+      id: entityType.value,
+      label: entityType.label,
+      entityType: entityType.value,
+      roleRequired: fields.some((field) => firstSemanticPathSegment(field.semanticPath) === 'company'),
+      fields,
     })
   }
   return domainTypes
@@ -83,9 +77,9 @@ function fieldsForEntityType(entityType: string): DomainFieldDefinition[] {
   )
   const fieldPrefixes = new Set(directlyTyped.map((field) => firstSemanticPathSegment(field.semanticPath)))
   if (!fieldPrefixes.size) return []
-  return ONTOLOGY_DOMAIN_FIELDS
-    .filter((field) => fieldPrefixes.has(firstSemanticPathSegment(field.semanticPath)))
-    .sort((left, right) => left.label.localeCompare(right.label))
+  return ONTOLOGY_DOMAIN_FIELDS.filter((field) => fieldPrefixes.has(firstSemanticPathSegment(field.semanticPath))).sort(
+    (left, right) => left.label.localeCompare(right.label),
+  )
 }
 
 function firstSemanticPathSegment(path: string): string {

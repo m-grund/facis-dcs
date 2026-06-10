@@ -2,7 +2,7 @@ export type AuditFindingCategory = 'violation' | 'inconsistency' | 'compliance_c
 
 export interface AuditFinding {
   id: number | string
-  category: AuditFindingCategory | string
+  category: AuditFindingCategory | (string & {})
   title?: string
   description?: string
   component?: string

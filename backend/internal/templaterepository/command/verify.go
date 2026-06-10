@@ -14,6 +14,7 @@ import (
 	"digital-contracting-service/internal/base/validation"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
@@ -28,6 +29,9 @@ type VerifyCmd struct {
 	DID           string
 	VerifiedBy    string
 	ParticipantID string
+	Token         string
+	HolderDID     string
+	UserRoles     userrole.UserRoles
 }
 
 type Verifier struct {
@@ -86,6 +90,8 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		Version:        processData.Version,
 		VerifiedBy:     cmd.VerifiedBy,
 		OccurredAt:     time.Now().UTC(),
+		HolderDID:      cmd.HolderDID,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

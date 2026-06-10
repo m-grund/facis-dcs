@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
+import { bindHydraLoginChallengeFromURL } from './hydra-login-guard'
 import { router } from './router/router'
 import { useErrorStore } from './stores/error-store'
 
@@ -20,4 +21,6 @@ app.config.errorHandler = (err, _instance, _info) => {
 
 app.use(router)
 
-app.mount('#app')
+void bindHydraLoginChallengeFromURL().finally(() => {
+  app.mount('#app')
+})

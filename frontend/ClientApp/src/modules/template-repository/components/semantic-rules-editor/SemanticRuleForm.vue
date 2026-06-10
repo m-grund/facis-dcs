@@ -20,11 +20,13 @@
     <div class="space-y-4">
       <p class="label-text mb-1 text-xs text-base-content/60">Parameters</p>
       <div
-        class="grid grid-cols-1 md:grid-cols-12 gap-x-3 p-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50">
-        <p class="md:col-span-12 text-xs font-medium text-base-content/70 mb-2">New parameter</p>
-        <div class="md:col-span-4 flex flex-col gap-1">
-          <label class="label py-0 min-h-0">
-            <span class="label-text text-xs text-base-content/60">Domain field
+        class="grid grid-cols-1 gap-x-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50 p-3 md:grid-cols-12"
+      >
+        <p class="mb-2 text-xs font-medium text-base-content/70 md:col-span-12">New parameter</p>
+        <div class="flex flex-col gap-1 md:col-span-4">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">
+              Domain field
               <RequiredIndicator />
             </span>
           </label>
@@ -32,7 +34,7 @@
             <input
               v-model="domainFieldSearch"
               type="search"
-              class="input input-bordered input-sm w-full h-9"
+              class="input-bordered input input-sm h-9 w-full"
               :class="{ 'input-primary': selectedDomainPath }"
               placeholder="Search domain fields"
               autocomplete="off"
@@ -43,18 +45,18 @@
             />
             <div
               v-if="showDomainFieldOptions"
-              class="absolute z-30 mt-1 w-full rounded-lg border border-base-300 bg-base-100 shadow-lg max-h-64 overflow-y-auto"
+              class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
             >
               <template v-if="groupedDomainFields.length">
                 <section v-for="group in groupedDomainFields" :key="group.name">
-                  <div class="sticky top-0 z-10 bg-base-100 px-3 py-1 border-b border-base-200">
-                    <p class="text-xs font-semibold uppercase text-base-content/50">{{ group.name }}</p>
+                  <div class="sticky top-0 z-10 border-b border-base-200 bg-base-100 px-3 py-1">
+                    <p class="text-xs font-semibold text-base-content/50 uppercase">{{ group.name }}</p>
                   </div>
                   <button
                     v-for="field in group.fields"
                     :key="field.semanticPath"
                     type="button"
-                    class="w-full text-left px-3 py-2 hover:bg-base-200 transition-colors border-b border-base-200 last:border-b-0"
+                    class="w-full border-b border-base-200 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-base-200"
                     :class="{ 'bg-primary/10': selectedDomainPath === field.semanticPath }"
                     @mousedown.prevent="selectDomainField(field.semanticPath)"
                   >
@@ -75,13 +77,14 @@
           </p>
           <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
         </div>
-        <div class="md:col-span-2 flex flex-col gap-1">
-          <label class="label py-0 min-h-0">
-            <span class="label-text text-xs text-base-content/60">Type
+        <div class="flex flex-col gap-1 md:col-span-2">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">
+              Type
               <RequiredIndicator />
             </span>
           </label>
-          <select v-model="draftParameter.type" class="select select-bordered select-sm w-full h-9" disabled>
+          <select v-model="draftParameter.type" class="select-bordered select h-9 w-full select-sm" disabled>
             <option value="date">Date</option>
             <option value="string">Text</option>
             <option value="decimal">Decimal</option>
@@ -90,14 +93,14 @@
             <option value="enum">Enum</option>
           </select>
         </div>
-        <div class="md:col-span-3 flex flex-col gap-1">
-          <label class="label py-0 min-h-0">
+        <div class="flex flex-col gap-1 md:col-span-3">
+          <label class="label min-h-0 py-0">
             <span class="label-text text-xs text-base-content/60">Fixed value</span>
           </label>
           <select
             v-if="fixedValueOptions.length"
             v-model="draftFixedValue"
-            class="select select-bordered select-sm w-full h-9"
+            class="select-bordered select h-9 w-full select-sm"
           >
             <option value="">None</option>
             <option v-for="value in fixedValueOptions" :key="value" :value="value">{{ value }}</option>
@@ -106,7 +109,7 @@
             v-else
             v-model="draftFixedValue"
             type="text"
-            class="input input-bordered input-sm w-full h-9"
+            class="input-bordered input input-sm h-9 w-full"
             placeholder="None"
           />
           <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
@@ -126,13 +129,19 @@
             </label>
           </div>
         </div>
-        <div class="md:col-span-1 flex flex-col gap-1">
-          <label class="label py-0 min-h-0 invisible">
+        <div class="flex flex-col gap-1 md:col-span-1">
+          <label class="invisible label min-h-0 py-0">
             <span class="label-text text-xs">Add</span>
           </label>
-          <div class="h-9 flex items-center">
-            <button type="button" class="btn btn-secondary btn-sm btn-square w-full" aria-label="Add parameter" title="Add parameter" :disabled="!canAddParameter"
-              @click="addParameter">
+          <div class="flex h-9 items-center">
+            <button
+              type="button"
+              class="btn btn-square w-full btn-sm btn-secondary"
+              aria-label="Add parameter"
+              title="Add parameter"
+              :disabled="!canAddParameter"
+              @click="addParameter"
+            >
               +
             </button>
           </div>
@@ -143,12 +152,18 @@
       <div v-if="newCondition.parameters.length" class="space-y-2">
         <p class="text-xs font-medium text-base-content/70">Added parameters</p>
         <ul class="space-y-2">
-          <li v-for="(param, idx) in newCondition.parameters" :key="idx"
-            class="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-base-100 border border-base-300">
-            <span class="font-mono text-sm font-medium border border-base-300 rounded px-2 py-0.5 bg-base-200/50">{{
-              semanticParameterLabel(param) }}</span>
+          <li
+            v-for="(param, idx) in newCondition.parameters"
+            :key="idx"
+            class="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2.5"
+          >
+            <span class="rounded border border-base-300 bg-base-200/50 px-2 py-0.5 font-mono text-sm font-medium">
+              {{ semanticParameterLabel(param) }}
+            </span>
             <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
-            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">fixed: {{ param.fixedValue }}</span>
+            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">
+              fixed: {{ param.fixedValue }}
+            </span>
             <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
               {{ formatValueConstraint(param.valueConstraint) }}
             </span>
@@ -244,7 +259,7 @@ function getDefaultNewCondition(): DraftConditionPayload {
 const newCondition = ref<DraftConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
 const draftFixedValue = ref('')
-const selectedDomainPath = ref<DomainSemanticPath | ''>('')
+const selectedDomainPath = ref<DomainSemanticPath>('')
 const domainFieldSearch = ref('')
 const showDomainFieldOptions = ref(false)
 const isEditMode = computed(() => props.mode === 'edit')
@@ -268,9 +283,7 @@ const groupedDomainFields = computed(() => {
       field.valueConstraint?.format ?? '',
       field.valueConstraint?.allowedValuesRef ?? '',
       field.valueConstraint?.allowedValues?.join(' ') ?? '',
-    ].some((value) =>
-      value.toLowerCase().includes(query),
-    )
+    ].some((value) => value.toLowerCase().includes(query))
   })
   const byGroup = new Map<string, typeof filtered>()
   for (const field of filtered) {
@@ -301,7 +314,10 @@ watch(
       schemaVersion: props.initialCondition.schemaVersion,
       entityType: props.initialCondition.entityType ?? '',
       entityRole: props.initialCondition.entityRole ?? '',
-      parameters: props.initialCondition.parameters.map((p) => ({ ...p, valueConstraint: cloneValueConstraint(p.valueConstraint) })),
+      parameters: props.initialCondition.parameters.map((p) => ({
+        ...p,
+        valueConstraint: cloneValueConstraint(p.valueConstraint),
+      })),
     }
     draftParameter.value = defaultParam()
     draftFixedValue.value = ''
@@ -493,5 +509,4 @@ function validateDraftFixedValue(): string {
   }
   return ''
 }
-
 </script>

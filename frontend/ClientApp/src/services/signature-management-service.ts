@@ -73,21 +73,15 @@ export const signatureManagementService = {
   },
 
   async verifySignature(did: string): Promise<SignatureVerifyResult> {
-    return http
-      .post<SignatureVerifyResult>('/signature/verify', { did })
-      .then((res) => res.data)
+    return http.post<SignatureVerifyResult>('/signature/verify', { did }).then((res) => res.data)
   },
 
   async validateSignature(did: string): Promise<SignatureValidateResult> {
-    return http
-      .post<SignatureValidateResult>('/signature/validate', { did })
-      .then((res) => res.data)
+    return http.post<SignatureValidateResult>('/signature/validate', { did }).then((res) => res.data)
   },
 
   async complianceCheck(did: string): Promise<SignatureComplianceResult> {
-    return http
-      .post<SignatureComplianceResult>('/signature/compliance', { did })
-      .then((res) => res.data)
+    return http.post<SignatureComplianceResult>('/signature/compliance', { did }).then((res) => res.data)
   },
 
   async revokeSignature(did: string, signerDid: string): Promise<void> {
@@ -95,8 +89,6 @@ export const signatureManagementService = {
   },
 
   async getAudit(did: string): Promise<SignatureAuditEntry[]> {
-    return http
-      .get<SignatureAuditEntry[]>('/signature/audit', { params: { did } })
-      .then((res) => res.data ?? [])
+    return http.get<SignatureAuditEntry[]>('/signature/audit', { params: { did } }).then((res) => res.data ?? [])
   },
 }

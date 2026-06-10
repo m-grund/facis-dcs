@@ -116,10 +116,8 @@ Resolve Keycloak port from explicit override, in-chart service, or scheme defaul
 {{- .Values.serviceDiscovery.keycloakPort -}}
 {{- else if .Values.keycloak.enabled -}}
 {{- default 8080 .Values.keycloak.service.port -}}
-{{- else if eq (default "http" .Values.oidc.keycloakScheme) "https" -}}
-443
 {{- else -}}
-80
+443
 {{- end -}}
 {{- end }}
 
@@ -158,25 +156,36 @@ NATS_URL override or derived from nats settings.
 {{- end }}
 
 {{/*
-OIDC issuer override or derived from keycloak settings.
-Uses external URL (istio/ingress host) for browser-based OIDC flows.
+Hydra OAuth2/OIDC issuer (URLs issuer / discovery). Requires hydra.enabled.
 */}}
-{{- define "digital-contracting-service.oidcIssuerURL" -}}
-{{- if .Values.oidc.issuerURL -}}
-{{- .Values.oidc.issuerURL -}}
-{{- else if and .Values.keycloak.enabled .Values.keycloak.route.path -}}
-{{- $scheme := default "https" .Values.oidc.keycloakScheme -}}
-{{- $realm := default "gaia-x" .Values.oidc.realm -}}
-{{- $basePath := printf "/%s" (trimAll "/" .Values.keycloak.route.path) -}}
-{{- $host := "" -}}
-{{- if and .Values.istio.enabled (gt (len .Values.istio.hosts) 0) -}}
-{{- $host = index .Values.istio.hosts 0 -}}
-{{- else if and .Values.ingress.enabled (gt (len .Values.ingress.hosts) 0) -}}
-{{- $host = (index .Values.ingress.hosts 0).host -}}
+{{- define "digital-contracting-service.hydraIssuerURL" -}}
+{{- if .Values.hydra.enabled -}}
+{{- if .Values.hydra.config.selfIssuerURL -}}
+{{- .Values.hydra.config.selfIssuerURL -}}
+{{- else -}}
+{{- printf "http://%s-hydra:%d" .Release.Name (.Values.hydra.service.publicPort | int) -}}
 {{- end -}}
-{{- if $host -}}
-{{- printf "%s://%s%s/realms/%s" $scheme $host $basePath $realm -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Hydra admin API base URL (login/consent accept).
+*/}}
+{{- define "digital-contracting-service.hydraAdminURL" -}}
+{{- if .Values.hydra.enabled -}}
+{{- printf "http://%s-hydra:%d" .Release.Name (.Values.hydra.service.adminPort | int) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Keycloak realm URL for Federated Catalogue integration only.
+*/}}
+{{- define "digital-contracting-service.fcKeycloakRealmURL" -}}
+{{- if .Values.fcKeycloak.realmURL -}}
+{{- .Values.fcKeycloak.realmURL -}}
+{{- else if .Values.keycloak.enabled -}}
+{{- $port := .Values.keycloak.service.port | default 8080 | int -}}
+{{- printf "http://%s-keycloak:%d/realms/gaia-x" .Release.Name $port -}}
 {{- else -}}
 {{- "" -}}
 {{- end -}}
@@ -331,4 +340,18 @@ Normalize Keycloak route path (leading slash, no trailing slash).
 {{- if .Values.keycloak.route.path -}}
 {{- printf "/%s" (trimAll "/" (.Values.keycloak.route.path | toString)) -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+OID4VP trust ConfigMap name.
+*/}}
+{{- define "digital-contracting-service.oid4vpTrustConfigMapName" -}}
+{{- default (printf "%s-oid4vp-trust" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.trust.configMapName -}}
+{{- end }}
+
+{{/*
+Kubernetes secret holding demo wallet private keys (synced from Vault).
+*/}}
+{{- define "digital-contracting-service.demoWalletSecretName" -}}
+{{- default (printf "%s-demo-wallet" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.demoWallet.secretName -}}
 {{- end }}

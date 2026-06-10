@@ -1,7 +1,12 @@
 <template>
-  <li class="flex items-center gap-1.5 rounded px-1 py-0.5 -mx-1" :class="rowClass" @click="$emit('click')">
-    <span class="border border-base-300 rounded px-1" @mouseenter="$emit('mouseenter')"
-      @mouseleave="$emit('mouseleave')">{{ label }}</span>
+  <li class="-mx-1 flex items-center gap-1.5 rounded px-1 py-0.5" :class="rowClass" @click="$emit('click')">
+    <span
+      class="rounded border border-base-300 px-1"
+      @mouseenter="$emit('mouseenter')"
+      @mouseleave="$emit('mouseleave')"
+    >
+      {{ label }}
+    </span>
     <span v-if="param.fixedValue !== undefined" class="text-base-content/50">fixed: {{ param.fixedValue }}</span>
     <span v-else class="text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
     <span class="text-base-content/40">({{ semanticParameterTypeLabel(param.type) }})</span>
@@ -40,7 +45,8 @@ const constraintLabel = computed(() => {
   if (constraint.allowedValuesRef) return constraint.allowedValuesRef
   if (constraint.format) return constraint.format
   if (constraint.allowedValues?.length) return constraint.allowedValues.join(', ')
-  if (constraint.min !== undefined || constraint.max !== undefined) return `${constraint.min ?? '-'}-${constraint.max ?? '-'}`
+  if (constraint.min !== undefined || constraint.max !== undefined)
+    return `${constraint.min ?? '-'}-${constraint.max ?? '-'}`
   return ''
 })
 </script>

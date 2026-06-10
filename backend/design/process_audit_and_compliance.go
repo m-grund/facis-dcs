@@ -59,7 +59,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(PACAuditRequest)

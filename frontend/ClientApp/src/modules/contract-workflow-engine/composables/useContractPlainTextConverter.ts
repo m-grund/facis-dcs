@@ -9,7 +9,7 @@ import type {
   DocumentOutlineBlock,
   SectionBlock,
   SemanticCondition,
-  TextBlock
+  TextBlock,
 } from '@/modules/template-repository/models/contract-template'
 import {
   isApprovedTemplateBlock,

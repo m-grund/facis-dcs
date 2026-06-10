@@ -3,17 +3,20 @@ package command
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
-	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
+	event2 "digital-contracting-service/internal/signingmanagement/event"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -21,9 +24,10 @@ import (
 // ApplyCmd carries the inputs for applying a digital signature.
 type ApplyCmd struct {
 	DID            string
-	SignerDID      string
 	CredentialType string
 	AppliedBy      string
+	HolderDID      string
+	UserRoles      userrole.UserRoles
 	DSSClient      dss.Client
 }
 
@@ -36,6 +40,7 @@ type Applier struct {
 // Handle applies a digital signature to a contract (DCS-FR-SM-16, DCS-IR-SI-10).
 // The contract must be in APPROVED state; this is enforced by the repo query.
 func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -44,8 +49,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -87,22 +91,24 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		INSERT INTO contract_signatures
 			(contract_did, signer_did, credential_type, signature_bytes, status, signed_at)
 		VALUES ($1, $2, $3, $4, $5, $6)`,
-		cmd.DID, cmd.SignerDID, cmd.CredentialType, sigBytes, status, time.Now().UTC(),
+		cmd.DID, cmd.HolderDID, cmd.CredentialType, sigBytes, status, time.Now().UTC(),
 	)
 	if err != nil {
 		return fmt.Errorf("insert contract_signatures: %w", err)
 	}
 
-	evt := signingmanagementevents.ApplyEvent{
+	evt := event2.ApplyEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
-		SignerDID:       cmd.SignerDID,
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 		CredentialType:  cmd.CredentialType,
 		AppliedBy:       cmd.AppliedBy,
 		OccurredAt:      time.Now().UTC(),
 	}
-	if err := event.Create(ctx, tx, evt, componenttype.SignatureManagement); err != nil {
-		return fmt.Errorf("create apply event: %w", err)
+	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
+	if err != nil {
+		return fmt.Errorf("could not create event: %w", err)
 	}
 
 	return tx.Commit()

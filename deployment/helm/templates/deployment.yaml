@@ -49,21 +49,25 @@ spec:
               containerPort: {{ .Values.service.port }}
               protocol: TCP
           env:
-            - name: OIDC_ISSUER_URL
-              {{- if .Values.oidc.issuerURLSecretRef.name }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.oidc.issuerURLSecretRef.name | quote }}
-                  key: {{ .Values.oidc.issuerURLSecretRef.key | quote }}
-              {{- else }}
-              value: {{ include "digital-contracting-service.oidcIssuerURL" . | quote }}
-              {{- end }}
-            - name: OIDC_CLIENT_ID
-              value: {{ .Values.oidc.clientID | quote }}
-            - name: OIDC_REDIRECT_URI
-              value: {{ .Values.oidc.redirectURI | quote }}
-            - name: OIDC_LOGOUT_REDIRECT_URI
-              value: {{ .Values.oidc.logoutRedirectURI | quote }}
+            {{- if and .Values.hydra.enabled .Values.hydra.clients }}
+            {{- $hydraClient := index .Values.hydra.clients 0 }}
+            - name: HYDRA_ISSUER_URL
+              value: {{ include "digital-contracting-service.hydraIssuerURL" . | quote }}
+            - name: HYDRA_CLIENT_ID
+              value: {{ $hydraClient.client_id | quote }}
+            - name: HYDRA_CLIENT_SECRET
+              value: {{ $hydraClient.client_secret | quote }}
+            - name: HYDRA_REDIRECT_URI
+              value: {{ index $hydraClient.redirect_uris 0 | quote }}
+            - name: HYDRA_POST_LOGOUT_REDIRECT_URI
+              value: {{ index $hydraClient.post_logout_redirect_uris 0 | quote }}
+            - name: HYDRA_ADMIN_URL
+              value: {{ include "digital-contracting-service.hydraAdminURL" . | quote }}
+            {{- end }}
+            {{- if include "digital-contracting-service.fcKeycloakRealmURL" . }}
+            - name: FC_KEYCLOAK_REALM_URL
+              value: {{ include "digital-contracting-service.fcKeycloakRealmURL" . | quote }}
+            {{- end }}
             - name: DATABASE_URL
               {{- if .Values.database.secretRef.name }}
               valueFrom:
@@ -106,6 +110,10 @@ spec:
               value: {{ include "digital-contracting-service.apiPath" . | quote }}
             - name: DCS_UI_PATH
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
+            {{- if .Values.oid4vp.trust.enabled }}
+            - name: OID4VP_TRUST_DATA_PATH
+              value: {{ printf "%s/trust.json" .Values.oid4vp.trust.mountPath | quote }}
+            {{- end }}
             # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
             - name: CRYPTO_PROVIDER_URL
               {{- if .Values.signing.cryptoProviderURLSecretRef.name }}
@@ -172,6 +180,7 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumeMounts }}
           {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
           {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
           {{- if or .Values.customCA.enabled .Values.volumeMounts (and $certChainEnabled $certSecretName) }}
@@ -186,10 +195,16 @@ spec:
               mountPath: {{ .Values.signing.certChain.mountPath | quote }}
               readOnly: true
           {{- end }}
+          {{- if .Values.oid4vp.trust.enabled }}
+            - name: oid4vp-trust
+              mountPath: {{ .Values.oid4vp.trust.mountPath | quote }}
+              readOnly: true
+          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
+      {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumes }}
       {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
       {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
       {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
@@ -198,6 +213,11 @@ spec:
         - name: custom-ca-certs
           configMap:
             name: {{ .Values.customCA.configMapName }}
+      {{- end }}
+      {{- if .Values.oid4vp.trust.enabled }}
+        - name: oid4vp-trust
+          configMap:
+            name: {{ include "digital-contracting-service.oid4vpTrustConfigMapName" . }}
       {{- end }}
       {{- if and $certChainEnabled $certSecretName }}
         - name: signer-cert-chain

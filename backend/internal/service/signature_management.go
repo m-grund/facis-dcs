@@ -13,6 +13,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
@@ -26,11 +28,14 @@ import (
 	db "digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type signatureManagementsrvc struct {
 	DB           *sqlx.DB
 	CRepo        db.ContractRepo
+	STRepo       db.SigningTaskRepo
 	ATrailReader base.AuditTrailReader
 	DSSClient    dss.Client
 	IPFSClient   *ipfs.APIClient
@@ -38,7 +43,7 @@ type signatureManagementsrvc struct {
 }
 
 func NewSignatureManagement(
-	database *sqlx.DB,
+	db *sqlx.DB,
 	jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo,
 	auditTrailReader base.AuditTrailReader,
@@ -47,7 +52,7 @@ func NewSignatureManagement(
 ) signaturemanagement.Service {
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
-		DB:               database,
+		DB:               db,
 		CRepo:            cRepo,
 		ATrailReader:     auditTrailReader,
 		DSSClient:        dssClient,
@@ -57,12 +62,24 @@ func NewSignatureManagement(
 
 func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturemanagement.SMContractRetrieveRequest) (res *signaturemanagement.SMContractRetrieveResponse, err error) {
 
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	pagination := datatype.Pagination{
+		Offset: derefInt(req.Offset),
+		Limit:  derefInt(req.Limit),
+	}
+
 	qry := query.GetAllMetadataQry{
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+		Pagination:  pagination,
 	}
 	queryHandler := query.GetAllMetadataHandler{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:     s.DB,
+		CRepo:  s.CRepo,
+		STRepo: s.STRepo,
 	}
 	result, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
@@ -71,14 +88,50 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 
 	var contracts []*signaturemanagement.SMContractListItem
 	for _, item := range result.Contracts {
+
+		var startDate *string
+		if item.StartDate != nil {
+			s := item.StartDate.Format(time.RFC3339)
+			startDate = &s
+		}
+
+		var expDate *string
+		if item.ExpDate != nil {
+			s := item.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if item.ExpPolicy != nil {
+			s := item.ExpPolicy.String()
+			expPolicy = &s
+		}
+
 		contracts = append(contracts, &signaturemanagement.SMContractListItem{
 			Did:             item.DID,
 			ContractVersion: item.ContractVersion,
 			State:           item.State.String(),
 			Name:            item.Name,
 			Description:     item.Description,
+			CreatedBy:       item.CreatedBy,
 			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			StartDate:       startDate,
+			ExpDate:         expDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: item.ExpNoticePeriod,
+			Responsible:     item.Responsible,
+		})
+	}
+
+	var signingTasks []*signaturemanagement.SMContractSigningTaskItem
+	for _, item := range result.SigningTasks {
+		signingTasks = append(signingTasks, &signaturemanagement.SMContractSigningTaskItem{
+			Did:             item.DID,
+			ContractVersion: item.ContractVersion,
+			State:           item.State.String(),
+			Signer:          item.Signer,
+			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -96,9 +149,13 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 
 func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signaturemanagement.SMContractRetrieveByIDRequest) (res *signaturemanagement.SMContractRetrieveByIDResponse, err error) {
 
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
 	qry := query.GetByIDQry{
-		DID:         req.Did,
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := query.GetByIDHandler{
 		DB:    s.DB,
@@ -139,6 +196,26 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 }
 
 func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemanagement.SMContractVerifyRequest) (res *signaturemanagement.SMContractVerifyResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.VerifyCmd{
+		DID:        req.Did,
+		VerifiedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
+	}
+	handler := command.Verifier{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	return &signaturemanagement.SMContractVerifyResponse{}, nil
 	// Count active signatures.
 	verifier := command.SignatureVerifier{DB: s.DB, CRepo: s.CRepo}
 	vResult, err := verifier.Handle(ctx, command.VerifyCmd{DID: req.Did})
@@ -202,6 +279,26 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 }
 
 func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanagement.SMContractApplyRequest) (res *signaturemanagement.SMContractApplyResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.ApplyCmd{
+		DID:       req.Did,
+		AppliedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	}
+	handler := command.Applier{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	return &signaturemanagement.SMContractApplyResponse{}, nil
 	credType := "stub"
 	if req.CredentialType != nil && *req.CredentialType != "" {
 		credType = *req.CredentialType
@@ -240,6 +337,38 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := command.ValidateCmd{
+		DID:         req.Did,
+		ValidatedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	queryHandler := command.Validator{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+
+	err = queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+
+	}
+
+	return &signaturemanagement.SMContractValidateResponse{}, nil
+}
+
+func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := command.RevokeCmd{
+		DID:       req.Did,
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	handler := command.Validator{DB: s.DB, CRepo: s.CRepo}
 	if err := handler.Handle(ctx, command.ValidateCmd{
 		DID:         req.Did,
@@ -289,6 +418,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 	}
 
 	return &signaturemanagement.SMContractRevokeResponse{Did: req.Did}, nil
+	return &signaturemanagement.SMContractRevokeResponse{}, nil
 }
 
 func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanagement.SMContractAuditRequest) (res []*signaturemanagement.SMContractAuditResponse, err error) {
@@ -298,7 +428,9 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 
 	qry := query.GetAuditLogQry{
 		DID:       req.Did,
-		AuditedBy: middleware.GetUsername(ctx),
+		AuditedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := query.Auditor{
 		DB:           s.DB,
@@ -541,6 +673,14 @@ func (s *signatureManagementsrvc) fetchLatestEnvelope(ctx context.Context, did s
 		CredentialType: row.CredentialType,
 		Status:         row.Status,
 		IpfsCid:        row.IpfsCID,
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := command.ComplianceCmd{
+		DID:       req.Did,
+		CheckedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	if row.SignedAt != nil {
 		t := row.SignedAt.Format(time.RFC3339)

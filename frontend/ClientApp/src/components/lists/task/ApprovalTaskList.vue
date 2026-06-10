@@ -117,8 +117,8 @@ onUnmounted(() => stateFilterStore.reset())
         <div class="list-col-grow card border-base-content/10 bg-base-100 card-border hover:bg-base-300">
           <div class="card-body">
             <h2 class="card-title flex-wrap justify-between">
-              <div v-if="task.type === 'template'">Approval Task for Template: {{ getTemplateName(task) }}</div>
-              <div v-else>Approval Task for Contract: {{ getContractName(task) }}</div>
+              <div v-if="task.type === 'template'">Template Name: {{ getTemplateName(task) }}</div>
+              <div v-else>Contract Name: {{ getContractName(task) }}</div>
               <div class="flex-1"></div>
               <div class="badge badge-accent">{{ toProperCase(task.type) }} Task</div>
               <div class="badge badge-secondary">{{ task.state }}</div>

@@ -30,6 +30,8 @@ const route = useRoute()
 const navStore = useNavStore()
 
 const authStore = useAuthStore()
+const issuer = computed(() => authStore.user?.issuer)
+
 const errorStore = useErrorStore()
 
 const templateDraftStore = useTemplateDraftStore()
@@ -41,7 +43,6 @@ const { activeTab } = storeToRefs(contractEditorUiStore)
 const contractContentValuesStore = useContractContentValuesStore()
 const scrollStore = useScrollStore()
 
-const username = computed(() => authStore.user?.username)
 const isSubmitting = ref(false)
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
@@ -154,7 +155,7 @@ watch(
 )
 
 const negotiateContractChange = async () => {
-  if (!contract.value || !editedContract.value || !username.value) return
+  if (!contract.value || !editedContract.value || !issuer.value) return
   isSubmitting.value = true
   try {
     const changeRequest: ContractChangeRequest = {}
@@ -176,7 +177,7 @@ const negotiateContractChange = async () => {
     const response = await contractWorkflowService.negotiate({
       did: contract.value?.did,
       updated_at: contract.value?.updated_at,
-      negotiated_by: username.value,
+      negotiated_by: issuer.value,
       change_request: changeRequest,
     })
     if (response.did) {
@@ -201,7 +202,7 @@ const submitContract = async () => {
       if (response.current_state !== contract.value.state) {
         await navStore.goToPreviousRoute()
       } else {
-        const otherNegotiatorsCount = (contract.value.responsible_persons?.negotiators.length ?? 0) - 1
+        const otherNegotiatorsCount = (contract.value.responsible?.negotiators.length ?? 0) - 1
         errorStore.add(`Awaiting approvals from ${otherNegotiatorsCount} other negotiators.`, 'info')
         await loadContract()
       }

@@ -29,7 +29,11 @@ import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
 import { useScrollStore } from '@/core/store/scroll'
-import { FACIS_CONTRACT_POLICY_REFS, FACIS_CONTRACT_VALIDATION_PROFILE, FACIS_SCHEMA_REFS } from '@/modules/template-repository/models/contract-template'
+import {
+  FACIS_CONTRACT_POLICY_REFS,
+  FACIS_CONTRACT_VALIDATION_PROFILE,
+  FACIS_SCHEMA_REFS,
+} from '@/modules/template-repository/models/contract-template'
 import { buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 
 const route = useRoute()
@@ -226,16 +230,16 @@ onBeforeRouteLeave(() => {
   <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <div v-if="!isEditMode" class="px-6 py-12">
       <div class="flex justify-center">
-        <select v-model="selectedTemplate" class="select" :disabled="!hasApprovedOrPublishedTemplates">
+        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedOrPublishedTemplates">
           <option :value="null" disabled selected>
             {{ hasApprovedOrPublishedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
           <option v-for="template in approvedOrPublishedTemplates" :key="template.did" :value="template">
-            {{ template.name }}
+            {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>
       </div>
-      <div v-if="selectedTemplate" class="pt-10">
+      <div v-if="selectedTemplate" class="pt-20">
         <ViewContractTemplateView :did="selectedTemplate.did" />
       </div>
     </div>

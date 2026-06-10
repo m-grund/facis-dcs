@@ -10,6 +10,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	templatequery "digital-contracting-service/internal/templatecatalogueintegration/query/template"
@@ -26,6 +27,8 @@ type RegisterCmd struct {
 	NewDID       string
 	Version      int
 	RegisteredBy string
+	HolderDID    string
+	UserRoles    userrole.UserRoles
 }
 
 type Registrar struct {
@@ -87,9 +90,9 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		}
 	}(tx)
 
-	existing, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.NewDID)
+	existing, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err == nil {
-		return fmt.Errorf("generated did already exists locally: %s", existing.DID)
+		return fmt.Errorf("this template already exists in local repository: %s", existing.DID)
 	}
 	if !errors.Is(err, db.ErrContractTemplateNotFound) {
 		return fmt.Errorf("could not read template: %w", err)
@@ -119,6 +122,8 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) error {
 		SourceDID:     cmd.DID,
 		SourceVersion: cmd.Version,
 		OccurredAt:    time.Now().UTC(),
+		HolderDID:     cmd.HolderDID,
+		UserRoles:     cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
