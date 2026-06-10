@@ -7,7 +7,7 @@ import type { ContractApprovalTask } from '../contract/contract-approval-task'
 import type { ContractEvent } from '../contract/contract-event'
 import type { ContractNegotiation } from '../contract/contract-negotiation'
 import type { ContractNegotiationTask } from '../contract/contract-negotiation-task'
-import type { ContractResponsiblePersons } from '../contract/contract-responsible-persons'
+import type { ContractResponsible } from '../contract/contract-responsible'
 import type { ContractReviewTask } from '../contract/contract-review-task'
 
 export interface ContractCreateResponse {
@@ -43,7 +43,7 @@ export interface ContractRetrieveByIdResponse {
   exp_date?: string
   exp_notice_period?: number
   exp_policy?: ExpirationPolicy
-  responsible_persons?: ContractResponsiblePersons
+  responsible?: ContractResponsible
   /** The data of that contract */
   contract_data: ContractData
   negotiations: ContractNegotiation[]
@@ -63,7 +63,7 @@ interface ContractSearchResponseItem {
   exp_date?: string
   exp_policy?: ExpirationPolicy
   exp_notice_period?: number
-  responsible_persons?: ContractResponsiblePersons
+  responsible?: ContractResponsible
   created_at: string
   updated_at: string
 }
@@ -107,7 +107,6 @@ export interface ContractAuditResponseItem {
 
 export type ContractAuditResponse = ContractAuditResponseItem[]
 
-
 export interface ContractHistoryItem {
   did: string
   contract_version: number
@@ -121,7 +120,7 @@ export interface ContractHistoryItem {
   exp_date?: string
   exp_policy?: ExpirationPolicy
   exp_notice_period?: number
-  responsible_persons?: unknown
+  responsible?: unknown
   contract_data?: ContractData
 }
 

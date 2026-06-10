@@ -2,18 +2,25 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"time"
+
+	"digital-contracting-service/internal/base/validation"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 	"digital-contracting-service/internal/templaterepository/selfdescription"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -23,6 +30,8 @@ type VerifyCmd struct {
 	VerifiedBy    string
 	ParticipantID string
 	Token         string
+	HolderDID     string
+	UserRoles     userrole.UserRoles
 }
 
 type Verifier struct {
@@ -38,7 +47,11 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -48,6 +61,9 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 	fullTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read template data: %w", err)
+	}
+	if _, err := validation.NormalizeTemplateData(fullTemplate.TemplateData); err != nil {
+		return fmt.Errorf("template data validation failed: %w", err)
 	}
 
 	if h.FCClient != nil {
@@ -74,6 +90,8 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		Version:        processData.Version,
 		VerifiedBy:     cmd.VerifiedBy,
 		OccurredAt:     time.Now().UTC(),
+		HolderDID:      cmd.HolderDID,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
@@ -85,10 +103,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 
 func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cmd VerifyCmd, processData *db.ContractTemplateProcessData, fullTemplate *db.ContractTemplate) error {
 	if h.FCClient == nil {
-		return fmt.Errorf("federated catalogue client is nil")
-	}
-	if cmd.Token == "" {
-		return fmt.Errorf("federated catalogue token is empty")
+		return fcclient.ErrFederatedCatalogueNotConfigured
 	}
 	if cmd.ParticipantID == "" {
 		return fmt.Errorf("participant id is empty")
@@ -139,7 +154,7 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 	query.Set("verifyVPSignature", "false")
 	query.Set("verifyVCSignature", "false")
 
-	resp, err := h.FCClient.Post(ctx, fcclient.VerificationEndpointPath, cmd.Token, query, body)
+	resp, err := h.FCClient.Post(ctx, fcclient.VerificationEndpointPath, query, body)
 	if err != nil {
 		return fmt.Errorf("verify template resource self-description failed: %w", err)
 	}

@@ -2,11 +2,12 @@ package pg
 
 import (
 	"context"
-	"digital-contracting-service/internal/contractworkflowengine/db"
 	"errors"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
 type PostgresNegotiationRepo struct {
@@ -140,7 +141,7 @@ func (r PostgresNegotiationRepo) ReadAllAcceptedByContractDIDAndVersion(ctx cont
 	return negotiations, nil
 }
 
-func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error) {
+func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int, negotiator string) (bool, error) {
 	query := `
         SELECT EXISTS (
             SELECT 1
@@ -149,10 +150,11 @@ func (r PostgresNegotiationRepo) HasOpenNegotiationDecisions(ctx context.Context
             WHERE cn.did = $1
               AND contract_version = $2
               AND cnd.decision IS NULL
+              AND cnd.negotiator = $3
         )
     `
 	var exists bool
-	err := tx.GetContext(ctx, &exists, query, did, contractVersion)
+	err := tx.GetContext(ctx, &exists, query, did, contractVersion, negotiator)
 	if err != nil {
 		return false, err
 	}

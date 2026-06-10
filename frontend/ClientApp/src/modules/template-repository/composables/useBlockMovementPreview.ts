@@ -1,7 +1,7 @@
 import { computed, ref, unref, onBeforeUnmount, type MaybeRef, type Component } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { DocumentOutline } from '@template-repository/models/contract-templace'
+import type { DocumentOutline } from '@/modules/template-repository/models/contract-template'
 import IconMoveLeft from '@template-repository/components/builder-editor/toolbar/icons/IconMoveLeft.vue'
 import IconMoveRight from '@template-repository/components/builder-editor/toolbar/icons/IconMoveRight.vue'
 
@@ -60,13 +60,13 @@ export function useBlockMovementPreview(outline?: MaybeRef<DocumentOutline>) {
 
   const verticalFadeOutSet = outline
     ? computed(() => {
-      const preview = blockMovementPreview.value
-      if (!preview || preview.type !== 'vertical') return new Set<string>()
-      const outlineVal = unref(outline)
-      const sourceDesc = collectDescendantBlockIds(outlineVal, preview.sourceBlockId)
-      const targetDesc = collectDescendantBlockIds(outlineVal, preview.targetBlockId)
-      return new Set([...sourceDesc, ...targetDesc])
-    })
+        const preview = blockMovementPreview.value
+        if (preview?.type !== 'vertical') return new Set<string>()
+        const outlineVal = unref(outline)
+        const sourceDesc = collectDescendantBlockIds(outlineVal, preview.sourceBlockId)
+        const targetDesc = collectDescendantBlockIds(outlineVal, preview.targetBlockId)
+        return new Set([...sourceDesc, ...targetDesc])
+      })
     : undefined
 
   function isInFadeOutSet(blockId: string): boolean {
@@ -94,7 +94,7 @@ export function useBlockMovementPreview(outline?: MaybeRef<DocumentOutline>) {
 
   function horizontalArrowIcon(item: { blockId: string }): Component {
     const preview = blockMovementPreview.value
-    if (!preview || preview.type !== 'horizontal' || preview.blockId !== item.blockId) return IconMoveLeft
+    if (preview?.type !== 'horizontal' || preview.blockId !== item.blockId) return IconMoveLeft
     return preview.direction === 'left' ? IconMoveLeft : IconMoveRight
   }
 
@@ -102,7 +102,9 @@ export function useBlockMovementPreview(outline?: MaybeRef<DocumentOutline>) {
    * Create toolbar hover/click handlers for one block.
    * Cleans up timers on unmount.
    */
-  function createToolbarHandlers(getContext: () => BlockMovementPreviewToolbarContext): BlockMovementPreviewToolbarHandlers {
+  function createToolbarHandlers(
+    getContext: () => BlockMovementPreviewToolbarContext,
+  ): BlockMovementPreviewToolbarHandlers {
     const moveUpEnterTimer = ref<ReturnType<typeof setTimeout> | null>(null)
     const moveUpLeaveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
     const moveDownEnterTimer = ref<ReturnType<typeof setTimeout> | null>(null)
@@ -223,7 +225,7 @@ export function useBlockMovementPreview(outline?: MaybeRef<DocumentOutline>) {
     }
 
     onBeforeUnmount(() => {
-      [
+      ;[
         moveUpEnterTimer,
         moveUpLeaveTimer,
         moveDownEnterTimer,

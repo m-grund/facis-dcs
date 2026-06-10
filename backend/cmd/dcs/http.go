@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+	"sync"
+	"time"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -13,33 +18,55 @@ import (
 	dcstodcssvr "digital-contracting-service/gen/http/dcs_to_dcs/server"
 	externaltargetsystemapisvr "digital-contracting-service/gen/http/external_target_system_api/server"
 	orchestrationwebhookssvr "digital-contracting-service/gen/http/orchestration_webhooks/server"
+	pdfgenerationsvr "digital-contracting-service/gen/http/pdf_generation/server"
 	processauditandcompliancesvr "digital-contracting-service/gen/http/process_audit_and_compliance/server"
 	signaturemanagementsvr "digital-contracting-service/gen/http/signature_management/server"
 	templatecatalogueintegrationsvr "digital-contracting-service/gen/http/template_catalogue_integration/server"
 	templaterepositorysvr "digital-contracting-service/gen/http/template_repository/server"
 	orchestrationwebhooks "digital-contracting-service/gen/orchestration_webhooks"
+	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
+	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/service"
 	"digital-contracting-service/internal/webhookplatform"
-	"net/http"
-	"net/url"
-	"sync"
-	"time"
 
 	"errors"
 
+	"strconv"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
 )
 
+var (
+	httpRequestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "Duration of HTTP requests in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "path", "status"},
+	)
+	httpRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "path", "status"},
+	)
+)
+
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
-func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.Endpoints, contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints, dcsToDcsEndpoints *dcstodcs.Endpoints, externalTargetSystemAPIEndpoints *externaltargetsystemapi.Endpoints, orchestrationWebhooksEndpoints *orchestrationwebhooks.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints, signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints, templateRepositoryEndpoints *templaterepository.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup, errc chan error, dbg bool) {
+func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.Endpoints, contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints, dcsToDcsEndpoints *dcstodcs.Endpoints, externalTargetSystemAPIEndpoints *externaltargetsystemapi.Endpoints, orchestrationWebhooksEndpoints *orchestrationwebhooks.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints, signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints, templateRepositoryEndpoints *templaterepository.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup, errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
 	// The goa http package has built-in support for JSON, XML and gob.
@@ -76,6 +103,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		dcsToDcsServer                     *dcstodcssvr.Server
 		externalTargetSystemAPIServer      *externaltargetsystemapisvr.Server
 		orchestrationWebhooksServer        *orchestrationwebhookssvr.Server
+		pdfGenerationServer                *pdfgenerationsvr.Server
 		processAuditAndComplianceServer    *processauditandcompliancesvr.Server
 		signatureManagementServer          *signaturemanagementsvr.Server
 		templateCatalogueIntegrationServer *templatecatalogueintegrationsvr.Server
@@ -90,6 +118,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		dcsToDcsServer = dcstodcssvr.New(dcsToDcsEndpoints, apiMux, dec, enc, eh, ef)
 		externalTargetSystemAPIServer = externaltargetsystemapisvr.New(externalTargetSystemAPIEndpoints, apiMux, dec, enc, eh, ef)
 		orchestrationWebhooksServer = orchestrationwebhookssvr.New(orchestrationWebhooksEndpoints, apiMux, dec, enc, eh, ef)
+		pdfGenerationServer = pdfgenerationsvr.New(pdfGenerationEndpoints, apiMux, dec, enc, eh, ef)
 		processAuditAndComplianceServer = processauditandcompliancesvr.New(processAuditAndComplianceEndpoints, apiMux, dec, enc, eh, ef)
 		signatureManagementServer = signaturemanagementsvr.New(signatureManagementEndpoints, apiMux, dec, enc, eh, ef)
 		templateCatalogueIntegrationServer = templatecatalogueintegrationsvr.New(templateCatalogueIntegrationEndpoints, apiMux, dec, enc, eh, ef)
@@ -103,6 +132,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	dcstodcssvr.Mount(apiMux, dcsToDcsServer)
 	externaltargetsystemapisvr.Mount(apiMux, externalTargetSystemAPIServer)
 	orchestrationwebhookssvr.Mount(apiMux, orchestrationWebhooksServer)
+	pdfgenerationsvr.Mount(apiMux, pdfGenerationServer)
 	processauditandcompliancesvr.Mount(apiMux, processAuditAndComplianceServer)
 	signaturemanagementsvr.Mount(apiMux, signatureManagementServer)
 	templatecatalogueintegrationsvr.Mount(apiMux, templateCatalogueIntegrationServer)
@@ -117,10 +147,13 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	// Outer mux: routes /orce/* to the webhook platform, everything else to Goa.
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/orce/", http.StripPrefix("/orce", webhookPlatform))
+	outerMux.Handle("/metrics", promhttp.Handler())
 	outerMux.Handle("/", mux)
 
 	var handler http.Handler = outerMux
 	handler = service.RequestContextMiddleware(handler)
+	handler = middleware.InjectIP(handler)
+	handler = metricsMiddleware(handler)
 	if dbg {
 		// Log query and response bodies if debug logs are enabled.
 		handler = debug.HTTP()(handler)
@@ -146,6 +179,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range orchestrationWebhooksServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range pdfGenerationServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range processAuditAndComplianceServer.Mounts {
@@ -219,4 +255,32 @@ func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
 	}
 
 	return resp
+}
+
+func metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		start := time.Now()
+		wrapped := &responseWriter{ResponseWriter: w, status: 200}
+		next.ServeHTTP(wrapped, r)
+		duration := time.Since(start).Seconds()
+		status := strconv.Itoa(wrapped.status)
+
+		httpRequestDuration.WithLabelValues(r.Method, r.URL.Path, status).Observe(duration)
+		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, status).Inc()
+	})
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
 }

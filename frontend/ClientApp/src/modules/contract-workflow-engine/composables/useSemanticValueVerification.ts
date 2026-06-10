@@ -1,11 +1,18 @@
-import type { SemanticConditionValue } from "@/models/contract-data";
-import type { SubTemplateSnapshot } from "@/models/contract-template";
-import { isClauseBlock, isMergedApprovedTemplateBlock, type DocumentBlock, type SemanticCondition } from "@/modules/template-repository/models/contract-templace";
+import type { SemanticConditionValue } from '@/models/contract-data'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import {
+  isClauseBlock,
+  isMergedApprovedTemplateBlock,
+  type DocumentBlock,
+  type SemanticCondition,
+  type SemanticValueConstraint,
+} from '@/modules/template-repository/models/contract-template'
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
   isSameTemplateDataRef,
-} from "@template-repository/utils/template-data-ref";
+} from '@template-repository/utils/template-data-ref'
+import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 
 export interface VerificationResult {
   isValid: boolean
@@ -59,20 +66,19 @@ function getConditionsByBlockId(
   const mergedBlock = documentBlocks.find((block) => block.blockId === ownerBlocId)
   if (!mergedBlock || !isMergedApprovedTemplateBlock(mergedBlock)) return conditions
 
-  const matchedSnapshot = subTemplateSnapshots.find(
-    (snapshot) =>
-      isSameTemplateDataRef(
-        {
-          templateId: snapshot.did,
-          version: snapshot.version,
-          document_number: snapshot.document_number,
-        },
-        {
-          templateId: mergedBlock.templateId,
-          version: mergedBlock.version,
-          document_number: mergedBlock.document_number,
-        }
-      )
+  const matchedSnapshot = subTemplateSnapshots.find((snapshot) =>
+    isSameTemplateDataRef(
+      {
+        templateId: snapshot.did,
+        version: snapshot.version,
+        document_number: snapshot.document_number,
+      },
+      {
+        templateId: mergedBlock.templateId,
+        version: mergedBlock.version,
+        document_number: mergedBlock.document_number,
+      },
+    ),
   )
   if (matchedSnapshot?.template_data?.semanticConditions) {
     conditions = matchedSnapshot.template_data.semanticConditions
@@ -81,7 +87,6 @@ function getConditionsByBlockId(
 }
 
 export function useSemanticValueVerification() {
-
   function getConditions(
     blockId: string,
     documentBlocks: DocumentBlock[],
@@ -91,9 +96,7 @@ export function useSemanticValueVerification() {
     let conditions = semanticConditions
     if (!isMergedBlockId(blockId)) return conditions
     const ownerBlockId = getOwnerBlockIdFromMergedBlockId(blockId)
-    const mergedBlock = ownerBlockId
-      ? documentBlocks.find((b) => b.blockId === ownerBlockId)
-      : undefined
+    const mergedBlock = ownerBlockId ? documentBlocks.find((b) => b.blockId === ownerBlockId) : undefined
     if (mergedBlock && isMergedApprovedTemplateBlock(mergedBlock)) {
       const mergedBlockRef = {
         templateId: mergedBlock.templateId,
@@ -107,10 +110,14 @@ export function useSemanticValueVerification() {
     }
     return conditions
   }
-  function validateParameterType(value: string | number, type: string): boolean {
+  function validateParameterType(value: string | number | boolean, type: string): boolean {
     switch (type) {
       case 'string':
         return typeof value === 'string'
+      case 'enum':
+        return typeof value === 'string'
+      case 'boolean':
+        return typeof value === 'boolean'
       case 'integer':
         return typeof value === 'number' && Number.isInteger(value)
       case 'decimal':
@@ -122,17 +129,44 @@ export function useSemanticValueVerification() {
     }
   }
 
+  function validateValueConstraint(
+    value: string | number | boolean,
+    constraint?: SemanticValueConstraint,
+  ): string | null {
+    if (!constraint) return null
+    const allowedValues = resolveAllowedValues(constraint)
+    if (allowedValues.length) {
+      if (typeof value !== 'string' || !allowedValues.includes(value)) {
+        return `Expected one of: ${allowedValues.join(', ')}.`
+      }
+    }
+    if (constraint.pattern) {
+      if (typeof value !== 'string' || !new RegExp(constraint.pattern).test(value)) {
+        return `Expected format ${constraint.allowedValuesRef ?? constraint.format ?? constraint.pattern}.`
+      }
+    }
+    if (typeof value === 'number') {
+      if (constraint.min !== undefined && value < constraint.min) {
+        return `Expected a value greater than or equal to ${constraint.min}.`
+      }
+      if (constraint.max !== undefined && value > constraint.max) {
+        return `Expected a value less than or equal to ${constraint.max}.`
+      }
+    }
+    return null
+  }
+
   function verifySemanticValue(
     semanticConditions: SemanticCondition[],
     subTemplateSemanticConditions: subTemplateSemanticCondition[],
     semanticConditionValues: SemanticConditionValue[],
-    documentBlocks: DocumentBlock[]
+    documentBlocks: DocumentBlock[],
   ): VerificationResult {
     const errors: VerificationResult['errors'] = []
     let isValid = false
     documentBlocks.forEach((b) => {
       if (!isClauseBlock(b)) return
-      let conditions = getConditions(b.blockId, documentBlocks, semanticConditions, subTemplateSemanticConditions)
+      const conditions = getConditions(b.blockId, documentBlocks, semanticConditions, subTemplateSemanticConditions)
       const conditionIds = b.conditionIds ?? []
       conditionIds.forEach((cId) => {
         const condition = conditions.find((c) => c.conditionId === cId)
@@ -140,10 +174,11 @@ export function useSemanticValueVerification() {
         condition.parameters.forEach((p) => {
           if (!p.isRequired) return
           const parameterName = p.parameterName
-          const isValueExist = semanticConditionValues.find((conditionValue) =>
-            conditionValue.blockId === b.blockId &&
-            conditionValue.conditionId === cId &&
-            conditionValue.parameterName === parameterName
+          const isValueExist = semanticConditionValues.find(
+            (conditionValue) =>
+              conditionValue.blockId === b.blockId &&
+              conditionValue.conditionId === cId &&
+              conditionValue.parameterName === parameterName,
           )
           if (!isValueExist) {
             errors.push({
@@ -158,7 +193,7 @@ export function useSemanticValueVerification() {
     })
 
     semanticConditionValues.forEach((value) => {
-      let conditions = getConditions(value.blockId, documentBlocks, semanticConditions, subTemplateSemanticConditions)
+      const conditions = getConditions(value.blockId, documentBlocks, semanticConditions, subTemplateSemanticConditions)
       const fieldName = value.parameterName || 'this field'
       const condition = conditions.find((cond) => cond.conditionId === value.conditionId)
       // check if the condition exists, if not, it's an error
@@ -201,6 +236,16 @@ export function useSemanticValueVerification() {
             conditionId: value.conditionId,
             parameterName: value.parameterName,
             message: `"${fieldName}" has an invalid value type. Expected ${parameter.type}.`,
+          })
+          return
+        }
+        const constraintError = validateValueConstraint(value.parameterValue, parameter.valueConstraint)
+        if (constraintError) {
+          errors.push({
+            blockId: value.blockId,
+            conditionId: value.conditionId,
+            parameterName: value.parameterName,
+            message: `"${fieldName}" has an invalid value. ${constraintError}`,
           })
           return
         }

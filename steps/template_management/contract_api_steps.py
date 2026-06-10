@@ -5,6 +5,7 @@ import os
 import requests as _requests
 from behave import given, then, when
 
+from core.utils import is_uuid
 from steps.support.services.contract_service import ContractService
 from steps.support.api_client import (
     contract_approve_url,
@@ -81,6 +82,8 @@ def step_then_contract_unique_id(context):
     body = context.requests_response.json()
     did = body.get("did")
     assert isinstance(did, str) and did.strip(), f"Expected a contract DID, got: {body}"
+    uuid = did.split(":")[-1]
+    assert is_uuid(uuid), f"Expected {uuid} is a valid UUID"
 
 
 # ---------------------------------------------------------------------------

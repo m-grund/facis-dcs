@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import type { ClausePlaceholderHighlight } from '@template-repository/models/template-editor-ui-store'
+import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
 
 export type Segment =
   | { type: 'text'; value: string }
@@ -28,7 +29,11 @@ function toPlaceholderString(conditionId: string, parameterName: string): string
   return `{{${conditionId}.${parameterName}}}`
 }
 
-function matchHighlight(conditionId: string, parameterName: string, h: NonNullable<ClausePlaceholderHighlight>): boolean {
+function matchHighlight(
+  conditionId: string,
+  parameterName: string,
+  h: NonNullable<ClausePlaceholderHighlight>,
+): boolean {
   if (h.conditionId !== conditionId) return false
   if (h.parameterName != null) return h.parameterName === parameterName
   return true
@@ -68,11 +73,13 @@ function parsePlaceholders(text: string, conditions: SemanticCondition[]): Segme
     const parameterName = dot >= 0 ? inner.slice(dot + 1) : ''
     const cond = conditions.find((c) => c.conditionId === conditionId)
     const conditionName = cond?.conditionName ?? conditionId
+    const param = cond?.parameters.find((p) => p.parameterName === parameterName)
+    const label = param ? semanticParameterLabel(param) : parameterName
     segments.push({
       type: 'placeholder',
       conditionId,
       parameterName,
-      displayText: `${parameterName} (${conditionName})`,
+      displayText: `${label} (${conditionName})`,
     })
     lastEnd = m.index + m[0].length
   }
@@ -119,21 +126,19 @@ export function conditionIdsInText(text: string): Set<string> {
 }
 
 /** Builds placeholder label like "paramName (type)" from conditions. */
-export function getPlaceholderLabelFromConditions(
-  seg: Segment,
-  conditions: SemanticCondition[]
-): string {
+export function getPlaceholderLabelFromConditions(seg: Segment, conditions: SemanticCondition[]): string {
   if (!isPlaceholder(seg)) return ''
   const cond = conditions.find((c) => c.conditionId === seg.conditionId)
   const param = cond?.parameters.find((p) => p.parameterName === seg.parameterName)
   const type = param?.type ?? 'string'
-  return `${seg.parameterName} (${type})`
+  const label = param ? semanticParameterLabel(param) : seg.parameterName
+  return `${label} (${semanticParameterTypeLabel(type)})`
 }
 
 export function useClauseTextChips(
   editorRef: Ref<HTMLDivElement | null>,
   highlight: Ref<ClausePlaceholderHighlight>,
-  isMounted: Ref<boolean>
+  isMounted: Ref<boolean>,
 ) {
   /**
    * From the editor DOM, generates the clause template text using element info: text nodes → plain text;
@@ -173,20 +178,17 @@ export function useClauseTextChips(
     if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? '').length
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement
-      if (isPlaceholderElement(el))
-        return toPlaceholderString(el.dataset.conditionId, el.dataset.parameterName).length
+      if (isPlaceholderElement(el)) return toPlaceholderString(el.dataset.conditionId, el.dataset.parameterName).length
       if (isLineBreakElement(el)) return 1
     }
     let len = 0
-    node.childNodes.forEach((child) => { len += getNodeLength(child) })
+    node.childNodes.forEach((child) => {
+      len += getNodeLength(child)
+    })
     return len
   }
 
-  function computeLogicalOffsetInContainer(
-    container: Node,
-    targetNode: Node,
-    targetOffset: number
-  ): number {
+  function computeLogicalOffsetInContainer(container: Node, targetNode: Node, targetOffset: number): number {
     let index = 0
     function walk(node: Node): boolean {
       if (node === targetNode) {
@@ -339,7 +341,7 @@ export function useClauseTextChips(
   }
 
   /**
-   * Rebuilds the editor DOM from the clause template text: text as text nodes, placeholders as 
+   * Rebuilds the editor DOM from the clause template text: text as text nodes, placeholders as
    * non-editable chip spans. Applies current highlight to matching chips.
    * @example
    * syncFromTemplateText('From {{c1.start}} to {{c1.end}}.', conditions)
@@ -395,8 +397,8 @@ export function useClauseTextChips(
   }
 
   /**
-   * Handles paste: preventDefault, reads clipboard plain text, replaces 
-   * selection (or insert at cursor) in current template text. Returns 
+   * Handles paste: preventDefault, reads clipboard plain text, replaces
+   * selection (or insert at cursor) in current template text. Returns
    * new value and cursor position; caller must emit, sync DOM, and set cursor.
    */
   function handlePaste(e: ClipboardEvent): { newValue: string; newCursorPos: number } {
@@ -421,11 +423,7 @@ export function useClauseTextChips(
   }
 
   /** Add space before/after insert unless already space or period. Returns new full value and length of inserted part (for cursor). */
-  function wrapSpaces(
-    before: string,
-    insert: string,
-    after: string
-  ): { value: string; insertLength: number } {
+  function wrapSpaces(before: string, insert: string, after: string): { value: string; insertLength: number } {
     const needBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('。')
     const needAfter = after.length > 0 && !after.startsWith(' ')
     const value = before + (needBefore ? ' ' : '') + insert + (needAfter ? ' ' : '') + after
@@ -435,17 +433,14 @@ export function useClauseTextChips(
 
   /** Placeholder chip span: <span contenteditable="false" data-condition-id="c1" data-parameter-name="start"> */
   function isPlaceholderElement(
-    el: HTMLElement
+    el: HTMLElement,
   ): el is HTMLElement & { dataset: DOMStringMap & { conditionId: string; parameterName: string } } {
     return el.dataset.conditionId != null && el.dataset.parameterName != null
   }
   /** Logical newline: <br data-line="true"> */
-  function isLineBreakElement(
-    el: HTMLElement
-  ): el is HTMLElement & { dataset: DOMStringMap & { line: string } } {
+  function isLineBreakElement(el: HTMLElement): el is HTMLElement & { dataset: DOMStringMap & { line: string } } {
     return el.dataset.line === 'true'
   }
-
 
   return {
     parseSegments,

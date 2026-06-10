@@ -12,7 +12,6 @@ import (
 )
 
 type UpdateCmd struct {
-	Token              string
 	ParticipantID      string
 	EndPointURL        string
 	TermsAndConditions string
@@ -20,7 +19,6 @@ type UpdateCmd struct {
 	Description        string
 }
 
-// UpdateServiceOffering handler updates the service offering in the Federated Catalogue.
 type Updater struct {
 	Ctx      context.Context
 	FCClient *client.FederatedCatalogueClient
@@ -32,7 +30,7 @@ type UpdateResult struct {
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) (*UpdateResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if cmd.ParticipantID == "" {
 		return nil, fmt.Errorf("participant id is empty")
@@ -69,7 +67,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) (*UpdateResult, err
 	}
 
 	// Federated Catalogue will overwrite the existing self-description if the id is the same.
-	resp, err := h.FCClient.Post(h.Ctx, client.SelfDescriptionsEndpointPath, cmd.Token, nil, body)
+	resp, err := h.FCClient.Post(h.Ctx, client.SelfDescriptionsEndpointPath, nil, body)
 	if err != nil {
 		return nil, err
 	}

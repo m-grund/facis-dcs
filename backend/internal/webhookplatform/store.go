@@ -21,12 +21,14 @@ var KnownEvents = []EventInfo{
 
 // DCSEventMap maps internal NATS event types to webhook event names.
 var DCSEventMap = map[string]string{
-	"CREATE_CONTRACT":    "contract.created",
-	"SUBMIT_CONTRACT":    "contract.submitted",
-	"APPROVE_CONTRACT":   "contract.approved",
-	"REJECT_CONTRACT":    "contract.rejected",
-	"NEGOTIATE_CONTRACT": "contract.negotiated",
-	"TERMINATE_CONTRACT": "contract.terminated",
+	"CREATE_CONTRACT":           "contract.created",
+	"SUBMIT_CONTRACT":           "contract.submitted",
+	"APPROVE_CONTRACT":          "contract.approved",
+	"REJECT_CONTRACT":           "contract.rejected",
+	"NEGOTIATE_CONTRACT":        "contract.negotiated",
+	"TERMINATE_CONTRACT":        "contract.terminated",
+	"CREATE_CONTRACT_TEMPLATE":  "template.created",
+	"APPROVE_CONTRACT_TEMPLATE": "template.approved",
 }
 
 // EventInfo describes a subscribable event.
@@ -56,9 +58,9 @@ type PendingCallback struct {
 // SubscriptionStore is a thread-safe in-memory store for subscriptions and
 // pending callbacks.
 type SubscriptionStore struct {
-	mu       sync.RWMutex
-	subs     map[string][]Subscription // event name → subscriptions
-	pending  map[string]PendingCallback // event_id → pending
+	mu      sync.RWMutex
+	subs    map[string][]Subscription  // event name → subscriptions
+	pending map[string]PendingCallback // event_id → pending
 }
 
 // NewSubscriptionStore returns an empty store.

@@ -2,17 +2,21 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"errors"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type ApproveCmd struct {
@@ -20,6 +24,8 @@ type ApproveCmd struct {
 	UpdatedAt     time.Time
 	ApprovedBy    string
 	DecisionNotes []string
+	HolderDID     string
+	UserRoles     userrole.UserRoles
 }
 
 type Approver struct {
@@ -34,7 +40,12 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -75,6 +86,8 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		ApprovedBy:     cmd.ApprovedBy,
 		DecisionNotes:  cmd.DecisionNotes,
 		OccurredAt:     time.Now().UTC(),
+		HolderDID:      cmd.HolderDID,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

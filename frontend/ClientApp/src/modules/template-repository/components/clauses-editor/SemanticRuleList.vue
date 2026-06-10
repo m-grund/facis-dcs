@@ -1,17 +1,28 @@
 <template>
   <section class="rounded-lg border border-base-300 bg-base-100 p-3">
-    <h4 class="text-xs font-semibold mb-2 text-base-content/70">{{ title }}</h4>
+    <h4 class="mb-2 text-xs font-semibold text-base-content/70">{{ title }}</h4>
     <p v-if="!conditions.length" class="text-xs text-base-content/50 italic">{{ emptyMessage }}</p>
     <ul v-else class="space-y-2">
       <li v-for="c in conditions" :key="c.conditionId" class="text-xs">
-        <span class="font-medium" :class="{ 'text-primary': highlightRuleTitle }"
-          @mouseenter="onRuleEnter(c.conditionId)" @mouseleave="onRuleLeave">{{ c.conditionName }}</span>
-        <ul class="ml-3 mt-1 space-y-0.5">
-          <RuleParamRow v-for="p in c.parameters" :key="p.parameterName" :param="p"
+        <span
+          class="font-medium"
+          :class="{ 'text-primary': highlightRuleTitle }"
+          @mouseenter="onRuleEnter(c.conditionId)"
+          @mouseleave="onRuleLeave"
+        >
+          {{ c.conditionName }}
+        </span>
+        <ul class="mt-1 ml-3 space-y-0.5">
+          <RuleParamRow
+            v-for="p in c.parameters"
+            :key="p.parameterName"
+            :param="p"
             :is-used="isParamUsedInText(c.conditionId, p.parameterName)"
             :is-required-and-unused="isParamRequiredAndUnused(c.conditionId, p.parameterName)"
-            @mouseenter="onParamEnter(c.conditionId, p.parameterName)" @mouseleave="onParamLeave"
-            @click="onParamClick(c.conditionId, p.parameterName)" />
+            @mouseenter="onParamEnter(c.conditionId, p.parameterName)"
+            @mouseleave="onParamLeave"
+            @click="onParamClick(c.conditionId, p.parameterName, p.fixedValue !== undefined)"
+          />
         </ul>
       </li>
     </ul>
@@ -19,10 +30,10 @@
 </template>
 
 <script setup lang="ts">
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import RuleParamRow from './RuleParamRow.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     title: string
     emptyMessage: string
@@ -35,7 +46,7 @@ const props = withDefaults(
     isParamUsedInText: () => false,
     isParamRequiredAndUnused: () => false,
     highlightRuleTitle: false,
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -61,7 +72,8 @@ function onParamEnter(conditionId: string, parameterName: string) {
   emit('highlightParam', conditionId, parameterName)
 }
 
-function onParamClick(conditionId: string, parameterName: string) {
+function onParamClick(conditionId: string, parameterName: string, isFixed: boolean) {
+  if (isFixed) return
   emit('insertPlaceholder', conditionId, parameterName)
 }
 </script>

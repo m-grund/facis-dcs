@@ -5,5 +5,26 @@ DCS allows organizations to streamline business processes, reduce paperwork, and
 
 **The detailed specifications for the Digital Contracting Service (DCS) can be found: [SRS_FACIS_DCS](https://github.com/eclipse-xfsc/facis/tree/main/DCS/specification/SRS_FACIS_DCS.pdf).**
 
+## Setup
+Run `npm install` in the **project root**. This installs **Husky** and registers the pre-commit hooks. If you skip this, you cannot commit code, and your Pull Request will fail the CI pipeline.
+```bash
+# Execute this in the root directory
+npm install
+```
+
 ## DCS Backend
-- You can find instruction for the DCS Backend here: [DCS Backend](./implementation/backend/README.md)
+- You can find instruction for the DCS Backend here: [DCS Backend](./backend/README.md)
+
+## Development Quick Start (Rancher Desktop + Helm)
+This repository uses Helm-managed dependencies in Kubernetes for local development.
+
+1. Start Rancher Desktop with Kubernetes enabled.
+2. From project root, run:
+
+```bash
+bash dev-stack.sh
+```
+
+This sets up Helm dependencies, prepares backend env and C2PA cert-chain, then starts frontend (Vite) and backend (air).
+
+For step-by-step manual commands and troubleshooting, see [deployment/README.md](./deployment/README.md#local-development).

@@ -116,10 +116,8 @@ Resolve Keycloak port from explicit override, in-chart service, or scheme defaul
 {{- .Values.serviceDiscovery.keycloakPort -}}
 {{- else if .Values.keycloak.enabled -}}
 {{- default 8080 .Values.keycloak.service.port -}}
-{{- else if eq (default "http" .Values.oidc.keycloakScheme) "https" -}}
-443
 {{- else -}}
-80
+443
 {{- end -}}
 {{- end }}
 
@@ -158,25 +156,36 @@ NATS_URL override or derived from nats settings.
 {{- end }}
 
 {{/*
-OIDC issuer override or derived from keycloak settings.
-Uses external URL (istio/ingress host) for browser-based OIDC flows.
+Hydra OAuth2/OIDC issuer (URLs issuer / discovery). Requires hydra.enabled.
 */}}
-{{- define "digital-contracting-service.oidcIssuerURL" -}}
-{{- if .Values.oidc.issuerURL -}}
-{{- .Values.oidc.issuerURL -}}
-{{- else if and .Values.keycloak.enabled .Values.keycloak.route.path -}}
-{{- $scheme := default "https" .Values.oidc.keycloakScheme -}}
-{{- $realm := default "gaia-x" .Values.oidc.realm -}}
-{{- $basePath := printf "/%s" (trimAll "/" .Values.keycloak.route.path) -}}
-{{- $host := "" -}}
-{{- if and .Values.istio.enabled (gt (len .Values.istio.hosts) 0) -}}
-{{- $host = index .Values.istio.hosts 0 -}}
-{{- else if and .Values.ingress.enabled (gt (len .Values.ingress.hosts) 0) -}}
-{{- $host = (index .Values.ingress.hosts 0).host -}}
+{{- define "digital-contracting-service.hydraIssuerURL" -}}
+{{- if .Values.hydra.enabled -}}
+{{- if .Values.hydra.config.selfIssuerURL -}}
+{{- .Values.hydra.config.selfIssuerURL -}}
+{{- else -}}
+{{- printf "http://%s-hydra:%d" .Release.Name (.Values.hydra.service.publicPort | int) -}}
 {{- end -}}
-{{- if $host -}}
-{{- printf "%s://%s%s/realms/%s" $scheme $host $basePath $realm -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Hydra admin API base URL (login/consent accept).
+*/}}
+{{- define "digital-contracting-service.hydraAdminURL" -}}
+{{- if .Values.hydra.enabled -}}
+{{- printf "http://%s-hydra:%d" .Release.Name (.Values.hydra.service.adminPort | int) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Keycloak realm URL for Federated Catalogue integration only.
+*/}}
+{{- define "digital-contracting-service.fcKeycloakRealmURL" -}}
+{{- if .Values.fcKeycloak.realmURL -}}
+{{- .Values.fcKeycloak.realmURL -}}
+{{- else if .Values.keycloak.enabled -}}
+{{- $port := .Values.keycloak.service.port | default 8080 | int -}}
+{{- printf "http://%s-keycloak:%d/realms/gaia-x" .Release.Name $port -}}
 {{- else -}}
 {{- "" -}}
 {{- end -}}
@@ -205,10 +214,144 @@ UI path override or derived default.
 {{- end }}
 
 {{/*
+IPFS Document Manager tenant base URL (auto-wired when ipfsDocumentManager sub-chart is enabled).
+*/}}
+{{- define "digital-contracting-service.ipfsTenantBaseURL" -}}
+{{- if .Values.ipfsClient.tenantBaseURL -}}
+{{- .Values.ipfsClient.tenantBaseURL -}}
+{{- else if .Values.ipfsDocumentManager.enabled -}}
+{{- $host := printf "%s-ipfs-document-manager" .Release.Name -}}
+{{- $port := default 8080 .Values.ipfsDocumentManager.service.port -}}
+{{- $tenant := default "tenant_space" .Values.ipfsClient.tenantName -}}
+{{- printf "http://%s:%v/v1/tenants/%s" $host $port $tenant -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_URL: explicit override, or derived from the co-deployed signer service.
+VAULT_ADDR: explicit override, or derived from the co-deployed Vault instance.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderURL" -}}
+{{- if .Values.signing.cryptoProviderURL -}}
+{{- .Values.signing.cryptoProviderURL -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- printf "http://%s-crypto-provider-signer:%v" .Release.Name .Values.cryptoProvider.signer.port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.mount.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderNamespace" -}}
+{{- if .Values.signing.cryptoProviderNamespace -}}
+{{- .Values.signing.cryptoProviderNamespace -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.mount -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
+*/}}
+{{- define "digital-contracting-service.ipfsMfsBaseURL" -}}
+{{- if .Values.ipfsClient.mfsBaseURL -}}
+{{- .Values.ipfsClient.mfsBaseURL -}}
+{{- else if .Values.ipfs.enabled -}}
+{{- $host := printf "%s-ipfs" .Release.Name -}}
+{{- $port := default 5001 .Values.ipfs.service.apiPort -}}
+{{- printf "http://%s:%v" $host $port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_KEY: explicit override or taken from subchart transit.key.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderKey" -}}
+{{- if .Values.signing.cryptoProviderKey -}}
+{{- .Values.signing.cryptoProviderKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.key -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CRYPTO_PROVIDER_VC_KEY: explicit override or taken from subchart transit.vcKey.
+*/}}
+{{- define "digital-contracting-service.cryptoProviderVCKey" -}}
+{{- if .Values.signing.cryptoProviderVCKey -}}
+{{- .Values.signing.cryptoProviderVCKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.vcKey -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+ISSUER_DID: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.issuerDID" -}}
+{{- .Values.signing.issuerDID -}}
+{{- end }}
+
+{{/*
+Resolve signer cert-chain secret name:
+1) explicit signing.certChain existingSecret
+2) auto-generated dev cert-chain from co-deployed crypto-provider
+*/}}
+{{- define "digital-contracting-service.signingCertChainSecretName" -}}
+{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
+{{- .Values.signing.certChain.existingSecret.name -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- default (printf "%s-crypto-provider-dev-cert-chain" .Release.Name) .Values.cryptoProvider.devCertChain.secretName -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve signer cert-chain secret key.
+*/}}
+{{- define "digital-contracting-service.signingCertChainSecretKey" -}}
+{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
+{{- .Values.signing.certChain.existingSecret.key -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- default "chain.pem" .Values.cryptoProvider.devCertChain.secretKey -}}
+{{- else -}}
+{{- "chain.pem" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+IPFS_MFS_BASE_URL: explicit value or secret ref.
+*/}}
+{{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
+{{- .Values.ipfs.mfsBaseURL -}}
+{{- end }}
+
+{{/*
 Normalize Keycloak route path (leading slash, no trailing slash).
 */}}
 {{- define "digital-contracting-service.keycloakRoutePath" -}}
 {{- if .Values.keycloak.route.path -}}
 {{- printf "/%s" (trimAll "/" (.Values.keycloak.route.path | toString)) -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+OID4VP trust ConfigMap name.
+*/}}
+{{- define "digital-contracting-service.oid4vpTrustConfigMapName" -}}
+{{- default (printf "%s-oid4vp-trust" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.trust.configMapName -}}
+{{- end }}
+
+{{/*
+Kubernetes secret holding demo wallet private keys (synced from Vault).
+*/}}
+{{- define "digital-contracting-service.demoWalletSecretName" -}}
+{{- default (printf "%s-demo-wallet" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.demoWallet.secretName -}}
 {{- end }}

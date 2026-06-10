@@ -2,19 +2,23 @@ package contracttemplate
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/contractworkflowengine/db"
-	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
+	"digital-contracting-service/internal/contractworkflowengine/db"
+	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 )
 
 type GetTemplateDataByDIDQry struct {
-	Token string
-	DID   string
+	DID string
 }
 
 type GetTemplateDataByDIDHandler struct {
@@ -28,6 +32,15 @@ var templateDataAllowedKeys = []string{
 	"documentOutline",
 	"documentBlocks",
 	"semanticConditions",
+	"schemaRefs",
+	"policyRefs",
+	"validation",
+	"semanticProfile",
+	"templateVariables",
+	"placeholderBindings",
+	"semanticRules",
+	"contractStatements",
+	"sla",
 	"subTemplateSnapshots",
 	"templateDataVersion",
 }
@@ -46,7 +59,7 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 	if err != nil {
 		return nil, err
 	}
-	return convertTemplateDataToContractData(templateData)
+	return convertTemplateDataToContractData(templateData, qry.DID)
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {
@@ -72,7 +85,11 @@ func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx con
 	if err != nil {
 		return nil, fmt.Errorf("could not create transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	templateData, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, templateDID)
 	if err != nil {
@@ -87,11 +104,7 @@ func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx con
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateDataFromFC(qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {
-	if strings.TrimSpace(qry.Token) == "" {
-		return nil, fmt.Errorf("template data not found in DB and federated catalogue token is empty")
-	}
-
-	resp, err := h.FCClient.Query(h.Ctx, qry.Token, fcclient.QueryRequest{
+	resp, err := h.FCClient.Query(h.Ctx, fcclient.QueryRequest{
 		Statement: getTemplateDataJSONByDIDStatement,
 		Parameters: map[string]string{
 			"did": qry.DID,
@@ -133,7 +146,7 @@ func (h *GetTemplateDataByDIDHandler) getTemplateDataFromFC(qry GetTemplateDataB
 	return &templateData, nil
 }
 
-func convertTemplateDataToContractData(raw *datatype.JSON) (*datatype.JSON, error) {
+func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string) (*datatype.JSON, error) {
 	if raw == nil || !raw.IsNotNullValue() {
 		return raw, nil
 	}
@@ -149,10 +162,14 @@ func convertTemplateDataToContractData(raw *datatype.JSON) (*datatype.JSON, erro
 			contractDataMap[key] = value
 		}
 	}
+	contractDataMap["sourceTemplate"] = map[string]interface{}{
+		"did": templateDID,
+	}
+	contractDataMap["derivedFromTemplate"] = templateDID
 
 	contractData, err := datatype.NewJSON(contractDataMap)
 	if err != nil {
 		return nil, fmt.Errorf("marshal converted contract data failed: %w", err)
 	}
-	return &contractData, nil
+	return validation.NormalizeContractData(&contractData, false)
 }

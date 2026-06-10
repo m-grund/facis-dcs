@@ -2,13 +2,14 @@ package pg
 
 import (
 	"context"
-	"digital-contracting-service/internal/contractworkflowengine/db"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
 type PostgresApprovalTaskRepo struct {
@@ -83,7 +84,7 @@ func (r *PostgresApprovalTaskRepo) UpdateState(ctx context.Context, tx *sqlx.Tx,
 		return err
 	}
 	if rowsAffected == 0 {
-		return errors.New("user has no review task for this contract")
+		return errors.New("user has no approval task for this contract")
 	}
 	return nil
 }

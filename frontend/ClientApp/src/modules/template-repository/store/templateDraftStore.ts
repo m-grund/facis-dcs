@@ -1,12 +1,34 @@
 import { defineStore } from 'pinia'
-import type { TemplateDraftState, AddBlockPayload, AddBlockOptions, SubTemplateReference } from "@template-repository/models/template-draft-store"
-import type { DocumentOutline, DocumentOutlineBlock, DocumentBlock, TemplateTypeValue, SemanticCondition, MetaData } from "@template-repository/models/contract-templace"
-import { DocumentBlockType, TemplateType, isClauseBlock, isSectionBlock, isApprovedTemplateBlock } from "@template-repository/models/contract-templace"
+import type {
+  TemplateDraftState,
+  AddBlockPayload,
+  AddBlockOptions,
+  SubTemplateReference,
+} from '@template-repository/models/template-draft-store'
+import type {
+  DocumentOutline,
+  DocumentOutlineBlock,
+  DocumentBlock,
+  TemplateTypeValue,
+  SemanticCondition,
+  MetaData,
+} from '@template-repository/models/contract-template'
+import {
+  DocumentBlockType,
+  TemplateType,
+  isClauseBlock,
+  isSectionBlock,
+  isApprovedTemplateBlock,
+  FACIS_SCHEMA_REFS,
+  FACIS_TEMPLATE_POLICY_REFS,
+  FACIS_TEMPLATE_VALIDATION_PROFILE,
+} from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
+import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 
-const storeId = "templateDraft"
+const storeId = 'templateDraft'
 const defaultState: Readonly<TemplateDraftState> = {
   did: null,
   name: '',
@@ -16,6 +38,18 @@ const defaultState: Readonly<TemplateDraftState> = {
   documentBlocks: [],
   semanticConditions: [],
   customMetaData: [],
+  schemaRefs: {
+    documentStructure: FACIS_SCHEMA_REFS.documentStructure,
+    semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
+    templateData: FACIS_SCHEMA_REFS.templateData,
+  },
+  policyRefs: FACIS_TEMPLATE_POLICY_REFS,
+  validation: FACIS_TEMPLATE_VALIDATION_PROFILE,
+  semanticProfile: FACIS_DCS_SEMANTIC_PROFILE,
+  templateVariables: [],
+  placeholderBindings: [],
+  semanticRules: [],
+  sla: null,
   subTemplateSnapshots: [],
   templateType: TemplateType.subContract,
   state: null,
@@ -23,7 +57,7 @@ const defaultState: Readonly<TemplateDraftState> = {
   version: null,
   updated_at: null,
   created_by: '',
-  responsible_persons: null,
+  responsible: null,
   // This field is used to distinguish between contract and template workflows.
   workflow: 'template',
 }
@@ -31,13 +65,20 @@ const defaultState: Readonly<TemplateDraftState> = {
 export const useTemplateDraftStore = defineStore(storeId, {
   state: (): TemplateDraftState => getInitialState(),
   getters: {
-    hasTemplateId(): boolean { return !!this.did },
+    hasTemplateId(): boolean {
+      return !!this.did
+    },
     /** Set of all block IDs that appear in the document outline tree (root + all descendants). */
     blockIdsInOutline(): Set<string> {
       return collectBlockIdsInOutline(this.documentOutline)
     },
     /** Returns the data to create a contract template based on the current draft state. */
     templateCreateRequestData(): ContractTemplateCreateRequest {
+      const semanticExtension = buildSemanticTemplateExtension(
+        this.documentBlocks,
+        this.semanticConditions,
+        this.semanticProfile,
+      )
       return {
         name: this.name,
         description: this.description,
@@ -47,13 +88,29 @@ export const useTemplateDraftStore = defineStore(storeId, {
           documentBlocks: this.documentBlocks,
           semanticConditions: this.semanticConditions,
           customMetaData: this.customMetaData,
+          schemaRefs: this.schemaRefs,
+          policyRefs: this.policyRefs,
+          validation: this.validation,
+          semanticProfile: semanticExtension.semanticProfile,
+          templateVariables: this.templateVariables,
+          placeholderBindings: mergePlaceholderBindings(
+            this.placeholderBindings,
+            semanticExtension.placeholderBindings,
+          ),
+          semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
+          sla: this.sla ?? undefined,
           subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
           templateDataVersion: this.templateDataVersion,
-        }
+        },
       }
     },
     templateUpdateRequestData(): ContractTemplateUpdateRequest | null {
       if (!this.did || !this.updated_at) return null
+      const semanticExtension = buildSemanticTemplateExtension(
+        this.documentBlocks,
+        this.semanticConditions,
+        this.semanticProfile,
+      )
       return {
         did: this.did,
         updated_at: this.updated_at,
@@ -64,6 +121,17 @@ export const useTemplateDraftStore = defineStore(storeId, {
           documentBlocks: this.documentBlocks,
           semanticConditions: this.semanticConditions,
           customMetaData: this.customMetaData,
+          schemaRefs: this.schemaRefs,
+          policyRefs: this.policyRefs,
+          validation: this.validation,
+          semanticProfile: semanticExtension.semanticProfile,
+          templateVariables: this.templateVariables,
+          placeholderBindings: mergePlaceholderBindings(
+            this.placeholderBindings,
+            semanticExtension.placeholderBindings,
+          ),
+          semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
+          sla: this.sla ?? undefined,
           subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
           templateDataVersion: this.templateDataVersion,
         },
@@ -74,9 +142,9 @@ export const useTemplateDraftStore = defineStore(storeId, {
     // Block operations: add, delete, update, move
     /**
      * Adds a new block under the given parent at the given index.
-     * 
+     *
      * subContract: cannot add APPROVED_TEMPLATE. frameContract: can only add APPROVED_TEMPLATE.
-     * 
+     *
      * @param parentBlockId - blockId of the outline node (parent) under which to insert
      * @param insertIndex - index in the parent's children array (0 = first)
      * @param payload - block data
@@ -85,10 +153,16 @@ export const useTemplateDraftStore = defineStore(storeId, {
      */
     addBlock(parentBlockId: string, insertIndex: number, payload: AddBlockPayload, options?: AddBlockOptions): string {
       if (this.workflow === 'template') {
-        if (this.templateType === TemplateType.subContract && payload.blockType === DocumentBlockType.ApprovedTemplate) {
+        if (
+          this.templateType === TemplateType.subContract &&
+          payload.blockType === DocumentBlockType.ApprovedTemplate
+        ) {
           throw new Error('subContract template cannot add APPROVED_TEMPLATE blocks')
         }
-        if (this.templateType === TemplateType.frameContract && payload.blockType !== DocumentBlockType.ApprovedTemplate) {
+        if (
+          this.templateType === TemplateType.frameContract &&
+          payload.blockType !== DocumentBlockType.ApprovedTemplate
+        ) {
           throw new Error('frameContract template can only add APPROVED_TEMPLATE blocks')
         }
       }
@@ -133,9 +207,14 @@ export const useTemplateDraftStore = defineStore(storeId, {
         conditionId: crypto.randomUUID(),
       })
     },
-    updateSemanticCondition(conditionId: string, payload: Omit<SemanticCondition, 'conditionId'>, subTemplateRef?: SubTemplateReference): void {
+    updateSemanticCondition(
+      conditionId: string,
+      payload: Omit<SemanticCondition, 'conditionId'>,
+      subTemplateRef?: SubTemplateReference,
+    ): void {
       const conditions = subTemplateRef
-        ? findSubTemplateSnapshotByRef(this.subTemplateSnapshots, subTemplateRef)?.template_data?.semanticConditions ?? []
+        ? (findSubTemplateSnapshotByRef(this.subTemplateSnapshots, subTemplateRef)?.template_data?.semanticConditions ??
+          [])
         : this.semanticConditions
       const idx = conditions.findIndex((item) => item.conditionId === conditionId)
       if (idx < 0) return
@@ -146,10 +225,11 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     deleteSemanticCondition(conditionId: string, subTemplateRef?: SubTemplateReference): void {
       const blocks = subTemplateRef
-        ? findSubTemplateSnapshotByRef(this.subTemplateSnapshots, subTemplateRef)?.template_data?.documentBlocks ?? []
+        ? (findSubTemplateSnapshotByRef(this.subTemplateSnapshots, subTemplateRef)?.template_data?.documentBlocks ?? [])
         : this.documentBlocks
       const conditions = subTemplateRef
-        ? findSubTemplateSnapshotByRef(this.subTemplateSnapshots, subTemplateRef)?.template_data?.semanticConditions ?? []
+        ? (findSubTemplateSnapshotByRef(this.subTemplateSnapshots, subTemplateRef)?.template_data?.semanticConditions ??
+          [])
         : this.semanticConditions
       if (!blocks || !conditions) return
 
@@ -172,13 +252,21 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     // Clauses operations: add, delete, update
     /** Adds a clause block to documentBlocks only */
-    addClause(payload: { title?: string; text: string; conditionIds: string[] }): string {
+    addClause(payload: {
+      title?: string
+      text: string
+      conditionIds: string[]
+      schemaRef?: string
+      semanticPath?: string
+    }): string {
       const blockId = crypto.randomUUID()
       const block = createBlockFromPayload(blockId, {
         blockType: DocumentBlockType.Clause,
         text: payload.text,
         title: payload.title,
         conditionIds: payload.conditionIds,
+        schemaRef: payload.schemaRef,
+        semanticPath: payload.semanticPath,
       })
       this.documentBlocks.push(block)
       return blockId
@@ -233,8 +321,8 @@ export const useTemplateDraftStore = defineStore(storeId, {
         throw new Error('Cannot change template type after template is created')
       }
       this.templateType = templateType
-      /**  TBD: after changing template type, the blocks that are not allowed in the new 
-       * template type should be removed. For example, if changing from frameContract 
+      /**  TBD: after changing template type, the blocks that are not allowed in the new
+       * template type should be removed. For example, if changing from frameContract
        * to subContract, the APPROVED_TEMPLATE blocks should be removed. */
     },
     updateName(name: string): void {
@@ -253,22 +341,24 @@ export const useTemplateDraftStore = defineStore(storeId, {
         template_data: template.template_data,
       }
       this.subTemplateSnapshots = [
-        ... this.subTemplateSnapshots.filter((item) => !isSameTemplate(item, snapshot)),
-        snapshot
+        ...this.subTemplateSnapshots.filter((item) => !isSameTemplate(item, snapshot)),
+        snapshot,
       ]
     },
-    removeSubTemplateSnapshot(template: { did: string, version: number, document_number?: string }): void {
+    removeSubTemplateSnapshot(template: { did: string; version: number; document_number?: string }): void {
       this.subTemplateSnapshots = this.subTemplateSnapshots.filter((item) => !isSameTemplate(item, template))
     },
     reset(overrides?: Partial<TemplateDraftState>) {
       Object.assign(this, getInitialState())
       if (overrides) Object.assign(this, overrides)
-    }
-  }
+    },
+  },
 })
 
 /** Creates a document outline item */
-function createOutlineItem(overrides?: Partial<Pick<DocumentOutlineBlock, 'blockId' | 'isRoot' | 'children'>>): DocumentOutlineBlock {
+function createOutlineItem(
+  overrides?: Partial<Pick<DocumentOutlineBlock, 'blockId' | 'isRoot' | 'children'>>,
+): DocumentOutlineBlock {
   return {
     blockId: overrides?.blockId ?? crypto.randomUUID(),
     isRoot: overrides?.isRoot ?? false,
@@ -297,7 +387,7 @@ function addBlock(
   parentBlockId: string,
   insertIndex: number,
   payload: AddBlockPayload,
-  options?: AddBlockOptions
+  options?: AddBlockOptions,
 ): string {
   const addToOutline = options?.addToOutline !== false
 
@@ -345,12 +435,7 @@ function addBlock(
 /**
  * Moves a block within the outline (same parent or different parent). Mutates documentOutline only.
  */
-function moveBlock(
-  outline: DocumentOutlineBlock[],
-  blockId: string,
-  parentBlockId: string,
-  insertIndex: number
-): void {
+function moveBlock(outline: DocumentOutlineBlock[], blockId: string, parentBlockId: string, insertIndex: number): void {
   const oldParent = outline.find((b) => b.children.includes(blockId))
   const newParent = outline.find((b) => b.blockId === parentBlockId)
   if (!oldParent || !newParent) return
@@ -374,11 +459,7 @@ function moveBlock(
 /**
  * Removes the block and all its descendants from outline and blocks. Mutates both arrays.
  */
-function deleteBlock(
-  outline: DocumentOutlineBlock[],
-  blocks: DocumentBlock[],
-  blockId: string
-): void {
+function deleteBlock(outline: DocumentOutlineBlock[], blocks: DocumentBlock[], blockId: string): void {
   const block = blocks.find((b) => b.blockId === blockId)
   const parent = outline.find((b) => b.children.includes(blockId))
   if (!parent) {
@@ -402,18 +483,31 @@ function deleteBlock(
 
 function createBlockFromPayload(blockId: string, payload: AddBlockPayload): DocumentBlock {
   const text = payload.text ?? ''
+  const blockMeta = {
+    blockCatalogueId: payload.blockCatalogueId,
+    schemaRef: payload.schemaRef,
+    semanticPath: payload.semanticPath,
+  }
   switch (payload.blockType) {
     case DocumentBlockType.Section:
-      return { blockId, type: DocumentBlockType.Section, text }
+      return { blockId, type: DocumentBlockType.Section, text, ...blockMeta }
     case DocumentBlockType.Text:
-      return { blockId, type: DocumentBlockType.Text, text }
+      return { blockId, type: DocumentBlockType.Text, text, ...blockMeta }
     case DocumentBlockType.Clause:
-      return { blockId, type: DocumentBlockType.Clause, text, title: payload.title, conditionIds: payload.conditionIds ?? [] }
+      return {
+        blockId,
+        type: DocumentBlockType.Clause,
+        text,
+        title: payload.title,
+        conditionIds: payload.conditionIds ?? [],
+        ...blockMeta,
+      }
     case DocumentBlockType.ApprovedTemplate:
       return {
         blockId,
         type: DocumentBlockType.ApprovedTemplate,
         text,
+        ...blockMeta,
         templateId: payload.templateId ?? '',
         version: payload.version ?? 1,
         document_number: payload.document_number ?? '',
@@ -426,7 +520,7 @@ function createBlockFromPayload(blockId: string, payload: AddBlockPayload): Docu
 function removeClauseAndOutlineRefs(
   blocks: DocumentBlock[],
   outlineBlocks: DocumentOutlineBlock[],
-  blockId: string
+  blockId: string,
 ): DocumentBlock[] {
   outlineBlocks.forEach((outlineBlock) => {
     if (!outlineBlock.children.includes(blockId)) return
@@ -436,10 +530,7 @@ function removeClauseAndOutlineRefs(
 }
 
 /** Returns a Set of blockId and all descendant block ids in the outline. */
-function collectDescendantBlockIds(
-  blockId: string,
-  outlineByBlockId: Map<string, DocumentOutlineBlock>
-): Set<string> {
+function collectDescendantBlockIds(blockId: string, outlineByBlockId: Map<string, DocumentOutlineBlock>): Set<string> {
   const set = new Set<string>([blockId])
   const node = outlineByBlockId.get(blockId)
   const childIds = node?.children ?? []
@@ -452,8 +543,8 @@ function placeholderRegexForCondition(conditionId: string): RegExp {
   return new RegExp(`\\{\\{${conditionId}\\.([^}]*)\\}\\}`, 'g')
 }
 
-/** Returns a copy of defaultState so store state does not share 
- *  refs with defaultState; mutations in the store do not pollute 
+/** Returns a copy of defaultState so store state does not share
+ *  refs with defaultState; mutations in the store do not pollute
  *  defaultState and $reset() restores correctly.
  **/
 function getInitialState(): TemplateDraftState {
@@ -464,13 +555,24 @@ function getInitialState(): TemplateDraftState {
     documentBlocks: [...defaultState.documentBlocks],
     semanticConditions: [...defaultState.semanticConditions],
     customMetaData: [...defaultState.customMetaData],
+    schemaRefs: { ...defaultState.schemaRefs },
+    policyRefs: defaultState.policyRefs.map((policy) => ({ ...policy })),
+    validation: {
+      ...defaultState.validation,
+      requiredPolicies: [...defaultState.validation.requiredPolicies],
+    },
+    semanticProfile: { ...defaultState.semanticProfile },
+    templateVariables: [...defaultState.templateVariables],
+    placeholderBindings: [...defaultState.placeholderBindings],
+    semanticRules: [...defaultState.semanticRules],
+    sla: defaultState.sla,
     subTemplateSnapshots: [...defaultState.subTemplateSnapshots],
   }
 }
 
 function isSameTemplate(
-  t1: { did: string, version: number, document_number?: string },
-  t2: { did: string, version: number, document_number?: string }
+  t1: { did: string; version: number; document_number?: string },
+  t2: { did: string; version: number; document_number?: string },
 ): boolean {
   return isSameTemplateDataRef(
     {
@@ -488,7 +590,7 @@ function isSameTemplate(
 
 function findSubTemplateSnapshotByRef(
   subTemplates: SubTemplateSnapshot[],
-  subTemplateRef: SubTemplateReference
+  subTemplateRef: SubTemplateReference,
 ): SubTemplateSnapshot | undefined {
   return subTemplates.find((subTemplate) => isSameTemplate(subTemplate, subTemplateRef))
 }
@@ -505,7 +607,43 @@ function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTem
         semanticConditions: td.semanticConditions,
         documentBlocks: td.documentBlocks,
         customMetaData: td.customMetaData,
+        schemaRefs: td.schemaRefs,
+        policyRefs: td.policyRefs,
+        validation: td.validation,
+        semanticProfile: td.semanticProfile,
+        templateVariables: td.templateVariables,
+        placeholderBindings: td.placeholderBindings,
+        semanticRules: td.semanticRules,
+        sla: td.sla,
       },
     }
   })
+}
+
+function mergePlaceholderBindings(
+  stored: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'],
+  generated: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'],
+) {
+  const result = new Map<string, ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'][number]>()
+  for (const binding of stored.filter((item) => item.source !== 'clause-placeholder')) {
+    result.set(`${binding.blockId}:${binding.boundToCondition}:${binding.boundToParameter}`, binding)
+  }
+  for (const binding of generated) {
+    result.set(`${binding.blockId}:${binding.boundToCondition}:${binding.boundToParameter}`, binding)
+  }
+  return [...result.values()]
+}
+
+function mergeSemanticRules(
+  stored: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'],
+  generated: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'],
+) {
+  const result = new Map<string, ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'][number]>()
+  for (const rule of stored.filter((item) => item.source !== 'semanticCondition')) {
+    result.set(rule.ruleId, rule)
+  }
+  for (const rule of generated) {
+    result.set(rule.ruleId, rule)
+  }
+  return [...result.values()]
 }

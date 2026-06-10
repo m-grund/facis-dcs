@@ -6,6 +6,7 @@
       :type="seg.paramType"
       :label="seg.label"
       :value="seg.value"
+      :value-constraint="seg.valueConstraint"
       :is-invalid="seg.isInvalid"
       :invalid-tip="seg.invalidTip"
       @update:value="(val) => onParamValueChange(seg, val)"
@@ -21,13 +22,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SemanticCondition, SemanticParameterType } from '@template-repository/models/contract-templace'
-import { parseSegments, isText, isPlaceholder, type Segment, isNewline } from '@template-repository/composables/useClauseTextChips'
+import type {
+  SemanticCondition,
+  SemanticParameterType,
+  SemanticValueConstraint,
+} from '@template-repository/models/contract-template'
+import {
+  parseSegments,
+  isText,
+  isPlaceholder,
+  type Segment,
+  isNewline,
+} from '@template-repository/composables/useClauseTextChips'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import PreviewParamInput from './PreviewParamInput.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 const props = defineProps<{
   blockId: string
@@ -41,15 +53,16 @@ const props = defineProps<{
 type PreviewSegment =
   | { type: 'text'; value: string }
   | {
-    type: 'param'
-    conditionId: string
-    parameterName: string
-    paramType: SemanticParameterType
-    label: string
-    value?: string | number
-    isInvalid?: boolean
-    invalidTip?: string
-  }
+      type: 'param'
+      conditionId: string
+      parameterName: string
+      paramType: SemanticParameterType
+      label: string
+      value?: string | number | boolean
+      valueConstraint?: SemanticValueConstraint
+      isInvalid?: boolean
+      invalidTip?: string
+    }
   | { type: 'newline' }
 
 const previewNewlineSpanClass = PREVIEW_NEWLINE_SPAN_CLASS
@@ -69,8 +82,9 @@ const segments = computed<PreviewSegment[]>(() => {
         conditionId: seg.conditionId,
         parameterName: seg.parameterName,
         paramType,
-        label: seg.parameterName,
+        label: param ? semanticParameterLabel(param) : seg.parameterName,
         value: findSemanticValue(seg.conditionId, seg.parameterName),
+        valueConstraint: param?.valueConstraint,
         isInvalid: !!findVerificationError(seg.conditionId, seg.parameterName),
         invalidTip: findVerificationError(seg.conditionId, seg.parameterName)?.message,
       })
@@ -81,30 +95,24 @@ const segments = computed<PreviewSegment[]>(() => {
   return result
 })
 
-function onParamValueChange(seg: PreviewSegment, value: string | number) {
+function onParamValueChange(seg: PreviewSegment, value: string | number | boolean) {
   if (seg.type !== 'param') return
   props.setSemanticConditionValue?.(props.blockId, seg.conditionId, seg.parameterName, value)
 }
 
-function findSemanticValue(conditionId: string, parameterName: string): string | number | undefined {
+function findSemanticValue(conditionId: string, parameterName: string): string | number | boolean | undefined {
   return props.semanticConditionValues?.find((item) => {
-    return (
-      item.blockId === props.blockId &&
-      item.conditionId === conditionId &&
-      item.parameterName === parameterName
-    )
+    return item.blockId === props.blockId && item.conditionId === conditionId && item.parameterName === parameterName
   })?.parameterValue
 }
 
 function findVerificationError(conditionId: string, parameterName: string) {
   if (!props.verificationResult) return null
-  return props.verificationResult.errors.find((item) => {
-    return (
-      item.blockId === props.blockId &&
-      item.conditionId === conditionId &&
-      item.parameterName === parameterName
-    )
-  }) ?? null
+  return (
+    props.verificationResult.errors.find((item) => {
+      return item.blockId === props.blockId && item.conditionId === conditionId && item.parameterName === parameterName
+    }) ?? null
+  )
 }
 </script>
 

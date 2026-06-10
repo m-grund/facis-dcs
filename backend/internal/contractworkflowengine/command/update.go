@@ -2,16 +2,22 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
-	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -27,6 +33,8 @@ type UpdateCmd struct {
 	Name            *string
 	Description     *string
 	ContractData    *datatype.JSON
+	HolderDID       string
+	UserRoles       userrole.UserRoles
 }
 
 type Updater struct {
@@ -35,12 +43,23 @@ type Updater struct {
 }
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
+	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
+		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, true)
+		if err != nil {
+			return fmt.Errorf("contract data validation failed: %w", err)
+		}
+		cmd.ContractData = normalizedContractData
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	oldData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {
@@ -51,8 +70,9 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
+	// This avoids that updates on different DCS are possible
 	if oldData.CreatedBy != cmd.UpdatedBy {
-		return errors.New("invalid user")
+		return errors.New("invalid participant")
 	}
 
 	if oldData.State != contracttemplatestate.Draft.String() {
@@ -127,6 +147,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		NewExpNoticePeriod: cmd.ExpNoticePeriod,
 		UpdatedBy:          cmd.UpdatedBy,
 		OccurredAt:         time.Now().UTC(),
+		HolderDID:          cmd.HolderDID,
+		UserRoles:          cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

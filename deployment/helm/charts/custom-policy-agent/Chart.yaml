@@ -1,0 +1,5 @@
+apiVersion: v2
+name: custom-policy-agent
+description: XFSC Custom Policy Agent – OPA-based policy evaluation service
+type: application
+version: 0.1.0

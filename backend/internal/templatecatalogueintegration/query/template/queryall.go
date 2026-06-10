@@ -2,15 +2,14 @@ package template
 
 import (
 	"context"
-	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"fmt"
 
+	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templatecatalogueintegration/internal/ptr"
 )
 
 type GetAllMetadataQry struct {
-	Token  string
 	Offset int
 	Limit  int
 }
@@ -45,16 +44,13 @@ LIMIT %d
 
 func (h *GetAllMetadataHandler) Handle(qry GetAllMetadataQry) (*templatecatalogueintegration.TemplateCatalogueRetrieveResponse, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if qry.Offset < 0 {
 		return nil, fmt.Errorf("offset must be >= 0")
 	}
-	if qry.Limit <= 0 {
-		return nil, fmt.Errorf("limit must be > 0")
-	}
 
-	countResp, err := h.FCClient.Query(h.Ctx, qry.Token, client.QueryRequest{
+	countResp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
 		Statement:  retrieveTemplatesCountStatement,
 		Parameters: map[string]string{},
 	})
@@ -64,8 +60,13 @@ func (h *GetAllMetadataHandler) Handle(qry GetAllMetadataQry) (*templatecatalogu
 
 	totalCount := countResp.TotalCount
 
-	statement := fmt.Sprintf(retrieveTemplatesStatementTemplate, qry.Offset, qry.Limit)
-	dataResp, err := h.FCClient.Query(h.Ctx, qry.Token, client.QueryRequest{
+	limit := qry.Limit
+	if limit < 1 {
+		limit = totalCount
+	}
+
+	statement := fmt.Sprintf(retrieveTemplatesStatementTemplate, qry.Offset, limit)
+	dataResp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
 		Statement:  statement,
 		Parameters: map[string]string{},
 	})

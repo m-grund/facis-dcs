@@ -8,6 +8,9 @@ var SMContractRetrieveRequest = Type("SMContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("offset", Int, "Start index of results")
+	Attribute("limit", Int, "Page size of results")
 })
 
 var SMContractListItem = Type("SMContractListItem", func() {
@@ -16,20 +19,26 @@ var SMContractListItem = Type("SMContractListItem", func() {
 	Attribute("state", String, "Current state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "The description of the contract")
+	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSigningTaskItem = Type("SMContractSigningTaskItem", func() {
 	Attribute("did", String, "DID of the contract")
 	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "State of the review task")
-	Attribute("reviewer", String, "The reviewer of the contract")
+	Attribute("signer", String, "The reviewer of the contract")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "reviewer", "created_at")
+	Required("did", "state", "signer", "created_at", "contract_version")
 })
 
 var SMContractRetrieveResponse = Type("SMContractRetrieveResponse", func() {
@@ -60,10 +69,19 @@ var SMContractItem = Type("SMContractItem", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {
+	Attribute("contract_did", String, "DID of the contract")
+	Attribute("signer_did", String, "DID of the signer")
+	Attribute("credential_type", String, "Type of credential used for signing")
+	Attribute("status", String, "Signature status: PENDING, SIGNED, REVOKED")
+	Attribute("signed_at", String, "ISO-8601 timestamp of signing")
+	Attribute("revoked_at", String, "ISO-8601 timestamp of revocation, if applicable")
+	Attribute("ipfs_cid", String, "IPFS CID of stored signature artefact, if uploaded")
+
+	Required("contract_did", "signer_did", "credential_type", "status")
 })
 
 var SMContractRetrieveByIDResponse = Type("SMContractRetrieveByIDResponse", func() {
@@ -87,9 +105,13 @@ var SMContractVerifyResponse = Type("SMContractVerifyResponse", func() {
 	Description("Result for verifying a contract")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("match", Boolean, "True if re-generated PDF hash matches stored PDF hash (DCS-FR-CWE-04)")
+	Attribute("jsonld_hash", String, "SHA-256 hex of the JSON-LD source")
+	Attribute("base_pdf_hash", String, "SHA-256 hex of the re-generated base PDF")
+	Attribute("sig_count", Int, "Number of active (non-revoked) signatures")
 	Attribute("findings", ArrayOf(String), "A list of findings")
 
-	Required("did")
+	Required("did", "match", "sig_count")
 })
 
 var SMContractApplyRequest = Type("SMContractApplyRequest", func() {
@@ -98,16 +120,18 @@ var SMContractApplyRequest = Type("SMContractApplyRequest", func() {
 	Token("token", String, "JWT token")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
-
+	Attribute("signer_did", String, "DID of the signer")
+	Attribute("credential_type", String, "Type of credential to use (default: stub)")
 	Attribute("updated_at", String, "The timestamp when the contract was updated")
 
-	Required("did", "updated_at")
+	Required("did", "signer_did", "updated_at")
 })
 
 var SMContractApplyResponse = Type("SMContractApplyResponse", func() {
-	Description("Result for verifying a contract")
+	Description("Result of applying a signature")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("signature_envelope", SMContractSignatureEnvelope, "The resulting signature envelope")
 
 	Required("did")
 })
@@ -137,8 +161,9 @@ var SMContractRevokeRequest = Type("SMContractRevokeRequest", func() {
 	Token("token", String, "JWT token")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("signer_did", String, "DID of the signer whose signature should be revoked")
 
-	Required("did")
+	Required("did", "signer_did")
 })
 
 var SMContractRevokeResponse = Type("SMContractRevokeResponse", func() {
@@ -305,8 +330,6 @@ var _ = Service("SignatureManagement", func() {
 		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
 		})
@@ -359,7 +382,7 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(SMContractAuditRequest)
@@ -370,6 +393,7 @@ var _ = Service("SignatureManagement", func() {
 
 		HTTP(func() {
 			GET("/signature/audit")
+			Param("did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

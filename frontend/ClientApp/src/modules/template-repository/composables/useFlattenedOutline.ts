@@ -1,5 +1,5 @@
 import { computed, unref, type MaybeRef } from 'vue'
-import type { DocumentOutline, DocumentOutlineBlock } from '@template-repository/models/contract-templace'
+import type { DocumentOutline, DocumentOutlineBlock } from '@/modules/template-repository/models/contract-template'
 
 export interface FlattenedOutlineItem {
   blockId: string
@@ -24,7 +24,7 @@ function flattenOutline(outline: DocumentOutline): FlattenedOutlineItem[] {
     parentBlockId: string,
     siblingIndex: number,
     depthLevel: number,
-    sectionNumberPath: number[]
+    sectionNumberPath: number[],
   ) {
     result.push({ blockId, parentBlockId, siblingIndex, sectionNumberPath, depthLevel })
     const outlineBlock = outlineByBlockId.get(blockId)

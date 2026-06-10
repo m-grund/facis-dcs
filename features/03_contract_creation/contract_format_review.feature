@@ -1,5 +1,4 @@
 @UC-03-05 @FR-CWE-04
-@skip
 Feature: Machine-Readable and Human-Readable Contract Review
   Contract Creators, Contract Reviewers, and Contract Managers review
   contracts in both machine-readable and human-readable formats. The system
@@ -63,3 +62,32 @@ Feature: Machine-Readable and Human-Readable Contract Review
     And contract "Service Agreement" exists
     When I attempt to access the synchronized view of contract "Service Agreement"
     Then the request is denied with an authorization error
+
+  @DCS-FR-CWE-04
+  Scenario: Export contract as PDF and verify MR/HR hash match
+    Given I am authenticated with roles: "Contract Reviewer"
+    And contract "Service Agreement" exists in "Under Review" state
+    When I export contract "Service Agreement" as PDF
+    Then the response is a valid PDF document
+    And the PDF contains an embedded JSON-LD attachment named "contract.jsonld"
+    And the embedded JSON-LD matches the contract source
+
+  @DCS-FR-CWE-04 @DCS-FR-CWE-05
+  Scenario: Verify MR/HR content hash consistency
+    Given I am authenticated with roles: "Contract Manager"
+    And contract "Service Agreement" is in "Draft" status
+    And contract "Service Agreement" has an exported PDF
+    When I verify the MR/HR hash consistency for contract "Service Agreement"
+    Then the verification result shows match is true
+    And the response includes jsonld_hash and base_pdf_hash
+
+  @DCS-FR-CWE-04 @skip
+  Scenario: Tampered PDF fails hash verification
+    # This scenario requires injecting a tampered PDF into IPFS, which is
+    # covered by the Go unit tests in verify/verifier_test.go.
+    # Integration-level tampering detection is not exercised here.
+    Given I am authenticated with roles: "Contract Manager"
+    And contract "Service Agreement" is in "Draft" status
+    And contract "Service Agreement" has an exported PDF with a tampered base layer
+    When I verify the MR/HR hash consistency for contract "Service Agreement"
+    Then the verification result shows match is false

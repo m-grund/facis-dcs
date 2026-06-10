@@ -18,6 +18,7 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 LOCAL_FORWARD_PORT ?= 18991
 SERVICE_PORT ?= 8991
+DCS_ISSUER ?= localhost
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 HELM_CHART_PATH ?= ../../deployment/helm
 HELM_TIMEOUT ?= 20m
@@ -35,7 +36,7 @@ KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
 
-.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help
+.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
 	@echo "make setup_dev    # Create venv and install bdd-executor"
@@ -66,7 +67,8 @@ setup_dev:
 		SRC_PATH="$(BDD_EXECUTOR_FALLBACK_PATH)"; \
 	fi; \
 	"$(VENV_PATH)/bin/pip" install --upgrade pip wheel; \
-	"$(VENV_PATH)/bin/pip" install -e "$$SRC_PATH[dev]"
+	"$(VENV_PATH)/bin/pip" install -e "$$SRC_PATH[dev]"; \
+	"$(VENV_PATH)/bin/pip" install psycopg2-binary
 
 run_bdd_dev: setup_dev
 	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
@@ -94,6 +96,7 @@ run_bdd_helm_dev: setup_dev ensure_k8s_tools
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
+		DCS_ISSUER="$(DCS_ISSUER)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		BDD_RUN_MODE=dev \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
@@ -110,6 +113,7 @@ run_bdd_helm_all: setup_dev ensure_k8s_tools
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
+		DCS_ISSUER="$(DCS_ISSUER)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		BDD_RUN_MODE=all \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
@@ -117,7 +121,7 @@ run_bdd_helm_all: setup_dev ensure_k8s_tools
 		bash "$(BDD_RUNNER_SCRIPT)"
 
 build_dcs_image:
-	@docker build -f ../../backend/Dockerfile -t "$(DOCKER_IMAGE)" ../..
+	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
@@ -157,7 +161,10 @@ kind_load_image: kind_create
 	@"$(KIND_BIN)" load docker-image "$(DOCKER_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
 kind_deploy: kind_load_image
+	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
+	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
 	@if ! "$(HELM_BIN)" upgrade --install "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
 		--namespace "$(KIND_NAMESPACE)" \
 		--create-namespace \

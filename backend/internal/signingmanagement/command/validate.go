@@ -2,20 +2,27 @@ package command
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/conf"
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/signingmanagement/db"
-	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
+	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/signingmanagement/db"
+	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 )
 
 type ValidateCmd struct {
 	DID         string
 	ValidatedBy string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
 }
 
 type Validator struct {
@@ -32,7 +39,11 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -44,6 +55,8 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 		ContractVersion: processData.ContractVersion,
 		ValidatedBy:     cmd.ValidatedBy,
 		OccurredAt:      time.Now(),
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

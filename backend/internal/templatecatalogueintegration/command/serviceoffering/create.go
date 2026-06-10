@@ -14,7 +14,6 @@ import (
 )
 
 type CreateCmd struct {
-	Token              string
 	ParticipantID      string
 	EndPointURL        string
 	TermsAndConditions string
@@ -22,13 +21,11 @@ type CreateCmd struct {
 	Description        string
 }
 
-// CreateServiceOffering handler creates a service offering in the Federated Catalogue.
 type Creator struct {
 	Ctx      context.Context
 	FCClient *client.FederatedCatalogueClient
 }
 
-// ErrServiceOfferingAlreadyExists indicates that a serviceOffering with the same serviceOfferingID
 var ErrServiceOfferingAlreadyExists = errors.New("ServiceOffering already exists")
 
 type CreateResult struct {
@@ -37,7 +34,7 @@ type CreateResult struct {
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) (*CreateResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if cmd.ParticipantID == "" {
 		return nil, fmt.Errorf("participant id is empty")
@@ -60,7 +57,6 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) (*CreateResult, err
 	}
 	existsResp, err := existsHandler.Handle(serviceofferingquery.ServiceOfferingExistsQry{
 		ServiceOfferingID: serviceOfferingID,
-		Token:             cmd.Token,
 	})
 	if err != nil {
 		return nil, err
@@ -83,7 +79,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) (*CreateResult, err
 		return nil, fmt.Errorf("marshal service offering payload failed: %w", err)
 	}
 
-	resp, err := h.FCClient.Post(h.Ctx, client.SelfDescriptionsEndpointPath, cmd.Token, nil, body)
+	resp, err := h.FCClient.Post(h.Ctx, client.SelfDescriptionsEndpointPath, nil, body)
 	if err != nil {
 		return nil, err
 	}

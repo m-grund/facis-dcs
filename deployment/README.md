@@ -23,7 +23,7 @@ Key components:
 
 ## Helm Chart
 
-The parent chart bundles `postgresql`, `keycloak`, `nats`, `neo4j`, and `federated-catalogue` as optional sub-charts, each toggled via `<subchart>.enabled`.
+The parent chart bundles `postgresql`, `keycloak`, `hydra`, `nats`, `neo4j`, and `federated-catalogue` as optional sub-charts, each toggled via `<subchart>.enabled`.
 
 When sub-charts are disabled, point DCS to external services via:
 - `serviceDiscovery.postgresqlHost`
@@ -40,6 +40,7 @@ Routing is configured with `route.basePath` (e.g. `/tenant-a/dcs`) or explicit `
 - [Rancher Desktop](https://rancherdesktop.io/) with Kubernetes enabled (provides `kubectl`, `helm`, and NodePort forwarding to `localhost`)
 - Go with [air](https://github.com/air-verse/air) (`go install github.com/air-verse/air@latest`)
 - Node.js 20+
+- Python 3.10+
 - Goa **v3** – Installation: Follow the instructions on [Goa Quickstart](https://goa.design/docs/1-goa/quickstart/)
 
 
@@ -55,12 +56,47 @@ Generate the required glue code under `gen/` with the Goa CLI:
 goa gen digital-contracting-service/design
 ```
 
-### 1. Deploy dependencies
+### Recommended: One-command full stack startup
+
+From the project root:
 
 ```bash
-helm dependency build ./deployment/helm
-helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
+bash dev-stack.sh
 ```
+
+What this command does:
+1. Runs Helm dependency update and upgrade using `deployment/helm/values.dev.yml`
+2. Creates `backend/.env` from `backend/.env.dev` if missing
+3. Fetches the C2PA cert chain from Kubernetes secret `dcs-crypto-provider-dev-cert-chain` into `backend/certs/dev/chain.pem`
+4. Starts frontend Vite dev server
+5. Starts backend with air hot reload
+
+Stop everything with `Ctrl+C` in the same terminal.
+
+### Manual startup (equivalent steps)
+
+Use this if you prefer separate terminals or step-by-step debugging.
+
+#### 1. Deploy dependencies
+
+```bash
+helm dependency update ./deployment/helm
+
+# First setup
+helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
+
+# Upgrade current installation
+helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
+
+# For uninstalling the installation
+`helm uninstall dcs`
+```
+
+The dev values enable automatic signer certificate-chain provisioning for C2PA:
+- Vault transit key is initialized as `ecdsa-p256`
+- a Helm hook job creates a local dev CA
+- a leaf certificate is issued for the active transit public key
+- the chain is stored in a Kubernetes Secret and auto-wired to DCS chart mounts/env
 
 This starts all dependencies as NodePort services forwarded to `localhost`:
 
@@ -68,25 +104,40 @@ This starts all dependencies as NodePort services forwarded to `localhost`:
 |----------------------|----------------------------------|
 | PostgreSQL           | `localhost:30432`                |
 | Keycloak             | `http://localhost:30080`         |
+| Hydra (public OIDC)  | `http://localhost:30444`         |
+| Hydra (admin API)    | `http://localhost:30085`         |
 | NATS                 | `nats://localhost:30422`         |
 | Neo4j HTTP           | `http://localhost:30474`         |
 | Neo4j Bolt           | `bolt://localhost:30687`         |
 | Federated Catalogue  | `http://localhost:30081`         |
+| IPFS Document Manager | `http://localhost:30481`        |
+| IPFS Kubo RPC        | `http://localhost:30501`         |
 
 The Keycloak `gaia-x` realm is imported automatically on first start.
 
 > To upgrade after chart changes: `helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml`
 
-### 2. Run the backend
+#### 2. Prepare backend runtime config and cert-chain
 
 ```bash
 cp backend/.env.dev backend/.env
+mkdir -p backend/certs/dev
+kubectl -n default get secret dcs-crypto-provider-dev-cert-chain \
+  -o jsonpath='{.data.chain\.pem}' | base64 -d > backend/certs/dev/chain.pem
+test -s backend/certs/dev/chain.pem
+```
+
+The backend reads the C2PA signer certificate chain from `CRYPTO_PROVIDER_CERT_CHAIN_FILE` (set to `certs/dev/chain.pem` in `.env.dev`).
+
+#### 3. Run backend and frontend
+
+Terminal 1:
+
+```bash
 cd backend && air
 ```
 
-The backend listens on `http://localhost:8991`.
-
-### 3. Run the frontend
+Terminal 2:
 
 ```bash
 cd frontend/ClientApp
@@ -94,7 +145,15 @@ npm install
 npm run dev
 ```
 
+The backend listens on `http://localhost:8991`.
+
 The Vite dev server starts at `http://localhost:5173` and proxies `/api` requests to the backend automatically.
+
+### 4. Sign in with the demo wallet
+
+```bash
+python3 testWallet/demo_wallet.py
+```
 
 ---
 
@@ -152,12 +211,51 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 
 ## Production Deployment
 
-### Keycloak
-- Use a properly secured external Keycloak instance (not the bundled sub-chart)
-- Configure valid redirect URIs in your client settings:
+### C2PA certificate chain (x5chain)
+
+DCS requires a signer certificate chain (PEM) for C2PA manifests. Configure it via Kubernetes Secret.
+
+For local Helm development with the co-deployed crypto-provider, you can enable automatic in-chart provisioning instead of creating a secret manually:
+
+```yaml
+cryptoProvider:
+  enabled: true
+  devCertChain:
+    enabled: true
+```
+
+This creates/updates a secret named `<release>-crypto-provider-dev-cert-chain` by default and auto-wires `CRYPTO_PROVIDER_CERT_CHAIN_FILE` in the DCS deployment.
+
+Create the secret (example):
+
+```bash
+kubectl -n <namespace> create secret generic dcs-c2pa-cert-chain \
+  --from-file=chain.pem=./chain.pem
+```
+
+Enable it in your Helm values override:
+
+```yaml
+signing:
+  certChain:
+    enabled: true
+    existingSecret:
+      name: dcs-c2pa-cert-chain
+      key: chain.pem
+```
+
+When enabled, the chart automatically:
+- mounts the secret into the DCS container
+- sets `CRYPTO_PROVIDER_CERT_CHAIN_FILE` to the mounted PEM path
+
+### Hydra
+- Enable `hydra.enabled` and set `hydra.config.selfIssuerURL` to the public issuer URL
+- Register `dcs-client` redirect URIs via `hydra.clients` (see `values.dev.yml`):
   - **Valid Redirect URIs**: `https://<domain>/<path>/api/auth/callback`
   - **Valid Post Logout Redirect URIs**: `https://<domain>/<path>/api/auth/logout-complete`
-- Enable **Client authentication**, **Standard flow enabled**
+
+### Keycloak (Federated Catalogue only)
+- FC integration uses `fcKeycloak.realmURL` / `FC_KEYCLOAK_REALM_URL`
 
 ### TLS
 - Use certificates from a trusted Certificate Authority
@@ -167,11 +265,18 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 Override the following at minimum:
 
 ```yaml
-oidc:
-  issuerURL: "https://keycloak.example.com/realms/gaia-x"
-  clientID: "dcs-client"
-  redirectURI: "https://example.com/dcs/ui/"
-  logoutRedirectURI: "https://example.com/dcs/ui/"
+hydra:
+  enabled: true
+  config:
+    selfIssuerURL: "https://hydra.example.com"
+  clients:
+    - client_id: dcs-client
+      client_secret: "<secret>"
+      redirect_uris: ["https://example.com/dcs/api/auth/callback"]
+      post_logout_redirect_uris: ["https://example.com/dcs/api/auth/logout-complete"]
+
+fcKeycloak:
+  realmURL: "https://keycloak.example.com/realms/gaia-x"
 
 route:
   basePath: "/dcs"

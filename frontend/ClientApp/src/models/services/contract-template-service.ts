@@ -5,6 +5,7 @@ import type {
   ContractTemplateAuditRequest,
   ContractTemplateCopyRequest,
   ContractTemplateCreateRequest,
+  ContractTemplatePublishRequest,
   ContractTemplateRegisterRequest,
   ContractTemplateRejectRequest,
   ContractTemplateRetrieveByIdRequest,
@@ -20,6 +21,7 @@ import type {
   ContractTemplateAuditResponse,
   ContractTemplateCopyResponse,
   ContractTemplateCreateResponse,
+  ContractTemplatePublishResponse,
   ContractTemplateRegisterResponse,
   ContractTemplateRejectResponse,
   ContractTemplateRetrieveResponse,
@@ -43,4 +45,9 @@ export interface ContractTemplateService {
   archive: (request: ContractTemplateArchiveRequest) => Promise<ContractTemplateArchiveResponse>
   register: (request: ContractTemplateRegisterRequest) => Promise<ContractTemplateRegisterResponse>
   audit: (request: ContractTemplateAuditRequest) => Promise<ContractTemplateAuditResponse>
+  publish: (request: ContractTemplatePublishRequest) => Promise<ContractTemplatePublishResponse>
+  exportPdf: (did: string) => Promise<Blob>
+  verifyPdf: (
+    did: string,
+  ) => Promise<{ match: boolean; jsonld_hash: string; base_pdf_hash: string; stored_base_pdf_hash: string }>
 }

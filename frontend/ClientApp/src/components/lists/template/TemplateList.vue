@@ -57,7 +57,7 @@ onUnmounted(() => stateFilterStore.reset())
 
 <template>
   <ul class="list">
-    <li class="tracking-wide px-4 flex justify-between flex-col sm:flex-row">
+    <li class="flex flex-col justify-between px-4 tracking-wide sm:flex-row">
       <TemplateListSearch :templates="templates" class="flex-1" @search-result="applySearchResult" />
       <ListStateFilter
         label="Template"
@@ -65,14 +65,12 @@ onUnmounted(() => stateFilterStore.reset())
         store-type="templates"
         :disabled="!hasTemplates"
       />
-      <ListSort :sorter="sorter" v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :disabled="!hasTemplates" />
+      <ListSort v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :sorter="sorter" :disabled="!hasTemplates" />
     </li>
     <TemplateListItem
       v-for="template in filteredTemplates"
       :key="`${template.did}|${template.document_number}|${template.version}`"
       :template="template"
-      :has-review-task="props.hasReviewTask(template)"
-      :has-approval-task="props.hasApprovalTask(template)"
     />
     <li v-if="filteredTemplates.length < 1" class="px-4">No templates found</li>
   </ul>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useContractEventType } from '@/composables/useContractEventType'
 import type { ContractAuditResponse } from '@/models/responses/contract-response'
+import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 import { toProperCase } from '@/utils/string'
 
 defineProps<{
@@ -15,7 +16,9 @@ const eventType = useContractEventType()
     <li v-for="audit in audits" :key="audit.id" class="list-row grid-cols-1">
       <div class="flex justify-between">
         <div>{{ new Date(audit.event_data.occurred_at).toLocaleString() }}</div>
-        <div class="badge badge-secondary badge-outline badge-sm">{{ toProperCase(audit.event_type) }}</div>
+        <div class="badge badge-outline badge-sm badge-secondary">
+          {{ contractAuditEventDisplayText(audit.event_type, audit.event_data) }}
+        </div>
         <div class="text-xs">{{ toProperCase(audit.component) }}</div>
       </div>
       <div class="list-col-wrap">
@@ -23,19 +26,19 @@ const eventType = useContractEventType()
           <div>Created by: {{ audit.event_data.created_by }}</div>
         </div>
         <div v-else-if="eventType.isUpdateEvent(audit)">
-          <div>Updated at: {{ audit.event_data.updated_at }}</div>
+          <div>Updated by: {{ audit.event_data.updated_by }}</div>
         </div>
         <div v-else-if="eventType.isSubmitEvent(audit)" class="flex justify-between">
           <div>Submitted by: {{ audit.event_data.submitted_by }}</div>
           <div>
             Transition:
-            <span class="badge badge-outline badge-secondary badge-xs relative -top-0.5">{{
-              toProperCase(audit.event_data.previous_state)
-            }}</span>
+            <span class="relative -top-0.5 badge badge-outline badge-xs badge-secondary">
+              {{ toProperCase(audit.event_data.previous_state) }}
+            </span>
             →
-            <span class="badge badge-outline badge-secondary badge-xs relative -top-0.5">{{
-              toProperCase(audit.event_data.new_state)
-            }}</span>
+            <span class="relative -top-0.5 badge badge-outline badge-xs badge-secondary">
+              {{ toProperCase(audit.event_data.new_state) }}
+            </span>
           </div>
         </div>
         <div v-else-if="eventType.isRetrieveByIDEvent(audit)">

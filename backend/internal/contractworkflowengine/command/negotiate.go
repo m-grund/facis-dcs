@@ -2,16 +2,20 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -21,6 +25,8 @@ type NegotiationCmd struct {
 	NegotiatedBy  string
 	ChangeRequest *datatype.JSON
 	UpdatedAt     time.Time
+	HolderDID     string
+	UserRoles     userrole.UserRoles
 }
 
 type Negotiator struct {
@@ -40,7 +46,11 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
 	if err != nil {
@@ -60,11 +70,15 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
 
-	if isValidNegotiator == false {
+	if !isValidNegotiator {
 		return errors.New("invalid user")
 	}
 
 	negotiators, err := h.NTRepo.ReadNegotiatorsForDID(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not read negotiators: %w", err)
+	}
+
 	data := db.NegotiationCreateData{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
@@ -87,6 +101,8 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		ChangeRequest:   cmd.ChangeRequest,
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

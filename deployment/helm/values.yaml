@@ -29,6 +29,9 @@ service:
   type: ClusterIP
   port: 8991
 
+serviceMonitor:
+  enabled: false
+
 ingress:
   enabled: false
   className: ""
@@ -54,6 +57,26 @@ autoscaling:
 volumes: []
 volumeMounts: []
 
+oid4vp:
+  trust:
+    enabled: true
+    mountPath: /app/config/oid4vp
+    configMapName: ""
+    issuerDID: did:web:dev.example:issuer:poa
+  demoWallet:
+    secretName: ""
+    # When false, vault-init seeds from chart files/oid4vp/*.
+    autoGenerate: false
+
+vault:
+  enabled: false
+  injector:
+    enabled: false
+  server:
+    dev:
+      enabled: true
+      devRootToken: root
+
 customCA:
   enabled: false
   configMapName: ""
@@ -75,18 +98,9 @@ paths:
   api: ""
   ui: ""
 
-# OIDC / authentication
-# issuerURL is derived from keycloak.route.path + istio/ingress host when not set explicitly
-oidc:
-  issuerURL: ""
-  clientID: "[oidc-client-id]"
-  redirectURI: "[oidc-redirect-uri]"
-  logoutRedirectURI: "[oidc-logout-redirect-uri]"
-  realm: "gaia-x"
-  keycloakScheme: "https"
-  issuerURLSecretRef:
-    name: ""
-    key: "OIDC_ISSUER_URL"
+# Keycloak realm URL for Federated Catalogue.
+fcKeycloak:
+  realmURL: ""
 
 # Database connection – derived from the postgresql sub-chart when not set explicitly
 database:
@@ -115,6 +129,49 @@ serviceDiscovery:
   natsHost: ""
   keycloakPort: ""
 
+# ---- Signing / C2PA provenance ----------------------------------------
+# DCS never holds private keys (DCS-IR-HI-01). Set these when connecting to
+# an external Crypto Provider Service or relying on the co-deployed one below.
+
+signing:
+  # DID of this DCS instance (embedded in C2PA lifecycle assertions as authority).
+  issuerDID: ""
+  issuerDIDSecretRef:
+    name: ""
+    key: "ISSUER_DID"
+
+  # RFC 3161 Timestamp Authority (optional; activates real timestamps on C2PA manifests).
+  tsaURL: ""
+
+  # XFSC Crypto Provider Service URL. Leave empty when cryptoProvider.enabled=true
+  # (auto-derived from the co-deployed signer service).
+  cryptoProviderURL: ""
+  cryptoProviderURLSecretRef:
+    name: ""
+    key: "CRYPTO_PROVIDER_URL"
+
+  # Vault transit mount path and key name.
+  # Taken from cryptoProvider.transit.* when co-deploying.
+  cryptoProviderNamespace: ""
+  cryptoProviderKey: ""
+  cryptoProviderVCKey: ""
+
+  # VC proof suite used by the local Ed25519Signature2020 proof path.
+  vcSignatureType: "ed25519signature2020"
+
+  # Signer certificate chain (PEM) used for C2PA x5chain headers.
+  # When enabled, the chart mounts the secret and sets
+  # CRYPTO_PROVIDER_CERT_CHAIN_FILE automatically.
+  # With cryptoProvider.devCertChain.enabled=true, this is auto-wired even when
+  # certChain.enabled=false.
+  certChain:
+    enabled: false
+    existingSecret:
+      name: ""
+      key: "chain.pem"
+    mountPath: "/var/run/secrets/dcs"
+    fileName: "crypto-provider-cert-chain.pem"
+
 # ---- Co-deployed dependencies ----------------------------------------
 # Each sub-chart owns its full set of configurable values.
 # Only fields referenced by the parent chart's helpers are listed here.
@@ -135,11 +192,67 @@ keycloak:
   route:
     path: ""
 
+hydra:
+  enabled: false
+  clients: []
+
 nats:
   enabled: false
 
 neo4j:
   enabled: false
+
+# XFSC Crypto Provider Service + HashiCorp Vault (transit engine).
+# When enabled, CRYPTO_PROVIDER_URL is auto-derived and wired into DCS.
+# See charts/crypto-provider/values.yaml for the full set of options.
+cryptoProvider:
+  enabled: false
+  vault:
+    dev:
+      enabled: true
+      rootToken: "root"
+    service:
+      port: 8200
+  transit:
+    mount: "transit"
+    key: "dcs-signing-key-p256"
+    keyType: "ecdsa-p256"
+    vcKey: "dcs-vc-signing-key"
+    vcKeyType: "ed25519"
+  devCertChain:
+    enabled: false
+    secretName: ""
+    secretKey: "chain.pem"
+    caCertKey: "ca.pem"
+    leafCommonName: "dcs-dev-signer"
+    caCommonName: "dcs-dev-local-ca"
+    validityDays: 3650
+    overwrite: true
+    image:
+      repository: alpine
+      tag: "3.20"
+      pullPolicy: IfNotPresent
+
+# XFSC Status List Service (DCS-OR-C2PA-005)
+# Manages verifiable credential status lists (Status List 2021/2023 format).
+# When enabled, STATUSLIST_SERVICE_URL is auto-derived and wired into DCS.
+# See charts/statuslist-service/values.yaml for all configurable fields.
+statuslistService:
+  enabled: false
+  image:
+    repository: ghcr.io/eclipse-xfsc/statuslist-service
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
 
 # XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
 # See charts/federated-catalogue/values.yaml for all configurable fields.
@@ -150,6 +263,13 @@ federatedCatalogue:
   secretRef:
     name: ""
     key: "FEDERATED_CATALOGUE_API_URL"
+  # Keycloak client_credentials for outbound FC API calls
+  oauth:
+    clientID: "dcs-fc-client"
+    clientSecret: ""
+    clientSecretSecretRef:
+      name: ""
+      key: "FEDERATED_CATALOGUE_CLIENT_SECRET"
   resources:
     requests:
       cpu: 100m
@@ -157,3 +277,87 @@ federatedCatalogue:
     limits:
       cpu: 500m
       memory: 1Gi
+
+# XFSC Custom Policy Agent (OPA-based policy evaluation)
+# See charts/custom-policy-agent/values.yaml for all configurable fields.
+mongodb:
+  enabled: false
+
+ipfs:
+  enabled: false
+  tenantBaseURL: ""
+  mfsBaseURL: ""
+  tenantBaseURLSecretRef:
+    name: ""
+    key: "IPFS_TENANT_BASE_URL"
+  mfsBaseURLSecretRef:
+    name: ""
+    key: "IPFS_MFS_BASE_URL"
+
+ipfsDocumentManager:
+  enabled: false
+
+# IPFS Document Manager client – auto-wired when sub-charts are enabled
+ipfsClient:
+  tenantName: "tenant_space"  # tenant identifier in the Document Manager URL path
+  tenantBaseURL: ""            # IPFS_TENANT_BASE_URL explicit override
+  mfsBaseURL: ""               # IPFS_MFS_BASE_URL explicit override (Kubo RPC API)
+
+customPolicyAgent:
+  enabled: false
+  mongo:
+    uri: ""
+    database: "policy"
+    collectionName: "policy"
+  nats:
+    url: ""
+  auth:
+    jwkURL: ""
+  logging:
+    level: "info"
+    format: "json"
+
+# ---- Optional monitoring stack (Prometheus, Grafana, Alertmanager) ----------------
+monitoring:
+  enabled: false
+
+grafana:
+  enabled: false
+  adminPassword: YourStrongPassword
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+
+prometheus:
+  enabled: false
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    serviceMonitorSelectorNilUsesHelmValues: true
+    podMonitorSelectorNilUsesHelmValues: true
+
+alertmanager:
+  enabled: false
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+nodeExporter:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false

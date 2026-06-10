@@ -2,20 +2,27 @@ package contracttemplate
 
 import (
 	"context"
-	"digital-contracting-service/internal/base"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/event"
-	templateevents "digital-contracting-service/internal/templaterepository/event"
+	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/event"
+	templateevents "digital-contracting-service/internal/templaterepository/event"
 )
 
 type GetAuditLogQry struct {
 	DID       string
 	AuditedBy string
+	HolderDID string
+	UserRoles userrole.UserRoles
 }
 
 type Auditor struct {
@@ -23,24 +30,30 @@ type Auditor struct {
 	ATrailReader base.AuditTrailReader
 }
 
-func (h *Auditor) Handle(ctx context.Context, qry GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
+func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
-	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, qry.DID)
+	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, query.DID)
 	if err != nil {
 		return nil, err
 	}
 
 	evt := templateevents.AuditEvt{
-		DID:           qry.DID,
+		DID:           query.DID,
 		ComponentType: componenttype.ContractTemplateRepo,
-		AuditedBy:     qry.AuditedBy,
+		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
+		HolderDID:     query.HolderDID,
+		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

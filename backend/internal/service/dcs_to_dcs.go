@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	"digital-contracting-service/internal/auth"
 
