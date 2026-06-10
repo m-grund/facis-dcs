@@ -1,15 +1,16 @@
 package main
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	_ "embed"
 
-	dcspdfcore "example.com/m/V2/gen/dcspdfcore"
-	dcspdfcoresvr "example.com/m/V2/gen/http/dcspdfcore/server"
-	goahttp "goa.design/goa/v3/http"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed ontology/generated/dcs-pdf-core-context.jsonld
@@ -21,48 +22,24 @@ var ontologyOWL []byte
 //go:embed ontology/generated/dcs-pdf-core.shacl.ttl
 var ontologySHACL []byte
 
-//go:embed gen/http/openapi3.json
-var openAPI3JSON []byte
-
-// binaryResponseEncoder wraps goahttp.ResponseEncoder but writes raw bytes for
-// binary content types instead of JSON-encoding them as base64 strings.
-// It sets the Content-Type header here (before the generated code calls
-// WriteHeader) so the correct media type is sent with the response.
-func binaryResponseEncoder(ctx context.Context, w http.ResponseWriter) goahttp.Encoder {
-	ct, _ := ctx.Value(goahttp.ContentTypeKey).(string)
-	switch ct {
-	case "application/pdf", "application/ld+json":
-		w.Header().Set("Content-Type", ct)
-		return &rawEncoder{w}
-	}
-	return goahttp.ResponseEncoder(ctx, w)
-}
-
-type rawEncoder struct{ w http.ResponseWriter }
-
-func (e *rawEncoder) Encode(v any) error {
-	b, ok := v.([]byte)
-	if !ok {
-		return fmt.Errorf("rawEncoder: expected []byte, got %T", v)
-	}
-	_, err := e.w.Write(b)
-	return err
-}
+//go:embed api/openapi3.yaml
+var openAPI3YAML []byte
 
 func newServer() http.Handler {
-	svc := &dcspdfcoreService{}
-	endpoints := dcspdfcore.NewEndpoints(svc)
+	svc := &service{}
+	mux := http.NewServeMux()
 
-	mux := goahttp.NewMuxer()
-	svr := dcspdfcoresvr.New(endpoints, mux, goahttp.RequestDecoder, binaryResponseEncoder, nil, nil)
-	dcspdfcoresvr.Mount(mux, svr)
-
-	// Meta-routes not part of the goa design.
-	mux.Handle("GET", "/swagger.json", handleSwagger)
-	mux.Handle("GET", "/ui/", handleUI)
-	mux.Handle("GET", "/index.html", handleUI)
-	mux.Handle("GET", "/ontology/dcs-pdf-core.shacl", handleSHACL)
-	mux.Handle("GET", "/", handleRoot)
+	mux.HandleFunc("POST /download", svc.download)
+	mux.HandleFunc("POST /verify", svc.verify)
+	mux.HandleFunc("POST /update", svc.update)
+	mux.HandleFunc("POST /claim", svc.claim)
+	mux.HandleFunc("GET /ontology/dcs-pdf-core", svc.ontologyContext)
+	mux.HandleFunc("GET /ontology/dcs-pdf-core.owl", svc.ontologyOwl)
+	mux.HandleFunc("GET /swagger.json", handleSwagger)
+	mux.HandleFunc("GET /ui/", handleUI)
+	mux.HandleFunc("GET /index.html", handleUI)
+	mux.HandleFunc("GET /ontology/dcs-pdf-core.shacl", handleSHACL)
+	mux.HandleFunc("GET /", handleRoot)
 
 	return mux
 }
@@ -81,8 +58,22 @@ func handleUI(w http.ResponseWriter, _ *http.Request) {
 }
 
 func handleSwagger(w http.ResponseWriter, _ *http.Request) {
+	// Convert YAML source of truth to JSON for the Swagger UI.
+	var doc interface{}
+	if err := yaml.Unmarshal(openAPI3YAML, &doc); err != nil {
+		http.Error(w, "failed to parse openapi spec", http.StatusInternalServerError)
+		return
+	}
+	jsonBytes, err := json.Marshal(doc)
+	if err != nil {
+		http.Error(w, "failed to encode openapi spec", http.StatusInternalServerError)
+		return
+	}
+	if pub := os.Getenv("DCS_PDF_CORE_PUBLIC_URL"); pub != "" {
+		jsonBytes = bytes.ReplaceAll(jsonBytes, []byte("http://localhost:8080"), []byte(strings.TrimRight(pub, "/")))
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_, _ = w.Write(openAPI3JSON)
+	_, _ = w.Write(jsonBytes)
 }
 
 func handleSHACL(w http.ResponseWriter, _ *http.Request) {
@@ -111,7 +102,24 @@ const swaggerHTML = `<!DOCTYPE html>
       url: '/swagger.json',
       dom_id: '#swagger-ui',
       deepLinking: true,
-      presets: [SwaggerUIBundle.presets.apis]
+      presets: [SwaggerUIBundle.presets.apis],
+      // Force arraybuffer on all API requests so binary responses (application/pdf)
+      // are not corrupted by UTF-8 text decoding. JSON error responses are decoded
+      // back to text in the responseInterceptor so Swagger UI can still display them.
+      requestInterceptor: function(req) {
+        if (!req.loadSpec) { req.responseType = 'arraybuffer'; }
+        return req;
+      },
+      responseInterceptor: function(res) {
+        var ct = (res.headers && res.headers['content-type']) || '';
+        if (res.data instanceof ArrayBuffer && !ct.includes('application/pdf')) {
+          var text = new TextDecoder().decode(res.data);
+          res.text = text;
+          res.data = text;
+          try { res.obj = JSON.parse(text); } catch(e) {}
+        }
+        return res;
+      }
     });
   </script>
 </body>

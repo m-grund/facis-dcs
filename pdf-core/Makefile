@@ -1,16 +1,10 @@
-.PHONY: all build test bdd test-all gen ontology clean
+.PHONY: all build test bdd test-all ontology clean
 
 SCHEMA    := ontology/dcs-pdf-core.yaml
 ONTOL_DIR := ontology/generated
 
-# Default: codegen + build
-all: gen ontology build
-
-# ── Goa codegen ──────────────────────────────────────────────────────
-# Regenerates gen/ on every build.
-gen:
-	go run goa.design/goa/v3/cmd/goa gen example.com/m/V2/design
-	go tool swaggerpatch gen/http/openapi3.yaml
+# Default: ontology + build
+all: ontology build
 
 # ── Ontology codegen ─────────────────────────────────────────────────
 $(ONTOL_DIR)/dcs-pdf-core-context.jsonld: $(SCHEMA) | $(ONTOL_DIR)
@@ -35,20 +29,20 @@ ontology: $(ONTOL_DIR)/dcs-pdf-core-context.jsonld \
 
 # ── Tests ────────────────────────────────────────────────────────────
 # Unit + integration tests (fast, no server required)
-test: gen
+test:
 	go test ./...
 
 # BDD tests (starts a real server, requires Python + behave)
-bdd: gen
+bdd:
 	behave features/
 
 # Both suites
 test-all: test bdd
 
 # ── Go build ─────────────────────────────────────────────────────────
-build: gen
-	go build ./...
+build:
+	go build -o pdf-core .
 
 # ── Housekeeping ─────────────────────────────────────────────────────
 clean:
-	rm -rf $(ONTOL_DIR) gen
+	rm -rf $(ONTOL_DIR) pdf-core

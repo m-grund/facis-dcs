@@ -2,41 +2,89 @@ package main
 
 import (
 	"bytes"
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"strings"
 
 	compiler "example.com/m/V2/compiler"
-	dcspdfcore "example.com/m/V2/gen/dcspdfcore"
+
+	"github.com/google/uuid"
 )
 
-// dcspdfcoreService implements dcspdfcore.Service.
-type dcspdfcoreService struct{}
+// service implements all HTTP handlers for the DCS-PDF-CORE API.
+type service struct{}
+
+// httpError carries enough information to write a structured error response.
+type httpError struct {
+	status  int
+	name    string
+	message string
+}
+
+func (e *httpError) Error() string { return e.message }
+
+// writeError writes a JSON error body matching the OpenAPI Error schema.
+func writeError(w http.ResponseWriter, err error) {
+	var he *httpError
+	if !errors.As(err, &he) {
+		he = &httpError{
+			status:  http.StatusInternalServerError,
+			name:    "internal_error",
+			message: err.Error(),
+		}
+	}
+	body := map[string]interface{}{
+		"name":      he.name,
+		"id":        uuid.New().String(),
+		"message":   he.message,
+		"temporary": false,
+		"timeout":   false,
+		"fault":     false,
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(he.status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func errBadRequest(err error) *httpError {
+	return &httpError{status: http.StatusBadRequest, name: "bad_request", message: err.Error()}
+}
+
+func errUnsupportedMediaType(err error) *httpError {
+	return &httpError{status: http.StatusUnsupportedMediaType, name: "unsupported_media_type", message: err.Error()}
+}
+
+func errConflict(err error) *httpError {
+	return &httpError{status: http.StatusConflict, name: "conflict", message: err.Error()}
+}
+
+func errUnprocessableEntity(err error) *httpError {
+	return &httpError{status: http.StatusUnprocessableEntity, name: "unprocessable_entity", message: err.Error()}
+}
 
 // checkMediaType returns an unsupported_media_type error if the Content-Type
 // header is not in the allowed set. Allowed values are matched on the bare
 // media type (parameters such as charset are ignored).
 func checkMediaType(contentType string, allowed ...string) error {
 	if contentType == "" {
-		return dcspdfcore.MakeUnsupportedMediaType(errors.New("missing content type"))
+		return errUnsupportedMediaType(errors.New("missing content type"))
 	}
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return dcspdfcore.MakeUnsupportedMediaType(fmt.Errorf("invalid content type: %w", err))
+		return errUnsupportedMediaType(fmt.Errorf("invalid content type: %w", err))
 	}
 	for _, a := range allowed {
 		if mediaType == a {
 			return nil
 		}
 	}
-	return dcspdfcore.MakeUnsupportedMediaType(
-		fmt.Errorf("unsupported content type %q", mediaType),
-	)
+	return errUnsupportedMediaType(fmt.Errorf("unsupported content type %q", mediaType))
 }
 
 // limitRead reads up to limit bytes and errors if the body is empty.
@@ -52,223 +100,210 @@ func limitRead(r io.ReadCloser, limit int64) ([]byte, error) {
 	return b, nil
 }
 
-// Download compiles a JSON-LD payload into deterministic PDF/A-3a bytes.
-func (s *dcspdfcoreService) Download(_ context.Context, p *dcspdfcore.DownloadPayload, body io.ReadCloser) ([]byte, error) {
-	if err := checkMediaType(p.ContentType, "application/ld+json", "application/json"); err != nil {
-		return nil, err
+func (s *service) download(w http.ResponseWriter, r *http.Request) {
+	if err := checkMediaType(r.Header.Get("Content-Type"), "application/ld+json", "application/json"); err != nil {
+		writeError(w, err)
+		return
 	}
-	raw, err := limitRead(body, 8<<20)
+	raw, err := limitRead(r.Body, 8<<20)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 	canonical, err := compiler.CanonicalizePayload(raw)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 	if err := compiler.ValidatePayloadSHACL(canonical); err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 	pdf, err := compiler.CompilePDF(canonical)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
-	return pdf, nil
+	w.Header().Set("Content-Type", "application/pdf")
+	_, _ = w.Write(pdf)
 }
 
-// Verify checks that a PDF was compiled deterministically from its embedded
-// payload and appends a C2PA verification witness.
-//
-// For a plain compiled PDF the guarantee is:
-//
-//	CompilePDF(embeddedPayload) == submittedPDF
-//
-// For an incrementally amended PDF the guarantee is extended to cover the full
-// provenance chain:
-//
-//	CompilePDF(oldPayload)          == originalPrefix
-//	UpdatePDF(originalPrefix, newPayload) == submittedPDF
-//
-// Both conditions together prove that the human-readable content is fully
-// determined by the machine-readable JSON-LD at every revision.
-func (s *dcspdfcoreService) Verify(_ context.Context, p *dcspdfcore.VerifyPayload, body io.ReadCloser) ([]byte, error) {
-	if err := checkMediaType(p.ContentType, "application/pdf"); err != nil {
-		return nil, err
+func (s *service) verify(w http.ResponseWriter, r *http.Request) {
+	if err := checkMediaType(r.Header.Get("Content-Type"), "application/pdf"); err != nil {
+		writeError(w, err)
+		return
 	}
-	raw, err := limitRead(body, 32<<20)
+	raw, err := limitRead(r.Body, 32<<20)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 
 	var payload []byte
 
 	if _, ok := compiler.SplitAtIncrementalUpdate(raw); ok {
-		// Amended PDF: verify the full provenance chain.
 		if err := compiler.VerifyIncrementalUpdate(raw); err != nil {
-			return nil, dcspdfcore.MakeConflict(err)
+			writeError(w, errConflict(err))
+			return
 		}
 		payload, err = compiler.ExtractLatestEmbeddedJSONLD(raw)
 		if err != nil {
-			return nil, dcspdfcore.MakeBadRequest(err)
+			writeError(w, errBadRequest(err))
+			return
 		}
 	} else {
-		// Plain compiled PDF: verify the single-step determinism guarantee.
 		payload, err = compiler.ExtractEmbeddedJSONLD(raw)
 		if err != nil {
-			return nil, dcspdfcore.MakeBadRequest(err)
+			writeError(w, errBadRequest(err))
+			return
 		}
 		recompiled, err := compiler.CompilePDF(payload)
 		if err != nil {
-			return nil, dcspdfcore.MakeUnprocessableEntity(err)
+			writeError(w, errUnprocessableEntity(err))
+			return
 		}
 		if !bytes.Equal(raw, recompiled) {
-			return nil, dcspdfcore.MakeConflict(errors.New("embedded payload does not reproduce the submitted PDF"))
+			writeError(w, errConflict(errors.New("embedded payload does not reproduce the submitted PDF")))
+			return
 		}
 	}
 
 	verified, err := compiler.AppendVerificationWitness(raw, payload)
 	if err != nil {
-		return nil, err
+		writeError(w, errBadRequest(err))
+		return
 	}
-	return verified, nil
+	w.Header().Set("Content-Type", "application/pdf")
+	_, _ = w.Write(verified)
 }
 
-// Update amends an existing PDF with a new JSON-LD payload.
-// The request body must be multipart/form-data with fields "pdf" and "payload".
-func (s *dcspdfcoreService) Update(_ context.Context, p *dcspdfcore.UpdatePayload, body io.ReadCloser) ([]byte, error) {
-	if err := checkMediaType(p.ContentType, "multipart/form-data"); err != nil {
-		return nil, err
+func (s *service) update(w http.ResponseWriter, r *http.Request) {
+	ct := r.Header.Get("Content-Type")
+	if err := checkMediaType(ct, "multipart/form-data"); err != nil {
+		writeError(w, err)
+		return
 	}
-	defer body.Close()
+	defer r.Body.Close()
 
-	_, params, err := mime.ParseMediaType(p.ContentType)
+	_, params, err := mime.ParseMediaType(ct)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(fmt.Errorf("invalid multipart content type: %w", err))
+		writeError(w, errBadRequest(fmt.Errorf("invalid multipart content type: %w", err)))
+		return
 	}
 	boundary, ok := params["boundary"]
 	if !ok {
-		return nil, dcspdfcore.MakeBadRequest(errors.New("multipart boundary missing from Content-Type"))
+		writeError(w, errBadRequest(errors.New("multipart boundary missing from Content-Type")))
+		return
 	}
 
-	parts := make(map[string][]byte)
-	mr := multipart.NewReader(body, boundary)
-	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, dcspdfcore.MakeBadRequest(fmt.Errorf("read multipart: %w", err))
-		}
-		name := part.FormName()
-		var limit int64 = 8 << 20
-		if name == "pdf" {
-			limit = 32 << 20
-		}
-		data, err := io.ReadAll(io.LimitReader(part, limit))
-		part.Close()
-		if err != nil {
-			return nil, dcspdfcore.MakeBadRequest(fmt.Errorf("read part %q: %w", name, err))
-		}
-		parts[name] = data
+	parts, err := readMultipartParts(r.Body, boundary)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
 	}
 
 	oldPDF, ok := parts["pdf"]
 	if !ok || len(oldPDF) == 0 {
-		return nil, dcspdfcore.MakeBadRequest(errors.New("pdf field required"))
+		writeError(w, errBadRequest(errors.New("pdf field required")))
+		return
 	}
 	newPayload, ok := parts["payload"]
 	if !ok || len(newPayload) == 0 {
-		return nil, dcspdfcore.MakeBadRequest(errors.New("payload field required"))
+		writeError(w, errBadRequest(errors.New("payload field required")))
+		return
 	}
 	canonical, err := compiler.CanonicalizePayload(newPayload)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 	if err := compiler.ValidatePayloadSHACL(canonical); err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
-
 	updated, err := compiler.UpdatePDF(oldPDF, canonical)
 	if err != nil {
 		if strings.Contains(err.Error(), "no changes") {
-			return nil, dcspdfcore.MakeConflict(err)
+			writeError(w, errConflict(err))
+			return
 		}
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
-	return updated, nil
+	w.Header().Set("Content-Type", "application/pdf")
+	_, _ = w.Write(updated)
 }
 
-// Claim verifies that the supplied JSON-LD payload produces the same page
-// content as the submitted PDF and returns the canonical compiled PDF — with
-// the JSON-LD embedded and a C2PA verification witness — as evidence of the
-// match.  The submitted PDF need not contain embedded metadata; only the
-// visible page content is compared.
-func (s *dcspdfcoreService) Claim(_ context.Context, p *dcspdfcore.ClaimPayload, body io.ReadCloser) ([]byte, error) {
-	if err := checkMediaType(p.ContentType, "multipart/form-data"); err != nil {
-		return nil, err
+func (s *service) claim(w http.ResponseWriter, r *http.Request) {
+	ct := r.Header.Get("Content-Type")
+	if err := checkMediaType(ct, "multipart/form-data"); err != nil {
+		writeError(w, err)
+		return
 	}
-	defer body.Close()
+	defer r.Body.Close()
 
-	_, params, err := mime.ParseMediaType(p.ContentType)
+	_, params, err := mime.ParseMediaType(ct)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(fmt.Errorf("invalid multipart content type: %w", err))
+		writeError(w, errBadRequest(fmt.Errorf("invalid multipart content type: %w", err)))
+		return
 	}
 	boundary, ok := params["boundary"]
 	if !ok {
-		return nil, dcspdfcore.MakeBadRequest(errors.New("multipart boundary missing from Content-Type"))
+		writeError(w, errBadRequest(errors.New("multipart boundary missing from Content-Type")))
+		return
 	}
 
-	parts := make(map[string][]byte)
-	mr := multipart.NewReader(body, boundary)
-	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, dcspdfcore.MakeBadRequest(fmt.Errorf("read multipart: %w", err))
-		}
-		name := part.FormName()
-		var limit int64 = 8 << 20
-		if name == "pdf" {
-			limit = 32 << 20
-		}
-		data, err := io.ReadAll(io.LimitReader(part, limit))
-		part.Close()
-		if err != nil {
-			return nil, dcspdfcore.MakeBadRequest(fmt.Errorf("read part %q: %w", name, err))
-		}
-		parts[name] = data
+	parts, err := readMultipartParts(r.Body, boundary)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
 	}
 
 	submittedPDF, ok := parts["pdf"]
 	if !ok || len(submittedPDF) == 0 {
-		return nil, dcspdfcore.MakeBadRequest(errors.New("pdf field required"))
+		writeError(w, errBadRequest(errors.New("pdf field required")))
+		return
 	}
 	payloadBytes, ok := parts["payload"]
 	if !ok || len(payloadBytes) == 0 {
-		return nil, dcspdfcore.MakeBadRequest(errors.New("payload field required"))
+		writeError(w, errBadRequest(errors.New("payload field required")))
+		return
 	}
 	canonical, err := compiler.CanonicalizePayload(payloadBytes)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 	if err := compiler.ValidatePayloadSHACL(canonical); err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
-
 	canonicalPDF, err := compiler.CompilePDF(canonical)
 	if err != nil {
-		return nil, dcspdfcore.MakeBadRequest(err)
+		writeError(w, errBadRequest(err))
+		return
 	}
 	if err := compiler.MatchPageContent(submittedPDF, canonicalPDF); err != nil {
-		return nil, dcspdfcore.MakeConflict(err)
+		writeError(w, errConflict(err))
+		return
 	}
 	result, err := compiler.AppendVerificationWitness(canonicalPDF, canonical)
 	if err != nil {
-		return nil, err
+		writeError(w, errBadRequest(err))
+		return
 	}
-	return result, nil
+	w.Header().Set("Content-Type", "application/pdf")
+	_, _ = w.Write(result)
+}
+
+func (s *service) ontologyContext(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/ld+json")
+	_, _ = w.Write(substituteBaseURL(ontologyContext))
+}
+
+func (s *service) ontologyOwl(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/ld+json")
+	_, _ = w.Write(substituteBaseURL(ontologyOWL))
 }
 
 // substituteBaseURL replaces the hardcoded default base URL in embedded ontology
@@ -283,12 +318,29 @@ func substituteBaseURL(raw []byte) []byte {
 	return bytes.ReplaceAll(raw, []byte("http://127.0.0.1:8080"), []byte(base))
 }
 
-// OntologyContext serves the embedded DCS-PDF-CORE JSON-LD context.
-func (s *dcspdfcoreService) OntologyContext(_ context.Context) ([]byte, error) {
-	return substituteBaseURL(ontologyContext), nil
-}
-
-// OntologyOwl serves the embedded DCS-PDF-CORE OWL definition.
-func (s *dcspdfcoreService) OntologyOwl(_ context.Context) ([]byte, error) {
-	return substituteBaseURL(ontologyOWL), nil
+// readMultipartParts reads all parts from a multipart body into a map keyed by form field name.
+func readMultipartParts(body io.Reader, boundary string) (map[string][]byte, error) {
+	parts := make(map[string][]byte)
+	mr := multipart.NewReader(body, boundary)
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read multipart: %w", err)
+		}
+		name := part.FormName()
+		var limit int64 = 8 << 20
+		if name == "pdf" {
+			limit = 32 << 20
+		}
+		data, err := io.ReadAll(io.LimitReader(part, limit))
+		part.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read part %q: %w", name, err)
+		}
+		parts[name] = data
+	}
+	return parts, nil
 }

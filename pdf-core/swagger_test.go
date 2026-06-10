@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"mime"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -31,14 +34,15 @@ type swaggerReqBody struct {
 }
 
 type swaggerMedia struct {
-	Schema map[string]interface{} `yaml:"schema"`
+	Schema  map[string]interface{} `yaml:"schema"`
+	Example interface{}            `yaml:"example"`
 }
 
 func loadSwagger(t *testing.T) swaggerDoc {
 	t.Helper()
-	data, err := os.ReadFile("gen/http/openapi3.yaml")
+	data, err := os.ReadFile("api/openapi3.yaml")
 	if err != nil {
-		t.Fatalf("read gen/http/openapi3.yaml: %v", err)
+		t.Fatalf("read api/openapi3.yaml: %v", err)
 	}
 	var doc swaggerDoc
 	if err := yaml.Unmarshal(data, &doc); err != nil {
@@ -135,6 +139,87 @@ func TestSwaggerContentTypeExamplesAreValidMediaTypes(t *testing.T) {
 					path, example, err)
 			}
 		}
+	}
+}
+
+// TestDownloadBodyIsJSONNotBinary verifies that the /download requestBody schema
+// does not carry format: binary (which makes Swagger UI render a file picker
+// instead of a JSON text editor).
+func TestDownloadBodyIsJSONNotBinary(t *testing.T) {
+	doc := loadSwagger(t)
+	op := doc.Paths["/download"]["post"]
+	if op == nil || op.RequestBody == nil {
+		t.Fatal("POST /download has no requestBody")
+	}
+	media := op.RequestBody.Content["application/ld+json"]
+	if media == nil {
+		t.Fatal("POST /download requestBody missing application/ld+json content")
+	}
+	if fmt, ok := media.Schema["format"]; ok && fmt == "binary" {
+		t.Error("POST /download schema has format: binary — Swagger UI will render a file picker instead of a text editor")
+	}
+}
+
+// TestDownloadHasNoContentTypeHeaderParam verifies that the Content-Type header
+// is not exposed as a manual parameter on /download — the requestBody content
+// type already communicates it.
+func TestDownloadHasNoContentTypeHeaderParam(t *testing.T) {
+	doc := loadSwagger(t)
+	op := doc.Paths["/download"]["post"]
+	if op == nil {
+		t.Fatal("POST /download not found")
+	}
+	for _, p := range op.Parameters {
+		if p.Name == "Content-Type" {
+			t.Error("POST /download exposes Content-Type as a header parameter; it should be implicit from the requestBody")
+		}
+	}
+}
+
+// TestDownloadRequestBodyHasExample verifies that /download carries an example
+// JSON-LD payload so Swagger UI users know what to submit.
+func TestDownloadRequestBodyHasExample(t *testing.T) {
+	doc := loadSwagger(t)
+	op := doc.Paths["/download"]["post"]
+	if op == nil || op.RequestBody == nil {
+		t.Fatal("POST /download has no requestBody")
+	}
+	media := op.RequestBody.Content["application/ld+json"]
+	if media == nil {
+		t.Fatal("POST /download requestBody missing application/ld+json content")
+	}
+	if media.Example == nil {
+		t.Error("POST /download application/ld+json requestBody has no example")
+	}
+}
+
+// TestSwaggerServerURLRespectsPublicURL verifies that GET /swagger.json
+// substitutes the hardcoded localhost URL with DCS_PDF_CORE_PUBLIC_URL when set.
+func TestSwaggerServerURLRespectsPublicURL(t *testing.T) {
+	const publicURL = "https://abc123.ngrok-free.app"
+	t.Setenv("DCS_PDF_CORE_PUBLIC_URL", publicURL)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/swagger.json", nil)
+	newServer().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /swagger.json returned %d", rec.Code)
+	}
+
+	var doc struct {
+		Servers []struct {
+			URL string `json:"url"`
+		} `json:"servers"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&doc); err != nil {
+		t.Fatalf("decode swagger.json: %v", err)
+	}
+	if len(doc.Servers) == 0 {
+		t.Fatal("swagger.json has no servers")
+	}
+	if got := doc.Servers[0].URL; got != publicURL {
+		t.Errorf("servers[0].url = %q, want %q", got, publicURL)
 	}
 }
 

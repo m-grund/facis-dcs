@@ -365,8 +365,14 @@ func init() {
 	initOntologyIRI(os.Getenv(envOntologyBaseURL))
 }
 
-// initOntologyIRI sets dcsCoreIRI and all derived model IRI slices from baseURL.
-// An empty baseURL defaults to http://127.0.0.1:8080. Exported for tests.
+// InitOntologyIRI sets dcsCoreIRI and all derived model IRI slices from baseURL.
+// An empty baseURL defaults to http://127.0.0.1:8080.
+// Call this from main() after loading .env so the runtime URL overrides the
+// value set by init().
+func InitOntologyIRI(baseURL string) {
+	initOntologyIRI(baseURL)
+}
+
 func initOntologyIRI(baseURL string) {
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:8080"
