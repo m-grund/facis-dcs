@@ -105,21 +105,21 @@ type ContractSignature struct {
 }
 
 type ContractSignatureEnvelope struct {
-	ContractDID    string
-	SignerDID      string
-	CredentialType string
-	Status         string
-	SignedAt       *string
-	RevokedAt      *string
-	IpfsCID        *string
+	ContractDID    string  `db:"contract_did"`
+	SignerDID      string  `db:"signer_did"`
+	CredentialType string  `db:"credential_type"`
+	Status         string  `db:"status"`
+	SignedAt       *string `db:"signed_at"`
+	RevokedAt      *string `db:"revoked_at"`
+	IpfsCID        *string `db:"ipfs_cid"`
 }
 
 type ContractSigningTask struct {
-	DID             string
-	ContractVersion int
-	State           string
-	SignerDID       string
-	CreatedAt       time.Time
+	ContractDID     string    `db:"contract_did"`
+	ContractVersion int       `db:"contract_version"`
+	State           string    `db:"state"`
+	SignerDID       string    `db:"signer_did"`
+	CreatedAt       time.Time `db:"created_at"`
 }
 
 type SignatureRecord struct {

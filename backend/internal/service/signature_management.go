@@ -48,8 +48,8 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 	defer cancel()
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: 0, // derefInt(req.Offset),
+		Limit:  0, // derefInt(req.Limit),
 	}
 
 	qry := query.GetAllMetadataQry{
