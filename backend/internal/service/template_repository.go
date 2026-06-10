@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"digital-contracting-service/internal/templaterepository/query"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
@@ -514,26 +516,27 @@ func (s *templateRepositorysrvc) Verify(ctx context.Context, req *templatereposi
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	cmd := command.VerifyCmd{
+	qry := query.VerifyQry{
 		DID:           req.Did,
 		VerifiedBy:    middleware.GetParticipantID(ctx),
 		HolderDID:     middleware.GetHolderDID(ctx),
 		UserRoles:     middleware.GetUserRoles(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}
-	handler := command.Verifier{
+	handler := query.Verifier{
 		DB:       s.DB,
 		CTRepo:   s.CTRepo,
 		RTRepo:   s.RTRepo,
 		FCClient: s.FCClient,
 	}
-	err = handler.Handle(ctx, cmd)
+	result, err := handler.Handle(ctx, qry)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
 	return &templaterepository.ContractTemplateVerifyResponse{
-		Did: req.Did,
+		Did:      req.Did,
+		Findings: result.Findings,
 	}, nil
 }
 

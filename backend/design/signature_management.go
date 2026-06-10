@@ -66,10 +66,17 @@ var SMContractItem = Type("SMContractItem", func() {
 	Attribute("state", String, "Current state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "The description of the contract")
+	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("contract_data", Any, "The data of that contract")
 
-	Required("did", "state", "created_at", "updated_at", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {

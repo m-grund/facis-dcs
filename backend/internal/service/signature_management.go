@@ -23,20 +23,22 @@ import (
 type signatureManagementsrvc struct {
 	DB           *sqlx.DB
 	CRepo        db.ContractRepo
-	STRepo       db.SigningTaskRepo
 	ATrailReader base.AuditTrailReader
+	DSSClient    dss.Client
+	IPFSClient   *ipfs.APIClient
 	auth.JWTAuthenticator
 }
 
-func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, stRepo db.SigningTaskRepo,
+func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo,
 	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
-		STRepo:           stRepo,
 		ATrailReader:     auditTrailReader,
+		DSSClient:        dssClient,
+		IPFSClient:       ipfsClient,
 	}
 }
 
@@ -57,9 +59,8 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 		Pagination:  pagination,
 	}
 	queryHandler := query.GetAllMetadataHandler{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		STRepo: s.STRepo,
+		DB:    s.DB,
+		CRepo: s.CRepo,
 	}
 	result, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
@@ -110,7 +111,7 @@ func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturema
 			Did:             item.DID,
 			ContractVersion: item.ContractVersion,
 			State:           item.State.String(),
-			Signer:          item.Signer,
+			Signer:          item.SignerDID,
 			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -127,6 +128,7 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 	defer cancel()
 
 	qry := query.GetByIDQry{
+		DID:         req.Did,
 		RetrievedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
@@ -136,22 +138,55 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		CRepo: s.CRepo,
 	}
 
-	contractResult, err := queryHandler.Handle(ctx, qry)
+	result, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
 
-	contract := signaturemanagement.SMContractItem{
-		Did:             contractResult.DID,
-		ContractVersion: contractResult.ContractVersion,
-		State:           contractResult.State.String(),
-		Name:            contractResult.Name,
-		Description:     contractResult.Description,
-		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       contractResult.UpdatedAt.Format(time.RFC3339),
+	var startDate *string
+	if result.Contract.StartDate != nil {
+		s := result.Contract.StartDate.Format(time.RFC3339)
+		startDate = &s
 	}
 
-	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{}
+	var expDate *string
+	if result.Contract.ExpDate != nil {
+		s := result.Contract.ExpDate.Format(time.RFC3339)
+		expDate = &s
+	}
+
+	var expPolicy *string
+	if result.Contract.ExpPolicy != nil {
+		s := result.Contract.ExpPolicy.String()
+		expPolicy = &s
+	}
+
+	contract := signaturemanagement.SMContractItem{
+		Did:             result.Contract.DID,
+		ContractVersion: result.Contract.ContractVersion,
+		State:           result.Contract.State.String(),
+		Name:            result.Contract.Name,
+		Description:     result.Contract.Description,
+		CreatedAt:       result.Contract.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       result.Contract.UpdatedAt.Format(time.RFC3339),
+		Responsible:     result.Contract.Responsible,
+		ContractData:    result.Contract.ContractData,
+		ExpNoticePeriod: result.Contract.ExpNoticePeriod,
+		StartDate:       startDate,
+		ExpDate:         expDate,
+		ExpPolicy:       expPolicy,
+		CreatedBy:       result.Contract.CreatedBy,
+	}
+
+	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{
+		ContractDid:    result.SignatureEnvelope.ContractDID,
+		CredentialType: result.SignatureEnvelope.CredentialType,
+		IpfsCid:        result.SignatureEnvelope.IpfsCID,
+		RevokedAt:      result.SignatureEnvelope.RevokedAt,
+		SignedAt:       result.SignatureEnvelope.SignedAt,
+		SignerDid:      result.SignatureEnvelope.SignerDID,
+		Status:         result.SignatureEnvelope.Status.String(),
+	}
 
 	return &signaturemanagement.SMContractRetrieveByIDResponse{
 		Contract:          &contract,
@@ -164,17 +199,17 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	cmd := command.VerifyCmd{
+	qry := query.SignatureVerifyQry{
 		DID:        req.Did,
 		VerifiedBy: middleware.GetParticipantID(ctx),
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
-	handler := command.SignatureVerifier{
+	handler := query.SignatureVerifier{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
-	_, err = handler.Handle(ctx, cmd)
+	_, err = handler.Handle(ctx, qry)
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
@@ -202,7 +237,36 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
 
-	return &signaturemanagement.SMContractApplyResponse{}, nil
+	qry := query.GetByIDQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	queryHandler := query.GetByIDHandler{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+	}
+
+	result, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{
+		ContractDid:    result.SignatureEnvelope.ContractDID,
+		CredentialType: result.SignatureEnvelope.CredentialType,
+		IpfsCid:        result.SignatureEnvelope.IpfsCID,
+		RevokedAt:      result.SignatureEnvelope.RevokedAt,
+		SignedAt:       result.SignatureEnvelope.SignedAt,
+		SignerDid:      result.SignatureEnvelope.SignerDID,
+		Status:         result.SignatureEnvelope.Status.String(),
+	}
+
+	return &signaturemanagement.SMContractApplyResponse{
+		Did:               req.Did,
+		SignatureEnvelope: signatureEnvelop,
+	}, nil
 }
 
 func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturemanagement.SMContractValidateRequest) (res *signaturemanagement.SMContractValidateResponse, err error) {
@@ -210,24 +274,27 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	qry := command.ValidateCmd{
+	qry := query.ValidateQry{
 		DID:         req.Did,
 		ValidatedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
-	queryHandler := command.Validator{
+	queryHandler := query.Validator{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
 
-	err = queryHandler.Handle(ctx, qry)
+	result, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 
 	}
 
-	return &signaturemanagement.SMContractValidateResponse{}, nil
+	return &signaturemanagement.SMContractValidateResponse{
+		Did:      req.Did,
+		Findings: result.Findings,
+	}, nil
 }
 
 func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
@@ -237,6 +304,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 
 	qry := command.RevokeCmd{
 		DID:       req.Did,
+		RevokedBy: middleware.GetParticipantID(ctx),
 		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}

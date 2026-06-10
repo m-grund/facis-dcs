@@ -138,6 +138,14 @@ func main() {
 		log.Fatalf(ctx, err, "failed to initialize Hydra JWT validator")
 	}
 
+	// Initialize IPFS client
+	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
+	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
+	if ipfsTenantBaseURL == "" || mfsBaseURL == "" {
+		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
+	}
+	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
+
 	aAttemptRepo := &pg.PostgresAccessAttemptRepo{}
 	lockRepo := &pg.PostgresIPLockoutRepo{}
 	jwtAuth := auth.NewJWTAuthenticator(hydraJWTValidator, db, aAttemptRepo, lockRepo)
@@ -155,16 +163,10 @@ func main() {
 	cweCronJob := contractworkflowengine2.CronJob{DB: db, CRepo: &cweRepo}
 	cweCronJob.Start(ctx, db)
 
-	smCRepo := smrepo.PostgresContractRepo{}
-	smSTRepo := smrepo.PostgresSigningTaskRepo{}
-
-	// Initialize IPFS client
-	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
-	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
-	if ipfsTenantBaseURL == "" || mfsBaseURL == "" {
-		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
+	smCRepo := smrepo.PostgresContractRepo{
+		IPFSClient: ipfsAPIClient,
 	}
-	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
+
 	aRepo := pq.PostgresAuditTrailRepository{}
 	outboxProcessor := event.OutboxProcessor{
 		DB:         db,
@@ -300,7 +302,7 @@ func main() {
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, cryptoClient, tsaCfg, issuerDID, c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smSTRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}
