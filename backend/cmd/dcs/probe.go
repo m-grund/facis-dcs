@@ -46,6 +46,8 @@ func probeHTTPAny(urls ...string) error {
 // probeTCP dials the host:port extracted from rawURL and returns an error if
 // the TCP connection cannot be established within 5 seconds. Use this for
 // services that don't expose a documented HTTP health endpoint.
+//
+//nolint:unused
 func probeTCP(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {

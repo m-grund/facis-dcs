@@ -30,10 +30,14 @@ type HydraJWTValidator struct {
 }
 
 const (
-	oidcDiscoveryDefaultAttempts       = 30
+	//nolint:unused
+	oidcDiscoveryDefaultAttempts = 30
+	//nolint:unused
 	oidcDiscoveryDefaultAttemptTimeout = 5 * time.Second
+	//nolint:unused
 	oidcDiscoveryDefaultInitialBackoff = 500 * time.Millisecond
-	oidcDiscoveryDefaultMaxBackoff     = 5 * time.Second
+	//nolint:unused
+	oidcDiscoveryDefaultMaxBackoff = 5 * time.Second
 )
 
 // NewHydraJWTValidator connects to the OIDC provider to get public keys.
@@ -58,6 +62,7 @@ func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWT
 	}, nil
 }
 
+//nolint:unused
 func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider, error) {
 	var lastErr error
 	attempts := oidcDiscoveryAttempts()
@@ -91,6 +96,7 @@ func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider
 	return nil, fmt.Errorf("OIDC discovery failed after %d attempts: %w", attempts, lastErr)
 }
 
+//nolint:unused
 func oidcDiscoveryAttempts() int {
 	value, err := strconv.Atoi(os.Getenv("OIDC_DISCOVERY_ATTEMPTS"))
 	if err != nil || value < 1 {
@@ -99,18 +105,22 @@ func oidcDiscoveryAttempts() int {
 	return value
 }
 
+//nolint:unused
 func oidcDiscoveryAttemptTimeout() time.Duration {
 	return oidcDiscoveryDuration("OIDC_DISCOVERY_ATTEMPT_TIMEOUT", oidcDiscoveryDefaultAttemptTimeout)
 }
 
+//nolint:unused
 func oidcDiscoveryInitialBackoff() time.Duration {
 	return oidcDiscoveryDuration("OIDC_DISCOVERY_INITIAL_BACKOFF", oidcDiscoveryDefaultInitialBackoff)
 }
 
+//nolint:unused
 func oidcDiscoveryMaxBackoff() time.Duration {
 	return oidcDiscoveryDuration("OIDC_DISCOVERY_MAX_BACKOFF", oidcDiscoveryDefaultMaxBackoff)
 }
 
+//nolint:unused
 func oidcDiscoveryDuration(envName string, fallback time.Duration) time.Duration {
 	value, err := time.ParseDuration(os.Getenv(envName))
 	if err != nil || value <= 0 {

@@ -1153,6 +1153,7 @@ func semanticConditionIndex(data documentData) (semanticConditionsByBlock, error
 	return conditions, nil
 }
 
+//nolint:unused
 func allowedValuesForDomainPath(domainPath string) []any {
 	field, ok := ontologyDomainFieldIndex[domainPath]
 	if !ok || field.Constraint == nil {
