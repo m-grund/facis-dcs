@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
@@ -18,7 +20,6 @@ import (
 	"digital-contracting-service/internal/base/validation"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/processauditandcompliance/query"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/jmoiron/sqlx"
@@ -189,7 +190,8 @@ func (s *processAuditAndCompliancesrvc) auditExistingTemplatePolicyTrailEntries(
 		}
 	}(tx)
 
-	templates, err := s.CTRepo.ReadAllMetaData(ctx, tx)
+	pagination := datatype.Pagination{}
+	templates, err := s.CTRepo.ReadAllMetaData(ctx, tx, pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +254,8 @@ func (s *processAuditAndCompliancesrvc) auditStaticContractContent(ctx context.C
 		ContractDID:     contractDID,
 		ContractVersion: stringPtrValue(req.ContractVersion),
 		PolicyVersion:   stringPtrValue(req.PolicyVersion),
-		AuditedBy:       middleware.GetUsername(ctx),
+		AuditedBy:       middleware.GetParticipantID(ctx),
+		HolderDID:       middleware.GetHolderDID(ctx),
 	}
 	findings, err := validation.AuditContractContent(req.ContractDocument, req.Policy, metadata)
 	if err != nil {
@@ -293,7 +296,8 @@ func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries
 		}
 	}(tx)
 
-	contracts, err := s.CRepo.ReadAllMetaData(ctx, tx)
+	pagination := datatype.Pagination{}
+	contracts, err := s.CRepo.ReadAllMetaData(ctx, tx, pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +315,8 @@ func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries
 			ContractDID:     contract.DID,
 			ContractVersion: fmt.Sprint(contract.ContractVersion),
 			PolicyVersion:   stringPtrValue(req.PolicyVersion),
-			AuditedBy:       middleware.GetUsername(ctx),
+			AuditedBy:       middleware.GetParticipantID(ctx),
+			HolderDID:       middleware.GetHolderDID(ctx),
 		}
 		findings, err := validation.AuditContractContent(contract.ContractData, policy, auditMetadata)
 		if err != nil {
