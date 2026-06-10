@@ -51,6 +51,11 @@ func (h *Revoker) Handle(ctx context.Context, cmd RevokeCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	err = h.CRepo.RevokeSignature(ctx, tx, cmd.DID, cmd.RevokedBy)
+	if err != nil {
+		return fmt.Errorf("could not revoke signature: %w", err)
+	}
+
 	evt := signingmanagementevents.RevokeEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
