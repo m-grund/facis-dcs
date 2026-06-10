@@ -1,7 +1,7 @@
 import type { ContractState } from '@/types/contract-state'
 import type { ContractData } from '../contract-data'
 import type { ContractNegotiation } from './contract-negotiation'
-import type { ContractResponsiblePersons } from './contract-responsible-persons'
+import type { ContractResponsible } from './contract-responsible'
 
 export const ExpirationPolicy = {
   renewal: 'RENEWAL',
@@ -24,12 +24,11 @@ export interface Contract {
   exp_date?: string
   exp_notice_period?: number
   exp_policy?: ExpirationPolicy
-  responsible_persons?: ContractResponsiblePersons
+  responsible?: ContractResponsible
   contract_data?: ContractData
   negotiations?: ContractNegotiation[]
 }
 
-export type ContractChangeRequest = Pick<
-  Contract,
-  'name' | 'description' | 'exp_notice_period' | 'exp_policy'
-> & { contract_data?: Partial<Contract['contract_data']> }
+export type ContractChangeRequest = Pick<Contract, 'name' | 'description' | 'exp_notice_period' | 'exp_policy'> & {
+  contract_data?: Partial<Contract['contract_data']>
+}

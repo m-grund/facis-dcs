@@ -3,13 +3,16 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/signingmanagement/db"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/signingmanagement/db"
 )
 
 type PostgresContractRepo struct {
@@ -18,10 +21,10 @@ type PostgresContractRepo struct {
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,
-               created_by, created_at, updated_at, contract_version
+               created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts
         WHERE did = $1
-         AND state = 'APPROVED'
+         AND state IN ('APPROVED', 'SIGNED')
     `
 	var ct db.Contract
 	err := tx.GetContext(ctx, &ct, query, did)
@@ -34,38 +37,54 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 	return &ct, nil
 }
 
-func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts
-        WHERE state = 'APPROVED'
+        WHERE state IN ('APPROVED', 'SIGNED')
     `
+
+	var params []any
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
+		query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+		params = append(params, pagination.Limit, offset)
+	}
+
 	var cts []db.ContractMetadata
-	err := tx.SelectContext(ctx, &cts, query)
+	err := tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
 		return []db.ContractMetadata{}, err
 	}
 	return cts, nil
 }
 
-func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
+func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version
+        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts
-        WHERE state = 'APPROVED'
+        WHERE state IN ('APPROVED', 'SIGNED')
     `
+
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
 		return nil, err
 	}
 	if len(params) > 0 {
-		query += " WHERE " + *conditions
+		query += " AND " + *conditions
+	}
+
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
+		n := len(params) + 1
+		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
+		params = append(params, pagination.Limit, offset)
 	}
 
 	var cts []db.ContractMetadata
 	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
-		return []db.ContractMetadata{}, err
+		return nil, err
 	}
 	return cts, nil
 }
@@ -98,85 +117,45 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 	return err
 }
 
-func (r *PostgresContractRepo) Update(ctx context.Context, tx *sqlx.Tx, data db.ContractUpdateData) error {
-	query, params, err := createQuery(data)
-	if err != nil {
-		return err
-	}
-	_, err = tx.ExecContext(ctx, *query, params...)
-	return err
-}
-
 func createSearchConditions(values db.SearchValues) (*string, []interface{}, error) {
 	conditions := ""
 	var params []interface{}
 	paramIndex := 1
 
-	if values.DID != nil {
+	if len(values.DID) > 0 {
 		conditions += ` did = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.DID)
+		params = append(params, values.DID)
 		paramIndex++
 	}
-	if values.ContractVersion != nil {
+	if values.ContractVersion > 0 {
 		conditions += ` contract_version = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, *values.ContractVersion)
+		params = append(params, values.ContractVersion)
 		paramIndex++
 	}
-	if values.Name != nil {
+	if len(values.State) > 0 {
+		conditions += ` state = $` + strconv.Itoa(paramIndex) + ` AND`
+		state := strings.ToUpper(values.State)
+		params = append(params, state)
+		paramIndex++
+	}
+	if len(values.Name) > 0 {
 		conditions += ` name ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Name+"%")
+		params = append(params, "%"+values.Name+"%")
 		paramIndex++
 	}
-	if values.Description != nil {
+	if len(values.Description) > 0 {
 		conditions += ` description ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+*values.Description+"%")
+		params = append(params, "%"+values.Description+"%")
 		paramIndex++
 	}
-	if values.ContractData != nil {
+	if len(values.ContractData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, *values.ContractData)
-		paramIndex++
+		params = append(params, values.ContractData)
 	}
-
 	l := len(" AND")
 	if len(conditions) > l {
 		conditions = conditions[:len(conditions)-l]
 	}
 
 	return &conditions, params, nil
-}
-
-func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
-	queryBase := `UPDATE contracts SET `
-	var columns []string
-	var params []interface{}
-
-	addParam := func(columnName string, value interface{}) {
-		columns = append(columns, fmt.Sprintf("%s = $%d", columnName, len(params)+1))
-		params = append(params, value)
-	}
-
-	if data.Name != nil {
-		addParam("name", data.Name)
-	}
-	if data.Description != nil {
-		addParam("description", data.Description)
-	}
-	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
-		addParam("contract_data", data.ContractData)
-	}
-	if data.ContractVersion != nil {
-		addParam("contract_version", data.ContractVersion)
-	}
-	if len(columns) == 0 {
-		return nil, nil, errors.New("no fields to update")
-	}
-
-	fullQuery := queryBase + strings.Join(columns, ", ")
-	nextIdx := len(params) + 1
-	fullQuery += fmt.Sprintf(" WHERE did = $%d AND state = 'APPROVED';",
-		nextIdx)
-	params = append(params, data.DID)
-
-	return &fullQuery, params, nil
 }

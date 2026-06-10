@@ -2,10 +2,19 @@ package contract
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -14,31 +23,30 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	events "digital-contracting-service/internal/contractworkflowengine/event"
-	"fmt"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type GetAllMetadataQry struct {
 	RetrievedBy string
+	HolderDID   string
+	Pagination  datatype.Pagination
+	UserRoles   userrole.UserRoles
 }
 
 type MetadataItem struct {
-	DID                string
-	ContractVersion    int
-	Name               *string
-	Description        *string
-	State              contractstate.ContractState
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	MetaData           datatype.JSON
-	CreatedBy          string
-	StartDate          *time.Time
-	ExpDate            *time.Time
-	ExpPolicy          *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod    *int
-	ResponsiblePersons *db.ResponsiblePersons
+	DID             string
+	ContractVersion int
+	Name            *string
+	Description     *string
+	State           contractstate.ContractState
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	MetaData        datatype.JSON
+	CreatedBy       string
+	StartDate       *time.Time
+	ExpDate         *time.Time
+	ExpPolicy       *expirationpolicy.ExpirationPolicy
+	ExpNoticePeriod *int
+	Responsible     *db.Responsible
 }
 
 type ReviewTaskItem struct {
@@ -89,11 +97,18 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	if err != nil {
 		return nil, fmt.Errorf("could not create transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
-	contractsMetadata, err := h.CRepo.ReadAllMetaData(ctx, tx)
-	if err != nil {
-		return nil, fmt.Errorf("could not read all contracts: %w", err)
+	var contractsMetadata []db.ContractMetadata
+	if query.Pagination.Limit >= 0 {
+		contractsMetadata, err = h.CRepo.ReadAllMetaData(ctx, tx, query.Pagination)
+		if err != nil {
+			return nil, fmt.Errorf("could not read all contracts: %w", err)
+		}
 	}
 
 	negotiationTasks, err := h.NTRepo.ReadAllByNegotiator(ctx, tx, query.RetrievedBy)
@@ -114,6 +129,8 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	evt := events.RetrieveAllEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
+		HolderDID:   query.HolderDID,
+		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {
@@ -144,19 +161,19 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 
 		metadata := MetadataItem{
-			DID:                data.DID,
-			ContractVersion:    data.ContractVersion,
-			State:              state,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedBy:          data.CreatedBy,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			StartDate:          data.StartDate,
-			ExpDate:            data.ExpDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    data.ExpNoticePeriod,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:             data.DID,
+			ContractVersion: data.ContractVersion,
+			State:           state,
+			Name:            data.Name,
+			Description:     data.Description,
+			CreatedBy:       data.CreatedBy,
+			CreatedAt:       data.CreatedAt,
+			UpdatedAt:       data.UpdatedAt,
+			StartDate:       data.StartDate,
+			ExpDate:         data.ExpDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: data.ExpNoticePeriod,
+			Responsible:     data.Responsible,
 		}
 		contractItems = append(contractItems, metadata)
 

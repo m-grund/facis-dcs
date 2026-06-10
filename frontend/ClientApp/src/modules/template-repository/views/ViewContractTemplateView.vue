@@ -1,22 +1,19 @@
 <template>
-  <div class="flex flex-col min-h-full -mx-4 md:-mx-8 -my-4 md:-my-8">
+  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <TemplateEditors title="View Template" />
 
     <!-- Pinned Footer -->
     <div v-if="$route.params.did === did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <CopyTemplateButton v-if="isCreator || isManager" class="btn btn-primary flex-1" />
+        <CopyTemplateButton v-if="isCreator || isManager" class="btn flex-1 btn-primary" />
         <template v-if="isCreator">
-          <SubmitSelectionDialog
-            v-if="state === TemplateState.draft"
-            dialog-type="template"
-            @submit="submitTemplate"
-            class="btn btn-primary flex-1"
-          />
+          <button v-if="state === TemplateState.draft" class="btn flex-1 btn-primary" @click="submitTemplate">
+            Submit
+          </button>
           <button
             v-if="state === TemplateState.rejected"
-            class="btn btn-primary flex-1"
+            class="btn flex-1 btn-primary"
             @click="submitRejectedTemplate"
           >
             Submit
@@ -25,7 +22,7 @@
         <TemplateManagerActions
           v-if="contractTemplate && isManager"
           :template="contractTemplate"
-          class="btn btn-primary flex-1"
+          class="btn flex-1 btn-primary"
         />
       </div>
     </div>
@@ -33,17 +30,15 @@
 </template>
 
 <script setup lang="ts">
-import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import type { SelectedUserRole } from '@/models/user'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useNavStore } from '@/stores/nav-store'
 import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 import { ref, watch, type Ref } from 'vue'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
@@ -98,29 +93,25 @@ watch(
           document_number: template.document_number ?? null,
           updated_at: template.updated_at ?? null,
           created_by: template.created_by,
-          responsible_persons: template.responsible_persons ?? null,
+          responsible: template.responsible ?? null,
         })
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error('Failed to load template for editing', error)
       })
   },
   { immediate: true },
 )
 
-const submitTemplate = async (result: SelectedUserRole[]) => {
+const submitTemplate = async () => {
   try {
     if (!draftStore.did || !draftStore.updated_at) return
-    const reviewers = result.filter((user) => user.role === 'TEMPLATE_REVIEWER').map((user) => user.user.username)
-    const approver = result.find((user) => user.role === 'TEMPLATE_APPROVER')?.user.username!
     const response = await contractTemplateService.submit({
       did: draftStore.did,
       updated_at: draftStore.updated_at,
-      reviewers: reviewers,
-      approver: approver,
     })
     if (response?.did) {
-      navStore.goToPreviousRoute()
+      await navStore.goToPreviousRoute()
     }
   } catch (error) {
     console.error('Template Submission failed', error)
@@ -135,7 +126,7 @@ const submitRejectedTemplate = async () => {
       updated_at: draftStore.updated_at,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await navStore.goToPreviousRoute()
     }
   } catch (error) {
     console.error('Template Submission failed', error)

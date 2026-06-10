@@ -37,7 +37,7 @@
 ### Setup the Backend
 
 #### Initialize all dependencies
-Run the following command in **DCS/implementation/backend** to initialize all needed dependencies:
+Run the following command in **backend/** to initialize all needed dependencies:
 ```bash
 go mod tidy
 ```
@@ -51,14 +51,20 @@ goa gen digital-contracting-service/design
 ## Running tests
 ```
 export DATABASE_URL="user=username password=password dbname=test_postgres sslmode=disable"
+export FC_KEYCLOAK_REALM_URL="http://localhost:30080/realms/gaia-x"
+export FEDERATED_CATALOGUE_API_URL="http://localhost:30081"
+export FEDERATED_CATALOGUE_CLIENT_ID="dcs-fc-client"
+export FEDERATED_CATALOGUE_CLIENT_SECRET="dcs-fc-client-secret"
 ```
 
 ```
 go test -v ./...
 ```
-**Note:** Every time you modify files in **DCS/implementation/backend/design**, you must regenerate the code.
+**Note:** Every time you modify files in **backend/design**, you must regenerate the code.
 
 ## Running the API Server
+
+For the local Helm stack, see [deployment/README.md](../deployment/README.md).
 
 ### Environment Variables
 ```bash
@@ -69,14 +75,21 @@ export DATABASE_URL="user=username password=password dbname=postgres sslmode=dis
 export API_PATH_PREFIX="/api"
 
 # Federated Catalogue
+export FC_KEYCLOAK_REALM_URL="http://localhost:30080/realms/gaia-x"
 export FEDERATED_CATALOGUE_API_URL="http://localhost:8081"
+export FEDERATED_CATALOGUE_CLIENT_ID="dcs-fc-client"
+export FEDERATED_CATALOGUE_CLIENT_SECRET="dcs-fc-client-secret"
 
-# OIDC/Keycloak Authentication
-export OIDC_ISSUER_URL="https://keycloak.example.com/realms/yourrealm"
-export OIDC_CLIENT_ID="digital-contracting-service"
-export OIDC_REDIRECT_URI="http://localhost:5173/api/auth/callback"
-export OIDC_LOGOUT_REDIRECT_URI="http://localhost:8991/api/auth/logout-complete"
+# Hydra Authentication
+export HYDRA_ISSUER_URL="http://localhost:30444"
+export HYDRA_CLIENT_ID="dcs-client"
+export HYDRA_CLIENT_SECRET="dcs-secret"
+export HYDRA_REDIRECT_URI="http://localhost:5173/api/auth/callback"
+export HYDRA_POST_LOGOUT_REDIRECT_URI="http://localhost:5173/api/auth/logout-complete"
+export HYDRA_ADMIN_URL="http://localhost:30085"
 ```
+
+When using the local Helm stack, copy `backend/.env.dev` to `backend/.env`.
 
 ### Start the DCS backend service
 ```bash
@@ -102,14 +115,14 @@ curl http://0.0.0.0:8991/template/search
 ```
 
 ### Build a Docker image
-To build a Docker image, you can use the helper script [build-image.sh](./build-image.sh).
+To build a Docker image, use the helper script [deployment/docker/build-image.sh](../deployment/docker/build-image.sh).
 
 **Important:** The Docker image embeds the frontend application. The build process:
-1. Builds the Vue.js frontend from `../frontend/ClientApp`
+1. Builds the Vue.js frontend from `frontend/ClientApp`
 2. Copies the built frontend into the backend image at `/app/web/dist`
 3. The backend serves the frontend at `/ui` (root `/` redirects to `/ui`), keeping API routes at the root level
 
-The build script must be run from the `backend/` directory, as it uses the parent directory (`implementation/`) as the Docker build context to access both backend and frontend code.
+The Dockerfile and build script live in `deployment/docker/`. The script resolves the repo root automatically as the Docker build context.
 
 **Parameters:**
 - `TAG` – Sets the image tag (default: `latest`)
@@ -118,7 +131,56 @@ The build script must be run from the `backend/` directory, as it uses the paren
 
 **Example:**
 ```bash
-REGISTRY="your-registry" REPO="your-repo" ./build-image.sh v1.0.0
+REGISTRY="your-registry" REPO="your-repo" ./deployment/docker/build-image.sh v1.0.0
 ```
 
 This builds a Docker image with the name: **your-registry/your-repo/digital-contracting-service:v1.0.0**
+
+## Linting
+
+This project uses **[golangci-lint](https://golangci-lint.run)** for static code analysis.
+
+Linting is automatically executed via a **pre-commit hook** before each commit, but you can also run it manually using the commands below.
+
+### Prerequisites
+
+Ensure `golangci-lint` is installed in the project's `./bin` directory. If it is not already present, follow the installation steps below.
+
+### Installation (Optional)
+
+> **Note:**
+> If you have already committed code in this repository, the pre-commit hook should have automatically installed the linter for you.
+
+If `golangci-lint` is not yet installed in `./bin`, run:
+
+```bash
+# Ensure the ./bin directory exists and install golangci-lint to the ./bin directory
+mkdir -p ./bin && curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b ./bin v2.12.2
+```
+
+Alternatively, if you have `golangci-lint` installed globally, you can copy it:
+
+```bash
+# Create directory and copy the global installation to ./bin
+mkdir -p ./bin && cp $(which golangci-lint) ./bin/golangci-lint
+```
+
+### Manual Linting
+
+To run the linter manually, use the following commands:
+
+```bash
+# Run linter on all files
+./bin/golangci-lint run
+
+# Run linter on a specific package
+./bin/golangci-lint run ./cmd/...
+
+# Run linter with verbose output
+./bin/golangci-lint run -v
+
+# Run linter and fix auto-fixable issues
+./bin/golangci-lint run --fix
+```
+
+You can also check the official [golangci-lint documentation](https://golangci-lint.run/docs) for additional configuration and command options.

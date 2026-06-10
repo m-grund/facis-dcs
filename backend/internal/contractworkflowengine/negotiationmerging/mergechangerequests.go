@@ -2,13 +2,14 @@ package negotiationmerging
 
 import (
 	"context"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/contractworkflowengine/db"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
 func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo, nRepo db.NegotiationRepo, did string, contractVersion int) (*db.ContractUpdateData, error) {
@@ -93,7 +94,7 @@ func upsertSemanticConditionValue(contract *ContractData, newValue SemanticCondi
 			existing.ParameterName == newValue.ParameterName &&
 			existing.ConditionID == newValue.ConditionID {
 
-			contract.SemanticConditionValues[i] = newValue // update
+			contract.SemanticConditionValues[i].ParameterValue = newValue.ParameterValue // update
 			return
 		}
 	}

@@ -2,7 +2,18 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+
 	"digital-contracting-service/internal/base/datatype"
+	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/command"
 	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -10,12 +21,7 @@ import (
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	database "digital-contracting-service/internal/templaterepository/db"
 	"digital-contracting-service/internal/templaterepository/db/pg"
-	"log"
-	"os"
-	"testing"
-
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"digital-contracting-service/internal/templaterepository/testutil"
 )
 
 type TestRepo struct {
@@ -30,14 +36,19 @@ func setupTestDB(t *testing.T) *sqlx.DB {
 		t.Fatalf("DATABASE_URL isn't set")
 	}
 
-	database, err := sqlx.Connect("postgres", databaseURL)
+	db, err := sqlx.Connect("postgres", databaseURL)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	t.Cleanup(func() { database.Close() })
+	t.Cleanup(func() {
+		err := db.Close()
+		if err != nil {
+			t.Fatalf("could not close database connection")
+		}
+	})
 
-	return database
+	return db
 }
 
 func NewTestRepo() *TestRepo {
@@ -157,10 +168,14 @@ func createTestContractTemplateWithData(t *testing.T, db *sqlx.DB, repo *TestRep
 
 func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state reviewtaskstate.ReviewTaskState, submittedBy string, reviewers []string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	for _, reviewer := range reviewers {
 		reviewTask := database.ReviewTaskData{
@@ -183,10 +198,14 @@ func createReviewTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *Tes
 
 func createApprovalTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *TestRepo, did string, state approvaltaskstate.ApprovalTaskState, submittedBy string, approver string) {
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	approvalTask := database.ApprovalTaskData{
 		DID:       did,
@@ -203,4 +222,77 @@ func createApprovalTasks(t *testing.T, ctx context.Context, db *sqlx.DB, repo *T
 	if err != nil {
 		t.Fatalf("Failed to commit transaction: %v", err)
 	}
+}
+
+// Federated Catalogue setup (env is read and validated here; testutil only uses passed config).
+
+func setupTestFC(t *testing.T) *fcclient.FederatedCatalogueClient {
+	t.Helper()
+
+	cfg := federatedCatalogueClientConfigFromEnv(t)
+	client, err := testutil.NewFCClient(cfg)
+	if err != nil {
+		t.Fatalf("failed to create Federated Catalogue client: %v", err)
+	}
+	if client == nil {
+		t.Fatalf("Federated Catalogue client is nil")
+	}
+
+	testutil.PrepareFC(t, client)
+
+	return client
+}
+
+func federatedCatalogueClientConfigFromEnv(t *testing.T) testutil.FCClientConfig {
+	t.Helper()
+
+	apiURL := strings.TrimSpace(os.Getenv("FEDERATED_CATALOGUE_API_URL"))
+	clientID := strings.TrimSpace(os.Getenv("FEDERATED_CATALOGUE_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("FEDERATED_CATALOGUE_CLIENT_SECRET"))
+	keycloakRealmURL := strings.TrimSpace(os.Getenv("FC_KEYCLOAK_REALM_URL"))
+
+	if apiURL == "" {
+		t.Fatalf("FEDERATED_CATALOGUE_API_URL isn't set")
+	}
+	if clientID == "" {
+		t.Fatalf("FEDERATED_CATALOGUE_CLIENT_ID isn't set")
+	}
+	if clientSecret == "" {
+		t.Fatalf("FEDERATED_CATALOGUE_CLIENT_SECRET isn't set")
+	}
+	if keycloakRealmURL == "" {
+		t.Fatalf("FC_KEYCLOAK_REALM_URL isn't set")
+	}
+
+	return testutil.FCClientConfig{
+		APIURL:           apiURL,
+		KeycloakRealmURL: keycloakRealmURL,
+		ClientID:         clientID,
+		ClientSecret:     clientSecret,
+	}
+}
+
+func getParticipantID() string {
+	return testutil.DefaultParticipantID
+}
+
+func loadExampleTemplateData(t *testing.T) *datatype.JSON {
+	t.Helper()
+	return testutil.LoadExampleTemplateData(t)
+}
+
+func seedFCTemplateResource(
+	t *testing.T,
+	ctx context.Context,
+	fc *fcclient.FederatedCatalogueClient,
+	participantID string,
+	did string,
+	version int,
+	documentNumber string,
+	templateType string,
+	name string,
+	templateData *datatype.JSON,
+) testutil.TemplateSeed {
+	t.Helper()
+	return testutil.SeedTemplateResource(t, ctx, fc, participantID, did, version, documentNumber, templateType, name, templateData)
 }

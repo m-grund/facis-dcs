@@ -16,6 +16,7 @@ const (
 	Submitted   ContractState = "SUBMITTED"
 	Reviewed    ContractState = "REVIEWED"
 	Approved    ContractState = "APPROVED"
+	Signed      ContractState = "SIGNED"
 	Terminated  ContractState = "TERMINATED"
 	Expired     ContractState = "EXPIRED"
 )
@@ -27,6 +28,7 @@ var validStates = map[ContractState]bool{
 	Submitted:   true,
 	Reviewed:    true,
 	Approved:    true,
+	Signed:      true,
 	Terminated:  true,
 	Expired:     true,
 }

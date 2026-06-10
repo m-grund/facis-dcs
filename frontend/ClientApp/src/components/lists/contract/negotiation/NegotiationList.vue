@@ -12,10 +12,10 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
-
 const authStore = useAuthStore()
-const username = computed(() => authStore.user?.username)
+const issuer = computed(() => authStore.user?.issuer)
+
+const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
 
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
@@ -27,7 +27,7 @@ const negotiations = computed(() => {
 })
 
 const sortedNegotiations = computed(() =>
-  negotiations.value.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+  negotiations.value.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
 )
 
 const sortedDecisions = (decisions: ContractNegotiationDecision[]) => {
@@ -37,7 +37,7 @@ const sortedDecisions = (decisions: ContractNegotiationDecision[]) => {
 const isSubmitting = ref(false)
 
 const acceptNegotiation = async (negotiation: ContractNegotiation) => {
-  if (!username.value || !confirmationModal.value) return
+  if (!confirmationModal.value) return
   isSubmitting.value = true
   try {
     const { isCanceled } = await confirmationModal.value?.reveal({ message: 'Accept this change request?' })
@@ -46,10 +46,9 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
         id: negotiation.id,
         did: props.contract.did,
         action_flag: 'ACCEPTING',
-        responded_by: username.value,
       })
       if (response.id) {
-        const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
+        const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === issuer.value)
         if (decision) decision.decision = 'ACCEPTED'
       }
     }
@@ -61,7 +60,7 @@ const acceptNegotiation = async (negotiation: ContractNegotiation) => {
 }
 
 const rejectNegotiation = async (negotiation: ContractNegotiation) => {
-  if (!username.value || !confirmationModal.value) return
+  if (!confirmationModal.value) return
   isSubmitting.value = true
   try {
     const rejectResult = await confirmationModal.value.reveal({
@@ -73,12 +72,11 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
         id: negotiation.id,
         did: props.contract.did,
         action_flag: 'REJECTING',
-        responded_by: username.value,
         rejection_reason: rejectResult.data,
       })
       if (response.id) {
         negotiation.negotiation_decisions.forEach((decision) => {
-          if (decision.negotiator === username.value) {
+          if (decision.negotiator === issuer.value) {
             decision.decision = 'REJECTED'
             decision.rejection_reason = rejectResult.data
           } else {
@@ -95,7 +93,7 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
 }
 
 const isBtnDisabled = (negotiation: ContractNegotiation) => {
-  const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === username.value)
+  const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === issuer.value)
   return decision?.decision !== undefined
 }
 
@@ -115,7 +113,7 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
 <template>
   <ul class="list">
     <li v-for="negotiation in sortedNegotiations" :key="negotiation.id" class="list-row px-0">
-      <div class="card bg-base-100 shadow-sm card-border border-base-content/10">
+      <div class="card border-base-content/10 bg-base-100 shadow-sm card-border">
         <div class="card-body">
           <h2 class="card-title">Change proposal by: {{ negotiation.created_by }}</h2>
           <ul class="list">
@@ -140,7 +138,7 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
               :disabled="isSubmitting || isBtnDisabled(negotiation)"
               @click="acceptNegotiation(negotiation)"
             >
-              <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
+              <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
               Accept
             </button>
             <button
@@ -149,10 +147,10 @@ const handleShowBtn = (negotiation: ContractNegotiation) => {
               :disabled="isSubmitting || isBtnDisabled(negotiation)"
               @click="rejectNegotiation(negotiation)"
             >
-              <span v-if="isSubmitting" class="loading loading-spinner loading-sm"></span>
+              <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
               Reject
             </button>
-            <button class="btn btn-primary btn-sm" @click="handleShowBtn(negotiation)">
+            <button class="btn btn-sm btn-primary" @click="handleShowBtn(negotiation)">
               {{ !isNegotiationShown.get(negotiation.id) ? 'Show' : 'Hide' }}
             </button>
           </div>

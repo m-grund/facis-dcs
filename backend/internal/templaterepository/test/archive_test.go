@@ -2,15 +2,17 @@ package test
 
 import (
 	"context"
-	"digital-contracting-service/internal/base"
-	"digital-contracting-service/internal/base/conf"
-	"digital-contracting-service/internal/templaterepository/command"
-	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
-	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/templaterepository/command"
+	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
+	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
 )
 
 func TestArchive_ArchiveContractTemplateDataInDraftState(t *testing.T) {
@@ -19,7 +21,7 @@ func TestArchive_ArchiveContractTemplateDataInDraftState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -72,7 +74,7 @@ func TestArchive_ArchiveNonExistingContractTemplate(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -103,7 +105,7 @@ func TestArchive_ArchiveContractTemplateDataInSubmittedState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -156,7 +158,7 @@ func TestArchive_ArchiveContractTemplateDataInRejectedState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -209,7 +211,7 @@ func TestArchive_ArchiveContractTemplateDataInReviewedState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -262,7 +264,7 @@ func TestArchive_ArchiveContractTemplateDataInApprovedState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -309,13 +311,13 @@ func TestArchive_ArchiveContractTemplateDataInApprovedState(t *testing.T) {
 	assert.Equal(t, contracttemplatestate.Deprecated, contractTemplate.State)
 }
 
-func TestArchive_ArchiveContractTemplateDataInRegisteredState(t *testing.T) {
+func TestArchive_ArchiveContractTemplateDataInPublishedState(t *testing.T) {
 
 	db := setupTestDB(t)
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -327,7 +329,7 @@ func TestArchive_ArchiveContractTemplateDataInRegisteredState(t *testing.T) {
 
 	repo := NewTestRepo()
 
-	createContractTemplate(t, db, repo, did, contracttemplatestate.Registered, creator)
+	createContractTemplate(t, db, repo, did, contracttemplatestate.Published, creator)
 
 	cmd := command.ArchiveCmd{
 		DID:        *did,
@@ -368,7 +370,7 @@ func TestArchive_ArchiveContractTemplateDataInDeletedState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -404,7 +406,7 @@ func TestArchive_ArchiveContractTemplateDataInDeprecatedState(t *testing.T) {
 
 	cleanupContractTemplateTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.TemplateResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}

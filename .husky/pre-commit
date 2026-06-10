@@ -1,0 +1,44 @@
+echo "🚀 Run Pre-Commit Hooks"
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$HOOK_DIR")"
+
+# Get the list of all files staged for this commit
+STAGED_FILES=$(git diff --cached --name-only)
+
+if echo "$STAGED_FILES" | grep -q "^frontend/"; then
+  echo "🎨 Checking Frontend..."
+  cd "$PROJECT_ROOT/frontend/ClientApp" && npx lint-staged || exit 1
+
+  echo "✅ Frontend verification passed."
+fi
+
+echo ""
+
+if echo "$STAGED_FILES" | grep -q "^backend/"; then
+  echo "⚙️ Checking Backend..."
+  cd "$PROJECT_ROOT/backend"
+
+  go mod tidy
+  if [ -n "$(git status --porcelain go.mod go.sum)" ]; then
+    echo "❌ Error: backend/go.mod or backend/go.sum are not tidy!"
+    echo "Please stage the changes created by 'go mod tidy'."
+    exit 1
+  fi
+
+  # Define the local binary directory path
+  LOCAL_BIN="$PROJECT_ROOT/backend/bin"
+  GCL="$LOCAL_BIN/golangci-lint"
+
+  # If golangci-lint does not exist locally, download it
+  if [ ! -f "$GCL" ]; then
+    echo "📥 Installing golangci-lint locally for the project..."
+    curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $LOCAL_BIN v2.12.2
+  fi
+
+  $GCL run --new-from-rev=HEAD || exit 1
+
+  echo "✅ Backend verification passed."
+fi
+
+echo "🎉 Hooks successfully run"

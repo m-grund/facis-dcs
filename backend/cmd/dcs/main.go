@@ -2,6 +2,16 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -13,6 +23,7 @@ import (
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
+	pg "digital-contracting-service/internal/auth/db/pq"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
@@ -27,15 +38,9 @@ import (
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
 	"digital-contracting-service/migrations"
-	"flag"
-	"fmt"
-	"net"
-	"net/url"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
+	"digital-contracting-service/migrations/fcschemas"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/nats-io/nats.go"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
@@ -74,7 +79,12 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not connect to database")
 	}
-	defer db.Close()
+	defer func(db *sqlx.DB) {
+		err := db.Close()
+		if err != nil {
+			fmt.Printf("could not close database connection: %v\n", err)
+		}
+	}(db)
 
 	log.Printf(ctx, "Connecting to database")
 
@@ -82,6 +92,14 @@ func main() {
 	if err := migrations.Run(db); err != nil {
 		log.Fatalf(ctx, err, "Could not run database migrations")
 		os.Exit(1)
+	}
+
+	if os.Getenv("DCS_ISSUER") == "" {
+		log.Printf(ctx, "DCS_ISSUER configuration missing: DCS_ISSUER will be set to localhost as issuer")
+	} else {
+		if strings.Contains(os.Getenv("DCS_ISSUER"), ":") {
+			log.Fatalf(ctx, nil, "DCS_ISSUER must not contain service port")
+		}
 	}
 
 	// Connect to NATS (use NATS_URL env var or default)
@@ -94,22 +112,30 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not connect to events publisher")
 	}
-	defer cepPubClient.Close()
+	defer func(cepPubClient *event.CloudEventPubClient) {
+		err := cepPubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close cloud event publisher")
+		}
+	}(cepPubClient)
 
 	// Initialize OIDC validator and JWT authenticator.
-	oidcIssuerURL := os.Getenv("OIDC_ISSUER_URL")
-	oidcClientID := os.Getenv("OIDC_CLIENT_ID")
-	if oidcIssuerURL == "" || oidcClientID == "" {
-		log.Fatalf(ctx, nil, "OIDC configuration missing: OIDC_ISSUER_URL and OIDC_CLIENT_ID environment variables must be specified")
+	hydraIssuerURL := os.Getenv("HYDRA_ISSUER_URL")
+	hydraClientID := os.Getenv("HYDRA_CLIENT_ID")
+	if hydraIssuerURL == "" || hydraClientID == "" {
+		log.Fatalf(ctx, nil, "Hydra configuration missing: HYDRA_ISSUER_URL and HYDRA_CLIENT_ID must be set")
 	}
-	oidcValidator, err := middleware.NewOIDCValidator(ctx, middleware.OIDCConfig{
-		IssuerURL: oidcIssuerURL,
-		ClientID:  oidcClientID,
+	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
+		IssuerURL: hydraIssuerURL,
+		ClientID:  hydraClientID,
 	})
 	if err != nil {
-		log.Fatalf(ctx, err, "failed to initialize OIDC validator")
+		log.Fatalf(ctx, err, "failed to initialize Hydra JWT validator")
 	}
-	jwtAuth := auth.NewJWTAuthenticator(oidcValidator)
+
+	aAttemptRepo := &pg.PostgresAccessAttemptRepo{}
+	lockRepo := &pg.PostgresIPLockoutRepo{}
+	jwtAuth := auth.NewJWTAuthenticator(hydraJWTValidator, db, aAttemptRepo, lockRepo)
 
 	ctRepo := tplrepo.PostgresContractTemplateRepo{}
 	ctRTRepo := tplrepo.PostgresReviewTaskRepo{}
@@ -125,11 +151,12 @@ func main() {
 	cweCronJob.Start(ctx, db)
 
 	smCRepo := smrepo.PostgresContractRepo{}
+	smSTRepo := smrepo.PostgresSigningTaskRepo{}
 
 	// Initialize IPFS client
 	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
 	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
-	if oidcIssuerURL == "" || oidcClientID == "" {
+	if ipfsTenantBaseURL == "" || mfsBaseURL == "" {
 		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
 	}
 	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
@@ -140,7 +167,10 @@ func main() {
 		IPFSClient: ipfsAPIClient,
 		ARepo:      &aRepo,
 	}
-	outboxProcessor.Start(ctx)
+	err = outboxProcessor.Start(ctx)
+	if err != nil {
+		log.Fatalf(ctx, err, "failed to start outbox processor")
+	}
 
 	auditTrailReader := base.AuditTrailReader{
 		IPFSClient: ipfsAPIClient,
@@ -149,9 +179,26 @@ func main() {
 
 	// Initialize the Federated Catalogue client.
 	fcURL := os.Getenv("FEDERATED_CATALOGUE_API_URL")
+	fcClientID := os.Getenv("FEDERATED_CATALOGUE_CLIENT_ID")
+	fcClientSecret := os.Getenv("FEDERATED_CATALOGUE_CLIENT_SECRET")
 	var templateCatalogueClient *fcclient.FederatedCatalogueClient
-	if fcURL != "" {
-		templateCatalogueClient = fcclient.NewFederatedCatalogueClient(fcURL)
+	if fcURL != "" && fcClientID != "" && fcClientSecret != "" {
+		fcRealmURL := strings.TrimSpace(os.Getenv("FC_KEYCLOAK_REALM_URL"))
+		if fcRealmURL == "" {
+			log.Fatalf(ctx, nil, "Federated Catalogue requires FC_KEYCLOAK_REALM_URL (Keycloak for FC only, not Hydra)")
+		}
+		templateCatalogueClient, err = fcclient.NewFederatedCatalogueClient(fcclient.Config{
+			APIURL:           fcURL,
+			KeycloakRealmURL: fcRealmURL,
+			ClientID:         fcClientID,
+			ClientSecret:     fcClientSecret,
+		})
+		if err != nil {
+			log.Fatalf(ctx, err, "failed to initialize Federated Catalogue client")
+		}
+		if err := fcschemas.SyncWithRetry(ctx, templateCatalogueClient); err != nil {
+			log.Fatalf(ctx, err, "failed to sync federated catalogue schemas")
+		}
 	}
 
 	// Initialize the webhook platform (ORCE integration).
@@ -161,11 +208,11 @@ func main() {
 		webhookStore,
 		webhookDispatcher,
 		func(ctx context.Context, token string) (string, error) {
-			info, err := oidcValidator.ValidateToken(ctx, token)
+			info, err := hydraJWTValidator.ValidateToken(ctx, token)
 			if err != nil {
 				return "", err
 			}
-			return info.Username, nil
+			return info.ParticipantDID, nil
 		},
 		nil,
 	)
@@ -184,14 +231,15 @@ func main() {
 		templateRepositorySvc           templaterepository.Service
 	)
 	{
-		authSvc = service.NewAuth()
+		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
+		authSvc = service.NewAuth(presentationRepo)
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smSTRepo, auditTrailReader)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}

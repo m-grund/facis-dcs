@@ -2,6 +2,13 @@ package test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log"
+	"slices"
+	"testing"
+	"time"
+
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -13,10 +20,8 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/query"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	"slices"
-	"testing"
-	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +31,7 @@ func TestSubmit_SubmitContractInDraftState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -40,7 +45,7 @@ func TestSubmit_SubmitContractInDraftState(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
@@ -56,7 +61,7 @@ func TestSubmit_SubmitContractInDraftState(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
@@ -120,7 +125,7 @@ func TestSubmit_SubmitContractInDraftStateWithInvalidUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -134,7 +139,7 @@ func TestSubmit_SubmitContractInDraftStateWithInvalidUser(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Draft, creator)
 
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
@@ -145,7 +150,7 @@ func TestSubmit_SubmitContractInDraftStateWithInvalidUser(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
@@ -165,7 +170,7 @@ func TestSubmit_SubmitContractInNegotiationState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -218,7 +223,7 @@ func TestSubmit_SubmitContractInNegotiationState(t *testing.T) {
 	}
 
 	assert.Equal(t, contractstate.Submitted, result.State)
-	assert.Equal(t, *result.ContractVersion, 1)
+	assert.Equal(t, result.ContractVersion, 1)
 }
 
 func TestSubmit_SubmitContractInNegotiationStateWithOpenNegotiations(t *testing.T) {
@@ -227,7 +232,7 @@ func TestSubmit_SubmitContractInNegotiationStateWithOpenNegotiations(t *testing.
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -251,6 +256,9 @@ func TestSubmit_SubmitContractInNegotiationStateWithOpenNegotiations(t *testing.
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to marshal change request: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -295,7 +303,7 @@ func TestSubmit_SubmitContractInNegotiationStateWithRejectedNegotiations(t *test
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -319,6 +327,9 @@ func TestSubmit_SubmitContractInNegotiationStateWithRejectedNegotiations(t *test
 
 	var changeRequest map[string]interface{}
 	jsonChangeRequest, err := datatype.NewJSON(changeRequest)
+	if err != nil {
+		t.Fatalf("Failed to create negotiation: %v", err)
+	}
 	cmd := command.NegotiationCmd{
 		DID:           *did,
 		NegotiatedBy:  negotiators[0],
@@ -339,10 +350,14 @@ func TestSubmit_SubmitContractInNegotiationStateWithRejectedNegotiations(t *test
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
 
 	negotiations, err := repo.NRepo.ReadAllByContractDID(ctx, tx, *did)
 	if err != nil {
@@ -416,7 +431,7 @@ func TestSubmit_SubmitContractInNegationStateWithInvalidUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -430,7 +445,7 @@ func TestSubmit_SubmitContractInNegationStateWithInvalidUser(t *testing.T) {
 
 	createContract(t, db, repo, did, contractstate.Negotiation, creator)
 
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID:         *did,
 		UpdatedAt:   time.Now().UTC(),
@@ -441,7 +456,7 @@ func TestSubmit_SubmitContractInNegationStateWithInvalidUser(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 
@@ -462,7 +477,7 @@ func TestSubmit_SubmitContractInReviewedStateWithVerifying(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -529,7 +544,7 @@ func TestSubmit_OneReviewerApprovedContractInSubmittedState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -596,7 +611,7 @@ func TestSubmit_ApproveContractInSubmittedStateWithInvalidUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -644,7 +659,7 @@ func TestSubmit_RejectContractInSubmittedStateWithInvalidUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -692,7 +707,7 @@ func TestSubmit_AllReviewersApprovedContractInSubmittedState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -761,7 +776,7 @@ func TestSubmit_OneReviewerDeclinesContractInSubmittedState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -833,7 +848,7 @@ func TestSubmit_SubmitNonExistingContract(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -867,7 +882,7 @@ func TestSubmit_SubmitContractInSubmittedStateWithoutActionFlag(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -906,7 +921,7 @@ func TestSubmit_SubmitContractInReviewedStateWithInvalidUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -948,7 +963,7 @@ func TestSubmit_SubmitContractInSubmittedStateWithApproverUser(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -1000,7 +1015,7 @@ func TestSubmit_SubmitContractReviewedState(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -1052,7 +1067,7 @@ func TestSubmit_SubmitContractTemplateAfterUpdate(t *testing.T) {
 
 	cleanupContractTable(t, db)
 
-	did, err := base.GetDID()
+	did, err := base.GetDID(datatype.ContractResourceType)
 	if err != nil {
 		t.Fatalf("Failed to get new DID: %v", err)
 	}
@@ -1065,7 +1080,7 @@ func TestSubmit_SubmitContractTemplateAfterUpdate(t *testing.T) {
 	createContract(t, db, repo, did, contractstate.Draft, "Test User")
 
 	submittedBy := "Test User"
-	approver := "Test User 5"
+	approvers := []string{"Test User 5"}
 	cmd := command.SubmitCmd{
 		DID: *did,
 
@@ -1077,7 +1092,7 @@ func TestSubmit_SubmitContractTemplateAfterUpdate(t *testing.T) {
 			"Test User 3",
 			"Test User 4",
 		},
-		Approver: &approver,
+		Approvers: approvers,
 	}
 	handler := command.Submitter{
 

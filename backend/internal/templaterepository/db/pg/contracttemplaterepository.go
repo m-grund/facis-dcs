@@ -3,14 +3,17 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/templaterepository/db"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
+
 	"github.com/jmoiron/sqlx"
+
+	"digital-contracting-service/internal/templaterepository/db"
 )
 
 type PostgresContractTemplateRepo struct {
@@ -20,16 +23,16 @@ func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx
 	statement := `
         INSERT INTO contract_templates 
             (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible_persons, template_data)
+             responsible, template_data)
         SELECT 
             $1,
             document_number,
             CASE 
-                WHEN state IN ('APPROVED', 'REGISTERED') THEN version + 1
+                WHEN state IN ('APPROVED', 'PUBLISHED') THEN version + 1
                 ELSE 1
             END,
             'DRAFT', template_type, name, description, created_by, NOW(), NOW(), 
-            responsible_persons, template_data
+            responsible, template_data
         FROM contract_templates 
         WHERE did = $2
         RETURNING version
@@ -49,10 +52,10 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 	statement := `
         INSERT INTO contract_templates_history 
             (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible_persons, template_data)
+             responsible, template_data)
         SELECT 
             did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-            responsible_persons, template_data
+            responsible, template_data
         FROM contract_templates 
         WHERE did = $1
     `
@@ -63,7 +66,7 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 func (r *PostgresContractTemplateRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractTemplateHistory, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible_persons
+               created_by, created_at, updated_at, template_data, template_type, responsible
         FROM contract_templates_history WHERE did = $1
     `
 	var ct []db.ContractTemplateHistory
@@ -99,38 +102,47 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplate, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible_persons
+               created_by, created_at, updated_at, template_data, template_type, responsible
         FROM contract_templates WHERE did = $1
     `
 	var ct db.ContractTemplate
 	err := tx.GetContext(ctx, &ct, query, did)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("contract template with DID %s not found", did)
+			return nil, fmt.Errorf("%w: did=%s", db.ErrContractTemplateNotFound, did)
 		}
 		return nil, err
 	}
 	return &ct, nil
 }
 
-func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractTemplateMetadata, error) {
+func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible_persons
+        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible
         FROM contract_templates
     `
+
+	var params []any
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
+		query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+		params = append(params, pagination.Limit, offset)
+	}
+
 	var cts []db.ContractTemplateMetadata
-	err := tx.SelectContext(ctx, &cts, query)
+	err := tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
 		return []db.ContractTemplateMetadata{}, err
 	}
 	return cts, nil
 }
 
-func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractTemplateMetadata, error) {
+func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible_persons
+        SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible
         FROM contract_templates
     `
+
 	conditions, params, err := createSearchConditions(values)
 	if err != nil {
 		return nil, err
@@ -139,10 +151,17 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Conte
 		query += " WHERE " + *conditions
 	}
 
+	if pagination.Limit > 0 {
+		offset := (pagination.Offset - 1) * pagination.Limit
+		n := len(params) + 1
+		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
+		params = append(params, pagination.Limit, offset)
+	}
+
 	var cts []db.ContractTemplateMetadata
 	err = tx.SelectContext(ctx, &cts, query, params...)
 	if err != nil {
-		return []db.ContractTemplateMetadata{}, err
+		return nil, err
 	}
 	return cts, nil
 }
@@ -234,7 +253,6 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	if len(values.TemplateData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.TemplateData)
-		paramIndex++
 	}
 	l := len(" AND")
 	if len(conditions) > l {
@@ -272,8 +290,8 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 	if len(data.TemplateType) > 0 {
 		addParam("template_type", data.TemplateType)
 	}
-	if data.ResponsiblePersons != nil {
-		addParam("responsible_persons", data.ResponsiblePersons)
+	if data.Responsible != nil {
+		addParam("responsible", data.Responsible)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")

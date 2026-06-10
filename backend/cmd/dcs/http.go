@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+	"sync"
+	"time"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -22,19 +27,39 @@ import (
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
+	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/service"
 	"digital-contracting-service/internal/webhookplatform"
-	"net/http"
-	"net/url"
-	"sync"
-	"time"
 
 	"errors"
 
+	"strconv"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
+)
+
+var (
+	httpRequestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "Duration of HTTP requests in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "path", "status"},
+	)
+	httpRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "path", "status"},
+	)
 )
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
@@ -117,10 +142,13 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	// Outer mux: routes /orce/* to the webhook platform, everything else to Goa.
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/orce/", http.StripPrefix("/orce", webhookPlatform))
+	outerMux.Handle("/metrics", promhttp.Handler())
 	outerMux.Handle("/", mux)
 
 	var handler http.Handler = outerMux
 	handler = service.RequestContextMiddleware(handler)
+	handler = middleware.InjectIP(handler)
+	handler = metricsMiddleware(handler)
 	if dbg {
 		// Log query and response bodies if debug logs are enabled.
 		handler = debug.HTTP()(handler)
@@ -219,4 +247,32 @@ func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
 	}
 
 	return resp
+}
+
+func metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		start := time.Now()
+		wrapped := &responseWriter{ResponseWriter: w, status: 200}
+		next.ServeHTTP(wrapped, r)
+		duration := time.Since(start).Seconds()
+		status := strconv.Itoa(wrapped.status)
+
+		httpRequestDuration.WithLabelValues(r.Method, r.URL.Path, status).Observe(duration)
+		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, status).Inc()
+	})
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
 }

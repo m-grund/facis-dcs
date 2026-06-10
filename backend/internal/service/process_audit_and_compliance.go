@@ -2,14 +2,16 @@ package service
 
 import (
 	"context"
+	"time"
+
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/processauditandcompliance/query"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
@@ -35,11 +37,13 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return nil, err
 	}
 
-	qry := query.GetAuditLogQry{
+	qry := qry2.GetAuditLogQry{
 		Scope:     scope,
-		AuditedBy: middleware.GetUsername(ctx),
+		AuditedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
 	}
-	handler := query.Auditor{
+	handler := qry2.Auditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}
@@ -72,9 +76,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		}
 
 		result = append(result, &processauditandcompliance.PACAuditResponse{
-			Component: req.Scope,
-			Did:       did,
-			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			Component:  req.Scope,
+			Did:        did,
+			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+			AuditTrail: history,
 		})
 	}
 

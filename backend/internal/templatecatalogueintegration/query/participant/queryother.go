@@ -2,16 +2,15 @@ package participant
 
 import (
 	"context"
-	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"fmt"
 
+	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templatecatalogueintegration/internal/ptr"
 )
 
 type GetOtherParticipantsQry struct {
 	ParticipantID string
-	Token         string
 }
 
 type GetOtherParticipantsHandler struct {
@@ -38,7 +37,7 @@ RETURN {
 
 func (h *GetOtherParticipantsHandler) Handle(qry GetOtherParticipantsQry) ([]*templatecatalogueintegration.TemplateCatalogueParticipantSummary, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if qry.ParticipantID == "" {
 		return nil, fmt.Errorf("participant id is empty")
@@ -51,7 +50,7 @@ func (h *GetOtherParticipantsHandler) Handle(qry GetOtherParticipantsQry) ([]*te
 		},
 	}
 
-	queryResp, err := h.FCClient.Query(h.Ctx, qry.Token, reqBody)
+	queryResp, err := h.FCClient.Query(h.Ctx, reqBody)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,6 @@ export interface ContractTemplateCopyRequest {
   did: string
 }
 
-
 export interface ContractTemplateSubmitRequest {
   did: string
   updated_at: string
@@ -58,7 +57,7 @@ export interface ContractTemplateSearchRequest {
   filter?: string
 }
 
-export interface ContractTemplateRetrieveRequest {}
+export type ContractTemplateRetrieveRequest = Record<string, unknown>
 
 export interface ContractTemplateRetrieveByIdRequest {
   did: string
@@ -88,10 +87,15 @@ export interface ContractTemplateArchiveRequest {
 
 export interface ContractTemplateRegisterRequest {
   did: string
-  updated_at: string
+  version: number
 }
 
 export interface ContractTemplateAuditRequest {
+  did: string
+  updated_at: string
+}
+
+export interface ContractTemplatePublishRequest {
   did: string
   updated_at: string
 }

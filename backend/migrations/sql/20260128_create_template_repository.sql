@@ -1,4 +1,4 @@
-CREATE TYPE contract_template_state AS ENUM ('DRAFT', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'REGISTERED', 'DELETED', 'DEPRECATED');
+CREATE TYPE contract_template_state AS ENUM ('DRAFT', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'PUBLISHED', 'DELETED', 'DEPRECATED');
 
 
 CREATE TYPE contract_template_type AS ENUM ('FRAME_CONTRACT', 'SUB_CONTRACT');
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS contract_templates
     state           contract_template_state NOT NULL,
     template_type   contract_template_type  NOT NULL,
 
-    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+    responsible     JSONB DEFAULT '{}'::jsonb,
 
     document_number VARCHAR(255),
 
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS contract_templates_history
     state           contract_template_state NOT NULL,
     template_type   contract_template_type  NOT NULL,
 
-    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+    responsible     JSONB DEFAULT '{}'::jsonb,
 
     document_number VARCHAR(255),
     version         INT NOT NULL,

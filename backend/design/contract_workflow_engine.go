@@ -103,7 +103,7 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("contract_data", Any, "The data of that contract")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
@@ -113,6 +113,9 @@ var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
+
+	Attribute("offset", Int, "Start index of results")
+	Attribute("limit", Int, "Page size of results")
 })
 
 var ContractItem = Type("ContractItem", func() {
@@ -128,7 +131,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
@@ -224,7 +227,7 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
 	Attribute("contract_data", Any, "The data of that contract")
 
@@ -256,6 +259,9 @@ var ContractSearchRequest = Type("ContractSearchRequest", func() {
 
 	Token("token", String, "JWT token")
 
+	Attribute("offset", Int, "Start index of results")
+	Attribute("limit", Int, "Page size of results")
+
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("contract_version", Int, "The version number of the contract")
 	Attribute("state", String, "The state of the contract")
@@ -279,7 +285,7 @@ var ContractSearchResponse = Type("ContractSearchResponse", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 
-	Attribute("responsible_persons", Any, "Persons responsible for this contract, including the creator, approver, reviewers, and negotiators")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approver, reviewers, and negotiators")
 
 	Attribute("created_at", String, "The timestamp when the contract template was created")
 
@@ -321,10 +327,9 @@ var ContractNegotiationRespondRequest = Type("ContractNegotiationRespondRequest"
 	Attribute("did", String, "Decentralized Identifier of the contract")
 
 	Attribute("action_flag", String, "Decision for that negotiation (ACCEPTING | REJECTING)")
-	Attribute("responded_by", String, "The user who responded to that negotiation")
 	Attribute("rejection_reason", String, "The reason for that rejection")
 
-	Required("id", "did", "action_flag", "responded_by")
+	Required("id", "did", "action_flag")
 })
 
 var ContractNegotiationRespondResponse = Type("ContractNegotiationRespondResponse", func() {
@@ -533,6 +538,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 		})
@@ -559,6 +565,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 		})
@@ -585,8 +592,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
-			Scope("Contract Approver")
+			Scope("Sys. Contract Reviewer")
 		})
 
 		Payload(ContractReviewRequest)
@@ -598,6 +606,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		HTTP(func() {
 			GET("/contract/review")
 			Param("did")
+
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -612,6 +621,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -628,7 +638,8 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			GET("/contract/retrieve")
-
+			Param("offset")
+			Param("limit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -645,6 +656,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -676,6 +688,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -708,6 +721,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -724,6 +738,9 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			GET("/contract/search")
+			Param("offset")
+			Param("limit")
+
 			Param("did")
 			Param("contract_version")
 			Param("state")
@@ -847,7 +864,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(ContractAuditRequest)

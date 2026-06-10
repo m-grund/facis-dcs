@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
+import { bindHydraLoginChallengeFromURL } from './hydra-login-guard'
 import { router } from './router/router'
 import { useErrorStore } from './stores/error-store'
 
@@ -14,10 +15,12 @@ window.addEventListener('unhandledrejection', (event) => {
 
 app.config.errorHandler = (err, _instance, _info) => {
   const errorStore = useErrorStore()
-  const message = err instanceof Error ? err.message : `Error: ${err ? String(err) : 'unknown'}`
+  const message = err instanceof Error ? err.message : `Error: ${err ? JSON.stringify(err) : 'unknown'}`
   errorStore.add(message)
 }
 
 app.use(router)
 
-app.mount('#app')
+void bindHydraLoginChallengeFromURL().finally(() => {
+  app.mount('#app')
+})

@@ -1,18 +1,24 @@
 import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth-store'
-import { useTemplateDraftStore } from '../store/templateDraftStore'
 
 export const useTemplatePermissions = () => {
   const authStore = useAuthStore()
-  const draftStore = useTemplateDraftStore()
 
   const isCreator = computed(() => {
-    return draftStore.created_by === authStore.user?.username
+    return authStore.user?.roles?.includes('TEMPLATE_CREATOR') ?? false
+  })
+
+  const isReviewer = computed(() => {
+    return authStore.user?.roles?.includes('TEMPLATE_REVIEWER') ?? false
+  })
+
+  const isApprover = computed(() => {
+    return authStore.user?.roles?.includes('TEMPLATE_APPROVER') ?? false
   })
 
   const isManager = computed(() => {
     return authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false
   })
 
-  return { isCreator, isManager }
+  return { isCreator, isReviewer, isApprover, isManager }
 }

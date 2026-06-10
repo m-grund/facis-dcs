@@ -4,6 +4,7 @@ tmp
 .vscode
 .DS_Store
 .claude/
+node_modules
 backend/gen
 
 frontend/node_modules
@@ -20,6 +21,9 @@ frontend/.cache
 frontend/ClientApp/.vite
 
 deployment/certs
+
+# OID4VP demo secrets, generate via testWallet/scripts/generate_dev_keys.py
+testWallet/dcs_wallet/__pycache__/
 
 # BDD test build artifacts
 bdd-executor

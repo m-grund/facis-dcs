@@ -29,6 +29,9 @@ service:
   type: ClusterIP
   port: 8991
 
+serviceMonitor:
+  enabled: false
+
 ingress:
   enabled: false
   className: ""
@@ -54,6 +57,26 @@ autoscaling:
 volumes: []
 volumeMounts: []
 
+oid4vp:
+  trust:
+    enabled: true
+    mountPath: /app/config/oid4vp
+    configMapName: ""
+    issuerDID: did:web:dev.example:issuer:poa
+  demoWallet:
+    secretName: ""
+    # When false, vault-init seeds from chart files/oid4vp/*.
+    autoGenerate: false
+
+vault:
+  enabled: false
+  injector:
+    enabled: false
+  server:
+    dev:
+      enabled: true
+      devRootToken: root
+
 customCA:
   enabled: false
   configMapName: ""
@@ -75,18 +98,9 @@ paths:
   api: ""
   ui: ""
 
-# OIDC / authentication
-# issuerURL is derived from keycloak.route.path + istio/ingress host when not set explicitly
-oidc:
-  issuerURL: ""
-  clientID: "[oidc-client-id]"
-  redirectURI: "[oidc-redirect-uri]"
-  logoutRedirectURI: "[oidc-logout-redirect-uri]"
-  realm: "gaia-x"
-  keycloakScheme: "https"
-  issuerURLSecretRef:
-    name: ""
-    key: "OIDC_ISSUER_URL"
+# Keycloak realm URL for Federated Catalogue.
+fcKeycloak:
+  realmURL: ""
 
 # Database connection – derived from the postgresql sub-chart when not set explicitly
 database:
@@ -135,6 +149,10 @@ keycloak:
   route:
     path: ""
 
+hydra:
+  enabled: false
+  clients: []
+
 nats:
   enabled: false
 
@@ -150,6 +168,13 @@ federatedCatalogue:
   secretRef:
     name: ""
     key: "FEDERATED_CATALOGUE_API_URL"
+  # Keycloak client_credentials for outbound FC API calls
+  oauth:
+    clientID: "dcs-fc-client"
+    clientSecret: ""
+    clientSecretSecretRef:
+      name: ""
+      key: "FEDERATED_CATALOGUE_CLIENT_SECRET"
   resources:
     requests:
       cpu: 100m
@@ -157,3 +182,48 @@ federatedCatalogue:
     limits:
       cpu: 500m
       memory: 1Gi
+
+# ---- Optional monitoring stack (Prometheus, Grafana, Alertmanager) ----------------
+monitoring:
+  enabled: false
+
+grafana:
+  enabled: false
+  adminPassword: YourStrongPassword
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+
+prometheus:
+  enabled: false
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    serviceMonitorSelectorNilUsesHelmValues: true
+    podMonitorSelectorNilUsesHelmValues: true
+
+alertmanager:
+  enabled: false
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+nodeExporter:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false

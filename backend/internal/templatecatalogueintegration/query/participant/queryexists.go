@@ -10,7 +10,6 @@ import (
 // ParticipantExistsQry checks whether a participant exists in the FC graph.
 type ParticipantExistsQry struct {
 	ParticipantID string
-	Token         string
 }
 
 type ParticipantExistsResult struct {
@@ -33,7 +32,7 @@ LIMIT 1
 
 func (h *ParticipantExistsHandler) Handle(qry ParticipantExistsQry) (*ParticipantExistsResult, error) {
 	if h.FCClient == nil {
-		return nil, fmt.Errorf("federated catalogue client is nil")
+		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
 	if qry.ParticipantID == "" {
 		return nil, fmt.Errorf("participant id is empty")
@@ -46,11 +45,11 @@ func (h *ParticipantExistsHandler) Handle(qry ParticipantExistsQry) (*Participan
 		},
 	}
 
-	queryResp, err := h.FCClient.Query(h.Ctx, qry.Token, reqBody)
+	queryResp, err := h.FCClient.Query(h.Ctx, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	exists := !(queryResp.TotalCount == 0 || len(queryResp.Items) == 0)
+	exists := queryResp.TotalCount != 0 && len(queryResp.Items) != 0
 	return &ParticipantExistsResult{Exists: exists}, nil
 }

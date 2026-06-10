@@ -1,18 +1,23 @@
 package event
 
 import (
+	"time"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
-	"time"
 )
 
 // AuditEvent is emitted when the contract is audited
 type AuditEvent struct {
 	DID           string                      `json:"did"`
+	HolderDID     string                      `json:"holder_did"`
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
 	Scope         componenttype.ComponentType `json:"scope"`
+	UserRoles     userrole.UserRoles          `json:"user_roles"`
 }
 
 // EventType implements the Event interface.

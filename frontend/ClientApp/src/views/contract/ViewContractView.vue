@@ -3,7 +3,7 @@ import ContractManagerActions from '@/components/contract/ContractManagerActions
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
-import type { SelectedUserRole } from '@/models/user'
+import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -30,6 +30,7 @@ import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -43,30 +44,32 @@ const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueV
 const { preprocessContractData } = useContractDataPreprocess()
 const { convertContractToPlainTextBlocks } = useContractPlainTextConverter()
 const { activeTab } = storeToRefs(contractEditorUiStore)
-const { setActiveTab } = contractEditorUiStore
 
 const errorStore = useErrorStore()
 
+const { isCreator } = useContractPermissions()
+
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
-
-const isCreator = computed(() => {
-  return contract.value?.created_by === authStore.user?.username
-})
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
-const isAuditingAuthorized = computed(() => 
-  (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some(role => authStore.user?.roles?.includes(role)) ?? false
+const isAuditingAuthorized = computed(
+  () =>
+    (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some((role) =>
+      authStore.user?.roles?.includes(role),
+    ) ?? false,
 )
 
-const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft).filter(tab => {
-  // Don't show diff tab in the contract view.
-  return tab.id !== 'diff'
-}))
+const tabs = computed(() =>
+  contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft).filter((tab) => {
+    // Don't show diff tab in the contract view.
+    return tab.id !== 'diff'
+  }),
+)
 
 watch(
   () => !!route.params.did,
@@ -78,7 +81,7 @@ watch(
           contract.value = await contractWorkflowService.retrieveById({ did: id })
           applyContractDataToDraft(contract.value?.contract_data)
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to load contract', err)
       }
     }
@@ -107,14 +110,11 @@ watch(
   { deep: true },
 )
 
-const submitContract = async (result: SelectedUserRole[]) => {
+const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContractAssignees) => {
   if (!contract.value) return
   const isSemanticValueValid = verifySemanticValues()
   if (!isSemanticValueValid) return
   try {
-    const reviewers = result.filter((user) => user.role === 'CONTRACT_REVIEWER').map((user) => user.user.username)
-    const approvers = result.filter((user) => user.role === 'CONTRACT_APPROVER').map((user) => user.user.username)
-    const negotiators = result.filter((user) => user.role === 'CONTRACT_NEGOTIATOR').map((user) => user.user.username)
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -123,7 +123,7 @@ const submitContract = async (result: SelectedUserRole[]) => {
       negotiators,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await navStore.goToPreviousRoute()
     }
   } catch (error) {
     console.error('Contract Submission failed', error)
@@ -140,7 +140,7 @@ const submitRejectedTemplate = async () => {
       updated_at: contract.value.updated_at,
     })
     if (response.did) {
-      navStore.goToPreviousRoute()
+      await navStore.goToPreviousRoute()
     }
   } catch (error) {
     console.error('Contract Submission failed', error)
@@ -148,7 +148,6 @@ const submitRejectedTemplate = async () => {
 }
 
 const verifySemanticValues = (): boolean => {
-
   const subTemplateSemanticConditions = templateDraftStore?.subTemplateSnapshots?.map((subTemplate) => {
     return {
       templateId: subTemplate.did,
@@ -167,10 +166,10 @@ const verifySemanticValues = (): boolean => {
   if (result.isValid) {
     return true
   } else {
-    result.errors.forEach(error => errorStore.add(error.message))
+    result.errors.forEach((error) => errorStore.add(error.message))
   }
   // go to content tab and highlight semantic inconsistencies
-  setActiveTab('content')
+  contractEditorUiStore.setActiveTab('content')
   return false
 }
 
@@ -222,21 +221,21 @@ const exportPdf = async () => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-full -mx-4 md:-mx-8 -my-4 md:-my-8">
+  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <div v-if="!!contract">
-      <div class="flex-1 flex flex-col">
+      <div class="flex flex-1 flex-col">
         <!-- Tabs -->
-        <div class="sticky top-0 z-10 shrink-0 bg-base-100 border-b border-base-300">
-          <div class="max-w-4xl mx-auto px-6 pt-3">
-            <p class="text-xs font-black uppercase tracking-widest text-base-content/40 mb-2">View Contract</p>
-            <div role="tablist" class="tabs tabs-border tabs-lg">
+        <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
+          <div class="mx-auto max-w-4xl px-6 pt-3">
+            <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">View Contract</p>
+            <div role="tablist" class="tabs-border tabs tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
                 class="tab"
                 :class="{ 'tab-active text-primary': activeTab === tab.id }"
-                @click="setActiveTab(tab.id)"
+                @click="contractEditorUiStore.setActiveTab(tab.id)"
               >
                 {{ tab.label }}
               </a>
@@ -244,15 +243,15 @@ const exportPdf = async () => {
           </div>
         </div>
         <!-- Tab content -->
-        <div class="grow mt-5">
-          <div class="max-w-4xl mx-auto p-6">
+        <div class="mt-5 grow">
+          <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" disabled />
               </div>
 
               <div v-show="activeTab === 'content'">
-                <div class="card bg-base-100 border border-base-300 shadow-sm">
+                <div class="card border border-base-300 bg-base-100 shadow-sm">
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
@@ -271,7 +270,7 @@ const exportPdf = async () => {
 
               <template v-if="isAuditingAuthorized">
                 <div v-show="activeTab === 'audit'">
-                  <div class="card bg-base-100 border border-base-300 shadow-sm">
+                  <div class="card border border-base-300 bg-base-100 shadow-sm">
                     <div class="card-body">
                       <h2 class="card-title text-sm">Audit History</h2>
                       <AuditView />
@@ -285,25 +284,22 @@ const exportPdf = async () => {
       </div>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <div class="max-w-4xl mx-auto px-6 py-3 flex flex-col md:flex-row gap-3">
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
-        <template v-if="isCreator">
-          <SubmitSelectionDialog
-            v-if="contract?.state === ContractState.draft"
-            dialog-type="contract"
-            @submit="submitContract"
-            class="btn btn-primary flex-1"
-          />
-          <button
-            v-else-if="contract?.state === ContractState.rejected"
-            class="btn btn-primary flex-1"
-            @click="submitRejectedTemplate"
-          >
-            Submit
-          </button>
-        </template>
-        <ContractManagerActions v-if="contract" :contract="contract" class="btn btn-primary flex-1" />
+        <SubmitSelectionDialog
+          v-if="contract?.state === ContractState.draft && isCreator"
+          class="btn flex-1 btn-primary"
+          @submit="submitContract"
+        />
+        <button
+          v-else-if="contract?.state === ContractState.rejected && isCreator"
+          class="btn flex-1 btn-primary"
+          @click="submitRejectedTemplate"
+        >
+          Submit
+        </button>
+        <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>
   </div>

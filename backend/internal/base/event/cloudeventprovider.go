@@ -43,7 +43,7 @@ func NewNatsPubClient(topic string, natsURL string) (*CloudEventPubClient, error
 		},
 	}, cloudeventprovider.ConnectionTypePub, topic)
 	if err != nil {
-		return nil, errors.New("Could not create cloud event provider client")
+		return nil, errors.New("could not create cloud event provider client")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -78,11 +78,9 @@ func NewNatsSubClient(topic string, natsURL string) (*CloudEventSubClient, error
 			Url: natsURL,
 		},
 	}, cloudeventprovider.ConnectionTypeSub, topic)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
 	if err != nil {
-		return nil, errors.New("Could not create cloud event provider client")
+		return nil, errors.New("could not create cloud event provider client")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &CloudEventSubClient{ctx, cancel, topic, client}, nil
 }
