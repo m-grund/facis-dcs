@@ -244,7 +244,7 @@ customPolicyAgent:
 ipfs:
   enabled: true
   persistence:
-    enabled: false
+    enabled: true
   api:
     cors:
       enabled: true
@@ -261,7 +261,7 @@ ipfs:
     apiNodePort: 30501
 
 ipfsDocumentManager:
-  enabled: false
+  enabled: true
   service:
     type: NodePort
     nodePort: 30481

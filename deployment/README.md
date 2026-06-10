@@ -81,7 +81,15 @@ Use this if you prefer separate terminals or step-by-step debugging.
 
 ```bash
 helm dependency update ./deployment/helm
+
+# First setup
+helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
+
+# Upgrade current installation
 helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
+
+# For uninstalling the installation
+`helm uninstall dcs`
 ```
 
 The dev values enable automatic signer certificate-chain provisioning for C2PA:
@@ -102,7 +110,7 @@ This starts all dependencies as NodePort services forwarded to `localhost`:
 | Neo4j HTTP           | `http://localhost:30474`         |
 | Neo4j Bolt           | `bolt://localhost:30687`         |
 | Federated Catalogue  | `http://localhost:30081`         |
-| IPFS Document Manager | `http://localhost:30800`        |
+| IPFS Document Manager | `http://localhost:30481`        |
 | IPFS Kubo RPC        | `http://localhost:30501`         |
 
 The Keycloak `gaia-x` realm is imported automatically on first start.

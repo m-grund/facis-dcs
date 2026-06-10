@@ -21,7 +21,7 @@ echo "=== Setting up dev environment ==="
 # Setup Helm
 echo "Updating Helm dependencies and deploying to Kubernetes..."
 helm dependency update "$HELM_CHART_PATH"
-helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
+helm install "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
 
 # Setup .env
 if [ ! -f backend/.env ]; then
