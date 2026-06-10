@@ -229,8 +229,9 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
 	handler := command.Applier{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:       s.DB,
+		CRepo:    s.CRepo,
+		DSClient: s.DSSClient,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

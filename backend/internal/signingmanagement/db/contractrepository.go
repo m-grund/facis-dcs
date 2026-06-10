@@ -94,7 +94,7 @@ type ContractUpdateData struct {
 }
 
 type ContractSignature struct {
-	ContractDID    string     `json:"contract_did"`
+	ContractDID    string     `db:"contract_did"`
 	SignerDID      string     `db:"signer_did"`
 	CredentialType string     `db:"credential_type"`
 	Status         string     `db:"status"`
