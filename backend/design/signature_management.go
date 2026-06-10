@@ -9,8 +9,8 @@ var SMContractRetrieveRequest = Type("SMContractRetrieveRequest", func() {
 
 	Token("token", String, "JWT token")
 
-	Attribute("offset", Int, "Start index of results")
-	Attribute("limit", Int, "Page size of results")
+	//	Attribute("offset", Int, "Start index of results")
+	//	Attribute("limit", Int, "Page size of results")
 })
 
 var SMContractListItem = Type("SMContractListItem", func() {
@@ -248,6 +248,8 @@ var _ = Service("SignatureManagement", func() {
 
 		HTTP(func() {
 			GET("/signature/retrieve")
+			//			Param("offset")
+			//			Param("limit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

@@ -155,14 +155,14 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			return nil, fmt.Errorf("could not create signing task state: %w", err)
 		}
 
-		metadata, exists := didToMetadata[data.DID]
+		metadata, exists := didToMetadata[data.ContractDID]
 		var contractVersion int
 		if exists {
 			contractVersion = metadata.ContractVersion
 		}
 
 		signingTaskItems = append(signingTaskItems, SigningTaskItem{
-			DID:             data.DID,
+			DID:             data.ContractDID,
 			State:           state,
 			ContractVersion: contractVersion,
 			SignerDID:       data.SignerDID,
