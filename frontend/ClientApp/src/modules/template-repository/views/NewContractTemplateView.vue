@@ -71,7 +71,8 @@ watch(
       // load template data into draftStore
       const did = Array.isArray(route.params.did) ? route.params.did[0] : route.params.did
       if (!did) return
-      contractTemplateService.retrieveById({ did })
+      contractTemplateService
+        .retrieveById({ did })
         .then((template) => {
           if (!template) {
             draftStore.reset()

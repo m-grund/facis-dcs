@@ -303,7 +303,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function findingBadgeClass(finding: AuditFinding): "badge-success" | "badge-error" | "badge-warning" {
+function findingBadgeClass(finding: AuditFinding): 'badge-success' | 'badge-error' | 'badge-warning' {
   const result = auditResult(finding)
   if (result === 'passed') {
     return 'badge-success'
@@ -362,7 +362,7 @@ function auditResult(finding: AuditFinding): AuditResult {
   return 'review'
 }
 
-function auditResultLabel(finding: AuditFinding): "Passed" | "Failed" | "Needs review" {
+function auditResultLabel(finding: AuditFinding): 'Passed' | 'Failed' | 'Needs review' {
   const result = auditResult(finding)
   if (result === 'passed') {
     return 'Passed'
@@ -405,7 +405,7 @@ function severityLabel(finding: AuditFinding): string {
   return finding.status?.trim() ?? 'not set'
 }
 
-function severityBadgeClass(finding: AuditFinding): "badge-success" | "badge-error" | "badge-warning" | "badge-ghost" {
+function severityBadgeClass(finding: AuditFinding): 'badge-success' | 'badge-error' | 'badge-warning' | 'badge-ghost' {
   const severity = finding.status?.trim().toLowerCase()
   if (
     severity === 'error' ||
