@@ -93,15 +93,6 @@ type ContractUpdateData struct {
 	ContractData    *datatype.JSON `db:"contract_data"`
 }
 
-type SearchValues struct {
-	DID             string
-	ContractVersion int
-	State           string
-	Name            string
-	Description     string
-	ContractData    string
-}
-
 type ContractSignature struct {
 	ContractDID    string     `json:"contract_did"`
 	SignerDID      string     `db:"signer_did"`
@@ -110,7 +101,7 @@ type ContractSignature struct {
 	SignedAt       *time.Time `db:"signed_at"`
 	RevokedAt      *time.Time `db:"revoked_at"`
 	IpfsCID        *string    `db:"ipfs_cid"`
-	SignatureBytes *string    `db:"signature_bytes"`
+	SignatureBytes []byte     `db:"signature_bytes"`
 }
 
 type ContractSignatureEnvelope struct {
@@ -143,10 +134,10 @@ type ContractRepo interface {
 	ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*Contract, error)
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)
 	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]ContractMetadata, error)
-	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues, pagination datatype.Pagination) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 
-	CreateSignature(ctx context.Context, tx *sqlx.Tx, signature *ContractSignature) error
+	CreateSignature(ctx context.Context, tx *sqlx.Tx, signature ContractSignature) error
+	RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error
 	ReadLatestEnvelopeByContractDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractSignatureEnvelope, error)
 	ReadAllSigningTasks(ctx context.Context, tx *sqlx.Tx) ([]ContractSigningTask, error)
 	CountSignatureForContractDID(ctx context.Context, tx *sqlx.Tx, did string) (int, error)

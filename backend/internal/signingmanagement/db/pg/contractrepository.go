@@ -3,10 +3,10 @@ package pg
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -67,36 +67,6 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 	return cts, nil
 }
 
-func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
-	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
-        FROM contracts
-        WHERE state IN ('APPROVED', 'SIGNED')
-    `
-
-	conditions, params, err := createSearchConditions(values)
-	if err != nil {
-		return nil, err
-	}
-	if len(params) > 0 {
-		query += " AND " + *conditions
-	}
-
-	if pagination.Limit > 0 {
-		offset := (pagination.Offset - 1) * pagination.Limit
-		n := len(params) + 1
-		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", n, n+1)
-		params = append(params, pagination.Limit, offset)
-	}
-
-	var cts []db.ContractMetadata
-	err = tx.SelectContext(ctx, &cts, query, params...)
-	if err != nil {
-		return nil, err
-	}
-	return cts, nil
-}
-
 func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
         SELECT did, state, updated_at, created_by, contract_version
@@ -125,52 +95,9 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 	return err
 }
 
-func createSearchConditions(values db.SearchValues) (*string, []interface{}, error) {
-	conditions := ""
-	var params []interface{}
-	paramIndex := 1
-
-	if len(values.DID) > 0 {
-		conditions += ` did = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, values.DID)
-		paramIndex++
-	}
-	if values.ContractVersion > 0 {
-		conditions += ` contract_version = $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, values.ContractVersion)
-		paramIndex++
-	}
-	if len(values.State) > 0 {
-		conditions += ` state = $` + strconv.Itoa(paramIndex) + ` AND`
-		state := strings.ToUpper(values.State)
-		params = append(params, state)
-		paramIndex++
-	}
-	if len(values.Name) > 0 {
-		conditions += ` name ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+values.Name+"%")
-		paramIndex++
-	}
-	if len(values.Description) > 0 {
-		conditions += ` description ILIKE $` + strconv.Itoa(paramIndex) + ` AND`
-		params = append(params, "%"+values.Description+"%")
-		paramIndex++
-	}
-	if len(values.ContractData) > 0 {
-		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
-		params = append(params, values.ContractData)
-	}
-	l := len(" AND")
-	if len(conditions) > l {
-		conditions = conditions[:len(conditions)-l]
-	}
-
-	return &conditions, params, nil
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 
-func (r *PostgresContractRepo) CreateSignatureRecord(ctx context.Context, tx *sqlx.Tx, signature *db.ContractSignature) error {
+func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx, signature db.ContractSignature) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO contract_signatures
 			(contract_did, signer_did, credential_type, signature_bytes, status)
@@ -181,6 +108,20 @@ func (r *PostgresContractRepo) CreateSignatureRecord(ctx context.Context, tx *sq
 		return fmt.Errorf("could not create contract signature: %w", err)
 	}
 
+	return nil
+}
+
+func (r *PostgresContractRepo) RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error {
+	now := time.Now().UTC()
+	_, err := tx.ExecContext(ctx,
+		`UPDATE contract_signatures
+		    SET status = 'REVOKED', revoked_at = $1
+		  WHERE contract_did = $2 AND signer_did = $3 AND status != 'REVOKED'`,
+		now, did, signerDID,
+	)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -262,6 +203,30 @@ func (r *PostgresContractRepo) FetchContractPDFBytes(ctx context.Context, tx *sq
 // rebuildContractPDFFromJSONLD re-generates the base PDF from embedded JSON-LD bytes,
 // fetching the contract metadata required for rendering.
 func (r *PostgresContractRepo) RebuildContractPDFFromJSONLD(ctx context.Context, tx *sqlx.Tx, did string, jsonld []byte) ([]byte, error) {
+
+	type contractMeta struct {
+		DID             string    `db:"did"`
+		State           string    `db:"state"`
+		ContractVersion int       `db:"contract_version"`
+		Name            *string   `db:"name"`
+		Description     *string   `db:"description"`
+		CreatedBy       string    `db:"created_by"`
+		CreatedAt       time.Time `db:"created_at"`
+		UpdatedAt       time.Time `db:"updated_at"`
+	}
+	var meta contractMeta
+	if err := tx.GetContext(ctx, &meta,
+		`SELECT did, state, COALESCE(contract_version, 1) AS contract_version,
+		        name, description, created_by, created_at, updated_at
+		   FROM contracts WHERE did = $1`, did,
+	); err != nil {
+		return nil, fmt.Errorf("fetch contract meta: %w", err)
+	}
+
+	var rawJSON json.RawMessage
+	_ = tx.QueryRowContext(ctx,
+		`SELECT contract_data FROM contracts WHERE did = $1`, did,
+	).Scan(&rawJSON)
 
 	name := ""
 	if meta.Name != nil {
@@ -388,7 +353,7 @@ func (r *PostgresContractRepo) LoadSignatures(ctx context.Context, tx *sqlx.Tx, 
 		`SELECT signer_did, credential_type, status, signed_at, revoked_at
 		   FROM contract_signatures
 		  WHERE contract_did = $1
-		  ORDER BY created_at ASC`, did,
+		  ORDER BY created_at`, did,
 	)
 	if err != nil {
 		return nil, err

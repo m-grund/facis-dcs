@@ -84,14 +84,16 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		status = "PENDING"
 	}
 
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO contract_signatures
-			(contract_did, signer_did, credential_type, signature_bytes, status, signed_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		cmd.DID, cmd.HolderDID, cmd.CredentialType, sigBytes, status, time.Now().UTC(),
-	)
+	signature := db.ContractSignature{
+		ContractDID:    cmd.DID,
+		Status:         status,
+		SignatureBytes: sigBytes,
+		SignerDID:      cmd.AppliedBy,
+		CredentialType: cmd.CredentialType,
+	}
+	err = h.CRepo.CreateSignature(ctx, tx, signature)
 	if err != nil {
-		return fmt.Errorf("insert contract_signatures: %w", err)
+		return fmt.Errorf("could not create signature: %w", err)
 	}
 
 	evt := event2.ApplyEvent{
