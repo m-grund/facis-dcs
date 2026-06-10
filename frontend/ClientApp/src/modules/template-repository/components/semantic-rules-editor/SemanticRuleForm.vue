@@ -26,32 +26,93 @@
         <div class="flex flex-col gap-1 md:col-span-4">
           <label class="label min-h-0 py-0">
             <span class="label-text text-xs text-base-content/60">
-              Parameter name
+              Domain field
               <RequiredIndicator />
             </span>
           </label>
-          <input
-            v-model="draftParameter.parameterName"
-            type="text"
-            class="input-bordered input input-sm h-9 w-full"
-            :class="{ 'input-error': isParameterNameDuplicate }"
-            placeholder="Label"
-          />
+          <div class="relative">
+            <input
+              v-model="domainFieldSearch"
+              type="search"
+              class="input-bordered input input-sm h-9 w-full"
+              :class="{ 'input-primary': selectedDomainPath }"
+              placeholder="Search domain fields"
+              autocomplete="off"
+              @focus="showDomainFieldOptions = true"
+              @input="handleDomainFieldInput"
+              @keydown.escape="showDomainFieldOptions = false"
+              @blur="hideDomainFieldOptions"
+            />
+            <div
+              v-if="showDomainFieldOptions"
+              class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
+            >
+              <template v-if="groupedDomainFields.length">
+                <section v-for="group in groupedDomainFields" :key="group.name">
+                  <div class="sticky top-0 z-10 border-b border-base-200 bg-base-100 px-3 py-1">
+                    <p class="text-xs font-semibold text-base-content/50 uppercase">{{ group.name }}</p>
+                  </div>
+                  <button
+                    v-for="field in group.fields"
+                    :key="field.semanticPath"
+                    type="button"
+                    class="w-full border-b border-base-200 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-base-200"
+                    :class="{ 'bg-primary/10': selectedDomainPath === field.semanticPath }"
+                    @mousedown.prevent="selectDomainField(field.semanticPath)"
+                  >
+                    <span class="block text-sm font-medium text-base-content">{{ field.label }}</span>
+                    <span class="block text-xs text-base-content/50">{{ field.semanticPath }}</span>
+                    <span v-if="field.valueConstraint" class="block text-xs text-base-content/50">
+                      {{ formatValueConstraint(field.valueConstraint) }}
+                    </span>
+                  </button>
+                </section>
+              </template>
+              <p v-else class="p-3 text-sm text-base-content/50">No matching domain fields.</p>
+            </div>
+          </div>
+          <p v-if="selectedDomainField" class="text-xs text-base-content/50">{{ selectedDomainField.semanticPath }}</p>
+          <p v-if="selectedDomainField?.valueConstraint" class="text-xs text-base-content/50">
+            {{ formatValueConstraint(selectedDomainField.valueConstraint) }}
+          </p>
           <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
         </div>
-        <div class="flex flex-col gap-1 md:col-span-3">
+        <div class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
             <span class="label-text text-xs text-base-content/60">
               Type
               <RequiredIndicator />
             </span>
           </label>
-          <select v-model="draftParameter.type" class="select-bordered select h-9 w-full select-sm">
+          <select v-model="draftParameter.type" class="select-bordered select h-9 w-full select-sm" disabled>
             <option value="date">Date</option>
             <option value="string">Text</option>
             <option value="decimal">Decimal</option>
             <option value="integer">Integer</option>
+            <option value="boolean">Boolean</option>
+            <option value="enum">Enum</option>
           </select>
+        </div>
+        <div class="flex flex-col gap-1 md:col-span-3">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">Fixed value</span>
+          </label>
+          <select
+            v-if="fixedValueOptions.length"
+            v-model="draftFixedValue"
+            class="select-bordered select h-9 w-full select-sm"
+          >
+            <option value="">None</option>
+            <option v-for="value in fixedValueOptions" :key="value" :value="value">{{ value }}</option>
+          </select>
+          <input
+            v-else
+            v-model="draftFixedValue"
+            type="text"
+            class="input-bordered input input-sm h-9 w-full"
+            placeholder="None"
+          />
+          <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
         </div>
         <div class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
@@ -68,18 +129,20 @@
             </label>
           </div>
         </div>
-        <div class="flex flex-col gap-1 md:col-span-2">
+        <div class="flex flex-col gap-1 md:col-span-1">
           <label class="invisible label min-h-0 py-0">
             <span class="label-text text-xs">Add</span>
           </label>
           <div class="flex h-9 items-center">
             <button
               type="button"
-              class="btn w-full whitespace-nowrap btn-sm btn-secondary"
+              class="btn btn-square w-full btn-sm btn-secondary"
+              aria-label="Add parameter"
+              title="Add parameter"
               :disabled="!canAddParameter"
               @click="addParameter"
             >
-              + Add parameter
+              +
             </button>
           </div>
         </div>
@@ -95,9 +158,16 @@
             class="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2.5"
           >
             <span class="rounded border border-base-300 bg-base-200/50 px-2 py-0.5 font-mono text-sm font-medium">
-              {{ param.parameterName }}
+              {{ semanticParameterLabel(param) }}
             </span>
-            <span class="badge badge-ghost badge-sm">{{ param.type }}</span>
+            <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
+            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">
+              fixed: {{ param.fixedValue }}
+            </span>
+            <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
+              {{ formatValueConstraint(param.valueConstraint) }}
+            </span>
+            <span class="badge badge-ghost badge-sm">{{ semanticParameterTypeLabel(param.type) }}</span>
             <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
             <button
               type="button"
@@ -128,10 +198,22 @@ import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import {
   type SemanticCondition,
   type SemanticConditionParameter,
+  type DomainSemanticPath,
+  type SemanticValueConstraint,
+  type SemanticEntityRole,
+  type SemanticEntityType,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
-} from '@template-repository/models/contract-templace'
+} from '@/modules/template-repository/models/contract-template'
+import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
+import { ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS } from '@/modules/template-repository/utils/ontology-domain-types'
+import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
+import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
+type DraftConditionPayload = NewConditionPayload & {
+  entityType: SemanticEntityType
+  entityRole: SemanticEntityRole
+}
 
 const props = defineProps<{
   existingConditions: SemanticCondition[]
@@ -146,28 +228,74 @@ const emit = defineEmits<{
 }>()
 
 function defaultParam(): SemanticConditionParameter {
+  const defaultField = semanticRuleDomainFields[0] ?? ONTOLOGY_DOMAIN_FIELDS[0]!
   return {
     parameterName: '',
-    type: 'string',
+    type: defaultField.type,
+    schemaRef: defaultField.schemaRef,
+    semanticPath: defaultField.semanticPath,
+    valueConstraint: cloneValueConstraint(defaultField.valueConstraint),
+    uiMetadata: { label: defaultField.label },
     isRequired: true,
     operators: [],
     value: undefined,
   }
 }
 
-function getDefaultNewCondition(): NewConditionPayload {
+const semanticRuleDomainFields = ONTOLOGY_DOMAIN_FIELDS.filter(
+  (field) => !ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS.has(field.semanticPath),
+)
+
+function getDefaultNewCondition(): DraftConditionPayload {
   return {
     conditionName: '',
     schemaVersion: SEMANTIC_CONDITION_SCHEMA_VERSION,
+    entityType: '',
+    entityRole: '',
     parameters: [],
   }
 }
 
-const newCondition = ref<NewConditionPayload>(getDefaultNewCondition())
+const newCondition = ref<DraftConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
+const draftFixedValue = ref('')
+const selectedDomainPath = ref<DomainSemanticPath>('')
+const domainFieldSearch = ref('')
+const showDomainFieldOptions = ref(false)
 const isEditMode = computed(() => props.mode === 'edit')
 const formTitle = computed(() => (isEditMode.value ? 'Edit rule' : 'New rule'))
 const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rule'))
+const selectedDomainField = computed(() =>
+  semanticRuleDomainFields.find((field) => field.semanticPath === selectedDomainPath.value),
+)
+const fixedValueOptions = computed(() => resolveAllowedValues(selectedDomainField.value?.valueConstraint))
+const fixedValueError = computed(() => validateDraftFixedValue())
+const groupedDomainFields = computed(() => {
+  const query = domainFieldSearch.value.trim().toLowerCase()
+  const filtered = semanticRuleDomainFields.filter((field) => {
+    if (!query) return true
+    return [
+      field.label,
+      field.semanticPath,
+      field.schemaRef,
+      field.type,
+      field.group,
+      field.valueConstraint?.format ?? '',
+      field.valueConstraint?.allowedValuesRef ?? '',
+      field.valueConstraint?.allowedValues?.join(' ') ?? '',
+    ].some((value) => value.toLowerCase().includes(query))
+  })
+  const byGroup = new Map<string, typeof filtered>()
+  for (const field of filtered) {
+    byGroup.set(field.group, [...(byGroup.get(field.group) ?? []), field])
+  }
+  return [...byGroup.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, fields]) => ({
+      name,
+      fields: [...fields].sort((left, right) => left.label.localeCompare(right.label)),
+    }))
+})
 
 watch(
   () => [props.mode, props.initialCondition] as const,
@@ -175,17 +303,89 @@ watch(
     if (!isEditMode.value || !props.initialCondition) {
       newCondition.value = getDefaultNewCondition()
       draftParameter.value = defaultParam()
+      draftFixedValue.value = ''
+      selectedDomainPath.value = ''
+      domainFieldSearch.value = ''
+      showDomainFieldOptions.value = false
       return
     }
     newCondition.value = {
       conditionName: props.initialCondition.conditionName,
       schemaVersion: props.initialCondition.schemaVersion,
-      parameters: props.initialCondition.parameters.map((p) => ({ ...p })),
+      entityType: props.initialCondition.entityType ?? '',
+      entityRole: props.initialCondition.entityRole ?? '',
+      parameters: props.initialCondition.parameters.map((p) => ({
+        ...p,
+        valueConstraint: cloneValueConstraint(p.valueConstraint),
+      })),
     }
     draftParameter.value = defaultParam()
+    draftFixedValue.value = ''
+    selectedDomainPath.value = ''
+    domainFieldSearch.value = ''
+    showDomainFieldOptions.value = false
   },
   { immediate: true },
 )
+
+watch(selectedDomainPath, (path) => {
+  const field = semanticRuleDomainFields.find((item) => item.semanticPath === path)
+  if (!field) {
+    draftParameter.value = defaultParam()
+    return
+  }
+  draftParameter.value = {
+    ...draftParameter.value,
+    parameterName: field.semanticPath,
+    schemaRef: field.schemaRef,
+    semanticPath: field.semanticPath,
+    valueConstraint: cloneValueConstraint(field.valueConstraint),
+    uiMetadata: { label: field.label },
+    type: field.type,
+  }
+  domainFieldSearch.value = formatDomainFieldLabel(field)
+  draftFixedValue.value = ''
+})
+
+function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
+  if (!constraint) return undefined
+  return {
+    ...constraint,
+    allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+  }
+}
+
+function formatValueConstraint(constraint: SemanticValueConstraint) {
+  if (constraint.allowedValuesRef) return constraint.allowedValuesRef
+  if (constraint.format) return constraint.format
+  if (constraint.allowedValues?.length) return `Allowed: ${constraint.allowedValues.join(', ')}`
+  if (constraint.min !== undefined || constraint.max !== undefined) {
+    return `Range: ${constraint.min ?? '-'} - ${constraint.max ?? '-'}`
+  }
+  return constraint.description ?? 'Constrained value'
+}
+
+function formatDomainFieldLabel(field: (typeof ONTOLOGY_DOMAIN_FIELDS)[number]) {
+  return `${field.label} (${field.semanticPath})`
+}
+
+function selectDomainField(path: DomainSemanticPath) {
+  selectedDomainPath.value = path
+  showDomainFieldOptions.value = false
+}
+
+function handleDomainFieldInput() {
+  showDomainFieldOptions.value = true
+  if (!selectedDomainField.value) return
+  if (domainFieldSearch.value === formatDomainFieldLabel(selectedDomainField.value)) return
+  selectedDomainPath.value = ''
+}
+
+function hideDomainFieldOptions() {
+  window.setTimeout(() => {
+    showDomainFieldOptions.value = false
+  }, 100)
+}
 
 const isParameterNameDuplicate = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
@@ -197,6 +397,7 @@ const isParameterNameDuplicate = computed(() => {
 const canAddParameter = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return false
+  if (fixedValueError.value) return false
   return !isParameterNameDuplicate.value
 })
 
@@ -223,11 +424,20 @@ function addParameter() {
   if (!canAddParameter.value) return
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return
+  const fixedValue = parseDraftFixedValue()
   newCondition.value.parameters.push({
     ...draftParameter.value,
     parameterName: name,
+    fixedValue,
   })
+  if (fixedValue === undefined) {
+    delete newCondition.value.parameters[newCondition.value.parameters.length - 1]?.fixedValue
+  }
   draftParameter.value = defaultParam()
+  draftFixedValue.value = ''
+  selectedDomainPath.value = ''
+  domainFieldSearch.value = ''
+  showDomainFieldOptions.value = false
 }
 
 function deleteParameter(index: number) {
@@ -235,7 +445,7 @@ function deleteParameter(index: number) {
 }
 
 function buildConditionPayload(): NewConditionPayload {
-  return {
+  const payload: NewConditionPayload = {
     conditionName: newCondition.value.conditionName.trim(),
     schemaVersion: newCondition.value.schemaVersion,
     parameters: newCondition.value.parameters.map((p) => ({
@@ -243,6 +453,13 @@ function buildConditionPayload(): NewConditionPayload {
       parameterName: p.parameterName.trim(),
     })),
   }
+  if (newCondition.value.entityType) {
+    payload.entityType = newCondition.value.entityType
+  }
+  if (newCondition.value.entityRole) {
+    payload.entityRole = newCondition.value.entityRole
+  }
+  return payload
 }
 
 function submitRule() {
@@ -256,5 +473,40 @@ function submitRule() {
   }
   newCondition.value = getDefaultNewCondition()
   draftParameter.value = defaultParam()
+  draftFixedValue.value = ''
+  selectedDomainPath.value = ''
+  domainFieldSearch.value = ''
+  showDomainFieldOptions.value = false
+}
+
+function parseDraftFixedValue(): unknown {
+  const raw = draftFixedValue.value.trim()
+  if (raw === '') return undefined
+  switch (draftParameter.value.type) {
+    case 'decimal':
+    case 'integer':
+      return Number(raw)
+    case 'boolean':
+      return raw === 'true'
+    default:
+      return raw
+  }
+}
+
+function validateDraftFixedValue(): string {
+  const raw = draftFixedValue.value.trim()
+  if (raw === '') return ''
+  if (draftParameter.value.type === 'decimal' || draftParameter.value.type === 'integer') {
+    const number = Number(raw)
+    if (!Number.isFinite(number)) return 'Fixed value must be numeric.'
+    if (draftParameter.value.type === 'integer' && !Number.isInteger(number)) return 'Fixed value must be an integer.'
+    const constraint = selectedDomainField.value?.valueConstraint
+    if (constraint?.min !== undefined && number < constraint.min) return `Minimum is ${constraint.min}.`
+    if (constraint?.max !== undefined && number > constraint.max) return `Maximum is ${constraint.max}.`
+  }
+  if (draftParameter.value.type === 'boolean' && raw !== 'true' && raw !== 'false') {
+    return 'Use true or false.'
+  }
+  return ''
 }
 </script>

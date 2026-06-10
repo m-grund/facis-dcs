@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -10,6 +12,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/middleware"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/command"
@@ -20,6 +23,7 @@ import (
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
 
 	"github.com/jmoiron/sqlx"
+	"goa.design/clue/log"
 )
 
 // TemplateRepository service example implementation.
@@ -693,6 +697,9 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 
 	history := make([]*templaterepository.ContractTemplateAuditResponse, 0)
 	for _, entry := range auditLogHistory {
+		if !base.IsAuditVisibleEventType(entry.EventType) {
+			continue
+		}
 		history = append(history, &templaterepository.ContractTemplateAuditResponse{
 			ID:               entry.ID,
 			Component:        entry.Component,
@@ -705,7 +712,50 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 		})
 	}
 
+	policyFindings, policyFindingsTemplate, err := s.auditTemplatePolicyFindings(ctx, req.Did)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+	for i, finding := range policyFindings {
+		did := req.Did
+		history = append(history, &templaterepository.ContractTemplateAuditResponse{
+			ID:        int64(-1 - i),
+			Component: "CONTRACT_TEMPLATE_REPO",
+			EventType: "TEMPLATE_POLICY_AUDIT_FINDING",
+			EventData: templatePolicyFindingEventData(finding, policyFindingsTemplate),
+			Did:       &did,
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
 	return history, nil
+}
+
+func (s *templateRepositorysrvc) auditTemplatePolicyFindings(ctx context.Context, did string) ([]validation.PolicyFinding, *db.ContractTemplate, error) {
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Errorf(ctx, err, "could not rollback transaction")
+		}
+	}(tx)
+
+	template, err := s.CTRepo.ReadDataByID(ctx, tx, did)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
+	}
+
+	findings, err := validation.AuditTemplatePolicies(template.TemplateData, validation.TemplatePolicyAuditMetadata{
+		DID:          template.DID,
+		TemplateType: template.TemplateType,
+		State:        template.State,
+	})
+	return findings, template, err
 }
 
 // publish approved template to Federated Catalogue.

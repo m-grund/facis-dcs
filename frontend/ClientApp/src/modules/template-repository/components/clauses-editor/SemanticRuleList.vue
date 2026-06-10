@@ -21,7 +21,7 @@
             :is-required-and-unused="isParamRequiredAndUnused(c.conditionId, p.parameterName)"
             @mouseenter="onParamEnter(c.conditionId, p.parameterName)"
             @mouseleave="onParamLeave"
-            @click="onParamClick(c.conditionId, p.parameterName)"
+            @click="onParamClick(c.conditionId, p.parameterName, p.fixedValue !== undefined)"
           />
         </ul>
       </li>
@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import type { SemanticCondition } from '@template-repository/models/contract-templace'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import RuleParamRow from './RuleParamRow.vue'
 
 withDefaults(
@@ -72,7 +72,8 @@ function onParamEnter(conditionId: string, parameterName: string) {
   emit('highlightParam', conditionId, parameterName)
 }
 
-function onParamClick(conditionId: string, parameterName: string) {
+function onParamClick(conditionId: string, parameterName: string, isFixed: boolean) {
+  if (isFixed) return
   emit('insertPlaceholder', conditionId, parameterName)
 }
 </script>

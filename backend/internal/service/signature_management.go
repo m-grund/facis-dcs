@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/ipfs"
 
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
@@ -13,6 +14,7 @@ import (
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
+	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
 
 	"github.com/jmoiron/sqlx"
@@ -26,7 +28,8 @@ type signatureManagementsrvc struct {
 	auth.JWTAuthenticator
 }
 
-func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, stRepo db.SigningTaskRepo, auditTrailReader base.AuditTrailReader) signaturemanagement.Service {
+func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, stRepo db.SigningTaskRepo,
+	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
@@ -167,11 +170,11 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
-	handler := command.Verifier{
+	handler := command.SignatureVerifier{
 		DB:    s.DB,
 		CRepo: s.CRepo,
 	}
-	err = handler.Handle(ctx, cmd)
+	_, err = handler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 	}

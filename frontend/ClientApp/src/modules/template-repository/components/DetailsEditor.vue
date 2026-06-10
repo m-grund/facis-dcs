@@ -146,7 +146,7 @@
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { TemplateType, isApprovedTemplateBlock } from '@template-repository/models/contract-templace'
+import { TemplateType, isApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { TemplateState } from '@/types/contract-template-state'

@@ -838,6 +838,9 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 
 	history := make([]*contractworkflowengine.ContractAuditResponse, 0)
 	for _, entry := range auditLogHistory {
+		if !base.IsAuditVisibleEventType(entry.EventType) {
+			continue
+		}
 		history = append(history, &contractworkflowengine.ContractAuditResponse{
 			ID:               entry.ID,
 			Component:        entry.Component,

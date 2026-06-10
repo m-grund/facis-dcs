@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"time"
 )
 
@@ -37,14 +39,16 @@ type IPFSResult struct {
 }
 
 func (c *APIClient) CreateFile(ctx context.Context, data any) (*IPFSResult, error) {
-
-	url := c.baseURL + "/api/ipfs/create"
-
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("marshal data: %w", err)
 	}
 
+	if c.baseURL == "" {
+		return c.createKuboFile(ctx, jsonData)
+	}
+
+	url := c.baseURL + "/api/ipfs/create"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -87,6 +91,10 @@ func (c *APIClient) CreateFile(ctx context.Context, data any) (*IPFSResult, erro
 }
 
 func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
+	if c.baseURL == "" {
+		return c.fetchKuboFile(cid)
+	}
+
 	url := fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -116,19 +124,26 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 
 	if len(result.Data) > 0 {
 		var dataStr string
-		if err := json.Unmarshal(result.Data, &dataStr); err == nil {
-			decoded, err := base64.RawStdEncoding.DecodeString(dataStr)
-			if err != nil {
-				decoded, _ = base64.StdEncoding.DecodeString(dataStr)
-			}
-			result.Data = json.RawMessage(decoded)
+		if err := json.Unmarshal(result.Data, &dataStr); err != nil {
+			return nil, fmt.Errorf("decode ipfs data json string: %w", err)
 		}
+		if dataStr == "" {
+			return nil, fmt.Errorf("decode ipfs data: empty payload")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(dataStr)
+		if err != nil {
+			return nil, fmt.Errorf("decode ipfs data base64: %w", err)
+		}
+		result.Data = json.RawMessage(decoded)
 	}
 
 	return &result, nil
 }
 
 func (c *APIClient) DeleteFile(cid string) error {
+	if c.baseURL == "" {
+		return c.deleteKuboFile(cid)
+	}
 
 	url := fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)
 
@@ -148,6 +163,161 @@ func (c *APIClient) DeleteFile(cid string) error {
 
 }
 
+func (c *APIClient) createKuboFile(ctx context.Context, data []byte) (*IPFSResult, error) {
+	if c.mfsBaseURL == "" {
+		return nil, fmt.Errorf("IPFS_MFS_BASE_URL is required when IPFS_TENANT_BASE_URL is not configured")
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", `form-data; name="file"; filename="audit-log.json"`)
+	header.Set("Content-Type", "application/json")
+
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		return nil, fmt.Errorf("create multipart part: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return nil, fmt.Errorf("write multipart data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
+
+	url := c.mfsBaseURL + "/api/v0/add?pin=true"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return nil, fmt.Errorf("create Kubo add request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do Kubo add request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected Kubo add status %d: %s", resp.StatusCode, body)
+	}
+
+	var addResult struct {
+		Hash string `json:"Hash"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&addResult); err != nil {
+		return nil, fmt.Errorf("decode Kubo add response: %w", err)
+	}
+	if addResult.Hash == "" {
+		return nil, fmt.Errorf("the Kubo add response does not include a CID")
+	}
+
+	result := &IPFSResult{
+		Data: data,
+	}
+	result.Identifier.Format = "CID"
+	result.Identifier.Value = addResult.Hash
+
+	if err := c.copyToMFS(ctx, c.mfsBaseURL, addResult.Hash, addResult.Hash); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func (c *APIClient) fetchKuboFile(cid string) (*IPFSResult, error) {
+	if c.mfsBaseURL == "" {
+		return nil, fmt.Errorf("IPFS_MFS_BASE_URL is required when IPFS_TENANT_BASE_URL is not configured")
+	}
+
+	url := fmt.Sprintf("%s/api/v0/cat?arg=%s", c.mfsBaseURL, cid)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create Kubo cat request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do Kubo cat request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected Kubo cat status %d: %s", resp.StatusCode, body)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read Kubo cat response: %w", err)
+	}
+
+	// Content written by createKuboFile is JSON-marshalled.
+	// If the stored value is a JSON string it was produced by base64Wrap (binary
+	// data); unmarshal and decode to recover the original bytes.
+	// Any other JSON type (object, array, …) is returned verbatim.
+	var dataStr string
+	var resultData []byte
+	if json.Unmarshal(body, &dataStr) == nil {
+		decoded, err := base64.StdEncoding.DecodeString(dataStr)
+		if err != nil {
+			return nil, fmt.Errorf("base64 decode Kubo file data: %w", err)
+		}
+		resultData = decoded
+	} else {
+		resultData = body
+	}
+
+	result := &IPFSResult{
+		Data: resultData,
+	}
+	result.Identifier.Format = "CID"
+	result.Identifier.Value = cid
+
+	return result, nil
+}
+
+func (c *APIClient) deleteKuboFile(cid string) error {
+	if c.mfsBaseURL == "" {
+		return fmt.Errorf("IPFS_MFS_BASE_URL is required when IPFS_TENANT_BASE_URL is not configured")
+	}
+
+	url := fmt.Sprintf("%s/api/v0/pin/rm?arg=%s", c.mfsBaseURL, cid)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, nil)
+	if err != nil {
+		return fmt.Errorf("create Kubo unpin request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("do Kubo unpin request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected Kubo unpin status %d: %s", resp.StatusCode, body)
+	}
+
+	return nil
+}
+
 func (c *APIClient) copyToMFS(ctx context.Context, baseURL string, cid string, filename string) error {
 
 	url := fmt.Sprintf("%s/api/v0/files/cp?arg=/ipfs/%s&arg=/%s", baseURL, cid, filename)
@@ -163,6 +333,11 @@ func (c *APIClient) copyToMFS(ctx context.Context, baseURL string, cid string, f
 			log.Println("could not close response body")
 		}
 	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected Kubo files/cp status %d: %s", resp.StatusCode, body)
+	}
 
 	return nil
 }

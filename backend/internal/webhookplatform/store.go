@@ -21,12 +21,14 @@ var KnownEvents = []EventInfo{
 
 // DCSEventMap maps internal NATS event types to webhook event names.
 var DCSEventMap = map[string]string{
-	"CREATE_CONTRACT":    "contract.created",
-	"SUBMIT_CONTRACT":    "contract.submitted",
-	"APPROVE_CONTRACT":   "contract.approved",
-	"REJECT_CONTRACT":    "contract.rejected",
-	"NEGOTIATE_CONTRACT": "contract.negotiated",
-	"TERMINATE_CONTRACT": "contract.terminated",
+	"CREATE_CONTRACT":           "contract.created",
+	"SUBMIT_CONTRACT":           "contract.submitted",
+	"APPROVE_CONTRACT":          "contract.approved",
+	"REJECT_CONTRACT":           "contract.rejected",
+	"NEGOTIATE_CONTRACT":        "contract.negotiated",
+	"TERMINATE_CONTRACT":        "contract.terminated",
+	"CREATE_CONTRACT_TEMPLATE":  "template.created",
+	"APPROVE_CONTRACT_TEMPLATE": "template.approved",
 }
 
 // EventInfo describes a subscribable event.

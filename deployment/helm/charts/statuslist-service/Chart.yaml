@@ -1,0 +1,6 @@
+apiVersion: v2
+name: statuslist-service
+description: XFSC Status List Service – Verifiable credential status list management (Status List 2021/2023)
+type: application
+version: 0.1.0
+home: https://github.com/eclipse-xfsc/statuslist-service

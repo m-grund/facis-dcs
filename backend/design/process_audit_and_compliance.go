@@ -10,6 +10,12 @@ var PACAuditRequest = Type("PACAuditRequest", func() {
 	Token("token", String, "JWT token")
 
 	Attribute("scope", String, "Scope that should be audited")
+	Attribute("audit_mode", String, "Audit mode, for example repository_trail or static_contract")
+	Attribute("contract_document", Any, "Contract document to audit for static contract checks")
+	Attribute("policy", Any, "Policy parameters to use for static contract checks")
+	Attribute("contract_did", String, "Contract DID for static contract checks")
+	Attribute("contract_version", String, "Contract version for static contract checks")
+	Attribute("policy_version", String, "Policy version for static contract checks")
 
 	Required("scope")
 })
@@ -40,9 +46,9 @@ var PACAuditResponse = Type("PACAuditResponse", func() {
 	Required("did", "component", "created_at", "audit_trail")
 })
 
-// Process Audit & Compliance Management Service  (/processauditandcompliance/...)
+// Process Audit & Compliance Management Service  (/pac/...)
 var _ = Service("ProcessAuditAndCompliance", func() {
-	Description("Process Audit & Compliance Management APIs (/processauditandcompliance/...)")
+	Description("Process Audit & Compliance Management APIs (/pac/...)")
 
 	Method("audit", func() {
 		Description("trigger an audit on selected scope.")
@@ -63,7 +69,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			POST("/processauditandcompliance/audit")
+			POST("/pac/audit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -82,7 +88,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 			Token("token", String, "JWT token")
 		})
 		HTTP(func() {
-			GET("/processauditandcompliance/report")
+			GET("/pac/report")
 			Response(StatusOK)
 		})
 		Result(Any)
@@ -100,7 +106,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 			Token("token", String, "JWT token")
 		})
 		HTTP(func() {
-			GET("/processauditandcompliance/monitor")
+			GET("/pac/monitor")
 			Response(StatusOK)
 		})
 		Result(Any)
@@ -118,7 +124,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 			Token("token", String, "JWT token")
 		})
 		HTTP(func() {
-			POST("/processauditandcompliance/report")
+			POST("/pac/report")
 			Response(StatusOK)
 		})
 		Result(Any)

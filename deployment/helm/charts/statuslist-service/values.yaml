@@ -1,0 +1,62 @@
+replicaCount: 1
+
+image:
+  repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
+  tag: "main"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8080
+  nodePort: null
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  pathType: Prefix
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi
+
+# PostgreSQL connection — required; the service uses auto-migrate on startup.
+database:
+  enabled: true
+  host: ""       # set per environment (e.g. dcs-postgresql)
+  port: "5432"
+  name: "statuslist"
+  user: ""
+  password: ""
+  sslMode: "disable"
+
+# NATS messaging
+nats:
+  url: ""        # e.g. nats://dcs-nats:4222
+  timeout: "10s"
+  queueGroup: "statuslistservice"
+
+# Topics
+topics:
+  creation: "status"
+  signer: "signer"
+
+# List configuration
+listSize: "125000"
+
+# Logging level
+logging:
+  level: "INFO"
+
+# CORS configuration
+cors:
+  enabled: false
+  allowOrigins: []

@@ -42,6 +42,8 @@
         {
           "parameterName": "start date",
           "type": "date",
+          "schemaRef": "facis.dcs.contract.v1",
+          "semanticPath": "contract.validity.startDate",
           "isRequired": true,
           "operators": [],
           "value": null
@@ -49,10 +51,12 @@
         {
           "parameterName": "end date",
           "type": "date",
+          "schemaRef": "facis.dcs.contract.v1",
+          "semanticPath": "contract.validity.endDate",
           "isRequired": false,
           "operators": [
             {
-              "operate": "lessThanOrEqual",
+              "operate": "LessThanOrEqual",
               "targets": ["{{sc-001.start date}}"]
             }
           ],
@@ -68,6 +72,8 @@
         {
           "parameterName": "rentAmount",
           "type": "decimal",
+          "schemaRef": "facis.dcs.contract.v1",
+          "semanticPath": "contract.payment.amount",
           "isRequired": true,
           "operators": [],
           "value": null
@@ -75,13 +81,24 @@
         {
           "parameterName": "currency",
           "type": "string",
+          "schemaRef": "facis.dcs.contract.v1",
+          "semanticPath": "contract.payment.currency",
+          "valueConstraint": {
+            "format": "iso-4217",
+            "pattern": "^[A-Z]{3}$",
+            "allowedValuesRef": "ISO 4217",
+            "allowedValues": ["EUR", "USD", "GBP", "CHF", "PLN", "CZK"],
+            "description": "Use ISO 4217 currency codes."
+          },
           "isRequired": true,
           "operators": [],
           "value": null
         },
         {
-          "parameterName": "dueDayOfMonth",
+          "parameterName": "dueDays",
           "type": "integer",
+          "schemaRef": "facis.dcs.contract.v1",
+          "semanticPath": "contract.payment.dueDays",
           "isRequired": true,
           "operators": [],
           "value": null
@@ -94,8 +111,31 @@
       "schemaVersion": "v1",
       "parameters": [
         {
-          "parameterName": "region",
+          "parameterName": "country",
           "type": "string",
+          "schemaRef": "facis.dcs.party.v1",
+          "semanticPath": "company.location.country",
+          "valueConstraint": {
+            "format": "iso-3166-1-alpha-3",
+            "pattern": "^[A-Z]{3}$",
+            "allowedValuesRef": "ISO 3166-1 alpha-3",
+            "allowedValues": [
+              "DEU",
+              "AUT",
+              "CHE",
+              "FRA",
+              "NLD",
+              "BEL",
+              "LUX",
+              "POL",
+              "CZE",
+              "ESP",
+              "ITA",
+              "GBR",
+              "USA"
+            ],
+            "description": "Use ISO 3166-1 alpha-3 country codes, for example DEU instead of Germany."
+          },
           "isRequired": true,
           "operators": [],
           "value": null
@@ -148,7 +188,7 @@
       "blockId": "sn-payment",
       "type": "CLAUSE",
       "conditionIds": ["sc-002"],
-      "text": "Rent of {{sc-002.rentAmount}} {{sc-002.currency}} is due on the {{sc-002.dueDayOfMonth}} of each month."
+      "text": "Rent of {{sc-002.rentAmount}} {{sc-002.currency}} is due within {{sc-002.dueDays}} days."
     },
     {
       "blockId": "sec-1-3",
@@ -165,7 +205,7 @@
       "blockId": "sn-access",
       "type": "CLAUSE",
       "conditionIds": ["sc-003"],
-      "text": "Data may be accessed only within {{sc-003.region}}."
+      "text": "Data may be accessed only within {{sc-003.country}}."
     },
     {
       "blockId": "cl-other-text",

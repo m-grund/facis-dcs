@@ -16,7 +16,7 @@ export interface ContractCreateEvent {
 
 export interface ContractUpdateEvent {
   did: string
-  updated_at: string
+  updated_by: string
   old_name?: string
   new_name?: string
   old_description?: string
@@ -24,8 +24,14 @@ export interface ContractUpdateEvent {
   old_contract_data?: ContractData
   new_contract_data?: ContractData
   occurred_at: string
-  old_expiration_date?: string
-  new_expiration_date?: string
+  old_exp_date?: string
+  new_exp_date?: string
+  old_exp_policy?: string
+  new_exp_policy?: string
+  old_exp_notice_period?: number
+  new_exp_notice_period?: number
+  old_start_date?: string
+  new_start_date?: string
 }
 
 export interface ContractSubmitEvent {

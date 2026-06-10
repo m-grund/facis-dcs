@@ -144,6 +144,7 @@ func (e RevokeEvent) GetDID() string {
 	return e.DID
 }
 
+// ComplianceValidationEvent is emitted when compliance check ist started
 type ComplianceValidationEvent struct {
 	DID             string             `json:"did"`
 	ContractVersion int                `json:"contract_version,omitempty"`
@@ -191,6 +192,7 @@ type ApplyEvent struct {
 	OccurredAt      time.Time          `json:"occurred_at"`
 	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
+	CredentialType  string             `json:"credential_type"`
 }
 
 // EventType implements the Event interface.

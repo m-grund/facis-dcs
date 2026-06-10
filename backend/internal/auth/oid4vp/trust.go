@@ -68,8 +68,8 @@ func (c *TrustConfig) vctAllowed(vct string) bool {
 }
 
 func (c *TrustConfig) issuersAllowed(iss string) bool {
-	iss = strings.TrimSpace(iss)
 	// Todo: Needs to be fixed, just for demo
+	//iss = strings.TrimSpace(iss)
 	//for _, allowed := range c.Issuers {
 	//	if iss == allowed {
 	//return true

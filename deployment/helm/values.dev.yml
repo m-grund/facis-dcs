@@ -1,22 +1,42 @@
 # Dev values: co-deploy all dependencies, skip the DCS app itself.
 # Run the backend locally with `air` and the frontend with `vite`.
 #
+# First-time setup (packages local subcharts):
+#   helm dependency update ./deployment/helm
+#
 # Install:
 #   helm install dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 #
 # Upgrade (after chart changes):
+#   helm dependency update ./deployment/helm  # re-run if Chart.yaml changed
 #   helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 #
 # Services exposed on localhost via NodePort (Rancher Desktop forwards these automatically):
-#   PostgreSQL : localhost:30432
-#   Keycloak   : localhost:30080  →  realm: http://localhost:30080/realms/gaia-x
+#   PostgreSQL       : localhost:30432
+#   Keycloak         : localhost:30080  →  realm: http://localhost:30080/realms/gaia-x
 #   Hydra public : localhost:30444
 #   Hydra admin  : localhost:30085
-#   NATS       : localhost:30422
-#   Neo4j HTTP : localhost:30474
-#   Neo4j Bolt : localhost:30687
-#   FC service : localhost:30081
-#   ORCE       : localhost:30180
+#   NATS             : localhost:30422
+#   Neo4j HTTP       : localhost:30474
+#   Neo4j Bolt       : localhost:30687
+#   FC service       : localhost:30081
+#   ORCE             : localhost:30180
+#   Crypto Provider  : localhost:30808  (XFSC signer HTTP API)
+#   Vault API        : localhost:30820  (dev mode, root token = "root")
+#   Status List Service : localhost:30821  (XFSC status list management)
+#   Policy Agent: localhost:30380
+#   MongoDB     : intern (kein NodePort nötig)
+#   IPFS Gateway: localhost:30480
+#   IPFS API    : localhost:30501
+#
+# Backend .env.dev (auto-detects pre-built dev certificate, no manual setup needed):
+#   CRYPTO_PROVIDER_URL=http://localhost:30808
+#   CRYPTO_PROVIDER_NAMESPACE=transit
+#   CRYPTO_PROVIDER_KEY=dcs-signing-key-p256
+#   CRYPTO_PROVIDER_VC_KEY=dcs-vc-signing-key
+#   CRYPTO_PROVIDER_VC_SIGNATURE_TYPE=ed25519signature2020
+#   STATUSLIST_SERVICE_URL=http://localhost:30821
+#   ISSUER_DID=did:web:localhost
 
 # In development, don't deploy the DCS container since we run it locally
 replicaCount: 0
@@ -32,7 +52,7 @@ postgresql:
     username: dcs
     password: dcs
     database: dcs
-  additionalDatabases: ["fc", "hydra"]
+  additionalDatabases: ["fc", "statuslist", "hydra"]
   persistence:
     enabled: false
   service:
@@ -103,6 +123,8 @@ neo4j:
     nodePortHttp: 30474
     nodePortBolt: 30687
 
+# XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
+# See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:
   enabled: true
   service:
@@ -119,14 +141,145 @@ federatedCatalogue:
 
 fcKeycloak:
   realmURL: "http://localhost:30080/realms/gaia-x"
+# OIDC / route values below are not used when replicaCount=0,
+# but kept here as documentation for the backend .env.dev file.
+signing:
+  issuerDID: "did:web:localhost"
+  cryptoProviderNamespace: "transit"
+  cryptoProviderKey: "dcs-signing-key-p256"
+  cryptoProviderVCKey: "dcs-vc-signing-key"
+  vcSignatureType: "ed25519signature2020"
+
+oidc:
+  clientID: "dcs-client"
+  redirectURI: "http://localhost:5173/api/auth/callback"
+  logoutRedirectURI: "http://localhost:5173/api/auth/logout-complete"
+  realm: "gaia-x"
+  keycloakScheme: "http"
+
+cryptoProvider:
+  enabled: true
+  vault:
+    dev:
+      enabled: true
+      rootToken: "root"
+    service:
+      type: ClusterIP
+      port: 8200
+  signer:
+    service:
+      type: NodePort
+      nodePort: 30808
+  transit:
+    mount: "transit"
+    key: "dcs-signing-key-p256"
+    keyType: "ecdsa-p256"
+    vcKey: "dcs-vc-signing-key"
+    vcKeyType: "ed25519"
+  devCertChain:
+    enabled: true
+    overwrite: true
+    # Optional override; by default: <release>-crypto-provider-dev-cert-chain
+    secretName: ""
+
+# XFSC Status List Service (DCS-OR-C2PA-005)
+statuslistService:
+  enabled: true
+  image:
+    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
+    tag: "main"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 8080
+    nodePort: 30821
+  keycloak:
+    hostname: "localhost:30080"
+    issuerScheme: "http"
+  oauth:
+    clientID: "dcs-fc-client"
+  # Allow POSTing self-descriptions without signature verification in dev
+  verificationVpSignature: false
+  verificationVcSignature: false
+  database:
+    enabled: true
+    host: "dcs-postgresql"
+    port: "5432"
+    name: "statuslist"
+    user: "dcs"
+    password: "dcs"
+    sslMode: "disable"
+  nats:
+    url: "nats://dcs-nats:4222"
 
 orce:
-  enabled: false
+  enabled: true
   persistence:
     enabled: false
   service:
     type: NodePort
     nodePort: 30180
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: false
+
+customPolicyAgent:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30380
+  nats:
+    addr: "nats://dcs-nats:4222"
+  mongo:
+    addr: "mongodb://dcs-mongodb-0.dcs-mongodb-headless.default.svc.cluster.local:27017/?replicaSet=rs0"
+    user: "policy"
+    pass: "policy"
+  externalServices:
+    ocmAddr: "http://localhost:9999"
+  logging:
+    level: "DEBUG"
+
+ipfs:
+  enabled: true
+  persistence:
+    enabled: true
+  api:
+    cors:
+      enabled: true
+      allowOrigins:
+        - "http://localhost:30480"
+        - "http://127.0.0.1:30480"
+        - "http://localhost:30501"
+        - "http://127.0.0.1:30501"
+        - "http://webui.ipfs.io"
+        - "https://webui.ipfs.io"
+  service:
+    type: NodePort
+    gatewayNodePort: 30480
+    apiNodePort: 30501
+
+ipfsDocumentManager:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30481
+  ipfs:
+    host: "dcs-ipfs"
+    apiGatewayURL: "http://dcs-ipfs:8080/ipfs"
+    rpcApiPort: 5001
+    logLevel: "debug"
+  config:
+    serverMode: "debug"
+
+# IPFS client env vars are not used when replicaCount=0 (backend runs locally).
+# For local dev, set in backend/.env.dev:
+#   IPFS_TENANT_BASE_URL=
+#   IPFS_MFS_BASE_URL=http://localhost:30501
+# In-cluster, IPFS_MFS_BASE_URL is auto-wired from the ipfs sub-chart. If
+# ipfsDocumentManager is enabled with a valid image, IPFS_TENANT_BASE_URL is
+# auto-wired to the document-manager service.
 
 route:
   basePath: "/api"

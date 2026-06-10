@@ -46,7 +46,7 @@ const resolveViewRouteName = computed(() => {
           <div class="flex min-w-0 flex-1 items-center gap-2">
             <div class="truncate">{{ template.name }}</div>
           </div>
-          <div class="flex shrink-0 flex-col items-end ml-10">
+          <div class="ml-10 flex shrink-0 flex-col items-end">
             <div class="badge badge-secondary">{{ template.state }}</div>
           </div>
         </h2>

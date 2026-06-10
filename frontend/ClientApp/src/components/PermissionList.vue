@@ -4,7 +4,7 @@ import { onClickOutside } from '@vueuse/core'
 import { useAuthStore } from '@/stores/auth-store'
 
 const authStore = useAuthStore()
-const roles = computed(() => authStore.user?.roles.sort())
+const roles = computed(() => [...(authStore.user?.roles ?? [])].sort())
 
 const isOpen = ref(false)
 const panelRef = ref(null)

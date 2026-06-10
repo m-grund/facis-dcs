@@ -8,6 +8,7 @@ import (
 type EventType string
 
 const (
+	Apply                EventType = "APPLY_SIGNATURE"
 	Validate             EventType = "VALIDATE_SIGNATURE"
 	Verify               EventType = "VERIFY_SIGNATURE"
 	RetrieveAll          EventType = "RETRIEVE_ALL_CONTRACTS"
@@ -21,6 +22,7 @@ const (
 )
 
 var validStates = map[EventType]bool{
+	Apply:                true,
 	Validate:             true,
 	Verify:               true,
 	RetrieveAll:          true,

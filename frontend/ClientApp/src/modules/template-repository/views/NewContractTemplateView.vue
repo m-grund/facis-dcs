@@ -69,9 +69,9 @@ watch(
     if (isEdit) {
       hasChosenType.value = true
       // load template data into draftStore
-      const did = String(route.params.did ?? '')
-      contractTemplateService
-        .retrieveById({ did })
+      const did = Array.isArray(route.params.did) ? route.params.did[0] : route.params.did
+      if (!did) return
+      contractTemplateService.retrieveById({ did })
         .then((template) => {
           if (!template) {
             draftStore.reset()
@@ -82,6 +82,7 @@ watch(
             TemplateState.deleted,
             TemplateState.deprecated,
             TemplateState.published,
+            TemplateState.registered,
           ].map((s) => s.toLowerCase())
           templateEditorUiStore.setTemplateEditable(!uneditableStates.includes(template.state.toLowerCase()))
 
@@ -94,12 +95,18 @@ watch(
             documentBlocks: template.template_data?.documentBlocks ?? [],
             semanticConditions: template.template_data?.semanticConditions ?? [],
             customMetaData: template.template_data?.customMetaData ?? [],
+            semanticProfile: template.template_data?.semanticProfile,
+            templateVariables: template.template_data?.templateVariables ?? [],
+            placeholderBindings: template.template_data?.placeholderBindings ?? [],
+            semanticRules: template.template_data?.semanticRules ?? [],
+            sla: template.template_data?.sla ?? null,
             subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
             templateType: template.template_type,
             state: template.state,
             version: template.version ?? null,
             document_number: template.document_number ?? null,
             updated_at: template.updated_at ?? null,
+            responsible: template.responsible ?? null,
           })
         })
         .catch((error: unknown) => {

@@ -4,12 +4,15 @@ import type {
   ApprovedTemplateBlock,
   DocumentBlock,
   DocumentOutlineBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import {
   DocumentBlockType,
+  FACIS_CONTRACT_POLICY_REFS,
+  FACIS_CONTRACT_VALIDATION_PROFILE,
+  FACIS_SCHEMA_REFS,
   isApprovedTemplateBlock,
   isMergedApprovedTemplateBlock,
-} from '@template-repository/models/contract-templace'
+} from '@template-repository/models/contract-template'
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { TEMPLATE_DATA_VERSIONS, type TemplateDataVersion } from '@template-repository/models/template-draft-store'
 
@@ -24,12 +27,23 @@ const CURRENT_TEMPLATE_DATA_VERSION: TemplateDataVersion = TEMPLATE_DATA_VERSION
 export function useContractDataPreprocess() {
   function preprocessContractData(cd: ContractData): ContractData {
     const contractData: ContractData = {
+      ...(cd['@context'] ? { '@context': cd['@context'] } : {}),
       documentOutline: deepClone(cd.documentOutline ?? []),
       documentBlocks: deepClone(cd.documentBlocks ?? []),
       semanticConditions: deepClone(cd.semanticConditions ?? []),
       subTemplateSnapshots: deepClone(cd.subTemplateSnapshots ?? []),
       semanticConditionValues: deepClone(cd.semanticConditionValues ?? []),
       templateDataVersion: normalizeTemplateDataVersion(cd.templateDataVersion),
+      schemaRefs: deepClone(
+        cd.schemaRefs ?? {
+          documentStructure: FACIS_SCHEMA_REFS.documentStructure,
+          semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
+          contractData: FACIS_SCHEMA_REFS.contractData,
+        },
+      ),
+      policyRefs: deepClone(cd.policyRefs ?? FACIS_CONTRACT_POLICY_REFS),
+      validation: deepClone(cd.validation ?? FACIS_CONTRACT_VALIDATION_PROFILE),
+      sourceTemplate: cd.sourceTemplate ? deepClone(cd.sourceTemplate) : undefined,
     }
 
     const approvedBlocks = contractData.documentBlocks.filter(isApprovedTemplateBlock)

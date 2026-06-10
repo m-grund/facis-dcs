@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
 
@@ -27,6 +29,13 @@ type HydraJWTValidator struct {
 	config   HydraJWTConfig
 }
 
+const (
+	oidcDiscoveryDefaultAttempts       = 30
+	oidcDiscoveryDefaultAttemptTimeout = 5 * time.Second
+	oidcDiscoveryDefaultInitialBackoff = 500 * time.Millisecond
+	oidcDiscoveryDefaultMaxBackoff     = 5 * time.Second
+)
+
 // NewHydraJWTValidator connects to the OIDC provider to get public keys.
 func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWTValidator, error) {
 	provider, err := oidc.NewProvider(ctx, config.IssuerURL)
@@ -47,6 +56,67 @@ func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWT
 		verifier: verifier,
 		config:   config,
 	}, nil
+}
+
+func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider, error) {
+	var lastErr error
+	attempts := oidcDiscoveryAttempts()
+	attemptTimeout := oidcDiscoveryAttemptTimeout()
+	backoff := oidcDiscoveryInitialBackoff()
+	maxBackoff := oidcDiscoveryMaxBackoff()
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
+		provider, err := oidc.NewProvider(attemptCtx, issuerURL)
+		cancel()
+		if err == nil {
+			return provider, nil
+		}
+		lastErr = err
+
+		if attempt == attempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
+
+	return nil, fmt.Errorf("OIDC discovery failed after %d attempts: %w", attempts, lastErr)
+}
+
+func oidcDiscoveryAttempts() int {
+	value, err := strconv.Atoi(os.Getenv("OIDC_DISCOVERY_ATTEMPTS"))
+	if err != nil || value < 1 {
+		return oidcDiscoveryDefaultAttempts
+	}
+	return value
+}
+
+func oidcDiscoveryAttemptTimeout() time.Duration {
+	return oidcDiscoveryDuration("OIDC_DISCOVERY_ATTEMPT_TIMEOUT", oidcDiscoveryDefaultAttemptTimeout)
+}
+
+func oidcDiscoveryInitialBackoff() time.Duration {
+	return oidcDiscoveryDuration("OIDC_DISCOVERY_INITIAL_BACKOFF", oidcDiscoveryDefaultInitialBackoff)
+}
+
+func oidcDiscoveryMaxBackoff() time.Duration {
+	return oidcDiscoveryDuration("OIDC_DISCOVERY_MAX_BACKOFF", oidcDiscoveryDefaultMaxBackoff)
+}
+
+func oidcDiscoveryDuration(envName string, fallback time.Duration) time.Duration {
+	value, err := time.ParseDuration(os.Getenv(envName))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 // TokenInfo holds the validated identity extracted from a JWT.

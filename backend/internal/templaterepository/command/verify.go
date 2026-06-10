@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"time"
 
+	"digital-contracting-service/internal/base/validation"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -59,6 +61,9 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 	fullTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read template data: %w", err)
+	}
+	if _, err := validation.NormalizeTemplateData(fullTemplate.TemplateData); err != nil {
+		return fmt.Errorf("template data validation failed: %w", err)
 	}
 
 	if h.FCClient != nil {
