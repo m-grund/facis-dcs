@@ -1,4 +1,4 @@
-package command
+package query
 
 import (
 	"context"
@@ -25,13 +25,17 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type VerifyCmd struct {
+type VerifyQry struct {
 	DID           string
 	VerifiedBy    string
 	ParticipantID string
 	Token         string
 	HolderDID     string
 	UserRoles     userrole.UserRoles
+}
+
+type VerifyResult struct {
+	Findings []string
 }
 
 type Verifier struct {
@@ -41,11 +45,11 @@ type Verifier struct {
 	FCClient *fcclient.FederatedCatalogueClient
 }
 
-func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
+func (h *Verifier) Handle(ctx context.Context, cmd VerifyQry) (*VerifyResult, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("could not start transaction: %w", err)
+		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
@@ -53,34 +57,38 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
-		return fmt.Errorf("could not read process data: %w", err)
+		return nil, fmt.Errorf("could not read process data: %w", err)
 	}
 
 	fullTemplate, err := h.CTRepo.ReadDataByID(ctx, tx, cmd.DID)
 	if err != nil {
-		return fmt.Errorf("could not read template data: %w", err)
+		return nil, fmt.Errorf("could not read template data: %w", err)
 	}
 	if _, err := validation.NormalizeTemplateData(fullTemplate.TemplateData); err != nil {
-		return fmt.Errorf("template data validation failed: %w", err)
+		return nil, fmt.Errorf("template data validation failed: %w", err)
 	}
 
 	if h.FCClient != nil {
-		if err := h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate); err != nil {
-			return err
+		findings, err := h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate)
+		if err != nil {
+
 		}
+		return &VerifyResult{
+			Findings: findings,
+		}, nil
 	}
 
 	hasTask, err := h.RTRepo.TaskExistsInState(ctx, tx, cmd.DID, cmd.VerifiedBy, reviewtaskstate.Open.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if hasTask {
 		err := h.RTRepo.UpdateState(ctx, tx, cmd.DID, cmd.VerifiedBy, reviewtaskstate.Verified.String())
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -95,28 +103,40 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyCmd) error {
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {
-		return fmt.Errorf("could not create event: %w", err)
+		return nil, fmt.Errorf("could not create event: %w", err)
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("could not commit transaction: %w", err)
+	}
+
+	return &VerifyResult{}, nil
 }
 
-func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cmd VerifyCmd, processData *db.ContractTemplateProcessData, fullTemplate *db.ContractTemplate) error {
+func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cmd VerifyQry, processData *db.ContractTemplateProcessData, fullTemplate *db.ContractTemplate) ([]string, error) {
 	if h.FCClient == nil {
-		return fcclient.ErrFederatedCatalogueNotConfigured
+		return nil, fcclient.ErrFederatedCatalogueNotConfigured
 	}
-	if cmd.ParticipantID == "" {
-		return fmt.Errorf("participant id is empty")
-	}
+
 	if processData == nil {
-		return fmt.Errorf("process data is nil")
+		return nil, fmt.Errorf("process data is nil")
 	}
 	if fullTemplate == nil {
-		return fmt.Errorf("full template is nil")
+		return nil, fmt.Errorf("full template is nil")
 	}
+
+	findings := []string{}
+	if cmd.ParticipantID == "" {
+		findings = append(findings, "participantID is empty")
+	}
+
 	documentNumber := ""
-	if processData.DocumentNumber != nil && *processData.DocumentNumber != "" {
+	if processData.DocumentNumber != nil {
 		documentNumber = *processData.DocumentNumber
+		if documentNumber == "" {
+			findings = append(findings, "documentNumber is empty")
+		}
 	}
 
 	templateType := fullTemplate.TemplateType
@@ -124,9 +144,15 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 	description := ""
 	if fullTemplate.Name != nil {
 		name = *fullTemplate.Name
+		if name == "" {
+			findings = append(findings, "name is empty")
+		}
 	}
 	if fullTemplate.Description != nil {
 		description = *fullTemplate.Description
+		if description == "" {
+			findings = append(findings, "description is empty")
+		}
 	}
 
 	sd := selfdescription.BuildTemplateResourceSelfDescription(selfdescription.TemplateResourceInput{
@@ -144,7 +170,7 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 
 	body, err := json.Marshal(sd)
 	if err != nil {
-		return fmt.Errorf("marshal template resource self-description failed: %w", err)
+		return nil, fmt.Errorf("marshal template resource self-description failed: %w", err)
 	}
 
 	query := url.Values{}
@@ -156,15 +182,18 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 
 	resp, err := h.FCClient.Post(ctx, fcclient.VerificationEndpointPath, query, body)
 	if err != nil {
-		return fmt.Errorf("verify template resource self-description failed: %w", err)
+		return nil, fmt.Errorf("verify template resource self-description failed: %w", err)
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		if message := h.FCClient.ExtractErrorMessage(resp.Body); message != "" {
-			return fmt.Errorf("verify template resource self-description failed: %s", message)
+			msg := fmt.Errorf("verify template resource self-description failed: %s", message)
+			findings = append(findings, msg.Error())
+		} else {
+			msg := fmt.Errorf("verify template resource self-description failed with status %d", resp.StatusCode)
+			findings = append(findings, msg.Error())
 		}
-		return fmt.Errorf("verify template resource self-description failed with status %d", resp.StatusCode)
 	}
 
-	return nil
+	return findings, nil
 }

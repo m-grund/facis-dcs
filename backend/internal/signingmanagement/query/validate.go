@@ -1,4 +1,4 @@
-package command
+package query
 
 import (
 	"context"
@@ -18,11 +18,15 @@ import (
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 )
 
-type ValidateCmd struct {
+type ValidateQry struct {
 	DID         string
 	ValidatedBy string
 	HolderDID   string
 	UserRoles   userrole.UserRoles
+}
+
+type ValidationResult struct {
+	Findings []string
 }
 
 type Validator struct {
@@ -30,14 +34,14 @@ type Validator struct {
 	CRepo db.ContractRepo
 }
 
-func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
+func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationResult, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("could not start transaction: %w", err)
+		return nil, fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
@@ -45,9 +49,14 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
-		return fmt.Errorf("could not read process data: %w", err)
+		return nil, fmt.Errorf("could not read process data: %w", err)
+	}
+
+	findings, err := h.CRepo.CollectValidationFindings(ctx, tx, cmd.DID)
+	if err != nil {
+		return nil, fmt.Errorf("could not collect validation findings: %w", err)
 	}
 
 	evt := signingmanagementevents.ValidateEvent{
@@ -60,8 +69,15 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateCmd) error {
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {
-		return fmt.Errorf("could not create event: %w", err)
+		return nil, fmt.Errorf("could not create event: %w", err)
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("could not commit transaction: %w", err)
+	}
+
+	return &ValidationResult{
+		Findings: findings,
+	}, nil
 }

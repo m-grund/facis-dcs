@@ -18,7 +18,7 @@ import (
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
-	"digital-contracting-service/internal/signingmanagement/datatype/signingtaskstate"
+	"digital-contracting-service/internal/signingmanagement/datatype/signingstatus"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 )
@@ -50,8 +50,8 @@ type MetadataItem struct {
 type SigningTaskItem struct {
 	DID             string
 	ContractVersion int
-	State           signingtaskstate.SigningTaskState
-	Signer          string
+	State           signingstatus.SigningStatus
+	SignerDID       string
 	CreatedAt       time.Time
 }
 
@@ -61,9 +61,8 @@ type GetAllMetadataResult struct {
 }
 
 type GetAllMetadataHandler struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	STRepo db.SigningTaskRepo
+	DB    *sqlx.DB
+	CRepo db.ContractRepo
 }
 
 func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadataQry) (*GetAllMetadataResult, error) {
@@ -89,7 +88,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 	}
 
-	signingTasks, err := h.STRepo.ReadAllBySigner(ctx, tx, query.RetrievedBy)
+	signingTasks, err := h.CRepo.ReadAllSigningTasks(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all signing tasks: %w", err)
 	}
@@ -151,7 +150,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	var signingTaskItems []SigningTaskItem
 	for _, data := range signingTasks {
 
-		state, err := signingtaskstate.NewSigningTaskState(data.State)
+		state, err := signingstatus.NewSigningStatus(data.State)
 		if err != nil {
 			return nil, fmt.Errorf("could not create signing task state: %w", err)
 		}
@@ -166,7 +165,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			DID:             data.DID,
 			State:           state,
 			ContractVersion: contractVersion,
-			Signer:          data.Signer,
+			SignerDID:       data.SignerDID,
 			CreatedAt:       data.CreatedAt,
 		})
 	}

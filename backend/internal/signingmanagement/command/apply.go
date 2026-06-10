@@ -55,20 +55,17 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	}(tx)
 
 	// Validates APPROVED state; errors if not found.
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	data, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract %s: %w", cmd.DID, err)
 	}
 
-	// Fetch JSON-LD bytes to form the signing payload.
-	var rawJSON []byte
-	var contractDataJSON *[]byte
-	row := tx.QueryRowContext(ctx, `SELECT contract_data FROM contracts WHERE did = $1`, cmd.DID)
-	if err := row.Scan(&contractDataJSON); err == nil && contractDataJSON != nil {
-		rawJSON = *contractDataJSON
+	if data.ContractData == nil {
+		return fmt.Errorf("could not read data from contract %s: %w", cmd.DID, err)
 	}
+
 	// Compute SHA-256 of the JSON-LD as the canonical signing payload.
-	sum := sha256.Sum256(rawJSON)
+	sum := sha256.Sum256(*data.ContractData)
 	payload, err := json.Marshal(map[string]string{
 		"contract_did": cmd.DID,
 		"jsonld_hash":  fmt.Sprintf("%x", sum),
@@ -99,7 +96,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 
 	evt := event2.ApplyEvent{
 		DID:             cmd.DID,
-		ContractVersion: processData.ContractVersion,
+		ContractVersion: data.ContractVersion,
 		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 		CredentialType:  cmd.CredentialType,

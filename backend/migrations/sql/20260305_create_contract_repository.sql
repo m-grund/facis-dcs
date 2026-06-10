@@ -253,24 +253,3 @@ CREATE TABLE IF NOT EXISTS contract_negotiation_decisions
             REFERENCES contract_negotiations (id)
             ON DELETE CASCADE
 );
-
-------------------------------------------------------------------------------------------------------------------------
-
-CREATE TYPE contract_signing_task_state AS ENUM ('OPEN', 'SIGNED');
-
-CREATE TABLE IF NOT EXISTS contract_signing_task
-(
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    did             VARCHAR(255) NOT NULL CHECK (did <> ''),
-
-    state    contract_approval_task_state NOT NULL,
-    signer VARCHAR(255)     NOT NULL CHECK (signer <> ''),
-
-    created_by VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_signing_task_contract
-        FOREIGN KEY (did)
-            REFERENCES contracts (did)
-);
