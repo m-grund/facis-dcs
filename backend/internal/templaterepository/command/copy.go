@@ -69,7 +69,7 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 		CopyDID:    cmd.CopyDID,
 		CopiedBy:   cmd.CopiedBy,
 		NewVersion: version,
-		OccurredAt: time.Now(),
+		OccurredAt: time.Now().UTC(),
 		HolderDID:  cmd.HolderDID,
 		UserRoles:  cmd.UserRoles,
 	}

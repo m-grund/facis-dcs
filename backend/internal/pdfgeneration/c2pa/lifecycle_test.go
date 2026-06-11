@@ -118,7 +118,7 @@ func TestLifecycleAssertion_OptionalFieldsOmittedWhenEmpty(t *testing.T) {
 	a := NewLifecycleAssertion(
 		"did:example:c1", "hash1", "pdfhash1", "1.0.1",
 		"active", "", "did:example:auth", "", "",
-		time.Now(),
+		time.Now().UTC(),
 	)
 
 	raw, err := json.Marshal(a)

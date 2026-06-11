@@ -54,7 +54,7 @@ func (h *ComplianceValidator) Handle(ctx context.Context, cmd ComplianceCmd) err
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		CheckedBy:       cmd.CheckedBy,
-		OccurredAt:      time.Now(),
+		OccurredAt:      time.Now().UTC(),
 		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}

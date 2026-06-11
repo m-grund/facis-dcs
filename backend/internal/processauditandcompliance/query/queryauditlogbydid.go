@@ -1,4 +1,4 @@
-package contracttemplate
+package qry
 
 import (
 	"context"
@@ -18,19 +18,20 @@ import (
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 )
 
-type GetAuditLogQry struct {
+type GetAuditLogByDIDQry struct {
+	Scope     componenttype.ComponentType
 	DID       string
 	AuditedBy string
 	HolderDID string
 	UserRoles userrole.UserRoles
 }
 
-type Auditor struct {
+type AuditLogByDIDAuditor struct {
 	DB           *sqlx.DB
 	ATrailReader base.AuditTrailReader
 }
 
-func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([]datatype.AuditLogEntry, error) {
+func (h *AuditLogByDIDAuditor) Handle(ctx context.Context, query GetAuditLogByDIDQry) ([]datatype.AuditLogEntry, error) {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -42,20 +43,20 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([]datatype.
 		}
 	}(tx)
 
-	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractTemplateRepo, query.DID)
+	result, err := h.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, query.Scope, query.DID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read audit log entries: %w", err)
 	}
 
 	evt := templateevents.AuditEvt{
 		DID:           query.DID,
-		ComponentType: componenttype.ContractTemplateRepo,
+		ComponentType: query.Scope,
 		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
 		HolderDID:     query.HolderDID,
 		UserRoles:     query.UserRoles,
 	}
-	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
+	err = event.Create(ctx, tx, evt, query.Scope)
 	if err != nil {
 		return nil, fmt.Errorf("could not create event: %w", err)
 	}

@@ -163,7 +163,7 @@ func TestAppendManifest_ChainLinkage(t *testing.T) {
 	// Second assertion referencing the first via PrevManifestHash.
 	assertion2 := NewLifecycleAssertion(
 		"did:example:contract1", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "1.0.1",
-		"active", "", "did:example:auth", "", prevHash, time.Now(),
+		"active", "", "did:example:auth", "", prevHash, time.Now().UTC(),
 	)
 
 	result2, err := AppendManifest(

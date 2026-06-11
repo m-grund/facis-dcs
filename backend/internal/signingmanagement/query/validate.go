@@ -63,7 +63,7 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		ValidatedBy:     cmd.ValidatedBy,
-		OccurredAt:      time.Now(),
+		OccurredAt:      time.Now().UTC(),
 		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}

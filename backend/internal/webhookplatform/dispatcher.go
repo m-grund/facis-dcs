@@ -50,7 +50,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event, did string, data json.
 		CorrelationID: uuid.New().String(),
 		Event:         event,
 		DID:           did,
-		OccurredAt:    time.Now(),
+		OccurredAt:    time.Now().UTC(),
 		Data:          data,
 	}
 
