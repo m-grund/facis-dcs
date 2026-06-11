@@ -137,6 +137,13 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 				return fmt.Errorf("could not read log CID: %w", err)
 			}
 		}
+	case componenttype.Authentication.String():
+		if event.DID != nil && len(*event.DID) > 1 {
+			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
+			if err != nil {
+				return fmt.Errorf("could not read log CID: %w", err)
+			}
+		}
 	}
 
 	auditLogEntry := datatype.AuditLogEntry{
@@ -163,6 +170,12 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 			}
 		}
 	case componenttype.ContractWorkflowEngine.String():
+		if event.DID != nil && len(*event.DID) > 1 {
+			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
+				return fmt.Errorf("could not update log CID: %w", err)
+			}
+		}
+	case componenttype.Authentication.String():
 		if event.DID != nil && len(*event.DID) > 1 {
 			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
 				return fmt.Errorf("could not update log CID: %w", err)

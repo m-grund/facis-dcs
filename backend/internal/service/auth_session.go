@@ -11,11 +11,13 @@ import (
 	"strings"
 
 	genauth "digital-contracting-service/gen/auth"
+	authaudit "digital-contracting-service/internal/auth/audit"
 	authdb "digital-contracting-service/internal/auth/db"
 	"digital-contracting-service/internal/auth/hydra"
 	"digital-contracting-service/internal/auth/oid4vp"
 	"digital-contracting-service/internal/pathutil"
 
+	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
 	goa "goa.design/goa/v3/pkg"
 )
@@ -31,7 +33,11 @@ type authSvc struct {
 	requestSigner     oid4vp.AuthorizationRequestSigner
 }
 
-func NewAuth(presentations authdb.PresentationAttemptRepo) genauth.Service {
+func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo) genauth.Service {
+	if db != nil {
+		oid4vp.ConfigurePresentationAuditRecorder(&authaudit.Recorder{DB: db})
+	}
+
 	var requestSigner oid4vp.AuthorizationRequestSigner
 	if signer, err := oid4vp.LoadAuthorizationRequestSignerFromEnv(); err == nil {
 		requestSigner = signer
