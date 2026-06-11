@@ -182,7 +182,7 @@ export interface CompanyParty {
   }
 }
 
-type SemanticConditionLike = {
+interface SemanticConditionLike {
   conditionId: string
   conditionName?: string
   parameters: {
@@ -190,11 +190,11 @@ type SemanticConditionLike = {
     type: ParameterType
     isRequired?: boolean
     fixedValue?: unknown
-    operators?: Array<{ operate: DcsOperator; targets?: string[] } | DcsOperator>
+    operators?: ({ operate: DcsOperator; targets?: string[] } | DcsOperator)[]
   }[]
 }
 
-type DocumentBlockLike = {
+interface DocumentBlockLike {
   blockId: string
   type: string
   text?: string
@@ -271,9 +271,14 @@ export function buildSemanticRulesFromConditions(
         const operate = typeof rawOperator === 'string' ? rawOperator : rawOperator.operate
         const operator = normalizeSemanticOperator(operate)
         if (!operator) continue
-        const targets = typeof rawOperator === 'string' ? [] : rawOperator.targets ?? []
+        const targets = typeof rawOperator === 'string' ? [] : (rawOperator.targets ?? [])
         rules.push({
-          '@type': parameter.type === 'date' ? 'DateConstraintRule' : parameter.type === 'decimal' || parameter.type === 'integer' ? 'ThresholdRule' : 'SemanticRule',
+          '@type':
+            parameter.type === 'date'
+              ? 'DateConstraintRule'
+              : parameter.type === 'decimal' || parameter.type === 'integer'
+                ? 'ThresholdRule'
+                : 'SemanticRule',
           ruleId: buildRuleId(condition.conditionId, parameter.parameterName, operator),
           conditionId: condition.conditionId,
           parameterName: parameter.parameterName,
@@ -284,7 +289,12 @@ export function buildSemanticRulesFromConditions(
           valueType: parameter.type,
           severity: parameter.isRequired ? 'blocking' : 'error',
           source: 'semanticCondition',
-          message: buildRuleMessage(condition.conditionName ?? condition.conditionId, parameter.parameterName, operator, targets),
+          message: buildRuleMessage(
+            condition.conditionName ?? condition.conditionId,
+            parameter.parameterName,
+            operator,
+            targets,
+          ),
         })
       }
     }
@@ -314,7 +324,12 @@ function buildRuleId(conditionId: string, parameterName: string, operator: DcsOp
   return `rule-${slugify(conditionId)}-${slugify(parameterName)}-${slugify(operator)}`
 }
 
-function buildRuleMessage(conditionName: string, parameterName: string, operator: DcsOperator, targets: string[]): string {
+function buildRuleMessage(
+  conditionName: string,
+  parameterName: string,
+  operator: DcsOperator,
+  targets: string[],
+): string {
   const target = targets.length ? ` ${targets.join(', ')}` : ''
   return `${conditionName}.${parameterName} must satisfy ${operator}${target}.`
 }

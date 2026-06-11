@@ -51,7 +51,6 @@
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
-import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import type { TemplateCatalogueRetrieveByIdResponse } from '@/models/responses/template-catalogue-integration-response'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
@@ -64,10 +63,10 @@ import { ROUTES } from '@/router/router'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const router = useRouter()
 const route = useRoute()
-const authStore = useAuthStore()
 
 const did = computed(() => (typeof route.params.did === 'string' ? route.params.did : ''))
 const version = computed(() => {
@@ -95,13 +94,20 @@ const tabs: { id: CatalogueTabId; label: string }[] = [
 
 const templatesStore = useContractTemplatesStore()
 const { contractTemplates, loading: localTemplatesLoading } = storeToRefs(templatesStore)
-const templateManager = computed(() => authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false)
+
+const { isManager } = useContractPermissions()
 
 const isRegisterDisabled = computed(() => {
-  if (!templateManager.value) return true
+  if (!isManager.value) return true
   if (localTemplatesLoading.value) return true
   if (!catalogue.value) return true
   if (catalogue.value.version == null) return true
+
+  const result = contractTemplates.value.filter((contract) => contract.did === did.value)
+  if (result.length > 0) {
+    return true
+  }
+
   return registerLoading.value
 })
 
@@ -161,7 +167,7 @@ watch(
         version: data.version ?? null,
         updated_at: data.updated_at ?? null,
         created_by: '',
-        responsible_persons: null,
+        responsible: null,
       })
     } catch (e: unknown) {
       error.value = e instanceof Error && e.message ? e.message : 'Error loading template catalogue'
@@ -198,7 +204,7 @@ async function registerTemplate() {
     })
 
     await templatesStore.loadTemplates()
-    await router.push({ name: ROUTES.TEMPLATES.VIEW, params: { did: registered.did } })
+    await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: registered.did } })
   } catch (e: unknown) {
     error.value = e instanceof Error && e.message ? e.message : 'Registration failed'
   } finally {

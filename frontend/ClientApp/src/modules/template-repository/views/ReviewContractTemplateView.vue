@@ -8,7 +8,7 @@
       <ConfirmationModal ref="comment-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-        <CopyTemplateButton v-if="isCreator || isManager" class="btn flex-1 btn-primary" />
+        <CopyTemplateButton v-if="isReviewer || isManager" class="btn flex-1 btn-primary" />
         <!-- Return to draft / request changes -->
         <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="returnToDraft">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
@@ -55,7 +55,7 @@ const commentDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('co
 const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const { isCreator, isManager: isManagerBase } = useTemplatePermissions()
+const { isReviewer, isManager: isManagerBase } = useTemplatePermissions()
 const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
@@ -93,7 +93,7 @@ watch(
           version: template.version ?? null,
           document_number: template.document_number ?? null,
           updated_at: template.updated_at ?? null,
-          responsible_persons: template.responsible_persons ?? null,
+          responsible: template.responsible ?? null,
         })
       })
       .catch((error: unknown) => {

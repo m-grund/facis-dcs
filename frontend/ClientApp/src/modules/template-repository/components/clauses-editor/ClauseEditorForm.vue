@@ -79,7 +79,11 @@ const hasRequiredUnusedParamInUsedRules = computed(() => {
 
   return props.semanticConditions
     .filter((c) => usedConditionIds.has(c.conditionId))
-    .some((c) => c.parameters.some((p) => p.fixedValue === undefined && p.isRequired && !usedParams.has(`${c.conditionId}.${p.parameterName}`)))
+    .some((c) =>
+      c.parameters.some(
+        (p) => p.fixedValue === undefined && p.isRequired && !usedParams.has(`${c.conditionId}.${p.parameterName}`),
+      ),
+    )
 })
 
 const canSubmit = computed(

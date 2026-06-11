@@ -352,7 +352,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueCreateParticipantRequest)
@@ -373,7 +373,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueCreateServiceOfferingRequest)
@@ -394,7 +394,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueGetCurrentParticipantRequest)
@@ -417,7 +417,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueGetCurrentParticipantRequest)
@@ -440,7 +440,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueListOtherParticipantsRequest)
@@ -461,7 +461,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueGetCurrentServiceOfferingRequest)
@@ -484,7 +484,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueUpdateParticipantRequest)
@@ -507,7 +507,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueUpdateServiceOfferingRequest)
@@ -530,7 +530,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueDeleteParticipantRequest)
@@ -551,7 +551,7 @@ var _ = Service("TemplateCatalogueIntegration", func() {
 		Meta("dcs:requirements", "DCS-IR-SI-01")
 
 		Security(JWTAuth, func() {
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(TemplateCatalogueDeleteServiceOfferingRequest)

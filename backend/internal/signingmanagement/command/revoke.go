@@ -2,9 +2,13 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/jmoiron/sqlx"
 
@@ -18,6 +22,8 @@ import (
 type RevokeCmd struct {
 	DID       string
 	RevokedBy string
+	HolderDID string
+	UserRoles userrole.UserRoles
 }
 
 type Revoker struct {
@@ -35,22 +41,28 @@ func (h *Revoker) Handle(ctx context.Context, cmd RevokeCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
+	}
+
+	err = h.CRepo.RevokeSignature(ctx, tx, cmd.DID, cmd.RevokedBy)
+	if err != nil {
+		return fmt.Errorf("could not revoke signature: %w", err)
 	}
 
 	evt := signingmanagementevents.RevokeEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		RevokedBy:       cmd.RevokedBy,
-		OccurredAt:      time.Now(),
+		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
 	if err != nil {

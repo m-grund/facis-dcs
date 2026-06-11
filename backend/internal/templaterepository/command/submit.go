@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/actionflag"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -25,8 +26,8 @@ type SubmitCmd struct {
 	SubmittedBy string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
-	Reviewers   []string
-	Approver    *string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
 }
 
 type Submitter struct {
@@ -37,26 +38,25 @@ type Submitter struct {
 }
 
 func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, cmd SubmitCmd) error {
-	for _, reviewer := range cmd.Reviewers {
-		reviewTask := db.ReviewTaskData{
-			DID:       cmd.DID,
-			Reviewer:  reviewer,
-			State:     reviewtaskstate.Open.String(),
-			CreatedBy: cmd.SubmittedBy,
-		}
-		_, err := rtRepo.Create(ctx, tx, reviewTask)
-		if err != nil {
-			return fmt.Errorf("could not create review tasks: %w", err)
-		}
+	reviewTask := db.ReviewTaskData{
+		DID:       cmd.DID,
+		Reviewer:  cmd.SubmittedBy,
+		State:     reviewtaskstate.Open.String(),
+		CreatedBy: cmd.SubmittedBy,
+	}
+	_, err := rtRepo.Create(ctx, tx, reviewTask)
+	if err != nil {
+		return fmt.Errorf("could not create review tasks: %w", err)
 	}
 
 	data := db.ApprovalTaskData{
 		DID:       cmd.DID,
 		CreatedBy: cmd.SubmittedBy,
-		Approver:  *cmd.Approver,
+		Approver:  cmd.SubmittedBy,
 		State:     reviewtaskstate.Open.String(),
 	}
-	_, err := atRepo.Create(ctx, tx, data)
+
+	_, err = atRepo.Create(ctx, tx, data)
 	if err != nil {
 		return fmt.Errorf("could not create approval task: %w", err)
 	}
@@ -76,7 +76,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
@@ -85,33 +85,25 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	var responsiblePersons *any
+	var responsible *any
 	var nextTemplateState contracttemplatestate.ContractTemplateState
 	if processData.State == contracttemplatestate.Draft.String() {
 
-		if cmd.SubmittedBy != processData.CreatedBy {
-			return errors.New("invalid user")
+		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator) {
+			return errors.New("invalid user permission")
 		}
 
-		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewer provided")
-		}
-
-		if cmd.Approver == nil || len(*cmd.Approver) == 0 {
-			return errors.New("no approver provided")
-		}
-
-		respPersons := db.ResponsiblePersons{
+		resp := db.Responsible{
 			Creator:   processData.CreatedBy,
-			Reviewers: cmd.Reviewers,
-			Approver:  *cmd.Approver,
+			Reviewers: []string{cmd.SubmittedBy},
+			Approver:  cmd.SubmittedBy,
 		}
-		anyRespPerson := any(respPersons)
-		responsiblePersons = &anyRespPerson
+		anyResp := any(resp)
+		responsible = &anyResp
 
 		updateData := db.ContractTemplateUpdateData{
-			DID:                cmd.DID,
-			ResponsiblePersons: &respPersons,
+			DID:         cmd.DID,
+			Responsible: &resp,
 		}
 		err := h.CTRepo.Update(ctx, tx, updateData)
 		if err != nil {
@@ -127,8 +119,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Rejected.String() {
 
-		if cmd.SubmittedBy != processData.CreatedBy {
-			return errors.New("invalid user")
+		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator) {
+			return errors.New("invalid user permission")
 		}
 
 		err := h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
@@ -145,13 +137,16 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contracttemplatestate.Submitted.String() {
 
-		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.SubmittedBy)
+		if !cmd.UserRoles.HasRoles(userrole.TemplateReviewer) {
+			return errors.New("invalid user permission")
+		}
+
+		isValidReviewer, err := h.RTRepo.IsValidReviewer(ctx, tx, cmd.DID, cmd.SubmittedBy)
 		if err != nil {
 			return err
 		}
-
-		if !isValid {
-			return errors.New("invalid user")
+		if !isValidReviewer {
+			return errors.New("user is not a valid reviewer for that contract template")
 		}
 
 		if cmd.ActionFlag != nil {
@@ -175,6 +170,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 				if !existOpenTasks {
 					nextTemplateState = contracttemplatestate.Reviewed
 				}
+
 			case actionflag.Draft:
 				err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
 				if err != nil {
@@ -187,18 +183,21 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 				nextTemplateState = contracttemplatestate.Rejected
 			}
 		} else {
-			return errors.New("action flags is missing")
+			return errors.New("action flag is missing")
 		}
 
 	} else if processData.State == contracttemplatestate.Reviewed.String() {
+
+		if !cmd.UserRoles.HasRoles(userrole.TemplateApprover) {
+			return errors.New("invalid user permission")
+		}
 
 		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
 		if err != nil {
 			return err
 		}
-
 		if !isValid {
-			return errors.New("invalid user")
+			return errors.New("user is not a valid approver for that contract template")
 		}
 
 		err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
@@ -224,16 +223,18 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		evt := templateevents.SubmitEvent{
-			DID:                cmd.DID,
-			DocumentNumber:     processData.DocumentNumber,
-			Version:            processData.Version,
-			SubmittedBy:        cmd.SubmittedBy,
-			PreviousState:      processData.State,
-			NewState:           nextTemplateState.String(),
-			ActionFlag:         cmd.ActionFlag,
-			Comments:           cmd.Comments,
-			OccurredAt:         time.Now().UTC(),
-			ResponsiblePersons: responsiblePersons,
+			DID:            cmd.DID,
+			DocumentNumber: processData.DocumentNumber,
+			Version:        processData.Version,
+			SubmittedBy:    cmd.SubmittedBy,
+			PreviousState:  processData.State,
+			NewState:       nextTemplateState.String(),
+			ActionFlag:     cmd.ActionFlag,
+			Comments:       cmd.Comments,
+			OccurredAt:     time.Now().UTC(),
+			Responsible:    responsible,
+			HolderDID:      cmd.HolderDID,
+			UserRoles:      cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 		if err != nil {

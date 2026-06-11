@@ -23,6 +23,7 @@
     "fast-myers-diff": "^3.2.0",
     "jwt-decode": "^4.0.0",
     "pinia": "^3.0.4",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
   },

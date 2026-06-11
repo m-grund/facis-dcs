@@ -28,7 +28,7 @@ import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } fro
 import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 
-const storeId = "templateDraft"
+const storeId = 'templateDraft'
 const defaultState: Readonly<TemplateDraftState> = {
   did: null,
   name: '',
@@ -57,7 +57,7 @@ const defaultState: Readonly<TemplateDraftState> = {
   version: null,
   updated_at: null,
   created_by: '',
-  responsible_persons: null,
+  responsible: null,
   // This field is used to distinguish between contract and template workflows.
   workflow: 'template',
 }
@@ -74,7 +74,11 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     /** Returns the data to create a contract template based on the current draft state. */
     templateCreateRequestData(): ContractTemplateCreateRequest {
-      const semanticExtension = buildSemanticTemplateExtension(this.documentBlocks, this.semanticConditions, this.semanticProfile)
+      const semanticExtension = buildSemanticTemplateExtension(
+        this.documentBlocks,
+        this.semanticConditions,
+        this.semanticProfile,
+      )
       return {
         name: this.name,
         description: this.description,
@@ -89,7 +93,10 @@ export const useTemplateDraftStore = defineStore(storeId, {
           validation: this.validation,
           semanticProfile: semanticExtension.semanticProfile,
           templateVariables: this.templateVariables,
-          placeholderBindings: mergePlaceholderBindings(this.placeholderBindings, semanticExtension.placeholderBindings),
+          placeholderBindings: mergePlaceholderBindings(
+            this.placeholderBindings,
+            semanticExtension.placeholderBindings,
+          ),
           semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
           sla: this.sla ?? undefined,
           subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
@@ -99,7 +106,11 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     templateUpdateRequestData(): ContractTemplateUpdateRequest | null {
       if (!this.did || !this.updated_at) return null
-      const semanticExtension = buildSemanticTemplateExtension(this.documentBlocks, this.semanticConditions, this.semanticProfile)
+      const semanticExtension = buildSemanticTemplateExtension(
+        this.documentBlocks,
+        this.semanticConditions,
+        this.semanticProfile,
+      )
       return {
         did: this.did,
         updated_at: this.updated_at,
@@ -115,7 +126,10 @@ export const useTemplateDraftStore = defineStore(storeId, {
           validation: this.validation,
           semanticProfile: semanticExtension.semanticProfile,
           templateVariables: this.templateVariables,
-          placeholderBindings: mergePlaceholderBindings(this.placeholderBindings, semanticExtension.placeholderBindings),
+          placeholderBindings: mergePlaceholderBindings(
+            this.placeholderBindings,
+            semanticExtension.placeholderBindings,
+          ),
           semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
           sla: this.sla ?? undefined,
           subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
@@ -238,7 +252,13 @@ export const useTemplateDraftStore = defineStore(storeId, {
     },
     // Clauses operations: add, delete, update
     /** Adds a clause block to documentBlocks only */
-    addClause(payload: { title?: string; text: string; conditionIds: string[]; schemaRef?: string; semanticPath?: string }): string {
+    addClause(payload: {
+      title?: string
+      text: string
+      conditionIds: string[]
+      schemaRef?: string
+      semanticPath?: string
+    }): string {
       const blockId = crypto.randomUUID()
       const block = createBlockFromPayload(blockId, {
         blockType: DocumentBlockType.Clause,
@@ -602,7 +622,7 @@ function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTem
 
 function mergePlaceholderBindings(
   stored: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'],
-  generated: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings']
+  generated: ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'],
 ) {
   const result = new Map<string, ReturnType<typeof buildSemanticTemplateExtension>['placeholderBindings'][number]>()
   for (const binding of stored.filter((item) => item.source !== 'clause-placeholder')) {
@@ -616,7 +636,7 @@ function mergePlaceholderBindings(
 
 function mergeSemanticRules(
   stored: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'],
-  generated: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules']
+  generated: ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'],
 ) {
   const result = new Map<string, ReturnType<typeof buildSemanticTemplateExtension>['semanticRules'][number]>()
   for (const rule of stored.filter((item) => item.source !== 'semanticCondition')) {

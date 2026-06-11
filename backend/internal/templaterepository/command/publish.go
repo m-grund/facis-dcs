@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -25,7 +26,9 @@ type PublishCmd struct {
 	DID           string
 	UpdatedAt     time.Time
 	PublishedBy   string
+	HolderDID     string
 	ParticipantID string
+	UserRoles     userrole.UserRoles
 }
 
 type Publisher struct {
@@ -49,7 +52,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 			}
 		}(tx)
 
-		processData, err = h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+		processData, err = h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 		if err != nil {
 			return fmt.Errorf("could not read process data: %w", err)
 		}
@@ -87,7 +90,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		}
 	}(tx)
 
-	processData, err = h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err = h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -111,7 +114,9 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		DocumentNumber: processData.DocumentNumber,
 		Version:        processData.Version,
 		PublishedBy:    cmd.PublishedBy,
+		HolderDID:      cmd.HolderDID,
 		OccurredAt:     time.Now().UTC(),
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

@@ -16,6 +16,7 @@ type ContractContentAuditMetadata struct {
 	ContractVersion string
 	PolicyVersion   string
 	AuditedBy       string
+	HolderDID       string
 }
 
 type ContractContentPolicy struct {

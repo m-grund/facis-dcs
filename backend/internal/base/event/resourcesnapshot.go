@@ -3,14 +3,16 @@ package event
 import (
 	"context"
 	"database/sql"
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/datatype/componenttype"
 	"encoding/json"
 	"fmt"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 
 	"github.com/jmoiron/sqlx"
 )
 
+//nolint:unused
 var resourceSnapshotEventTypes = map[string]map[string]bool{
 	componenttype.ContractWorkflowEngine.String(): {
 		"CREATE_CONTRACT":           true,
@@ -39,10 +41,12 @@ var resourceSnapshotEventTypes = map[string]map[string]bool{
 	},
 }
 
+//nolint:unused
 func shouldStoreResourceData(component string, eventType string) bool {
 	return resourceSnapshotEventTypes[component][eventType]
 }
 
+//nolint:unused
 func readCurrentResourceData(ctx context.Context, tx *sqlx.Tx, component string, did *string) (json.RawMessage, error) {
 	if did == nil || len(*did) <= 1 {
 		return nil, nil
@@ -79,7 +83,7 @@ func readCurrentResourceData(ctx context.Context, tx *sqlx.Tx, component string,
 				'created_by', created_by,
 				'created_at', created_at,
 				'updated_at', updated_at,
-				'expiration_date', expiration_date,
+				'exp_date', exp_date,
 				'contract_data', contract_data
 			)
 			FROM contracts_effective
@@ -100,6 +104,7 @@ func readCurrentResourceData(ctx context.Context, tx *sqlx.Tx, component string,
 	return json.RawMessage(data), nil
 }
 
+//nolint:unused
 func eventDataWithResourceData(eventData []byte, resourceData json.RawMessage) ([]byte, error) {
 	if len(resourceData) == 0 {
 		return eventData, nil
@@ -118,6 +123,7 @@ func eventDataWithResourceData(eventData []byte, resourceData json.RawMessage) (
 	return result, nil
 }
 
+//nolint:unused
 func splitResourceData(eventData []byte) (json.RawMessage, []byte) {
 	var payload map[string]json.RawMessage
 	if err := json.Unmarshal(eventData, &payload); err != nil {

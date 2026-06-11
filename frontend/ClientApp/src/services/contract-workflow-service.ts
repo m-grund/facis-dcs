@@ -148,8 +148,6 @@ export const contractWorkflowService: ContractWorkflowService = {
     lifecycle_status?: string
     status_list_status?: string
   }> {
-    return http
-      .get(`/pdf/verify/contract/${encodeURIComponent(did)}`)
-      .then((res) => res.data)
+    return http.get(`/pdf/verify/contract/${encodeURIComponent(did)}`).then((res) => res.data)
   },
 }

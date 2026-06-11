@@ -78,7 +78,7 @@ func (s *SubscriptionStore) Add(event, callbackURL, secret string) Subscription 
 		Event:       event,
 		CallbackURL: callbackURL,
 		Secret:      secret,
-		CreatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
 	}
 	s.mu.Lock()
 	s.subs[event] = append(s.subs[event], sub)

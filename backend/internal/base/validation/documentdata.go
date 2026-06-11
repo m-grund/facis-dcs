@@ -1,12 +1,13 @@
 package validation
 
 import (
-	"digital-contracting-service/internal/base/datatype"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 type domainField struct {
@@ -431,9 +432,10 @@ func buildSemanticRules(data documentData) []map[string]any {
 					continue
 				}
 				ruleType := "SemanticRule"
-				if parameterType == "date" {
+				switch parameterType {
+				case "date":
 					ruleType = "DateConstraintRule"
-				} else if parameterType == "decimal" || parameterType == "integer" {
+				case "decimal", "integer":
 					ruleType = "ThresholdRule"
 				}
 				var rightOperand any = targets
@@ -1151,6 +1153,7 @@ func semanticConditionIndex(data documentData) (semanticConditionsByBlock, error
 	return conditions, nil
 }
 
+//nolint:unused
 func allowedValuesForDomainPath(domainPath string) []any {
 	field, ok := ontologyDomainFieldIndex[domainPath]
 	if !ok || field.Constraint == nil {

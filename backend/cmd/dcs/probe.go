@@ -17,7 +17,10 @@ func probeHTTP(rawURL string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	err = resp.Body.Close()
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
@@ -43,6 +46,8 @@ func probeHTTPAny(urls ...string) error {
 // probeTCP dials the host:port extracted from rawURL and returns an error if
 // the TCP connection cannot be established within 5 seconds. Use this for
 // services that don't expose a documented HTTP health endpoint.
+//
+//nolint:unused
 func probeTCP(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -62,6 +67,9 @@ func probeTCP(rawURL string) error {
 	if err != nil {
 		return err
 	}
-	conn.Close()
+	err = conn.Close()
+	if err != nil {
+		return err
+	}
 	return nil
 }

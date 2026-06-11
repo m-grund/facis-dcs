@@ -123,7 +123,7 @@ func TestC2PA_ChainLinkageWithRealPDF(t *testing.T) {
 	// First assertion: initial export (draft state, no prev hash).
 	assertion1 := c2pa.NewLifecycleAssertion(
 		fixedInput.DID, fileHash, pdfHash, "1.0.1",
-		"draft", "", "did:example:issuer", "", "", time.Now(),
+		"draft", "", "did:example:issuer", "", "", time.Now().UTC(),
 	)
 	result1, err := c2pa.AppendManifest(
 		context.Background(), signer, c2pa.TSAConfig{}, storer,
@@ -140,7 +140,7 @@ func TestC2PA_ChainLinkageWithRealPDF(t *testing.T) {
 	// Second assertion: state advance to active, chaining from the first.
 	assertion2 := c2pa.NewLifecycleAssertion(
 		fixedInput.DID, fileHash, pdfHash, "1.0.1",
-		"active", "", "did:example:issuer", "", prevHash, time.Now(),
+		"active", "", "did:example:issuer", "", prevHash, time.Now().UTC(),
 	)
 	result2, err := c2pa.AppendManifest(
 		context.Background(), signer, c2pa.TSAConfig{}, storer,
@@ -177,7 +177,7 @@ func TestC2PA_RoundTripWithRealPDF(t *testing.T) {
 	pdfHash := c2pa.BasePDFHashOf(pdf)
 	assertion := c2pa.NewLifecycleAssertion(
 		fixedInput.DID, fileHash, pdfHash, "1.0.1",
-		"draft", "", "did:example:issuer", "", "", time.Now(),
+		"draft", "", "did:example:issuer", "", "", time.Now().UTC(),
 	)
 
 	result, err := c2pa.AppendManifest(

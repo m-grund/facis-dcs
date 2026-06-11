@@ -8,6 +8,9 @@ var SMContractRetrieveRequest = Type("SMContractRetrieveRequest", func() {
 	Description("Contract retrieve request")
 
 	Token("token", String, "JWT token")
+
+	//	Attribute("offset", Int, "Start index of results")
+	//	Attribute("limit", Int, "Page size of results")
 })
 
 var SMContractListItem = Type("SMContractListItem", func() {
@@ -16,20 +19,26 @@ var SMContractListItem = Type("SMContractListItem", func() {
 	Attribute("state", String, "Current state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "The description of the contract")
+	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSigningTaskItem = Type("SMContractSigningTaskItem", func() {
 	Attribute("did", String, "DID of the contract")
 	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "State of the review task")
-	Attribute("reviewer", String, "The reviewer of the contract")
+	Attribute("signer", String, "The reviewer of the contract")
 	Attribute("created_at", String, "Created at")
 
-	Required("did", "state", "reviewer", "created_at")
+	Required("did", "state", "signer", "created_at", "contract_version")
 })
 
 var SMContractRetrieveResponse = Type("SMContractRetrieveResponse", func() {
@@ -57,10 +66,17 @@ var SMContractItem = Type("SMContractItem", func() {
 	Attribute("state", String, "Current state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "The description of the contract")
+	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("start_date", String, "The timestamp when the contract starts")
+	Attribute("exp_date", String, "The timestamp when the contract expired")
+	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
+	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
+	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("contract_data", Any, "The data of that contract")
 
-	Required("did", "state", "created_at", "updated_at")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })
 
 var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {
@@ -232,6 +248,8 @@ var _ = Service("SignatureManagement", func() {
 
 		HTTP(func() {
 			GET("/signature/retrieve")
+			//			Param("offset")
+			//			Param("limit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -321,8 +339,6 @@ var _ = Service("SignatureManagement", func() {
 		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
 
 		Security(JWTAuth, func() {
-			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
 		})
@@ -375,7 +391,7 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("System Administrator")
+			Scope("Sys. Administrator")
 		})
 
 		Payload(SMContractAuditRequest)

@@ -54,6 +54,7 @@ watch(
       v-for="template in sortedTemplates"
       :key="`${template.did}|${template.document_number}|${template.version}`"
       :template="template"
+      :templates="props.templates"
     />
     <li v-if="sortedTemplates.length < 1" class="px-4">No templates found</li>
   </ul>

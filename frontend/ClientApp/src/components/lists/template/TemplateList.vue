@@ -71,8 +71,6 @@ onUnmounted(() => stateFilterStore.reset())
       v-for="template in filteredTemplates"
       :key="`${template.did}|${template.document_number}|${template.version}`"
       :template="template"
-      :has-review-task="props.hasReviewTask(template)"
-      :has-approval-task="props.hasApprovalTask(template)"
     />
     <li v-if="filteredTemplates.length < 1" class="px-4">No templates found</li>
   </ul>

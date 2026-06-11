@@ -1,4 +1,4 @@
-CREATE TYPE contract_state AS ENUM ('DRAFT', 'NEGOTIATION', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'TERMINATED', 'EXPIRED');
+CREATE TYPE contract_state AS ENUM ('DRAFT', 'NEGOTIATION', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'SIGNED', 'TERMINATED', 'EXPIRED');
 CREATE TYPE contract_expiration_policy AS ENUM ('RENEWAL', 'TERMINATION', 'ARCHIVING');
 
 
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS contracts
     exp_policy        contract_expiration_policy,
     exp_notice_period INT,
 
-    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+    responsible     JSONB DEFAULT '{}'::jsonb,
 
     state             contract_state NOT NULL,
 
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS contract_history
     exp_policy        contract_expiration_policy,
     exp_notice_period INT,
 
-    responsible_persons     JSONB DEFAULT '{}'::jsonb,
+    responsible     JSONB DEFAULT '{}'::jsonb,
 
     state             contract_state NOT NULL,
 
@@ -106,7 +106,7 @@ SELECT
     description,
     contract_data,
     search_vector,
-    responsible_persons
+    responsible
 FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ SELECT
     contract_version,
     name,
     description,
-    responsible_persons
+    responsible
 FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -242,7 +243,12 @@ func requestTimestamp(ctx context.Context, tsaURL string, data []byte) ([]byte, 
 	if err != nil {
 		return nil, fmt.Errorf("call TSA endpoint: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close body")
+		}
+	}(httpResp.Body)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {

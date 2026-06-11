@@ -11,7 +11,9 @@ export function resolveAllowedValues(constraint?: SemanticValueConstraint): read
   return (
     ONTOLOGY_DOMAIN_FIELDS.find((field) => {
       const fieldConstraint = field.valueConstraint
-      return normalizeAllowedValuesRef(fieldConstraint?.allowedValuesRef) === ref && !!fieldConstraint?.allowedValues?.length
+      return (
+        normalizeAllowedValuesRef(fieldConstraint?.allowedValuesRef) === ref && !!fieldConstraint?.allowedValues?.length
+      )
     })?.valueConstraint?.allowedValues ?? []
   )
 }

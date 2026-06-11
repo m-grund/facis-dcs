@@ -58,7 +58,7 @@ func TestRequestTimestamp_Success(t *testing.T) {
 			Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
 			Nonce:         req.Nonce,
 		}
-		resp, err := ts.CreateResponse(cert, key)
+		resp, err := ts.CreateResponseWithOpts(cert, key, nil)
 		require.NoError(t, err)
 
 		w.Header().Set("Content-Type", "application/timestamp-reply")
@@ -99,7 +99,7 @@ func TestRequestTimestamp_HashMismatch(t *testing.T) {
 			Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
 			Nonce:         req.Nonce,
 		}
-		resp, err := ts.CreateResponse(cert, key)
+		resp, err := ts.CreateResponseWithOpts(cert, key, nil)
 		require.NoError(t, err)
 		_, _ = w.Write(resp)
 	}))
