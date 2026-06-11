@@ -23,6 +23,15 @@ func (s *processAuditAndCompliancesrvc) auditArchiveTrailEntries(ctx context.Con
 		return nil, err
 	}
 
+	chainReader, err := newArchiveNotaryChainReaderFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	notaryEvents, err := chainReader.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	for i, entry := range entries {
 		did := entry.DID
 		result[did] = append(result[did], &processauditandcompliance.PACResourceAuditTrailEntry{
@@ -50,6 +59,15 @@ func (s *processAuditAndCompliancesrvc) auditArchiveTrailEntries(ctx context.Con
 			Did:       &did,
 			CreatedAt: entry.StoredAt.UTC().Format(time.RFC3339),
 		})
+		archiveStoreEvents, err := s.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractStorageArchive, did)
+		if err != nil {
+			return nil, err
+		}
+		integrityEntry, err := s.archiveIntegrityTrailEntries(ctx, entry, i, archiveStoreEvents, notaryEvents)
+		if err != nil {
+			return nil, err
+		}
+		result[did] = append(result[did], integrityEntry)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err

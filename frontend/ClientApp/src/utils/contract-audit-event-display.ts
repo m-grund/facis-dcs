@@ -21,6 +21,7 @@ const contractEventLabels: Record<string, string> = {
   SEARCH_CONTRACT: 'Searched contracts',
   STORE_ARCHIVED_CONTRACT: 'Stored contract in archive',
   ARCHIVE_ENTRY_AUDIT_SUMMARY: 'Archive entry audit summary',
+  ARCHIVE_INTEGRITY_AUDIT_CHECK: 'Archive integrity audit check',
 }
 
 const submitTransitionLabels: Record<string, string> = {

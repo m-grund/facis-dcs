@@ -1,0 +1,250 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+
+	"digital-contracting-service/internal/base/datatype"
+	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
+	"digital-contracting-service/internal/contractworkflowengine/db"
+)
+
+func TestParseArchiveNotaryChainAcceptsValidChain(t *testing.T) {
+	first := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-08T12:00:00Z",
+		ReceivedAt:      "2026-06-08T12:00:01Z",
+		PreviousHash:    nil,
+	}
+	first.EventHash = hashArchiveNotaryEvent(first)
+	prev := first.EventHash
+	second := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:2",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:2#1",
+		ContentHash:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		SnapshotCID:     "bafy-two",
+		StoredBy:        "bob",
+		StoredAt:        "2026-06-08T12:01:00Z",
+		ReceivedAt:      "2026-06-08T12:01:01Z",
+		PreviousHash:    &prev,
+	}
+	second.EventHash = hashArchiveNotaryEvent(second)
+
+	events, err := parseArchiveNotaryChain(strings.NewReader(notaryLine(first) + notaryLine(second)))
+	if err != nil {
+		t.Fatalf("parseArchiveNotaryChain returned error: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[first.ArchiveEntryID].EventHash != first.EventHash {
+		t.Fatalf("first event hash mismatch")
+	}
+	if events[second.ArchiveEntryID].PreviousHash == nil || *events[second.ArchiveEntryID].PreviousHash != first.EventHash {
+		t.Fatalf("second previous hash mismatch")
+	}
+}
+
+func TestParseArchiveNotaryChainRejectsInvalidEventHash(t *testing.T) {
+	event := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-08T12:00:00Z",
+		ReceivedAt:      "2026-06-08T12:00:01Z",
+		EventHash:       "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	}
+
+	_, err := parseArchiveNotaryChain(strings.NewReader(notaryLine(event)))
+	if err == nil {
+		t.Fatal("expected invalid event hash error")
+	}
+}
+
+func TestParseArchiveNotaryChainRejectsInvalidPreviousHash(t *testing.T) {
+	invalidPrev := "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	event := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-08T12:00:00Z",
+		ReceivedAt:      "2026-06-08T12:00:01Z",
+		PreviousHash:    &invalidPrev,
+	}
+	event.EventHash = hashArchiveNotaryEvent(event)
+
+	_, err := parseArchiveNotaryChain(strings.NewReader(notaryLine(event)))
+	if err == nil {
+		t.Fatal("expected invalid previous hash error")
+	}
+}
+
+func TestArchiveNotaryChainReaderSendsBearerToken(t *testing.T) {
+	event := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-08T12:00:00Z",
+		ReceivedAt:      "2026-06-08T12:00:01Z",
+	}
+	event.EventHash = hashArchiveNotaryEvent(event)
+
+	reader := archiveNotaryChainReader{
+		url:         "http://orce.example/archive-audit-events.jsonl",
+		bearerToken: "test-token",
+		httpClient: &http.Client{Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+				t.Fatalf("unexpected Authorization header %q", got)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(notaryLine(event))),
+				Header:     make(http.Header),
+			}, nil
+		})},
+	}
+	events, err := reader.Read(context.Background())
+	if err != nil {
+		t.Fatalf("Read returned error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestArchiveSnapshotHashDetectsChangedSnapshot(t *testing.T) {
+	snapshot, err := datatype.NewJSON(map[string]any{"did": "did:example:1", "state": "APPROVED"})
+	if err != nil {
+		t.Fatalf("NewJSON returned error: %v", err)
+	}
+	changed, err := datatype.NewJSON(map[string]any{"did": "did:example:1", "state": "DRAFT"})
+	if err != nil {
+		t.Fatalf("NewJSON returned error: %v", err)
+	}
+	first := cwecommand.HashArchiveSnapshot(snapshot)
+	second := cwecommand.HashArchiveSnapshot(snapshot)
+	third := cwecommand.HashArchiveSnapshot(changed)
+	if first != second {
+		t.Fatal("expected deterministic hash")
+	}
+	if first == third {
+		t.Fatal("expected changed snapshot to produce a different hash")
+	}
+}
+
+func TestFindArchiveStoreEventRequiresNotaryReceipt(t *testing.T) {
+	entry := db.ContractArchiveEntry{
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+	}
+	eventData, err := json.Marshal(archiveStoreEventData{
+		DID:             entry.DID,
+		ContractVersion: entry.ContractVersion,
+		ContentHash:     entry.ContentHash,
+		SnapshotCID:     entry.SnapshotCID,
+	})
+	if err != nil {
+		t.Fatalf("marshal event data: %v", err)
+	}
+
+	_, _, err = findArchiveStoreEvent(entry, "did:example:contract:1#1", []datatype.AuditLogEntry{{
+		ID:        1,
+		EventType: "STORE_ARCHIVED_CONTRACT",
+		EventData: eventData,
+	}})
+	if err == nil {
+		t.Fatal("expected missing notary receipt error")
+	}
+}
+
+func TestFindArchiveStoreEventReturnsNotaryReceipt(t *testing.T) {
+	entry := db.ContractArchiveEntry{
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+	}
+	previousHash := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	eventData, err := json.Marshal(archiveStoreEventData{
+		DID:             entry.DID,
+		ContractVersion: entry.ContractVersion,
+		ContentHash:     entry.ContentHash,
+		SnapshotCID:     entry.SnapshotCID,
+		NotaryReceipt: &archiveNotaryReceiptData{
+			ReceiptType:    "ARCHIVE_NOTARY_RECEIPT",
+			ArchiveEntryID: "did:example:contract:1#1",
+			EventHash:      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+			PreviousHash:   &previousHash,
+			ReceivedAt:     "2026-06-08T12:00:01Z",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal event data: %v", err)
+	}
+
+	_, receipt, err := findArchiveStoreEvent(entry, "did:example:contract:1#1", []datatype.AuditLogEntry{{
+		ID:        1,
+		EventType: "STORE_ARCHIVED_CONTRACT",
+		EventData: eventData,
+	}})
+	if err != nil {
+		t.Fatalf("findArchiveStoreEvent returned error: %v", err)
+	}
+	if receipt.EventHash != "sha256:1111111111111111111111111111111111111111111111111111111111111111" {
+		t.Fatalf("unexpected receipt event hash %q", receipt.EventHash)
+	}
+}
+
+func notaryLine(event archiveNotaryEvent) string {
+	previousHash := "null"
+	if event.PreviousHash != nil {
+		previousHash = fmt.Sprintf("%q", *event.PreviousHash)
+	}
+	return fmt.Sprintf(
+		`{"eventType":%q,"did":%q,"contractVersion":%d,"archiveEntryId":%q,"contentHash":%q,"snapshotCid":%q,"storedBy":%q,"storedAt":%q,"receivedAt":%q,"previousHash":%s,"eventHash":%q}`+"\n",
+		event.EventType,
+		event.DID,
+		event.ContractVersion,
+		event.ArchiveEntryID,
+		event.ContentHash,
+		event.SnapshotCID,
+		event.StoredBy,
+		event.StoredAt,
+		event.ReceivedAt,
+		previousHash,
+		event.EventHash,
+	)
+}

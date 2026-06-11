@@ -27,7 +27,7 @@ func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchi
 	if err != nil {
 		return db.ContractArchiveEntry{}, err
 	}
-	contentHash := hashArchiveSnapshot(snapshotJSON)
+	contentHash := HashArchiveSnapshot(snapshotJSON)
 
 	signatureMetadata, err := datatype.NewJSON(map[string]any{
 		"status":   "NOT_PERFORMED",
@@ -94,7 +94,7 @@ func buildContractSnapshot(contract *db.Contract) (datatype.JSON, error) {
 	return datatype.NewJSON(snapshot)
 }
 
-func hashArchiveSnapshot(snapshot datatype.JSON) string {
+func HashArchiveSnapshot(snapshot datatype.JSON) string {
 	sum := sha256.Sum256(snapshot)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
