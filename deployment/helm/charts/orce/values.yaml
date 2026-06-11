@@ -29,3 +29,11 @@ persistence:
 extraEnv: []
 
 resources: {}
+
+flowImport:
+  enabled: true
+  auth:
+    enabled: true
+    tokenUrl: "http://dcs-orce:1880/auth/token"
+    username: "admin"
+    password: "xfsc-orce"

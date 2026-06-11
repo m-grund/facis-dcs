@@ -1,0 +1,1207 @@
+---
+# Source: digital-contracting-service/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: release-name-digital-contracting-service
+  labels:
+    helm.sh/chart: digital-contracting-service-0.2.2
+    app.kubernetes.io/name: digital-contracting-service
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+---
+# Source: digital-contracting-service/charts/orce/templates/configmap-flows.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: release-name-orce-flows
+data:
+  event-webhook-orce-flow.json: |
+    [
+        {
+            "id": "sf-dcs-subscribe",
+            "type": "subflow",
+            "name": "DCS Subscribe",
+            "info": "Fetches a Keycloak OAuth2 token (client_credentials) then subscribes to one DCS webhook event.\n\nOutput 1 (green): { ok:true, id, event }\nOutput 2 (red):   { ok:false, error/status/body }",
+            "category": "DCS",
+            "in": [
+                {
+                    "x": 40,
+                    "y": 120,
+                    "wires": [
+                        {
+                            "id": "sf-fn-token"
+                        }
+                    ]
+                }
+            ],
+            "out": [
+                {
+                    "x": 1300,
+                    "y": 400,
+                    "wires": [
+                        {
+                            "id": "sf-fn-result",
+                            "port": 0
+                        }
+                    ]
+                },
+                {
+                    "x": 1300,
+                    "y": 460,
+                    "wires": [
+                        {
+                            "id": "sf-fn-result",
+                            "port": 1
+                        }
+                    ]
+                }
+            ],
+            "env": [
+                {
+                    "name": "DCS_URL",
+                    "type": "str",
+                    "value": "http://host.docker.internal:8991",
+                    "ui": {
+                        "label": {
+                            "en-US": "DCS base URL"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "KEYCLOAK_URL",
+                    "type": "str",
+                    "value": "http://dcs-keycloak:8080/realms/gaia-x/protocol/openid-connect/token",
+                    "ui": {
+                        "label": {
+                            "en-US": "Keycloak token URL"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "CLIENT_ID",
+                    "type": "str",
+                    "value": "dcs-client",
+                    "ui": {
+                        "label": {
+                            "en-US": "Client ID"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "CLIENT_SECRET",
+                    "type": "str",
+                    "value": "dohTcbxCRqcYB3ppfOHZr3STMi8p0ojv",
+                    "ui": {
+                        "label": {
+                            "en-US": "Client Secret"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env",
+                                "cred"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "EVENT",
+                    "type": "str",
+                    "value": "template.created",
+                    "ui": {
+                        "label": {
+                            "en-US": "Event to subscribe"
+                        },
+                        "type": "select",
+                        "opts": {
+                            "opts": [
+                                {
+                                    "l": {
+                                        "en-US": "contract.created"
+                                    },
+                                    "v": "contract.created"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "contract.submitted"
+                                    },
+                                    "v": "contract.submitted"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "contract.approved"
+                                    },
+                                    "v": "contract.approved"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "contract.rejected"
+                                    },
+                                    "v": "contract.rejected"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "contract.negotiated"
+                                    },
+                                    "v": "contract.negotiated"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "contract.terminated"
+                                    },
+                                    "v": "contract.terminated"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "template.created"
+                                    },
+                                    "v": "template.created"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "template.approved"
+                                    },
+                                    "v": "template.approved"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "CALLBACK_URL",
+                    "type": "str",
+                    "value": "http://localhost:31880/dcs-dispatch",
+                    "ui": {
+                        "label": {
+                            "en-US": "Callback URL (this ORCE endpoint)"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "WEBHOOK_SECRET",
+                    "type": "str",
+                    "value": "",
+                    "ui": {
+                        "label": {
+                            "en-US": "Shared webhook secret"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env",
+                                "cred"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "JWT_ALG_NONE_SUPPORTED",
+                    "type": "bool",
+                    "value": "false",
+                    "ui": {
+                        "label": {
+                            "en-US": "Use alg:none mock JWT (skip Keycloak)"
+                        },
+                        "type": "checkbox"
+                    }
+                },
+                {
+                    "name": "JWT_CLIENT_ID",
+                    "type": "str",
+                    "value": "dcs-client",
+                    "ui": {
+                        "label": {
+                            "en-US": "Mock JWT – Client ID (azp)"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "JWT_USERNAME",
+                    "type": "str",
+                    "value": "bdd-orce",
+                    "ui": {
+                        "label": {
+                            "en-US": "Mock JWT – Username (sub)"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "JWT_ROLE",
+                    "type": "str",
+                    "value": "Template Creator",
+                    "ui": {
+                        "label": {
+                            "en-US": "Mock JWT – Role"
+                        },
+                        "type": "select",
+                        "opts": {
+                            "opts": [
+                                {
+                                    "l": {
+                                        "en-US": "Template Creator"
+                                    },
+                                    "v": "Template Creator"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "Template Reviewer"
+                                    },
+                                    "v": "Template Reviewer"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "Template Approver"
+                                    },
+                                    "v": "Template Approver"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "Contract Creator"
+                                    },
+                                    "v": "Contract Creator"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "Contract Reviewer"
+                                    },
+                                    "v": "Contract Reviewer"
+                                },
+                                {
+                                    "l": {
+                                        "en-US": "Contract Approver"
+                                    },
+                                    "v": "Contract Approver"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "JWT_ISSUER",
+                    "type": "str",
+                    "value": "http://localhost:30080/realms/gaia-x",
+                    "ui": {
+                        "label": {
+                            "en-US": "Mock JWT – Issuer (iss)"
+                        },
+                        "type": "input",
+                        "opts": {
+                            "types": [
+                                "str",
+                                "env"
+                            ]
+                        }
+                    }
+                }
+            ],
+            "meta": {},
+            "color": "#4a90e2",
+            "icon": "font-awesome/fa-plug"
+        },
+        {
+            "id": "sf-fn-token",
+            "type": "function",
+            "z": "sf-dcs-subscribe",
+            "name": "Get token (mock or Keycloak)",
+            "func": "var useMock = env.get('JWT_ALG_NONE_SUPPORTED');\nif (useMock === true || useMock === 'true') {\n    var clientId = env.get('JWT_CLIENT_ID') || 'dcs-client';\n    var username = env.get('JWT_USERNAME')  || 'bdd-orce';\n    var role     = env.get('JWT_ROLE')      || 'Template Creator';\n    var issuer   = env.get('JWT_ISSUER')    || 'https://auth.eclipse.org/auth/realms/community';\n    function b64url(obj) {\n        return Buffer.from(JSON.stringify(obj)).toString('base64url');\n    }\n    var header = { alg: 'none' };\n    var resource = {};\n    resource[clientId] = { roles: [role] };\n    var payload = {\n        sub: username,\n        iss: issuer,\n        azp: clientId,\n        resource_access: resource,\n        exp: 9999999999\n    };\n    msg.payload = { access_token: b64url(header) + '.' + b64url(payload) + '.' };\n    return [msg, null];\n}\nvar KEYCLOAK_URL  = env.get('KEYCLOAK_URL')  || 'http://dcs-keycloak:8080/realms/gaia-x/protocol/openid-connect/token';\nvar CLIENT_ID     = env.get('CLIENT_ID')     || 'federated-catalogue';\nvar CLIENT_SECRET = env.get('CLIENT_SECRET') || 'federated-catalogue-secret';\nmsg.url     = KEYCLOAK_URL;\nmsg.method  = 'POST';\nmsg.headers = {\n    'Content-Type': 'application/x-www-form-urlencoded',\n    'Host': 'localhost:30080'\n};\nmsg.payload = 'grant_type=client_credentials'\n    + '&client_id='     + encodeURIComponent(CLIENT_ID)\n    + '&client_secret=' + encodeURIComponent(CLIENT_SECRET);\nreturn [null, msg];",
+            "outputs": 2,
+            "timeout": "",
+            "noerr": 0,
+            "initialize": "",
+            "finalize": "",
+            "libs": [],
+            "x": 300,
+            "y": 120,
+            "wires": [
+                [
+                    "sf-fn-subscribe"
+                ],
+                [
+                    "sf-http-token"
+                ]
+            ]
+        },
+        {
+            "id": "sf-http-token",
+            "type": "http request",
+            "z": "sf-dcs-subscribe",
+            "name": "Keycloak",
+            "method": "use",
+            "ret": "obj",
+            "paytoqs": "ignore",
+            "url": "",
+            "tls": "",
+            "persist": false,
+            "proxy": "",
+            "insecureHTTPParser": false,
+            "authType": "",
+            "senderr": false,
+            "headers": [],
+            "x": 277.5,
+            "y": 280,
+            "wires": [
+                [
+                    "sf-fn-subscribe"
+                ]
+            ]
+        },
+        {
+            "id": "sf-fn-subscribe",
+            "type": "function",
+            "z": "sf-dcs-subscribe",
+            "name": "Build subscribe req",
+            "func": "var DCS_URL      = env.get('DCS_URL')      || 'http://host.docker.internal:8991';\nvar EVENT        = env.get('EVENT')        || 'template.created';\nvar CALLBACK_URL = env.get('CALLBACK_URL') || 'http://dcs-orce:1880/dcs-dispatch';\nvar SECRET       = env.get('WEBHOOK_SECRET') || '';\nif (!msg.payload || !msg.payload.access_token) {\n    return [null, {payload:{ok:false,error:'token_failed',body:msg.payload}}];\n}\nflow.set('dcs_token', msg.payload.access_token);\nflow.set('dcs_url', DCS_URL);\nmsg.url    = DCS_URL + '/orce/webhooks';\nmsg.method = 'POST';\nmsg.headers = {\n    'Authorization': 'Bearer ' + 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ0ZXN0IiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDozMDA4MC9yZWFsbXMvZ2FpYS14IiwiYXpwIjoiZGNzLWNsaWVudCIsInJlc291cmNlX2FjY2VzcyI6eyJkY3MtY2xpZW50Ijp7InJvbGVzIjoiVGVtcGxhdGUgUmV2aWV3ZXIifX0sImV4cCI6IjE3ODA2MDA4MjYifQ.', //msg.payload.access_token,\n    'Content-Type':  'application/json'\n};\nmsg.payload = {\n    event:        EVENT,\n    callback_url: CALLBACK_URL,\n    secret:       SECRET\n};\nreturn [msg, null];",
+            "outputs": 2,
+            "timeout": "",
+            "noerr": 0,
+            "initialize": "",
+            "finalize": "",
+            "libs": [],
+            "x": 717.5,
+            "y": 280,
+            "wires": [
+                [
+                    "sf-http-subscribe"
+                ],
+                [
+                    "sf-fn-result"
+                ]
+            ]
+        },
+        {
+            "id": "sf-http-subscribe",
+            "type": "http request",
+            "z": "sf-dcs-subscribe",
+            "name": "POST /orce/webhooks",
+            "method": "use",
+            "ret": "obj",
+            "paytoqs": "ignore",
+            "url": "",
+            "tls": "",
+            "persist": false,
+            "proxy": "",
+            "insecureHTTPParser": false,
+            "authType": "",
+            "senderr": false,
+            "headers": [],
+            "x": 717.5,
+            "y": 420,
+            "wires": [
+                [
+                    "sf-fn-result"
+                ]
+            ]
+        },
+        {
+            "id": "sf-fn-result",
+            "type": "function",
+            "z": "sf-dcs-subscribe",
+            "name": "Format result",
+            "func": "if (msg.payload && msg.payload.ok === false) { return [null, msg]; }\nif (msg.statusCode === 201) {\n    var s = flow.get('dcs_subscriptions') || {};\n    s[msg.payload.event] = msg.payload.id;\n    flow.set('dcs_subscriptions', s);\n    return [{payload:{ok:true, id:msg.payload.id, event:msg.payload.event}}, null];\n}\nreturn [null, {payload:{ok:false, status:msg.statusCode, body:msg.payload}}];",
+            "outputs": 2,
+            "timeout": "",
+            "noerr": 0,
+            "initialize": "",
+            "finalize": "",
+            "libs": [],
+            "x": 1062.5,
+            "y": 420,
+            "wires": [
+                [],
+                []
+            ]
+        },
+        {
+            "id": "tab-dcs-test",
+            "type": "tab",
+            "label": "DCS Webhook Test",
+            "disabled": false,
+            "info": "Compact test flow for the DCS webhook platform.\n\nRow 1 – Subscribe: click the inject, configure the DCS Subscribe node (double-click it).\nRow 2 – List: shows all active subscriptions.\nRow 3 – Receive: listens on POST /dcs-dispatch and auto-sends a callback to DCS."
+        },
+        {
+            "id": "inject-sub",
+            "type": "inject",
+            "z": "tab-dcs-test",
+            "name": "▶ Subscribe",
+            "props": [],
+            "repeat": "",
+            "crontab": "",
+            "once": false,
+            "onceDelay": "",
+            "topic": "",
+            "x": 262.5,
+            "y": 140,
+            "wires": [
+                [
+                    "node-subscribe"
+                ]
+            ]
+        },
+        {
+            "id": "node-subscribe",
+            "type": "subflow:sf-dcs-subscribe",
+            "z": "tab-dcs-test",
+            "name": "contract.created",
+            "env": [
+                {
+                    "name": "CALLBACK_URL",
+                    "value": "http://localhost:30180/dcs-dispatch",
+                    "type": "str"
+                },
+                {
+                    "name": "JWT_ALG_NONE_SUPPORTED",
+                    "type": "bool",
+                    "value": "true"
+                }
+            ],
+            "x": 582.5,
+            "y": 140,
+            "wires": [
+                [
+                    "debug-ok"
+                ],
+                [
+                    "debug-err"
+                ]
+            ]
+        },
+        {
+            "id": "debug-ok",
+            "type": "debug",
+            "z": "tab-dcs-test",
+            "name": "✓",
+            "active": true,
+            "tosidebar": true,
+            "console": false,
+            "tostatus": true,
+            "complete": "payload",
+            "targetType": "msg",
+            "statusVal": "payload",
+            "statusType": "auto",
+            "x": 907.5,
+            "y": 60,
+            "wires": []
+        },
+        {
+            "id": "debug-err",
+            "type": "debug",
+            "z": "tab-dcs-test",
+            "name": "✗ Error",
+            "active": true,
+            "tosidebar": true,
+            "console": false,
+            "tostatus": true,
+            "complete": "payload",
+            "targetType": "msg",
+            "statusVal": "payload",
+            "statusType": "auto",
+            "x": 907.5,
+            "y": 220,
+            "wires": []
+        },
+        {
+            "id": "inject-list",
+            "type": "inject",
+            "z": "tab-dcs-test",
+            "name": "▶ List Subscriptions",
+            "props": [],
+            "repeat": "",
+            "crontab": "",
+            "once": false,
+            "onceDelay": "",
+            "topic": "",
+            "x": 257.5,
+            "y": 380,
+            "wires": [
+                [
+                    "fn-list"
+                ]
+            ]
+        },
+        {
+            "id": "fn-list",
+            "type": "function",
+            "z": "tab-dcs-test",
+            "name": "GET /orce/webhooks",
+            "func": "var t = flow.get('dcs_token');\nvar u = env.get('DCS_URL') || 'http://host.docker.internal:8991';\nmsg.url    = u + '/orce/webhooks';\nt = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ0ZXN0IiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDozMDA4MC9yZWFsbXMvZ2FpYS14IiwiYXpwIjoiZGNzLWNsaWVudCIsInJlc291cmNlX2FjY2VzcyI6eyJkY3MtY2xpZW50Ijp7InJvbGVzIjoiVGVtcGxhdGUgUmV2aWV3ZXIifX0sImV4cCI6IjE3ODA2MDA4MjYifQ.';\nmsg.method = 'GET';\nmsg.headers = t ? {'Authorization':'Bearer '+t} : {};\nreturn msg;",
+            "outputs": 1,
+            "timeout": "",
+            "noerr": 0,
+            "initialize": "",
+            "finalize": "",
+            "libs": [],
+            "x": 627.5,
+            "y": 380,
+            "wires": [
+                [
+                    "http-list"
+                ]
+            ]
+        },
+        {
+            "id": "http-list",
+            "type": "http request",
+            "z": "tab-dcs-test",
+            "name": "",
+            "method": "use",
+            "ret": "obj",
+            "paytoqs": "ignore",
+            "url": "",
+            "tls": "",
+            "persist": false,
+            "proxy": "",
+            "insecureHTTPParser": false,
+            "authType": "",
+            "senderr": false,
+            "headers": [],
+            "x": 947.5,
+            "y": 420,
+            "wires": [
+                [
+                    "debug-list"
+                ]
+            ]
+        },
+        {
+            "id": "debug-list",
+            "type": "debug",
+            "z": "tab-dcs-test",
+            "name": "Subscriptions",
+            "active": true,
+            "tosidebar": true,
+            "console": false,
+            "tostatus": true,
+            "complete": "true",
+            "targetType": "full",
+            "statusVal": "payload",
+            "statusType": "auto",
+            "x": 1262.5,
+            "y": 420,
+            "wires": []
+        },
+        {
+            "id": "httpin-dispatch",
+            "type": "http in",
+            "z": "tab-dcs-test",
+            "name": "POST /dcs-dispatch",
+            "url": "/dcs-dispatch",
+            "method": "post",
+            "upload": false,
+            "swaggerDoc": "",
+            "x": 312.5,
+            "y": 800,
+            "wires": [
+                [
+                    "fn-dispatch"
+                ]
+            ]
+        },
+        {
+            "id": "fn-dispatch",
+            "type": "function",
+            "z": "tab-dcs-test",
+            "name": "Verify + Auto-Callback",
+            "func": "var secret = env.get('WEBHOOK_SECRET') || '';\nvar auth   = (msg.req.headers['authorization'] || '').replace('Bearer ','');\nif (secret && auth !== secret) {\n    node.send([{payload:{error:'unauthorized'},statusCode:401,res:msg.res}, null, null]);\n    return null;\n}\nvar d = msg.payload;\n\n// Out 1: HTTP 200 to caller\nvar resp = {payload:{status:'received'}, statusCode:200, res:msg.res};\n\n// Out 2: callback to DCS\nvar token  = flow.get('dcs_token') || flow.get('mock_token');\nvar dcsURL = flow.get('dcs_url') || env.get('DCS_URL') || 'http://host.docker.internal:8991';\nvar cb = token ? {\n    url:    dcsURL + '/orce/callbacks',\n    method: 'POST',\n    headers: {'Authorization':'Bearer '+token,'Content-Type':'application/json'},\n    payload: {event_id:d.event_id, status:'completed', result:{event:d.event, did:d.did}}\n} : null;\n\n// Out 3: debug\nnode.send([resp, cb, {payload:d}]);\nreturn null;",
+            "outputs": 3,
+            "timeout": "",
+            "noerr": 0,
+            "initialize": "",
+            "finalize": "",
+            "libs": [],
+            "x": 630,
+            "y": 800,
+            "wires": [
+                [
+                    "httpresponse"
+                ],
+                [
+                    "http-callback"
+                ],
+                [
+                    "debug-dispatch"
+                ]
+            ]
+        },
+        {
+            "id": "httpresponse",
+            "type": "http response",
+            "z": "tab-dcs-test",
+            "name": "200",
+            "x": 982.5,
+            "y": 640,
+            "wires": []
+        },
+        {
+            "id": "http-callback",
+            "type": "http request",
+            "z": "tab-dcs-test",
+            "name": "POST /orce/callbacks",
+            "method": "use",
+            "ret": "obj",
+            "paytoqs": "ignore",
+            "url": "",
+            "tls": "",
+            "persist": false,
+            "proxy": "",
+            "insecureHTTPParser": false,
+            "authType": "",
+            "senderr": false,
+            "headers": [],
+            "x": 967.5,
+            "y": 800,
+            "wires": [
+                [
+                    "debug-cb"
+                ]
+            ]
+        },
+        {
+            "id": "debug-dispatch",
+            "type": "debug",
+            "z": "tab-dcs-test",
+            "name": "Dispatch in",
+            "active": true,
+            "tosidebar": true,
+            "tostatus": true,
+            "complete": "payload",
+            "x": 987.5,
+            "y": 960,
+            "wires": []
+        },
+        {
+            "id": "debug-cb",
+            "type": "debug",
+            "z": "tab-dcs-test",
+            "name": "Callback →",
+            "active": true,
+            "tosidebar": true,
+            "tostatus": true,
+            "complete": "payload",
+            "statusVal": "statusCode",
+            "x": 1287.5,
+            "y": 800,
+            "wires": []
+        }
+    ]
+  tsa_orce_flow.json: |
+    [
+        {
+            "id": "tsa_flow",
+            "type": "tab",
+            "label": "RFC3161 TSA Flow",
+            "disabled": false,
+            "info": ""
+        },
+        {
+            "id": "http_in",
+            "type": "http in",
+            "z": "tsa_flow",
+            "name": "TSA Endpoint",
+            "url": "/tsa/:hash",
+            "method": "get",
+            "upload": false,
+            "swaggerDoc": "",
+            "x": 402.5,
+            "y": 160,
+            "wires": [
+                [
+                    "validate"
+                ]
+            ]
+        },
+        {
+            "id": "validate",
+            "type": "function",
+            "z": "tsa_flow",
+            "name": "Validate + Build OpenSSL",
+            "func": "const hash = msg.req.params.hash;\n\nif (!/^[a-fA-F0-9]{64}$/.test(hash)) {\n    msg.statusCode = 400;\n    msg.payload = \"Invalid SHA-256 hash\";\n    return [null, msg];\n}\n\nmsg.hash = hash;\nmsg.payload = `ts -query -digest ${hash} -sha256 -cert -out /tmp/request.tsq`;\n\nreturn [msg, null];",
+            "outputs": 2,
+            "timeout": "",
+            "noerr": 0,
+            "initialize": "",
+            "finalize": "",
+            "libs": [],
+            "x": 400,
+            "y": 300,
+            "wires": [
+                [
+                    "exec"
+                ],
+                [
+                    "http_resp_error"
+                ]
+            ]
+        },
+        {
+            "id": "exec",
+            "type": "exec",
+            "z": "tsa_flow",
+            "command": "openssl",
+            "addpay": "payload",
+            "append": "",
+            "useSpawn": "false",
+            "timer": "",
+            "winHide": false,
+            "name": "Generate TSQ",
+            "x": 402.5,
+            "y": 440,
+            "wires": [
+                [
+                    "filein"
+                ],
+                [],
+                [
+                    "debug_exec"
+                ]
+            ]
+        },
+        {
+            "id": "filein",
+            "type": "file in",
+            "z": "tsa_flow",
+            "name": "Read TSQ",
+            "filename": "/tmp/request.tsq",
+            "filenameType": "str",
+            "format": "binary",
+            "chunk": false,
+            "sendError": false,
+            "encoding": "none",
+            "allProps": false,
+            "x": 402.5,
+            "y": 580,
+            "wires": [
+                [
+                    "http_request",
+                    "d3033cc052a06c83"
+                ]
+            ]
+        },
+        {
+            "id": "http_request",
+            "type": "http request",
+            "z": "tsa_flow",
+            "name": "FreeTSA POST",
+            "method": "POST",
+            "ret": "bin",
+            "paytoqs": "ignore",
+            "url": "https://freetsa.org/tsr",
+            "tls": "",
+            "persist": false,
+            "proxy": "",
+            "insecureHTTPParser": false,
+            "authType": "",
+            "senderr": false,
+            "headers": [
+                {
+                    "keyType": "Content-Type",
+                    "keyValue": "",
+                    "valueType": "other",
+                    "valueValue": "application/timestamp-query"
+                }
+            ],
+            "x": 402.5,
+            "y": 720,
+            "wires": [
+                [
+                    "http_resp",
+                    "71ee3f008826813b"
+                ]
+            ]
+        },
+        {
+            "id": "http_resp",
+            "type": "http response",
+            "z": "tsa_flow",
+            "name": "Return TSR",
+            "statusCode": "",
+            "headers": {
+                "Content-Type": "application/timestamp-reply"
+            },
+            "x": 402.5,
+            "y": 880,
+            "wires": []
+        },
+        {
+            "id": "http_resp_error",
+            "type": "http response",
+            "z": "tsa_flow",
+            "name": "Error Response",
+            "statusCode": "400",
+            "x": 737.5,
+            "y": 300,
+            "wires": []
+        },
+        {
+            "id": "debug_exec",
+            "type": "debug",
+            "z": "tsa_flow",
+            "name": "Exec Error",
+            "active": true,
+            "tosidebar": true,
+            "complete": true,
+            "x": 737.5,
+            "y": 460,
+            "wires": []
+        },
+        {
+            "id": "d3033cc052a06c83",
+            "type": "debug",
+            "z": "tsa_flow",
+            "name": "2",
+            "active": true,
+            "tosidebar": true,
+            "console": false,
+            "tostatus": false,
+            "complete": "true",
+            "targetType": "full",
+            "statusVal": "",
+            "statusType": "auto",
+            "x": 737.5,
+            "y": 600,
+            "wires": []
+        },
+        {
+            "id": "71ee3f008826813b",
+            "type": "debug",
+            "z": "tsa_flow",
+            "name": "3",
+            "active": true,
+            "tosidebar": true,
+            "console": false,
+            "tostatus": false,
+            "complete": "true",
+            "targetType": "full",
+            "statusVal": "",
+            "statusType": "auto",
+            "x": 737.5,
+            "y": 760,
+            "wires": []
+        }
+    ]
+---
+# Source: digital-contracting-service/charts/orce/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: release-name-orce
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+# Source: digital-contracting-service/charts/orce/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: release-name-orce
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 1880
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: orce
+    app.kubernetes.io/instance: release-name
+---
+# Source: digital-contracting-service/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: release-name-digital-contracting-service
+  labels:
+    helm.sh/chart: digital-contracting-service-0.2.2
+    app.kubernetes.io/name: digital-contracting-service
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8991
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: digital-contracting-service
+    app.kubernetes.io/instance: release-name
+---
+# Source: digital-contracting-service/charts/orce/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release-name-orce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: orce
+      app.kubernetes.io/instance: release-name
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: orce
+        app.kubernetes.io/instance: release-name
+    spec:
+      containers:
+        - name: orce
+          image: "ecofacis/xfsc-orce:2.0.13"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 1880
+              protocol: TCP
+          volumeMounts:
+            - name: orce-data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: orce-data
+          persistentVolumeClaim:
+            claimName: release-name-orce
+---
+# Source: digital-contracting-service/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release-name-digital-contracting-service
+  labels:
+    helm.sh/chart: digital-contracting-service-0.2.2
+    app.kubernetes.io/name: digital-contracting-service
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: digital-contracting-service
+      app.kubernetes.io/instance: release-name
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: digital-contracting-service-0.2.2
+        app.kubernetes.io/name: digital-contracting-service
+        app.kubernetes.io/instance: release-name
+        app.kubernetes.io/version: "1.16.0"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: release-name-digital-contracting-service
+      containers:
+        - name: digital-contracting-service
+          image: "[registry]:1.16.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8991
+              protocol: TCP
+          env:
+            - name: OIDC_ISSUER_URL
+              value: ""
+            - name: OIDC_CLIENT_ID
+              value: "[oidc-client-id]"
+            - name: OIDC_REDIRECT_URI
+              value: "[oidc-redirect-uri]"
+            - name: OIDC_LOGOUT_REDIRECT_URI
+              value: "[oidc-logout-redirect-uri]"
+            - name: DATABASE_URL
+              value: ""
+            - name: NATS_URL
+              value: ""
+            - name: FEDERATED_CATALOGUE_API_URL
+              value: ""
+            - name: FEDERATED_CATALOGUE_CLIENT_ID
+              value: "dcs-fc-client"
+            - name: FEDERATED_CATALOGUE_CLIENT_SECRET
+              value: ""
+            - name: DCS_API_PATH
+              value: "/digital-contracting-service/api"
+            - name: DCS_UI_PATH
+              value: "/digital-contracting-service/ui"
+            # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
+            - name: CRYPTO_PROVIDER_URL
+              value: ""
+            - name: CRYPTO_PROVIDER_NAMESPACE
+              value: ""
+            - name: CRYPTO_PROVIDER_KEY
+              value: ""
+            - name: CRYPTO_PROVIDER_VC_KEY
+              value: ""
+            - name: CRYPTO_PROVIDER_VC_SIGNATURE_TYPE
+              value: "ed25519signature2020"
+            - name: ISSUER_DID
+              value: ""
+            - name: TSA_URL
+              value: ""
+            # ---- IPFS storage -------------------------------------------------------
+            - name: IPFS_TENANT_BASE_URL
+              value: ""
+            - name: IPFS_MFS_BASE_URL
+              value: ""
+---
+# Source: digital-contracting-service/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "release-name-digital-contracting-service-test-connection"
+  labels:
+    helm.sh/chart: digital-contracting-service-0.2.2
+    app.kubernetes.io/name: digital-contracting-service
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['release-name-digital-contracting-service:8991']
+  restartPolicy: Never
+---
+# Source: digital-contracting-service/charts/orce/templates/job-flow-import.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: release-name-orce-flow-import
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: flow-importer
+          image: alpine:3.19
+          env:
+            - name: AUTH_USERNAME
+              value: "admin"
+            - name: AUTH_PASSWORD
+              value: "xfsc-orce"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              apk add --no-cache curl jq > /dev/null 2>&1
+
+              BASE_URL="http://release-name-orce:1880"
+
+              # Warten bis ORCE bereit ist
+              echo "Warte auf ORCE..."
+              TIMEOUT=120
+              ELAPSED=0
+              until curl -sf "$BASE_URL/" > /dev/null; do
+                if [ $ELAPSED -ge $TIMEOUT ]; then
+                  echo "Timeout: ORCE nicht erreichbar"
+                  exit 1
+                fi
+                sleep 3
+                ELAPSED=$((ELAPSED + 3))
+              done
+              echo "ORCE ist bereit."
+
+              # Bearer Token holen
+              echo "Hole Auth-Token..."
+              TOKEN_RESPONSE=$(curl -sf -X POST "$BASE_URL/auth/token" \
+                -H "Content-Type: application/x-www-form-urlencoded" \
+                -d "client_id=node-red-admin&grant_type=password&username=$AUTH_USERNAME&password=$AUTH_PASSWORD")
+
+              TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+
+              if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+                echo "Fehler: Kein Token erhalten. Response: $TOKEN_RESPONSE"
+                exit 1
+              fi
+              echo "Token erhalten. $TOKEN"
+
+              # Alle Flow-JSONs zu einem Array zusammenführen
+              echo "Merge Flows..."
+              MERGED=$(cat /flows/*.json | jq -s 'add')
+
+              FLOW_COUNT=$(echo "$MERGED" | jq 'length')
+              echo "$FLOW_COUNT Nodes/Tabs gefunden."
+
+              # Einmalig alle Flows deployen
+              echo "Deploye Flows..."
+              curl -v --max-time 60 -X POST "$BASE_URL/flows" \
+                -H "Content-Type: application/json" \
+                -H "Node-RED-Deployment-Type: full" \
+                -H "Authorization: Bearer $TOKEN" \
+                -d "$MERGED"
+
+              echo "Alle Flows erfolgreich importiert."
+          volumeMounts:
+            - name: flows
+              mountPath: /flows
+              readOnly: true
+      volumes:
+        - name: flows
+          configMap:
+            name: release-name-orce-flows

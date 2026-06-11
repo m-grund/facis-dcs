@@ -1,0 +1,89 @@
+{{- if and .Values.flowImport.enabled (.Files.Glob "flows/*.json") }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-orce-flow-import
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    # "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: flow-importer
+          image: alpine:3.19
+          env:
+            - name: AUTH_USERNAME
+              value: {{ .Values.flowImport.auth.username | quote }}
+            - name: AUTH_PASSWORD
+              value: {{ .Values.flowImport.auth.password | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -ex
+
+              apk add --no-cache curl jq > /dev/null 2>&1
+
+              BASE_URL="http://{{ .Release.Name }}-orce:{{ .Values.service.port | default 1880 }}"
+
+              # Warten bis ORCE bereit ist
+              echo "Warte auf ORCE..."
+              TIMEOUT=120
+              ELAPSED=0
+              until curl -sf "$BASE_URL/" > /dev/null; do
+                if [ $ELAPSED -ge $TIMEOUT ]; then
+                  echo "Timeout: ORCE nicht erreichbar"
+                  exit 1
+                fi
+                sleep 3
+                ELAPSED=$((ELAPSED + 3))
+              done
+              echo "ORCE ist bereit."
+
+              # Bearer Token holen
+              echo "Hole Auth-Token..."
+              # TOKEN_RESPONSE=$(curl -sf -X POST "$BASE_URL/auth/token" \
+              #   -H "Content-Type: application/x-www-form-urlencoded" \
+              #   -d "client_id=node-red-admin&grant_type=password&username=$AUTH_USERNAME&password=$AUTH_PASSWORD")
+              
+              TOKEN_RESPONSE=$(curl -sf -X POST "$BASE_URL/auth/token" -H "content-type: application/x-www-form-urlencoded; charset=UTF-8" -H "node-red-api-version: v2" --data-raw "client_id=node-red-admin&grant_type=password&scope=&username=$AUTH_USERNAME&password=$AUTH_PASSWORD")
+
+              echo "Logging in with user: $AUTH_USERNAME and password: $AUTH_PASSWORD"
+              TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+
+              if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+                echo "Fehler: Kein Token erhalten. Response: $TOKEN_RESPONSE"
+                exit 1
+              fi
+              echo "Token erhalten. $TOKEN"
+
+              # Alle Flow-JSONs zu einem Array zusammenführen
+              echo "Merge Flows..."
+              MERGED=$(cat /flows/*.json | jq -s 'add')
+
+              FLOW_COUNT=$(echo "$MERGED" | jq 'length')
+              echo "$FLOW_COUNT Nodes/Tabs gefunden."
+
+              # Einmalig alle Flows deployen
+              echo "Deploye Flows..."
+              curl -v --max-time 60 -X POST "$BASE_URL/flows" \
+                -H "Content-Type: application/json" \
+                -H "Node-RED-Deployment-Type: full" \
+                -H "Authorization: Bearer $TOKEN" \
+                -d "$MERGED"
+
+              echo "Alle Flows erfolgreich importiert."
+              
+          volumeMounts:
+            - name: flows
+              mountPath: /flows
+              readOnly: true
+      volumes:
+        - name: flows
+          configMap:
+            name: {{ .Release.Name }}-orce-flows
+{{- end }}
