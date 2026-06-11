@@ -152,7 +152,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 
 		state, err := signingstatus.NewSigningStatus(data.State)
 		if err != nil {
-			return nil, fmt.Errorf("could not create signing task state: %w", err)
+			return nil, fmt.Errorf("could not create signing status: %w", err)
 		}
 
 		metadata, exists := didToMetadata[data.ContractDID]
