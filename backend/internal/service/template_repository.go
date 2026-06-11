@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"time"
+
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 
 	"digital-contracting-service/internal/templaterepository/query"
 
@@ -14,7 +15,6 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/middleware"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/command"
@@ -25,7 +25,6 @@ import (
 	"digital-contracting-service/internal/templaterepository/query/contracttemplate"
 
 	"github.com/jmoiron/sqlx"
-	"goa.design/clue/log"
 )
 
 // TemplateRepository service example implementation.
@@ -310,21 +309,21 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 	}
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: base.DerefInt(req.Offset),
+		Limit:  base.DerefInt(req.Limit),
 	}
 
 	qry := contracttemplate.GetAllMetadataByFilterQry{
 		RetrievedBy:    middleware.GetParticipantID(ctx),
 		HolderDID:      middleware.GetHolderDID(ctx),
 		UserRoles:      middleware.GetUserRoles(ctx),
-		DID:            derefString(req.Did),
-		DocumentNumber: derefString(req.DocumentNumber),
-		Version:        derefInt(req.Version),
+		DID:            base.DerefString(req.Did),
+		DocumentNumber: base.DerefString(req.DocumentNumber),
+		Version:        base.DerefInt(req.Version),
 		State:          state,
-		Name:           derefString(req.Name),
-		Description:    derefString(req.Description),
-		TemplateData:   derefString(req.TemplateData),
+		Name:           base.DerefString(req.Name),
+		Description:    base.DerefString(req.Description),
+		TemplateData:   base.DerefString(req.TemplateData),
 		Pagination:     pagination,
 	}
 	queryHandler := contracttemplate.GetAllMetaDataByFilterHandler{
@@ -404,8 +403,8 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 	defer cancel()
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: base.DerefInt(req.Offset),
+		Limit:  base.DerefInt(req.Limit),
 	}
 
 	qry := contracttemplate.GetAllMetadataQry{
@@ -683,13 +682,14 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	qry := contracttemplate.GetAuditLogQry{
+	qry := qry2.GetAuditLogByDIDQry{
+		Scope:     componenttype.ContractTemplateRepo,
 		DID:       req.Did,
 		AuditedBy: middleware.GetParticipantID(ctx),
 		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
-	handler := contracttemplate.Auditor{
+	handler := qry2.AuditLogByDIDAuditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}
@@ -715,50 +715,34 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 		})
 	}
 
-	policyFindings, policyFindingsTemplate, err := s.auditTemplatePolicyFindings(ctx, req.Did)
+	policyTrailQry := qry2.GetTemplatePolicyTrailQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	policyTrailHandler := qry2.ContractTemplatePolicyTrailAuditor{
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+
+	policyTrailResult, err := policyTrailHandler.Handle(ctx, policyTrailQry)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
-	for i, finding := range policyFindings {
+	for i, finding := range policyTrailResult {
 		did := req.Did
 		history = append(history, &templaterepository.ContractTemplateAuditResponse{
 			ID:        int64(-1 - i),
-			Component: "CONTRACT_TEMPLATE_REPO",
-			EventType: "TEMPLATE_POLICY_AUDIT_FINDING",
-			EventData: templatePolicyFindingEventData(finding, policyFindingsTemplate),
+			Component: finding.Component,
+			EventType: finding.EventType,
+			EventData: finding.EventData,
 			Did:       &did,
-			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			CreatedAt: finding.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
 	return history, nil
-}
-
-func (s *templateRepositorysrvc) auditTemplatePolicyFindings(ctx context.Context, did string) ([]validation.PolicyFinding, *db.ContractTemplate, error) {
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Errorf(ctx, err, "could not rollback transaction")
-		}
-	}(tx)
-
-	template, err := s.CTRepo.ReadDataByID(ctx, tx, did)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, nil, err
-	}
-
-	findings, err := validation.AuditTemplatePolicies(template.TemplateData, validation.TemplatePolicyAuditMetadata{
-		DID:          template.DID,
-		TemplateType: template.TemplateType,
-		State:        template.State,
-	})
-	return findings, template, err
 }
 
 // publish approved template to Federated Catalogue.

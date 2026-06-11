@@ -98,7 +98,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 	evt := signingmanagementevents.RetrieveByIDEvent{
 		DID:         query.DID,
 		RetrievedBy: query.RetrievedBy,
-		OccurredAt:  time.Now(),
+		OccurredAt:  time.Now().UTC(),
 		HolderDID:   query.HolderDID,
 		UserRoles:   query.UserRoles,
 	}

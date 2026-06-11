@@ -61,7 +61,7 @@ func TestLocalVCIssuer_VCIDIsURN(t *testing.T) {
 	vcID, _, err := issuer.IssueContractLifecycleVC(
 		context.Background(),
 		"did:example:c1", "hash123", "draft", "", "did:example:auth",
-		time.Now(),
+		time.Now().UTC(),
 	)
 	require.NoError(t, err)
 	assert.True(t, len(vcID) > len("urn:dcs:vc:"), "vcID must start with urn:dcs:vc: prefix")
@@ -79,7 +79,7 @@ func TestLocalVCIssuer_FailsHardWhenStatusListFails(t *testing.T) {
 	_, _, err := issuer.IssueContractLifecycleVC(
 		context.Background(),
 		"did:example:contract1", "hash", "terminated", "", "did:example:auth",
-		time.Now(),
+		time.Now().UTC(),
 	)
 	require.Error(t, err, "VC issuance must fail when status list is unreachable")
 	assert.Contains(t, err.Error(), "publish contract status to status list",
@@ -104,7 +104,7 @@ func TestLocalVCIssuer_StatusListCalledBeforeVCSigning(t *testing.T) {
 	_, _, err := issuer.IssueContractLifecycleVC(
 		context.Background(),
 		"did:example:c1", "hash", "active", "", "did:example:auth",
-		time.Now(),
+		time.Now().UTC(),
 	)
 	require.NoError(t, err)
 	require.Len(t, callOrder, 2)

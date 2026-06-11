@@ -95,7 +95,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 
 	evt := signingmanagementevents.RetrieveAllEvent{
 		RetrievedBy: query.RetrievedBy,
-		OccurredAt:  time.Now(),
+		OccurredAt:  time.Now().UTC(),
 		HolderDID:   query.HolderDID,
 		UserRoles:   query.UserRoles,
 	}

@@ -7,6 +7,7 @@ import (
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/auth"
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/middleware"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	participantcmd "digital-contracting-service/internal/templatecatalogueintegration/command/participant"
@@ -80,16 +81,16 @@ func (s *templateCatalogueIntegrationsrvc) CreateParticipant(ctx context.Context
 	legalPostal := ""
 	legalLocality := ""
 	if req.HeadquarterAddress != nil {
-		headquarterCountry = derefString(req.HeadquarterAddress.Country)
-		headquarterStreet = derefString(req.HeadquarterAddress.StreetAddress)
-		headquarterPostal = derefString(req.HeadquarterAddress.PostalCode)
-		headquarterLocality = derefString(req.HeadquarterAddress.Locality)
+		headquarterCountry = base.DerefString(req.HeadquarterAddress.Country)
+		headquarterStreet = base.DerefString(req.HeadquarterAddress.StreetAddress)
+		headquarterPostal = base.DerefString(req.HeadquarterAddress.PostalCode)
+		headquarterLocality = base.DerefString(req.HeadquarterAddress.Locality)
 	}
 	if req.LegalAddress != nil {
-		legalCountry = derefString(req.LegalAddress.Country)
-		legalStreet = derefString(req.LegalAddress.StreetAddress)
-		legalPostal = derefString(req.LegalAddress.PostalCode)
-		legalLocality = derefString(req.LegalAddress.Locality)
+		legalCountry = base.DerefString(req.LegalAddress.Country)
+		legalStreet = base.DerefString(req.LegalAddress.StreetAddress)
+		legalPostal = base.DerefString(req.LegalAddress.PostalCode)
+		legalLocality = base.DerefString(req.LegalAddress.Locality)
 	}
 
 	cmd := participantcmd.CreateCmd{
@@ -260,16 +261,16 @@ func (s *templateCatalogueIntegrationsrvc) UpdateParticipant(ctx context.Context
 	legalPostal := ""
 	legalLocality := ""
 	if req.HeadquarterAddress != nil {
-		headquarterCountry = derefString(req.HeadquarterAddress.Country)
-		headquarterStreet = derefString(req.HeadquarterAddress.StreetAddress)
-		headquarterPostal = derefString(req.HeadquarterAddress.PostalCode)
-		headquarterLocality = derefString(req.HeadquarterAddress.Locality)
+		headquarterCountry = base.DerefString(req.HeadquarterAddress.Country)
+		headquarterStreet = base.DerefString(req.HeadquarterAddress.StreetAddress)
+		headquarterPostal = base.DerefString(req.HeadquarterAddress.PostalCode)
+		headquarterLocality = base.DerefString(req.HeadquarterAddress.Locality)
 	}
 	if req.LegalAddress != nil {
-		legalCountry = derefString(req.LegalAddress.Country)
-		legalStreet = derefString(req.LegalAddress.StreetAddress)
-		legalPostal = derefString(req.LegalAddress.PostalCode)
-		legalLocality = derefString(req.LegalAddress.Locality)
+		legalCountry = base.DerefString(req.LegalAddress.Country)
+		legalStreet = base.DerefString(req.LegalAddress.StreetAddress)
+		legalPostal = base.DerefString(req.LegalAddress.PostalCode)
+		legalLocality = base.DerefString(req.LegalAddress.Locality)
 	}
 
 	cmd := participantcmd.UpdateCmd{
@@ -372,11 +373,11 @@ func (s *templateCatalogueIntegrationsrvc) SearchTemplate(ctx context.Context, r
 	}
 
 	qry := templatequery.SearchQry{
-		DID:            derefString(req.Did),
-		DocumentNumber: derefString(req.DocumentNumber),
-		Version:        derefInt(req.Version),
-		Name:           derefString(req.Name),
-		Description:    derefString(req.Description),
+		DID:            base.DerefString(req.Did),
+		DocumentNumber: base.DerefString(req.DocumentNumber),
+		Version:        base.DerefInt(req.Version),
+		Name:           base.DerefString(req.Name),
+		Description:    base.DerefString(req.Description),
 		Offset:         req.Offset,
 		Limit:          req.Limit,
 	}

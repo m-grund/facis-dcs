@@ -1,13 +1,13 @@
-package service
+package base
 
-func derefInt(i *int) int {
+func DerefInt(i *int) int {
 	if i != nil {
 		return *i
 	}
 	return 0
 }
 
-func derefString(v *string) string {
+func DerefString(v *string) string {
 	if v == nil {
 		return ""
 	}
