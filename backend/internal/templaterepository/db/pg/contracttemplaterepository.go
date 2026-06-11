@@ -166,7 +166,7 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Conte
 	return cts, nil
 }
 
-func (r *PostgresContractTemplateRepo) ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateProcessData, error) {
+func (r *PostgresContractTemplateRepo) ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateProcessData, error) {
 	query := `
         SELECT did, document_number, version, state, updated_at, created_by
         FROM contract_templates WHERE did = $1
@@ -272,29 +272,54 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 		params = append(params, value)
 	}
 
+	contentChanged := false
 	if data.DocumentNumber != nil && len(*data.DocumentNumber) > 0 {
 		addParam("document_number", data.DocumentNumber)
+		contentChanged = true
 	}
 	if len(data.State) > 0 {
 		addParam("state", data.State)
 	}
 	if data.Name != nil {
 		addParam("name", data.Name)
+		contentChanged = true
 	}
 	if data.Description != nil {
 		addParam("description", data.Description)
+		contentChanged = true
 	}
 	if data.TemplateData != nil && data.TemplateData.IsNotNullValue() {
 		addParam("template_data", data.TemplateData)
+		contentChanged = true
 	}
 	if len(data.TemplateType) > 0 {
 		addParam("template_type", data.TemplateType)
+		contentChanged = true
 	}
 	if data.Responsible != nil {
 		addParam("responsible", data.Responsible)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")
+	}
+
+	// Invalidate the cached PDF only when rendered content changes.
+	// Pure state transitions (submit, approve, etc.) must NOT clear pdf_ipfs_cid
+	// because the C2PA chain logic relies on the prior CID to append the next manifest.
+	//
+	// When content does change, carry the latest manifest hash forward into
+	// prev_manifest_hash before clearing pdf_manifest_hash.  The next
+	// appendAndCache call reads prev_manifest_hash as a fallback when the
+	// freshly-built PDF has no embedded manifest, preserving the C2PA chain
+	// across content edits (DCS-OR-C2PA-001 Gap E).
+	if contentChanged {
+		columns = append(columns,
+			"pdf_ipfs_cid = NULL",
+			"pdf_manifest_ipfs_cid = NULL",
+			"pdf_renderer_version = NULL",
+			"prev_manifest_hash = pdf_manifest_hash",
+			"pdf_manifest_hash = NULL",
+		)
 	}
 
 	fullQuery := queryBase + strings.Join(columns, ", ")

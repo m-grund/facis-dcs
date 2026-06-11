@@ -29,6 +29,12 @@ import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
 import { useScrollStore } from '@/core/store/scroll'
+import {
+  FACIS_CONTRACT_POLICY_REFS,
+  FACIS_CONTRACT_VALIDATION_PROFILE,
+  FACIS_SCHEMA_REFS,
+} from '@/modules/template-repository/models/contract-template'
+import { buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 
 const route = useRoute()
 const router = useRouter()
@@ -58,7 +64,7 @@ const canSubmit = computed(
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
-  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number) =>
+  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
@@ -72,12 +78,29 @@ const submit = async () => {
       did.value = response.did
       errorStore.add('Contract created.', 'info')
     } else if (contract.value) {
+      const semanticExtension = buildSemanticTemplateExtension(
+        templateDraftStore.documentBlocks,
+        templateDraftStore.semanticConditions,
+        templateDraftStore.semanticProfile,
+      )
       const contractData: ContractData = {
         documentOutline: templateDraftStore.documentOutline,
         documentBlocks: templateDraftStore.documentBlocks,
         semanticConditions: templateDraftStore.semanticConditions,
         subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
         templateDataVersion: templateDraftStore.templateDataVersion,
+        schemaRefs: {
+          documentStructure: FACIS_SCHEMA_REFS.documentStructure,
+          semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
+          contractData: FACIS_SCHEMA_REFS.contractData,
+        },
+        policyRefs: FACIS_CONTRACT_POLICY_REFS,
+        validation: FACIS_CONTRACT_VALIDATION_PROFILE,
+        semanticProfile: semanticExtension.semanticProfile,
+        templateVariables: templateDraftStore.templateVariables,
+        placeholderBindings: semanticExtension.placeholderBindings,
+        semanticRules: semanticExtension.semanticRules,
+        sla: templateDraftStore.sla ?? undefined,
         semanticConditionValues: contractContentValuesStore.semanticConditionValues,
       }
       await contractWorkflowService.update({
@@ -171,6 +194,18 @@ function applyContractDataToDraft(contractData?: unknown) {
     semanticConditions: cd.semanticConditions ?? [],
     subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
     templateDataVersion: cd.templateDataVersion,
+    schemaRefs: {
+      documentStructure: cd.schemaRefs?.documentStructure ?? FACIS_SCHEMA_REFS.documentStructure,
+      semanticCondition: cd.schemaRefs?.semanticCondition ?? FACIS_SCHEMA_REFS.semanticCondition,
+      contractData: cd.schemaRefs?.contractData ?? FACIS_SCHEMA_REFS.contractData,
+    },
+    policyRefs: cd.policyRefs ?? FACIS_CONTRACT_POLICY_REFS,
+    validation: cd.validation ?? FACIS_CONTRACT_VALIDATION_PROFILE,
+    semanticProfile: cd.semanticProfile,
+    templateVariables: cd.templateVariables ?? [],
+    placeholderBindings: cd.placeholderBindings ?? [],
+    semanticRules: cd.semanticRules ?? [],
+    sla: cd.sla ?? null,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null

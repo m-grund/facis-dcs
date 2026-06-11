@@ -10,6 +10,7 @@ type ComponentType string
 const (
 	ContractTemplateRepo      ComponentType = "CONTRACT_TEMPLATE_REPOSITORY"
 	ContractWorkflowEngine    ComponentType = "CONTRACT_WORKFLOW_ENGINE"
+	ContractStorageArchive    ComponentType = "CONTRACT_STORAGE_ARCHIVE"
 	ProcessAuditAndCompliance ComponentType = "PROCESS_AUDIT_AND_COMPLIANCE"
 	SignatureManagement       ComponentType = "SIGNATURE_MANAGEMENT"
 )
@@ -17,6 +18,7 @@ const (
 var validType = map[ComponentType]bool{
 	ContractTemplateRepo:      true,
 	ContractWorkflowEngine:    true,
+	ContractStorageArchive:    true,
 	ProcessAuditAndCompliance: true,
 	SignatureManagement:       true,
 }

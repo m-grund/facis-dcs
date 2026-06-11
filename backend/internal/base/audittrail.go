@@ -65,7 +65,7 @@ func (r AuditTrailReader) ReadAuditLogEntriesByComponent(ctx context.Context, tx
 	for _, cid := range cids {
 		logEntries := make([]datatype.AuditLogEntry, 0)
 		if cid == nil {
-			return nil, nil
+			continue
 		}
 
 		currentCID := *cid

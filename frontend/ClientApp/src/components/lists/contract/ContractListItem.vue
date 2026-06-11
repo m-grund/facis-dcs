@@ -92,7 +92,7 @@ function expirationMessage(timeUtil: TimeUntil): string {
           <div class="flex min-w-0 flex-1 items-center gap-2">
             <div class="truncate">Name: {{ contract.name }}</div>
           </div>
-          <div class="badge shrink-0 badge-secondary ml-10">{{ contract.state }}</div>
+          <div class="ml-10 badge shrink-0 badge-secondary">{{ contract.state }}</div>
         </h2>
         <div class="flex justify-start">
           <div v-if="contract.contract_version">Version: {{ contract.contract_version }}</div>

@@ -18,6 +18,7 @@ import (
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	externaltargetsystemapi "digital-contracting-service/gen/external_target_system_api"
 	orchestrationwebhooks "digital-contracting-service/gen/orchestration_webhooks"
+	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
@@ -31,9 +32,13 @@ import (
 	"digital-contracting-service/internal/base/ipfs"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
+	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
+	"digital-contracting-service/internal/pdfgeneration/c2pa"
+	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
+	"digital-contracting-service/internal/signingmanagement/dss"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
@@ -133,6 +138,14 @@ func main() {
 		log.Fatalf(ctx, err, "failed to initialize Hydra JWT validator")
 	}
 
+	// Initialize IPFS client
+	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
+	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
+	if ipfsTenantBaseURL == "" || mfsBaseURL == "" {
+		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
+	}
+	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
+
 	aAttemptRepo := &pg.PostgresAccessAttemptRepo{}
 	lockRepo := &pg.PostgresIPLockoutRepo{}
 	jwtAuth := auth.NewJWTAuthenticator(hydraJWTValidator, db, aAttemptRepo, lockRepo)
@@ -150,16 +163,10 @@ func main() {
 	cweCronJob := contractworkflowengine2.CronJob{DB: db, CRepo: &cweRepo}
 	cweCronJob.Start(ctx, db)
 
-	smCRepo := smrepo.PostgresContractRepo{}
-	smSTRepo := smrepo.PostgresSigningTaskRepo{}
-
-	// Initialize IPFS client
-	ipfsTenantBaseURL := os.Getenv("IPFS_TENANT_BASE_URL")
-	mfsBaseURL := os.Getenv("IPFS_MFS_BASE_URL")
-	if ipfsTenantBaseURL == "" || mfsBaseURL == "" {
-		log.Fatalf(ctx, nil, "IPFS configuration missing: IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL environment variables must be specified")
+	smCRepo := smrepo.PostgresContractRepo{
+		IPFSClient: ipfsAPIClient,
 	}
-	ipfsAPIClient := ipfs.NewClient(ipfsTenantBaseURL, mfsBaseURL)
+
 	aRepo := pq.PostgresAuditTrailRepository{}
 	outboxProcessor := event.OutboxProcessor{
 		DB:         db,
@@ -217,6 +224,60 @@ func main() {
 		nil,
 	)
 
+	// Start the NATS→Webhook bridge: automatically fans out to all registered
+	// webhook subscribers whenever a DCS lifecycle event fires on the event bus.
+	webhookSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not create webhook NATS subscriber")
+	}
+	defer func(webhookSubClient *event.CloudEventSubClient) {
+		err := webhookSubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "failed to close webhook subscriber")
+		}
+	}(webhookSubClient)
+	go func() {
+		if err := webhookplatform.StartNATSBridge(webhookSubClient, webhookDispatcher); err != nil {
+			log.Fatalf(ctx, err, "Could not start webhook NATS bridge")
+		}
+	}()
+
+	// Initialize Crypto Provider Service client for C2PA signing.
+	cryptoProviderURL := os.Getenv("CRYPTO_PROVIDER_URL")
+	cryptoProviderNamespace := os.Getenv("CRYPTO_PROVIDER_NAMESPACE")
+	cryptoProviderKey := os.Getenv("CRYPTO_PROVIDER_KEY")
+	cryptoProviderCertChainFile := strings.TrimSpace(os.Getenv("CRYPTO_PROVIDER_CERT_CHAIN_FILE"))
+	issuerDID := os.Getenv("ISSUER_DID")
+	cryptoClient := cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
+
+	if cryptoProviderCertChainFile == "" {
+		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_CERT_CHAIN_FILE is required")
+	}
+	if err := cryptoClient.SetCertificateChainFromPEMFile(cryptoProviderCertChainFile); err != nil {
+		log.Fatalf(ctx, err, "load crypto provider certificate chain from file")
+	}
+
+	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
+
+	// Probe crypto provider liveness before accepting traffic.
+	if cryptoProviderURL == "" {
+		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_URL is required")
+	}
+	if err := probeHTTP(cryptoProviderURL + "/readiness"); err != nil {
+		log.Fatalf(ctx, err, "crypto provider not reachable at %s", cryptoProviderURL)
+	}
+
+	// Initialize OCM-W Status List Service client (DCS-OR-C2PA-005).
+	statusListServiceURL := os.Getenv("STATUSLIST_SERVICE_URL")
+	if statusListServiceURL == "" {
+		log.Fatalf(ctx, nil, "STATUSLIST_SERVICE_URL is required (DCS-OR-C2PA-005)")
+	}
+	if err := probeHTTPAny(statusListServiceURL+"/health", statusListServiceURL+"/v1/metrics/health"); err != nil {
+		log.Fatalf(ctx, err, "status list service not reachable at %s", statusListServiceURL)
+	}
+	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
+	statusListPublisher := c2pa.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
+
 	// Initialize the service.
 	var (
 		authSvc                         genauth.Service
@@ -225,6 +286,7 @@ func main() {
 		dcsToDcsSvc                     dcstodcs.Service
 		externalTargetSystemAPISvc      externaltargetsystemapi.Service
 		orchestrationWebhooksSvc        orchestrationwebhooks.Service
+		pdfGenerationSvc                pdfgeneration.Service
 		processAuditAndComplianceSvc    processauditandcompliance.Service
 		signatureManagementSvc          signaturemanagement.Service
 		templateCatalogueIntegrationSvc templatecatalogueintegration.Service
@@ -238,11 +300,44 @@ func main() {
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
-		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smSTRepo, auditTrailReader)
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, cryptoClient, tsaCfg, issuerDID, c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
+		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}
+
+	// Channel used by background workers and signal handler to notify main to exit.
+	errc := make(chan error)
+
+	// Start the PDF lifecycle C2PA subscriber (appends C2PA assertions on state changes).
+	// Only start when a real signing URL is configured; without one, the subscriber
+	// would attempt signing on every CWE event and log spurious HTTP errors.
+	pdfSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not create PDF generation NATS subscriber")
+	}
+	defer func(pdfSubClient *event.CloudEventSubClient) {
+		err := pdfSubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close PDF subscriber")
+		}
+	}(pdfSubClient)
+	pdfSub := &pdfevent.Subscriber{
+		DB:         db,
+		IPFSClient: ipfsAPIClient,
+		CRepo:      &cweRepo,
+		TRepo:      &ctRepo,
+		Signer:     cryptoClient,
+		TSACfg:     tsaCfg,
+		IssuerDID:  issuerDID,
+		VCIssuer:   c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
+	}
+	go func() {
+		if err := pdfSub.Start(pdfSubClient); err != nil {
+			errc <- fmt.Errorf("could not start PDF generation subscriber: %w", err)
+		}
+	}()
 
 	// Wrap the service in endpoints that can be invoked from other service
 	// potentially running in different processes.
@@ -253,6 +348,7 @@ func main() {
 		dcsToDcsEndpoints                     *dcstodcs.Endpoints
 		externalTargetSystemAPIEndpoints      *externaltargetsystemapi.Endpoints
 		orchestrationWebhooksEndpoints        *orchestrationwebhooks.Endpoints
+		pdfGenerationEndpoints                *pdfgeneration.Endpoints
 		processAuditAndComplianceEndpoints    *processauditandcompliance.Endpoints
 		signatureManagementEndpoints          *signaturemanagement.Endpoints
 		templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints
@@ -277,6 +373,9 @@ func main() {
 		orchestrationWebhooksEndpoints = orchestrationwebhooks.NewEndpoints(orchestrationWebhooksSvc)
 		orchestrationWebhooksEndpoints.Use(debug.LogPayloads())
 		orchestrationWebhooksEndpoints.Use(log.Endpoint)
+		pdfGenerationEndpoints = pdfgeneration.NewEndpoints(pdfGenerationSvc)
+		pdfGenerationEndpoints.Use(debug.LogPayloads())
+		pdfGenerationEndpoints.Use(log.Endpoint)
 		processAuditAndComplianceEndpoints = processauditandcompliance.NewEndpoints(processAuditAndComplianceSvc)
 		processAuditAndComplianceEndpoints.Use(debug.LogPayloads())
 		processAuditAndComplianceEndpoints.Use(log.Endpoint)
@@ -290,10 +389,6 @@ func main() {
 		templateRepositoryEndpoints.Use(debug.LogPayloads())
 		templateRepositoryEndpoints.Use(log.Endpoint)
 	}
-
-	// Create channel used by both the signal handler and server goroutines
-	// to notify the main goroutine when to stop the server.
-	errc := make(chan error)
 
 	// Setup interrupt handler. This optional step configures the process so
 	// that SIGINT and SIGTERM signals cause the service to stop gracefully.
@@ -330,7 +425,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, externalTargetSystemAPIEndpoints, orchestrationWebhooksEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, externalTargetSystemAPIEndpoints, orchestrationWebhooksEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:

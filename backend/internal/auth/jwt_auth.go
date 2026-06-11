@@ -106,7 +106,7 @@ func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *
 	_ = a.AAttemptRepo.Create(ctx, tx, db.AccessAttempt{
 		IPAddress:   ip,
 		AttemptBy:   attemptBy,
-		AttemptedAt: time.Now(),
+		AttemptedAt: time.Now().UTC(),
 		Success:     success,
 		Service:     ctx.Value(goa.ServiceKey).(string),
 		Method:      ctx.Value(goa.MethodKey).(string),

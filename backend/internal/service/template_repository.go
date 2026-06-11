@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+
+	"digital-contracting-service/internal/templaterepository/query"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
@@ -304,21 +309,21 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 	}
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: base.DerefInt(req.Offset),
+		Limit:  base.DerefInt(req.Limit),
 	}
 
 	qry := contracttemplate.GetAllMetadataByFilterQry{
 		RetrievedBy:    middleware.GetParticipantID(ctx),
 		HolderDID:      middleware.GetHolderDID(ctx),
 		UserRoles:      middleware.GetUserRoles(ctx),
-		DID:            derefString(req.Did),
-		DocumentNumber: derefString(req.DocumentNumber),
-		Version:        derefInt(req.Version),
+		DID:            base.DerefString(req.Did),
+		DocumentNumber: base.DerefString(req.DocumentNumber),
+		Version:        base.DerefInt(req.Version),
 		State:          state,
-		Name:           derefString(req.Name),
-		Description:    derefString(req.Description),
-		TemplateData:   derefString(req.TemplateData),
+		Name:           base.DerefString(req.Name),
+		Description:    base.DerefString(req.Description),
+		TemplateData:   base.DerefString(req.TemplateData),
 		Pagination:     pagination,
 	}
 	queryHandler := contracttemplate.GetAllMetaDataByFilterHandler{
@@ -398,8 +403,8 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 	defer cancel()
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: base.DerefInt(req.Offset),
+		Limit:  base.DerefInt(req.Limit),
 	}
 
 	qry := contracttemplate.GetAllMetadataQry{
@@ -510,26 +515,27 @@ func (s *templateRepositorysrvc) Verify(ctx context.Context, req *templatereposi
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	cmd := command.VerifyCmd{
+	qry := query.VerifyQry{
 		DID:           req.Did,
 		VerifiedBy:    middleware.GetParticipantID(ctx),
 		HolderDID:     middleware.GetHolderDID(ctx),
 		UserRoles:     middleware.GetUserRoles(ctx),
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}
-	handler := command.Verifier{
+	handler := query.Verifier{
 		DB:       s.DB,
 		CTRepo:   s.CTRepo,
 		RTRepo:   s.RTRepo,
 		FCClient: s.FCClient,
 	}
-	err = handler.Handle(ctx, cmd)
+	result, err := handler.Handle(ctx, qry)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
 	return &templaterepository.ContractTemplateVerifyResponse{
-		Did: req.Did,
+		Did:      req.Did,
+		Findings: result.Findings,
 	}, nil
 }
 
@@ -676,13 +682,14 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	qry := contracttemplate.GetAuditLogQry{
+	qry := qry2.GetAuditLogByDIDQry{
+		Scope:     componenttype.ContractTemplateRepo,
 		DID:       req.Did,
 		AuditedBy: middleware.GetParticipantID(ctx),
 		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
-	handler := contracttemplate.Auditor{
+	handler := qry2.AuditLogByDIDAuditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}
@@ -693,6 +700,9 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 
 	history := make([]*templaterepository.ContractTemplateAuditResponse, 0)
 	for _, entry := range auditLogHistory {
+		if !base.IsAuditVisibleEventType(entry.EventType) {
+			continue
+		}
 		history = append(history, &templaterepository.ContractTemplateAuditResponse{
 			ID:               entry.ID,
 			Component:        entry.Component,
@@ -702,6 +712,33 @@ func (s *templateRepositorysrvc) Audit(ctx context.Context, req *templatereposit
 			CreatedAt:        entry.CreatedAt.String(),
 			GlobalLogPredCid: entry.GlobalLogPredCID,
 			ResLogPredCid:    entry.ResLogPredCID,
+		})
+	}
+
+	policyTrailQry := qry2.GetTemplatePolicyTrailQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	policyTrailHandler := qry2.ContractTemplatePolicyTrailAuditor{
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+
+	policyTrailResult, err := policyTrailHandler.Handle(ctx, policyTrailQry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+	for i, finding := range policyTrailResult {
+		did := req.Did
+		history = append(history, &templaterepository.ContractTemplateAuditResponse{
+			ID:        int64(-1 - i),
+			Component: finding.Component,
+			EventType: finding.EventType,
+			EventData: finding.EventData,
+			Did:       &did,
+			CreatedAt: finding.CreatedAt.Format(time.RFC3339),
 		})
 	}
 

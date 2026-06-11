@@ -7,6 +7,9 @@ import (
 	"slices"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
@@ -246,8 +249,8 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 	defer cancel()
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: base.DerefInt(req.Offset),
+		Limit:  base.DerefInt(req.Limit),
 	}
 
 	qry := contract.GetAllMetadataQry{
@@ -625,20 +628,20 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 	}
 
 	pagination := datatype.Pagination{
-		Offset: derefInt(req.Offset),
-		Limit:  derefInt(req.Limit),
+		Offset: base.DerefInt(req.Offset),
+		Limit:  base.DerefInt(req.Limit),
 	}
 
 	qry := contract.GetAllMetadataByFilterQry{
-		DID:             derefString(req.Did),
-		ContractVersion: derefInt(req.ContractVersion),
+		DID:             base.DerefString(req.Did),
+		ContractVersion: base.DerefInt(req.ContractVersion),
 		State:           state,
 		RetrievedBy:     middleware.GetParticipantID(ctx),
 		HolderDID:       middleware.GetHolderDID(ctx),
 		UserRoles:       middleware.GetUserRoles(ctx),
-		Name:            derefString(req.Name),
-		Description:     derefString(req.Description),
-		ContractData:    derefString(req.ContractData),
+		Name:            base.DerefString(req.Name),
+		Description:     base.DerefString(req.Description),
+		ContractData:    base.DerefString(req.ContractData),
 		Pagination:      pagination,
 	}
 	qryHandler := contract.GetAllMetaDataByFilterHandler{
@@ -821,13 +824,14 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	qry := contract.GetAuditLogQry{
+	qry := qry2.GetAuditLogByDIDQry{
 		DID:       req.Did,
+		Scope:     componenttype.ContractWorkflowEngine,
 		AuditedBy: middleware.GetParticipantID(ctx),
 		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
 	}
-	handler := contract.Auditor{
+	handler := qry2.AuditLogByDIDAuditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}
@@ -838,6 +842,9 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 
 	history := make([]*contractworkflowengine.ContractAuditResponse, 0)
 	for _, entry := range auditLogHistory {
+		if !base.IsAuditVisibleEventType(entry.EventType) {
+			continue
+		}
 		history = append(history, &contractworkflowengine.ContractAuditResponse{
 			ID:               entry.ID,
 			Component:        entry.Component,

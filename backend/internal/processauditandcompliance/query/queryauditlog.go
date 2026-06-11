@@ -44,7 +44,7 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatyp
 
 	result, err := h.ATrailReader.ReadAuditLogEntriesByComponent(ctx, tx, query.Scope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read audit log entries: %w", err)
 	}
 
 	evt := event2.AuditEvent{
