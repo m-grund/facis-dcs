@@ -1,6 +1,12 @@
-import type { ContractTemplateState } from "@/types/contract-template-state"
-import type { SubTemplateSnapshot } from "@/models/contract-template"
-import type { PlaceholderBinding, SemanticProfile, SemanticRule, SLAAgreement, TemplateVariable } from "@/models/semantic/facis-dcs-semantic"
+import type { ContractTemplateState } from '@/types/contract-template-state'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type {
+  PlaceholderBinding,
+  SemanticProfile,
+  SemanticRule,
+  SLAAgreement,
+  TemplateVariable,
+} from '@/models/semantic/facis-dcs-semantic'
 import type {
   DocumentOutline,
   DocumentBlock,
@@ -11,8 +17,8 @@ import type {
   PolicyReference,
   SchemaReferenceSet,
   ValidationProfile,
-} from "@/modules/template-repository/models/contract-template"
-import type { ContractTemplateResponsiblePersons } from "@/models/contract-template-responsible-persons"
+} from '@/modules/template-repository/models/contract-template'
+import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const
 export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]
@@ -41,7 +47,7 @@ interface TemplateDraftState {
   version: number | null
   updated_at: string | null
   created_by: string
-  responsible_persons: ContractTemplateResponsiblePersons | null
+  responsible: ContractTemplateResponsible | null
   workflow: 'contract' | 'template'
 }
 

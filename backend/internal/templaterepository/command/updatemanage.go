@@ -10,6 +10,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -32,6 +33,8 @@ type UpdateManageCmd struct {
 	Description    *string
 	TemplateData   *datatype.JSON
 	IsManager      bool
+	HolderDID      string
+	UserRoles      userrole.UserRoles
 }
 
 type UpdateManager struct {
@@ -69,7 +72,7 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	if oldData.State == contracttemplatestate.Registered.String() ||
+	if oldData.State == contracttemplatestate.Published.String() ||
 		oldData.State == contracttemplatestate.Deleted.String() ||
 		oldData.State == contracttemplatestate.Deprecated.String() ||
 		oldData.State == contracttemplatestate.Approved.String() {
@@ -169,6 +172,8 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 		NewTemplateData:   cmd.TemplateData,
 		UpdatedBy:         cmd.UpdatedBy,
 		OccurredAt:        time.Now().UTC(),
+		HolderDID:         cmd.HolderDID,
+		UserRoles:         cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

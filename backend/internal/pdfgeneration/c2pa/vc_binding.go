@@ -24,7 +24,7 @@ type VCBinding struct {
 	Type              []string               `json:"type"`
 	ID                string                 `json:"id"`
 	Issuer            string                 `json:"issuer"`
-	IssuanceDate      time.Time             `json:"issuanceDate"`
+	IssuanceDate      time.Time              `json:"issuanceDate"`
 	CredentialSubject map[string]interface{} `json:"credentialSubject"`
 	// CredentialStatus links this VC to the XFSC status list entry so
 	// verifiers can check revocation (DCS-OR-C2PA-004, DCS-OR-C2PA-005).

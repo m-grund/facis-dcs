@@ -18,6 +18,7 @@ const (
 	Deleted    ContractTemplateState = "DELETED"
 	Deprecated ContractTemplateState = "DEPRECATED"
 	Registered ContractTemplateState = "REGISTERED"
+	Published  ContractTemplateState = "PUBLISHED"
 )
 
 var validState = map[ContractTemplateState]bool{
@@ -29,6 +30,7 @@ var validState = map[ContractTemplateState]bool{
 	Deleted:    true,
 	Deprecated: true,
 	Registered: true,
+	Published:  true,
 }
 
 func NewContractTemplateState(s string) (ContractTemplateState, error) {

@@ -5,7 +5,7 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { TemplateState } from '@/types/contract-template-state'
 import { defineStore } from 'pinia'
 import { computed, ref, type Ref } from 'vue'
-import {TemplateType} from "@/modules/template-repository/models/contract-template";
+import { TemplateType } from '@/modules/template-repository/models/contract-template'
 
 export const useContractTemplatesStore = defineStore('contractTemplates', () => {
   const contractTemplates: Ref<PartialContractTemplate[]> = ref([])
@@ -16,17 +16,17 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
   const error = ref<string | null>(null)
 
   const hasTemplates = computed(() => contractTemplates.value.length > 0)
-  const hasApprovedOrRegisteredTemplates = computed(() =>
+  const hasApprovedOrPublishedTemplates = computed(() =>
     contractTemplates.value.some(
       (template) =>
-        (template.state === TemplateState.approved || template.state === TemplateState.registered) &&
+        (template.state === TemplateState.approved || template.state === TemplateState.published) &&
         template.template_type === TemplateType.frameContract,
     ),
   )
-  const approvedOrRegisteredTemplates = computed(() =>
+  const approvedOrPublishedTemplates = computed(() =>
     contractTemplates.value.filter(
       (template) =>
-        (template.state === TemplateState.approved || template.state === TemplateState.registered) &&
+        (template.state === TemplateState.approved || template.state === TemplateState.published) &&
         template.template_type === TemplateType.frameContract,
     ),
   )
@@ -53,8 +53,8 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
     reviewTasks,
     approvalTasks,
     hasTemplates,
-    hasApprovedOrRegisteredTemplates,
-    approvedOrRegisteredTemplates,
+    hasApprovedOrPublishedTemplates,
+    approvedOrPublishedTemplates,
     findTemplateByDid,
     loadTemplates,
     loading,

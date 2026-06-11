@@ -6,15 +6,17 @@ import (
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
+
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/validation"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/processauditandcompliance/query"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/jmoiron/sqlx"
@@ -58,11 +60,58 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
 
-	qry := query.GetAuditLogQry{
-		Scope:     scope,
-		AuditedBy: middleware.GetUsername(ctx),
+	if isStaticContractAudit(req) {
+		if scope != componenttype.ContractWorkflowEngine {
+			return nil, processauditandcompliance.MakeBadRequest(fmt.Errorf("static contract audits require scope %q", "contracts"))
+		}
+
+		auditStaticContentQry := qry2.GetStaticContentAuditQry{
+			DID:              req.ContractDid,
+			RetrievedBy:      middleware.GetParticipantID(ctx),
+			HolderDID:        middleware.GetHolderDID(ctx),
+			UserRoles:        middleware.GetUserRoles(ctx),
+			Policy:           req.Policy,
+			PolicyVersion:    req.PolicyVersion,
+			ContractVersion:  req.ContractVersion,
+			ContractDocument: req.ContractDocument,
+		}
+		auditStaticContentAuditor := qry2.StaticContentAuditor{}
+		entries, err := auditStaticContentAuditor.Handle(ctx, auditStaticContentQry)
+		if err != nil {
+			return nil, processauditandcompliance.MakeBadRequest(err)
+		}
+
+		result := []*processauditandcompliance.PACResourceAuditTrailEntry{}
+		for _, entry := range entries {
+			result = append(result, &processauditandcompliance.PACResourceAuditTrailEntry{
+				ID:               entry.ID,
+				Component:        entry.Component,
+				EventType:        entry.EventType,
+				EventData:        entry.EventData,
+				Did:              entry.DID,
+				CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
+				GlobalLogPredCid: entry.GlobalLogPredCID,
+				ResLogPredCid:    entry.ResLogPredCID,
+			})
+		}
+
+		return []*processauditandcompliance.PACAuditResponse{
+			{
+				Component:  componenttype.ContractWorkflowEngine.String(),
+				Did:        base.DerefString(req.ContractDid),
+				CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+				AuditTrail: result,
+			},
+		}, nil
 	}
-	handler := query.Auditor{
+
+	qry := qry2.GetAuditLogQry{
+		Scope:     scope,
+		AuditedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	}
+	handler := qry2.Auditor{
 		DB:           s.DB,
 		ATrailReader: s.ATrailReader,
 	}
@@ -71,26 +120,42 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return nil, processauditandcompliance.MakeInternalError(err)
 	}
 
-	contractContentEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
+	contractContentEntriesByDID := make(map[string][]datatype.AuditLogEntry)
 	if scope == componenttype.ContractWorkflowEngine && s.CRepo != nil {
-		contractContentEntriesByDID, err = s.auditExistingContractContentTrailEntries(ctx)
+		contractContentTrailQry := qry2.GetContractContentTrailQry{
+			RetrievedBy:   middleware.GetParticipantID(ctx),
+			HolderDID:     middleware.GetHolderDID(ctx),
+			UserRoles:     middleware.GetUserRoles(ctx),
+			Policy:        req.Policy,
+			PolicyVersion: req.PolicyVersion,
+		}
+		contractContentTrailHandler := qry2.ContractContentTrailAuditor{
+			DB:    s.DB,
+			CRepo: s.CRepo,
+		}
+		result, err := contractContentTrailHandler.Handle(ctx, contractContentTrailQry)
 		if err != nil {
 			return nil, processauditandcompliance.MakeInternalError(err)
 		}
+		contractContentEntriesByDID = result
 	}
-	templatePolicyEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
+
+	templatePolicyEntriesByDID := make(map[string][]datatype.AuditLogEntry)
 	if scope == componenttype.ContractTemplateRepo && s.CTRepo != nil {
-		templatePolicyEntriesByDID, err = s.auditExistingTemplatePolicyTrailEntries(ctx)
+		policyTrailQry := qry2.GetContractPolicyTrailQry{
+			RetrievedBy: middleware.GetParticipantID(ctx),
+			HolderDID:   middleware.GetHolderDID(ctx),
+			UserRoles:   middleware.GetUserRoles(ctx),
+		}
+		policyTrailHandler := qry2.ContractPolicyTrailAuditor{
+			DB:     s.DB,
+			CTRepo: s.CTRepo,
+		}
+		result, err := policyTrailHandler.Handle(ctx, policyTrailQry)
 		if err != nil {
 			return nil, processauditandcompliance.MakeInternalError(err)
 		}
-	}
-	archiveEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
-	if scope == componenttype.ContractStorageArchive && s.CRepo != nil {
-		archiveEntriesByDID, err = s.auditArchiveTrailEntries(ctx)
-		if err != nil {
-			return nil, processauditandcompliance.MakeInternalError(err)
-		}
+		templatePolicyEntriesByDID = result
 	}
 
 	result := make([]*processauditandcompliance.PACAuditResponse, 0)
@@ -114,24 +179,67 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 				EventType:        entry.EventType,
 				EventData:        entry.EventData,
 				Did:              entry.DID,
-				CreatedAt:        entry.CreatedAt.String(),
+				CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
 				GlobalLogPredCid: entry.GlobalLogPredCID,
 				ResLogPredCid:    entry.ResLogPredCID,
 			})
 		}
 		if scope == componenttype.ContractTemplateRepo && did != "" {
-			history = append(history, templatePolicyEntriesByDID[did]...)
+			for _, entry := range templatePolicyEntriesByDID[did] {
+				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
+					ID:               entry.ID,
+					Component:        entry.Component,
+					EventType:        entry.EventType,
+					EventData:        entry.EventData,
+					Did:              entry.DID,
+					CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
+					GlobalLogPredCid: entry.GlobalLogPredCID,
+					ResLogPredCid:    entry.ResLogPredCID,
+				})
+			}
 			seenDIDs[did] = true
 		}
 		if scope == componenttype.ContractTemplateRepo && did != "" {
-			history = append(history, s.auditTemplateApprovalProvenanceTrailEntries(did, resLog)...)
+
+			provenanceQuery := qry2.GetTemplateApprovalProvenanceTrailQry{
+				RetrievedBy: middleware.GetParticipantID(ctx),
+				HolderDID:   middleware.GetHolderDID(ctx),
+				UserRoles:   middleware.GetUserRoles(ctx),
+				DID:         did,
+				LogEntries:  resLog,
+			}
+			provenanceHandler := qry2.TemplateApprovalProvenanceTrailAuditor{}
+			provenanceResult, err := provenanceHandler.Handle(ctx, provenanceQuery)
+			if err != nil {
+				return nil, processauditandcompliance.MakeInternalError(err)
+			}
+
+			for _, entry := range provenanceResult {
+				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
+					ID:               entry.ID,
+					Component:        entry.Component,
+					EventType:        entry.EventType,
+					EventData:        entry.EventData,
+					Did:              entry.DID,
+					CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
+					GlobalLogPredCid: entry.GlobalLogPredCID,
+					ResLogPredCid:    entry.ResLogPredCID,
+				})
+			}
 		}
 		if scope == componenttype.ContractWorkflowEngine && did != "" {
-			history = append(history, contractContentEntriesByDID[did]...)
-			seenDIDs[did] = true
-		}
-		if scope == componenttype.ContractStorageArchive && did != "" {
-			history = append(history, archiveEntriesByDID[did]...)
+			for _, entry := range contractContentEntriesByDID[did] {
+				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
+					ID:               entry.ID,
+					Component:        entry.Component,
+					EventType:        entry.EventType,
+					EventData:        entry.EventData,
+					Did:              entry.DID,
+					CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
+					GlobalLogPredCid: entry.GlobalLogPredCID,
+					ResLogPredCid:    entry.ResLogPredCID,
+				})
+			}
 			seenDIDs[did] = true
 		}
 		if len(history) == 0 {
@@ -149,22 +257,52 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		if seenDIDs[did] || len(entries) == 0 {
 			continue
 		}
+
+		auditTrail := []*processauditandcompliance.PACResourceAuditTrailEntry{}
+		for _, entry := range entries {
+			auditTrail = append(auditTrail, &processauditandcompliance.PACResourceAuditTrailEntry{
+				ID:               entry.ID,
+				Component:        entry.Component,
+				EventType:        entry.EventType,
+				EventData:        entry.EventData,
+				Did:              entry.DID,
+				CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
+				GlobalLogPredCid: entry.GlobalLogPredCID,
+				ResLogPredCid:    entry.ResLogPredCID,
+			})
+		}
+
 		result = append(result, &processauditandcompliance.PACAuditResponse{
 			Component:  componenttype.ContractTemplateRepo.String(),
 			Did:        did,
 			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-			AuditTrail: entries,
+			AuditTrail: auditTrail,
 		})
 	}
 	for did, entries := range contractContentEntriesByDID {
 		if seenDIDs[did] || len(entries) == 0 {
 			continue
 		}
+
+		auditTrail := []*processauditandcompliance.PACResourceAuditTrailEntry{}
+		for _, entry := range entries {
+			auditTrail = append(auditTrail, &processauditandcompliance.PACResourceAuditTrailEntry{
+				ID:               entry.ID,
+				Component:        entry.Component,
+				EventType:        entry.EventType,
+				EventData:        entry.EventData,
+				Did:              entry.DID,
+				CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
+				GlobalLogPredCid: entry.GlobalLogPredCID,
+				ResLogPredCid:    entry.ResLogPredCID,
+			})
+		}
+
 		result = append(result, &processauditandcompliance.PACAuditResponse{
 			Component:  componenttype.ContractWorkflowEngine.String(),
 			Did:        did,
 			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-			AuditTrail: entries,
+			AuditTrail: auditTrail,
 		})
 	}
 	for did, entries := range archiveEntriesByDID {
@@ -175,110 +313,21 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			Component:  componenttype.ContractStorageArchive.String(),
 			Did:        did,
 			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-			AuditTrail: entries,
+			AuditTrail: auditTrail,
 		})
 	}
 
 	return result, nil
 }
 
-func (s *processAuditAndCompliancesrvc) auditExistingTemplatePolicyTrailEntries(ctx context.Context) (map[string][]*processauditandcompliance.PACResourceAuditTrailEntry, error) {
-	result := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
+func isStaticContractAudit(req *processauditandcompliance.PACAuditRequest) bool {
+	if req == nil {
+		return false
 	}
-	defer tx.Rollback()
-
-	templates, err := s.CTRepo.ReadAllMetaData(ctx, tx)
-	if err != nil {
-		return nil, err
+	if req.ContractDocument != nil {
+		return true
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	for templateIndex, metadata := range templates {
-		template, err := s.CTRepo.ReadDataByID(ctx, tx, metadata.DID)
-		if err != nil {
-			return nil, err
-		}
-		if template.TemplateData == nil || !template.TemplateData.IsNotNullValue() {
-			continue
-		}
-		findings, err := validation.AuditTemplatePolicies(template.TemplateData, validation.TemplatePolicyAuditMetadata{
-			DID:          template.DID,
-			TemplateType: template.TemplateType,
-			State:        template.State,
-		})
-		if err != nil {
-			return nil, err
-		}
-		entries := make([]*processauditandcompliance.PACResourceAuditTrailEntry, 0, len(findings))
-		for findingIndex, finding := range findings {
-			templateDID := template.DID
-			entries = append(entries, &processauditandcompliance.PACResourceAuditTrailEntry{
-				ID:        int64(-4000000 - (templateIndex * 10000) - findingIndex),
-				Component: componenttype.ContractTemplateRepo.String(),
-				EventType: "TEMPLATE_POLICY_AUDIT_FINDING",
-				EventData: templatePolicyFindingEventData(finding, template),
-				Did:       &templateDID,
-				CreatedAt: now,
-			})
-		}
-		result[template.DID] = entries
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (s *processAuditAndCompliancesrvc) auditExistingContractContentTrailEntries(ctx context.Context) (map[string][]*processauditandcompliance.PACResourceAuditTrailEntry, error) {
-	result := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	contracts, err := s.CRepo.ReadAllMetaData(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	for contractIndex, metadata := range contracts {
-		contract, err := s.CRepo.ReadDataByID(ctx, tx, metadata.DID)
-		if err != nil {
-			return nil, err
-		}
-		if contract.ContractData == nil || !contract.ContractData.IsNotNullValue() {
-			continue
-		}
-		auditMetadata := validation.ContractContentAuditMetadata{
-			ContractDID:     contract.DID,
-			ContractVersion: fmt.Sprint(contract.ContractVersion),
-			AuditedBy:       middleware.GetUsername(ctx),
-		}
-		findings, err := validation.AuditContractContent(contract.ContractData, nil, auditMetadata)
-		if err != nil {
-			return nil, err
-		}
-		entries := make([]*processauditandcompliance.PACResourceAuditTrailEntry, 0, len(findings))
-		for findingIndex, finding := range findings {
-			did := contract.DID
-			entries = append(entries, &processauditandcompliance.PACResourceAuditTrailEntry{
-				ID:        int64(-3000000 - (contractIndex * 10000) - findingIndex),
-				Component: componenttype.ContractWorkflowEngine.String(),
-				EventType: "CONTRACT_CONTENT_POLICY_AUDIT_FINDING",
-				EventData: contractContentPolicyFindingEventData(finding, auditMetadata),
-				Did:       &did,
-				CreatedAt: now,
-			})
-		}
-		result[contract.DID] = entries
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return req.AuditMode != nil && strings.EqualFold(strings.TrimSpace(*req.AuditMode), "static_contract")
 }
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {

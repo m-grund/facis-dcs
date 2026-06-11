@@ -7,6 +7,7 @@ import (
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/auth"
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/middleware"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	participantcmd "digital-contracting-service/internal/templatecatalogueintegration/command/participant"
@@ -33,7 +34,6 @@ func (s *templateCatalogueIntegrationsrvc) RetrieveTemplate(ctx context.Context,
 	}
 
 	result, err := queryHandler.Handle(templatequery.GetAllMetadataQry{
-		Token:  *req.Token,
 		Offset: req.Offset,
 		Limit:  req.Limit,
 	})
@@ -50,14 +50,14 @@ func (s *templateCatalogueIntegrationsrvc) RetrieveTemplateByID(ctx context.Cont
 	}
 
 	result, err := queryHandler.Handle(templatequery.GetByIDQry{
-		Token: *req.Token,
-		DID:   req.Did,
+		DID:     req.Did,
+		Version: req.Version,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
 	}
 	if result == nil {
-		return nil, templatecatalogueintegration.MakeNotFound(fmt.Errorf("template not found"))
+		return nil, nil
 	}
 
 	return result, nil
@@ -81,20 +81,19 @@ func (s *templateCatalogueIntegrationsrvc) CreateParticipant(ctx context.Context
 	legalPostal := ""
 	legalLocality := ""
 	if req.HeadquarterAddress != nil {
-		headquarterCountry = derefString(req.HeadquarterAddress.Country)
-		headquarterStreet = derefString(req.HeadquarterAddress.StreetAddress)
-		headquarterPostal = derefString(req.HeadquarterAddress.PostalCode)
-		headquarterLocality = derefString(req.HeadquarterAddress.Locality)
+		headquarterCountry = base.DerefString(req.HeadquarterAddress.Country)
+		headquarterStreet = base.DerefString(req.HeadquarterAddress.StreetAddress)
+		headquarterPostal = base.DerefString(req.HeadquarterAddress.PostalCode)
+		headquarterLocality = base.DerefString(req.HeadquarterAddress.Locality)
 	}
 	if req.LegalAddress != nil {
-		legalCountry = derefString(req.LegalAddress.Country)
-		legalStreet = derefString(req.LegalAddress.StreetAddress)
-		legalPostal = derefString(req.LegalAddress.PostalCode)
-		legalLocality = derefString(req.LegalAddress.Locality)
+		legalCountry = base.DerefString(req.LegalAddress.Country)
+		legalStreet = base.DerefString(req.LegalAddress.StreetAddress)
+		legalPostal = base.DerefString(req.LegalAddress.PostalCode)
+		legalLocality = base.DerefString(req.LegalAddress.Locality)
 	}
 
 	cmd := participantcmd.CreateCmd{
-		Token: *req.Token,
 		Participant: selfdescription.ParticipantSdInput{
 			ParticipantID:             middleware.GetParticipantID(ctx),
 			LegalName:                 req.LegalName,
@@ -133,7 +132,6 @@ func (s *templateCatalogueIntegrationsrvc) CreateServiceOffering(ctx context.Con
 	}
 
 	cmd := serviceofferingcmd.CreateCmd{
-		Token:              *req.Token,
 		ParticipantID:      middleware.GetParticipantID(ctx),
 		Description:        req.Description,
 		Keywords:           req.Keywords,
@@ -161,7 +159,6 @@ func (s *templateCatalogueIntegrationsrvc) GetCurrentParticipant(ctx context.Con
 
 	result, err := queryHandler.Handle(participantquery.GetCurrentParticipantQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -199,7 +196,6 @@ func (s *templateCatalogueIntegrationsrvc) GetCurrentParticipantSummary(ctx cont
 
 	result, err := queryHandler.Handle(participantquery.GetCurrentParticipantSummaryQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -219,7 +215,6 @@ func (s *templateCatalogueIntegrationsrvc) ListOtherParticipants(ctx context.Con
 
 	result, err := queryHandler.Handle(participantquery.GetOtherParticipantsQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -236,7 +231,6 @@ func (s *templateCatalogueIntegrationsrvc) GetCurrentServiceOffering(ctx context
 
 	result, err := queryHandler.Handle(serviceofferingquery.GetByParticipantQry{
 		ParticipantID: middleware.GetParticipantID(ctx),
-		Token:         *req.Token,
 	})
 	if err != nil {
 		return nil, templatecatalogueintegration.MakeInternalError(err)
@@ -267,20 +261,19 @@ func (s *templateCatalogueIntegrationsrvc) UpdateParticipant(ctx context.Context
 	legalPostal := ""
 	legalLocality := ""
 	if req.HeadquarterAddress != nil {
-		headquarterCountry = derefString(req.HeadquarterAddress.Country)
-		headquarterStreet = derefString(req.HeadquarterAddress.StreetAddress)
-		headquarterPostal = derefString(req.HeadquarterAddress.PostalCode)
-		headquarterLocality = derefString(req.HeadquarterAddress.Locality)
+		headquarterCountry = base.DerefString(req.HeadquarterAddress.Country)
+		headquarterStreet = base.DerefString(req.HeadquarterAddress.StreetAddress)
+		headquarterPostal = base.DerefString(req.HeadquarterAddress.PostalCode)
+		headquarterLocality = base.DerefString(req.HeadquarterAddress.Locality)
 	}
 	if req.LegalAddress != nil {
-		legalCountry = derefString(req.LegalAddress.Country)
-		legalStreet = derefString(req.LegalAddress.StreetAddress)
-		legalPostal = derefString(req.LegalAddress.PostalCode)
-		legalLocality = derefString(req.LegalAddress.Locality)
+		legalCountry = base.DerefString(req.LegalAddress.Country)
+		legalStreet = base.DerefString(req.LegalAddress.StreetAddress)
+		legalPostal = base.DerefString(req.LegalAddress.PostalCode)
+		legalLocality = base.DerefString(req.LegalAddress.Locality)
 	}
 
 	cmd := participantcmd.UpdateCmd{
-		Token: *req.Token,
 		Participant: selfdescription.ParticipantSdInput{
 			ParticipantID:             middleware.GetParticipantID(ctx),
 			LegalName:                 req.LegalName,
@@ -316,7 +309,6 @@ func (s *templateCatalogueIntegrationsrvc) UpdateServiceOffering(ctx context.Con
 	}
 
 	cmd := serviceofferingcmd.UpdateCmd{
-		Token:              *req.Token,
 		ParticipantID:      middleware.GetParticipantID(ctx),
 		Keywords:           req.Keywords,
 		Description:        req.Description,
@@ -342,8 +334,7 @@ func (s *templateCatalogueIntegrationsrvc) DeleteParticipant(ctx context.Context
 	}
 
 	cmd := participantcmd.DeleteCmd{
-		ID:    middleware.GetParticipantID(ctx),
-		Token: *req.Token,
+		ID: middleware.GetParticipantID(ctx),
 	}
 	err = deleteHandler.Handle(ctx, cmd)
 	if err != nil {
@@ -363,7 +354,6 @@ func (s *templateCatalogueIntegrationsrvc) DeleteServiceOffering(ctx context.Con
 	}
 
 	cmd := serviceofferingcmd.DeleteCmd{
-		Token:         *req.Token,
 		ParticipantID: middleware.GetParticipantID(ctx),
 	}
 	result, err := deleteHandler.Handle(ctx, cmd)
@@ -376,11 +366,25 @@ func (s *templateCatalogueIntegrationsrvc) DeleteServiceOffering(ctx context.Con
 	}, nil
 }
 
-// derefString safely dereferences a *string.
-// It returns an empty string when the pointer is nil.
-func derefString(v *string) string {
-	if v == nil {
-		return ""
+func (s *templateCatalogueIntegrationsrvc) SearchTemplate(ctx context.Context, req *templatecatalogueintegration.TemplateCatalogueSearchRequest) (res *templatecatalogueintegration.TemplateCatalogueRetrieveResponse, err error) {
+	queryHandler := templatequery.SearchHandler{
+		Ctx:      ctx,
+		FCClient: s.fcClient,
 	}
-	return *v
+
+	qry := templatequery.SearchQry{
+		DID:            base.DerefString(req.Did),
+		DocumentNumber: base.DerefString(req.DocumentNumber),
+		Version:        base.DerefInt(req.Version),
+		Name:           base.DerefString(req.Name),
+		Description:    base.DerefString(req.Description),
+		Offset:         req.Offset,
+		Limit:          req.Limit,
+	}
+
+	result, err := queryHandler.Handle(qry)
+	if err != nil {
+		return nil, templatecatalogueintegration.MakeInternalError(err)
+	}
+	return result, nil
 }

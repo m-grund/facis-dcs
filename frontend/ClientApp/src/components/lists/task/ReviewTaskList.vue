@@ -2,7 +2,6 @@
 import type { ContractTemplateReviewTask } from '@/models/contract-template-review-task'
 import type { ContractReviewTask } from '@/models/contract/contract-review-task'
 import { ROUTES } from '@/router/router'
-import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import { useReviewTaskStateFilterStore } from '@/stores/state-filter-store'
@@ -24,7 +23,6 @@ const props = defineProps<{
 
 const templatesStore = useContractTemplatesStore()
 const contractsStore = useContractsStore()
-const authStore = useAuthStore()
 const stateFilterStore = useReviewTaskStateFilterStore()
 
 const sorter = new Map<keyof ReviewTask, string>([
@@ -77,11 +75,7 @@ const canEdit = (task: ReviewTask) => {
 
   const template = templatesStore.findTemplateByDid(task.did)
   const state = template?.state
-  return (
-    (template?.created_by === authStore.user?.username &&
-      (state === TemplateState.draft || state === TemplateState.rejected)) ||
-    state === TemplateState.submitted
-  )
+  return state === TemplateState.draft || state === TemplateState.rejected || state === TemplateState.submitted
 }
 
 const resolveViewRouteName = (task: ReviewTask) => {
@@ -118,8 +112,8 @@ onUnmounted(() => stateFilterStore.reset())
         <div class="list-col-grow card border-base-content/10 bg-base-100 card-border hover:bg-base-300">
           <div class="card-body">
             <h2 class="card-title flex-wrap justify-between">
-              <div v-if="task.type === 'template'">Review Task for Template: {{ getTemplateName(task) }}</div>
-              <div v-else>Review Task for Contract: {{ getContractName(task) }}</div>
+              <div v-if="task.type === 'template'">Template Name: {{ getTemplateName(task) }}</div>
+              <div v-else>Contract Name: {{ getContractName(task) }}</div>
               <div class="flex-1"></div>
               <div class="badge badge-accent">{{ toProperCase(task.type) }} Task</div>
               <div class="badge badge-secondary">{{ task.state }}</div>

@@ -1,9 +1,10 @@
 package validation
 
 import (
-	"digital-contracting-service/internal/base/datatype"
 	"encoding/json"
 	"testing"
+
+	"digital-contracting-service/internal/base/datatype"
 
 	"github.com/stretchr/testify/require"
 )

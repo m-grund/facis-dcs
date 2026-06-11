@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,17 +13,19 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 )
 
-type ResponsiblePersons struct {
+var ErrContractTemplateNotFound = errors.New("template not found")
+
+type Responsible struct {
 	Creator   string   `json:"creator"`
 	Approver  string   `json:"approver"`
 	Reviewers []string `json:"reviewers"`
 }
 
-func (r ResponsiblePersons) Value() (driver.Value, error) {
+func (r Responsible) Value() (driver.Value, error) {
 	return json.Marshal(r)
 }
 
-func (r *ResponsiblePersons) Scan(src any) error {
+func (r *Responsible) Scan(src any) error {
 	if src == nil {
 		return nil
 	}
@@ -39,32 +42,32 @@ func (r *ResponsiblePersons) Scan(src any) error {
 }
 
 type ContractTemplate struct {
-	DID                string              `db:"did"`
-	DocumentNumber     *string             `db:"document_number"`
-	Version            int                 `db:"version"`
-	State              string              `db:"state"`
-	TemplateType       string              `db:"template_type"`
-	Name               *string             `db:"name"`
-	Description        *string             `db:"description"`
-	CreatedBy          string              `db:"created_by"`
-	CreatedAt          time.Time           `db:"created_at"`
-	UpdatedAt          time.Time           `db:"updated_at"`
-	ResponsiblePersons *ResponsiblePersons `db:"responsible_persons"`
-	TemplateData       *datatype.JSON      `db:"template_data"`
+	DID            string         `db:"did"`
+	DocumentNumber *string        `db:"document_number"`
+	Version        int            `db:"version"`
+	State          string         `db:"state"`
+	TemplateType   string         `db:"template_type"`
+	Name           *string        `db:"name"`
+	Description    *string        `db:"description"`
+	CreatedBy      string         `db:"created_by"`
+	CreatedAt      time.Time      `db:"created_at"`
+	UpdatedAt      time.Time      `db:"updated_at"`
+	Responsible    *Responsible   `db:"responsible"`
+	TemplateData   *datatype.JSON `db:"template_data"`
 }
 
 type ContractTemplateMetadata struct {
-	DID                string              `db:"did"`
-	DocumentNumber     *string             `db:"document_number"`
-	Version            int                 `db:"version"`
-	State              string              `db:"state"`
-	TemplateType       string              `db:"template_type"`
-	Name               *string             `db:"name"`
-	Description        *string             `db:"description"`
-	CreatedBy          string              `db:"created_by"`
-	CreatedAt          time.Time           `db:"created_at"`
-	ResponsiblePersons *ResponsiblePersons `db:"responsible_persons"`
-	UpdatedAt          time.Time           `db:"updated_at"`
+	DID            string       `db:"did"`
+	DocumentNumber *string      `db:"document_number"`
+	Version        int          `db:"version"`
+	State          string       `db:"state"`
+	TemplateType   string       `db:"template_type"`
+	Name           *string      `db:"name"`
+	Description    *string      `db:"description"`
+	CreatedBy      string       `db:"created_by"`
+	CreatedAt      time.Time    `db:"created_at"`
+	Responsible    *Responsible `db:"responsible"`
+	UpdatedAt      time.Time    `db:"updated_at"`
 }
 
 type ContractTemplateProcessData struct {
@@ -77,30 +80,30 @@ type ContractTemplateProcessData struct {
 }
 
 type ContractTemplateUpdateData struct {
-	DID                string              `db:"did"`
-	DocumentNumber     *string             `db:"document_number"`
-	State              string              `db:"state"`
-	TemplateType       string              `db:"template_type"`
-	Name               *string             `db:"name"`
-	Description        *string             `db:"description"`
-	ResponsiblePersons *ResponsiblePersons `db:"responsible_persons"`
-	TemplateData       *datatype.JSON      `db:"template_data"`
+	DID            string         `db:"did"`
+	DocumentNumber *string        `db:"document_number"`
+	State          string         `db:"state"`
+	TemplateType   string         `db:"template_type"`
+	Name           *string        `db:"name"`
+	Description    *string        `db:"description"`
+	Responsible    *Responsible   `db:"responsible"`
+	TemplateData   *datatype.JSON `db:"template_data"`
 }
 
 type ContractTemplateHistory struct {
-	ID                 string              `db:"id"`
-	DID                string              `db:"did"`
-	DocumentNumber     *string             `db:"document_number"`
-	Version            int                 `db:"version"`
-	State              string              `db:"state"`
-	TemplateType       string              `db:"template_type"`
-	Name               *string             `db:"name"`
-	Description        *string             `db:"description"`
-	CreatedBy          string              `db:"created_by"`
-	CreatedAt          time.Time           `db:"created_at"`
-	UpdatedAt          time.Time           `db:"updated_at"`
-	ResponsiblePersons *ResponsiblePersons `db:"responsible_persons"`
-	TemplateData       *datatype.JSON      `db:"template_data"`
+	ID             string         `db:"id"`
+	DID            string         `db:"did"`
+	DocumentNumber *string        `db:"document_number"`
+	Version        int            `db:"version"`
+	State          string         `db:"state"`
+	TemplateType   string         `db:"template_type"`
+	Name           *string        `db:"name"`
+	Description    *string        `db:"description"`
+	CreatedBy      string         `db:"created_by"`
+	CreatedAt      time.Time      `db:"created_at"`
+	UpdatedAt      time.Time      `db:"updated_at"`
+	Responsible    *Responsible   `db:"responsible"`
+	TemplateData   *datatype.JSON `db:"template_data"`
 }
 
 type SearchValues struct {
@@ -120,9 +123,9 @@ type ContractTemplateRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data ContractTemplate) (*time.Time, error)
 	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractTemplateHistory, error)
 	ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplate, error)
-	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]ContractTemplateMetadata, error)
-	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractTemplateMetadata, error)
-	ReadProcessData(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplateProcessData, error)
+	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]ContractTemplateMetadata, error)
+	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues, pagination datatype.Pagination) ([]ContractTemplateMetadata, error)
+	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplateProcessData, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractTemplateUpdateData) error
 }

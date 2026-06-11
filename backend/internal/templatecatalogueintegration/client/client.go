@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 
 	"fmt"
@@ -12,6 +13,11 @@ import (
 	"net/url"
 	"strings"
 	"time"
+)
+
+var (
+	ErrFederatedCatalogueNotConfigured      = errors.New("federated catalogue is not configured")
+	ErrTemplateNotFoundInFederatedCatalogue = errors.New("template not found in Federated Catalogue")
 )
 
 // Response wraps essential HTTP response data.
@@ -54,28 +60,58 @@ type GetSelfDescriptionsRequest struct {
 }
 
 type fcErrorBody struct {
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
+const (
+	JSONContentType   = "application/json"
+	RDFXMLContentType = "application/rdf+xml"
+)
+
 // FederatedCatalogueClient handles outbound requests to Federated Catalogue.
 type FederatedCatalogueClient struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL      string
+	tokenURL     string
+	clientID     string
+	clientSecret string
+	httpClient   *http.Client
 }
 
 const ParticipantsEndpointPath = "/participants"
 const SelfDescriptionsEndpointPath = "/self-descriptions"
+const SchemaEndpointPath = "/schemas"
 
 const QueryEndpointPath = "/query/search"
 const VerificationEndpointPath = "/verification"
 
-func NewFederatedCatalogueClient(apiURL string) *FederatedCatalogueClient {
+func NewFederatedCatalogueClient(cfg Config) (*FederatedCatalogueClient, error) {
+	apiURL := normalizeBaseURL(cfg.APIURL)
+	if apiURL == "" {
+		return nil, nil
+	}
+
+	realmURL := strings.TrimSpace(cfg.KeycloakRealmURL)
+	clientID := strings.TrimSpace(cfg.ClientID)
+	clientSecret := strings.TrimSpace(cfg.ClientSecret)
+	if realmURL == "" || clientID == "" || clientSecret == "" {
+		return nil, fmt.Errorf("federated catalogue client requires KeycloakRealmURL, ClientID, and ClientSecret when APIURL is set")
+	}
+
+	tokenURL, err := clientCredentialsTokenURL(realmURL)
+	if err != nil {
+		return nil, err
+	}
+
 	return &FederatedCatalogueClient{
-		baseURL: normalizeBaseURL(apiURL),
+		baseURL:      apiURL,
+		tokenURL:     tokenURL,
+		clientID:     clientID,
+		clientSecret: clientSecret,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-	}
+	}, nil
 }
 
 // BaseURL returns the normalized configured API URL.
@@ -84,18 +120,23 @@ func (c *FederatedCatalogueClient) BaseURL() string {
 }
 
 // Post sends a POST request to Federated Catalogue.
-func (c *FederatedCatalogueClient) Post(ctx context.Context, path string, bearerToken string, query url.Values, body []byte) (*Response, error) {
-	return c.doRequest(ctx, http.MethodPost, path, bearerToken, query, body)
+func (c *FederatedCatalogueClient) Post(ctx context.Context, path string, query url.Values, body []byte) (*Response, error) {
+	return c.doRequest(ctx, http.MethodPost, path, query, JSONContentType, body)
+}
+
+// PostRaw sends a POST with an explicit Content-Type.
+func (c *FederatedCatalogueClient) PostRaw(ctx context.Context, path string, query url.Values, contentType string, body []byte) (*Response, error) {
+	return c.doRequest(ctx, http.MethodPost, path, query, contentType, body)
 }
 
 // Query sends an FC /query request and decodes the JSON response.
-func (c *FederatedCatalogueClient) Query(ctx context.Context, bearerToken string, req QueryRequest) (*QueryResults, error) {
+func (c *FederatedCatalogueClient) Query(ctx context.Context, req QueryRequest) (*QueryResults, error) {
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal /query request failed: %w", err)
 	}
 
-	resp, err := c.Post(ctx, QueryEndpointPath, bearerToken, nil, bodyBytes)
+	resp, err := c.Post(ctx, QueryEndpointPath, nil, bodyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +148,7 @@ func (c *FederatedCatalogueClient) Query(ctx context.Context, bearerToken string
 	return &results, nil
 }
 
-func (c *FederatedCatalogueClient) GetSelfDescriptions(ctx context.Context, bearerToken string, req GetSelfDescriptionsRequest) (*GetSelfDescriptionsResponse, error) {
+func (c *FederatedCatalogueClient) GetSelfDescriptions(ctx context.Context, req GetSelfDescriptionsRequest) (*GetSelfDescriptionsResponse, error) {
 	query := url.Values{}
 	if len(req.IDs) > 0 {
 		query.Set("ids", strings.Join(req.IDs, ","))
@@ -118,7 +159,7 @@ func (c *FederatedCatalogueClient) GetSelfDescriptions(ctx context.Context, bear
 	}
 	query.Set("withMeta", "true")
 
-	resp, err := c.Get(ctx, SelfDescriptionsEndpointPath, bearerToken, query)
+	resp, err := c.Get(ctx, SelfDescriptionsEndpointPath, query)
 	if err != nil {
 		return nil, err
 	}
@@ -134,23 +175,33 @@ func (c *FederatedCatalogueClient) GetSelfDescriptions(ctx context.Context, bear
 }
 
 // Put sends a PUT request to Federated Catalogue.
-func (c *FederatedCatalogueClient) Put(ctx context.Context, path string, bearerToken string, query url.Values, body []byte) (*Response, error) {
-	return c.doRequest(ctx, http.MethodPut, path, bearerToken, query, body)
+func (c *FederatedCatalogueClient) Put(ctx context.Context, path string, query url.Values, body []byte) (*Response, error) {
+	return c.doRequest(ctx, http.MethodPut, path, query, JSONContentType, body)
+}
+
+// PutRaw sends a PUT with an explicit Content-Type.
+func (c *FederatedCatalogueClient) PutRaw(ctx context.Context, path string, query url.Values, contentType string, body []byte) (*Response, error) {
+	return c.doRequest(ctx, http.MethodPut, path, query, contentType, body)
 }
 
 // Get sends a GET request to Federated Catalogue.
-func (c *FederatedCatalogueClient) Get(ctx context.Context, path string, bearerToken string, query url.Values) (*Response, error) {
-	return c.doRequest(ctx, http.MethodGet, path, bearerToken, query, nil)
+func (c *FederatedCatalogueClient) Get(ctx context.Context, path string, query url.Values) (*Response, error) {
+	return c.doRequest(ctx, http.MethodGet, path, query, JSONContentType, nil)
 }
 
 // Delete sends a DELETE request to Federated Catalogue.
-func (c *FederatedCatalogueClient) Delete(ctx context.Context, path string, bearerToken string, query url.Values) (*Response, error) {
-	return c.doRequest(ctx, http.MethodDelete, path, bearerToken, query, nil)
+func (c *FederatedCatalogueClient) Delete(ctx context.Context, path string, query url.Values) (*Response, error) {
+	return c.doRequest(ctx, http.MethodDelete, path, query, JSONContentType, nil)
 }
 
-func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string, path string, bearerToken string, query url.Values, body []byte) (*Response, error) {
+func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string, path string, query url.Values, contentType string, body []byte) (*Response, error) {
 	if c.baseURL == "" {
 		return nil, fmt.Errorf("federated catalogue api url is empty")
+	}
+
+	token, err := c.FetchAccessToken(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	requestURL, err := url.Parse(c.baseURL + path)
@@ -165,11 +216,11 @@ func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string,
 	if err != nil {
 		return nil, fmt.Errorf("create request failed: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	token := strings.TrimSpace(bearerToken)
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if contentType == "" {
+		contentType = JSONContentType
 	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -208,4 +259,27 @@ func (c *FederatedCatalogueClient) ExtractErrorMessage(body []byte) string {
 		return ""
 	}
 	return errBody.Message
+}
+
+// ExtractErrorCode tries to extract the FC error code from a response body.
+func (c *FederatedCatalogueClient) ExtractErrorCode(body []byte) string {
+	_ = c
+	var errBody fcErrorBody
+	if err := json.Unmarshal(body, &errBody); err != nil {
+		return ""
+	}
+	return errBody.Code
+}
+
+// SchemaHTTPError formats a failed FC /schemas HTTP response as an error.
+func (c *FederatedCatalogueClient) SchemaHTTPError(action string, resp *Response) error {
+	code := c.ExtractErrorCode(resp.Body)
+	msg := c.ExtractErrorMessage(resp.Body)
+	if code != "" && msg != "" {
+		return fmt.Errorf("%s failed with status %d: %s: %s", action, resp.StatusCode, code, msg)
+	}
+	if msg != "" {
+		return fmt.Errorf("%s failed with status %d: %s", action, resp.StatusCode, msg)
+	}
+	return fmt.Errorf("%s failed with status %d", action, resp.StatusCode)
 }

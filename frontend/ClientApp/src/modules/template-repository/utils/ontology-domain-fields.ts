@@ -20,8 +20,7 @@ export interface OntologySelectOption<TValue extends string = string> {
 const quotedValue = /"([^"]*)"/g
 const numericValue = /[-+]?[0-9]+(?:\.[0-9]+)?/
 
-export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] =
-  parseOntologyDomainFields(ontologyText)
+export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = parseOntologyDomainFields(ontologyText)
 export const ONTOLOGY_ENTITY_TYPES: readonly OntologySelectOption<SemanticEntityType>[] =
   parseOntologyEntityTypes(ontologyText)
 export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
@@ -129,7 +128,7 @@ function literals(statement: string, predicate: string): string[] {
 }
 
 function firstNumber(statement: string, predicate: string): number | undefined {
-  const match = predicateLine(statement, predicate)?.match(numericValue)
+  const match = numericValue.exec(predicateLine(statement, predicate))
   return match ? Number(match[0]) : undefined
 }
 
@@ -149,10 +148,12 @@ function formatOntologyLabel(value: string): string {
 }
 
 function predicateLine(statement: string, predicate: string): string {
-  return statement
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line.startsWith(`${predicate} `)) ?? ''
+  return (
+    statement
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.startsWith(`${predicate} `)) ?? ''
+  )
 }
 
 function cloneConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
@@ -183,10 +184,7 @@ function inferDomainFieldGroup(semanticPath: string): string {
   ) {
     return 'Risk'
   }
-  if (
-    semanticPath.startsWith('contract.dataProtection.') ||
-    semanticPath.startsWith('contract.auditRights.')
-  ) {
+  if (semanticPath.startsWith('contract.dataProtection.') || semanticPath.startsWith('contract.auditRights.')) {
     return 'Compliance'
   }
   if (

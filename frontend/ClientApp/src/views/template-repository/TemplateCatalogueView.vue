@@ -171,12 +171,20 @@ const error = ref<string | null>(null)
 const catalogue = ref<TemplateResource | null>(null)
 
 const did = computed(() => String(route.params.did ?? ''))
+const version = computed(() => {
+  const raw = route.query.version
+  const value = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isFinite(value) ? value : 1
+})
 
 async function load() {
   loading.value = true
   error.value = null
   try {
-    catalogue.value = await templateCatalogueIntegrationService.retrieve_template_by_id({ did: did.value })
+    catalogue.value = await templateCatalogueIntegrationService.retrieve_template_by_id({
+      did: did.value,
+      version: version.value,
+    })
   } catch (e: unknown) {
     error.value = e instanceof Error && e.message ? e?.message : 'Error loading template catalogue'
   } finally {

@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/db"
@@ -20,6 +21,8 @@ type ArchiveCmd struct {
 	DID        string
 	UpdatedAt  time.Time
 	ArchivedBy string
+	HolderDID  string
+	UserRoles  userrole.UserRoles
 }
 
 type Archiver struct {
@@ -42,7 +45,7 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -56,7 +59,7 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		return errors.New("invalid contract template state")
 	}
 
-	if processData.State == contracttemplatestate.Approved.String() || processData.State == contracttemplatestate.Registered.String() {
+	if processData.State == contracttemplatestate.Approved.String() || processData.State == contracttemplatestate.Published.String() {
 
 		err = h.CTRepo.UpdateState(ctx, tx, cmd.DID, contracttemplatestate.Deprecated.String())
 		if err != nil {
@@ -77,6 +80,8 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		Version:        processData.Version,
 		ArchivedBy:     cmd.ArchivedBy,
 		OccurredAt:     time.Now().UTC(),
+		HolderDID:      cmd.HolderDID,
+		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

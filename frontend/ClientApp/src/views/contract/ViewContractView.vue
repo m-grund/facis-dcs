@@ -3,7 +3,7 @@ import ContractManagerActions from '@/components/contract/ContractManagerActions
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
-import type { SelectedUserRole } from '@/models/user'
+import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -26,6 +26,7 @@ import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -41,12 +42,10 @@ const { activeTab } = storeToRefs(contractEditorUiStore)
 
 const errorStore = useErrorStore()
 
+const { isCreator } = useContractPermissions()
+
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
-
-const isCreator = computed(() => {
-  return contract.value?.created_by === authStore.user?.username
-})
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
@@ -106,14 +105,11 @@ watch(
   { deep: true },
 )
 
-const submitContract = async (result: SelectedUserRole[]) => {
+const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContractAssignees) => {
   if (!contract.value) return
   const isSemanticValueValid = verifySemanticValues()
   if (!isSemanticValueValid) return
   try {
-    const reviewers = result.filter((user) => user.role === 'CONTRACT_REVIEWER').map((user) => user.user.username)
-    const approvers = result.filter((user) => user.role === 'CONTRACT_APPROVER').map((user) => user.user.username)
-    const negotiators = result.filter((user) => user.role === 'CONTRACT_NEGOTIATOR').map((user) => user.user.username)
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -289,21 +285,18 @@ const exportPdf = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
-        <template v-if="isCreator">
-          <SubmitSelectionDialog
-            v-if="contract?.state === ContractState.draft"
-            dialog-type="contract"
-            class="btn flex-1 btn-primary"
-            @submit="submitContract"
-          />
-          <button
-            v-else-if="contract?.state === ContractState.rejected"
-            class="btn flex-1 btn-primary"
-            @click="submitRejectedTemplate"
-          >
-            Submit
-          </button>
-        </template>
+        <SubmitSelectionDialog
+          v-if="contract?.state === ContractState.draft && isCreator"
+          class="btn flex-1 btn-primary"
+          @submit="submitContract"
+        />
+        <button
+          v-else-if="contract?.state === ContractState.rejected && isCreator"
+          class="btn flex-1 btn-primary"
+          @click="submitRejectedTemplate"
+        >
+          Submit
+        </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>

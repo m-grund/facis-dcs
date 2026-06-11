@@ -19,8 +19,10 @@
             :param="p"
             :is-used="isParamUsedInText(c.conditionId, p.parameterName)"
             :is-required-and-unused="isParamRequiredAndUnused(c.conditionId, p.parameterName)"
-            @mouseenter="onParamEnter(c.conditionId, p.parameterName)" @mouseleave="onParamLeave"
-            @click="onParamClick(c.conditionId, p.parameterName, p.fixedValue !== undefined)" />
+            @mouseenter="onParamEnter(c.conditionId, p.parameterName)"
+            @mouseleave="onParamLeave"
+            @click="onParamClick(c.conditionId, p.parameterName, p.fixedValue !== undefined)"
+          />
         </ul>
       </li>
     </ul>

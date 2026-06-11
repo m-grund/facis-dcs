@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype/userrole"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -24,6 +26,8 @@ type ApproveCmd struct {
 	UpdatedAt     time.Time
 	ApprovedBy    string
 	DecisionNotes []string
+	HolderDID     string
+	UserRoles     userrole.UserRoles
 }
 
 type Approver struct {
@@ -54,7 +58,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -159,6 +163,8 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
 		ApprovedBy:      cmd.ApprovedBy,
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

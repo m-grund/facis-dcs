@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -21,6 +22,8 @@ type AcceptNegotiationCmd struct {
 	ID         string
 	DID        string
 	AcceptedBy string
+	HolderDID  string
+	UserRoles  userrole.UserRoles
 }
 
 type NegotiationAcceptor struct {
@@ -41,7 +44,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
@@ -67,7 +70,9 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 	evt := contractevents.AcceptNegotiationEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
+		UserRoles:       cmd.UserRoles,
 		AcceptedBy:      cmd.AcceptedBy,
+		HolderDID:       cmd.HolderDID,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

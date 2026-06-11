@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Contract } from '@/models/contract/contract'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
-import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import { ContractState } from '@/types/contract-state'
 import { computed } from 'vue'
@@ -10,11 +10,14 @@ const props = defineProps<{
   contract: Contract
 }>()
 
-const authStore = useAuthStore()
+const { isCreator } = useContractPermissions()
+
 const contractsStore = useContractsStore()
 
 const canEdit = computed(() => {
-  return props.contract.created_by === authStore.user?.username && props.contract.state === ContractState.draft
+  return (
+    (props.contract.state === ContractState.draft || props.contract.state === ContractState.rejected) && isCreator.value
+  )
 })
 
 const hasNegotiationTask = computed(() => contractsStore.hasNegotiationTask(props.contract))
@@ -85,11 +88,11 @@ function expirationMessage(timeUtil: TimeUntil): string {
   <li class="list-row w-full min-w-0">
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
-        <h2 class="card-title flex-wrap sm:justify-between">
-          <div class="flex gap-8 sm:h-full">
-            <div>Name: {{ contract.name }}</div>
+        <h2 class="card-title justify-between">
+          <div class="flex min-w-0 flex-1 items-center gap-2">
+            <div class="truncate">Name: {{ contract.name }}</div>
           </div>
-          <div class="badge badge-secondary">{{ contract.state }}</div>
+          <div class="ml-10 badge shrink-0 badge-secondary">{{ contract.state }}</div>
         </h2>
         <div class="flex justify-start">
           <div v-if="contract.contract_version">Version: {{ contract.contract_version }}</div>

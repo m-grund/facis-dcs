@@ -11,6 +11,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -24,6 +25,8 @@ type NegotiationCmd struct {
 	NegotiatedBy  string
 	ChangeRequest *datatype.JSON
 	UpdatedAt     time.Time
+	HolderDID     string
+	UserRoles     userrole.UserRoles
 }
 
 type Negotiator struct {
@@ -49,7 +52,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
@@ -98,6 +101,8 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		ChangeRequest:   cmd.ChangeRequest,
 		NegotiatedBy:    cmd.NegotiatedBy,
 		Negotiators:     negotiators,
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

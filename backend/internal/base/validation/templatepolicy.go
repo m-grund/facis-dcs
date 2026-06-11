@@ -1,13 +1,14 @@
 package validation
 
 import (
-	"digital-contracting-service/internal/base/datatype"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 const defaultTemplatePolicyFile = "docs/policies/facis-template-audit-policies.json"

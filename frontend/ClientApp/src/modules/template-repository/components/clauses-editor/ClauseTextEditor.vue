@@ -269,7 +269,7 @@ function onEditorClick(e: MouseEvent) {
     }
     node = node.parentNode
   }
-  nextTick(() => rememberEditorCursor())
+  void nextTick(() => rememberEditorCursor())
 }
 
 function onEditorPaste(e: ClipboardEvent) {

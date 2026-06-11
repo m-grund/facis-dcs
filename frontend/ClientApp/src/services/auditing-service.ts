@@ -4,7 +4,7 @@ import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/
 import type { AuditingService } from '@/models/services/auditing-service'
 import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 
-type RawAuditTrailEntry = {
+interface RawAuditTrailEntry {
   id?: number | string
   component?: string
   event_type?: string
@@ -16,7 +16,7 @@ type RawAuditTrailEntry = {
   createdAt?: string
 }
 
-type RawPACAuditResource = {
+interface RawPACAuditResource {
   id?: number | string
   component?: string
   event_type?: string
@@ -77,7 +77,7 @@ function normalizeFinding(
   const category = item.category ?? categoryFromEvent(eventType, status)
   const objectDid = stringValue(policyData?.objectDid)
   return {
-    id: useFallbackId ? fallbackId : item.id ?? fallbackId,
+    id: useFallbackId ? fallbackId : (item.id ?? fallbackId),
     category,
     title: item.title ?? stringValue(policyData?.title) ?? contractAuditEventDisplayText(eventType, eventData),
     description: item.description ?? descriptionFromEventData(eventData),
@@ -93,7 +93,12 @@ function normalizeFinding(
 
 function categoryFromEvent(eventType?: string, severity?: string): AuditFinding['category'] {
   const normalizedSeverity = severity?.trim().toLowerCase()
-  if (normalizedSeverity === 'error' || normalizedSeverity === 'critical' || normalizedSeverity === 'blocking' || normalizedSeverity === 'failed') {
+  if (
+    normalizedSeverity === 'error' ||
+    normalizedSeverity === 'critical' ||
+    normalizedSeverity === 'blocking' ||
+    normalizedSeverity === 'failed'
+  ) {
     return 'violation'
   }
   if (normalizedSeverity === 'warning' || normalizedSeverity === 'warn') {
@@ -125,9 +130,15 @@ function descriptionFromEventData(eventData: unknown): string {
   const documentNumber = stringValue(eventData.documentNumber)
   const version = typeof eventData.version === 'number' ? String(eventData.version) : stringValue(eventData.version)
   const parts = [
-    objectName ? `Object: ${objectName}${objectDid ? ` (${objectDid})` : ''}` : objectDid ? `Object DID: ${objectDid}` : '',
+    objectName
+      ? `Object: ${objectName}${objectDid ? ` (${objectDid})` : ''}`
+      : objectDid
+        ? `Object DID: ${objectDid}`
+        : '',
     [templateType ? `Type: ${templateType}` : '', state ? `State: ${state}` : ''].filter(Boolean).join(' · '),
-    [documentNumber ? `Document: ${documentNumber}` : '', version ? `Version: ${version}` : ''].filter(Boolean).join(' · '),
+    [documentNumber ? `Document: ${documentNumber}` : '', version ? `Version: ${version}` : '']
+      .filter(Boolean)
+      .join(' · '),
     message,
     ruleId ? `Rule: ${ruleId}` : '',
     semanticPath ? `Semantic path: ${semanticPath}` : '',

@@ -26,17 +26,21 @@ const complianceResults = ref<Record<string, SignatureComplianceResult | undefin
 const pdfVerifyResults = ref<
   Record<
     string,
-    {
-      lifecycle_status?: string
-      status_list_status?: string
-    } | undefined
+    | {
+        lifecycle_status?: string
+        status_list_status?: string
+      }
+    | undefined
   >
 >({})
 
 // DCS-OR-C2PA-006: derive human-readable C2PA lifecycle banner label and CSS class
 // from the contract state. Returns one of: Active, Draft, Suspended, Terminated,
 // Replaced, Expired, or the raw state as fallback.
-type C2PAStatus = { label: string; cls: string }
+interface C2PAStatus {
+  label: string
+  cls: string
+}
 function c2paStatus(contract: SignatureContract): C2PAStatus {
   const pdfVerify = pdfVerifyResults.value[contract.did]
   const lifecycle = (pdfVerify?.lifecycle_status ?? '').toLowerCase()
@@ -59,14 +63,14 @@ function c2paStatus(contract: SignatureContract): C2PAStatus {
 
   const state = (contract.state ?? '').toLowerCase()
   const map: Record<string, C2PAStatus> = {
-    active:     { label: 'Active',     cls: 'badge-success' },
-    approved:   { label: 'Active',     cls: 'badge-success' },
-    draft:      { label: 'Draft',      cls: 'badge-ghost' },
-    suspended:  { label: 'Suspended',  cls: 'badge-warning' },
+    active: { label: 'Active', cls: 'badge-success' },
+    approved: { label: 'Active', cls: 'badge-success' },
+    draft: { label: 'Draft', cls: 'badge-ghost' },
+    suspended: { label: 'Suspended', cls: 'badge-warning' },
     terminated: { label: 'Terminated', cls: 'badge-error' },
-    replaced:   { label: 'Replaced',   cls: 'badge-neutral' },
-    expired:    { label: 'Expired',    cls: 'badge-neutral' },
-    amended:    { label: 'Active',     cls: 'badge-success' },
+    replaced: { label: 'Replaced', cls: 'badge-neutral' },
+    expired: { label: 'Expired', cls: 'badge-neutral' },
+    amended: { label: 'Active', cls: 'badge-success' },
   }
   return map[state] ?? { label: contract.state ?? 'Unknown', cls: 'badge-ghost' }
 }
@@ -75,7 +79,7 @@ onMounted(async () => {
   loading.value = true
   try {
     contracts.value = await signatureManagementService.retrieveContracts()
-  } catch (e) {
+  } catch {
     error.value = 'Failed to load contracts for signing.'
   } finally {
     loading.value = false
@@ -83,13 +87,13 @@ onMounted(async () => {
 })
 
 async function sign(contract: SignatureContract) {
-  const signerDid = authStore.user?.name ?? 'unknown'
+  const issuer = authStore.user?.issuer ?? 'unknown'
   signing.value[contract.did] = true
   try {
-    const env = await signatureManagementService.applySignature(contract.did, signerDid)
+    const env = await signatureManagementService.applySignature(contract.did, issuer)
     envelopes.value[contract.did] = env
-  } catch (e) {
-    error.value = `Failed to sign contract ${contract.did}: ${e}`
+  } catch (e: unknown) {
+    error.value = `Failed to sign contract ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
   } finally {
     signing.value[contract.did] = false
   }
@@ -97,52 +101,44 @@ async function sign(contract: SignatureContract) {
 
 async function verify(contract: SignatureContract) {
   try {
-    verifyResults.value[contract.did] = await signatureManagementService.verifySignature(
-      contract.did,
-    )
+    verifyResults.value[contract.did] = await signatureManagementService.verifySignature(contract.did)
     pdfVerifyResults.value[contract.did] = await contractWorkflowService.verifyPdf(contract.did)
-  } catch (e) {
-    error.value = `Failed to verify contract ${contract.did}: ${e}`
+  } catch (e: unknown) {
+    error.value = `Failed to verify contract ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
   }
 }
 
 async function validate(contract: SignatureContract) {
   try {
-    validateResults.value[contract.did] = await signatureManagementService.validateSignature(
-      contract.did,
-    )
-  } catch (e) {
-    error.value = `Failed to validate contract ${contract.did}: ${e}`
+    validateResults.value[contract.did] = await signatureManagementService.validateSignature(contract.did)
+  } catch (e: unknown) {
+    error.value = `Failed to validate contract ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
   }
 }
 
 async function compliance(contract: SignatureContract) {
   try {
-    complianceResults.value[contract.did] = await signatureManagementService.complianceCheck(
-      contract.did,
-    )
-  } catch (e) {
-    error.value = `Failed to run compliance check for ${contract.did}: ${e}`
+    complianceResults.value[contract.did] = await signatureManagementService.complianceCheck(contract.did)
+  } catch (e: unknown) {
+    error.value = `Failed to run compliance check for ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
   }
 }
 </script>
 
 <template>
-  <div class="flex bg-base-100 border-b border-base-content/10 justify-between p-4 mb-4">
-    <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
-      Signing Dashboard
-    </h2>
+  <div class="mb-4 flex justify-between border-b border-base-content/10 bg-base-100 p-4">
+    <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">Signing Dashboard</h2>
   </div>
 
   <div class="p-4">
     <div v-if="loading" class="text-base-content/60">Loading approved contracts…</div>
-    <div v-else-if="error" class="alert alert-error mb-4">{{ error }}</div>
+    <div v-else-if="error" class="mb-4 alert alert-error">{{ error }}</div>
     <div v-else-if="contracts.length === 0" class="text-base-content/60">
       No approved contracts available for signing.
     </div>
 
     <div v-else class="overflow-x-auto">
-      <table class="table table-zebra w-full">
+      <table class="table w-full table-zebra">
         <thead>
           <tr>
             <th>DID</th>
@@ -156,7 +152,7 @@ async function compliance(contract: SignatureContract) {
         </thead>
         <tbody>
           <tr v-for="contract in contracts" :key="contract.did">
-            <td class="font-mono text-xs max-w-xs truncate">{{ contract.did }}</td>
+            <td class="max-w-xs truncate font-mono text-xs">{{ contract.did }}</td>
             <td>{{ contract.name ?? '—' }}</td>
             <td>{{ contract.contract_version ?? 1 }}</td>
             <td>{{ new Date(contract.updated_at).toLocaleDateString() }}</td>
@@ -169,10 +165,7 @@ async function compliance(contract: SignatureContract) {
             <td>
               <span
                 v-if="envelopes[contract.did]"
-                :class="[
-                  'badge',
-                  envelopes[contract.did]?.status === 'SIGNED' ? 'badge-success' : 'badge-warning',
-                ]"
+                :class="['badge', envelopes[contract.did]?.status === 'SIGNED' ? 'badge-success' : 'badge-warning']"
               >
                 {{ envelopes[contract.did]?.status }}
               </span>
@@ -180,35 +173,33 @@ async function compliance(contract: SignatureContract) {
 
               <div
                 v-if="verifyResults[contract.did]"
-                class="text-xs mt-1"
+                class="mt-1 text-xs"
                 :class="verifyResults[contract.did]?.match ? 'text-success' : 'text-error'"
               >
-                MR/HR: {{ verifyResults[contract.did]?.match ? 'match ✓' : 'mismatch ✗' }}
-                ({{ verifyResults[contract.did]?.sig_count }} sig(s))
+                MR/HR: {{ verifyResults[contract.did]?.match ? 'match ✓' : 'mismatch ✗' }} ({{
+                  verifyResults[contract.did]?.sig_count
+                }}
+                sig(s))
               </div>
-              <div v-if="verifyResults[contract.did]?.findings?.length" class="text-xs mt-1">
+              <div v-if="verifyResults[contract.did]?.findings?.length" class="mt-1 text-xs">
                 Verify: {{ verifyResults[contract.did]?.findings?.[0] }}
               </div>
 
-              <div v-if="validateResults[contract.did]?.findings?.length" class="text-xs mt-1">
+              <div v-if="validateResults[contract.did]?.findings?.length" class="mt-1 text-xs">
                 Validation: {{ validateResults[contract.did]?.findings?.[0] }}
               </div>
-              <div v-if="complianceResults[contract.did]?.findings?.length" class="text-xs mt-1">
+              <div v-if="complianceResults[contract.did]?.findings?.length" class="mt-1 text-xs">
                 Compliance: {{ complianceResults[contract.did]?.findings?.[0] }}
               </div>
             </td>
             <td class="flex gap-2">
-              <button
-                class="btn btn-sm btn-primary"
-                :disabled="signing[contract.did]"
-                @click="sign(contract)"
-              >
-                <span v-if="signing[contract.did]" class="loading loading-spinner loading-xs" />
+              <button class="btn btn-sm btn-primary" :disabled="signing[contract.did]" @click="sign(contract)">
+                <span v-if="signing[contract.did]" class="loading loading-xs loading-spinner" />
                 Sign
               </button>
-              <button class="btn btn-sm btn-ghost" @click="verify(contract)">Verify</button>
-              <button class="btn btn-sm btn-ghost" @click="validate(contract)">Validate</button>
-              <button class="btn btn-sm btn-ghost" @click="compliance(contract)">Compliance</button>
+              <button class="btn btn-ghost btn-sm" @click="verify(contract)">Verify</button>
+              <button class="btn btn-ghost btn-sm" @click="validate(contract)">Validate</button>
+              <button class="btn btn-ghost btn-sm" @click="compliance(contract)">Compliance</button>
             </td>
           </tr>
         </tbody>

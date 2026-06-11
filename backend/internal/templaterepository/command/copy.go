@@ -2,22 +2,28 @@ package command
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"fmt"
-	"log"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
 
 type CopyCmd struct {
-	NewDID   string
-	CopyDID  string
-	CopiedBy string
+	NewDID    string
+	CopyDID   string
+	CopiedBy  string
+	HolderDID string
+	UserRoles userrole.UserRoles
 }
 
 type Copier struct {
@@ -32,8 +38,7 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -64,7 +69,9 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 		CopyDID:    cmd.CopyDID,
 		CopiedBy:   cmd.CopiedBy,
 		NewVersion: version,
-		OccurredAt: time.Now(),
+		OccurredAt: time.Now().UTC(),
+		HolderDID:  cmd.HolderDID,
+		UserRoles:  cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)
 	if err != nil {

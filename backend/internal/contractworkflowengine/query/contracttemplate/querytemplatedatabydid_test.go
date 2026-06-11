@@ -1,10 +1,11 @@
 package contracttemplate
 
 import (
-	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/validation"
 	"encoding/json"
 	"testing"
+
+	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 
 	"github.com/stretchr/testify/require"
 )
