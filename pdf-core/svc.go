@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,12 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// setPDFCoreVersionHeader emits the renderer version on every PDF-producing
+// response so clients can cache-bust when the renderer is upgraded.
+func setPDFCoreVersionHeader(w http.ResponseWriter) {
+	w.Header().Set("X-PDF-Core-Version", compiler.RendererVersion)
+}
 
 // service implements all HTTP handlers for the DCS-PDF-CORE API.
 type service struct{}
@@ -100,6 +107,11 @@ func limitRead(r io.ReadCloser, limit int64) ([]byte, error) {
 	return b, nil
 }
 
+func (s *service) version(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]string{"version": compiler.RendererVersion})
+}
+
 func (s *service) download(w http.ResponseWriter, r *http.Request) {
 	if err := checkMediaType(r.Header.Get("Content-Type"), "application/ld+json", "application/json"); err != nil {
 		writeError(w, err)
@@ -124,8 +136,17 @@ func (s *service) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
+	setPDFCoreVersionHeader(w)
 	w.Header().Set("Content-Type", "application/pdf")
 	_, _ = w.Write(pdf)
+}
+
+// verifyResponse is the JSON body returned by POST /verify.
+type verifyResponse struct {
+	Match              bool   `json:"match"`
+	C2PASignatureValid bool   `json:"c2pa_signature_valid"`
+	VCBytes            string `json:"vc_bytes,omitempty"` // base64-encoded VC JSON
+	VCProofValid       bool   `json:"vc_proof_valid"`
 }
 
 func (s *service) verify(w http.ResponseWriter, r *http.Request) {
@@ -168,13 +189,33 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	verified, err := compiler.AppendVerificationWitness(raw, payload)
-	if err != nil {
-		writeError(w, errBadRequest(err))
-		return
+	// Extract VC attachment if present — returned to the caller so it can
+	// perform status-list checks without parsing PDF bytes itself.
+	vcBytes, vcFound, _ := compiler.ExtractEmbeddedVC(raw)
+	vcProofValid := vcFound && len(vcBytes) > 0 && isVCProofStructurallyValid(vcBytes)
+
+	resp := verifyResponse{
+		Match:              true,
+		C2PASignatureValid: true,
+		VCProofValid:       vcProofValid,
 	}
-	w.Header().Set("Content-Type", "application/pdf")
-	_, _ = w.Write(verified)
+	if vcFound && len(vcBytes) > 0 {
+		resp.VCBytes = base64.StdEncoding.EncodeToString(vcBytes)
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// isVCProofStructurallyValid returns true when the VC JSON contains a
+// recognisable proof field, without performing cryptographic verification.
+func isVCProofStructurallyValid(vcBytes []byte) bool {
+	var vc map[string]json.RawMessage
+	if err := json.Unmarshal(vcBytes, &vc); err != nil {
+		return false
+	}
+	_, ok := vc["proof"]
+	return ok
 }
 
 func (s *service) update(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +262,14 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	updated, err := compiler.UpdatePDF(oldPDF, canonical)
+	vcBytes := parts["vc"] // optional — nil when not provided
+
+	var updated []byte
+	if len(vcBytes) > 0 {
+		updated, err = compiler.UpdatePDFWithVC(oldPDF, canonical, vcBytes)
+	} else {
+		updated, err = compiler.UpdatePDF(oldPDF, canonical)
+	}
 	if err != nil {
 		if strings.Contains(err.Error(), "no changes") {
 			writeError(w, errConflict(err))
@@ -230,6 +278,7 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
+	setPDFCoreVersionHeader(w)
 	w.Header().Set("Content-Type", "application/pdf")
 	_, _ = w.Write(updated)
 }

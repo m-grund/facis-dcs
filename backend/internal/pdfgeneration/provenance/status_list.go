@@ -1,9 +1,10 @@
-package c2pa
+package provenance
 
 import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -11,10 +12,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
-
-	"crypto/sha256"
 )
 
 // StatusListPublisher publishes contract status to a status list service (DCS-OR-C2PA-005).
@@ -236,4 +236,49 @@ func (p *OCMWStatusListPublisher) RevokeStatus(ctx context.Context, contractID s
 		return "", fmt.Errorf("revoke %s: %w", contractID, err)
 	}
 	return p.statusListURI(), nil
+}
+
+// ExtractCredentialStatusFields parses statusListCredential and statusListIndex
+// from the credentialStatus object embedded in vcBytes.
+func ExtractCredentialStatusFields(vcBytes []byte) (statusListCredential string, index uint32, ok bool) {
+	var vcObj map[string]interface{}
+	if err := json.Unmarshal(vcBytes, &vcObj); err != nil {
+		return "", 0, false
+	}
+	csRaw, exists := vcObj["credentialStatus"]
+	if !exists {
+		return "", 0, false
+	}
+	cs, ok := csRaw.(map[string]interface{})
+	if !ok {
+		return "", 0, false
+	}
+	cred, _ := cs["statusListCredential"].(string)
+	indexStr, _ := cs["statusListIndex"].(string)
+	if cred == "" || indexStr == "" {
+		return "", 0, false
+	}
+	idx, err := strconv.ParseUint(indexStr, 10, 32)
+	if err != nil {
+		return "", 0, false
+	}
+	return cred, uint32(idx), true
+}
+
+// ExtractStatusListURI extracts the credentialStatus.id from the VC JSON.
+func ExtractStatusListURI(vcBytes []byte) string {
+	var vcObj map[string]interface{}
+	if err := json.Unmarshal(vcBytes, &vcObj); err != nil {
+		return ""
+	}
+	credStatusRaw, ok := vcObj["credentialStatus"]
+	if !ok {
+		return ""
+	}
+	credStatusObj, ok := credStatusRaw.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	uri, _ := credStatusObj["id"].(string)
+	return uri
 }

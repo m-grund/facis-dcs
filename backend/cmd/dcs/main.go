@@ -34,8 +34,9 @@ import (
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/pdfgeneration/c2pa"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -163,10 +164,6 @@ func main() {
 	cweCronJob := contractworkflowengine2.CronJob{DB: db, CRepo: &cweRepo}
 	cweCronJob.Start(ctx, db)
 
-	smCRepo := smrepo.PostgresContractRepo{
-		IPFSClient: ipfsAPIClient,
-	}
-
 	aRepo := pq.PostgresAuditTrailRepository{}
 	outboxProcessor := event.OutboxProcessor{
 		DB:         db,
@@ -257,8 +254,6 @@ func main() {
 		log.Fatalf(ctx, err, "load crypto provider certificate chain from file")
 	}
 
-	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
-
 	// Probe crypto provider liveness before accepting traffic.
 	if cryptoProviderURL == "" {
 		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_URL is required")
@@ -276,7 +271,22 @@ func main() {
 		log.Fatalf(ctx, err, "status list service not reachable at %s", statusListServiceURL)
 	}
 	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
-	statusListPublisher := c2pa.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
+	statusListPublisher := provenance.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
+
+	// Initialize pdf-core client (PDF rendering + C2PA provenance microservice).
+	pdfCoreURL := os.Getenv("PDF_CORE_URL")
+	if pdfCoreURL == "" {
+		log.Fatalf(ctx, nil, "PDF_CORE_URL is required")
+	}
+	if err := probeHTTP(pdfCoreURL + "/version"); err != nil {
+		log.Fatalf(ctx, err, "pdf-core not reachable at %s", pdfCoreURL)
+	}
+	pdfCoreClient := pdfcore.New(pdfCoreURL)
+
+	smCRepo := smrepo.PostgresContractRepo{
+		IPFSClient: ipfsAPIClient,
+		PDFCore:    pdfCoreClient,
+	}
 
 	// Initialize the service.
 	var (
@@ -300,9 +310,9 @@ func main() {
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, cryptoClient, tsaCfg, issuerDID, c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}
@@ -328,10 +338,9 @@ func main() {
 		IPFSClient: ipfsAPIClient,
 		CRepo:      &cweRepo,
 		TRepo:      &ctRepo,
-		Signer:     cryptoClient,
-		TSACfg:     tsaCfg,
+		PDFCore:    pdfCoreClient,
 		IssuerDID:  issuerDID,
-		VCIssuer:   c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
+		VCIssuer:   provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
 	}
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {

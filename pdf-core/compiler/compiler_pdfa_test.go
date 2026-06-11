@@ -257,6 +257,18 @@ func TestXMPWrappedInXpacket(t *testing.T) {
 	}
 }
 
+// TestXMPCreatorToolContainsRendererVersion verifies that the XMP CreatorTool
+// property embeds the renderer version so consumers can identify which build
+// produced the PDF without any out-of-band version registry.
+func TestXMPCreatorToolContainsRendererVersion(t *testing.T) {
+	pdf := renderPDF(minimalDoc())
+
+	expected := []byte(`xmp:CreatorTool="DCS-PDF-CORE ` + RendererVersion + `"`)
+	if !bytes.Contains(pdf, expected) {
+		t.Errorf("XMP metadata missing renderer version in CreatorTool: want %q present in XMP", string(expected))
+	}
+}
+
 // TestEmbeddedFileParamsHasModDate verifies that the embedded JSON-LD file
 // stream's /Params dictionary contains a /ModDate entry, as required by
 // ISO 19005-3:2012 clause 6.4.7 (Table 4). veraPDF flags the absence of

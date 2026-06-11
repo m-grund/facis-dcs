@@ -306,19 +306,10 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 	// Invalidate the cached PDF only when rendered content changes.
 	// Pure state transitions (submit, approve, etc.) must NOT clear pdf_ipfs_cid
 	// because the C2PA chain logic relies on the prior CID to append the next manifest.
-	//
-	// When content does change, carry the latest manifest hash forward into
-	// prev_manifest_hash before clearing pdf_manifest_hash.  The next
-	// appendAndCache call reads prev_manifest_hash as a fallback when the
-	// freshly-built PDF has no embedded manifest, preserving the C2PA chain
-	// across content edits (DCS-OR-C2PA-001 Gap E).
 	if contentChanged {
 		columns = append(columns,
 			"pdf_ipfs_cid = NULL",
-			"pdf_manifest_ipfs_cid = NULL",
 			"pdf_renderer_version = NULL",
-			"prev_manifest_hash = pdf_manifest_hash",
-			"pdf_manifest_hash = NULL",
 		)
 	}
 

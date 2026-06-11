@@ -1,4 +1,4 @@
-package c2pa
+package provenance
 
 import (
 	"bytes"

@@ -3,13 +3,16 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -18,9 +21,8 @@ import (
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/ipfs"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
-	"digital-contracting-service/internal/pdfgeneration/builder"
-	"digital-contracting-service/internal/pdfgeneration/c2pa"
-	"digital-contracting-service/internal/pdfgeneration/verify"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 )
 
@@ -29,10 +31,9 @@ type pdfGenerationSrvc struct {
 	IPFSClient *ipfs.APIClient
 	CRepo      *cwerepo.PostgresContractRepo
 	TRepo      *tplrepo.PostgresContractTemplateRepo
-	Signer     c2pa.Signer
-	TSACfg     c2pa.TSAConfig
+	PDFCore    *pdfcore.Client
 	IssuerDID  string
-	VCIssuer   c2pa.VCIssuer
+	VCIssuer   provenance.VCIssuer
 	auth.JWTAuthenticator
 }
 
@@ -44,22 +45,22 @@ func NewPDFGeneration(
 	ipfsClient *ipfs.APIClient,
 	cRepo *cwerepo.PostgresContractRepo,
 	tRepo *tplrepo.PostgresContractTemplateRepo,
-	signer c2pa.Signer,
-	tsaCfg c2pa.TSAConfig,
+	pdfCore *pdfcore.Client,
 	issuerDID string,
-	vcIssuer c2pa.VCIssuer,
+	vcIssuer provenance.VCIssuer,
 ) pdfgen.Service {
 	if vcIssuer == nil {
 		panic("VCIssuer is required for DCS-OR-C2PA-004 compliance")
 	}
-	// Note: VCIssuer now includes StatusListPublisher atomically (DCS-OR-C2PA-005).
+	if pdfCore == nil {
+		panic("PDFCore client is required")
+	}
 	return &pdfGenerationSrvc{
 		DB:               db,
 		IPFSClient:       ipfsClient,
 		CRepo:            cRepo,
 		TRepo:            tRepo,
-		Signer:           signer,
-		TSACfg:           tsaCfg,
+		PDFCore:          pdfCore,
 		IssuerDID:        issuerDID,
 		VCIssuer:         vcIssuer,
 		JWTAuthenticator: jwtAuth,
@@ -75,16 +76,15 @@ func readCachedPDFMetadata(ctx context.Context, queryRow func(context.Context, s
 }
 
 // ExportContractPdf exports a contract as a PDF/A-3 document.
-// If a PDF is already stored in IPFS (from a prior C2PA append cycle) it is
-// returned directly; otherwise a fresh PDF is built from the JSON-LD.
+// If a PDF is already stored in IPFS with the current C2PA state it is returned
+// directly; otherwise a fresh PDF is built via pdf-core and cached.
 func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.ExportContractPdfPayload) (io.ReadCloser, error) {
 	tx, err := s.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && err.Error() != "sql: transaction has already been committed or rolled back" {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -103,37 +103,34 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 		jsonldBytes = b
 	}
 
-	cidStr, lastC2PAState, lastRendererVersion, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contracts", p.Did)
+	cidStr, lastC2PAState, _, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contracts", p.Did)
 	if scanErr != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached contract PDF metadata for %s: %w", p.Did, scanErr))
 	}
-	currentC2PAState, err := c2pa.MapCWEStateToC2PAStrict(contract.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(contract.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map contract state %q to C2PA state: %w", contract.State, err))
 	}
 	log.Printf("pdfgeneration: ExportContractPdf %s cidStr=%q lastC2PAState=%q currentState=%s c2paState=%q",
 		p.Did, cidStr, lastC2PAState, contract.State, currentC2PAState)
-	if cidStr != "" && lastRendererVersion == builder.RendererVersion {
+
+	if cidStr != "" && lastC2PAState == currentC2PAState {
+		// DB state is authoritative — cached PDF is current.
 		r, err := s.IPFSClient.FetchFile(cidStr)
 		if err != nil || len(r.Data) == 0 {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached PDF from IPFS %s: %w", cidStr, err))
 		}
-		log.Printf("pdfgeneration: ExportContractPdf %s fetched %d bytes from IPFS", p.Did, len(r.Data))
+		log.Printf("pdfgeneration: ExportContractPdf %s state matches — returning cached PDF (%d bytes)", p.Did, len(r.Data))
+		return io.NopCloser(bytes.NewReader(r.Data)), nil
+	}
 
-		// Extract JUMBF manifest from PDF, then check lifecycle status
-		_, manifestBytes, _ := c2pa.ExtractAndVerifyManifest(r.Data)
-		actualManifestState := c2pa.ExtractLifecycleStatus(manifestBytes)
-		log.Printf("pdfgeneration: ExportContractPdf %s actualManifestState=%q currentC2PAState=%q",
-			p.Did, actualManifestState, currentC2PAState)
-
-		if actualManifestState == currentC2PAState {
-			log.Printf("pdfgeneration: ExportContractPdf %s manifest matches current state (%s) — returning cached PDF", p.Did, actualManifestState)
-			return io.NopCloser(bytes.NewReader(r.Data)), nil
+	if cidStr != "" {
+		// Existing PDF but state has advanced — update via pdf-core.
+		log.Printf("pdfgeneration: ExportContractPdf %s state changed %q→%q; appending", p.Did, lastC2PAState, currentC2PAState)
+		r, err := s.IPFSClient.FetchFile(cidStr)
+		if err != nil || len(r.Data) == 0 {
+			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch PDF from IPFS %s for update: %w", cidStr, err))
 		}
-
-		log.Printf("pdfgeneration: ExportContractPdf %s manifest %q ≠ current %q — appending new assertion",
-			p.Did, actualManifestState, currentC2PAState)
-		// Manifest state doesn't match current state — append new assertion to PDF
 		pdfBytes, err := s.appendAndCache(ctx, tx, p.Did, contract.State, jsonldBytes, r.Data, "contracts")
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("append C2PA assertion for contract %s: %w", p.Did, err))
@@ -143,39 +140,17 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 		}
 		return io.NopCloser(bytes.NewReader(pdfBytes)), nil
 	}
-	if cidStr != "" && lastRendererVersion != builder.RendererVersion {
-		log.Printf("pdfgeneration: ExportContractPdf %s cached renderer %q != current %q; rebuilding", p.Did, lastRendererVersion, builder.RendererVersion)
-	}
 
-	// No cached PDF — build from scratch.
-	name := ""
-	if contract.Name != nil {
-		name = *contract.Name
-	}
-	desc := ""
-	if contract.Description != nil {
-		desc = *contract.Description
-	}
-	pdfBytes, err := builder.BuildContract(builder.ContractInput{
-		DID:          contract.DID,
-		State:        contract.State,
-		Version:      contract.ContractVersion,
-		Name:         name,
-		Description:  desc,
-		CreatedBy:    contract.CreatedBy,
-		CreatedAt:    contract.CreatedAt,
-		UpdatedAt:    contract.UpdatedAt,
-		ContractData: jsonldBytes,
-	})
+	// No cached PDF — render from scratch via pdf-core /download.
+	pdfBytes, _, err := s.PDFCore.Download(ctx, jsonldBytes)
 	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("build contract PDF: %w", err))
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("pdf-core download for contract %s: %w", p.Did, err))
 	}
 
 	pdfBytes, err = s.appendAndCache(ctx, tx, p.Did, contract.State, jsonldBytes, pdfBytes, "contracts")
 	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("append and cache contract PDF C2PA manifest: %w", err))
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("append and cache contract PDF for %s: %w", p.Did, err))
 	}
-
 	if err := tx.Commit(); err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("commit contract PDF export tx for %s: %w", p.Did, err))
 	}
@@ -189,8 +164,7 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && err.Error() != "sql: transaction has already been committed or rolled back" {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -209,41 +183,32 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 		jsonldBytes = b
 	}
 
-	cidStr, lastC2PAState, lastRendererVersion, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contract_templates", p.Did)
+	cidStr, lastC2PAState, _, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contract_templates", p.Did)
 	if scanErr != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached template PDF metadata for %s: %w", p.Did, scanErr))
 	}
-	currentC2PAState, err := c2pa.MapCWEStateToC2PAStrict(tpl.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(tpl.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map template state %q to C2PA state: %w", tpl.State, err))
 	}
 	log.Printf("pdfgeneration: ExportTemplatePdf %s cidStr=%q lastC2PAState=%q currentState=%s c2paState=%q",
 		p.Did, cidStr, lastC2PAState, tpl.State, currentC2PAState)
-	if cidStr != "" && lastRendererVersion == builder.RendererVersion {
+
+	if cidStr != "" && lastC2PAState == currentC2PAState {
 		r, err := s.IPFSClient.FetchFile(cidStr)
 		if err != nil || len(r.Data) == 0 {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached PDF from IPFS %s: %w", cidStr, err))
 		}
-		first := r.Data
-		if len(first) > 8 {
-			first = first[:8]
+		log.Printf("pdfgeneration: ExportTemplatePdf %s state matches — returning cached PDF (%d bytes)", p.Did, len(r.Data))
+		return io.NopCloser(bytes.NewReader(r.Data)), nil
+	}
+
+	if cidStr != "" {
+		log.Printf("pdfgeneration: ExportTemplatePdf %s state changed %q→%q; appending", p.Did, lastC2PAState, currentC2PAState)
+		r, err := s.IPFSClient.FetchFile(cidStr)
+		if err != nil || len(r.Data) == 0 {
+			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch PDF from IPFS %s for update: %w", cidStr, err))
 		}
-		log.Printf("pdfgeneration: ExportTemplatePdf %s fetched %d bytes from IPFS, first8=%x", p.Did, len(r.Data), first)
-
-		// Extract JUMBF manifest from PDF, then check lifecycle status
-		_, manifestBytes, _ := c2pa.ExtractAndVerifyManifest(r.Data)
-		actualManifestState := c2pa.ExtractLifecycleStatus(manifestBytes)
-		log.Printf("pdfgeneration: ExportTemplatePdf %s actualManifestState=%q currentC2PAState=%q",
-			p.Did, actualManifestState, currentC2PAState)
-
-		if actualManifestState == currentC2PAState {
-			log.Printf("pdfgeneration: ExportTemplatePdf %s manifest matches current state (%s) — returning cached PDF", p.Did, actualManifestState)
-			return io.NopCloser(bytes.NewReader(r.Data)), nil
-		}
-
-		log.Printf("pdfgeneration: ExportTemplatePdf %s manifest %q ≠ current %q — appending new assertion",
-			p.Did, actualManifestState, currentC2PAState)
-		// Manifest state doesn't match current state — append new assertion to PDF
 		pdfBytes, err := s.appendAndCache(ctx, tx, p.Did, tpl.State, jsonldBytes, r.Data, "contract_templates")
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("append C2PA assertion for template %s: %w", p.Did, err))
@@ -253,43 +218,16 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 		}
 		return io.NopCloser(bytes.NewReader(pdfBytes)), nil
 	}
-	if cidStr != "" && lastRendererVersion != builder.RendererVersion {
-		log.Printf("pdfgeneration: ExportTemplatePdf %s cached renderer %q != current %q; rebuilding", p.Did, lastRendererVersion, builder.RendererVersion)
-	}
 
-	// No cached PDF — build from scratch.
-	name := ""
-	if tpl.Name != nil {
-		name = *tpl.Name
-	}
-	desc := ""
-	if tpl.Description != nil {
-		desc = *tpl.Description
-	}
-	docNumber := ""
-	if tpl.DocumentNumber != nil {
-		docNumber = *tpl.DocumentNumber
-	}
-	pdfBytes, err := builder.BuildTemplate(builder.TemplateInput{
-		DID:            tpl.DID,
-		State:          tpl.State,
-		Version:        tpl.Version,
-		Name:           name,
-		Description:    desc,
-		TemplateType:   tpl.TemplateType,
-		DocumentNumber: docNumber,
-		CreatedBy:      tpl.CreatedBy,
-		CreatedAt:      tpl.CreatedAt,
-		UpdatedAt:      tpl.UpdatedAt,
-		TemplateData:   jsonldBytes,
-	})
+	// No cached PDF — render from scratch via pdf-core /download.
+	pdfBytes, _, err := s.PDFCore.Download(ctx, jsonldBytes)
 	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("build template PDF: %w", err))
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("pdf-core download for template %s: %w", p.Did, err))
 	}
 
 	pdfBytes, err = s.appendAndCache(ctx, tx, p.Did, tpl.State, jsonldBytes, pdfBytes, "contract_templates")
 	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("append and cache template PDF C2PA manifest: %w", err))
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("append and cache template PDF for %s: %w", p.Did, err))
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("commit template PDF export tx for %s: %w", p.Did, err))
@@ -297,17 +235,16 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 	return io.NopCloser(bytes.NewReader(pdfBytes)), nil
 }
 
-// VerifyContractPdf verifies MR/HR hash consistency and C2PA provenance for a contract (DCS-OR-C2PA-006).
-// Per DCS-OR-C2PA-003, if the contract state has advanced since the cached PDF was generated,
-// this method ensures a new manifest is appended before verification.
+// VerifyContractPdf verifies content integrity and C2PA provenance for a contract (DCS-OR-C2PA-006).
+// Delegates content-match + C2PA-chain validation to pdf-core /verify; performs VC proof and
+// status-list checks locally using the remaining c2pa helpers.
 func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.VerifyContractPdfPayload) (*pdfgen.PDFVerifyResult, error) {
 	tx, err := s.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && err.Error() != "sql: transaction has already been committed or rolled back" {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -324,17 +261,15 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read contract PDF verification metadata for %s: %w", p.Did, err))
 	}
 
-	currentC2PAState, err := c2pa.MapCWEStateToC2PAStrict(contract.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(contract.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map contract state %q to C2PA state: %w", contract.State, err))
 	}
+
 	if cachedCID != "" && cachedC2PAState != currentC2PAState {
-		// State has advanced since the cached PDF was created (DCS-OR-C2PA-003).
-		// Append a new manifest to ensure the PDF reflects the current lifecycle state
-		// before verification returns.
+		// State has advanced — append before verifying (DCS-OR-C2PA-003).
 		log.Printf("pdfgeneration: VerifyContractPdf %s state advanced %q→%q; appending before verify",
 			p.Did, cachedC2PAState, currentC2PAState)
-
 		var jsonldBytes []byte
 		if contract.ContractData != nil {
 			b, err := json.Marshal(contract.ContractData)
@@ -343,10 +278,9 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 			}
 			jsonldBytes = b
 		}
-
 		r, err := s.IPFSClient.FetchFile(cachedCID)
 		if err != nil || len(r.Data) == 0 {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached contract PDF %s from IPFS %s for verify append: %w", p.Did, cachedCID, err))
+			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached contract PDF %s from IPFS for verify append: %w", p.Did, err))
 		}
 		if _, err := s.appendAndCache(ctx, tx, p.Did, contract.State, jsonldBytes, r.Data, "contracts"); err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("append contract C2PA assertion before verify for %s: %w", p.Did, err))
@@ -356,56 +290,28 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 		}
 	}
 
-	pdfBytes, err := s.fetchOrBuildContractPDF(ctx, p.Did)
-	if err != nil {
-		return nil, err
+	// Fetch the latest PDF (CID may have changed after state advance above).
+	var latestCID string
+	if err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(pdf_ipfs_cid,'') FROM contracts WHERE did=$1`, p.Did).Scan(&latestCID); err != nil || latestCID == "" {
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("no cached PDF for contract %s; call export first", p.Did))
 	}
+	r, err := s.IPFSClient.FetchFile(latestCID)
+	if err != nil || len(r.Data) == 0 {
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch contract PDF %s from IPFS for verify: %w", p.Did, err))
+	}
+	pdfBytes := []byte(r.Data)
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	v := &verify.ContractVerifier{
-		BuildFn: func(jsonld []byte) ([]byte, error) {
-			return s.rebuildContractFromJSONLD(ctx, p.Did, jsonld)
-		},
-		// FetchManifestFn retrieves the dedicated remote C2PA manifest object
-		// (JUMBF bytes) when embedded provenance is stripped (DCS-OR-C2PA-008).
-		FetchManifestFn: s.contractManifestIPFSFetchFn(ctx, p.Did),
-		// FetchFn fetches the canonical PDF (with C2PA manifests) from IPFS when the
-		// input PDF has been stripped of incremental updates (DCS-OR-C2PA-008).
-		FetchFn: s.contractIPFSFetchFn(ctx, p.Did),
-		// CheckStatusFn queries live revocation state from the XFSC status list (DCS-OR-C2PA-006).
-		CheckStatusFn: func(statusListCredential string, index uint32) (string, error) {
-			return c2pa.QueryStatusListStatus(ctx, httpClient, statusListCredential, index)
-		},
-	}
-	result, err := v.Verify(pdfBytes)
-	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("verify contract PDF: %w", err))
-	}
-	return &pdfgen.PDFVerifyResult{
-		Match:              result.Match,
-		JsonldHash:         result.JSONLDHash,
-		BasePdfHash:        result.BasePDFHash,
-		StoredBasePdfHash:  result.StoredBasePDFHash,
-		C2paManifestFound:  result.C2PAManifestFound,
-		C2paSignatureValid: result.C2PASignatureValid,
-		VcProofValid:       result.VCProofValid,
-		StatusListURI:      ptrToString(result.StatusListURI),
-		LifecycleStatus:    ptrToString(result.LifecycleStatus),
-		StatusListStatus:   ptrToString(result.StatusListStatus),
-	}, nil
+	return s.runVerify(ctx, pdfBytes)
 }
 
-// VerifyTemplatePdf verifies MR/HR hash consistency and C2PA provenance for a template (DCS-OR-C2PA-006).
-// Per DCS-OR-C2PA-003, if the template state has advanced since the cached PDF was generated,
-// this method ensures a new manifest is appended before verification.
+// VerifyTemplatePdf verifies content integrity and C2PA provenance for a template (DCS-OR-C2PA-006).
 func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.VerifyTemplatePdfPayload) (*pdfgen.PDFVerifyResult, error) {
 	tx, err := s.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
 	}
 	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
+		if err := tx.Rollback(); err != nil && err.Error() != "sql: transaction has already been committed or rolled back" {
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
@@ -422,17 +328,14 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read template PDF verification metadata for %s: %w", p.Did, err))
 	}
 
-	currentC2PAState, err := c2pa.MapCWEStateToC2PAStrict(tpl.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(tpl.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map template state %q to C2PA state: %w", tpl.State, err))
 	}
+
 	if cachedCID != "" && cachedC2PAState != currentC2PAState {
-		// State has advanced since the cached PDF was created (DCS-OR-C2PA-003).
-		// Append a new manifest to ensure the PDF reflects the current lifecycle state
-		// before verification returns.
 		log.Printf("pdfgeneration: VerifyTemplatePdf %s state advanced %q→%q; appending before verify",
 			p.Did, cachedC2PAState, currentC2PAState)
-
 		var jsonldBytes []byte
 		if tpl.TemplateData != nil {
 			b, err := json.Marshal(tpl.TemplateData)
@@ -441,10 +344,9 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 			}
 			jsonldBytes = b
 		}
-
 		r, err := s.IPFSClient.FetchFile(cachedCID)
 		if err != nil || len(r.Data) == 0 {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached template PDF %s from IPFS %s for verify append: %w", p.Did, cachedCID, err))
+			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached template PDF %s from IPFS for verify append: %w", p.Did, err))
 		}
 		if _, err := s.appendAndCache(ctx, tx, p.Did, tpl.State, jsonldBytes, r.Data, "contract_templates"); err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("append template C2PA assertion before verify for %s: %w", p.Did, err))
@@ -454,382 +356,105 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 		}
 	}
 
-	pdfBytes, err := s.fetchOrBuildTemplatePDF(ctx, p.Did)
-	if err != nil {
-		return nil, err
+	var latestCID string
+	if err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(pdf_ipfs_cid,'') FROM contract_templates WHERE did=$1`, p.Did).Scan(&latestCID); err != nil || latestCID == "" {
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("no cached PDF for template %s; call export first", p.Did))
+	}
+	r, err := s.IPFSClient.FetchFile(latestCID)
+	if err != nil || len(r.Data) == 0 {
+		return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch template PDF %s from IPFS for verify: %w", p.Did, err))
+	}
+	pdfBytes := []byte(r.Data)
+
+	return s.runVerify(ctx, pdfBytes)
+}
+
+// runVerify delegates content-match + C2PA-chain validation to pdf-core /verify,
+// then performs status-list checks locally using VC bytes from the response.
+func (s *pdfGenerationSrvc) runVerify(ctx context.Context, pdfBytes []byte) (*pdfgen.PDFVerifyResult, error) {
+	// pdf-core /verify: re-renders JSON-LD and compares, validates C2PA chain.
+	// 200 → intact; 409 → content mismatch or C2PA chain broken; other → error.
+	result, verifyErr := s.PDFCore.Verify(ctx, pdfBytes)
+	match := verifyErr == nil
+	c2paManifestFound := verifyErr == nil || (verifyErr != nil && strings.Contains(verifyErr.Error(), "status 409"))
+	c2paSignatureValid := verifyErr == nil
+
+	// Query live revocation state from the XFSC status list (DCS-OR-C2PA-006).
+	// VC bytes are returned directly by pdf-core — no PDF byte scanning required.
+	statusListURI := ""
+	statusListStatus := ""
+	if result.VCProofValid && len(result.VCBytes) > 0 {
+		statusListURI = provenance.ExtractStatusListURI(result.VCBytes)
+		if cred, idx, ok := provenance.ExtractCredentialStatusFields(result.VCBytes); ok {
+			httpClient := &http.Client{Timeout: 10 * time.Second}
+			if status, err := provenance.QueryStatusListStatus(ctx, httpClient, cred, idx); err == nil {
+				statusListStatus = status
+			}
+		}
 	}
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	v := &verify.TemplateVerifier{
-		BuildFn: func(jsonld []byte) ([]byte, error) {
-			return s.rebuildTemplateFromJSONLD(ctx, p.Did, jsonld)
-		},
-		// FetchManifestFn retrieves the dedicated remote C2PA manifest object
-		// for templates (DCS-OR-C2PA-008).
-		FetchManifestFn: s.templateManifestIPFSFetchFn(ctx, p.Did),
-		// FetchFn fetches the canonical PDF from IPFS when stripped (DCS-OR-C2PA-008).
-		FetchFn: s.templateIPFSFetchFn(ctx, p.Did),
-		// CheckStatusFn queries live revocation state from the XFSC status list (DCS-OR-C2PA-006).
-		CheckStatusFn: func(statusListCredential string, index uint32) (string, error) {
-			return c2pa.QueryStatusListStatus(ctx, httpClient, statusListCredential, index)
-		},
-	}
-	result, err := v.Verify(pdfBytes)
-	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("verify template PDF: %w", err))
-	}
 	return &pdfgen.PDFVerifyResult{
-		Match:              result.Match,
-		JsonldHash:         result.JSONLDHash,
-		BasePdfHash:        result.BasePDFHash,
-		StoredBasePdfHash:  result.StoredBasePDFHash,
-		C2paManifestFound:  result.C2PAManifestFound,
-		C2paSignatureValid: result.C2PASignatureValid,
+		Match:              match,
+		C2paManifestFound:  c2paManifestFound,
+		C2paSignatureValid: c2paSignatureValid,
 		VcProofValid:       result.VCProofValid,
-		StatusListURI:      ptrToString(result.StatusListURI),
-		LifecycleStatus:    ptrToString(result.LifecycleStatus),
-		StatusListStatus:   ptrToString(result.StatusListStatus),
+		StatusListURI:      ptrToString(statusListURI),
+		StatusListStatus:   ptrToString(statusListStatus),
 	}, nil
 }
 
-// contractIPFSFetchFn returns a FetchFn that retrieves the canonical contract PDF
-// from IPFS using the stored pdf_ipfs_cid (DCS-OR-C2PA-008).
-func (s *pdfGenerationSrvc) contractIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
-	if s.IPFSClient == nil {
-		return nil
-	}
-	return func() ([]byte, error) {
-		cidStr, _, rendererVersion, err := readCachedPDFMetadata(ctx, s.DB.QueryRowContext, "contracts", did)
-		if err != nil {
-			return nil, fmt.Errorf("read contract pdf_ipfs_cid for %s: %w", did, err)
-		}
-		if cidStr == "" || rendererVersion != builder.RendererVersion {
-			if cidStr != "" && rendererVersion != builder.RendererVersion {
-				log.Printf("pdfgeneration: fetchOrBuildContractPDF %s cached renderer %q != current %q; rebuilding", did, rendererVersion, builder.RendererVersion)
-			}
-			return nil, nil
-		}
-		r, err := s.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, err
-		}
-		return r.Data, nil
-	}
-}
-
-// templateIPFSFetchFn is the template counterpart of contractIPFSFetchFn (DCS-OR-C2PA-008).
-func (s *pdfGenerationSrvc) templateIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
-	if s.IPFSClient == nil {
-		return nil
-	}
-	return func() ([]byte, error) {
-		cidStr, _, rendererVersion, err := readCachedPDFMetadata(ctx, s.DB.QueryRowContext, "contract_templates", did)
-		if err != nil {
-			return nil, fmt.Errorf("read template pdf_ipfs_cid for %s: %w", did, err)
-		}
-		if cidStr == "" || rendererVersion != builder.RendererVersion {
-			if cidStr != "" && rendererVersion != builder.RendererVersion {
-				log.Printf("pdfgeneration: fetchOrBuildTemplatePDF %s cached renderer %q != current %q; rebuilding", did, rendererVersion, builder.RendererVersion)
-			}
-			return nil, nil
-		}
-		r, err := s.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, err
-		}
-		return r.Data, nil
-	}
-}
-
-// contractManifestIPFSFetchFn returns a FetchManifestFn that retrieves the
-// standalone remote C2PA manifest bytes for the given contract DID.
-func (s *pdfGenerationSrvc) contractManifestIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
-	if s.IPFSClient == nil {
-		return nil
-	}
-	return func() ([]byte, error) {
-		var cidStr string
-		if err := s.DB.QueryRowContext(ctx,
-			`SELECT COALESCE(pdf_manifest_ipfs_cid,'') FROM contracts WHERE did=$1`, did,
-		).Scan(&cidStr); err != nil {
-			return nil, fmt.Errorf("read contract pdf_manifest_ipfs_cid for %s: %w", did, err)
-		}
-		if cidStr == "" {
-			return nil, nil
-		}
-		r, err := s.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, err
-		}
-		return r.Data, nil
-	}
-}
-
-// templateManifestIPFSFetchFn returns a FetchManifestFn that retrieves the
-// standalone remote C2PA manifest bytes for the given template DID.
-func (s *pdfGenerationSrvc) templateManifestIPFSFetchFn(ctx context.Context, did string) func() ([]byte, error) {
-	if s.IPFSClient == nil {
-		return nil
-	}
-	return func() ([]byte, error) {
-		var cidStr string
-		if err := s.DB.QueryRowContext(ctx,
-			`SELECT COALESCE(pdf_manifest_ipfs_cid,'') FROM contract_templates WHERE did=$1`, did,
-		).Scan(&cidStr); err != nil {
-			return nil, fmt.Errorf("read template pdf_manifest_ipfs_cid for %s: %w", did, err)
-		}
-		if cidStr == "" {
-			return nil, nil
-		}
-		r, err := s.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, err
-		}
-		return r.Data, nil
-	}
-}
-
-// appendAndCache appends an initial C2PA assertion and stores the PDF in IPFS,
-// updating the pdf_ipfs_cid column in the given table.
-// It also creates a W3C Verifiable Credential for the lifecycle event (DCS-OR-C2PA-004).
+// appendAndCache issues a W3C VC, calls pdf-core /update to append C2PA + VC,
+// stores the updated PDF in IPFS, and writes the new CID + state to the DB.
 func (s *pdfGenerationSrvc) appendAndCache(
 	ctx context.Context, tx *sqlx.Tx,
 	did, state string, jsonldBytes, pdfBytes []byte, table string,
 ) ([]byte, error) {
-	if s.Signer == nil {
-		return nil, fmt.Errorf("C2PA signer is not configured")
-	}
-	assetHash := c2pa.FileHashOf(pdfBytes)
-	prevHash := c2pa.PrevManifestHashFrom(pdfBytes)
-
-	// If the PDF was freshly built (no embedded manifest) check whether a prior
-	// content-changing edit preserved a chain link in prev_manifest_hash
-	// (DCS-OR-C2PA-001 Gap E).
-	if prevHash == "" {
-		var stored string
-		if err := tx.QueryRowContext(ctx,
-			fmt.Sprintf(`SELECT COALESCE(prev_manifest_hash,'') FROM %s WHERE did=$1`, table),
-			did,
-		).Scan(&stored); err != nil {
-			return nil, fmt.Errorf("read prev_manifest_hash for %s from %s: %w", did, table, err)
-		}
-		prevHash = stored
-	}
-
-	// Map the raw CWE/DB state to the SRS-defined C2PA vocabulary (DCS-OR-C2PA-003).
-	c2paState, err := c2pa.MapCWEStateToC2PAStrict(state)
+	c2paState, err := provenance.MapCWEStateToC2PAStrict(state)
 	if err != nil {
 		return pdfBytes, fmt.Errorf("map lifecycle state %q: %w", state, err)
 	}
-	var fromState string
-	if err := tx.QueryRowContext(ctx,
-		fmt.Sprintf(`SELECT COALESCE(pdf_c2pa_state,'') FROM %s WHERE did=$1`, table),
-		did,
-	).Scan(&fromState); err != nil {
-		return nil, fmt.Errorf("read previous C2PA state for %s from %s: %w", did, table, err)
-	}
-	log.Printf("pdfgeneration: appendAndCache %s table=%s state=%s c2paState=%s prevHash=%q pdfLen=%d",
-		did, table, state, c2paState, prevHash, len(pdfBytes))
 
-	// Generate a reason based on the state transition (DCS-OR-C2PA-003).
+	log.Printf("pdfgeneration: appendAndCache %s table=%s state=%s c2paState=%s pdfLen=%d",
+		did, table, state, c2paState, len(pdfBytes))
+
 	reason := stateToReason(c2paState)
 
-	// Issue a W3C VC for this lifecycle event (DCS-OR-C2PA-004).
+	// Compute asset hash for the VC credentialSubject (DCS-OR-C2PA-004).
+	h := sha256.Sum256(pdfBytes)
+	assetHash := hex.EncodeToString(h[:])
+
+	// Issue W3C VC for this lifecycle event (DCS-OR-C2PA-004).
 	// Status list publication is atomic with VC issuance (DCS-OR-C2PA-005).
-	vcID, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
+	_, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
 		ctx, did, assetHash, c2paState, reason, s.IssuerDID, time.Now().UTC(),
 	)
 	if err != nil {
 		return pdfBytes, fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
 	}
 
-	assertion := c2pa.NewLifecycleAssertion(
-		did, assetHash, assetHash, builder.RendererVersion,
-		c2paState, reason, s.IssuerDID, vcID, prevHash,
-		time.Now().UTC(),
-	)
-	result, err := c2pa.AppendManifest(ctx, s.Signer, s.TSACfg, s.IPFSClient, assertion, pdfBytes, vcBytes)
+	// pdf-core appends a C2PA incremental update embedding the VC attachment.
+	// When vcBytes is provided, pdf-core bypasses the "no-changes" guard —
+	// this covers the genesis VC attachment case (same JSON-LD as /download).
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes)
 	if err != nil {
-		return pdfBytes, err
+		return pdfBytes, fmt.Errorf("pdf-core update for %s: %w", did, err)
 	}
+
+	// Store updated PDF in IPFS.
+	ipfsResult, err := s.IPFSClient.CreateFile(ctx, base64.StdEncoding.EncodeToString(updatedPDF))
+	if err != nil {
+		return updatedPDF, fmt.Errorf("store PDF in IPFS for %s: %w", did, err)
+	}
+	pdfCID := ipfsResult.Identifier.Value
+
 	if _, err := tx.ExecContext(ctx,
-		fmt.Sprintf(`UPDATE %s SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3, pdf_manifest_hash=$4, pdf_manifest_ipfs_cid=$5, prev_manifest_hash=NULL WHERE did=$6`, table),
-		result.IPFSCID, builder.RendererVersion, c2paState, result.ManifestHash, result.ManifestIPFSCID, did,
+		fmt.Sprintf(`UPDATE %s SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3 WHERE did=$4`, table),
+		pdfCID, rendererVersion, c2paState, did,
 	); err != nil {
 		return nil, fmt.Errorf("update %s pdf_ipfs_cid: %w", table, err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO c2pa_audit_log (entity_type, entity_did, from_state, to_state, actor_did, reason, vc_id, manifest_hash, occurred_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		auditEntityTypeForTable(table), did, nullableString(fromState), c2paState, s.IssuerDID,
-		reason, nullableString(vcID), result.ManifestHash, time.Now().UTC(),
-	); err != nil {
-		return nil, fmt.Errorf("insert c2pa_audit_log for %s: %w", did, err)
-	}
-	log.Printf("pdfgeneration: appendAndCache %s done → CID=%s pdfLen=%d", did, result.IPFSCID, len(result.UpdatedPDF))
-	return result.UpdatedPDF, nil
-}
-
-func (s *pdfGenerationSrvc) fetchOrBuildContractPDF(ctx context.Context, did string) ([]byte, error) {
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
-	}
-	defer func(tx *sqlx.Tx) {
-		err := tx.Rollback()
-		if err != nil {
-			log.Printf("could not rollback transaction: %v", err)
-		}
-	}(tx)
-
-	var cidStr string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(pdf_ipfs_cid,'') FROM contracts WHERE did=$1`, did).Scan(&cidStr); err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached contract PDF CID for %s: %w", did, err))
-	}
-	if cidStr != "" {
-		r, err := s.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached contract PDF for %s from IPFS %s: %w", did, cidStr, err))
-		}
-		if len(r.Data) == 0 {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("cached contract PDF for %s from IPFS %s is empty", did, cidStr))
-		}
-		return r.Data, nil
-	}
-
-	// Fall back: build from scratch.
-	contract, err := s.CRepo.ReadDataByID(ctx, tx, did)
-	if err != nil {
-		return nil, pdfgen.MakeNotFound(fmt.Errorf("contract %s: %w", did, err))
-	}
-	var jsonldBytes []byte
-	if contract.ContractData != nil {
-		b, err := json.Marshal(contract.ContractData)
-		if err != nil {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal contract JSON-LD for rebuild %s: %w", did, err))
-		}
-		jsonldBytes = b
-	}
-	name := ""
-	if contract.Name != nil {
-		name = *contract.Name
-	}
-	return builder.BuildContract(builder.ContractInput{
-		DID: did, State: contract.State, Version: contract.ContractVersion,
-		Name: name, CreatedBy: contract.CreatedBy,
-		CreatedAt: contract.CreatedAt, UpdatedAt: contract.UpdatedAt,
-		ContractData: jsonldBytes,
-	})
-}
-
-func (s *pdfGenerationSrvc) rebuildContractFromJSONLD(ctx context.Context, did string, jsonld []byte) ([]byte, error) {
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("could not rollback transaction: %v", err)
-		}
-	}(tx)
-	contract, err := s.CRepo.ReadDataByID(ctx, tx, did)
-	if err != nil {
-		return nil, err
-	}
-	name := ""
-	if contract.Name != nil {
-		name = *contract.Name
-	}
-	return builder.BuildContract(builder.ContractInput{
-		DID: did, State: contract.State, Version: contract.ContractVersion,
-		Name: name, CreatedBy: contract.CreatedBy,
-		CreatedAt: contract.CreatedAt, UpdatedAt: contract.UpdatedAt,
-		ContractData: jsonld,
-	})
-}
-
-func (s *pdfGenerationSrvc) fetchOrBuildTemplatePDF(ctx context.Context, did string) ([]byte, error) {
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("begin tx: %w", err))
-	}
-	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("could not rollback transaction: %v", err)
-		}
-	}(tx)
-
-	var cidStr string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(pdf_ipfs_cid,'') FROM contract_templates WHERE did=$1`, did).Scan(&cidStr); err != nil {
-		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached template PDF CID for %s: %w", did, err))
-	}
-	if cidStr != "" {
-		r, err := s.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("fetch cached template PDF for %s from IPFS %s: %w", did, cidStr, err))
-		}
-		if len(r.Data) == 0 {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("cached template PDF for %s from IPFS %s is empty", did, cidStr))
-		}
-		return r.Data, nil
-	}
-
-	tpl, err := s.TRepo.ReadDataByID(ctx, tx, did)
-	if err != nil {
-		return nil, pdfgen.MakeNotFound(fmt.Errorf("template %s: %w", did, err))
-	}
-	var jsonldBytes []byte
-	if tpl.TemplateData != nil {
-		b, err := json.Marshal(tpl.TemplateData)
-		if err != nil {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal template JSON-LD for rebuild %s: %w", did, err))
-		}
-		jsonldBytes = b
-	}
-	name := ""
-	if tpl.Name != nil {
-		name = *tpl.Name
-	}
-	docNumber := ""
-	if tpl.DocumentNumber != nil {
-		docNumber = *tpl.DocumentNumber
-	}
-	return builder.BuildTemplate(builder.TemplateInput{
-		DID: did, State: tpl.State, Version: tpl.Version,
-		Name: name, TemplateType: tpl.TemplateType, DocumentNumber: docNumber,
-		CreatedBy: tpl.CreatedBy, CreatedAt: tpl.CreatedAt, UpdatedAt: tpl.UpdatedAt,
-		TemplateData: jsonldBytes,
-	})
-}
-
-func (s *pdfGenerationSrvc) rebuildTemplateFromJSONLD(ctx context.Context, did string, jsonld []byte) ([]byte, error) {
-	tx, err := s.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("could not rollback transaction: %v", err)
-		}
-	}(tx)
-	tpl, err := s.TRepo.ReadDataByID(ctx, tx, did)
-	if err != nil {
-		return nil, err
-	}
-	name := ""
-	if tpl.Name != nil {
-		name = *tpl.Name
-	}
-	docNumber := ""
-	if tpl.DocumentNumber != nil {
-		docNumber = *tpl.DocumentNumber
-	}
-	return builder.BuildTemplate(builder.TemplateInput{
-		DID: did, State: tpl.State, Version: tpl.Version,
-		Name: name, TemplateType: tpl.TemplateType, DocumentNumber: docNumber,
-		CreatedBy: tpl.CreatedBy, CreatedAt: tpl.CreatedAt, UpdatedAt: tpl.UpdatedAt,
-		TemplateData: jsonld,
-	})
+	log.Printf("pdfgeneration: appendAndCache %s done → CID=%s pdfLen=%d", did, pdfCID, len(updatedPDF))
+	return updatedPDF, nil
 }
 
 // stateToReason generates a human-readable reason for a state transition (DCS-OR-C2PA-003).
@@ -854,7 +479,7 @@ func stateToReason(state string) string {
 	}
 }
 
-// ptrToString converts a string to a *string pointer, handling empty strings.
+// ptrToString converts a string to a *string pointer, returning nil for empty strings.
 func ptrToString(s string) *string {
 	if s == "" {
 		return nil
@@ -862,16 +487,3 @@ func ptrToString(s string) *string {
 	return &s
 }
 
-func auditEntityTypeForTable(table string) string {
-	if table == "contract_templates" {
-		return "template"
-	}
-	return "contract"
-}
-
-func nullableString(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}

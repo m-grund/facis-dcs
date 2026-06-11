@@ -1,4 +1,4 @@
-package c2pa
+package provenance
 
 import (
 	"context"
@@ -26,12 +26,9 @@ func TestIssueLifecycleVC_IncludesInlineJSONLDContextAndSubjectID(t *testing.T) 
 	assertion := NewLifecycleAssertion(
 		"did:web:example.org:contracts:abc123",
 		"f00dbabe",
-		"",
-		"",
 		"active",
 		"approved",
 		"did:web:example.org:issuer",
-		"",
 		"",
 		effectiveAt,
 	)
@@ -75,8 +72,8 @@ func TestIssueLifecycleVC_CredentialStatusIncludedWhenStatusListURISet(t *testin
 	contractID := "did:web:example.org:contracts:abc123"
 	statusURI := "http://statuslist/v1/tenants/default/status/1"
 	assertion := NewLifecycleAssertion(
-		contractID, "f00dbabe", "", "", "active", "approved",
-		"did:web:example.org:issuer", "", "", effectiveAt,
+		contractID, "f00dbabe", "active", "approved",
+		"did:web:example.org:issuer", "", effectiveAt,
 	)
 
 	signer := &captureSigner{}
@@ -101,8 +98,8 @@ func TestIssueLifecycleVC_CredentialStatusIncludedWhenStatusListURISet(t *testin
 func TestIssueLifecycleVC_CredentialStatusOmittedWhenStatusListURIEmpty(t *testing.T) {
 	effectiveAt := time.Date(2026, 5, 29, 16, 0, 0, 0, time.UTC)
 	assertion := NewLifecycleAssertion(
-		"did:web:example.org:contracts:abc123", "f00dbabe", "", "", "active", "approved",
-		"did:web:example.org:issuer", "", "", effectiveAt,
+		"did:web:example.org:contracts:abc123", "f00dbabe", "active", "approved",
+		"did:web:example.org:issuer", "", effectiveAt,
 	)
 
 	signer := &captureSigner{}
@@ -120,12 +117,9 @@ func TestIssueLifecycleVC_NormalizesNonURISubjectID(t *testing.T) {
 	assertion := NewLifecycleAssertion(
 		"contract-123", // not an absolute URI
 		"f00dbabe",
-		"",
-		"",
 		"active",
 		"approved",
 		"did:web:example.org:issuer",
-		"",
 		"",
 		effectiveAt,
 	)
@@ -152,12 +146,9 @@ func TestIssueLifecycleVC_VCDM2ValidFromNotIssuanceDate(t *testing.T) {
 	assertion := NewLifecycleAssertion(
 		"did:web:example.org:contracts:dm2",
 		"f00dbabe",
-		"",
-		"",
 		"active",
 		"",
 		"did:web:example.org:issuer",
-		"",
 		"",
 		effectiveAt,
 	)

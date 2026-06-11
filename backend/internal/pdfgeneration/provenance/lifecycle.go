@@ -1,4 +1,4 @@
-package c2pa
+package provenance
 
 import (
 	"fmt"
@@ -8,8 +8,7 @@ import (
 
 // LifecycleAssertion is the dcs.contract.lifecycle assertion carried in each C2PA
 // manifest (DCS-OR-C2PA-003). It records the contract's state at the time the
-// manifest was created so verifiers can reconstruct the full lifecycle history
-// by following the prev_manifest_hash chain.
+// manifest was created so verifiers can reconstruct the full lifecycle history.
 type LifecycleAssertion struct {
 	// Label identifies this assertion type.
 	Label string `json:"label"`
@@ -22,17 +21,6 @@ type LifecycleAssertion struct {
 	// SRS-required binding field used in both lifecycle assertions and
 	// VC credentialSubject.file_hash.
 	FileHash string `json:"file_hash"`
-
-	// PDFHash is the SHA-256 of the same artifact bytes used by FileHash. It is
-	// carried explicitly so c2pa.hash.data and lifecycle assertion checks can be
-	// compared directly without cross-field derivation.
-	PDFHash string `json:"pdf_hash"`
-
-	// RendererVersion identifies the renderer build that produced the PDF. A renderer
-	// upgrade produces different PDF bytes for the same JSON-LD, so the version must
-	// be recorded to allow future bytewise-match verification to select the correct
-	// renderer.
-	RendererVersion string `json:"renderer_version"`
 
 	// Status is the contract lifecycle state at assertion time
 	// (draft, active, amended, suspended, terminated, expired, replaced).
@@ -50,28 +38,21 @@ type LifecycleAssertion struct {
 	// VCId is the identifier of the W3C VC that records this lifecycle event
 	// (DCS-OR-C2PA-004). Empty until the VC is issued.
 	VCId string `json:"vc_id,omitempty"`
-
-	// PrevManifestHash is the SHA-256 of the previous JUMBF manifest box bytes
-	// (hex-encoded), forming a chain of custody. Empty for the first assertion.
-	PrevManifestHash string `json:"prev_manifest_hash,omitempty"`
 }
 
 const lifecycleAssertionLabel = "org.facis.dcs.contract.lifecycle"
 
 // NewLifecycleAssertion constructs a LifecycleAssertion with the required fields.
-func NewLifecycleAssertion(contractID, fileHash, pdfHash, rendererVersion, status, reason, authority, vcID, prevManifestHash string, effectiveAt time.Time) LifecycleAssertion {
+func NewLifecycleAssertion(contractID, fileHash, status, reason, authority, vcID string, effectiveAt time.Time) LifecycleAssertion {
 	return LifecycleAssertion{
-		Label:            lifecycleAssertionLabel,
-		ContractID:       contractID,
-		FileHash:         fileHash,
-		PDFHash:          pdfHash,
-		RendererVersion:  rendererVersion,
-		Status:           status,
-		Reason:           reason,
-		EffectiveAt:      effectiveAt,
-		Authority:        authority,
-		VCId:             vcID,
-		PrevManifestHash: prevManifestHash,
+		Label:       lifecycleAssertionLabel,
+		ContractID:  contractID,
+		FileHash:    fileHash,
+		Status:      status,
+		Reason:      reason,
+		EffectiveAt: effectiveAt,
+		Authority:   authority,
+		VCId:        vcID,
 	}
 }
 

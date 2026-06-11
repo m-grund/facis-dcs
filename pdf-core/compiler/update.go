@@ -118,6 +118,30 @@ func parseCurrentPagesKids(pdf []byte) ([]int, error) {
 // The original PDF bytes are preserved unchanged as a prefix so existing
 // C2PA hard-binding signatures remain verifiable over the original byte range.
 func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
+	return updatePDF(oldPDF, newPayload, nil)
+}
+
+// UpdatePDFWithVC appends a PDF incremental update that replaces visible page
+// content with a freshly compiled version of newPayload AND embeds vcBytes as
+// a "contract-lifecycle-vc.json" attached file.
+//
+// Unlike UpdatePDF, this function proceeds even when newPayload is semantically
+// identical to the current embedded payload, because the VC attachment is itself
+// a provenance event (e.g. attaching the initial lifecycle credential to a
+// freshly compiled base PDF).
+//
+// When vcBytes is nil the call delegates to UpdatePDF unchanged.
+func UpdatePDFWithVC(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
+	if len(vcBytes) == 0 {
+		return UpdatePDF(oldPDF, newPayload)
+	}
+	return updatePDF(oldPDF, newPayload, vcBytes)
+}
+
+// updatePDF is the shared implementation used by UpdatePDF and UpdatePDFWithVC.
+// When vcBytes is non-nil the "no changes" guard is bypassed and the VC is
+// appended as an embedded attachment in the incremental update section.
+func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
 	oldPayload, err := ExtractEmbeddedJSONLD(oldPDF)
 	if err != nil {
 		return nil, fmt.Errorf("extract embedded JSON-LD: %w", err)
@@ -136,7 +160,7 @@ func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
 	oldHashHex := hex.EncodeToString(oldHash[:])
 	newHashHex := hex.EncodeToString(newHash[:])
 
-	if oldHashHex == newHashHex {
+	if oldHashHex == newHashHex && vcBytes == nil {
 		return nil, fmt.Errorf("no changes: payloads are semantically identical")
 	}
 
@@ -176,6 +200,16 @@ func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
 		}
 	}
 
+	// Reserve IDs for VC embedded-file and filespec objects when a VC is present.
+	vcFileObjID := 0
+	vcSpecObjID := 0
+	if vcBytes != nil {
+		vcFileObjID = nextID
+		nextID++
+		vcSpecObjID = nextID
+		nextID++ //nolint:ineffassign // nextID may be used by future extensions
+	}
+
 	originalC2PA, err := extractEmbeddedStreamByFileSpecName(oldPDF, "content_credential.c2pa")
 	if err != nil {
 		return nil, fmt.Errorf("extract original C2PA: %w", err)
@@ -195,7 +229,7 @@ func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
 		appendix := buildUpdateAppendixBytes(
 			len(oldPDF), prevStartXref, oldSize, fileID,
 			updatedC2PA, newDoc.CanonicalJSON, newDoc.PayloadHash,
-			newPages,
+			newPages, vcBytes, vcFileObjID, vcSpecObjID,
 		)
 		result = append(append([]byte(nil), oldPDF...), appendix...)
 
@@ -230,6 +264,7 @@ func buildUpdateAppendixBytes(
 	updatedC2PA, newCanonicalJSON []byte,
 	newPayloadHash string,
 	newPages []pageLayout,
+	vcBytes []byte, vcFileObjID, vcSpecObjID int,
 ) []byte {
 	const (
 		fontObjID  = 6
@@ -321,6 +356,22 @@ func buildUpdateAppendixBytes(
 	buf.WriteString(fmt.Sprintf("%d 0 obj\n<< /Type /Pages /Kids [%s] /Count %d >>\nendobj\n",
 		pagesObjID, strings.Join(newKids, " "), len(newPages)))
 
+	// Append VC embedded-file and filespec objects when a credential is supplied.
+	// The EmbeddedFile stream is written before the Filespec so that ExtractVC
+	// (which scans backwards from the filename marker) finds the correct stream.
+	if len(vcBytes) > 0 {
+		entries = append(entries, objEntry{vcFileObjID, baseLen + buf.Len()})
+		buf.WriteString(fmt.Sprintf("%d 0 obj\n", vcFileObjID))
+		buf.Write(streamObject(vcBytes, fmt.Sprintf(
+			"<< /Type /EmbeddedFile /Subtype /application#2Fjson /Length %d >>", len(vcBytes))))
+		buf.WriteString("\nendobj\n")
+
+		entries = append(entries, objEntry{vcSpecObjID, baseLen + buf.Len()})
+		buf.WriteString(fmt.Sprintf(
+			"%d 0 obj\n<< /Type /Filespec /F (contract-lifecycle-vc.json) /UF (contract-lifecycle-vc.json) /AFRelationship /Supplement /EF << /F %d 0 R >> >>\nendobj\n",
+			vcSpecObjID, vcFileObjID))
+	}
+
 	// Supersede obj 9: updated C2PA manifest — written last so stream offset stabilises.
 	entries = append(entries, objEntry{c2paObjID, baseLen + buf.Len()})
 	buf.WriteString(fmt.Sprintf("%d 0 obj\n", c2paObjID))
@@ -367,6 +418,47 @@ func buildUpdateAppendixBytes(
 		newSize, prevStartXref, idEntry, xrefStart,
 	))
 	return buf.Bytes()
+}
+
+// ExtractEmbeddedVC extracts the raw bytes of the "contract-lifecycle-vc.json"
+// embedded-file attachment from a PDF produced by UpdatePDFWithVC.
+// Returns (vcBytes, true, nil) when the attachment is present; (nil, false, nil)
+// when absent; and (nil, false, err) on a malformed reference.
+func ExtractEmbeddedVC(pdf []byte) ([]byte, bool, error) {
+	specPos := bytes.LastIndex(pdf, []byte("/F (contract-lifecycle-vc.json)"))
+	if specPos < 0 {
+		return nil, false, nil
+	}
+	efPos := bytes.Index(pdf[specPos:], []byte("/EF << /F "))
+	if efPos < 0 {
+		return nil, false, fmt.Errorf("contract-lifecycle-vc.json filespec missing /EF reference")
+	}
+	efPos += specPos + len("/EF << /F ")
+	refEnd := bytes.Index(pdf[efPos:], []byte(" 0 R"))
+	if refEnd < 0 {
+		return nil, false, fmt.Errorf("contract-lifecycle-vc.json object reference malformed")
+	}
+	objIDStr := strings.TrimSpace(string(pdf[efPos : efPos+refEnd]))
+	objID, err := strconv.Atoi(objIDStr)
+	if err != nil {
+		return nil, false, fmt.Errorf("contract-lifecycle-vc.json object id invalid: %w", err)
+	}
+	// Use LastIndex so the most recent definition wins (incremental update semantics).
+	objMarker := []byte(fmt.Sprintf("%d 0 obj", objID))
+	objPos := bytes.LastIndex(pdf, objMarker)
+	if objPos < 0 {
+		return nil, false, fmt.Errorf("contract-lifecycle-vc.json object %d not found", objID)
+	}
+	streamStart := bytes.Index(pdf[objPos:], []byte("stream\n"))
+	if streamStart < 0 {
+		return nil, false, fmt.Errorf("contract-lifecycle-vc.json stream start not found")
+	}
+	streamStart += objPos + len("stream\n")
+	streamEnd := bytes.Index(pdf[streamStart:], []byte("\nendstream"))
+	if streamEnd < 0 {
+		return nil, false, fmt.Errorf("contract-lifecycle-vc.json stream end not found")
+	}
+	return append([]byte(nil), pdf[streamStart:streamStart+streamEnd]...), true, nil
 }
 
 // incrementalUpdateMarker is the comment written as the very first line of
@@ -423,7 +515,15 @@ func VerifyIncrementalUpdate(pdf []byte) error {
 
 	// Re-apply the amendment to the actual original (which may include PAdES
 	// appendices) so the deterministic update covers the same base offsets.
-	freshUpdated, err := UpdatePDF(original, newPayload)
+	// If the submitted PDF contains a VC attachment, re-apply with the same VC
+	// so the deterministic output includes it.
+	embeddedVC, vcPresent, _ := ExtractEmbeddedVC(pdf)
+	var freshUpdated []byte
+	if vcPresent && len(embeddedVC) > 0 {
+		freshUpdated, err = UpdatePDFWithVC(original, newPayload, embeddedVC)
+	} else {
+		freshUpdated, err = UpdatePDF(original, newPayload)
+	}
 	if err != nil {
 		return fmt.Errorf("re-apply amendment: %w", err)
 	}

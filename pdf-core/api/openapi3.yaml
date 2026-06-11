@@ -51,8 +51,12 @@ paths:
         post:
             tags:
                 - dcspdfcore
-            summary: Verify PDF and append C2PA witness
-            description: Verify that a PDF was compiled from its embedded payload, then append a C2PA witness
+            summary: Verify PDF integrity and provenance
+            description: |
+                Verify that a PDF was deterministically compiled from its embedded JSON-LD payload.
+                Returns a JSON result containing the match outcome, C2PA validity, and — when a
+                contract-lifecycle-vc.json attachment is present — the base64-encoded VC bytes so
+                the caller can perform status-list revocation checks without parsing PDF bytes.
             operationId: verify
             requestBody:
                 required: true
@@ -61,15 +65,31 @@ paths:
                         schema:
                             type: string
                             format: binary
-                            description: Compiled PDF document to verify
+                            description: Compiled or incrementally-updated PDF to verify
             responses:
                 "200":
-                    description: OK response.
+                    description: Verification result.
                     content:
-                        application/pdf:
+                        application/json:
                             schema:
-                                type: string
-                                format: binary
+                                type: object
+                                required:
+                                    - match
+                                    - c2pa_signature_valid
+                                    - vc_proof_valid
+                                properties:
+                                    match:
+                                        type: boolean
+                                        description: True when the PDF was deterministically produced from its embedded payload.
+                                    c2pa_signature_valid:
+                                        type: boolean
+                                        description: True when the C2PA provenance chain is intact.
+                                    vc_bytes:
+                                        type: string
+                                        description: Base64-encoded contract-lifecycle-vc.json bytes, present only when the PDF contains that attachment.
+                                    vc_proof_valid:
+                                        type: boolean
+                                        description: True when a VC attachment is present and its proof field is structurally valid.
                 "400":
                     $ref: '#/components/responses/BadRequest'
                 "409":
@@ -103,6 +123,15 @@ paths:
                                     type: string
                                     format: binary
                                     description: New JSON-LD semantic payload
+                                vc:
+                                    type: string
+                                    format: binary
+                                    description: |
+                                        Optional W3C Verifiable Credential JSON to embed as
+                                        "contract-lifecycle-vc.json" in the incremental update.
+                                        When provided the call proceeds even when the JSON-LD
+                                        payload is identical to the current embedded revision,
+                                        because the VC attachment is itself a provenance event.
             responses:
                 "200":
                     description: OK response.

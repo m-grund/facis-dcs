@@ -1,4 +1,4 @@
-package c2pa
+package provenance
 
 import (
 	"context"
@@ -51,8 +51,7 @@ func (v *LocalVCIssuer) IssueContractLifecycleVC(
 	}
 
 	// Build a LifecycleAssertion for the VC binding fields.
-	// PDFHash and RendererVersion are not required for the VC payload.
-	assertion := NewLifecycleAssertion(contractID, fileHash, "", "", status, reason, authority, "", "", effectiveAt)
+	assertion := NewLifecycleAssertion(contractID, fileHash, status, reason, authority, "", effectiveAt)
 
 	// Issue and sign the W3C VC via the Crypto Provider Service (DCS-IR-SI-10).
 	// Pass the status list URI so credentialStatus is embedded in the VC (DCS-OR-C2PA-005).

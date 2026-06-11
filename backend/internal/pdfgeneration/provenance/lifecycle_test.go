@@ -1,4 +1,4 @@
-package c2pa
+package provenance
 
 import (
 	"encoding/json"
@@ -14,13 +14,10 @@ func TestLifecycleAssertion_AllFieldsPresent(t *testing.T) {
 	a := NewLifecycleAssertion(
 		"did:example:contract123",
 		"abc123hash",
-		"pdfhash",
-		"1.0.1",
 		"draft",
 		"initial creation",
 		"did:example:authority",
 		"urn:dcs:vc:vcid",
-		"prevhash",
 		effectiveAt,
 	)
 
@@ -32,8 +29,8 @@ func TestLifecycleAssertion_AllFieldsPresent(t *testing.T) {
 
 	// DCS-OR-C2PA-003: all fields required.
 	for _, field := range []string{
-		"label", "contract_id", "file_hash", "pdf_hash", "renderer_version",
-		"status", "reason", "effective_at", "authority", "vc_id", "prev_manifest_hash",
+		"label", "contract_id", "file_hash",
+		"status", "reason", "effective_at", "authority", "vc_id",
 	} {
 		assert.Contains(t, m, field, "field %q missing from lifecycle assertion JSON", field)
 	}
@@ -116,16 +113,15 @@ func TestMapCWEStateToC2PA_AllSRSStatesCovered(t *testing.T) {
 
 func TestLifecycleAssertion_OptionalFieldsOmittedWhenEmpty(t *testing.T) {
 	a := NewLifecycleAssertion(
-		"did:example:c1", "hash1", "pdfhash1", "1.0.1",
-		"active", "", "did:example:auth", "", "",
+		"did:example:c1", "hash1",
+		"active", "", "did:example:auth", "",
 		time.Now().UTC(),
 	)
 
 	raw, err := json.Marshal(a)
 	require.NoError(t, err)
 
-	// reason, vc_id, prev_manifest_hash are omitempty — absent when empty.
+	// reason and vc_id are omitempty — absent when empty.
 	assert.NotContains(t, string(raw), `"reason"`)
 	assert.NotContains(t, string(raw), `"vc_id"`)
-	assert.NotContains(t, string(raw), `"prev_manifest_hash"`)
 }

@@ -101,6 +101,27 @@ func buildMultipartBody(t *testing.T, pdf []byte, payload string) (io.Reader, st
 	return &buf, "multipart/form-data; boundary=" + boundary
 }
 
+// buildMultipartBodyWithVC is like buildMultipartBody but also includes a "vc" field.
+func buildMultipartBodyWithVC(t *testing.T, pdf []byte, payload string, vc []byte) (io.Reader, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	boundary := mw.Boundary()
+	for name, data := range map[string][]byte{"pdf": pdf, "payload": []byte(payload), "vc": vc} {
+		fw, err := mw.CreateFormField(name)
+		if err != nil {
+			t.Fatalf("multipart CreateFormField %s: %v", name, err)
+		}
+		if _, err := fw.Write(data); err != nil {
+			t.Fatalf("multipart write %s: %v", name, err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("multipart close: %v", err)
+	}
+	return &buf, "multipart/form-data; boundary=" + boundary
+}
+
 // errorName parses the "name" field from a JSON error response body.
 func errorName(t *testing.T, body []byte) string {
 	t.Helper()
@@ -243,8 +264,12 @@ func TestVerify_ValidPDF(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("verify: status %d: %s", rec.Code, rec.Body.String())
 	}
-	if len(rec.Body.Bytes()) <= len(pdf) {
-		t.Fatal("verified PDF should be larger than original")
+	var result verifyResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode verify response: %v", err)
+	}
+	if !result.Match {
+		t.Error("expected match=true for a valid compiled PDF")
 	}
 }
 
@@ -297,6 +322,131 @@ func TestOntologyContext(t *testing.T) {
 	}
 	if !json.Valid(res) {
 		t.Fatal("ontology context is not valid JSON")
+	}
+}
+
+// TestVersionEndpointReturnsVersion verifies that GET /version returns a JSON
+// object containing the renderer version string.
+func TestVersionEndpointReturnsVersion(t *testing.T) {
+	rec := doRequest(http.MethodGet, "/version", nil, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("expected application/json content type, got %q", ct)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	v, ok := body["version"]
+	if !ok || v == "" {
+		t.Fatalf("response body must contain non-empty \"version\" field, got %v", body)
+	}
+}
+
+// TestDownloadResponseCarriesVersionHeader verifies that POST /download
+// includes an X-PDF-Core-Version header in the response.
+func TestDownloadResponseCarriesVersionHeader(t *testing.T) {
+	rec := doRequest(http.MethodPost, "/download",
+		strings.NewReader(minimalPayload), "application/ld+json")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if v := rec.Header().Get("X-PDF-Core-Version"); v == "" {
+		t.Error("POST /download response must include X-PDF-Core-Version header")
+	}
+}
+
+// TestUpdateResponseCarriesVersionHeader verifies that POST /update
+// includes an X-PDF-Core-Version header in the response.
+func TestUpdateResponseCarriesVersionHeader(t *testing.T) {
+	// First compile a base PDF.
+	baseRec := doRequest(http.MethodPost, "/download",
+		strings.NewReader(minimalPayload), "application/ld+json")
+	if baseRec.Code != http.StatusOK {
+		t.Fatalf("compile base PDF: expected 200, got %d", baseRec.Code)
+	}
+	basePDF := baseRec.Body.Bytes()
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	pdfPart, _ := mw.CreateFormField("pdf")
+	_, _ = pdfPart.Write(basePDF)
+	payloadPart, _ := mw.CreateFormField("payload")
+	_, _ = payloadPart.Write([]byte(minimalPayloadAmended))
+	mw.Close()
+
+	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if v := rec.Header().Get("X-PDF-Core-Version"); v == "" {
+		t.Error("POST /update response must include X-PDF-Core-Version header")
+	}
+}
+
+// TestUpdateWithVCEmbedsAttachment verifies that POST /update with an optional
+// "vc" multipart field embeds the VC bytes as "contract-lifecycle-vc.json" in
+// the returned PDF.
+func TestUpdateWithVCEmbedsAttachment(t *testing.T) {
+	baseRec := doRequest(http.MethodPost, "/download",
+		strings.NewReader(minimalPayload), "application/ld+json")
+	if baseRec.Code != http.StatusOK {
+		t.Fatalf("compile base PDF: %d", baseRec.Code)
+	}
+	basePDF := baseRec.Body.Bytes()
+
+	vcBytes := []byte(`{"type":["VerifiableCredential"],"id":"urn:dcs:vc:test"}`)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	pdfPart, _ := mw.CreateFormField("pdf")
+	_, _ = pdfPart.Write(basePDF)
+	payloadPart, _ := mw.CreateFormField("payload")
+	_, _ = payloadPart.Write([]byte(minimalPayloadAmended))
+	vcPart, _ := mw.CreateFormField("vc")
+	_, _ = vcPart.Write(vcBytes)
+	mw.Close()
+
+	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("contract-lifecycle-vc.json")) {
+		t.Error("response PDF must contain the VC attachment name")
+	}
+}
+
+// TestUpdateWithVCUnchangedPayloadProceeds verifies that POST /update with a
+// "vc" field succeeds even when the payload is identical to the current
+// embedded one, because the VC attachment is itself a provenance event.
+func TestUpdateWithVCUnchangedPayloadProceeds(t *testing.T) {
+	baseRec := doRequest(http.MethodPost, "/download",
+		strings.NewReader(minimalPayload), "application/ld+json")
+	if baseRec.Code != http.StatusOK {
+		t.Fatalf("compile base PDF: %d", baseRec.Code)
+	}
+	basePDF := baseRec.Body.Bytes()
+
+	vcBytes := []byte(`{"type":["VerifiableCredential"],"id":"urn:dcs:vc:genesis"}`)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	pdfPart, _ := mw.CreateFormField("pdf")
+	_, _ = pdfPart.Write(basePDF)
+	payloadPart, _ := mw.CreateFormField("payload")
+	_, _ = payloadPart.Write([]byte(minimalPayload)) // same payload as base
+	vcPart, _ := mw.CreateFormField("vc")
+	_, _ = vcPart.Write(vcBytes)
+	mw.Close()
+
+	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (VC-only update), got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("contract-lifecycle-vc.json")) {
+		t.Error("response PDF must contain the VC attachment name")
 	}
 }
 
@@ -356,8 +506,12 @@ func TestVerify_AmendedDocument(t *testing.T) {
 	if recVerify.Code != http.StatusOK {
 		t.Fatalf("verify amended: status %d: %s", recVerify.Code, recVerify.Body.String())
 	}
-	if len(recVerify.Body.Bytes()) <= len(amended) {
-		t.Fatal("verified amended PDF must be larger than input (witness appended)")
+	var result verifyResult
+	if err := json.NewDecoder(recVerify.Body).Decode(&result); err != nil {
+		t.Fatalf("decode verify response: %v", err)
+	}
+	if !result.Match {
+		t.Error("expected match=true for valid amended PDF")
 	}
 }
 
@@ -455,5 +609,92 @@ func TestClaim_MissingPDFField(t *testing.T) {
 	}
 	if name := errorName(t, rec.Body.Bytes()); name != "bad_request" {
 		t.Fatalf("expected bad_request, got %q", name)
+	}
+}
+
+// ---- Verify JSON response ---------------------------------------------------
+
+// verifyResult matches the JSON body returned by POST /verify.
+type verifyResult struct {
+	Match              bool   `json:"match"`
+	C2PASignatureValid bool   `json:"c2pa_signature_valid"`
+	VCBytes            string `json:"vc_bytes,omitempty"` // base64-encoded VC JSON
+	VCProofValid       bool   `json:"vc_proof_valid"`
+}
+
+// TestVerify_ReturnsJSON verifies that POST /verify returns application/json
+// with a match=true body for a valid compiled PDF.
+func TestVerify_ReturnsJSON(t *testing.T) {
+	pdf := compilePDF(t)
+
+	rec := doRequest(http.MethodPost, "/verify",
+		bytes.NewReader(pdf), "application/pdf")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify: status %d: %s", rec.Code, rec.Body.String())
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("expected application/json response, got %q", ct)
+	}
+
+	var result verifyResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode verify response: %v", err)
+	}
+	if !result.Match {
+		t.Error("expected match=true for a valid compiled PDF")
+	}
+	if !result.C2PASignatureValid {
+		t.Error("expected c2pa_signature_valid=true for a valid compiled PDF")
+	}
+}
+
+// TestVerify_JSONIncludesVCBytesWhenPresent verifies that when a PDF contains
+// a contract-lifecycle-vc.json attachment /verify returns its base64 bytes in
+// the vc_bytes field so the backend can check the status list without parsing
+// PDF bytes itself.
+func TestVerify_JSONIncludesVCBytesWhenPresent(t *testing.T) {
+	original := compilePDF(t)
+	vcJSON := []byte(`{"type":["VerifiableCredential"],"credentialSubject":{"status":"active"}}`)
+
+	body, ct := buildMultipartBodyWithVC(t, original, minimalPayloadAmended, vcJSON)
+	recUpdate := doRequest(http.MethodPost, "/update", body, ct)
+	if recUpdate.Code != http.StatusOK {
+		t.Fatalf("update: status %d: %s", recUpdate.Code, recUpdate.Body.String())
+	}
+	withVC := recUpdate.Body.Bytes()
+
+	recVerify := doRequest(http.MethodPost, "/verify",
+		bytes.NewReader(withVC), "application/pdf")
+	if recVerify.Code != http.StatusOK {
+		t.Fatalf("verify with VC: status %d: %s", recVerify.Code, recVerify.Body.String())
+	}
+
+	var result verifyResult
+	if err := json.NewDecoder(recVerify.Body).Decode(&result); err != nil {
+		t.Fatalf("decode verify response: %v", err)
+	}
+	if result.VCBytes == "" {
+		t.Error("expected vc_bytes to be non-empty when PDF contains contract-lifecycle-vc.json")
+	}
+}
+
+// TestVerify_JSONMatchFalseOnMismatch verifies that tampered content returns
+// match=false and status 409 instead of 200.
+func TestVerify_JSONMatchFalseOnMismatch(t *testing.T) {
+	pdf := compilePDF(t)
+	// Flip a byte inside the page content stream to break the match.
+	corrupted := append([]byte(nil), pdf...)
+	// Find "clause" text in the content stream and flip a byte.
+	idx := bytes.Index(corrupted, []byte("("))
+	if idx > 0 {
+		corrupted[idx+1] ^= 0x01
+	}
+
+	rec := doRequest(http.MethodPost, "/verify",
+		bytes.NewReader(corrupted), "application/pdf")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for tampered PDF, got %d", rec.Code)
 	}
 }

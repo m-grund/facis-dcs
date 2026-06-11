@@ -3,17 +3,13 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/ipfs"
-	"digital-contracting-service/internal/pdfgeneration/builder"
-	"digital-contracting-service/internal/pdfgeneration/c2pa"
-	"digital-contracting-service/internal/pdfgeneration/verify"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 
 	"digital-contracting-service/internal/base/datatype"
 
@@ -24,6 +20,7 @@ import (
 
 type PostgresContractRepo struct {
 	IPFSClient *ipfs.APIClient
+	PDFCore    *pdfcore.Client
 }
 
 func (r *PostgresContractRepo) ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
@@ -200,93 +197,6 @@ func (r *PostgresContractRepo) FetchContractPDFBytes(ctx context.Context, tx *sq
 	return result.Data, nil
 }
 
-// RebuildContractPDFFromJSONLD re-generates the base PDF from embedded JSON-LD bytes,
-// fetching the contract metadata required for rendering.
-func (r *PostgresContractRepo) RebuildContractPDFFromJSONLD(ctx context.Context, tx *sqlx.Tx, did string, jsonld []byte) ([]byte, error) {
-
-	type contractMeta struct {
-		DID             string    `db:"did"`
-		State           string    `db:"state"`
-		ContractVersion int       `db:"contract_version"`
-		Name            *string   `db:"name"`
-		Description     *string   `db:"description"`
-		CreatedBy       string    `db:"created_by"`
-		CreatedAt       time.Time `db:"created_at"`
-		UpdatedAt       time.Time `db:"updated_at"`
-	}
-	var meta contractMeta
-	if err := tx.GetContext(ctx, &meta,
-		`SELECT did, state, COALESCE(contract_version, 1) AS contract_version,
-		        name, description, created_by, created_at, updated_at
-		   FROM contracts WHERE did = $1`, did,
-	); err != nil {
-		return nil, fmt.Errorf("fetch contract meta: %w", err)
-	}
-
-	var rawJSON json.RawMessage
-	_ = tx.QueryRowContext(ctx,
-		`SELECT contract_data FROM contracts WHERE did = $1`, did,
-	).Scan(&rawJSON)
-
-	name := ""
-	if meta.Name != nil {
-		name = *meta.Name
-	}
-	desc := ""
-	if meta.Description != nil {
-		desc = *meta.Description
-	}
-	contractData := jsonld
-	if len(rawJSON) > 0 {
-		contractData = rawJSON
-	}
-
-	return builder.BuildContract(builder.ContractInput{
-		DID:          meta.DID,
-		State:        meta.State,
-		Version:      meta.ContractVersion,
-		Name:         name,
-		Description:  desc,
-		CreatedBy:    meta.CreatedBy,
-		CreatedAt:    meta.CreatedAt,
-		UpdatedAt:    meta.UpdatedAt,
-		ContractData: contractData,
-	})
-}
-
-// ContractIPFSFetchFn returns a verifier FetchFn that retrieves the canonical
-// contract PDF from IPFS.
-func (r *PostgresContractRepo) ContractIPFSFetchFn(ctx context.Context, tx *sqlx.Tx, did string) func() ([]byte, error) {
-	return func() ([]byte, error) {
-		return r.FetchContractPDFBytes(ctx, tx, did)
-	}
-}
-
-// ContractManifestIPFSFetchFn returns a verifier FetchManifestFn that retrieves
-// the standalone remote manifest bytes for the given contract.
-func (r *PostgresContractRepo) ContractManifestIPFSFetchFn(ctx context.Context, tx *sqlx.Tx, did string) func() ([]byte, error) {
-	return func() ([]byte, error) {
-		var cidStr string
-		if err := tx.QueryRowContext(ctx,
-			`SELECT COALESCE(pdf_manifest_ipfs_cid,'') FROM contracts WHERE did = $1`, did,
-		).Scan(&cidStr); err != nil || cidStr == "" {
-			return nil, nil
-		}
-		result, err := r.IPFSClient.FetchFile(cidStr)
-		if err != nil {
-			return nil, err
-		}
-		return []byte(result.Data), nil
-	}
-}
-
-func (r *PostgresContractRepo) StatusListCheckFn(ctx context.Context, tx *sqlx.Tx) func(string, uint32) (string, error) {
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	return func(statusListCredential string, index uint32) (string, error) {
-		return c2pa.QueryStatusListStatus(ctx, httpClient, statusListCredential, index)
-	}
-}
-
 func (r *PostgresContractRepo) CollectValidationFindings(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error) {
 	records, err := r.LoadSignatures(ctx, tx, did)
 	if err != nil {
@@ -322,19 +232,10 @@ func (r *PostgresContractRepo) CollectValidationFindings(ctx context.Context, tx
 	} else if len(pdfBytes) == 0 {
 		findings = append(findings, "No contract PDF available for MR/HR integrity check")
 	} else {
-		contractVerifier := &verify.ContractVerifier{
-			BuildFn: func(jsonld []byte) ([]byte, error) {
-				return r.RebuildContractPDFFromJSONLD(ctx, tx, did, jsonld)
-			},
-			FetchFn:         r.ContractIPFSFetchFn(ctx, tx, did),
-			FetchManifestFn: r.ContractManifestIPFSFetchFn(ctx, tx, did),
-			CheckStatusFn:   r.StatusListCheckFn(ctx, tx),
-		}
-		hashResult, verifyErr := contractVerifier.Verify(pdfBytes)
+		// pdf-core /verify: re-renders JSON-LD and compares, validates C2PA chain.
+		_, verifyErr := r.PDFCore.Verify(ctx, pdfBytes)
 		if verifyErr != nil {
 			findings = append(findings, fmt.Sprintf("Integrity check failed: %v", verifyErr))
-		} else if !hashResult.Match {
-			findings = append(findings, "Document integrity check failed")
 		} else {
 			findings = append(findings, "Document integrity check passed")
 		}
@@ -408,3 +309,4 @@ func (r *PostgresContractRepo) CollectComplianceFindings(ctx context.Context, tx
 
 	return findings, nil
 }
+

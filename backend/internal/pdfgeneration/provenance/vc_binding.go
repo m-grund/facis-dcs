@@ -1,4 +1,4 @@
-package c2pa
+package provenance
 
 import (
 	"context"
@@ -18,13 +18,13 @@ type VCSigner interface {
 
 // VCBinding is the W3C VC issued to bind a lifecycle event to contract_id + file_hash
 // (DCS-OR-C2PA-004). It is returned by IssueLifecycleVC and stored as vc_id in the
-// LifecycleAssertion once issued.
+// LifecycleAssertion once issued. Uses W3C VC Data Model 2.0 field names.
 type VCBinding struct {
 	Context           []interface{}          `json:"@context"`
 	Type              []string               `json:"type"`
 	ID                string                 `json:"id"`
 	Issuer            string                 `json:"issuer"`
-	IssuanceDate      time.Time              `json:"issuanceDate"`
+	ValidFrom         string                 `json:"validFrom"`
 	CredentialSubject map[string]interface{} `json:"credentialSubject"`
 	// CredentialStatus links this VC to the XFSC status list entry so
 	// verifiers can check revocation (DCS-OR-C2PA-004, DCS-OR-C2PA-005).
@@ -43,7 +43,7 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusLis
 
 	unsignedVC := VCBinding{
 		Context: []interface{}{
-			"https://www.w3.org/2018/credentials/v1",
+			"https://www.w3.org/ns/credentials/v2",
 			securityCtx,
 			map[string]interface{}{
 				"dcs":                         "https://w3id.org/facis/dcs#",
@@ -58,10 +58,10 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusLis
 				},
 			},
 		},
-		Type:         []string{"VerifiableCredential", "ContractLifecycleCredential"},
-		ID:           "", // filled after hash
-		Issuer:       issuerDID,
-		IssuanceDate: assertion.EffectiveAt,
+		Type:      []string{"VerifiableCredential", "ContractLifecycleCredential"},
+		ID:        "", // filled after hash
+		Issuer:    issuerDID,
+		ValidFrom: assertion.EffectiveAt.UTC().Format(time.RFC3339),
 		CredentialSubject: map[string]interface{}{
 			"id":           subjectID,
 			"contract_id":  assertion.ContractID,
@@ -104,7 +104,7 @@ func buildCredentialStatus(statusListURI, contractID string) map[string]interfac
 	}
 	return map[string]interface{}{
 		"id":                   fmt.Sprintf("%s#%d", statusListURI, StatusListIndex(contractID)),
-		"type":                 "StatusList2021Entry",
+		"type":                 "BitstringStatusListEntry",
 		"statusPurpose":        "revocation",
 		"statusListIndex":      fmt.Sprintf("%d", StatusListIndex(contractID)),
 		"statusListCredential": statusListURI,

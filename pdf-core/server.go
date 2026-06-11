@@ -29,6 +29,7 @@ func newServer() http.Handler {
 	svc := &service{}
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("GET /version", svc.version)
 	mux.HandleFunc("POST /download", svc.download)
 	mux.HandleFunc("POST /verify", svc.verify)
 	mux.HandleFunc("POST /update", svc.update)

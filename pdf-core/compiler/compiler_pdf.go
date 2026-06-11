@@ -714,7 +714,7 @@ func renderXMPMetadata(_ string) []byte {
 		"    pdfaid:conformance=\"A\"/>\n" +
 		"  <rdf:Description rdf:about=\"\"\n" +
 		"    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n" +
-		"    xmp:CreatorTool=\"DCS-PDF-CORE Deterministic PDF Compiler\"\n" +
+		"    xmp:CreatorTool=\"DCS-PDF-CORE " + RendererVersion + "\"\n" +
 		"    xmp:MetadataDate=\"2026-06-04T00:00:00Z\"/>\n" +
 		"</rdf:RDF>\n" +
 		"</x:xmpmeta>\n" +
