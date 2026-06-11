@@ -66,13 +66,14 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		}
 
 		auditStaticContentQry := qry2.GetStaticContentAuditQry{
-			DID:             req.ContractDid,
-			RetrievedBy:     middleware.GetParticipantID(ctx),
-			HolderDID:       middleware.GetHolderDID(ctx),
-			UserRoles:       middleware.GetUserRoles(ctx),
-			Policy:          req.Policy,
-			PolicyVersion:   req.PolicyVersion,
-			ContractVersion: req.ContractVersion,
+			DID:              req.ContractDid,
+			RetrievedBy:      middleware.GetParticipantID(ctx),
+			HolderDID:        middleware.GetHolderDID(ctx),
+			UserRoles:        middleware.GetUserRoles(ctx),
+			Policy:           req.Policy,
+			PolicyVersion:    req.PolicyVersion,
+			ContractVersion:  req.ContractVersion,
+			ContractDocument: req.ContractDocument,
 		}
 		auditStaticContentAuditor := qry2.StaticContentAuditor{}
 		entries, err := auditStaticContentAuditor.Handle(ctx, auditStaticContentQry)

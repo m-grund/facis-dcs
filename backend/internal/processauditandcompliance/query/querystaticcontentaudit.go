@@ -22,7 +22,7 @@ import (
 
 type GetStaticContentAuditQry struct {
 	DID              *string
-	ContractDocument *string
+	ContractDocument any
 	ContractVersion  *string
 	Policy           any
 	PolicyVersion    *string
