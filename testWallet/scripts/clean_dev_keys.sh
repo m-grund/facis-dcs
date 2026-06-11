@@ -32,6 +32,5 @@ delete_file() {
 delete_glob "$ROOT/testWallet/keys/"*.jwk
 delete_glob "$ROOT/testWallet/credentials/"*.json
 delete_file "$ROOT/backend/config/oid4vp/trust.dev.json"
-delete_file "$ROOT/deployment/helm/files/oid4vp/trust.dev.json"
 
 echo "done"

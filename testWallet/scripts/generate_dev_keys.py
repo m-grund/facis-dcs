@@ -5,8 +5,8 @@ Generate demo OID4VP materials for testWallet + DCS backend.
 Creates:
   - testWallet/keys/issuer-dev.jwk
   - testWallet/keys/wallet.jwk
-  - backend/config/oid4vp/trust.dev.json (issuer public JWKS only)
-  - testWallet/credentials/*.json from *.template.json (injects sub/iss/vct/iat/exp)
+  - backend/config/oid4vp/trust.dev.json (issuer public JWKS for all trusted DIDs)
+  - testWallet/credentials/*.jwt from *.template.json (issuer-signed SD-JWT, one line each)
 
 Optional Vault sync (KV v2):
   secret/dcs/demo/issuer-dev-jwk
@@ -43,12 +43,20 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import jwt
 from cryptography.hazmat.primitives.asymmetric import ec
+from jwt.algorithms import ECAlgorithm
 
 POA_VCT = "urn:dcs:poa:v1"
+CREDENTIAL_JWT_TYP = "dc+sd-jwt"
 DEFAULT_ISSUER_DID = "did:web:dev.example:issuer:poa"
+TRUSTED_ISSUER_DIDS = [
+    "did:web:dev.example:issuer:poa",
+    "did:web:dev2.example:issuer:poa",
+]
 ISSUER_KID = "issuer-dev"
 WALLET_KID = "wallet"
+CREDENTIAL_EXT = ".jwt"
 VAULT_ISSUER_PATH = "dcs/demo/issuer-dev-jwk"
 VAULT_WALLET_PATH = "dcs/demo/wallet-jwk"
 VAULT_TRUST_PATH = "dcs/demo/trust-json"
@@ -93,17 +101,31 @@ def did_jwk_from_public_jwk(key: dict[str, Any]) -> str:
     return "did:jwk:" + base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
 
 
-def build_trust_json(*, issuer_did: str, issuer_public: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "vcts": [POA_VCT],
-        "issuers": {
-            issuer_did: {
-                "jwks": {
-                    "keys": [issuer_public],
-                },
-            },
-        },
-    }
+def build_trust_json(*, issuer_public: dict[str, Any], issuer_dids: list[str] | None = None) -> dict[str, Any]:
+    dids = issuer_dids or TRUSTED_ISSUER_DIDS
+    issuers: dict[str, Any] = {}
+    for did in dids:
+        issuers[did] = {"jwks": {"keys": [issuer_public]}}
+    return {"vcts": [POA_VCT], "issuers": issuers}
+
+
+def sign_credential_jwt(*, claims: dict[str, Any], issuer_private: dict[str, Any]) -> str:
+    return jwt.encode(
+        claims,
+        ECAlgorithm.from_jwk(json.dumps(issuer_private)),
+        algorithm="ES256",
+        headers={"kid": issuer_private.get("kid", ISSUER_KID), "typ": CREDENTIAL_JWT_TYP},
+    )
+
+
+def write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        fh.write(content.rstrip() + "\n")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -128,11 +150,17 @@ def render_credentials(
     credentials_dir: Path,
     holder_did: str,
     issuer_did: str,
+    issuer_private: dict[str, Any],
 ) -> None:
+    for legacy in credentials_dir.glob("*.json"):
+        if legacy.name.endswith(".template.json"):
+            continue
+        legacy.unlink(missing_ok=True)
+
     for template in sorted(credentials_dir.glob("*.template.json")):
         with template.open(encoding="utf-8") as fh:
             template_data = json.load(fh)
-        out = {
+        claims = {
             "iss": issuer_did,
             "sub": holder_did,
             "vct": POA_VCT,
@@ -141,8 +169,9 @@ def render_credentials(
             "iat": CREDENTIAL_IAT,
             "exp": CREDENTIAL_EXP,
         }
-        target = credentials_dir / template.name.replace(".template.json", ".json")
-        write_json(target, out)
+        stem = template.name.replace(".template.json", "")
+        token = sign_credential_jwt(claims=claims, issuer_private=issuer_private)
+        write_text(credentials_dir / f"{stem}{CREDENTIAL_EXT}", token)
 
 
 def vault_request(
@@ -191,16 +220,8 @@ def vault_write_json(addr: str, token: str, path: str, value: Any) -> None:
     )
 
 
-def helm_trust_path() -> Path:
-    return repo_root() / "deployment" / "helm" / "files" / "oid4vp" / "trust.dev.json"
-
-
-def credential_json_paths(credentials_dir: Path) -> list[Path]:
-    return sorted(
-        p
-        for p in credentials_dir.glob("*.json")
-        if p.is_file() and not p.name.endswith(".template.json")
-    )
+def credential_jwt_paths(credentials_dir: Path) -> list[Path]:
+    return sorted(p for p in credentials_dir.glob(f"*{CREDENTIAL_EXT}") if p.is_file())
 
 
 def existing_local_material(
@@ -216,10 +237,7 @@ def existing_local_material(
             found.append(path)
     if trust_path.is_file():
         found.append(trust_path)
-    helm_trust = helm_trust_path()
-    if helm_trust.is_file() and helm_trust.resolve() != trust_path.resolve():
-        found.append(helm_trust)
-    found.extend(credential_json_paths(credentials_dir))
+    found.extend(credential_jwt_paths(credentials_dir))
     return found
 
 
@@ -248,13 +266,13 @@ def planned_overwrite_reasons(
         elif has_issuer and not has_wallet:
             reasons.append("keep issuer-dev.jwk and generate a new wallet.jwk")
 
-    if args.trust_path in existing or helm_trust_path() in existing:
+    if args.trust_path in existing:
         reasons.append(f"rewrite {args.trust_path.name} from the issuer public key")
 
     creds = [p for p in existing if p.parent == args.credentials_dir]
     if creds:
         names = ", ".join(p.name for p in creds)
-        reasons.append(f"re-render credentials ({names}) from *.template.json")
+        reasons.append(f"re-render credentials ({names}) as *{CREDENTIAL_EXT} from *.template.json")
 
     if args.vault_write:
         reasons.append("write keys and trust to Vault (--vault-write)")
@@ -291,15 +309,18 @@ def materialize_local(
 ) -> str:
     issuer_public = public_jwk(issuer_private)
     holder_did = did_jwk_from_public_jwk(public_jwk(wallet_private))
-    trust = build_trust_json(issuer_did=issuer_did, issuer_public=issuer_public)
+    trusted_dids = list(dict.fromkeys([issuer_did, *TRUSTED_ISSUER_DIDS]))
+    trust = build_trust_json(issuer_public=issuer_public, issuer_dids=trusted_dids)
 
     write_json(keys_dir / "issuer-dev.jwk", issuer_private)
     write_json(keys_dir / "wallet.jwk", wallet_private)
     write_json(trust_path, trust)
-    helm_trust = helm_trust_path()
-    if trust_path.resolve() != helm_trust.resolve():
-        write_json(helm_trust, trust)
-    render_credentials(credentials_dir=credentials_dir, holder_did=holder_did, issuer_did=issuer_did)
+    render_credentials(
+        credentials_dir=credentials_dir,
+        holder_did=holder_did,
+        issuer_did=issuer_did,
+        issuer_private=issuer_private,
+    )
     return holder_did
 
 
@@ -380,7 +401,8 @@ def main() -> int:
         wallet_private = ec_private_jwk(ec.generate_private_key(ec.SECP256R1()), kid=WALLET_KID)
 
     if trust is None and issuer_private is not None:
-        trust = build_trust_json(issuer_did=args.issuer_did, issuer_public=public_jwk(issuer_private))
+        trusted_dids = list(dict.fromkeys([args.issuer_did, *TRUSTED_ISSUER_DIDS]))
+        trust = build_trust_json(issuer_public=public_jwk(issuer_private), issuer_dids=trusted_dids)
 
     assert issuer_private is not None and wallet_private is not None and trust is not None
     holder_did = materialize_local(

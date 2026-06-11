@@ -168,16 +168,18 @@ var _ = Service("Auth", func() {
 	})
 
 	Method("presentationRequest", func() {
-		Description("Returns the OpenID4VP authorization request object for the wallet.")
+		Description("Returns a signed OpenID4VP authorization request JWT for request-by-reference wallet retrieval.")
 		NoSecurity()
 		Payload(func() {
 			Attribute("state", String, "Login state identifier from the login response")
 			Required("state")
 		})
-		Result(PresentationRequestObject)
 		HTTP(func() {
 			GET("/auth/presentation/request/{state}")
-			Response(StatusOK)
+			SkipResponseBodyEncodeDecode()
+			Response(StatusOK, func() {
+				ContentType("application/oauth-authz-req+jwt")
+			})
 		})
 	})
 
@@ -195,20 +197,6 @@ var _ = Service("Auth", func() {
 		})
 	})
 
-})
-
-// PresentationRequestObject is the OpenID4VP authorization request returned to the wallet
-// (response_uri, state, nonce, DCQL query) without a signed request JWT for now.
-var PresentationRequestObject = Type("PresentationRequestObject", func() {
-	Description("OpenID4VP authorization request object for the wallet.")
-	Attribute("client_id", String, "OAuth2 client identifier of the DCS verifier")
-	Attribute("response_type", String, "OpenID4VP response type requested from the wallet")
-	Attribute("response_mode", String, "OpenID4VP response mode used by the wallet")
-	Attribute("response_uri", String, "Backend endpoint where the wallet posts the presentation response")
-	Attribute("state", String, "Login state identifier used to correlate the presentation response")
-	Attribute("nonce", String, "Nonce that must be bound to the presentation to prevent replay")
-	Attribute("dcql_query", Any, "DCQL query describing the credential format, type, and claims requested from the wallet")
-	Required("client_id", "response_type", "response_mode", "response_uri", "state", "nonce", "dcql_query")
 })
 
 var PresentationCallbackPayload = Type("PresentationCallbackPayload", func() {

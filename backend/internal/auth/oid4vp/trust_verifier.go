@@ -2,8 +2,6 @@ package oid4vp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,15 +9,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
-
-const vpFormat = "dc+sd-jwt"
-
-// vpEnvelope is the VP token shape with separate credential and KB-JWT parts.
-type vpEnvelope struct {
-	Format        string `json:"format"`
-	CredentialJWT string `json:"credential_jwt"`
-	KBJWT         string `json:"kb_jwt"`
-}
 
 // TrustVerifier validates wallet presentations against trust.json issuers.
 type TrustVerifier struct {
@@ -39,20 +28,18 @@ func (v *TrustVerifier) Verify(vpToken string, ctx PresentationContext) (*Verifi
 		return nil, fmt.Errorf("trust verifier is not configured")
 	}
 
-	env, err := parseVPEnvelope(vpToken)
+	presentation, err := parseSDJWTPresentation(vpToken)
 	if err != nil {
 		return nil, err
 	}
 
-	if env.Format != vpFormat {
-		return nil, fmt.Errorf("unsupported vp format %q", env.Format)
-	}
-
-	credClaims, err := v.verifyCredentialJWT(env.CredentialJWT)
+	credClaims, err := v.verifyCredentialJWT(presentation.CredentialJWT)
 	if err != nil {
 		return nil, err
 	}
-	if err := v.verifyKBJWT(env.KBJWT, env.CredentialJWT, ctx); err != nil {
+
+	err = v.verifyKBJWT(presentation.KBJWT, presentation.SDHash, ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -66,13 +53,18 @@ func (v *TrustVerifier) Verify(vpToken string, ctx PresentationContext) (*Verifi
 		return nil, fmt.Errorf("credential missing iss")
 	}
 
+	if !v.trust.issuerTrusted(iss) {
+		return nil, fmt.Errorf("issuer %q is not trusted", iss)
+	}
+
 	sub, _ := credClaims["sub"].(string)
 	if strings.TrimSpace(sub) == "" {
 		return nil, fmt.Errorf("credential missing sub")
 	}
 
-	if !v.trust.issuersAllowed(iss) {
-		return nil, fmt.Errorf("issuer %q is not allowed", iss)
+	organization, _ := credClaims["organization"].(string)
+	if strings.TrimSpace(organization) == "" {
+		return nil, fmt.Errorf("credential missing organization")
 	}
 
 	raw, err := json.Marshal(credClaims)
@@ -82,68 +74,47 @@ func (v *TrustVerifier) Verify(vpToken string, ctx PresentationContext) (*Verifi
 
 	return &VerifiedLoginClaims{
 		SubjectDID:     strings.TrimSpace(sub),
-		ParticipantDID: strings.TrimSpace(iss),
+		ParticipantDID: strings.TrimSpace(organization),
 		Roles:          roles,
 		RawClaims:      raw,
 	}, nil
 }
 
-func parseVPEnvelope(vpToken string) (*vpEnvelope, error) {
-	raw := strings.TrimSpace(vpToken)
-	if raw == "" {
-		return nil, fmt.Errorf("vp_token is required")
-	}
-	if !strings.HasPrefix(raw, "{") {
-		decoded, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil {
-			return nil, fmt.Errorf("vp_token is not JSON or base64url JSON")
-		}
-		raw = string(decoded)
-	}
-	var env vpEnvelope
-	if err := json.Unmarshal([]byte(raw), &env); err != nil {
-		return nil, fmt.Errorf("invalid vp envelope: %w", err)
-	}
-	if strings.TrimSpace(env.CredentialJWT) == "" || strings.TrimSpace(env.KBJWT) == "" {
-		return nil, fmt.Errorf("vp envelope missing credential_jwt or kb_jwt")
-	}
-	return &env, nil
-}
-
 func (v *TrustVerifier) verifyCredentialJWT(token string) (jwt.MapClaims, error) {
 	unverified, _, err := jwt.NewParser().ParseUnverified(token, jwt.MapClaims{})
-
 	if err != nil {
 		return nil, fmt.Errorf("parse credential jwt: %w", err)
 	}
-	claims, ok := unverified.Claims.(jwt.MapClaims)
+	typ, _ := unverified.Header["typ"].(string)
+	if strings.TrimSpace(typ) != CredentialJWTTyp {
+		return nil, fmt.Errorf("credential jwt typ must be %q", CredentialJWTTyp)
+	}
 
+	claims, ok := unverified.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, fmt.Errorf("credential jwt claims are invalid")
 	}
 
 	sub, _ := claims["sub"].(string)
-	sub = strings.TrimSpace(sub)
-	if sub == "" {
+	if strings.TrimSpace(sub) == "" {
 		return nil, fmt.Errorf("credential jwt missing sub")
 	}
 
 	iss, _ := claims["iss"].(string)
-	iss = strings.TrimSpace(iss)
-	if iss == "" {
+	if strings.TrimSpace(iss) == "" {
 		return nil, fmt.Errorf("credential jwt missing iss")
 	}
-
 	if !v.trust.issuerTrusted(iss) {
 		return nil, fmt.Errorf("issuer %q is not trusted", iss)
 	}
-	vct, _ := claims["vct"].(string)
 
+	vct, _ := claims["vct"].(string)
 	if !v.trust.vctAllowed(strings.TrimSpace(vct)) {
 		return nil, fmt.Errorf("vct %q is not allowed", vct)
 	}
 
-	if err := validateTimeClaims(claims); err != nil {
+	err = validateTimeClaims(claims)
+	if err != nil {
 		return nil, err
 	}
 
@@ -154,7 +125,7 @@ func (v *TrustVerifier) verifyCredentialJWT(token string) (jwt.MapClaims, error)
 
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		return keySetKeyFunc(jwksRaw, t)
-	}, jwt.WithValidMethods([]string{"ES256", "RS256"}))
+	}, jwt.WithValidMethods([]string{"ES256"}))
 	if err != nil {
 		return nil, fmt.Errorf("credential jwt signature: %w", err)
 	}
@@ -163,11 +134,10 @@ func (v *TrustVerifier) verifyCredentialJWT(token string) (jwt.MapClaims, error)
 	if !ok {
 		return nil, fmt.Errorf("credential jwt claims are invalid")
 	}
-
 	return out, nil
 }
 
-func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx PresentationContext) error {
+func (v *TrustVerifier) verifyKBJWT(token, expectedSDHash string, ctx PresentationContext) error {
 	unverified, _, err := jwt.NewParser().ParseUnverified(token, jwt.MapClaims{})
 	if err != nil {
 		return fmt.Errorf("parse kb jwt: %w", err)
@@ -183,14 +153,23 @@ func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx Presentatio
 		return fmt.Errorf("kb jwt nonce mismatch")
 	}
 
+	clientID := strings.TrimSpace(ctx.ClientID)
+	if clientID == "" {
+		return fmt.Errorf("kb jwt verification requires client_id")
+	}
+	aud, _ := claims["aud"].(string)
+	if strings.TrimSpace(aud) != clientID {
+		return fmt.Errorf("kb jwt aud mismatch")
+	}
+
 	if hash, _ := claims["sd_hash"].(string); hash != "" {
-		expected := sha256Base64URL(credentialJWT)
-		if hash != expected {
+		if expectedSDHash == "" || hash != expectedSDHash {
 			return fmt.Errorf("kb jwt sd_hash mismatch")
 		}
 	}
 
-	if err := validateTimeClaims(claims); err != nil {
+	err = validateTimeClaims(claims)
+	if err != nil {
 		return err
 	}
 
@@ -198,13 +177,13 @@ func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx Presentatio
 	if strings.TrimSpace(sub) == "" {
 		return fmt.Errorf("kb jwt missing sub")
 	}
+
 	resolveCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		return holderKeyFunc(resolveCtx, v.resolver, sub, t)
 	}, jwt.WithValidMethods([]string{"ES256"}))
-
 	if err != nil {
 		return fmt.Errorf("kb jwt signature: %w", err)
 	}
@@ -212,7 +191,6 @@ func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx Presentatio
 	if _, ok := parsed.Claims.(jwt.MapClaims); !ok {
 		return fmt.Errorf("kb jwt claims are invalid")
 	}
-
 	return nil
 }
 
@@ -275,9 +253,4 @@ func numericDate(v any) (time.Time, error) {
 	default:
 		return time.Time{}, fmt.Errorf("invalid numeric date")
 	}
-}
-
-func sha256Base64URL(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

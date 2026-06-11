@@ -72,6 +72,10 @@ USER $DOCKER_USER
 # Copy compiled binary from go-builder stage
 COPY --from=go-builder /build/dcs /app/dcs
 
+# Copy OID4VP issuer trust for DCS.
+COPY --from=go-builder --chown=$DOCKER_USER:$DOCKER_USER \
+  /build/config/oid4vp/trust.dev.json /app/config/oid4vp/trust.dev.json
+
 # Copy generated OpenAPI spec from go-builder stage
 COPY --from=go-builder /build/gen/http/openapi3.json /app/gen/http/openapi3.json
 COPY --chown=$DOCKER_USER:$DOCKER_USER docs/semantic-ontology/ /app/docs/semantic-ontology/

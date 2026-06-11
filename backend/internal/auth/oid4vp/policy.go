@@ -3,6 +3,8 @@ package oid4vp
 import (
 	"encoding/json"
 	"fmt"
+
+	"digital-contracting-service/internal/base/datatype/userrole"
 )
 
 // CheckCredentialRevocation validates credentialStatus / bitstring status list when present.
@@ -10,14 +12,19 @@ import (
 // Until OCM-W / status service is available, presentations pass this check.
 func CheckCredentialRevocation(rawClaims json.RawMessage) error {
 	var claims map[string]any
+
 	if len(rawClaims) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(rawClaims, &claims); err != nil {
+
+	err := json.Unmarshal(rawClaims, &claims)
+	if err != nil {
 		return fmt.Errorf("parse credential claims for revocation check: %w", err)
 	}
+
 	_, hasStatus := claims["credentialStatus"]
 	_ = hasStatus
+
 	// Deferred: return error when status list reports revoked.
 	return nil
 }
@@ -29,15 +36,19 @@ func EvaluateLoginPolicy(verified *VerifiedLoginClaims) ([]string, error) {
 	if verified == nil {
 		return nil, fmt.Errorf("verified claims are required")
 	}
+
 	if len(verified.Roles) == 0 {
 		return nil, fmt.Errorf("no roles disclosed in presentation")
 	}
-	return verified.Roles, nil
-}
 
-// CheckDisclosedClaimsMeetDCQL confirms the VP satisfies the active DCQL query.
-// TODO: enforce selective disclosure and DCQL claim requirements beyond vct/format checks.
-// Until full SD-JWT / OCM-W support, verified credential claims are accepted when cryptographic checks pass.
-func CheckDisclosedClaimsMeetDCQL(_ json.RawMessage) error {
-	return nil
+	granted := make([]string, 0, len(verified.Roles))
+	for _, role := range verified.Roles {
+		ur, err := userrole.NewUserRole(role)
+		if err != nil {
+			return nil, fmt.Errorf("invalid disclosed role %q: %w", role, err)
+		}
+		granted = append(granted, ur.String())
+	}
+
+	return granted, nil
 }

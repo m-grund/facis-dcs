@@ -16,7 +16,7 @@ Usage (from repo root):
   python3 testWallet/demo_wallet.py --credential neusta-gmbh_johndoe --presentation-url 'openid4vp://...'
 
   # Headless end-to-end (POST /auth/login, no browser tab):
-  python3 testWallet/demo_wallet.py --headless --credential acme-corp_test
+  python3 testWallet/demo_wallet.py --headless --credential test
 """
 
 from __future__ import annotations
@@ -33,10 +33,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload
 from dcs_wallet.presentation import build_vp_token
 
 DEFAULT_API_BASE = os.environ.get("DCS_API_BASE", "http://localhost:8991/api")
-DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "acme-corp_test")
+DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "test")
 REQUEST_URI_MARKER = "/auth/presentation/request/"
 _CREDENTIALS_DIR = Path(__file__).resolve().parent / "credentials"
 _KEYS_DIR = Path(__file__).resolve().parent / "keys"
@@ -198,13 +199,14 @@ def prompt_presentation_url() -> str:
     return resolve_https_request_uri(line)
 
 
+def decode_authorization_request_jwt(token: str) -> dict:
+    return decode_jwt_payload(token)
+
+
 def list_available_credentials() -> list[CredentialOption]:
     options: list[CredentialOption] = []
-    for path in sorted(_CREDENTIALS_DIR.glob("*.json")):
-        if path.name.endswith(".template.json"):
-            continue
-        with path.open(encoding="utf-8") as fh:
-            data = json.load(fh)
+    for path in sorted(_CREDENTIALS_DIR.glob(f"*{CREDENTIAL_EXT}")):
+        data = decode_jwt_payload(path.read_text(encoding="utf-8").strip())
         roles_raw = data.get("roles") or []
         roles = [r for r in roles_raw if isinstance(r, str)]
         options.append(
@@ -281,7 +283,7 @@ def resolve_credential_name(credential_name: str | None) -> str | None:
         return credential_name
     options = list_available_credentials()
     if not options:
-        log("wallet", "FAILED", error=f"no credentials/*.json found — run: {_GENERATE_HINT}")
+        log("wallet", "FAILED", error=f"no credentials/*{CREDENTIAL_EXT} found — run: {_GENERATE_HINT}")
         return None
     return prompt_credential_choice(options)
 
@@ -318,9 +320,16 @@ def run_wallet_flow(
         if r.status_code in (400, 404):
             log("fetch", "hint: presentation link expired or unknown — copy a fresh link from /ui/ login")
         return 1
-    req_obj = r.json()
-    if not isinstance(req_obj, dict):
-        log("fetch", "FAILED", error="unexpected request object shape")
+    body = r.text.strip()
+    content_type = (r.headers.get("content-type") or "").lower()
+    if body.startswith("eyJ") or "oauth-authz-req+jwt" in content_type:
+        try:
+            req_obj = decode_authorization_request_jwt(body)
+        except ValueError as exc:
+            log("fetch", "FAILED", error=str(exc))
+            return 1
+    else:
+        log("fetch", "FAILED", error="expected signed authorization request JWT (application/oauth-authz-req+jwt)")
         return 1
     log(
         "fetch-ok",

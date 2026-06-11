@@ -255,6 +255,19 @@ CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.moun
 {{- end }}
 
 {{/*
+VAULT_ADDR for OID4VP authorization request signing (transit engine).
+*/}}
+{{- define "digital-contracting-service.vaultAddr" -}}
+{{- if .Values.oid4vp.trust.vaultAddr -}}
+{{- .Values.oid4vp.trust.vaultAddr -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- printf "http://%s-crypto-provider-vault:%v" .Release.Name .Values.cryptoProvider.vault.service.port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
 */}}
 {{- define "digital-contracting-service.ipfsMfsBaseURL" -}}
@@ -342,16 +355,3 @@ Normalize Keycloak route path (leading slash, no trailing slash).
 {{- end -}}
 {{- end }}
 
-{{/*
-OID4VP trust ConfigMap name.
-*/}}
-{{- define "digital-contracting-service.oid4vpTrustConfigMapName" -}}
-{{- default (printf "%s-oid4vp-trust" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.trust.configMapName -}}
-{{- end }}
-
-{{/*
-Kubernetes secret holding demo wallet private keys (synced from Vault).
-*/}}
-{{- define "digital-contracting-service.demoWalletSecretName" -}}
-{{- default (printf "%s-demo-wallet" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.demoWallet.secretName -}}
-{{- end }}

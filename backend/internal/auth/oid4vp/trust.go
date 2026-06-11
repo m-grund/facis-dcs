@@ -21,23 +21,31 @@ type TrustIssuer struct {
 // LoadTrustConfig reads trust data from a JSON file (ConfigMap mount).
 func LoadTrustConfig(path string) (*TrustConfig, error) {
 	path = strings.TrimSpace(path)
+
 	if path == "" {
 		return nil, fmt.Errorf("trust config path is empty")
 	}
+
 	data, err := os.ReadFile(path)
+
 	if err != nil {
 		return nil, fmt.Errorf("read trust config %q: %w", path, err)
 	}
+
 	var cfg TrustConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	err = json.Unmarshal(data, &cfg)
+	if err != nil {
 		return nil, fmt.Errorf("parse trust config %q: %w", path, err)
 	}
+
 	if len(cfg.VCTs) == 0 {
 		return nil, fmt.Errorf("trust config %q: vcts is required", path)
 	}
+
 	if len(cfg.Issuers) == 0 {
 		return nil, fmt.Errorf("trust config %q: issuers is required", path)
 	}
+
 	return &cfg, nil
 }
 
@@ -51,6 +59,7 @@ func (c *TrustConfig) issuerTrusted(iss string) bool {
 		return false
 	}
 	_, ok := c.Issuers[strings.TrimSpace(iss)]
+
 	return ok
 }
 
@@ -58,33 +67,28 @@ func (c *TrustConfig) vctAllowed(vct string) bool {
 	if c == nil {
 		return false
 	}
+
 	vct = strings.TrimSpace(vct)
+
 	for _, allowed := range c.VCTs {
 		if vct == allowed {
 			return true
 		}
 	}
-	return false
-}
 
-func (c *TrustConfig) issuersAllowed(iss string) bool {
-	// Todo: Needs to be fixed, just for demo
-	//iss = strings.TrimSpace(iss)
-	//for _, allowed := range c.Issuers {
-	//	if iss == allowed {
-	//return true
-	//	}
-	//}
-	return true
+	return false
 }
 
 func (c *TrustConfig) issuerJWKS(iss string) (json.RawMessage, error) {
 	entry, ok := c.Issuers[strings.TrimSpace(iss)]
+
 	if !ok {
 		return nil, fmt.Errorf("issuer %q is not trusted", iss)
 	}
+
 	if len(entry.JWKS) == 0 {
 		return nil, fmt.Errorf("issuer %q has no jwks", iss)
 	}
+
 	return entry.JWKS, nil
 }
