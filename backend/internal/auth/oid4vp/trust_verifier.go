@@ -38,10 +38,12 @@ func (v *TrustVerifier) Verify(vpToken string, ctx PresentationContext) (*Verifi
 	if v == nil || v.trust == nil {
 		return nil, fmt.Errorf("trust verifier is not configured")
 	}
+
 	env, err := parseVPEnvelope(vpToken)
 	if err != nil {
 		return nil, err
 	}
+
 	if env.Format != vpFormat {
 		return nil, fmt.Errorf("unsupported vp format %q", env.Format)
 	}
@@ -58,22 +60,29 @@ func (v *TrustVerifier) Verify(vpToken string, ctx PresentationContext) (*Verifi
 	if err != nil {
 		return nil, err
 	}
-	org, _ := credClaims["organization"].(string)
+
+	iss, _ := credClaims["iss"].(string)
+	if strings.TrimSpace(iss) == "" {
+		return nil, fmt.Errorf("credential missing iss")
+	}
+
 	sub, _ := credClaims["sub"].(string)
 	if strings.TrimSpace(sub) == "" {
 		return nil, fmt.Errorf("credential missing sub")
 	}
-	if !v.trust.organizationAllowed(org) {
-		return nil, fmt.Errorf("organization %q is not allowed", org)
+
+	if !v.trust.issuersAllowed(iss) {
+		return nil, fmt.Errorf("issuer %q is not allowed", iss)
 	}
 
 	raw, err := json.Marshal(credClaims)
 	if err != nil {
 		return nil, err
 	}
+
 	return &VerifiedLoginClaims{
 		SubjectDID:     strings.TrimSpace(sub),
-		OrganizationID: strings.TrimSpace(org),
+		ParticipantDID: strings.TrimSpace(iss),
 		Roles:          roles,
 		RawClaims:      raw,
 	}, nil
@@ -103,25 +112,37 @@ func parseVPEnvelope(vpToken string) (*vpEnvelope, error) {
 
 func (v *TrustVerifier) verifyCredentialJWT(token string) (jwt.MapClaims, error) {
 	unverified, _, err := jwt.NewParser().ParseUnverified(token, jwt.MapClaims{})
+
 	if err != nil {
 		return nil, fmt.Errorf("parse credential jwt: %w", err)
 	}
 	claims, ok := unverified.Claims.(jwt.MapClaims)
+
 	if !ok {
 		return nil, fmt.Errorf("credential jwt claims are invalid")
 	}
+
+	sub, _ := claims["sub"].(string)
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		return nil, fmt.Errorf("credential jwt missing sub")
+	}
+
 	iss, _ := claims["iss"].(string)
 	iss = strings.TrimSpace(iss)
 	if iss == "" {
 		return nil, fmt.Errorf("credential jwt missing iss")
 	}
+
 	if !v.trust.issuerTrusted(iss) {
 		return nil, fmt.Errorf("issuer %q is not trusted", iss)
 	}
 	vct, _ := claims["vct"].(string)
+
 	if !v.trust.vctAllowed(strings.TrimSpace(vct)) {
 		return nil, fmt.Errorf("vct %q is not allowed", vct)
 	}
+
 	if err := validateTimeClaims(claims); err != nil {
 		return nil, err
 	}
@@ -130,16 +151,19 @@ func (v *TrustVerifier) verifyCredentialJWT(token string) (jwt.MapClaims, error)
 	if err != nil {
 		return nil, err
 	}
+
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		return keySetKeyFunc(jwksRaw, t)
 	}, jwt.WithValidMethods([]string{"ES256", "RS256"}))
 	if err != nil {
 		return nil, fmt.Errorf("credential jwt signature: %w", err)
 	}
+
 	out, ok := parsed.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, fmt.Errorf("credential jwt claims are invalid")
 	}
+
 	return out, nil
 }
 
@@ -148,20 +172,24 @@ func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx Presentatio
 	if err != nil {
 		return fmt.Errorf("parse kb jwt: %w", err)
 	}
+
 	claims, ok := unverified.Claims.(jwt.MapClaims)
 	if !ok {
 		return fmt.Errorf("kb jwt claims are invalid")
 	}
+
 	nonce, _ := claims["nonce"].(string)
 	if strings.TrimSpace(ctx.Nonce) == "" || nonce != ctx.Nonce {
 		return fmt.Errorf("kb jwt nonce mismatch")
 	}
+
 	if hash, _ := claims["sd_hash"].(string); hash != "" {
 		expected := sha256Base64URL(credentialJWT)
 		if hash != expected {
 			return fmt.Errorf("kb jwt sd_hash mismatch")
 		}
 	}
+
 	if err := validateTimeClaims(claims); err != nil {
 		return err
 	}
@@ -176,12 +204,15 @@ func (v *TrustVerifier) verifyKBJWT(token, credentialJWT string, ctx Presentatio
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		return holderKeyFunc(resolveCtx, v.resolver, sub, t)
 	}, jwt.WithValidMethods([]string{"ES256"}))
+
 	if err != nil {
 		return fmt.Errorf("kb jwt signature: %w", err)
 	}
+
 	if _, ok := parsed.Claims.(jwt.MapClaims); !ok {
 		return fmt.Errorf("kb jwt claims are invalid")
 	}
+
 	return nil
 }
 

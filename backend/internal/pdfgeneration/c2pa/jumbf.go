@@ -72,6 +72,7 @@ var (
 	}
 
 	// c2paJSONAssertionUUID is the JSON assertion box UUID.
+	//nolint:unused
 	c2paJSONAssertionUUID = [16]byte{
 		0x6A, 0x73, 0x6F, 0x6E, // "json"
 		0x00, 0x11, 0x00, 0x10,

@@ -186,8 +186,11 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 	if p.VpToken != nil {
 		vpToken = *p.VpToken
 	}
-	verifier := s.vpVerifier
-	if cfg, err := oid4vp.LoadTrustConfigFromEnv(); err == nil {
+	cfg, err := oid4vp.LoadTrustConfigFromEnv()
+	var verifier oid4vp.Verifier
+	if err != nil {
+		verifier = s.vpVerifier
+	} else {
 		verifier = oid4vp.NewVerifier(cfg)
 	}
 	verified, err := verifier.Verify(vpToken, oid4vp.PresentationContext{
@@ -209,7 +212,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -221,7 +224,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -234,7 +237,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             verified.Roles,
 			ErrorMessage:      err.Error(),
 		})
@@ -245,7 +248,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		ctx,
 		*attempt.HydraLoginChallenge,
 		verified.SubjectDID,
-		verified.OrganizationID,
+		verified.ParticipantDID,
 		grantedRoles,
 	)
 	if err != nil {
@@ -254,7 +257,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 			PresentationState: attempt.PresentationState,
 			Success:           false,
 			SubjectDID:        verified.SubjectDID,
-			OrganizationID:    verified.OrganizationID,
+			ParticipantDID:    verified.ParticipantDID,
 			Roles:             grantedRoles,
 			ErrorMessage:      err.Error(),
 		})
@@ -262,14 +265,14 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 	}
 	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
 	rolesJSON, _ := json.Marshal(grantedRoles)
-	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.OrganizationID, rolesJSON, continueURL); err != nil {
+	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.ParticipantDID, rolesJSON, continueURL); err != nil {
 		return nil, err
 	}
 	oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
 		PresentationState: attempt.PresentationState,
 		Success:           true,
 		SubjectDID:        verified.SubjectDID,
-		OrganizationID:    verified.OrganizationID,
+		ParticipantDID:    verified.ParticipantDID,
 		Roles:             grantedRoles,
 	})
 

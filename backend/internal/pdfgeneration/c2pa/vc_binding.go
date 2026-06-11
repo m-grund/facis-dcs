@@ -16,35 +16,35 @@ type VCSigner interface {
 	CreateCredential(ctx context.Context, unsignedVC json.RawMessage) (json.RawMessage, error)
 }
 
-// VCBinding is the W3C VC (Data Model 2.0) issued to bind a lifecycle event to
-// contract_id + file_hash (DCS-OR-C2PA-004).
-// Fields follow W3C VC Data Model 2.0: validFrom/validUntil replace issuanceDate.
+// VCBinding is the W3C VC issued to bind a lifecycle event to contract_id + file_hash
+// (DCS-OR-C2PA-004). It is returned by IssueLifecycleVC and stored as vc_id in the
+// LifecycleAssertion once issued.
 type VCBinding struct {
 	Context           []interface{}          `json:"@context"`
 	Type              []string               `json:"type"`
 	ID                string                 `json:"id"`
 	Issuer            string                 `json:"issuer"`
-	ValidFrom         time.Time              `json:"validFrom"`
-	ValidUntil        *time.Time             `json:"validUntil,omitempty"`
+	IssuanceDate      time.Time              `json:"issuanceDate"`
 	CredentialSubject map[string]interface{} `json:"credentialSubject"`
 	// CredentialStatus links this VC to the XFSC status list entry so
 	// verifiers can check revocation (DCS-OR-C2PA-004, DCS-OR-C2PA-005).
 	CredentialStatus map[string]interface{} `json:"credentialStatus,omitempty"`
 }
 
-// IssueLifecycleVC builds and signs a W3C VC (Data Model 2.0) recording the
-// lifecycle event. statusListURI is the URL of the XFSC status list entry for
-// this contract; it is embedded as credentialStatus.id so verifiers can check
-// revocation (DCS-OR-C2PA-004, DCS-OR-C2PA-005).
+// IssueLifecycleVC builds and signs a W3C VC recording the lifecycle event.
+// statusListURI is the URL of the XFSC status list entry for this contract;
+// it is embedded as credentialStatus.id so verifiers can check revocation
+// (DCS-OR-C2PA-004, DCS-OR-C2PA-005).
+// The signed VC bytes are returned; the VC id is derived from the SHA-256 of
+// its content so it can be stored in LifecycleAssertion.VCId.
 func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusListURI string, assertion LifecycleAssertion) (json.RawMessage, string, error) {
 	subjectID := normalizeSubjectID(assertion.ContractID)
+	securityCtx := vcSecuritySuiteContext()
 
 	unsignedVC := VCBinding{
-		// W3C VC Data Model 2.0: first context element MUST be
-		// https://www.w3.org/ns/credentials/v2.
 		Context: []interface{}{
-			"https://www.w3.org/ns/credentials/v2",
-			vcSecuritySuiteContext(),
+			"https://www.w3.org/2018/credentials/v1",
+			securityCtx,
 			map[string]interface{}{
 				"dcs":                         "https://w3id.org/facis/dcs#",
 				"ContractLifecycleCredential": "dcs:ContractLifecycleCredential",
@@ -58,10 +58,10 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusLis
 				},
 			},
 		},
-		Type:      []string{"VerifiableCredential", "ContractLifecycleCredential"},
-		ID:        "", // filled after hash
-		Issuer:    issuerDID,
-		ValidFrom: assertion.EffectiveAt.UTC(),
+		Type:         []string{"VerifiableCredential", "ContractLifecycleCredential"},
+		ID:           "", // filled after hash
+		Issuer:       issuerDID,
+		IssuanceDate: assertion.EffectiveAt,
 		CredentialSubject: map[string]interface{}{
 			"id":           subjectID,
 			"contract_id":  assertion.ContractID,
@@ -95,9 +95,8 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusLis
 	return signed, vcID, nil
 }
 
-// buildCredentialStatus constructs the W3C BitstringStatusListEntry
-// credentialStatus object that links this VC to the XFSC bitstring status list
-// (DCS-OR-C2PA-005, W3C VC Status List 2021/BitstringStatusList).
+// buildCredentialStatus constructs the W3C StatusList2021 credentialStatus
+// object that links this VC to the XFSC bitstring status list (DCS-OR-C2PA-005).
 // Returns nil when statusListURI is empty so the field is omitted from the VC.
 func buildCredentialStatus(statusListURI, contractID string) map[string]interface{} {
 	if statusListURI == "" {
@@ -105,17 +104,13 @@ func buildCredentialStatus(statusListURI, contractID string) map[string]interfac
 	}
 	return map[string]interface{}{
 		"id":                   fmt.Sprintf("%s#%d", statusListURI, StatusListIndex(contractID)),
-		"type":                 "BitstringStatusListEntry",
+		"type":                 "StatusList2021Entry",
 		"statusPurpose":        "revocation",
 		"statusListIndex":      fmt.Sprintf("%d", StatusListIndex(contractID)),
 		"statusListCredential": statusListURI,
 	}
 }
 
-// vcSecuritySuiteContext returns the JSON-LD context URL for the Ed25519Signature2020
-// proof suite used by the XFSC Crypto Provider Service signer.
-// The proof type is determined by the external CRYPTO_PROVIDER_VC_SIGNATURE_TYPE
-// env var (ed25519signature2020), not by this service.
 func vcSecuritySuiteContext() string {
 	return "https://w3id.org/security/suites/ed25519-2020/v1"
 }

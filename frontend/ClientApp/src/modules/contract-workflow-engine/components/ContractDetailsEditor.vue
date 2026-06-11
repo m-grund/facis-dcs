@@ -1,6 +1,11 @@
 <template>
   <div class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-5">
+      <h2 class="card-title justify-between text-sm">
+        <div class="flex gap-2">Contract Details</div>
+        <div class="badge badge-sm badge-secondary">{{ contract.state }}</div>
+      </h2>
+
       <fieldset class="fieldset border-none p-0">
         <legend class="fieldset-legend">Version: {{ contract.contract_version }}</legend>
       </fieldset>
@@ -80,7 +85,7 @@
       <fieldset v-if="showResponsiblities" class="fieldset border-none p-0">
         <div class="collapse-arrow collapse [&>input~.collapse-title::after]:scale-75">
           <input type="checkbox" name="responsibles" />
-          <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Persons</legend>
+          <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Participants</legend>
           <div class="collapse-content grid">
             <ul class="list col-start-1 row-start-1">
               <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Creator</li>

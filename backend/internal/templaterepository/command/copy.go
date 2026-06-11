@@ -8,21 +8,21 @@ import (
 	"log"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type CopyCmd struct {
 	NewDID    string
 	CopyDID   string
 	CopiedBy  string
-	Username  string
+	HolderDID string
 	UserRoles userrole.UserRoles
 }
 
@@ -69,8 +69,8 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 		CopyDID:    cmd.CopyDID,
 		CopiedBy:   cmd.CopiedBy,
 		NewVersion: version,
-		OccurredAt: time.Now(),
-		Username:   cmd.Username,
+		OccurredAt: time.Now().UTC(),
+		HolderDID:  cmd.HolderDID,
 		UserRoles:  cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

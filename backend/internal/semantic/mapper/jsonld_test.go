@@ -22,8 +22,6 @@ func newJSON(t *testing.T, v any) *datatype.JSON {
 	return &j
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func now() time.Time { return time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC) }
 
 // minimalTemplateInner returns a pre-built inner JSONB that matches what

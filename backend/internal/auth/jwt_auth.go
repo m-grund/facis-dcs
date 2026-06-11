@@ -60,7 +60,7 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 
 	if len(scheme.RequiredScopes) > 0 {
 		if !hasAnyRole(info.Roles, scheme.RequiredScopes) {
-			a.logAttempt(ctx, ip, &info.Username, false)
+			a.logAttempt(ctx, ip, &info.HolderDID, false)
 			if err := a.checkAndLock(ctx, ip); err != nil {
 				return ctx, err
 			}
@@ -68,10 +68,10 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 		}
 	}
 
-	a.logAttempt(ctx, ip, &info.Username, true)
+	a.logAttempt(ctx, ip, &info.HolderDID, true)
 	a.clearLock(ctx, ip)
 
-	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.DID, info.Username, info.ParticipantID)
+	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.HolderDID, info.ParticipantDID)
 	return ctx, nil
 }
 
@@ -106,7 +106,7 @@ func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *
 	_ = a.AAttemptRepo.Create(ctx, tx, db.AccessAttempt{
 		IPAddress:   ip,
 		AttemptBy:   attemptBy,
-		AttemptedAt: time.Now(),
+		AttemptedAt: time.Now().UTC(),
 		Success:     success,
 		Service:     ctx.Value(goa.ServiceKey).(string),
 		Method:      ctx.Value(goa.MethodKey).(string),

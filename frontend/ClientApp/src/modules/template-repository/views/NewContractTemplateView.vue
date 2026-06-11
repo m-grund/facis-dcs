@@ -69,7 +69,8 @@ watch(
     if (isEdit) {
       hasChosenType.value = true
       // load template data into draftStore
-      const did = String(route.params.did ?? '')
+      const did = Array.isArray(route.params.did) ? route.params.did[0] : route.params.did
+      if (!did) return
       contractTemplateService
         .retrieveById({ did })
         .then((template) => {
@@ -83,6 +84,7 @@ watch(
             TemplateState.deprecated,
             TemplateState.registered,
             TemplateState.published,
+            TemplateState.registered,
           ].map((s) => s.toLowerCase())
           templateEditorUiStore.setTemplateEditable(!uneditableStates.includes(template.state.toLowerCase()))
 
@@ -106,7 +108,7 @@ watch(
             version: template.version ?? null,
             document_number: template.document_number ?? null,
             updated_at: template.updated_at ?? null,
-            responsible_persons: template.responsible_persons ?? null,
+            responsible: template.responsible ?? null,
           })
         })
         .catch((error: unknown) => {

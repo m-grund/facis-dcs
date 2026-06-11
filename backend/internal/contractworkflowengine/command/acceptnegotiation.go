@@ -22,7 +22,7 @@ type AcceptNegotiationCmd struct {
 	ID         string
 	DID        string
 	AcceptedBy string
-	Username   string
+	HolderDID  string
 	UserRoles  userrole.UserRoles
 }
 
@@ -44,7 +44,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
@@ -72,7 +72,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		ContractVersion: processData.ContractVersion,
 		UserRoles:       cmd.UserRoles,
 		AcceptedBy:      cmd.AcceptedBy,
-		Username:        cmd.Username,
+		HolderDID:       cmd.HolderDID,
 		OccurredAt:      time.Now().UTC(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

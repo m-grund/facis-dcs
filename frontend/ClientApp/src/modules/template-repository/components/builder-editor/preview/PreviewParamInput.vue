@@ -49,7 +49,10 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { SemanticParameterType, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
+import type {
+  SemanticParameterType,
+  SemanticValueConstraint,
+} from '@/modules/template-repository/models/contract-template'
 import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 
 const props = defineProps<{
@@ -60,21 +63,21 @@ const props = defineProps<{
   isInvalid?: boolean
   invalidTip?: string
 }>()
-const emit = defineEmits<{
-  (e: 'update:value', value: string | number | boolean): void
-}>()
+const emit = defineEmits<(e: 'update:value', value: string | number | boolean) => void>()
 
 const stringValue = ref('')
 const numberValue = ref('')
 const dateValue = ref('')
 const booleanValue = ref(false)
 const allowedValues = computed(() => resolveAllowedValues(props.valueConstraint))
-const tipText = computed(() => props.invalidTip || props.valueConstraint?.description || props.label || '')
-const inputClass = computed(() =>
-  `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
+const tipText = computed(() => props.invalidTip ?? props.valueConstraint?.description ?? props.label ?? '')
+const inputClass = computed(
+  () =>
+    `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
 )
-const selectClass = computed(() =>
-  `select select-xs h-7 min-h-0 w-28 rounded-md bg-transparent px-1 text-sm leading-relaxed ${props.isInvalid ? 'select-error text-error' : 'select-bordered'}`,
+const selectClass = computed(
+  () =>
+    `select select-xs h-7 min-h-0 w-28 rounded-md bg-transparent px-1 text-sm leading-relaxed ${props.isInvalid ? 'select-error text-error' : 'select-bordered'}`,
 )
 
 watch(
@@ -84,7 +87,7 @@ watch(
     numberValue.value = ''
     dateValue.value = ''
     booleanValue.value = false
-  }
+  },
 )
 
 watch(

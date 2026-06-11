@@ -30,15 +30,19 @@ type HydraJWTValidator struct {
 }
 
 const (
-	oidcDiscoveryDefaultAttempts       = 30
+	//nolint:unused
+	oidcDiscoveryDefaultAttempts = 30
+	//nolint:unused
 	oidcDiscoveryDefaultAttemptTimeout = 5 * time.Second
+	//nolint:unused
 	oidcDiscoveryDefaultInitialBackoff = 500 * time.Millisecond
-	oidcDiscoveryDefaultMaxBackoff     = 5 * time.Second
+	//nolint:unused
+	oidcDiscoveryDefaultMaxBackoff = 5 * time.Second
 )
 
 // NewHydraJWTValidator connects to the OIDC provider to get public keys.
 func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWTValidator, error) {
-	provider, err := discoverOIDCProvider(ctx, config.IssuerURL)
+	provider, err := oidc.NewProvider(ctx, config.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover OIDC provider: %w", err)
 	}
@@ -58,6 +62,7 @@ func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWT
 	}, nil
 }
 
+//nolint:unused
 func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider, error) {
 	var lastErr error
 	attempts := oidcDiscoveryAttempts()
@@ -91,6 +96,7 @@ func discoverOIDCProvider(ctx context.Context, issuerURL string) (*oidc.Provider
 	return nil, fmt.Errorf("OIDC discovery failed after %d attempts: %w", attempts, lastErr)
 }
 
+//nolint:unused
 func oidcDiscoveryAttempts() int {
 	value, err := strconv.Atoi(os.Getenv("OIDC_DISCOVERY_ATTEMPTS"))
 	if err != nil || value < 1 {
@@ -99,18 +105,22 @@ func oidcDiscoveryAttempts() int {
 	return value
 }
 
+//nolint:unused
 func oidcDiscoveryAttemptTimeout() time.Duration {
 	return oidcDiscoveryDuration("OIDC_DISCOVERY_ATTEMPT_TIMEOUT", oidcDiscoveryDefaultAttemptTimeout)
 }
 
+//nolint:unused
 func oidcDiscoveryInitialBackoff() time.Duration {
 	return oidcDiscoveryDuration("OIDC_DISCOVERY_INITIAL_BACKOFF", oidcDiscoveryDefaultInitialBackoff)
 }
 
+//nolint:unused
 func oidcDiscoveryMaxBackoff() time.Duration {
 	return oidcDiscoveryDuration("OIDC_DISCOVERY_MAX_BACKOFF", oidcDiscoveryDefaultMaxBackoff)
 }
 
+//nolint:unused
 func oidcDiscoveryDuration(envName string, fallback time.Duration) time.Duration {
 	value, err := time.ParseDuration(os.Getenv(envName))
 	if err != nil || value <= 0 {
@@ -121,21 +131,28 @@ func oidcDiscoveryDuration(envName string, fallback time.Duration) time.Duration
 
 // TokenInfo holds the validated identity extracted from a JWT.
 type TokenInfo struct {
-	Roles         []string
-	DID           string
-	Username      string
-	ParticipantID string
+	Roles          []string
+	HolderDID      string
+	ParticipantDID string
+}
+
+type Claims struct {
+	Subject  string                 `json:"sub"`
+	Issuer   string                 `json:"iss"`
+	Ext      map[string]interface{} `json:"ext"`
+	Audience interface{}            `json:"aud"`
+	ClientID string                 `json:"client_id"`
 }
 
 // ValidateToken verifies the token signature, issuer, and client binding, then
-// returns the caller's roles, DID, username, and participant ID.
+// returns the caller's roles, holder DID, and participant DID.
 func (v *HydraJWTValidator) ValidateToken(ctx context.Context, token string) (*TokenInfo, error) {
 	idToken, err := v.verifier.Verify(ctx, token)
 	if err != nil {
 		return nil, fmt.Errorf("token verification failed: %w", err)
 	}
 
-	var claims map[string]interface{}
+	var claims Claims
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to parse token claims: %w", err)
 	}
@@ -144,24 +161,22 @@ func (v *HydraJWTValidator) ValidateToken(ctx context.Context, token string) (*T
 		return nil, fmt.Errorf("token is not bound to client ID %q", v.config.ClientID)
 	}
 
-	sub, _ := claims["sub"].(string)
-	username := sub
-
-	// TBD: use workaround solution until we have a proper participant ID in the credential.
-	participantID := "did:web:argo.asd-stack.eu:facis:participant:cfc9d0a5-cd79-4807-8eef-e245ab0ffee8"
+	issuer, ok := claims.Ext["iss"].(string)
+	if !ok {
+		return nil, fmt.Errorf("no iss claim in ext claim found in token")
+	}
 
 	return &TokenInfo{
-		Roles:         extractRoles(claims),
-		DID:           sub,
-		Username:      username,
-		ParticipantID: participantID,
+		Roles:          extractRoles(claims),
+		HolderDID:      claims.Subject,
+		ParticipantDID: issuer,
 	}, nil
 }
 
 // extractRoles extracts DCS roles from a Hydra access token.
-func extractRoles(claims map[string]interface{}) []string {
-	if ext, ok := claims["ext"].(map[string]interface{}); ok {
-		if roles := toStringSlice(ext["roles"]); len(roles) > 0 {
+func extractRoles(claims Claims) []string {
+	if claims.Ext != nil {
+		if roles := toStringSlice(claims.Ext["roles"]); len(roles) > 0 {
 			return roles
 		}
 	}
@@ -169,11 +184,12 @@ func extractRoles(claims map[string]interface{}) []string {
 }
 
 // matchesClientID matches the JWT token to the expected OAuth client.
-func matchesClientID(claims map[string]interface{}, clientID string) bool {
-	if cid, _ := claims["client_id"].(string); cid != "" {
-		return cid == clientID
+func matchesClientID(claims Claims, clientID string) bool {
+
+	if claims.ClientID != "" {
+		return claims.ClientID == clientID
 	}
-	switch aud := claims["aud"].(type) {
+	switch aud := claims.Audience.(type) {
 	case string:
 		return aud == clientID
 	case []interface{}:
@@ -215,8 +231,7 @@ type authCtxKey struct{}
 // AuthContext carries the validated caller identity through the request context.
 type AuthContext struct {
 	Roles         []string
-	DID           string
-	Username      string
+	HolderDID     string
 	ParticipantID string
 }
 
@@ -237,18 +252,10 @@ func GetUserRoles(ctx context.Context) []userrole.UserRole {
 	return []userrole.UserRole{}
 }
 
-// GetUsername extracts the authenticated username from the request context.
-func GetUsername(ctx context.Context) string {
+// GetHolderDID extracts the authenticated DID from the request context.
+func GetHolderDID(ctx context.Context) string {
 	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.Username
-	}
-	return ""
-}
-
-// GetDID extracts the authenticated DID from the request context.
-func GetDID(ctx context.Context) string {
-	if ac, ok := ctx.Value(authCtxKey{}).(AuthContext); ok {
-		return ac.DID
+		return ac.HolderDID
 	}
 	return ""
 }
@@ -262,6 +269,6 @@ func GetParticipantID(ctx context.Context) string {
 }
 
 // InjectAuthContext injects the validated identity into the request context.
-func InjectAuthContext(ctx context.Context, roles []string, did string, username string, participantID string) context.Context {
-	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, DID: did, Username: username, ParticipantID: participantID})
+func InjectAuthContext(ctx context.Context, roles []string, holderDID string, participantID string) context.Context {
+	return context.WithValue(ctx, authCtxKey{}, AuthContext{Roles: roles, HolderDID: holderDID, ParticipantID: participantID})
 }

@@ -3,9 +3,18 @@ import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/
 import { ROUTES } from '@/router/router'
 import { toProperCase } from '@/utils/string'
 
-defineProps<{
+const props = defineProps<{
   template: TemplateResourcesItem
+  templates: TemplateResourcesItem[]
 }>()
+
+function existLocally(did: string): boolean {
+  const result = props.templates.filter((contract) => contract.did === did)
+  if (result.length > 0) {
+    return true
+  }
+  return false
+}
 </script>
 
 <template>
@@ -43,6 +52,10 @@ defineProps<{
               View
             </RouterLink>
           </div>
+        </div>
+        <div class="flex min-w-0 justify-between">
+          <div v-if="existLocally(template.did)" class="flex min-w-0 justify-between">In local repository</div>
+          <div v-else class="flex min-w-0 justify-between">In catalogue</div>
         </div>
       </div>
     </div>

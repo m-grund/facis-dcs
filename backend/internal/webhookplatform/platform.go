@@ -11,8 +11,8 @@ import (
 // CallbackHandler is called when ORCE sends a callback after processing a webhook.
 type CallbackHandler func(ctx context.Context, pending PendingCallback, status string, result json.RawMessage)
 
-// TokenValidator validates a Bearer token and returns the caller's username.
-type TokenValidator func(ctx context.Context, token string) (username string, err error)
+// TokenValidator validates a Bearer token and returns the caller's holderDID.
+type TokenValidator func(ctx context.Context, token string) (holderDID string, err error)
 
 // Platform is the webhook subscription HTTP handler.
 // Mount it on any path prefix with http.StripPrefix.
@@ -71,21 +71,21 @@ func (p *Platform) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		token := strings.TrimPrefix(header, "Bearer ")
 
-		username, err := p.validate(r.Context(), token)
+		holderDID, err := p.validate(r.Context(), token)
 		if err != nil {
 			jsonError(w, http.StatusUnauthorized, "invalid token: "+err.Error())
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), ctxKeyUsername{}, username)
+		ctx := context.WithValue(r.Context(), ctxKeyHolderDID{}, holderDID)
 		next(w, r.WithContext(ctx))
 	}
 }
 
-type ctxKeyUsername struct{}
+type ctxKeyHolderDID struct{}
 
-func usernameFromCtx(ctx context.Context) string {
-	v, _ := ctx.Value(ctxKeyUsername{}).(string)
+func holderDIDFromCtx(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyHolderDID{}).(string)
 	return v
 }
 
@@ -127,7 +127,7 @@ func (p *Platform) subscribe(w http.ResponseWriter, r *http.Request) {
 
 	sub := p.store.Add(req.Event, req.CallbackURL, req.Secret)
 	log.Printf("webhookplatform: new subscription id=%s event=%s url=%s caller=%s",
-		sub.ID, sub.Event, sub.CallbackURL, usernameFromCtx(r.Context()))
+		sub.ID, sub.Event, sub.CallbackURL, holderDIDFromCtx(r.Context()))
 
 	w.WriteHeader(http.StatusCreated)
 	jsonOK(w, sub)
@@ -141,7 +141,7 @@ func (p *Platform) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("webhookplatform: deleted subscription id=%s caller=%s",
-		id, usernameFromCtx(r.Context()))
+		id, holderDIDFromCtx(r.Context()))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -168,7 +168,7 @@ func (p *Platform) callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("webhookplatform: callback received event_id=%s event=%s did=%s status=%s caller=%s",
-		req.EventID, pending.Event, pending.DID, req.Status, usernameFromCtx(r.Context()))
+		req.EventID, pending.Event, pending.DID, req.Status, holderDIDFromCtx(r.Context()))
 
 	if p.onCallback != nil {
 		go p.onCallback(r.Context(), pending, req.Status, req.Result)

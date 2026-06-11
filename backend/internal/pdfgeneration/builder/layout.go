@@ -41,7 +41,7 @@ const (
 
 // epochTime is used as a fixed creation/modification date so the PDF bytes are
 // deterministic for the same JSON-LD input (DCS-FR-CWE-04).
-// time.Time{} (year 1) is treated as zero by fpdf and replaced with time.Now(),
+// time.Time{} (year 1) is treated as zero by fpdf and replaced with time.Now().UTC(),
 // so we use Unix epoch (1970-01-01) instead.
 var epochTime = time.Unix(0, 0).UTC()
 

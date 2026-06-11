@@ -149,13 +149,13 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	embeddedStreamDict.Dict.Update("Subtype", pdftypes.Name("application#2Fjson"))
+	embeddedStreamDict.Update("Subtype", pdftypes.Name("application#2Fjson"))
 
 	streamPayload := extractRawStreamPayload(pdf, embeddedObjNum)
 	if len(streamPayload) == 0 {
 		return nil, fmt.Errorf("embedded stream payload not found")
 	}
-	embeddedStreamDict.Dict.Update("Params", pdftypes.Dict{
+	embeddedStreamDict.Update("Params", pdftypes.Dict{
 		"Size":    pdftypes.Integer(len(streamPayload)),
 		"ModDate": pdftypes.StringLiteral(pdftypes.DateString(epochTime)),
 	})
@@ -218,7 +218,7 @@ func appendPDFA3Increment(pdf []byte, idSeed []byte) ([]byte, error) {
 	fmt.Fprintf(&inc, "%d 0 obj\n%s\nendobj\n", fileSpecObjNum, fileSpecStr)
 
 	offsets[embeddedObjNum] = base + int64(inc.Len())
-	embeddedStr := canonicalizeDictString(embeddedStreamDict.Dict.PDFString())
+	embeddedStr := canonicalizeDictString(embeddedStreamDict.PDFString())
 	fmt.Fprintf(&inc, "%d 0 obj\n%s\n", embeddedObjNum, embeddedStr)
 	inc.WriteString("stream\n")
 	inc.Write(streamPayload)

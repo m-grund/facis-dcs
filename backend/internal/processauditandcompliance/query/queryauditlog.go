@@ -21,7 +21,7 @@ import (
 type GetAuditLogQry struct {
 	Scope     componenttype.ComponentType
 	AuditedBy string
-	Username  string
+	HolderDID string
 	UserRoles userrole.UserRoles
 }
 
@@ -44,7 +44,7 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatyp
 
 	result, err := h.ATrailReader.ReadAuditLogEntriesByComponent(ctx, tx, query.Scope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read audit log entries: %w", err)
 	}
 
 	evt := event2.AuditEvent{
@@ -52,7 +52,7 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatyp
 		ComponentType: componenttype.ProcessAuditAndCompliance,
 		AuditedBy:     query.AuditedBy,
 		OccurredAt:    time.Now().UTC(),
-		Username:      query.Username,
+		HolderDID:     query.HolderDID,
 		UserRoles:     query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance)

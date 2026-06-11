@@ -32,7 +32,7 @@ type SubmitCmd struct {
 	Negotiators []string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
-	Username    string
+	HolderDID   string
 	UserRoles   userrole.UserRoles
 }
 
@@ -100,7 +100,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -123,7 +123,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewer provided")
+			return errors.New("no reviewers provided")
 		}
 
 		if len(cmd.Negotiators) == 0 {
@@ -134,18 +134,15 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approvers provided")
 		}
 
-		respPersons := db.Responsible{
+		resp := db.Responsible{
 			Creator:     processData.CreatedBy,
 			Reviewers:   cmd.Reviewers,
 			Approvers:   cmd.Approvers,
 			Negotiators: cmd.Negotiators,
 		}
-		anyRespPerson := any(respPersons)
-		responsible = &anyRespPerson
-
 		updateData := db.ContractUpdateData{
 			DID:         cmd.DID,
-			Responsible: &respPersons,
+			Responsible: &resp,
 		}
 		err := h.CRepo.Update(ctx, tx, updateData)
 		if err != nil {
@@ -252,7 +249,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 					NewContractVersion: processData.ContractVersion + 1,
 					SubmittedBy:        cmd.SubmittedBy,
 					OccurredAt:         time.Now().UTC(),
-					Username:           cmd.Username,
+					HolderDID:          cmd.HolderDID,
 					UserRoles:          cmd.UserRoles,
 				}
 				err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
@@ -361,7 +358,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			Comments:        cmd.Comments,
 			OccurredAt:      time.Now().UTC(),
 			Responsible:     responsible,
-			Username:        cmd.Username,
+			HolderDID:       cmd.HolderDID,
 			UserRoles:       cmd.UserRoles,
 		}
 		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

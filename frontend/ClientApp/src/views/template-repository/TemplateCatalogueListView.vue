@@ -63,6 +63,7 @@ import { templateCatalogueIntegrationService } from '@/services/template-catalog
 import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
 import { toProperCase } from '@/utils/string'
 import { computed, ref } from 'vue'
+
 const Limit = 20
 const page = ref(0)
 const items = ref<TemplateResourcesItem[]>([])

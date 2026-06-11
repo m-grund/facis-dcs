@@ -9,7 +9,7 @@ export const useAuthTokenStore = defineStore('token', () => {
 
   const isAuthSet = computed(() => !!tokenType.value && !!accessToken.value)
   const getAuthenticationHeader = computed(() => `${tokenType.value} ${accessToken.value}`)
-  const getUserId = computed(() => useJwt(accessToken.value).payload.value?.sub)
+  const getHolder = computed(() => useJwt(accessToken.value).payload.value?.sub)
 
   function setTokens(type: string, access_token: string) {
     tokenType.value = type
@@ -21,5 +21,5 @@ export const useAuthTokenStore = defineStore('token', () => {
     accessToken.value = null
   }
 
-  return { tokenType, accessToken, isAuthSet, getAuthenticationHeader, getUserId, setTokens, remove }
+  return { tokenType, accessToken, isAuthSet, getAuthenticationHeader, getHolder, setTokens, remove }
 })

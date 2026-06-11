@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
+import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
@@ -47,7 +48,11 @@ const canArchive = computed(() => {
 })
 
 const showPublishButton = computed(() => {
-  return isManager.value && props.template.state === TemplateState.approved
+  return (
+    isManager.value &&
+    props.template.state === TemplateState.approved &&
+    props.template.template_type === TemplateType.frameContract
+  )
 })
 
 const archive = async () => {
@@ -80,14 +85,8 @@ const publish = async () => {
   }
 }
 
-const exportPdf = async () => {
-  const blob = await contractTemplateService.exportPdf(props.template.did)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `template-${props.template.did}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+const exportPdf = () => {
+  alert('not implemented yet')
 }
 </script>
 

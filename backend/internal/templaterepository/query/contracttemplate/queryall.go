@@ -24,7 +24,7 @@ import (
 
 type GetAllMetadataQry struct {
 	RetrievedBy string
-	Username    string
+	HolderDID   string
 	Pagination  datatype.Pagination
 	UserRoles   userrole.UserRoles
 }
@@ -98,7 +98,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	evt := templateevents.RetrieveAllEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
-		Username:    query.Username,
+		HolderDID:   query.HolderDID,
 		UserRoles:   query.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

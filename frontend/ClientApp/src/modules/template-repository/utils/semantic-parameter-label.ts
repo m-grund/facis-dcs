@@ -1,4 +1,7 @@
-import type { SemanticConditionParameter, SemanticParameterType } from '@/modules/template-repository/models/contract-template'
+import type {
+  SemanticConditionParameter,
+  SemanticParameterType,
+} from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from './ontology-domain-fields'
 
 const ontologyLabelByPath = new Map(ONTOLOGY_DOMAIN_FIELDS.map((field) => [field.semanticPath, field.label]))

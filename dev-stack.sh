@@ -21,7 +21,7 @@ echo "=== Setting up dev environment ==="
 # Setup Helm
 echo "Updating Helm dependencies and deploying to Kubernetes..."
 helm dependency update "$HELM_CHART_PATH"
-helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
+helm install "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
 
 echo "Waiting for Federated Catalogue to become ready..."
 kubectl wait --for=condition=ready pod \

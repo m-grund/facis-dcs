@@ -14,7 +14,7 @@ type PresentationContext struct {
 // VerifiedLoginClaims holds subject and roles extracted from a verified VP.
 type VerifiedLoginClaims struct {
 	SubjectDID     string
-	OrganizationID string
+	ParticipantDID string
 	Roles          []string
 	RawClaims      json.RawMessage
 }

@@ -61,8 +61,8 @@ func (c *Client) AcceptConsent(ctx context.Context, challenge, organization stri
 	}
 
 	rolesToGrant := rolesFromConsentContext(consentReq.Context, roles)
-	org := organizationFromConsentContext(consentReq.Context, organization)
-	claims := tokenSessionClaims(rolesToGrant, org)
+	iss := issuerFromConsentContext(consentReq.Context, organization)
+	claims := tokenSessionClaims(rolesToGrant, iss)
 	consentBody := consentAcceptReq{
 		GrantScope:               consentReq.RequestedScope,
 		GrantAccessTokenAudience: consentReq.RequestedAccessTokenAudience,
@@ -79,7 +79,7 @@ func (c *Client) AcceptConsent(ctx context.Context, challenge, organization stri
 	if consentOut.RedirectTo == "" {
 		return "", fmt.Errorf("hydra consent accept returned empty redirect")
 	}
-	return c.ResolveRedirectChain(ctx, consentOut.RedirectTo, org, roles)
+	return c.ResolveRedirectChain(ctx, consentOut.RedirectTo, iss, roles)
 }
 
 // ResolveRedirectChain accepts nested Hydra login/consent UI redirects via the admin API until
@@ -110,11 +110,11 @@ func (c *Client) ResolveRedirectChain(ctx context.Context, redirectTo, organizat
 	return "", fmt.Errorf("hydra redirect chain: exceeded %d steps", maxSteps)
 }
 
-func organizationFromConsentContext(ctx map[string]any, fallback string) string {
+func issuerFromConsentContext(ctx map[string]any, fallback string) string {
 	if ctx == nil {
 		return strings.TrimSpace(fallback)
 	}
-	if raw, ok := ctx["organization"].(string); ok && strings.TrimSpace(raw) != "" {
+	if raw, ok := ctx["iss"].(string); ok && strings.TrimSpace(raw) != "" {
 		return strings.TrimSpace(raw)
 	}
 	return strings.TrimSpace(fallback)
@@ -151,8 +151,8 @@ func (c *Client) AcceptLoginAndConsent(ctx context.Context, challenge, subject, 
 		"roles":  roles,
 		"source": "openid4vp",
 	}
-	if org := strings.TrimSpace(organization); org != "" {
-		loginCtx["organization"] = org
+	if iss := strings.TrimSpace(organization); iss != "" {
+		loginCtx["iss"] = iss
 	}
 	loginReq := loginAcceptReq{
 		Subject:     subject,
@@ -246,12 +246,12 @@ func (c *Client) doJSON(ctx context.Context, method, path string, q url.Values, 
 }
 
 // tokenSessionClaims maps verified PoA claims into Hydra session token claims.
-func tokenSessionClaims(roles []string, organization string) map[string]any {
+func tokenSessionClaims(roles []string, iss string) map[string]any {
 	claims := map[string]any{
 		"roles": roles,
 	}
-	if org := strings.TrimSpace(organization); org != "" {
-		claims["organization"] = org
+	if iss := strings.TrimSpace(iss); iss != "" {
+		claims["iss"] = iss
 	}
 	return claims
 }

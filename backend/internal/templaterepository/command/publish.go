@@ -26,7 +26,7 @@ type PublishCmd struct {
 	DID           string
 	UpdatedAt     time.Time
 	PublishedBy   string
-	Username      string
+	HolderDID     string
 	ParticipantID string
 	UserRoles     userrole.UserRoles
 }
@@ -52,7 +52,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 			}
 		}(tx)
 
-		processData, err = h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+		processData, err = h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 		if err != nil {
 			return fmt.Errorf("could not read process data: %w", err)
 		}
@@ -90,7 +90,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		}
 	}(tx)
 
-	processData, err = h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err = h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -114,7 +114,7 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		DocumentNumber: processData.DocumentNumber,
 		Version:        processData.Version,
 		PublishedBy:    cmd.PublishedBy,
-		Username:       cmd.Username,
+		HolderDID:      cmd.HolderDID,
 		OccurredAt:     time.Now().UTC(),
 		UserRoles:      cmd.UserRoles,
 	}

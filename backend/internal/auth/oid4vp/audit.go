@@ -7,7 +7,7 @@ type PresentationAuditEvent struct {
 	PresentationState string
 	Success           bool
 	SubjectDID        string
-	OrganizationID    string
+	ParticipantDID    string
 	Roles             []string
 	ErrorMessage      string
 }

@@ -177,6 +177,7 @@ func ontologyStatementsFromConfiguredFile() []string {
 	return nil
 }
 
+//nolint:unused
 func statementLeaf(statementField string) string {
 	_, leaf, ok := splitStatementField(statementField)
 	if !ok {
@@ -535,6 +536,7 @@ func ontologyNumber(statement string, predicate string) *float64 {
 	return nil
 }
 
+//nolint:unused
 func ontologyBool(statement string, predicate string) bool {
 	for _, line := range strings.Split(statement, "\n") {
 		fields := strings.Fields(strings.TrimSpace(line))

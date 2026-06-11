@@ -1,11 +1,12 @@
 package validation
 
 import (
-	"digital-contracting-service/internal/base/datatype"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"digital-contracting-service/internal/base/datatype"
 )
 
 const templateProvenancePolicySetID = "facis.dcs.template.approval-provenance"

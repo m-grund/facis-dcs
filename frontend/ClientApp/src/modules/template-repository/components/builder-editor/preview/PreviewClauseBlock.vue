@@ -22,7 +22,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SemanticCondition, SemanticParameterType, SemanticValueConstraint } from '@template-repository/models/contract-template'
+import type {
+  SemanticCondition,
+  SemanticParameterType,
+  SemanticValueConstraint,
+} from '@template-repository/models/contract-template'
 import {
   parseSegments,
   isText,
@@ -49,16 +53,16 @@ const props = defineProps<{
 type PreviewSegment =
   | { type: 'text'; value: string }
   | {
-    type: 'param'
-    conditionId: string
-    parameterName: string
-    paramType: SemanticParameterType
-    label: string
-    value?: string | number | boolean
-    valueConstraint?: SemanticValueConstraint
-    isInvalid?: boolean
-    invalidTip?: string
-  }
+      type: 'param'
+      conditionId: string
+      parameterName: string
+      paramType: SemanticParameterType
+      label: string
+      value?: string | number | boolean
+      valueConstraint?: SemanticValueConstraint
+      isInvalid?: boolean
+      invalidTip?: string
+    }
   | { type: 'newline' }
 
 const previewNewlineSpanClass = PREVIEW_NEWLINE_SPAN_CLASS

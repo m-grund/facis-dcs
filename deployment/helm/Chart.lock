@@ -45,4 +45,4 @@ dependencies:
   repository: https://helm.releases.hashicorp.com
   version: 0.27.0
 digest: sha256:5a0ce1e31a44b6a0c6e6fd03d2e1b50e1711f50916bb01f9cd41d4ac8d19b3ee
-generated: "2026-06-05T20:12:01.932449152+02:00"
+generated: "2026-06-10T10:04:21.347257716+02:00"

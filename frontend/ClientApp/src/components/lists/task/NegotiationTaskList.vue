@@ -91,7 +91,7 @@ onUnmounted(() => stateFilterStore.reset())
         <div class="list-col-grow card border-base-content/10 bg-base-100 card-border hover:bg-base-300">
           <div class="card-body">
             <h2 class="card-title flex-wrap justify-between">
-              <div>Negotiation Task for Contract: {{ getContractName(task) }}</div>
+              <div>Contract Name: {{ getContractName(task) }}</div>
               <div class="flex-1"></div>
               <div class="badge badge-secondary">{{ task.state }}</div>
             </h2>

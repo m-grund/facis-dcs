@@ -1,23 +1,23 @@
-import type {
-  DocumentBlock,
-  DocumentOutline,
-  MetaData,
-  PolicyReference,
-  SchemaReferenceSet,
-  SemanticCondition,
-  ValidationProfile,
-} from '@/modules/template-repository/models/contract-template'
 import type { TemplateDataVersion } from '@/modules/template-repository/models/template-draft-store'
-import type {
-  PlaceholderBinding,
-  SemanticProfile,
-  SemanticRule,
-  SLAAgreement,
-  TemplateVariable,
-} from '@/models/semantic/facis-dcs-semantic'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
 import type { ContractTemplateResponsible } from './contract-template-responsible'
+import type {
+  SchemaReferenceSet,
+  PolicyReference,
+  ValidationProfile,
+  DocumentOutline,
+  DocumentBlock,
+  MetaData,
+  SemanticCondition,
+} from '@/modules/template-repository/models/contract-template'
+import type {
+  SemanticProfile,
+  TemplateVariable,
+  PlaceholderBinding,
+  SemanticRule,
+  SLAAgreement,
+} from './semantic/facis-dcs-semantic'
 
 export interface ContractTemplate {
   did: string

@@ -24,7 +24,7 @@ type RejectNegotiationCmd struct {
 	DID             string
 	RejectedBy      string
 	RejectionReason *string
-	Username        string
+	HolderDID       string
 	UserRoles       userrole.UserRoles
 }
 
@@ -47,7 +47,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
@@ -76,7 +76,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		RejectedBy:      cmd.RejectedBy,
 		RejectionReason: cmd.RejectionReason,
 		OccurredAt:      time.Now().UTC(),
-		Username:        cmd.Username,
+		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)

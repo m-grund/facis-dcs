@@ -14,7 +14,7 @@ type RetrieveByIDEvent struct {
 	DID         string             `json:"did"`
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
-	Username    string             `json:"username"`
+	HolderDID   string             `json:"holder_did"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -32,7 +32,7 @@ func (e RetrieveByIDEvent) GetDID() string {
 type RetrieveAllEvent struct {
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
-	Username    string             `json:"username"`
+	HolderDID   string             `json:"holder_did"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -50,7 +50,7 @@ func (e RetrieveAllEvent) GetDID() string {
 type SearchEvent struct {
 	RetrievedBy string             `json:"retrieved_by"`
 	OccurredAt  time.Time          `json:"occurred_at"`
-	Username    string             `json:"username"`
+	HolderDID   string             `json:"holder_did"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -70,7 +70,7 @@ type ValidateEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	ValidatedBy     string             `json:"validated_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -90,7 +90,7 @@ type VerifyEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	VerifiedBy      string             `json:"verified_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -110,7 +110,7 @@ type AuditEvt struct {
 	AuditedBy     string                      `json:"audited_by"`
 	OccurredAt    time.Time                   `json:"occurred_at"`
 	ComponentType componenttype.ComponentType `json:"component_type"`
-	Username      string                      `json:"username"`
+	HolderDID     string                      `json:"holder_did"`
 	UserRoles     userrole.UserRoles          `json:"user_roles"`
 }
 
@@ -130,7 +130,7 @@ type RevokeEvent struct {
 	ContractVersion int                `json:"contract_version,omitempty"`
 	RevokedBy       string             `json:"revoked_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -144,33 +144,13 @@ func (e RevokeEvent) GetDID() string {
 	return e.DID
 }
 
-// ApplyEvent is emitted when a digital signature is applied to a contract.
-type ApplyEvent struct {
-	DID             string    `json:"did"`
-	ContractVersion int       `json:"contract_version,omitempty"`
-	SignerDID       string    `json:"signer_did"`
-	CredentialType  string    `json:"credential_type"`
-	AppliedBy       string    `json:"applied_by"`
-	OccurredAt      time.Time `json:"occurred_at"`
-}
-
-// EventType implements the Event interface.
-func (e ApplyEvent) EventType() string {
-	return eventtype.Apply.String()
-}
-
-// GetDID implements the Event interface.
-func (e ApplyEvent) GetDID() string {
-	return e.DID
-}
-
-// ComplianceValidation is emitted when compliance check ist started
+// ComplianceValidationEvent is emitted when compliance check ist started
 type ComplianceValidationEvent struct {
 	DID             string             `json:"did"`
 	ContractVersion int                `json:"contract_version,omitempty"`
 	CheckedBy       string             `json:"checked_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -190,7 +170,7 @@ type SigningRequestEvent struct {
 	ContractVersion int                `json:"contract_version"`
 	RequestedBy     string             `json:"requested_by"`
 	OccurredAt      time.Time          `json:"occurred_at"`
-	Username        string             `json:"username"`
+	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
@@ -201,5 +181,26 @@ func (e SigningRequestEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e SigningRequestEvent) GetDID() string {
+	return e.DID
+}
+
+// ApplyEvent is emitted when contract is reviewed.
+type ApplyEvent struct {
+	DID             string             `json:"did"`
+	ContractVersion int                `json:"contract_version"`
+	AppliedBy       string             `json:"applied_by"`
+	OccurredAt      time.Time          `json:"occurred_at"`
+	HolderDID       string             `json:"holder_did"`
+	UserRoles       userrole.UserRoles `json:"user_roles"`
+	CredentialType  string             `json:"credential_type"`
+}
+
+// EventType implements the Event interface.
+func (e ApplyEvent) EventType() string {
+	return eventtype.Applied.String()
+}
+
+// GetDID implements the Event interface.
+func (e ApplyEvent) GetDID() string {
 	return e.DID
 }

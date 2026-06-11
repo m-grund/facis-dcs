@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -78,9 +79,6 @@ func (p *OCMWStatusListPublisher) statusListURI() string {
 	return fmt.Sprintf("%s/v1/tenants/%s/status/%d", p.ServiceURL, p.TenantID, defaultListID)
 }
 
-// deriveIndex returns a stable bitstring index for contractID.
-// Uses the first 4 bytes of SHA-256(contractID) modulo listSize so the
-// index is deterministic without requiring a per-contract allocation table.
 // StatusListIndex returns the bitstring position for contractID.
 // Uses the first 4 bytes of SHA-256(contractID) modulo listSize so the
 // index is deterministic without requiring a per-contract allocation table.
@@ -116,7 +114,12 @@ func (p *OCMWStatusListPublisher) setRevoked(ctx context.Context, contractID str
 	if err != nil {
 		return fmt.Errorf("POST %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body:", err)
+		}
+	}(resp.Body)
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
@@ -167,7 +170,12 @@ func QueryStatusListStatus(ctx context.Context, client *http.Client, statusListC
 	if err != nil {
 		return "", fmt.Errorf("GET %s: %w", statusListCredential, err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("could not close response body:", err)
+		}
+	}(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("status list service returned %d", resp.StatusCode)
 	}
@@ -199,7 +207,12 @@ func QueryStatusListStatus(ctx context.Context, client *http.Client, statusListC
 	if err != nil {
 		return "", fmt.Errorf("create zlib reader for bitstring: %w", err)
 	}
-	defer r.Close()
+	defer func(r io.ReadCloser) {
+		err := r.Close()
+		if err != nil {
+			log.Printf("close zlib reader for bitstring: %v", err)
+		}
+	}(r)
 	bitstring, err := io.ReadAll(r)
 	if err != nil {
 		return "", fmt.Errorf("decompress bitstring: %w", err)

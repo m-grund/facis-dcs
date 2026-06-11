@@ -25,7 +25,7 @@ type RejectCmd struct {
 	UpdatedAt  time.Time
 	RejectedBy string
 	Reason     string
-	Username   string
+	HolderDID  string
 	UserRoles  userrole.UserRoles
 }
 
@@ -48,7 +48,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -87,7 +87,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		RejectedBy:     cmd.RejectedBy,
 		Reason:         cmd.Reason,
 		OccurredAt:     time.Now().UTC(),
-		Username:       cmd.Username,
+		HolderDID:      cmd.HolderDID,
 		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

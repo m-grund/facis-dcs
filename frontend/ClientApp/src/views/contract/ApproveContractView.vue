@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
-import NegotiationList from '@/components/lists/contract/negotiation/NegotiationList.vue'
-import { useScrollStore } from '@/core/store/scroll'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
-import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -39,7 +36,6 @@ const { hasConditionParameterForValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 const contractContentValuesStore = useContractContentValuesStore()
-const scrollStore = useScrollStore()
 
 const confirmationDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-dialog')
 
@@ -207,25 +203,6 @@ function applyContractDataToDraft(contractData?: unknown) {
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null
 }
-
-const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, selectedContract: Contract | null) => {
-  if (!contract.value || !selectedContract) return
-  compareChangesData.value = !!negotiation
-    ? {
-        ...contract.value,
-        name: negotiation.change_request.name
-          ? `${contract.value.name} -> ${negotiation.change_request.name}`
-          : contract.value.name,
-        description: negotiation.change_request.description
-          ? `${contract.value.description} -> ${negotiation.change_request.description}`
-          : contract.value.description,
-        contract_data: contract.value.contract_data, // TODO
-      }
-    : null
-  if (compareChangesData.value) {
-    scrollStore.scrollToTop()
-  }
-}
 </script>
 
 <template>
@@ -293,15 +270,6 @@ const handleSelectedNegotiation = (negotiation: ContractNegotiation | null, sele
             </div>
           </div>
         </div>
-      </div>
-      <div class="divider"></div>
-      <div v-if="(contract.negotiations?.length ?? -1) > 0" class="mx-auto max-w-4xl p-6">
-        <div class="text-lg">Active negotiations</div>
-        <NegotiationList
-          :contract="contract"
-          disabled
-          @selected-negotiation="(negotiation) => handleSelectedNegotiation(negotiation, contract)"
-        />
       </div>
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">

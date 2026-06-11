@@ -8,11 +8,10 @@ package verify
 import (
 	"bytes"
 	"crypto/sha256"
-	"crypto/x509"
-	"digital-contracting-service/internal/pdfgeneration/c2pa"
 	"encoding/hex"
 	"fmt"
-	"time"
+
+	"digital-contracting-service/internal/pdfgeneration/c2pa"
 )
 
 // Result is returned by VerifyContract and VerifyTemplate.
@@ -38,12 +37,6 @@ type Result struct {
 	// C2PASignatureValid is true when the COSE_Sign1 signature in the manifest is
 	// cryptographically valid (DCS-OR-C2PA-006).
 	C2PASignatureValid bool `json:"c2pa_signature_valid"`
-	// TSATimestampValid is true when the RFC 3161 sigTst token in the manifest was
-	// parsed, verified, and the message imprint matched (DCS-OR-C2PA-009).
-	TSATimestampValid bool `json:"tsa_timestamp_valid"`
-	// TrustedTime is the genTime from the verified RFC 3161 token (DCS-OR-C2PA-009).
-	// Zero value when TSATimestampValid is false.
-	TrustedTime time.Time `json:"trusted_time,omitempty"`
 	// VCProofValid is true when the embedded W3C VC Ed25519Signature2020 proof is
 	// cryptographically valid (DCS-OR-C2PA-006).
 	VCProofValid bool `json:"vc_proof_valid"`
@@ -86,20 +79,6 @@ type ContractVerifier struct {
 	// statusListIndex parsed from the embedded VC to query live revocation state
 	// (DCS-OR-C2PA-006). Returns "active" or "revoked".
 	CheckStatusFn func(statusListCredential string, index uint32) (string, error)
-
-	// TrustedSignerRoots, when non-nil, is the set of trusted root CAs for COSE
-	// signer certificate chain validation (DCS-OR-C2PA-006). nil = skip (dev only).
-	TrustedSignerRoots *x509.CertPool
-
-	// TrustedTSARoots, when non-nil, is the set of trusted root CAs for the RFC 3161
-	// TSA certificate chain (DCS-OR-C2PA-009). nil = skip (dev only).
-	TrustedTSARoots *x509.CertPool
-
-	// VCProofVerifier, when non-nil, performs actual cryptographic verification of
-	// the W3C VC proof (DCS-OR-C2PA-006). Use c2pa.NewEd25519VCProofVerifier for
-	// production deployments. When nil, falls back to a structural format check
-	// (dev mode only — does not verify the signature).
-	VCProofVerifier func(vcBytes []byte) (bool, error)
 }
 
 // TemplateVerifier holds the dependencies for template re-rendering.
@@ -111,31 +90,17 @@ type TemplateVerifier struct {
 	FetchManifestFn func() ([]byte, error)
 	// CheckStatusFn mirrors ContractVerifier.CheckStatusFn for templates (DCS-OR-C2PA-006).
 	CheckStatusFn func(statusListCredential string, index uint32) (string, error)
-	// TrustedSignerRoots mirrors ContractVerifier.TrustedSignerRoots for templates.
-	TrustedSignerRoots *x509.CertPool
-	// TrustedTSARoots mirrors ContractVerifier.TrustedTSARoots for templates.
-	TrustedTSARoots *x509.CertPool
-	// VCProofVerifier mirrors ContractVerifier.VCProofVerifier for templates.
-	VCProofVerifier func(vcBytes []byte) (bool, error)
 }
 
 // Verify extracts the embedded JSON-LD from pdfBytes, re-renders the base PDF,
 // and compares SHA-256 hashes. Also verifies C2PA signatures and extracts the status list URI from the VC.
 func (v *ContractVerifier) Verify(pdfBytes []byte) (*Result, error) {
-	opts := c2pa.VerifyOptions{
-		TrustedSignerRoots: v.TrustedSignerRoots,
-		TrustedTSARoots:    v.TrustedTSARoots,
-	}
-	return verify(pdfBytes, v.BuildFn, v.FetchFn, v.FetchManifestFn, v.CheckStatusFn, v.VCProofVerifier, opts)
+	return verify(pdfBytes, v.BuildFn, v.FetchFn, v.FetchManifestFn, v.CheckStatusFn)
 }
 
 // Verify is the template counterpart.
 func (v *TemplateVerifier) Verify(pdfBytes []byte) (*Result, error) {
-	opts := c2pa.VerifyOptions{
-		TrustedSignerRoots: v.TrustedSignerRoots,
-		TrustedTSARoots:    v.TrustedTSARoots,
-	}
-	return verify(pdfBytes, v.BuildFn, v.FetchFn, v.FetchManifestFn, v.CheckStatusFn, v.VCProofVerifier, opts)
+	return verify(pdfBytes, v.BuildFn, v.FetchFn, v.FetchManifestFn, v.CheckStatusFn)
 }
 
 func verify(
@@ -144,8 +109,6 @@ func verify(
 	fetchFn func() ([]byte, error),
 	fetchManifestFn func() ([]byte, error),
 	checkStatusFn func(statusListCredential string, index uint32) (string, error),
-	vcProofVerifier func(vcBytes []byte) (bool, error),
-	opts c2pa.VerifyOptions,
 ) (*Result, error) {
 	manifestSource := "embedded"
 	remoteManifestBytes := []byte(nil)
@@ -182,53 +145,33 @@ func verify(
 		}
 	}
 
-	// Extract and verify C2PA manifest (DCS-OR-C2PA-006, DCS-OR-C2PA-009).
-	// c2paManifestFound is set whenever manifest bytes are extracted, regardless of
-	// signature validity, so callers can distinguish "manifest present but untrusted"
-	// from "no manifest" (the distinction matters for banner rendering per DCS-OR-C2PA-006).
+	// Extract and verify C2PA manifest (DCS-OR-C2PA-006).
 	c2paManifestFound, c2paSignatureValid := false, false
-	tsaTimestampValid := false
-	var trustedTime time.Time
 	lifecycleStatus := ""
-	mvr, manifestBytes, manifestErr := c2pa.ExtractAndVerifyManifestFull(verifyPDFBytes, opts)
-	if len(manifestBytes) > 0 {
-		c2paManifestFound = true
-	}
-	if manifestErr == nil && len(manifestBytes) > 0 {
-		c2paSignatureValid = mvr.SignatureValid
-		tsaTimestampValid = mvr.Timestamp.Valid
-		if mvr.Timestamp.Valid {
-			trustedTime = mvr.Timestamp.TrustedTime
+	if isValid, manifestBytes, err := c2pa.ExtractAndVerifyManifest(verifyPDFBytes); err == nil {
+		c2paManifestFound = isValid
+		c2paSignatureValid = isValid
+		if len(manifestBytes) > 0 {
+			lifecycleStatus = c2pa.ExtractLifecycleStatus(manifestBytes)
 		}
-		lifecycleStatus = c2pa.ExtractLifecycleStatus(manifestBytes)
 	}
 	if !c2paManifestFound && len(remoteManifestBytes) > 0 {
-		c2paManifestFound = true
-		if rmvr, err := c2pa.VerifyManifestBytesFull(remoteManifestBytes, opts); err == nil {
-			c2paSignatureValid = rmvr.SignatureValid
-			if !tsaTimestampValid && rmvr.Timestamp.Valid {
-				tsaTimestampValid = true
-				trustedTime = rmvr.Timestamp.TrustedTime
-			}
+		if isValid, err := c2pa.VerifyManifestBytes(remoteManifestBytes); err == nil {
+			c2paManifestFound = isValid
+			c2paSignatureValid = isValid
 			lifecycleStatus = c2pa.ExtractLifecycleStatus(remoteManifestBytes)
 		}
 	}
 
 	// Extract and verify W3C VC proof (DCS-OR-C2PA-006).
-	// When vcProofVerifier is set, it performs actual cryptographic verification.
-	// When nil (dev mode), fall back to the structural proof check.
 	vcProofValid := false
-	if _, vcBytes, err := c2pa.ExtractVC(verifyPDFBytes); err == nil && len(vcBytes) > 0 {
-		if vcProofVerifier != nil {
-			vcProofValid, _ = vcProofVerifier(vcBytes)
-		} else {
-			vcProofValid, _ = c2pa.VerifyVCProofStructural(vcBytes)
-		}
+	if isValid, _, err := c2pa.ExtractAndVerifyVC(verifyPDFBytes); err == nil {
+		vcProofValid = isValid
 	}
 
 	// Verify detached PDF signatures (PAdES/PKCS#7) when present.
 	pdfSigCount, pdfSigValid := 0, false
-	if count, valid, sigErr := VerifyPDFSignatures(verifyPDFBytes, opts.TrustedSignerRoots); sigErr == nil {
+	if count, valid, sigErr := VerifyPDFSignatures(verifyPDFBytes); sigErr == nil {
 		pdfSigCount = count
 		pdfSigValid = valid
 	}
@@ -261,7 +204,7 @@ func verify(
 	statusListStatus := ""
 	if vcProofValid {
 		// Extract VC fields from the same byte source used for provenance checks.
-		if _, vcBytes, vcErr := c2pa.ExtractVC(verifyPDFBytes); vcErr == nil && len(vcBytes) > 0 {
+		if vcIsValid, vcBytes, vcErr := c2pa.ExtractAndVerifyVC(verifyPDFBytes); vcIsValid && vcErr == nil {
 			statusListURI = c2pa.ExtractStatusListURI(vcBytes)
 			if checkStatusFn != nil {
 				if cred, idx, ok := c2pa.ExtractCredentialStatusFields(vcBytes); ok {
@@ -283,8 +226,6 @@ func verify(
 		ManifestSource:     manifestSource,
 		C2PAManifestFound:  c2paManifestFound,
 		C2PASignatureValid: c2paSignatureValid,
-		TSATimestampValid:  tsaTimestampValid,
-		TrustedTime:        trustedTime,
 		VCProofValid:       vcProofValid,
 		StatusListURI:      statusListURI,
 		LifecycleStatus:    lifecycleStatus,

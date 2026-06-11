@@ -110,6 +110,10 @@ spec:
               value: {{ include "digital-contracting-service.apiPath" . | quote }}
             - name: DCS_UI_PATH
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
+            {{- if .Values.oid4vp.trust.enabled }}
+            - name: OID4VP_TRUST_DATA_PATH
+              value: {{ printf "%s/trust.json" .Values.oid4vp.trust.mountPath | quote }}
+            {{- end }}
             # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
             - name: CRYPTO_PROVIDER_URL
               {{- if .Values.signing.cryptoProviderURLSecretRef.name }}
@@ -157,10 +161,6 @@ spec:
               {{- end }}
             - name: IPFS_MFS_BASE_URL
               value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
-            {{- if .Values.oid4vp.trust.enabled }}
-            - name: OID4VP_TRUST_DATA_PATH
-              value: {{ printf "%s/trust.json" .Values.oid4vp.trust.mountPath | quote }}
-            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -180,9 +180,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumeMounts }}
           {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
           {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
-          {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumeMounts (and $certChainEnabled $certSecretName) }}
+          {{- if or .Values.customCA.enabled .Values.volumeMounts (and $certChainEnabled $certSecretName) }}
           volumeMounts:
           {{- if .Values.customCA.enabled }}
             - name: custom-ca-certs
@@ -203,14 +204,21 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
+          {{- end }}
+      {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumes }}
       {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
       {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
-      {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
+      {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
           configMap:
             name: {{ .Values.customCA.configMapName }}
+      {{- end }}
+      {{- if .Values.oid4vp.trust.enabled }}
+        - name: oid4vp-trust
+          configMap:
+            name: {{ include "digital-contracting-service.oid4vpTrustConfigMapName" . }}
       {{- end }}
       {{- if and $certChainEnabled $certSecretName }}
         - name: signer-cert-chain
@@ -220,13 +228,9 @@ spec:
               - key: {{ include "digital-contracting-service.signingCertChainSecretKey" . | quote }}
                 path: {{ .Values.signing.certChain.fileName | quote }}
       {{- end }}
-      {{- if .Values.oid4vp.trust.enabled }}
-        - name: oid4vp-trust
-          configMap:
-            name: {{ include "digital-contracting-service.oid4vpTrustConfigMapName" . }}
-      {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}

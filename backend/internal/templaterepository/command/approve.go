@@ -24,7 +24,7 @@ type ApproveCmd struct {
 	UpdatedAt     time.Time
 	ApprovedBy    string
 	DecisionNotes []string
-	Username      string
+	HolderDID     string
 	UserRoles     userrole.UserRoles
 }
 
@@ -47,7 +47,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		}
 	}(tx)
 
-	processData, err := h.CTRepo.ReadProcessData(ctx, tx, cmd.DID)
+	processData, err := h.CTRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -86,7 +86,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		ApprovedBy:     cmd.ApprovedBy,
 		DecisionNotes:  cmd.DecisionNotes,
 		OccurredAt:     time.Now().UTC(),
-		Username:       cmd.Username,
+		HolderDID:      cmd.HolderDID,
 		UserRoles:      cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractTemplateRepo)

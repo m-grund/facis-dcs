@@ -232,6 +232,19 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/audit',
+    name: ROUTES.AUDIT.LIST,
+    component: AuditView,
+    meta: {
+      name: 'Audit',
+      icon: ClipboardDocumentListIcon,
+      requiresAuth: true,
+      title: 'DCS - Audit',
+      order: 5,
+      roles: ['AUDITOR'],
+    },
+  },
+  {
     path: '/contracts',
     name: ROUTES.CONTRACTS.LIST,
     component: ContractListView,
