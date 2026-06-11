@@ -200,7 +200,7 @@ func (r *PostgresContractRepo) FetchContractPDFBytes(ctx context.Context, tx *sq
 	return result.Data, nil
 }
 
-// rebuildContractPDFFromJSONLD re-generates the base PDF from embedded JSON-LD bytes,
+// RebuildContractPDFFromJSONLD re-generates the base PDF from embedded JSON-LD bytes,
 // fetching the contract metadata required for rendering.
 func (r *PostgresContractRepo) RebuildContractPDFFromJSONLD(ctx context.Context, tx *sqlx.Tx, did string, jsonld []byte) ([]byte, error) {
 
@@ -262,7 +262,7 @@ func (r *PostgresContractRepo) ContractIPFSFetchFn(ctx context.Context, tx *sqlx
 	}
 }
 
-// contractManifestIPFSFetchFn returns a verifier FetchManifestFn that retrieves
+// ContractManifestIPFSFetchFn returns a verifier FetchManifestFn that retrieves
 // the standalone remote manifest bytes for the given contract.
 func (r *PostgresContractRepo) ContractManifestIPFSFetchFn(ctx context.Context, tx *sqlx.Tx, did string) func() ([]byte, error) {
 	return func() ([]byte, error) {

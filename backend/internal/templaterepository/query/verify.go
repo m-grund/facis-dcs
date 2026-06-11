@@ -73,7 +73,7 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyQry) (*VerifyResult, er
 	if h.FCClient != nil {
 		findings, err := h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate)
 		if err != nil {
-
+			return nil, err
 		}
 		return &VerifyResult{
 			Findings: findings,
