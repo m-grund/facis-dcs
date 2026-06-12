@@ -171,11 +171,11 @@ func main() {
 
 	aRepo := pq.PostgresAuditTrailRepository{}
 
-	tsaUrl := os.Getenv("TSA_URL")
-	if tsaUrl == "" {
+	tsaURL := os.Getenv("TSA_URL")
+	if tsaURL == "" {
 		log.Fatalf(ctx, nil, "TSA_URL is not set")
 	}
-	tsaClient, err := tsa.NewClient(tsaUrl)
+	tsaClient, err := tsa.NewClient(tsaURL)
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to initialize TSA client")
 	}
