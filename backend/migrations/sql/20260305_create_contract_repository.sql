@@ -361,7 +361,7 @@ SELECT
     c.name,
     c.description,
     c.search_vector,
-    c.responsible_persons
+    c.responsible
 FROM contracts_effective c
          INNER JOIN contract_archive_entries a
                     ON a.did = c.did

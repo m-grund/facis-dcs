@@ -89,6 +89,16 @@ affinity: {}
 extraEnv: []
 extraEnvFrom: []
 
+# Archive notary / ORCE integration
+archiveNotary:
+  baseURL: ""
+  notaryPath: "/archive/notary"
+  auditLogPath: "/archive-audit-events.jsonl"
+  auditLogBearerToken: ""
+  auditLogBearerTokenSecretRef:
+    name: ""
+    key: "ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN"
+
 # Route and path configuration
 route:
   basePath: "/digital-contracting-service"

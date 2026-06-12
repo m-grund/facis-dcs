@@ -220,6 +220,11 @@ orce:
     type: NodePort
     nodePort: 30180
 
+archiveNotary:
+  notaryPath: "/archive/notary"
+  auditLogPath: "/archive-audit-events.jsonl"
+  auditLogBearerToken: "dev-archive-audit-token"
+
 mongodb:
   enabled: true
   persistence:

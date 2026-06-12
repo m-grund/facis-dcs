@@ -142,18 +142,7 @@ const executeAudit = async () => {
   report.value = null
   hasExecutedAudit.value = true
   try {
-    const request =
-      selectedAuditMode.value === 'static_contract'
-        ? {
-            scope: selectedScope.value,
-            audit_mode: selectedAuditMode.value,
-            contract_document: parseJSONInput(contractDocumentText.value, 'Contract document'),
-            contract_did: contractDid.value.trim() || undefined,
-            contract_version: contractVersion.value.trim() || undefined,
-            policy_version: policyVersion.value.trim() || undefined,
-          }
-        : { scope: selectedScope.value, audit_mode: selectedAuditMode.value }
-    findings.value = await auditingService.audit(request)
+    findings.value = await auditingService.audit({ scope: selectedScope.value })
     selectedFindingId.value = null
     activeAuditTab.value = checkFindings.value.length > 0 ? 'checks' : 'timeline'
   } catch (err) {
@@ -451,23 +440,10 @@ function formatDateTime(value?: string): string {
           <select
             v-model="selectedScope"
             class="select-bordered select rounded-box"
-            :disabled="auditLoading || reportLoading || selectedAuditMode === 'static_contract'"
+            :disabled="auditLoading || reportLoading"
           >
             <option v-for="scope in scopeOptions" :key="scope.value" :value="scope.value">
               {{ scope.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="form-control w-full sm:w-48">
-          <span class="label-text mb-1">Mode</span>
-          <select
-            v-model="selectedAuditMode"
-            class="select-bordered select rounded-box"
-            :disabled="auditLoading || reportLoading"
-          >
-            <option v-for="mode in auditModeOptions" :key="mode.value" :value="mode.value">
-              {{ mode.label }}
             </option>
           </select>
         </label>
@@ -489,46 +465,6 @@ function formatDateTime(value?: string): string {
           <span v-if="reportLoading" class="loading loading-sm loading-spinner"></span>
           <span v-else>Generate Report</span>
         </button>
-      </div>
-    </div>
-
-    <div v-if="selectedAuditMode === 'static_contract'" class="space-y-3">
-      <div class="space-y-3">
-        <div class="grid gap-3 sm:grid-cols-3">
-          <label class="form-control">
-            <span class="label-text mb-1">Contract DID</span>
-            <input
-              v-model="contractDid"
-              class="input-bordered input rounded-box"
-              :disabled="auditLoading || reportLoading"
-            />
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">Contract Version</span>
-            <input
-              v-model="contractVersion"
-              class="input-bordered input rounded-box"
-              :disabled="auditLoading || reportLoading"
-            />
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">Policy Version</span>
-            <input
-              v-model="policyVersion"
-              class="input-bordered input rounded-box"
-              :disabled="auditLoading || reportLoading"
-            />
-          </label>
-        </div>
-        <label class="form-control">
-          <span class="label-text mb-1">Contract JSON-LD</span>
-          <textarea
-            v-model="contractDocumentText"
-            class="textarea-bordered textarea min-h-96 rounded-box font-mono text-xs leading-5"
-            spellcheck="false"
-            :disabled="auditLoading || reportLoading"
-          ></textarea>
-        </label>
       </div>
     </div>
 

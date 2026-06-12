@@ -166,19 +166,19 @@ func toMetadataItems(contractsMetadata []db.ContractMetadata) ([]MetadataItem, e
 		}
 
 		metadata := MetadataItem{
-			DID:                data.DID,
-			ContractVersion:    data.ContractVersion,
-			State:              state,
-			Name:               data.Name,
-			Description:        data.Description,
-			CreatedBy:          data.CreatedBy,
-			CreatedAt:          data.CreatedAt,
-			UpdatedAt:          data.UpdatedAt,
-			StartDate:          data.StartDate,
-			ExpDate:            data.ExpDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    data.ExpNoticePeriod,
-			ResponsiblePersons: data.ResponsiblePersons,
+			DID:             data.DID,
+			ContractVersion: data.ContractVersion,
+			State:           state,
+			Name:            data.Name,
+			Description:     data.Description,
+			CreatedBy:       data.CreatedBy,
+			CreatedAt:       data.CreatedAt,
+			UpdatedAt:       data.UpdatedAt,
+			StartDate:       data.StartDate,
+			ExpDate:         data.ExpDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: data.ExpNoticePeriod,
+			Responsible:     data.Responsible,
 		}
 		contractItems = append(contractItems, metadata)
 	}

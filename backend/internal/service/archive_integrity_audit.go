@@ -249,7 +249,7 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 			"orceChainVerified":     true,
 			"storeEventId":          storeEvent.ID,
 			"notaryEventHash":       notaryEvent.EventHash,
-			"notaryPreviousHash":    stringPtrValue(notaryEvent.PreviousHash),
+			"notaryPreviousHash":    notaryEvent.PreviousHash,
 			"notaryReceivedAt":      notaryEvent.ReceivedAt,
 			"snapshotHashAlgorithm": "SHA-256",
 			"checkedAt":             now,

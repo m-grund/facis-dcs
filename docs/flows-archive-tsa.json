@@ -1,0 +1,96 @@
+[
+    {
+        "id": "f10514b54313a655",
+        "type": "tab",
+        "label": "Audit Archive",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "3e5d28c9c3814ebf",
+        "type": "http in",
+        "z": "f10514b54313a655",
+        "name": "POST /archive/notary",
+        "url": "/archive/notary",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 142.5,
+        "y": 140,
+        "wires": [
+            [
+                "9f976e196dc5b844"
+            ]
+        ]
+    },
+    {
+        "id": "9f976e196dc5b844",
+        "type": "function",
+        "z": "f10514b54313a655",
+        "name": "Build archive audit event",
+        "func": "const crypto = require(\"crypto\");\n\nconst required = [\n  \"eventType\",\n  \"did\",\n  \"contractVersion\",\n  \"archiveEntryId\",\n  \"contentHash\",\n  \"snapshotCid\",\n  \"storedBy\",\n  \"storedAt\"\n];\n\nfor (const key of required) {\n  if (!msg.payload || !msg.payload[key]) {\n    msg.statusCode = 400;\n    msg.payload = { error: `Missing field: ${key}` };\n    return msg;\n  }\n}\n\nconst previousHash = flow.get(\"archiveChainHead\") || null;\n\nconst auditPayload = {\n  eventType: msg.payload.eventType,\n  did: msg.payload.did,\n  contractVersion: msg.payload.contractVersion,\n  archiveEntryId: msg.payload.archiveEntryId,\n  contentHash: msg.payload.contentHash,\n  snapshotCid: msg.payload.snapshotCid,\n  storedBy: msg.payload.storedBy,\n  storedAt: msg.payload.storedAt,\n  receivedAt: new Date().toISOString(),\n  previousHash\n};\n\nconst canonical = JSON.stringify(auditPayload);\nconst eventHash = \"sha256:\" + crypto\n  .createHash(\"sha256\")\n  .update(canonical)\n  .digest(\"hex\");\n\nconst storedEvent = {\n  ...auditPayload,\n  eventHash\n};\n\nflow.set(\"archiveChainHead\", eventHash);\n\nmsg.payload = JSON.stringify(storedEvent) + \"\\n\";\n\nmsg.receipt = {\n  receiptType: \"ARCHIVE_NOTARY_RECEIPT\",\n  archiveEntryId: storedEvent.archiveEntryId,\n  eventHash: storedEvent.eventHash,\n  previousHash: storedEvent.previousHash,\n  receivedAt: storedEvent.receivedAt\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 517.5,
+        "y": 140,
+        "wires": [
+            [
+                "a140293e82da129a"
+            ]
+        ]
+    },
+    {
+        "id": "a140293e82da129a",
+        "type": "file",
+        "z": "f10514b54313a655",
+        "name": "Write Archive Event",
+        "filename": "/data/archive-audit-events.jsonl",
+        "filenameType": "str",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 897.5,
+        "y": 140,
+        "wires": [
+            [
+                "e1bdd77b97527da2"
+            ]
+        ]
+    },
+    {
+        "id": "004907d18c654e54",
+        "type": "http response",
+        "z": "f10514b54313a655",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1657.5,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "e1bdd77b97527da2",
+        "type": "function",
+        "z": "f10514b54313a655",
+        "name": "Return receipt",
+        "func": "msg.statusCode = 200;\nmsg.headers = {\n  \"Content-Type\": \"application/json\"\n};\nmsg.payload = msg.receipt;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1277.5,
+        "y": 140,
+        "wires": [
+            [
+                "004907d18c654e54"
+            ]
+        ]
+    }
+]

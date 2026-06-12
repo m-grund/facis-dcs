@@ -60,51 +60,6 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
 
-	if isStaticContractAudit(req) {
-		if scope != componenttype.ContractWorkflowEngine {
-			return nil, processauditandcompliance.MakeBadRequest(fmt.Errorf("static contract audits require scope %q", "contracts"))
-		}
-
-		auditStaticContentQry := qry2.GetStaticContentAuditQry{
-			DID:              req.ContractDid,
-			RetrievedBy:      middleware.GetParticipantID(ctx),
-			HolderDID:        middleware.GetHolderDID(ctx),
-			UserRoles:        middleware.GetUserRoles(ctx),
-			Policy:           req.Policy,
-			PolicyVersion:    req.PolicyVersion,
-			ContractVersion:  req.ContractVersion,
-			ContractDocument: req.ContractDocument,
-		}
-		auditStaticContentAuditor := qry2.StaticContentAuditor{}
-		entries, err := auditStaticContentAuditor.Handle(ctx, auditStaticContentQry)
-		if err != nil {
-			return nil, processauditandcompliance.MakeBadRequest(err)
-		}
-
-		result := []*processauditandcompliance.PACResourceAuditTrailEntry{}
-		for _, entry := range entries {
-			result = append(result, &processauditandcompliance.PACResourceAuditTrailEntry{
-				ID:               entry.ID,
-				Component:        entry.Component,
-				EventType:        entry.EventType,
-				EventData:        entry.EventData,
-				Did:              entry.DID,
-				CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
-				GlobalLogPredCid: entry.GlobalLogPredCID,
-				ResLogPredCid:    entry.ResLogPredCID,
-			})
-		}
-
-		return []*processauditandcompliance.PACAuditResponse{
-			{
-				Component:  componenttype.ContractWorkflowEngine.String(),
-				Did:        base.DerefString(req.ContractDid),
-				CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-				AuditTrail: result,
-			},
-		}, nil
-	}
-
 	qry := qry2.GetAuditLogQry{
 		Scope:     scope,
 		AuditedBy: middleware.GetParticipantID(ctx),
@@ -123,11 +78,9 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	contractContentEntriesByDID := make(map[string][]datatype.AuditLogEntry)
 	if scope == componenttype.ContractWorkflowEngine && s.CRepo != nil {
 		contractContentTrailQry := qry2.GetContractContentTrailQry{
-			RetrievedBy:   middleware.GetParticipantID(ctx),
-			HolderDID:     middleware.GetHolderDID(ctx),
-			UserRoles:     middleware.GetUserRoles(ctx),
-			Policy:        req.Policy,
-			PolicyVersion: req.PolicyVersion,
+			RetrievedBy: middleware.GetParticipantID(ctx),
+			HolderDID:   middleware.GetHolderDID(ctx),
+			UserRoles:   middleware.GetUserRoles(ctx),
 		}
 		contractContentTrailHandler := qry2.ContractContentTrailAuditor{
 			DB:    s.DB,
@@ -156,6 +109,15 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			return nil, processauditandcompliance.MakeInternalError(err)
 		}
 		templatePolicyEntriesByDID = result
+	}
+
+	archiveEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
+	if scope == componenttype.ContractStorageArchive && s.CRepo != nil {
+		result, err := s.auditArchiveTrailEntries(ctx)
+		if err != nil {
+			return nil, processauditandcompliance.MakeInternalError(err)
+		}
+		archiveEntriesByDID = result
 	}
 
 	result := make([]*processauditandcompliance.PACAuditResponse, 0)
@@ -242,6 +204,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			}
 			seenDIDs[did] = true
 		}
+		if scope == componenttype.ContractStorageArchive && did != "" {
+			history = append(history, archiveEntriesByDID[did]...)
+			seenDIDs[did] = true
+		}
 		if len(history) == 0 {
 			continue
 		}
@@ -313,21 +279,11 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			Component:  componenttype.ContractStorageArchive.String(),
 			Did:        did,
 			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-			AuditTrail: auditTrail,
+			AuditTrail: entries,
 		})
 	}
 
 	return result, nil
-}
-
-func isStaticContractAudit(req *processauditandcompliance.PACAuditRequest) bool {
-	if req == nil {
-		return false
-	}
-	if req.ContractDocument != nil {
-		return true
-	}
-	return req.AuditMode != nil && strings.EqualFold(strings.TrimSpace(*req.AuditMode), "static_contract")
 }
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {

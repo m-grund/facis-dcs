@@ -39,7 +39,7 @@ func (s *contractStorageArchivesrvc) Retrieve(ctx context.Context, p *contractst
 	defer cancel()
 
 	qry := contract.GetArchivedContractsQry{
-		RetrievedBy: middleware.GetUsername(ctx),
+		RetrievedBy: middleware.GetParticipantID(ctx),
 	}
 
 	queryHandler := contract.GetArchivedContractsHandler{
@@ -74,19 +74,19 @@ func (s *contractStorageArchivesrvc) Retrieve(ctx context.Context, p *contractst
 		}
 
 		contracts = append(contracts, &contractstoragearchive.ContractItem{
-			Did:                item.DID,
-			ContractVersion:    item.ContractVersion,
-			State:              item.State.String(),
-			Name:               item.Name,
-			Description:        item.Description,
-			CreatedBy:          item.CreatedBy,
-			CreatedAt:          item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
-			StartDate:          startDate,
-			ExpDate:            expDate,
-			ExpPolicy:          expPolicy,
-			ExpNoticePeriod:    item.ExpNoticePeriod,
-			ResponsiblePersons: item.ResponsiblePersons,
+			Did:             item.DID,
+			ContractVersion: item.ContractVersion,
+			State:           item.State.String(),
+			Name:            item.Name,
+			Description:     item.Description,
+			CreatedBy:       item.CreatedBy,
+			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			StartDate:       startDate,
+			ExpDate:         expDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: item.ExpNoticePeriod,
+			Responsible:     item.Responsible,
 		})
 	}
 
@@ -113,7 +113,7 @@ func (s *contractStorageArchivesrvc) Search(ctx context.Context, p *contractstor
 		DID:             stringValue(p.Did),
 		ContractVersion: intValue(p.ContractVersion),
 		State:           state,
-		RetrievedBy:     middleware.GetUsername(ctx),
+		RetrievedBy:     middleware.GetParticipantID(ctx),
 		Name:            stringValue(p.Name),
 		Description:     stringValue(p.Description),
 		ContractData:    stringValue(p.ContractData),
@@ -171,19 +171,19 @@ func toArchiveContractItem(item contract.MetadataItem) *contractstoragearchive.C
 	}
 
 	return &contractstoragearchive.ContractItem{
-		Did:                item.DID,
-		ContractVersion:    item.ContractVersion,
-		State:              item.State.String(),
-		Name:               item.Name,
-		Description:        item.Description,
-		CreatedBy:          item.CreatedBy,
-		CreatedAt:          item.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:          item.UpdatedAt.Format(time.RFC3339),
-		StartDate:          startDate,
-		ExpDate:            expDate,
-		ExpPolicy:          expPolicy,
-		ExpNoticePeriod:    item.ExpNoticePeriod,
-		ResponsiblePersons: item.ResponsiblePersons,
+		Did:             item.DID,
+		ContractVersion: item.ContractVersion,
+		State:           item.State.String(),
+		Name:            item.Name,
+		Description:     item.Description,
+		CreatedBy:       item.CreatedBy,
+		CreatedAt:       item.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+		StartDate:       startDate,
+		ExpDate:         expDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: item.ExpNoticePeriod,
+		Responsible:     item.Responsible,
 	}
 }
 
