@@ -1801,42 +1801,6 @@ def step_tampered_c2pa_hash_mismatch(context):
 # Remote manifest URL (DCS-OR-C2PA-008) steps
 # ---------------------------------------------------------------------------
 
-def _build_multipart_body_with_manifest_url(pdf_bytes, payload_text, manifest_url):
-    """Like _build_multipart_body but also includes a manifest_url field."""
-    boundary = b"dcs-pdf-manifest-url-boundary"
-    body = (
-        b"--" + boundary + b"\r\n"
-        b'Content-Disposition: form-data; name="pdf"; filename="doc.pdf"\r\n'
-        b"Content-Type: application/pdf\r\n\r\n"
-        + pdf_bytes
-        + b"\r\n"
-        b"--" + boundary + b"\r\n"
-        b'Content-Disposition: form-data; name="payload"; filename="payload.jsonld"\r\n'
-        b"Content-Type: application/ld+json\r\n\r\n"
-        + payload_text.encode("utf-8")
-        + b"\r\n"
-        b"--" + boundary + b"\r\n"
-        b'Content-Disposition: form-data; name="manifest_url"\r\n\r\n'
-        + manifest_url.encode("utf-8")
-        + b"\r\n"
-        b"--" + boundary + b"--\r\n"
-    )
-    content_type = "multipart/form-data; boundary=" + boundary.decode()
-    return body, content_type
-
-
-@when('I amend the PDF with a new payload and manifest URL "{manifest_url}":')
-def step_amend_with_manifest_url(context, manifest_url):
-    payload_text = context.text.strip().replace("http://127.0.0.1:8080", context.server_url)
-    body, content_type = _build_multipart_body_with_manifest_url(
-        context.compiled_pdf, payload_text, manifest_url
-    )
-    _request(context, "POST", "/update", body, content_type)
-    if context.last_response["status"] == 200:
-        context.updated_pdf = context.last_response["body"]
-        _save_artifact(context, context.updated_pdf, "_updated_manifest_url")
-
-
 @when("I amend the PDF with a new payload:")
 def step_amend_without_manifest_url(context):
     payload_text = context.text.strip().replace("http://127.0.0.1:8080", context.server_url)
@@ -1845,19 +1809,6 @@ def step_amend_without_manifest_url(context):
     if context.last_response["status"] == 200:
         context.updated_pdf = context.last_response["body"]
         _save_artifact(context, context.updated_pdf, "_updated_no_manifest_url")
-
-
-@then('the updated PDF C2PA manifest contains the remote manifest URL "{expected_url}"')
-def step_updated_pdf_has_manifest_url(context, expected_url):
-    # Use the /manifest/extract endpoint to get the active (latest) manifest store.
-    _request(context, "POST", "/manifest/extract", context.updated_pdf, "application/pdf")
-    assert context.last_response["status"] == 200, (
-        f"manifest/extract failed: {context.last_response['body'][:300]}"
-    )
-    c2pa_bytes = context.last_response["body"]
-    assert expected_url.encode("utf-8") in c2pa_bytes, (
-        f"remote manifest URL {expected_url!r} not found in C2PA manifest store"
-    )
 
 
 @then("the updated PDF C2PA manifest contains no remote manifest URL")

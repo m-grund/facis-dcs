@@ -118,7 +118,7 @@ func parseCurrentPagesKids(pdf []byte) ([]int, error) {
 // The original PDF bytes are preserved unchanged as a prefix so existing
 // C2PA hard-binding signatures remain verifiable over the original byte range.
 func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
-	return updatePDF(oldPDF, newPayload, nil, "")
+	return updatePDF(oldPDF, newPayload, nil)
 }
 
 // UpdatePDFWithVC appends a PDF incremental update that replaces visible page
@@ -135,15 +135,7 @@ func UpdatePDFWithVC(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, 
 	if len(vcBytes) == 0 {
 		return UpdatePDF(oldPDF, newPayload)
 	}
-	return updatePDF(oldPDF, newPayload, vcBytes, "")
-}
-
-// UpdatePDFWithRemoteManifest appends a PDF incremental update with an
-// optional VC attachment and embeds remoteManifestURL in the signed C2PA claim
-// (DCS-OR-C2PA-008).  When remoteManifestURL is empty the behaviour is
-// identical to UpdatePDFWithVC.
-func UpdatePDFWithRemoteManifest(oldPDF []byte, newPayload []byte, vcBytes []byte, remoteManifestURL string) ([]byte, error) {
-	return updatePDF(oldPDF, newPayload, vcBytes, remoteManifestURL)
+	return updatePDF(oldPDF, newPayload, vcBytes)
 }
 
 // ExtractManifestStore returns the raw JUMBF C2PA manifest store bytes
@@ -152,10 +144,9 @@ func ExtractManifestStore(pdf []byte) ([]byte, error) {
 	return extractEmbeddedStreamByFileSpecName(pdf, "content_credential.c2pa")
 }
 
-// updatePDF is the shared implementation used by UpdatePDF, UpdatePDFWithVC,
-// and UpdatePDFWithRemoteManifest.  The "no changes" guard is bypassed when
-// vcBytes is non-nil or remoteManifestURL is non-empty.
-func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte, remoteManifestURL string) ([]byte, error) {
+// updatePDF is the shared implementation used by UpdatePDF and UpdatePDFWithVC.
+// The "no changes" guard is bypassed when vcBytes is non-nil.
+func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
 	oldPayload, err := ExtractEmbeddedJSONLD(oldPDF)
 	if err != nil {
 		return nil, fmt.Errorf("extract embedded JSON-LD: %w", err)
@@ -174,7 +165,7 @@ func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte, remoteManifestU
 	oldHashHex := hex.EncodeToString(oldHash[:])
 	newHashHex := hex.EncodeToString(newHash[:])
 
-	if oldHashHex == newHashHex && len(vcBytes) == 0 && remoteManifestURL == "" {
+	if oldHashHex == newHashHex && len(vcBytes) == 0 {
 		return nil, fmt.Errorf("no changes: payloads are semantically identical")
 	}
 
@@ -236,7 +227,7 @@ func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte, remoteManifestU
 	var result []byte
 
 	for range 6 {
-		updatedC2PA, err := renderVerificationManifestStore(originalC2PA, updateManifestLabelFromHash(newHashHex), newHashHex, hardBindingHash, exclusions, remoteManifestURL)
+		updatedC2PA, err := renderVerificationManifestStore(originalC2PA, updateManifestLabelFromHash(newHashHex), newHashHex, hardBindingHash, exclusions)
 		if err != nil {
 			return nil, fmt.Errorf("render update manifest: %w", err)
 		}
@@ -529,19 +520,14 @@ func VerifyIncrementalUpdate(pdf []byte) error {
 
 	// Re-apply the amendment to the actual original (which may include PAdES
 	// appendices) so the deterministic update covers the same base offsets.
-	// Re-use any remote manifest URL and VC from the existing PDF so the
-	// deterministic output is byte-for-byte identical.
-	existingManifest, _ := ExtractManifestStore(pdf)
-	remoteURL := ""
-	if len(existingManifest) > 0 {
-		remoteURL = ExtractRemoteManifestURL(existingManifest)
-	}
+	// Re-use any VC from the existing PDF so the deterministic output is
+	// byte-for-byte identical.
 	embeddedVC, vcPresent, _ := ExtractEmbeddedVC(pdf)
 	var freshUpdated []byte
 	if vcPresent && len(embeddedVC) > 0 {
-		freshUpdated, err = UpdatePDFWithRemoteManifest(original, newPayload, embeddedVC, remoteURL)
+		freshUpdated, err = UpdatePDFWithVC(original, newPayload, embeddedVC)
 	} else {
-		freshUpdated, err = UpdatePDFWithRemoteManifest(original, newPayload, nil, remoteURL)
+		freshUpdated, err = UpdatePDF(original, newPayload)
 	}
 	if err != nil {
 		return fmt.Errorf("re-apply amendment: %w", err)

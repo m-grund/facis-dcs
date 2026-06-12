@@ -720,59 +720,6 @@ func TestVerify_JSONIncludesVCBytesWhenPresent(t *testing.T) {
 	}
 }
 
-// ---- Update with manifest URL -----------------------------------------------
-
-// TestUpdate_WithManifestURL_URLPresentInManifest verifies that when a
-// manifest_url multipart field is supplied, the returned PDF's C2PA manifest
-// store contains the URL in the remote_manifests CBOR field.
-func TestUpdate_WithManifestURL_URLPresentInManifest(t *testing.T) {
-	const wantURL = "https://api.example.com/contracts/did:example:svc/c2pa-manifest"
-	basePDF := compilePDF(t)
-
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	for name, data := range map[string][]byte{
-		"pdf":          basePDF,
-		"payload":      []byte(minimalPayloadAmended),
-		"manifest_url": []byte(wantURL),
-	} {
-		fw, _ := mw.CreateFormField(name)
-		_, _ = fw.Write(data)
-	}
-	mw.Close()
-
-	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	manifest, err := compiler.ExtractManifestStore(rec.Body.Bytes())
-	if err != nil {
-		t.Fatalf("ExtractManifestStore: %v", err)
-	}
-	if got := compiler.ExtractRemoteManifestURL(manifest); got != wantURL {
-		t.Errorf("remote manifest URL: got %q, want %q", got, wantURL)
-	}
-}
-
-// TestUpdate_WithoutManifestURL_NoRemoteRef verifies that when manifest_url is
-// absent the manifest store contains no remote_manifests entry.
-func TestUpdate_WithoutManifestURL_NoRemoteRef(t *testing.T) {
-	basePDF := compilePDF(t)
-
-	body, ct := buildMultipartBody(t, basePDF, minimalPayloadAmended)
-	rec := doRequest(http.MethodPost, "/update", body, ct)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	manifest, err := compiler.ExtractManifestStore(rec.Body.Bytes())
-	if err != nil {
-		t.Fatalf("ExtractManifestStore: %v", err)
-	}
-	if got := compiler.ExtractRemoteManifestURL(manifest); got != "" {
-		t.Errorf("expected no remote manifest URL, got %q", got)
-	}
-}
-
 // ---- POST /manifest/extract -------------------------------------------------
 
 // TestExtractManifest_ReturnsManifestBytes verifies that POST /manifest/extract

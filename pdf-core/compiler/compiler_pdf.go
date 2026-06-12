@@ -46,7 +46,7 @@ func renderPDF(doc documentModel) []byte {
 	// (IDs 3,4,5 were formerly static struct elems — now dynamically assigned.)
 
 	xmpMetadata := renderXMPMetadata(doc.PayloadHash)
-	c2paManifest := renderC2PAManifestStore(doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}}, "")
+	c2paManifest := renderC2PAManifestStore(doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}})
 	objects := make([]pdfObject, 0, 24+len(pages)*3)
 	objects = append(objects,
 		// Embedded TrueType font (Liberation Sans, metrically compatible with
@@ -147,7 +147,7 @@ func renderPDF(doc documentModel) []byte {
 
 		exclusions := buildC2PAExclusions(streamStart, streamLen)
 		assetHash := sha256WithExclusions(pdf, exclusions)
-		nextManifest := renderC2PAManifestStore(doc.PayloadHash, assetHash[:], exclusions, "")
+		nextManifest := renderC2PAManifestStore(doc.PayloadHash, assetHash[:], exclusions)
 		if bytes.Equal(nextManifest, c2paManifest) {
 			finalPDF = pdf
 			break

@@ -271,12 +271,11 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	vcBytes := parts["vc"]                           // optional
-	manifestURL := strings.TrimSpace(string(parts["manifest_url"])) // optional (DCS-OR-C2PA-008)
+	vcBytes := parts["vc"] // optional
 
 	var updated []byte
-	if manifestURL != "" || len(vcBytes) > 0 {
-		updated, err = compiler.UpdatePDFWithRemoteManifest(oldPDF, canonical, vcBytes, manifestURL)
+	if len(vcBytes) > 0 {
+		updated, err = compiler.UpdatePDFWithVC(oldPDF, canonical, vcBytes)
 	} else {
 		updated, err = compiler.UpdatePDF(oldPDF, canonical)
 	}
