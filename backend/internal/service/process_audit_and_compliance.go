@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
