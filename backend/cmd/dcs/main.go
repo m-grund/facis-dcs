@@ -310,7 +310,7 @@ func main() {
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher), os.Getenv("DCS_PUBLIC_BASE_URL"))
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
@@ -340,8 +340,7 @@ func main() {
 		TRepo:           &ctRepo,
 		PDFCore:         pdfCoreClient,
 		IssuerDID:       issuerDID,
-		VCIssuer:        provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
-		ManifestBaseURL: os.Getenv("DCS_PUBLIC_BASE_URL"),
+		VCIssuer:  provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
 	}
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {

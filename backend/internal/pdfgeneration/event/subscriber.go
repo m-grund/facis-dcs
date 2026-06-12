@@ -70,11 +70,6 @@ type Subscriber struct {
 	IssuerDID  string
 	// VCIssuer issues and signs a W3C VC for each lifecycle event (DCS-OR-C2PA-004/005).
 	VCIssuer provenance.VCIssuer
-	// ManifestBaseURL is the public base URL used to construct the stable
-	// remote C2PA manifest URL embedded in each lifecycle assertion
-	// (DCS-OR-C2PA-008).  Must be set before Start is called.
-	// Example: "https://api.example.com"
-	ManifestBaseURL string
 }
 
 // Start registers the event handler with the NATS sub-client and begins
@@ -183,12 +178,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
 	}
 
-	// pdf-core appends C2PA incremental update with VC attachment and remote manifest URL.
-	manifestURL := ""
-	if s.ManifestBaseURL != "" {
-		manifestURL = s.ManifestBaseURL + "/contracts/" + cweEvt.DID + "/c2pa-manifest"
-	}
-	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, existingPDF, jsonldBytes, vcBytes, manifestURL)
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, existingPDF, jsonldBytes, vcBytes)
 	if err != nil {
 		return fmt.Errorf("pdf-core update for contract %s: %w", cweEvt.DID, err)
 	}
@@ -303,13 +293,9 @@ func (s *Subscriber) appendOneTemplateManifest(
 		return nil, fmt.Errorf("issue lifecycle VC: %w", err)
 	}
 
-	// pdf-core appends C2PA incremental update with VC attachment and remote manifest URL.
+	// pdf-core appends C2PA incremental update with VC attachment.
 	// vcBytes being non-nil bypasses the "no-changes" guard for genesis VC attachment.
-	manifestURL := ""
-	if s.ManifestBaseURL != "" {
-		manifestURL = s.ManifestBaseURL + "/templates/" + did + "/c2pa-manifest"
-	}
-	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, manifestURL)
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes)
 	if err != nil {
 		return nil, fmt.Errorf("pdf-core update for template %s: %w", did, err)
 	}

@@ -355,3 +355,21 @@ Kubernetes secret holding demo wallet private keys (synced from Vault).
 {{- define "digital-contracting-service.demoWalletSecretName" -}}
 {{- default (printf "%s-demo-wallet" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.demoWallet.secretName -}}
 {{- end }}
+
+{{/*
+PDF-Core internal service URL — auto-wired when pdfCore.enabled=true.
+*/}}
+{{- define "digital-contracting-service.pdfCoreURL" -}}
+{{- if .Values.pdfCore.url -}}
+{{- .Values.pdfCore.url -}}
+{{- else if .Values.pdfCore.enabled -}}
+{{- printf "http://%s-pdf-core:%v" (include "digital-contracting-service.fullname" .) .Values.pdfCore.service.port -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the Secret that holds the pdf-core C2PA signing material.
+*/}}
+{{- define "digital-contracting-service.pdfCoreSigningSecretName" -}}
+{{- default (printf "%s-pdf-core-signing" (include "digital-contracting-service.fullname" .)) .Values.pdfCore.signing.existingSecret -}}
+{{- end }}

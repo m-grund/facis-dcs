@@ -161,6 +161,9 @@ spec:
               {{- end }}
             - name: IPFS_MFS_BASE_URL
               value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
+            # ---- PDF-Core (C2PA PDF compiler/verifier) --------------------------
+            - name: PDF_CORE_URL
+              value: {{ include "digital-contracting-service.pdfCoreURL" . | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

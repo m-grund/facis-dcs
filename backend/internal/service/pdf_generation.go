@@ -34,7 +34,6 @@ type pdfGenerationSrvc struct {
 	PDFCore         *pdfcore.Client
 	IssuerDID       string
 	VCIssuer        provenance.VCIssuer
-	ManifestBaseURL string
 	auth.JWTAuthenticator
 }
 
@@ -49,7 +48,6 @@ func NewPDFGeneration(
 	pdfCore *pdfcore.Client,
 	issuerDID string,
 	vcIssuer provenance.VCIssuer,
-	manifestBaseURL string,
 ) pdfgen.Service {
 	if vcIssuer == nil {
 		panic("VCIssuer is required for DCS-OR-C2PA-004 compliance")
@@ -65,7 +63,6 @@ func NewPDFGeneration(
 		PDFCore:          pdfCore,
 		IssuerDID:        issuerDID,
 		VCIssuer:         vcIssuer,
-		ManifestBaseURL:  manifestBaseURL,
 		JWTAuthenticator: jwtAuth,
 	}
 }
@@ -438,15 +435,7 @@ func (s *pdfGenerationSrvc) appendAndCache(
 	// pdf-core appends a C2PA incremental update embedding the VC attachment.
 	// When vcBytes is provided, pdf-core bypasses the "no-changes" guard —
 	// this covers the genesis VC attachment case (same JSON-LD as /download).
-	manifestURL := ""
-	if s.ManifestBaseURL != "" {
-		urlPath := table // "contracts" or "contract_templates"
-		if table == "contract_templates" {
-			urlPath = "templates"
-		}
-		manifestURL = s.ManifestBaseURL + "/" + urlPath + "/" + did + "/c2pa-manifest"
-	}
-	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, manifestURL)
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes)
 	if err != nil {
 		return pdfBytes, fmt.Errorf("pdf-core update for %s: %w", did, err)
 	}
