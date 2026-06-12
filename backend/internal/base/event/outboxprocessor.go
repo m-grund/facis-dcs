@@ -163,6 +163,15 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		TsaSignature:  tsaResult,
 	}
 
+	log.Printf("Processing event %d", event.ID)
+	isVerified, err := tsa.Verify(tsaResult, auditLogEntry)
+	if !isVerified {
+		return fmt.Errorf("timestamp verification failed for event %d", event.ID)
+	}
+	if isVerified {
+		log.Printf("timestamp verification succeeded for event %d", event.ID)
+	}
+
 	result, err := j.IPFSClient.CreateFile(ctx, signedAuditLogEntry)
 	if err != nil {
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
