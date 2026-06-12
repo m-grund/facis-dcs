@@ -92,5 +92,96 @@
                 "004907d18c654e54"
             ]
         ]
+    },
+    {
+        "id": "a1d8c2c1e5b24a7f",
+        "type": "http in",
+        "z": "f10514b54313a655",
+        "name": "GET /archive-audit-events.jsonl",
+        "url": "/archive-audit-events.jsonl",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 175,
+        "y": 300,
+        "wires": [
+            [
+                "d6f0a35a7c9617ac"
+            ]
+        ]
+    },
+    {
+        "id": "d6f0a35a7c9617ac",
+        "type": "function",
+        "z": "f10514b54313a655",
+        "name": "Check audit log bearer token",
+        "func": "const configuredToken = env.get(\"ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN\") || \"dev-archive-audit-token\";\nconst expected = `Bearer ${configuredToken}`;\nconst actual = msg.req?.headers?.authorization;\n\nif (actual !== expected) {\n  msg.statusCode = 401;\n  msg.headers = {\n    \"Content-Type\": \"application/json\"\n  };\n  msg.payload = { error: \"Unauthorized\" };\n  return [null, msg];\n}\n\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 515,
+        "y": 300,
+        "wires": [
+            [
+                "b945bead4933f6dd"
+            ],
+            [
+                "c7717d5f7aa1de62"
+            ]
+        ]
+    },
+    {
+        "id": "b945bead4933f6dd",
+        "type": "file in",
+        "z": "f10514b54313a655",
+        "name": "Read Archive Events",
+        "filename": "/data/archive-audit-events.jsonl",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 865,
+        "y": 280,
+        "wires": [
+            [
+                "e7fbad236deea5f1"
+            ]
+        ]
+    },
+    {
+        "id": "e7fbad236deea5f1",
+        "type": "function",
+        "z": "f10514b54313a655",
+        "name": "Return archive audit log",
+        "func": "msg.statusCode = 200;\nmsg.headers = {\n  \"Content-Type\": \"text/plain; charset=utf-8\"\n};\n\nif (msg.payload === undefined || msg.payload === null) {\n  msg.payload = \"\";\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1215,
+        "y": 280,
+        "wires": [
+            [
+                "c7717d5f7aa1de62"
+            ]
+        ]
+    },
+    {
+        "id": "c7717d5f7aa1de62",
+        "type": "http response",
+        "z": "f10514b54313a655",
+        "name": "Archive audit log response",
+        "statusCode": "",
+        "headers": {},
+        "x": 1580,
+        "y": 300,
+        "wires": []
     }
 ]

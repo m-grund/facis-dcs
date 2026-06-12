@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -29,6 +31,17 @@ type processAuditAndCompliancesrvc struct {
 	auth.JWTAuthenticator
 }
 
+type auditScopeConfig struct {
+	scopeName                      string
+	component                      componenttype.ComponentType
+	requiresTemplateRepo           bool
+	requiresContractRepo           bool
+	includeTemplatePolicyTrail     bool
+	includeTemplateProvenanceTrail bool
+	includeContractContentTrail    bool
+	includeArchiveTrail            bool
+}
+
 func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, auditTrailReader base.AuditTrailReader, ctRepo templatedb.ContractTemplateRepo, cRepo cwedb.ContractRepo) processauditandcompliance.Service {
 	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader, CTRepo: ctRepo, CRepo: cRepo}
 }
@@ -38,10 +51,14 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	scope, err := componenttype.NewComponentType(req.Scope)
+	scopeConfig, err := resolveAuditScope(req.Scope)
 	if err != nil {
 		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
+	if err := s.validateAuditScopeDependencies(scopeConfig); err != nil {
+		return nil, processauditandcompliance.MakeInternalError(err)
+	}
+	scope := scopeConfig.component
 
 	qry := qry2.GetAuditLogQry{
 		Scope:     scope,
@@ -59,7 +76,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	contractContentEntriesByDID := make(map[string][]datatype.AuditLogEntry)
-	if scope == componenttype.ContractWorkflowEngine && s.CRepo != nil {
+	if scopeConfig.includeContractContentTrail {
 		contractContentTrailQry := qry2.GetContractContentTrailQry{
 			RetrievedBy: middleware.GetParticipantID(ctx),
 			HolderDID:   middleware.GetHolderDID(ctx),
@@ -77,7 +94,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	templatePolicyEntriesByDID := make(map[string][]datatype.AuditLogEntry)
-	if scope == componenttype.ContractTemplateRepo && s.CTRepo != nil {
+	if scopeConfig.includeTemplatePolicyTrail {
 		policyTrailQry := qry2.GetContractPolicyTrailQry{
 			RetrievedBy: middleware.GetParticipantID(ctx),
 			HolderDID:   middleware.GetHolderDID(ctx),
@@ -95,7 +112,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	archiveEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
-	if scope == componenttype.ContractStorageArchive && s.CRepo != nil {
+	if scopeConfig.includeArchiveTrail {
 		result, err := s.auditArchiveTrailEntries(ctx)
 		if err != nil {
 			return nil, processauditandcompliance.MakeInternalError(err)
@@ -129,7 +146,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 				ResLogPredCid:    entry.ResLogPredCID,
 			})
 		}
-		if scope == componenttype.ContractTemplateRepo && did != "" {
+		if scopeConfig.includeTemplatePolicyTrail && did != "" {
 			for _, entry := range templatePolicyEntriesByDID[did] {
 				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
 					ID:               entry.ID,
@@ -144,7 +161,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			}
 			seenDIDs[did] = true
 		}
-		if scope == componenttype.ContractTemplateRepo && did != "" {
+		if scopeConfig.includeTemplateProvenanceTrail && did != "" {
 
 			provenanceQuery := qry2.GetTemplateApprovalProvenanceTrailQry{
 				RetrievedBy: middleware.GetParticipantID(ctx),
@@ -172,7 +189,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 				})
 			}
 		}
-		if scope == componenttype.ContractWorkflowEngine && did != "" {
+		if scopeConfig.includeContractContentTrail && did != "" {
 			for _, entry := range contractContentEntriesByDID[did] {
 				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
 					ID:               entry.ID,
@@ -187,7 +204,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			}
 			seenDIDs[did] = true
 		}
-		if scope == componenttype.ContractStorageArchive && did != "" {
+		if scopeConfig.includeArchiveTrail && did != "" {
 			history = append(history, archiveEntriesByDID[did]...)
 			seenDIDs[did] = true
 		}
@@ -267,6 +284,72 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	return result, nil
+}
+
+func resolveAuditScope(rawScope string) (auditScopeConfig, error) {
+	normalizedScope := strings.TrimSpace(rawScope)
+	switch strings.ToLower(normalizedScope) {
+	case "templates":
+		return templateAuditScopeConfig(), nil
+	case "contracts":
+		return contractAuditScopeConfig(), nil
+	case "archive":
+		return archiveAuditScopeConfig(), nil
+	}
+
+	scope, err := componenttype.NewComponentType(normalizedScope)
+	if err != nil {
+		return auditScopeConfig{}, fmt.Errorf("invalid audit scope %q; allowed values are templates, contracts, archive, or a valid component type", rawScope)
+	}
+
+	switch scope {
+	case componenttype.ContractTemplateRepo:
+		return templateAuditScopeConfig(), nil
+	case componenttype.ContractWorkflowEngine:
+		return contractAuditScopeConfig(), nil
+	case componenttype.ContractStorageArchive:
+		return archiveAuditScopeConfig(), nil
+	default:
+		return auditScopeConfig{scopeName: scope.String(), component: scope}, nil
+	}
+}
+
+func templateAuditScopeConfig() auditScopeConfig {
+	return auditScopeConfig{
+		scopeName:                      "templates",
+		component:                      componenttype.ContractTemplateRepo,
+		requiresTemplateRepo:           true,
+		includeTemplatePolicyTrail:     true,
+		includeTemplateProvenanceTrail: true,
+	}
+}
+
+func contractAuditScopeConfig() auditScopeConfig {
+	return auditScopeConfig{
+		scopeName:                   "contracts",
+		component:                   componenttype.ContractWorkflowEngine,
+		requiresContractRepo:        true,
+		includeContractContentTrail: true,
+	}
+}
+
+func archiveAuditScopeConfig() auditScopeConfig {
+	return auditScopeConfig{
+		scopeName:            "archive",
+		component:            componenttype.ContractStorageArchive,
+		requiresContractRepo: true,
+		includeArchiveTrail:  true,
+	}
+}
+
+func (s *processAuditAndCompliancesrvc) validateAuditScopeDependencies(scopeConfig auditScopeConfig) error {
+	if scopeConfig.requiresTemplateRepo && s.CTRepo == nil {
+		return fmt.Errorf("audit scope %s is not configured", scopeConfig.scopeName)
+	}
+	if scopeConfig.requiresContractRepo && s.CRepo == nil {
+		return fmt.Errorf("audit scope %s is not configured", scopeConfig.scopeName)
+	}
+	return nil
 }
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {

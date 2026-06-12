@@ -1,5 +1,5 @@
 import http from '@/api/http'
-import type { AuditRequest } from '@/models/requests/auditing-request'
+import type { AuditRequest, AuditScope } from '@/models/requests/auditing-request'
 import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/responses/auditing-response'
 import type { AuditingService } from '@/models/services/auditing-service'
 import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
@@ -28,21 +28,21 @@ interface RawPACAuditResource {
   auditTrail?: RawAuditTrailEntry[]
 }
 
-const normalizeAuditResponse = (data: AuditResponse | string): AuditResponse => {
+const normalizeAuditResponse = (data: AuditResponse | string, scope: AuditScope): AuditResponse => {
   if (!Array.isArray(data)) {
     return []
   }
 
-  return data.flatMap((item, index) => normalizeAuditItem(item as AuditFinding & RawPACAuditResource, index))
+  return data.flatMap((item, index) => normalizeAuditItem(item as AuditFinding & RawPACAuditResource, index, scope))
 }
 
-function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: number): AuditFinding[] {
+function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: number, scope: AuditScope): AuditFinding[] {
   const trail = item.audit_trail ?? item.auditTrail
   if (!Array.isArray(trail)) {
     if (!isVisibleAuditEvent(item.event_type ?? item.eventType)) {
       return []
     }
-    return [normalizeFinding(item, index, item.did, item.component, item.created_at ?? item.createdAt)]
+    return [normalizeFinding(item, index, scope, item.did, item.created_at ?? item.createdAt)]
   }
   if (trail.length === 0) {
     return []
@@ -53,8 +53,8 @@ function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: num
       normalizeFinding(
         entry as AuditFinding & RawAuditTrailEntry,
         `${index}-${entry.id ?? entryIndex}`,
+        scope,
         entry.did ?? item.did,
-        entry.component ?? item.component,
         entry.created_at ?? entry.createdAt ?? item.created_at ?? item.createdAt,
         true,
       ),
@@ -64,8 +64,8 @@ function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: num
 function normalizeFinding(
   item: AuditFinding & RawAuditTrailEntry,
   fallbackId: number | string,
+  scope: AuditScope,
   fallbackDid?: string,
-  fallbackComponent?: string,
   fallbackCreatedAt?: string,
   useFallbackId = false,
 ): AuditFinding {
@@ -81,7 +81,7 @@ function normalizeFinding(
     category,
     title: item.title ?? stringValue(policyData?.title) ?? contractAuditEventDisplayText(eventType, eventData),
     description: item.description ?? descriptionFromEventData(eventData),
-    component: item.component ?? fallbackComponent,
+    component: auditComponentLabel(scope),
     status,
     did: item.did ?? objectDid ?? fallbackDid,
     object_name: stringValue(policyData?.objectName),
@@ -156,9 +156,24 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
 
+function auditComponentLabel(scope: AuditScope): string {
+  switch (scope) {
+    case 'templates':
+      return 'Templates'
+    case 'contracts':
+      return 'Contracts'
+    case 'archive':
+      return 'Archive'
+    case 'signatures':
+      return 'Signatures'
+  }
+}
+
 export const auditingService: AuditingService = {
   async audit(request: AuditRequest) {
-    return http.post<AuditResponse | string>('/pac/audit', request).then((res) => normalizeAuditResponse(res.data))
+    return http
+      .post<AuditResponse | string>('/pac/audit', request)
+      .then((res) => normalizeAuditResponse(res.data, request.scope))
   },
 
   async report(request: AuditRequest) {

@@ -4,14 +4,14 @@ import type { AuditFinding } from '@/models/responses/auditing-response'
 import { auditingService } from '@/services/auditing-service'
 import { computed, ref, watch } from 'vue'
 
-const findings = ref<AuditFinding[]>([])
+const auditFindingsByScope = ref<Partial<Record<AuditScope, AuditFinding[]>>>({})
+const auditReportsByScope = ref<Partial<Record<AuditScope, unknown>>>({})
+const auditErrorsByScope = ref<Partial<Record<AuditScope, string>>>({})
+const executedAuditScopes = ref<Partial<Record<AuditScope, boolean>>>({})
 const selectedFindingId = ref<number | string | null>(null)
-const report = ref<unknown>(null)
-const auditLoading = ref(false)
-const reportLoading = ref(false)
-const error = ref<string | null>(null)
+const auditLoadingScope = ref<AuditScope | null>(null)
+const reportLoadingScope = ref<AuditScope | null>(null)
 const selectedScope = ref<AuditScope>('contracts')
-const hasExecutedAudit = ref(false)
 type AuditResult = 'passed' | 'failed' | 'review'
 type AuditTab = 'checks' | 'timeline'
 type TableFilterKey = 'result' | 'category' | 'status' | 'component' | 'did'
@@ -31,6 +31,15 @@ const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'contracts', label: 'Contracts' },
   { value: 'archive', label: 'Archive' },
 ]
+
+const findings = computed(() => auditFindingsByScope.value[selectedScope.value] ?? [])
+const report = computed(() => auditReportsByScope.value[selectedScope.value] ?? null)
+const error = computed(() => auditErrorsByScope.value[selectedScope.value] ?? null)
+const hasExecutedAudit = computed(() => executedAuditScopes.value[selectedScope.value] === true)
+const auditLoading = computed(() => auditLoadingScope.value !== null)
+const reportLoading = computed(() => reportLoadingScope.value !== null)
+const selectedAuditLoading = computed(() => auditLoadingScope.value === selectedScope.value)
+const selectedReportLoading = computed(() => reportLoadingScope.value === selectedScope.value)
 
 const filteredFindings = computed(() => {
   return checkFindings.value.filter((finding) => {
@@ -104,7 +113,7 @@ const reviewCheckCount = computed(
   () => checkFindings.value.filter((finding) => auditResult(finding) === 'review').length,
 )
 const auditHasPassed = computed(
-  () => hasExecutedAudit.value && !auditLoading.value && !error.value && checkFindings.value.length === 0,
+  () => hasExecutedAudit.value && !selectedAuditLoading.value && !error.value && checkFindings.value.length === 0,
 )
 const tableFilterGroups: { key: TableFilterKey; label: string }[] = [
   { key: 'result', label: 'Result' },
@@ -136,33 +145,45 @@ watch(
   { immediate: true },
 )
 
+watch(selectedScope, () => {
+  selectedFindingId.value = null
+  activeAuditTab.value = checkFindings.value.length > 0 ? 'checks' : 'timeline'
+})
+
 const executeAudit = async () => {
-  auditLoading.value = true
-  error.value = null
-  report.value = null
-  hasExecutedAudit.value = true
+  const scope = selectedScope.value
+  auditLoadingScope.value = scope
+  auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: undefined }
+  auditReportsByScope.value = { ...auditReportsByScope.value, [scope]: undefined }
+  executedAuditScopes.value = { ...executedAuditScopes.value, [scope]: true }
   try {
-    findings.value = await auditingService.audit({ scope: selectedScope.value })
+    const scopeFindings = await auditingService.audit({ scope })
+    auditFindingsByScope.value = { ...auditFindingsByScope.value, [scope]: scopeFindings }
     selectedFindingId.value = null
-    activeAuditTab.value = checkFindings.value.length > 0 ? 'checks' : 'timeline'
+    activeAuditTab.value = scopeFindings.some((finding) => auditItemKind(finding) === 'check') ? 'checks' : 'timeline'
   } catch (err) {
     console.error('Audit Error:', err)
-    error.value = err instanceof Error ? err.message : 'Audit could not be executed.'
+    auditErrorsByScope.value = {
+      ...auditErrorsByScope.value,
+      [scope]: err instanceof Error ? err.message : 'Audit could not be executed.',
+    }
   } finally {
-    auditLoading.value = false
+    auditLoadingScope.value = null
   }
 }
 
 const generateReport = async () => {
-  reportLoading.value = true
-  error.value = null
+  const scope = selectedScope.value
+  reportLoadingScope.value = scope
+  auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: undefined }
   try {
-    report.value = await auditingService.report({ scope: selectedScope.value })
+    const scopeReport = await auditingService.report({ scope })
+    auditReportsByScope.value = { ...auditReportsByScope.value, [scope]: scopeReport }
   } catch (err) {
     console.error('Audit Report Error:', err)
-    error.value = 'Audit report could not be generated.'
+    auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: 'Audit report could not be generated.' }
   } finally {
-    reportLoading.value = false
+    reportLoadingScope.value = null
   }
 }
 
@@ -453,7 +474,7 @@ function formatDateTime(value?: string): string {
           :disabled="auditLoading || reportLoading"
           @click="executeAudit"
         >
-          <span v-if="auditLoading" class="loading loading-sm loading-spinner"></span>
+          <span v-if="selectedAuditLoading" class="loading loading-sm loading-spinner"></span>
           <span v-else>Execute Audit</span>
         </button>
 
@@ -462,19 +483,19 @@ function formatDateTime(value?: string): string {
           :disabled="reportLoading || auditLoading || !hasExecutedAudit"
           @click="generateReport"
         >
-          <span v-if="reportLoading" class="loading loading-sm loading-spinner"></span>
+          <span v-if="selectedReportLoading" class="loading loading-sm loading-spinner"></span>
           <span v-else>Generate Report</span>
         </button>
       </div>
     </div>
 
-    <div v-if="auditLoading" class="p-4">Executing audit...</div>
+    <div v-if="selectedAuditLoading" class="p-4">Executing audit...</div>
     <div v-else-if="error" class="alert rounded-box alert-error">{{ error }}</div>
     <div v-if="auditHasPassed" class="alert rounded-box alert-success">
       Audit passed. No failed checks or review findings were returned.
     </div>
 
-    <div v-if="!auditLoading && !error" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+    <div v-if="!selectedAuditLoading && !error" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <div class="overflow-x-auto rounded-box border border-base-content/10">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 px-4 py-3">
           <div role="tablist" class="tabs-box tabs">
