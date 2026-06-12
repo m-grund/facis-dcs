@@ -35,27 +35,12 @@ func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, au
 	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader, CTRepo: ctRepo, CRepo: cRepo}
 }
 
-func auditScopeToComponentType(scope string) (componenttype.ComponentType, error) {
-	switch strings.ToLower(scope) {
-	case "templates":
-		return componenttype.ContractTemplateRepo, nil
-	case "contracts":
-		return componenttype.ContractWorkflowEngine, nil
-	case "signatures":
-		return componenttype.SignatureManagement, nil
-	case "archive":
-		return componenttype.ContractStorageArchive, nil
-	default:
-		return "", fmt.Errorf("invalid audit scope: %s", scope)
-	}
-}
-
 func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processauditandcompliance.PACAuditRequest) (res []*processauditandcompliance.PACAuditResponse, err error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	scope, err := auditScopeToComponentType(req.Scope)
+	scope, err := componenttype.NewComponentType(req.Scope)
 	if err != nil {
 		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
