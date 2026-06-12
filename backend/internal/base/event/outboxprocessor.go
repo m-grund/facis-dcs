@@ -163,7 +163,7 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		TsaSignature:  tsaResult,
 	}
 
-	log.Printf("Processing event %d", event.ID)
+	// sanity check that our cert is ok
 	isVerified, err := tsa.Verify(tsaResult, auditLogEntry)
 	if !isVerified {
 		return fmt.Errorf("timestamp verification failed for event %d", event.ID)
