@@ -31,9 +31,10 @@ type pdfGenerationSrvc struct {
 	IPFSClient *ipfs.APIClient
 	CRepo      *cwerepo.PostgresContractRepo
 	TRepo      *tplrepo.PostgresContractTemplateRepo
-	PDFCore    *pdfcore.Client
-	IssuerDID  string
-	VCIssuer   provenance.VCIssuer
+	PDFCore         *pdfcore.Client
+	IssuerDID       string
+	VCIssuer        provenance.VCIssuer
+	ManifestBaseURL string
 	auth.JWTAuthenticator
 }
 
@@ -48,6 +49,7 @@ func NewPDFGeneration(
 	pdfCore *pdfcore.Client,
 	issuerDID string,
 	vcIssuer provenance.VCIssuer,
+	manifestBaseURL string,
 ) pdfgen.Service {
 	if vcIssuer == nil {
 		panic("VCIssuer is required for DCS-OR-C2PA-004 compliance")
@@ -63,6 +65,7 @@ func NewPDFGeneration(
 		PDFCore:          pdfCore,
 		IssuerDID:        issuerDID,
 		VCIssuer:         vcIssuer,
+		ManifestBaseURL:  manifestBaseURL,
 		JWTAuthenticator: jwtAuth,
 	}
 }
@@ -107,7 +110,7 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 	if scanErr != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached contract PDF metadata for %s: %w", p.Did, scanErr))
 	}
-	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(contract.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PA(contract.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map contract state %q to C2PA state: %w", contract.State, err))
 	}
@@ -187,7 +190,7 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 	if scanErr != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read cached template PDF metadata for %s: %w", p.Did, scanErr))
 	}
-	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(tpl.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PA(tpl.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map template state %q to C2PA state: %w", tpl.State, err))
 	}
@@ -261,7 +264,7 @@ func (s *pdfGenerationSrvc) VerifyContractPdf(ctx context.Context, p *pdfgen.Ver
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read contract PDF verification metadata for %s: %w", p.Did, err))
 	}
 
-	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(contract.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PA(contract.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map contract state %q to C2PA state: %w", contract.State, err))
 	}
@@ -328,7 +331,7 @@ func (s *pdfGenerationSrvc) VerifyTemplatePdf(ctx context.Context, p *pdfgen.Ver
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("read template PDF verification metadata for %s: %w", p.Did, err))
 	}
 
-	currentC2PAState, err := provenance.MapCWEStateToC2PAStrict(tpl.State)
+	currentC2PAState, err := provenance.MapCWEStateToC2PA(tpl.State)
 	if err != nil {
 		return nil, pdfgen.MakeInternalError(fmt.Errorf("map template state %q to C2PA state: %w", tpl.State, err))
 	}
@@ -409,7 +412,7 @@ func (s *pdfGenerationSrvc) appendAndCache(
 	ctx context.Context, tx *sqlx.Tx,
 	did, state string, jsonldBytes, pdfBytes []byte, table string,
 ) ([]byte, error) {
-	c2paState, err := provenance.MapCWEStateToC2PAStrict(state)
+	c2paState, err := provenance.MapCWEStateToC2PA(state)
 	if err != nil {
 		return pdfBytes, fmt.Errorf("map lifecycle state %q: %w", state, err)
 	}
@@ -435,7 +438,15 @@ func (s *pdfGenerationSrvc) appendAndCache(
 	// pdf-core appends a C2PA incremental update embedding the VC attachment.
 	// When vcBytes is provided, pdf-core bypasses the "no-changes" guard —
 	// this covers the genesis VC attachment case (same JSON-LD as /download).
-	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes)
+	manifestURL := ""
+	if s.ManifestBaseURL != "" {
+		urlPath := table // "contracts" or "contract_templates"
+		if table == "contract_templates" {
+			urlPath = "templates"
+		}
+		manifestURL = s.ManifestBaseURL + "/" + urlPath + "/" + did + "/c2pa-manifest"
+	}
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, manifestURL)
 	if err != nil {
 		return pdfBytes, fmt.Errorf("pdf-core update for %s: %w", did, err)
 	}

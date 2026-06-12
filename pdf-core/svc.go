@@ -147,6 +147,7 @@ type verifyResponse struct {
 	C2PASignatureValid bool   `json:"c2pa_signature_valid"`
 	VCBytes            string `json:"vc_bytes,omitempty"` // base64-encoded VC JSON
 	VCProofValid       bool   `json:"vc_proof_valid"`
+	Artifact           string `json:"artifact"` // base64-encoded verification-witness PDF
 }
 
 func (s *service) verify(w http.ResponseWriter, r *http.Request) {
@@ -194,10 +195,18 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 	vcBytes, vcFound, _ := compiler.ExtractEmbeddedVC(raw)
 	vcProofValid := vcFound && len(vcBytes) > 0 && isVCProofStructurallyValid(vcBytes)
 
+	// Append a verification witness and embed the resulting PDF as artifact.
+	witness, err := compiler.AppendVerificationWitness(raw, payload)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("append verification witness: %w", err)))
+		return
+	}
+
 	resp := verifyResponse{
 		Match:              true,
 		C2PASignatureValid: true,
 		VCProofValid:       vcProofValid,
+		Artifact:           base64.StdEncoding.EncodeToString(witness),
 	}
 	if vcFound && len(vcBytes) > 0 {
 		resp.VCBytes = base64.StdEncoding.EncodeToString(vcBytes)
@@ -262,11 +271,12 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	vcBytes := parts["vc"] // optional — nil when not provided
+	vcBytes := parts["vc"]                           // optional
+	manifestURL := strings.TrimSpace(string(parts["manifest_url"])) // optional (DCS-OR-C2PA-008)
 
 	var updated []byte
-	if len(vcBytes) > 0 {
-		updated, err = compiler.UpdatePDFWithVC(oldPDF, canonical, vcBytes)
+	if manifestURL != "" || len(vcBytes) > 0 {
+		updated, err = compiler.UpdatePDFWithRemoteManifest(oldPDF, canonical, vcBytes, manifestURL)
 	} else {
 		updated, err = compiler.UpdatePDF(oldPDF, canonical)
 	}
@@ -343,6 +353,25 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/pdf")
 	_, _ = w.Write(result)
+}
+
+func (s *service) extractManifest(w http.ResponseWriter, r *http.Request) {
+	if err := checkMediaType(r.Header.Get("Content-Type"), "application/pdf"); err != nil {
+		writeError(w, err)
+		return
+	}
+	raw, err := limitRead(r.Body, 32<<20)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	manifest, err := compiler.ExtractManifestStore(raw)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	_, _ = w.Write(manifest)
 }
 
 func (s *service) ontologyContext(w http.ResponseWriter, _ *http.Request) {

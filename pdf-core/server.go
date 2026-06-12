@@ -34,6 +34,7 @@ func newServer() http.Handler {
 	mux.HandleFunc("POST /verify", svc.verify)
 	mux.HandleFunc("POST /update", svc.update)
 	mux.HandleFunc("POST /claim", svc.claim)
+	mux.HandleFunc("POST /manifest/extract", svc.extractManifest)
 	mux.HandleFunc("GET /ontology/dcs-pdf-core", svc.ontologyContext)
 	mux.HandleFunc("GET /ontology/dcs-pdf-core.owl", svc.ontologyOwl)
 	mux.HandleFunc("GET /swagger.json", handleSwagger)

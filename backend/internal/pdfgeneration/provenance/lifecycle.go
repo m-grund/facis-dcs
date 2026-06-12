@@ -56,12 +56,9 @@ func NewLifecycleAssertion(contractID, fileHash, status, reason, authority, vcID
 	}
 }
 
-// MapCWEStateToC2PAStrict maps a CWE contract state to the canonical C2PA
-// lifecycle vocabulary defined in DCS-OR-C2PA-003.
-//
-// No fallback mapping is applied: unsupported states return an error so callers
-// can fail fast in green-field strict-compliance mode.
-func MapCWEStateToC2PAStrict(cweState string) (string, error) {
+// MapCWEStateToC2PA maps a CWE contract state to the canonical C2PA lifecycle
+// vocabulary defined in DCS-OR-C2PA-003. Unsupported states return an error.
+func MapCWEStateToC2PA(cweState string) (string, error) {
 	switch strings.ToUpper(cweState) {
 	case "DRAFT":
 		return "draft", nil
@@ -84,22 +81,6 @@ func MapCWEStateToC2PAStrict(cweState string) (string, error) {
 	case "REPLACED":
 		return "replaced", nil
 	default:
-		// Pass-through if the caller already uses the SRS vocabulary.
-		lower := strings.ToLower(cweState)
-		switch lower {
-		case "draft", "active", "amended", "suspended", "terminated", "expired", "replaced":
-			return lower, nil
-		}
-		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,SUBMITTED,REVIEWED,APPROVED,NEGOTIATION,REJECTED,TERMINATED,EXPIRED,SUSPENDED,REPLACED,draft,active,amended,suspended,terminated,expired,replaced)", cweState)
+		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,SUBMITTED,REVIEWED,APPROVED,NEGOTIATION,REJECTED,TERMINATED,EXPIRED,SUSPENDED,REPLACED)", cweState)
 	}
-}
-
-// MapCWEStateToC2PA is a convenience wrapper that returns an empty string for
-// unsupported states. New code should prefer MapCWEStateToC2PAStrict.
-func MapCWEStateToC2PA(cweState string) string {
-	mapped, err := MapCWEStateToC2PAStrict(cweState)
-	if err != nil {
-		return ""
-	}
-	return mapped
 }

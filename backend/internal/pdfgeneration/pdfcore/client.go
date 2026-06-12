@@ -81,11 +81,11 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 }
 
 // Update posts a multipart request to POST /update containing existingPDF as
-// "pdf", jsonld as "payload", and optionally vcBytes as "vc". When vcBytes is
-// non-nil the request proceeds even if the JSON-LD payload is unchanged (the VC
-// attachment is itself a provenance event — genesis VC attachment case).
+// "pdf", jsonld as "payload", optionally vcBytes as "vc", and optionally
+// manifestURL as "manifest_url" (DCS-OR-C2PA-008). When vcBytes is non-nil the
+// request proceeds even if the JSON-LD payload is unchanged.
 // Returns the updated PDF bytes and the renderer version header.
-func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte) (pdf []byte, version string, err error) {
+func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte, manifestURL string) (pdf []byte, version string, err error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 
@@ -98,6 +98,11 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 	if len(vcBytes) > 0 {
 		if err := writeField(mw, "vc", vcBytes); err != nil {
 			return nil, "", fmt.Errorf("pdf-core update: write vc field: %w", err)
+		}
+	}
+	if manifestURL != "" {
+		if err := writeField(mw, "manifest_url", []byte(manifestURL)); err != nil {
+			return nil, "", fmt.Errorf("pdf-core update: write manifest_url field: %w", err)
 		}
 	}
 	if err := mw.Close(); err != nil {
@@ -179,6 +184,31 @@ func (c *Client) Verify(ctx context.Context, pdf []byte) (VerifyResult, error) {
 		result.VCBytes = decoded
 	}
 	return result, nil
+}
+
+// ExtractManifest posts pdf to POST /manifest/extract and returns the raw JUMBF
+// C2PA manifest store bytes embedded in the PDF (DCS-OR-C2PA-008).
+func (c *Client) ExtractManifest(ctx context.Context, pdf []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/manifest/extract", bytes.NewReader(pdf))
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core extract-manifest request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/pdf")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core extract-manifest: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	manifest, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core extract-manifest read: %w", err)
+	}
+	return manifest, nil
 }
 
 // checkStatus returns an error for non-2xx responses, including the status code

@@ -221,7 +221,7 @@ func extractLabeledChildJUMBFBox(parentJumbBox []byte, label string) ([]byte, er
 	return nil, fmt.Errorf("child JUMBF box %s not found", label)
 }
 
-func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) []byte {
+func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, remoteManifestURL string) []byte {
 	// Build a deterministic, syntactically valid JUMBF C2PA manifest-store:
 	//   jumb(c2pa) -> jumb(c2ma)
 	//                    |- jumb(c2pa.assertions)
@@ -254,6 +254,7 @@ func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusi
 		"self#jumbf=c2pa.assertions/c2pa.hash.data",
 		actionsAssertionHash[:],
 		"self#jumbf=c2pa.assertions/c2pa.actions.v2",
+		remoteManifestURL,
 	)
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
@@ -274,7 +275,7 @@ func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusi
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", [][]byte{manifestBox})
 }
 
-func renderVerificationManifestStore(originalC2PA []byte, manifestLabel string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
+func renderVerificationManifestStore(originalC2PA []byte, manifestLabel string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, remoteManifestURL string) ([]byte, error) {
 	manifestBoxes, err := extractTopLevelManifestBoxes(originalC2PA)
 	if err != nil {
 		return nil, err
@@ -294,14 +295,14 @@ func renderVerificationManifestStore(originalC2PA []byte, manifestLabel string, 
 	originalManifestHash := sha256.Sum256(originalManifestBox[8:])
 	originalSignatureHash := sha256.Sum256(originalSignatureBox[8:])
 
-	updateManifestBox := renderVerificationUpdateManifest(manifestLabel, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions)
+	updateManifestBox := renderVerificationUpdateManifest(manifestLabel, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions, remoteManifestURL)
 	children := make([][]byte, 0, len(manifestBoxes)+1)
 	children = append(children, manifestBoxes...)
 	children = append(children, updateManifestBox)
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", children), nil
 }
 
-func renderVerificationUpdateManifest(manifestLabel string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, parentSignatureHash []byte, hardBindingHash []byte, exclusions []c2paExclusion) []byte {
+func renderVerificationUpdateManifest(manifestLabel string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, parentSignatureHash []byte, hardBindingHash []byte, exclusions []c2paExclusion, remoteManifestURL string) []byte {
 	updateLabel := manifestLabel
 	hardBindingLabel := "c2pa.hash.data"
 	hardBindingPayload := renderMinimalDataHashAssertionCBOR(hardBindingHash, exclusions)
@@ -321,7 +322,7 @@ func renderVerificationUpdateManifest(manifestLabel string, payloadHash string, 
 	actionsURI := absoluteAssertionURI(updateLabel, "c2pa.actions.v2")
 
 	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", [][]byte{hardBindingBox, ingredientBox, actionsBox})
-	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:])
+	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:], remoteManifestURL)
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	protected := buildCoseProtectedHeadersWithX5Chain()
@@ -464,7 +465,7 @@ func renderMinimalDataHashAssertionCBOR(hashBytes []byte, exclusions []c2paExclu
 	return cborMap(pairs...)
 }
 
-func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBindingURL string, actionsHash []byte, actionsURL string) []byte {
+func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBindingURL string, actionsHash []byte, actionsURL string, remoteManifestURL string) []byte {
 	instanceID := "xmp:iid:" + uuidFromHashPrefix(payloadHash)
 	hardBindingHashedURI := cborMap(
 		cborText("url"), cborText(hardBindingURL),
@@ -480,13 +481,24 @@ func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBind
 		cborText("name"), cborText("DCS-PDF-CORE"),
 		cborText("version"), cborText("1.0"),
 	)
-	return cborMap(
+	pairs := [][]byte{
 		cborText("instanceID"), cborText(instanceID),
 		cborText("claim_generator_info"), claimGenInfo,
 		cborText("alg"), cborText("sha256"),
 		cborText("signature"), cborText("self#jumbf=c2pa.signature"),
 		cborText("created_assertions"), cborArray(hardBindingHashedURI, actionsHashedURI),
-	)
+	}
+	if remoteManifestURL != "" {
+		pairs = append(pairs,
+			cborText("remote_manifests"),
+			cborArray(cborMap(
+				cborText("url"), cborText(remoteManifestURL),
+				cborText("alg"), cborText("sha256"),
+				cborText("hash"), cborBytes(nil),
+			)),
+		)
+	}
+	return cborMap(pairs...)
 }
 
 func renderMinimalIngredientAssertionCBOR(payloadHash string, parentManifestLabel string, parentManifestHash []byte) []byte {
@@ -526,7 +538,7 @@ func renderVerificationActionsAssertionCBOR(ingredientURI string, ingredientHash
 	)
 }
 
-func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte) []byte {
+func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte, remoteManifestURL string) []byte {
 	instanceID := "xmp:iid:" + uuidFromHashPrefix(payloadHash)
 	hardBindingRef := cborMap(
 		cborText("url"), cborText(hardBindingURI),
@@ -547,13 +559,24 @@ func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardB
 		cborText("name"), cborText("DCS-PDF-CORE"),
 		cborText("version"), cborText("1.0"),
 	)
-	return cborMap(
+	pairs := [][]byte{
 		cborText("instanceID"), cborText(instanceID),
 		cborText("claim_generator_info"), claimGenInfo,
 		cborText("alg"), cborText("sha256"),
 		cborText("signature"), cborText(absoluteSignatureURI(manifestLabel)),
 		cborText("created_assertions"), cborArray(hardBindingRef, ingredientRef, actionsRef),
-	)
+	}
+	if remoteManifestURL != "" {
+		pairs = append(pairs,
+			cborText("remote_manifests"),
+			cborArray(cborMap(
+				cborText("url"), cborText(remoteManifestURL),
+				cborText("alg"), cborText("sha256"),
+				cborText("hash"), cborBytes(nil),
+			)),
+		)
+	}
+	return cborMap(pairs...)
 }
 
 func buildCoseProtectedHeadersWithX5Chain() []byte {
@@ -741,6 +764,66 @@ func updateManifestLabelFromHash(payloadHash string) string {
 // for the same payload — avoiding a cyclic-ingredient report from c2patool.
 func witnessManifestLabel(hardBindingHash []byte) string {
 	return urnUUIDFromHash(hex.EncodeToString(hardBindingHash)) + ":dcs-pdf-core:witness_1"
+}
+
+// ExtractRemoteManifestURL scans a C2PA manifest store's CBOR bytes for the
+// remote_manifests[0].url field and returns it.  Returns "" when absent or
+// when the structure cannot be parsed.
+func ExtractRemoteManifestURL(manifest []byte) string {
+	key := cborText("remote_manifests")
+	pos := bytes.Index(manifest, key)
+	if pos < 0 {
+		return ""
+	}
+	pos += len(key)
+	// Expect: array(1) map(n≥1) text("url") text(<url>) ...
+	// The map contains url + alg + hash (3 entries, header 0xa3), but we accept
+	// any non-empty definite-length map (0xa1–0xb7) with "url" as first key.
+	if pos >= len(manifest) || manifest[pos] != 0x81 {
+		return ""
+	}
+	pos++
+	if pos >= len(manifest) || manifest[pos] < 0xa1 || manifest[pos] > 0xb7 {
+		return ""
+	}
+	pos++
+	urlKey := cborText("url")
+	if pos+len(urlKey) > len(manifest) || !bytes.Equal(manifest[pos:pos+len(urlKey)], urlKey) {
+		return ""
+	}
+	pos += len(urlKey)
+	if pos >= len(manifest) {
+		return ""
+	}
+	b := manifest[pos]
+	if b>>5 != 3 { // major type 3 = text string
+		return ""
+	}
+	info := b & 0x1f
+	pos++
+	var urlLen int
+	switch {
+	case info <= 23:
+		urlLen = int(info)
+	case info == 24:
+		if pos >= len(manifest) {
+			return ""
+		}
+		urlLen = int(manifest[pos])
+		pos++
+	case info == 25:
+		if pos+2 > len(manifest) {
+			return ""
+		}
+		urlLen = int(manifest[pos])<<8 | int(manifest[pos+1])
+		pos += 2
+	default:
+		return ""
+	}
+	if pos+urlLen > len(manifest) {
+		return ""
+	}
+	return string(manifest[pos : pos+urlLen])
 }
 
 func absoluteManifestURI(manifestLabel string) string {

@@ -288,7 +288,9 @@ def step_post_payload(context, path, content_type):
 @when("I verify the compiled PDF through /verify")
 def step_verify_pdf(context):
     _request(context, "POST", "/verify", context.compiled_pdf, "application/pdf")
-    context.verified_pdf = context.last_response["body"]
+    import base64 as _b64
+    resp = json.loads(context.last_response["body"].decode("utf-8"))
+    context.verified_pdf = _b64.b64decode(resp["artifact"])
     _save_artifact(context, context.verified_pdf, "_verified")
 
 
@@ -1633,7 +1635,9 @@ def step_verify_stage_pdf(context, stage):
         f"verify of {stage} PDF failed (HTTP {context.last_response['status']}): "
         f"{context.last_response['body'][:300]}"
     )
-    context.verified_pdf = context.last_response["body"]
+    import base64 as _b64
+    resp = json.loads(context.last_response["body"].decode("utf-8"))
+    context.verified_pdf = _b64.b64decode(resp["artifact"])
     _save_artifact(context, context.verified_pdf, f"_verified_{stage.replace('-', '_')}")
 
 
@@ -1791,3 +1795,89 @@ def step_tampered_c2pa_hash_mismatch(context):
         "C2PA hash still matches tampered content — the flipped byte must fall "
         "inside the hash boundary (not in a JUMBF exclusion zone)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Remote manifest URL (DCS-OR-C2PA-008) steps
+# ---------------------------------------------------------------------------
+
+def _build_multipart_body_with_manifest_url(pdf_bytes, payload_text, manifest_url):
+    """Like _build_multipart_body but also includes a manifest_url field."""
+    boundary = b"dcs-pdf-manifest-url-boundary"
+    body = (
+        b"--" + boundary + b"\r\n"
+        b'Content-Disposition: form-data; name="pdf"; filename="doc.pdf"\r\n'
+        b"Content-Type: application/pdf\r\n\r\n"
+        + pdf_bytes
+        + b"\r\n"
+        b"--" + boundary + b"\r\n"
+        b'Content-Disposition: form-data; name="payload"; filename="payload.jsonld"\r\n'
+        b"Content-Type: application/ld+json\r\n\r\n"
+        + payload_text.encode("utf-8")
+        + b"\r\n"
+        b"--" + boundary + b"\r\n"
+        b'Content-Disposition: form-data; name="manifest_url"\r\n\r\n'
+        + manifest_url.encode("utf-8")
+        + b"\r\n"
+        b"--" + boundary + b"--\r\n"
+    )
+    content_type = "multipart/form-data; boundary=" + boundary.decode()
+    return body, content_type
+
+
+@when('I amend the PDF with a new payload and manifest URL "{manifest_url}":')
+def step_amend_with_manifest_url(context, manifest_url):
+    payload_text = context.text.strip().replace("http://127.0.0.1:8080", context.server_url)
+    body, content_type = _build_multipart_body_with_manifest_url(
+        context.compiled_pdf, payload_text, manifest_url
+    )
+    _request(context, "POST", "/update", body, content_type)
+    if context.last_response["status"] == 200:
+        context.updated_pdf = context.last_response["body"]
+        _save_artifact(context, context.updated_pdf, "_updated_manifest_url")
+
+
+@when("I amend the PDF with a new payload:")
+def step_amend_without_manifest_url(context):
+    payload_text = context.text.strip().replace("http://127.0.0.1:8080", context.server_url)
+    body, content_type = _build_multipart_body(context.compiled_pdf, payload_text)
+    _request(context, "POST", "/update", body, content_type)
+    if context.last_response["status"] == 200:
+        context.updated_pdf = context.last_response["body"]
+        _save_artifact(context, context.updated_pdf, "_updated_no_manifest_url")
+
+
+@then('the updated PDF C2PA manifest contains the remote manifest URL "{expected_url}"')
+def step_updated_pdf_has_manifest_url(context, expected_url):
+    # Use the /manifest/extract endpoint to get the active (latest) manifest store.
+    _request(context, "POST", "/manifest/extract", context.updated_pdf, "application/pdf")
+    assert context.last_response["status"] == 200, (
+        f"manifest/extract failed: {context.last_response['body'][:300]}"
+    )
+    c2pa_bytes = context.last_response["body"]
+    assert expected_url.encode("utf-8") in c2pa_bytes, (
+        f"remote manifest URL {expected_url!r} not found in C2PA manifest store"
+    )
+
+
+@then("the updated PDF C2PA manifest contains no remote manifest URL")
+def step_updated_pdf_has_no_manifest_url(context):
+    _request(context, "POST", "/manifest/extract", context.updated_pdf, "application/pdf")
+    assert context.last_response["status"] == 200, (
+        f"manifest/extract failed: {context.last_response['body'][:300]}"
+    )
+    c2pa_bytes = context.last_response["body"]
+    assert b"remote_manifests" not in c2pa_bytes, (
+        "remote_manifests key unexpectedly present in C2PA manifest store"
+    )
+
+
+@when("I extract the C2PA manifest store from the compiled PDF")
+def step_extract_manifest_store(context):
+    _request(context, "POST", "/manifest/extract", context.compiled_pdf, "application/pdf")
+
+
+@then("the manifest store response contains the JUMBF marker")
+def step_manifest_store_contains_jumbf(context):
+    body = context.last_response["body"]
+    assert b"jumb" in body, "manifest store response does not contain JUMBF marker 'jumb'"

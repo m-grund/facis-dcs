@@ -143,7 +143,7 @@ func AppendVerificationWitness(pdf []byte, payload []byte) ([]byte, error) {
 	exclusions := []c2paExclusion{}
 	var candidate []byte
 	for iteration := 0; iteration < 6; iteration++ {
-		updatedC2PA, err := renderVerificationManifestStore(originalC2PA, witnessManifestLabel(hardBindingHash), payloadHashHex, hardBindingHash, exclusions)
+		updatedC2PA, err := renderVerificationManifestStore(originalC2PA, witnessManifestLabel(hardBindingHash), payloadHashHex, hardBindingHash, exclusions, "")
 		if err != nil {
 			return nil, err
 		}

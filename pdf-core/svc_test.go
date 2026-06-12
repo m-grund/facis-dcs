@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -620,6 +621,7 @@ type verifyResult struct {
 	C2PASignatureValid bool   `json:"c2pa_signature_valid"`
 	VCBytes            string `json:"vc_bytes,omitempty"` // base64-encoded VC JSON
 	VCProofValid       bool   `json:"vc_proof_valid"`
+	Artifact           string `json:"artifact"` // base64-encoded verification-witness PDF
 }
 
 // TestVerify_ReturnsJSON verifies that POST /verify returns application/json
@@ -650,6 +652,44 @@ func TestVerify_ReturnsJSON(t *testing.T) {
 	}
 }
 
+// TestVerify_ArtifactFieldContainsWitnessPDF verifies that POST /verify
+// embeds the verification-witness PDF (base64-encoded) in the "artifact"
+// JSON field (DCS-OR-C2PA-008 witness requirement).
+func TestVerify_ArtifactFieldContainsWitnessPDF(t *testing.T) {
+	pdf := compilePDF(t)
+
+	rec := doRequest(http.MethodPost, "/verify",
+		bytes.NewReader(pdf), "application/pdf")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("verify: status %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result verifyResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode verify response: %v", err)
+	}
+	if result.Artifact == "" {
+		t.Fatal("expected non-empty artifact field in /verify JSON response")
+	}
+	artifactBytes, err := base64.StdEncoding.DecodeString(result.Artifact)
+	if err != nil {
+		t.Fatalf("base64 decode artifact: %v", err)
+	}
+	if !bytes.HasPrefix(artifactBytes, []byte("%PDF-")) {
+		t.Errorf("artifact is not a PDF (got %q...)", artifactBytes[:min(10, len(artifactBytes))])
+	}
+	if len(artifactBytes) <= len(pdf) {
+		t.Error("artifact (witness PDF) must be larger than the original compiled PDF")
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // TestVerify_JSONIncludesVCBytesWhenPresent verifies that when a PDF contains
 // a contract-lifecycle-vc.json attachment /verify returns its base64 bytes in
 // the vc_bytes field so the backend can check the status list without parsing
@@ -677,6 +717,103 @@ func TestVerify_JSONIncludesVCBytesWhenPresent(t *testing.T) {
 	}
 	if result.VCBytes == "" {
 		t.Error("expected vc_bytes to be non-empty when PDF contains contract-lifecycle-vc.json")
+	}
+}
+
+// ---- Update with manifest URL -----------------------------------------------
+
+// TestUpdate_WithManifestURL_URLPresentInManifest verifies that when a
+// manifest_url multipart field is supplied, the returned PDF's C2PA manifest
+// store contains the URL in the remote_manifests CBOR field.
+func TestUpdate_WithManifestURL_URLPresentInManifest(t *testing.T) {
+	const wantURL = "https://api.example.com/contracts/did:example:svc/c2pa-manifest"
+	basePDF := compilePDF(t)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for name, data := range map[string][]byte{
+		"pdf":          basePDF,
+		"payload":      []byte(minimalPayloadAmended),
+		"manifest_url": []byte(wantURL),
+	} {
+		fw, _ := mw.CreateFormField(name)
+		_, _ = fw.Write(data)
+	}
+	mw.Close()
+
+	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	manifest, err := compiler.ExtractManifestStore(rec.Body.Bytes())
+	if err != nil {
+		t.Fatalf("ExtractManifestStore: %v", err)
+	}
+	if got := compiler.ExtractRemoteManifestURL(manifest); got != wantURL {
+		t.Errorf("remote manifest URL: got %q, want %q", got, wantURL)
+	}
+}
+
+// TestUpdate_WithoutManifestURL_NoRemoteRef verifies that when manifest_url is
+// absent the manifest store contains no remote_manifests entry.
+func TestUpdate_WithoutManifestURL_NoRemoteRef(t *testing.T) {
+	basePDF := compilePDF(t)
+
+	body, ct := buildMultipartBody(t, basePDF, minimalPayloadAmended)
+	rec := doRequest(http.MethodPost, "/update", body, ct)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	manifest, err := compiler.ExtractManifestStore(rec.Body.Bytes())
+	if err != nil {
+		t.Fatalf("ExtractManifestStore: %v", err)
+	}
+	if got := compiler.ExtractRemoteManifestURL(manifest); got != "" {
+		t.Errorf("expected no remote manifest URL, got %q", got)
+	}
+}
+
+// ---- POST /manifest/extract -------------------------------------------------
+
+// TestExtractManifest_ReturnsManifestBytes verifies that POST /manifest/extract
+// on a compiled PDF returns non-empty JUMBF bytes starting with the "jumb" marker.
+func TestExtractManifest_ReturnsManifestBytes(t *testing.T) {
+	pdf := compilePDF(t)
+
+	rec := doRequest(http.MethodPost, "/manifest/extract",
+		bytes.NewReader(pdf), "application/pdf")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Content-Type") != "application/octet-stream" {
+		t.Errorf("expected application/octet-stream, got %q", rec.Header().Get("Content-Type"))
+	}
+	body := rec.Body.Bytes()
+	if len(body) == 0 {
+		t.Fatal("expected non-empty manifest bytes")
+	}
+	if !bytes.Contains(body, []byte("jumb")) {
+		t.Error("manifest bytes do not contain JUMBF marker 'jumb'")
+	}
+}
+
+// TestExtractManifest_WrongContentType verifies that a non-PDF Content-Type
+// returns 415.
+func TestExtractManifest_WrongContentType(t *testing.T) {
+	rec := doRequest(http.MethodPost, "/manifest/extract",
+		strings.NewReader("hello"), "text/plain")
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415, got %d", rec.Code)
+	}
+}
+
+// TestExtractManifest_InvalidPDF verifies that a request body that is not a
+// valid PDF returns 400.
+func TestExtractManifest_InvalidPDF(t *testing.T) {
+	rec := doRequest(http.MethodPost, "/manifest/extract",
+		bytes.NewReader([]byte("%PDF-garbage")), "application/pdf")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 

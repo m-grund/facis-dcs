@@ -77,6 +77,7 @@ paths:
                                     - match
                                     - c2pa_signature_valid
                                     - vc_proof_valid
+                                    - artifact
                                 properties:
                                     match:
                                         type: boolean
@@ -90,6 +91,9 @@ paths:
                                     vc_proof_valid:
                                         type: boolean
                                         description: True when a VC attachment is present and its proof field is structurally valid.
+                                    artifact:
+                                        type: string
+                                        description: Base64-encoded verification-witness PDF. The witness PDF is the submitted PDF with a second C2PA manifest appended, proving the verification event occurred.
                 "400":
                     $ref: '#/components/responses/BadRequest'
                 "409":
@@ -132,6 +136,15 @@ paths:
                                         When provided the call proceeds even when the JSON-LD
                                         payload is identical to the current embedded revision,
                                         because the VC attachment is itself a provenance event.
+                                manifest_url:
+                                    type: string
+                                    description: |
+                                        Optional stable public URL at which the C2PA manifest
+                                        store for this document can be retrieved
+                                        (DCS-OR-C2PA-008). When supplied, the URL is embedded
+                                        in the remote_manifests field of the signed C2PA claim
+                                        CBOR so verifiers can fetch the full manifest chain
+                                        without having the PDF on hand.
             responses:
                 "200":
                     description: OK response.
@@ -183,6 +196,36 @@ paths:
                     $ref: '#/components/responses/BadRequest'
                 "409":
                     $ref: '#/components/responses/Conflict'
+                "415":
+                    $ref: '#/components/responses/UnsupportedMediaType'
+    /manifest/extract:
+        post:
+            tags:
+                - dcspdfcore
+            summary: Extract embedded C2PA manifest store
+            description: |
+                Extract the raw JUMBF C2PA manifest store bytes from an existing PDF
+                (DCS-OR-C2PA-008). Returns the manifest store as an octet-stream so
+                callers can inspect or relay the manifest independently of the PDF.
+            operationId: extractManifest
+            requestBody:
+                required: true
+                content:
+                    application/pdf:
+                        schema:
+                            type: string
+                            format: binary
+                            description: PDF containing an embedded C2PA manifest store
+            responses:
+                "200":
+                    description: Raw JUMBF manifest store bytes.
+                    content:
+                        application/octet-stream:
+                            schema:
+                                type: string
+                                format: binary
+                "400":
+                    $ref: '#/components/responses/BadRequest'
                 "415":
                     $ref: '#/components/responses/UnsupportedMediaType'
     /ontology/dcs-pdf-core:

@@ -19,11 +19,11 @@ import (
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/ipfs"
 	cweeventtype "digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
-	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
-	"digital-contracting-service/internal/pdfgeneration/provenance"
+	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tplevttype "digital-contracting-service/internal/templaterepository/datatype/eventtype"
-	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
+	tpldb "digital-contracting-service/internal/templaterepository/db"
 )
 
 // contractLifecycleEventTypes is the set of CWE event types that represent a
@@ -64,13 +64,17 @@ type minimalCWEEvent struct {
 type Subscriber struct {
 	DB         *sqlx.DB
 	IPFSClient *ipfs.APIClient
-	CRepo      *cwerepo.PostgresContractRepo
-	TRepo      *tplrepo.PostgresContractTemplateRepo
+	CRepo      cwedb.ContractRepo
+	TRepo      tpldb.ContractTemplateRepo
 	PDFCore    *pdfcore.Client
 	IssuerDID  string
 	// VCIssuer issues and signs a W3C VC for each lifecycle event (DCS-OR-C2PA-004/005).
-	// When nil, no VC is embedded in the C2PA manifest.
 	VCIssuer provenance.VCIssuer
+	// ManifestBaseURL is the public base URL used to construct the stable
+	// remote C2PA manifest URL embedded in each lifecycle assertion
+	// (DCS-OR-C2PA-008).  Must be set before Start is called.
+	// Example: "https://api.example.com"
+	ManifestBaseURL string
 }
 
 // Start registers the event handler with the NATS sub-client and begins
@@ -140,37 +144,31 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	}
 
 	state := cweEvt.NewState
-	if state == "" {
-		state = contract.State
-	}
 	effectiveAt := cweEvt.OccurredAt
-	if effectiveAt.IsZero() {
-		effectiveAt = time.Now().UTC()
-	}
 
 	// Map the raw CWE state to the SRS-defined C2PA vocabulary (DCS-OR-C2PA-003).
-	c2paState, err := provenance.MapCWEStateToC2PAStrict(state)
+	c2paState, err := provenance.MapCWEStateToC2PA(state)
 	if err != nil {
 		return fmt.Errorf("map contract state %q to C2PA state: %w", state, err)
 	}
 
 	// Fetch the base PDF and check for idempotency.
-	var cidStr, currentPdfC2PAState string
-	_ = tx.QueryRowContext(ctx,
-		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_c2pa_state,'') FROM contracts WHERE did=$1`, cweEvt.DID,
-	).Scan(&cidStr, &currentPdfC2PAState)
+	pdfState, err := s.CRepo.ReadPDFState(ctx, tx, cweEvt.DID)
+	if err != nil {
+		return fmt.Errorf("read PDF state for contract %s: %w", cweEvt.DID, err)
+	}
 
-	if currentPdfC2PAState == c2paState {
+	if pdfState.C2PAState == c2paState {
 		// Already embedded by a concurrent export call — skip.
 		return nil
 	}
 
-	if cidStr == "" {
+	if pdfState.IPFSCID == "" {
 		return fmt.Errorf("no cached PDF for contract %s; export must be called before state-change events can chain", cweEvt.DID)
 	}
-	ipfsResult, err := s.IPFSClient.FetchFile(cidStr)
+	ipfsResult, err := s.IPFSClient.FetchFile(pdfState.IPFSCID)
 	if err != nil || len(ipfsResult.Data) == 0 {
-		return fmt.Errorf("fetch PDF from IPFS %s for contract %s: %w", cidStr, cweEvt.DID, err)
+		return fmt.Errorf("fetch PDF from IPFS %s for contract %s: %w", pdfState.IPFSCID, cweEvt.DID, err)
 	}
 	existingPDF := []byte(ipfsResult.Data)
 
@@ -178,19 +176,19 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	h := sha256.Sum256(existingPDF)
 	fileHash := hex.EncodeToString(h[:])
 
-	// Issue W3C VC for this lifecycle event when a VCIssuer is configured (DCS-OR-C2PA-004/005).
-	var vcBytes []byte
-	if s.VCIssuer != nil {
-		_, vcBytes, err = s.VCIssuer.IssueContractLifecycleVC(
-			ctx, cweEvt.DID, fileHash, c2paState, cweEvt.Reason, s.IssuerDID, effectiveAt,
-		)
-		if err != nil {
-			return fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
-		}
+	_, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
+		ctx, cweEvt.DID, fileHash, c2paState, cweEvt.Reason, s.IssuerDID, effectiveAt,
+	)
+	if err != nil {
+		return fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
 	}
 
-	// pdf-core appends C2PA incremental update with VC attachment.
-	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, existingPDF, jsonldBytes, vcBytes)
+	// pdf-core appends C2PA incremental update with VC attachment and remote manifest URL.
+	manifestURL := ""
+	if s.ManifestBaseURL != "" {
+		manifestURL = s.ManifestBaseURL + "/contracts/" + cweEvt.DID + "/c2pa-manifest"
+	}
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, existingPDF, jsonldBytes, vcBytes, manifestURL)
 	if err != nil {
 		return fmt.Errorf("pdf-core update for contract %s: %w", cweEvt.DID, err)
 	}
@@ -201,10 +199,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("store updated PDF in IPFS for contract %s: %w", cweEvt.DID, err)
 	}
 
-	if _, err = tx.ExecContext(ctx,
-		`UPDATE contracts SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3 WHERE did=$4`,
-		storeResult.Identifier.Value, rendererVersion, c2paState, cweEvt.DID,
-	); err != nil {
+	if err = s.CRepo.UpdatePDFState(ctx, tx, cweEvt.DID, cwedb.ContractPDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState}); err != nil {
 		return fmt.Errorf("update pdf_ipfs_cid for %s: %w", cweEvt.DID, err)
 	}
 
@@ -242,51 +237,33 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 	}
 
 	state := tplEvt.NewState
-	if state == "" {
-		state = tpl.State
-	}
 	effectiveAt := tplEvt.OccurredAt
-	if effectiveAt.IsZero() {
-		effectiveAt = time.Now().UTC()
-	}
 
-	c2paState, err := provenance.MapCWEStateToC2PAStrict(state)
+	c2paState, err := provenance.MapCWEStateToC2PA(state)
 	if err != nil {
 		return fmt.Errorf("map template state %q to C2PA state: %w", state, err)
 	}
 
-	var cidStr, currentPdfC2PAState string
-	_ = tx.QueryRowContext(ctx,
-		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_c2pa_state,'') FROM contract_templates WHERE did=$1`,
-		tplEvt.DID,
-	).Scan(&cidStr, &currentPdfC2PAState)
+	tplPDFState, err := s.TRepo.ReadPDFState(ctx, tx, tplEvt.DID)
+	if err != nil {
+		return fmt.Errorf("read PDF state for template %s: %w", tplEvt.DID, err)
+	}
 
-	if currentPdfC2PAState == c2paState {
+	if tplPDFState.C2PAState == c2paState {
 		return nil // Already embedded — skip.
 	}
 
 	var pdfBytes []byte
-	if cidStr != "" {
-		ipfsResult, err := s.IPFSClient.FetchFile(cidStr)
+	if tplPDFState.IPFSCID != "" {
+		ipfsResult, err := s.IPFSClient.FetchFile(tplPDFState.IPFSCID)
 		if err != nil || len(ipfsResult.Data) == 0 {
-			return fmt.Errorf("fetch PDF from IPFS %s for template %s: %w", cidStr, tplEvt.DID, err)
+			return fmt.Errorf("fetch PDF from IPFS %s for template %s: %w", tplPDFState.IPFSCID, tplEvt.DID, err)
 		}
 		pdfBytes = ipfsResult.Data
 	} else {
-		// No prior export — build the base PDF from pdf-core /download.
 		pdfBytes, _, err = s.PDFCore.Download(ctx, jsonldBytes)
 		if err != nil {
 			return fmt.Errorf("pdf-core download for template %s: %w", tplEvt.DID, err)
-		}
-
-		// If the current state is not "draft" the template was never captured at
-		// creation. Prepend a synthetic draft genesis manifest so the chain
-		// starts from the beginning of the lifecycle.
-		if c2paState != "draft" {
-			pdfBytes, err = s.appendOneTemplateManifest(ctx, tx, tplEvt.DID, "draft", jsonldBytes, pdfBytes, effectiveAt)
-			if err != nil {
-				return fmt.Errorf("append draft genesis manifest for template %s: %w", tplEvt.DID, err)
-			}
 		}
 	}
 
@@ -311,7 +288,7 @@ func (s *Subscriber) appendOneTemplateManifest(
 	ctx context.Context, tx *sqlx.Tx,
 	did, state string, jsonldBytes, pdfBytes []byte, effectiveAt time.Time,
 ) ([]byte, error) {
-	c2paState, err := provenance.MapCWEStateToC2PAStrict(state)
+	c2paState, err := provenance.MapCWEStateToC2PA(state)
 	if err != nil {
 		return nil, fmt.Errorf("map template state %q to C2PA state: %w", state, err)
 	}
@@ -319,19 +296,20 @@ func (s *Subscriber) appendOneTemplateManifest(
 	h := sha256.Sum256(pdfBytes)
 	fileHash := hex.EncodeToString(h[:])
 
-	var vcBytes []byte
-	if s.VCIssuer != nil {
-		_, vcBytes, err = s.VCIssuer.IssueContractLifecycleVC(
-			ctx, did, fileHash, c2paState, "", s.IssuerDID, effectiveAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("issue lifecycle VC: %w", err)
-		}
+	_, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
+		ctx, did, fileHash, c2paState, "", s.IssuerDID, effectiveAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("issue lifecycle VC: %w", err)
 	}
 
-	// pdf-core appends C2PA incremental update with VC attachment.
+	// pdf-core appends C2PA incremental update with VC attachment and remote manifest URL.
 	// vcBytes being non-nil bypasses the "no-changes" guard for genesis VC attachment.
-	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes)
+	manifestURL := ""
+	if s.ManifestBaseURL != "" {
+		manifestURL = s.ManifestBaseURL + "/templates/" + did + "/c2pa-manifest"
+	}
+	updatedPDF, rendererVersion, err := s.PDFCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, manifestURL)
 	if err != nil {
 		return nil, fmt.Errorf("pdf-core update for template %s: %w", did, err)
 	}
@@ -341,13 +319,9 @@ func (s *Subscriber) appendOneTemplateManifest(
 		return nil, fmt.Errorf("store updated PDF in IPFS for template %s: %w", did, err)
 	}
 
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE contract_templates SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3 WHERE did=$4`,
-		storeResult.Identifier.Value, rendererVersion, c2paState, did,
-	); err != nil {
+	if err := s.TRepo.UpdatePDFState(ctx, tx, did, tpldb.ContractTemplatePDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState}); err != nil {
 		return nil, fmt.Errorf("update contract_templates pdf_ipfs_cid: %w", err)
 	}
 
 	return updatedPDF, nil
 }
-

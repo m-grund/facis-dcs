@@ -57,7 +57,7 @@ Feature: Verification witness
       """
     And I compile the payload through /download
     When I verify the compiled PDF through /verify
-    Then the response content type is "application/pdf"
+    Then the response content type is "application/json"
     And the verified PDF is longer than the original
     And the verified PDF preserves the original bytes as a prefix
     And the verified PDF C2PA attachment contains two manifest boxes
