@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
@@ -37,7 +38,7 @@ const odrlPayload = `{
 // TestExtraNamespaceCompilationSucceeds verifies that a payload containing an
 // unknown namespace (odrl) compiles without error.
 func TestExtraNamespaceCompilationSucceeds(t *testing.T) {
-	_, err := CompilePDF([]byte(odrlPayload))
+	_, err := CompilePDF(context.Background(), []byte(odrlPayload))
 	if err != nil {
 		t.Fatalf("CompilePDF with extra namespace: %v", err)
 	}
@@ -46,7 +47,7 @@ func TestExtraNamespaceCompilationSucceeds(t *testing.T) {
 // TestODRLDataPreservedInEmbeddedJSONLD verifies that ODRL properties survive
 // the compile→extract round-trip in the embedded JSON-LD attachment.
 func TestODRLDataPreservedInEmbeddedJSONLD(t *testing.T) {
-	pdf, err := CompilePDF([]byte(odrlPayload))
+	pdf, err := CompilePDF(context.Background(), []byte(odrlPayload))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestODRLDataPreservedInEmbeddedJSONLD(t *testing.T) {
 // TestExtraSemanticDataNotRenderedInPDF verifies that ODRL property names and
 // type tokens do not appear in the PDF page content streams (BT/ET blocks).
 func TestExtraSemanticDataNotRenderedInPDF(t *testing.T) {
-	pdf, err := CompilePDF([]byte(odrlPayload))
+	pdf, err := CompilePDF(context.Background(), []byte(odrlPayload))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

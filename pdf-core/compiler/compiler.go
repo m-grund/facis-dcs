@@ -4,6 +4,7 @@ import (
 	_ "embed"
 
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -20,7 +21,7 @@ import (
 //go:embed testdata/fonts/LiberationSans-Regular.ttf
 var liberationSansTTF []byte
 
-func CompilePDF(payload []byte) ([]byte, error) {
+func CompilePDF(ctx context.Context, payload []byte) ([]byte, error) {
 	nquads, expanded, err := NormalizePayload(payload)
 	if err != nil {
 		return nil, err
@@ -29,16 +30,14 @@ func CompilePDF(payload []byte) ([]byte, error) {
 	sum := sha256.Sum256(nquads)
 	hashHex := hex.EncodeToString(sum[:])
 
-	// Extract the raw @context so extractDocumentModel can build the namespace
-	// map and fetch ontology terms. The JSON is already validated by NormalizePayload.
+	// Raw @context is already validated by NormalizePayload.
 	var rawRoot map[string]any
 	json.Unmarshal(payload, &rawRoot) //nolint:errcheck // already validated above
 	rawCtx, _ := rawRoot["@context"].(map[string]any)
 	rootID, _ := rawRoot["@id"].(string)
 
-	// Embed the original JSON-LD so /verify can extract and re-compile it.
 	doc := extractDocumentModel(expanded, rootID, rawCtx, payload, hashHex)
-	return renderPDF(doc), nil
+	return renderPDF(ctx, doc)
 }
 
 func ExtractEmbeddedJSONLD(pdf []byte) ([]byte, error) {
@@ -121,18 +120,17 @@ func ExtractLatestEmbeddedJSONLD(pdf []byte) ([]byte, error) {
 	return append([]byte(nil), pdf[streamStart:streamStart+streamEnd]...), nil
 }
 
-func AppendVerificationWitness(pdf []byte, payload []byte) ([]byte, error) {
+func AppendVerificationWitness(ctx context.Context, pdf []byte, payload []byte) ([]byte, error) {
 	nquads, _, err := NormalizePayload(payload)
 	if err != nil {
 		return nil, err
 	}
 	hash := sha256.Sum256(nquads)
+	hashHex := hex.EncodeToString(hash[:])
 	startxref, err := previousStartXref(pdf)
 	if err != nil {
 		return nil, err
 	}
-	hashHex := hex.EncodeToString(hash[:])
-	payloadHashHex := hex.EncodeToString(hash[:])
 	originalC2PA, err := extractEmbeddedStreamByFileSpecName(pdf, "content_credential.c2pa")
 	if err != nil {
 		return nil, err
@@ -143,7 +141,7 @@ func AppendVerificationWitness(pdf []byte, payload []byte) ([]byte, error) {
 	exclusions := []c2paExclusion{}
 	var candidate []byte
 	for iteration := 0; iteration < 6; iteration++ {
-		updatedC2PA, err := renderVerificationManifestStore(originalC2PA, witnessManifestLabel(hardBindingHash), payloadHashHex, hardBindingHash, exclusions)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), hashHex, hardBindingHash, exclusions)
 		if err != nil {
 			return nil, err
 		}

@@ -1,11 +1,23 @@
 package compiler
 
 import (
+	"context"
+	"crypto/ed25519"
 	"regexp"
 	"sync"
-
-	"crypto/ed25519"
 )
+
+type Signer interface {
+	Sign(ctx context.Context, data []byte) ([]byte, error)
+}
+
+type localSigner struct {
+	priv ed25519.PrivateKey
+}
+
+func (s localSigner) Sign(_ context.Context, data []byte) ([]byte, error) {
+	return ed25519.Sign(s.priv, data), nil
+}
 
 type glossaryTerm struct {
 	Term       string
@@ -127,7 +139,7 @@ type bmffBox struct {
 }
 
 type signingMaterial struct {
-	signer       ed25519.PrivateKey
+	signer       Signer
 	certChainDER [][]byte
 }
 
@@ -148,6 +160,9 @@ const (
 	envX5ChainPEM                     = "DCS_PDF_CORE_C2PA_X5CHAIN_PEM"
 	envX5ChainPEMFile                 = "DCS_PDF_CORE_C2PA_X5CHAIN_PEM_FILE"
 	envRequireExternalSigningMaterial = "DCS_PDF_CORE_C2PA_REQUIRE_EXTERNAL_SIGNING_MATERIAL"
+	envCryptoProviderURL              = "DCS_PDF_CORE_CRYPTO_PROVIDER_URL"
+	envCryptoProviderNamespace        = "DCS_PDF_CORE_CRYPTO_PROVIDER_NAMESPACE"
+	envCryptoProviderKey              = "DCS_PDF_CORE_CRYPTO_PROVIDER_KEY"
 )
 
 var (

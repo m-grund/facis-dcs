@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -50,7 +51,10 @@ func TestSectionHeadingsAppearInPDF(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Second clause."}}},
 		}},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, heading := range []string{"1. Background", "2. Terms"} {
 		if !bytes.Contains(pdf, []byte(heading)) {
 			t.Errorf("PDF must contain section heading %q", heading)
@@ -66,7 +70,10 @@ func TestPDFHasOutlineWhenSectionsPresent(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Content."}}},
 		}},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/Outlines")) {
 		t.Error("PDF catalog must contain /Outlines when the document has named sections")
 	}
@@ -80,7 +87,10 @@ func TestPDFOutlineItemMatchesSectionHeading(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Content."}}},
 		}},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/Title (My Section)")) {
 		t.Error("PDF outline must contain /Title (My Section) matching the section heading")
 	}
@@ -94,7 +104,10 @@ func TestStructTreeHasSectAndH1Elements(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Para."}}},
 		}},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/S /Sect")) {
 		t.Error("PDF structure tree must contain /S /Sect for each section")
 	}
@@ -344,7 +357,10 @@ func TestH1TagInContentStream(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Body text."}}},
 		}},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/H1 <<")) {
 		t.Error("section heading must use /H1 tag in content stream")
 	}
@@ -367,7 +383,10 @@ func TestParentTreeCoversAllMCIDs(t *testing.T) {
 	for _, p := range pages {
 		totalMCIDs += len(p.Lines)
 	}
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The ParentTree must have at least as many entries as there are MCIDs.
 	// The entries look like "N 0 R" inside the /Nums array.
@@ -542,7 +561,10 @@ func TestGlossaryAppearsInOutline(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "A clause."}}},
 		}},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/Title (Glossary)")) {
 		t.Error("PDF outline must contain a /Title (Glossary) bookmark entry")
 	}
@@ -738,7 +760,10 @@ func TestGlossaryLinkAnnotationUsesExplicitDestination(t *testing.T) {
 		FileID:        strings.Repeat("0", 64),
 		NamespaceMap:  map[string]string{},
 	}
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if bytes.Contains(pdf, []byte("/Dest (glossary-")) {
 		t.Error("glossary link annotations must use explicit array destinations [page /XYZ ...], not named string destinations (glossary-N) — string destinations require a /Names /Dests lookup not supported by all viewers")
 	}

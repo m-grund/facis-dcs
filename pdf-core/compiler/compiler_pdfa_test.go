@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"math"
 	"strconv"
@@ -32,7 +33,10 @@ func minimalDocWithSigFields() documentModel {
 // at least four bytes each with a decimal value greater than 127. This marker
 // signals to tools that the file may contain binary data.
 func TestPDFHeaderBinaryComment(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Find the end of the first line ("%PDF-1.7\n")
 	firstNL := bytes.IndexByte(pdf, '\n')
@@ -63,7 +67,10 @@ func TestPDFHeaderBinaryComment(t *testing.T) {
 // explicitly set to true.
 func TestAcroFormNoNeedAppearances(t *testing.T) {
 	// Use a doc with signature fields so the AcroForm object is emitted.
-	pdf := renderPDF(minimalDocWithSigFields())
+	pdf, err := renderPDF(context.Background(), minimalDocWithSigFields())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if bytes.Contains(pdf, []byte("/NeedAppearances true")) {
 		t.Error("AcroForm contains /NeedAppearances true; must be absent or false (ISO 19005-3 clause 6.4.1)")
@@ -75,7 +82,10 @@ func TestAcroFormNoNeedAppearances(t *testing.T) {
 // A TrueType font requires /FontFile2 in its /FontDescriptor, and the
 // /FontDescriptor must be referenced from the /Font object.
 func TestFontIsEmbedded(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !bytes.Contains(pdf, []byte("/FontFile2")) {
 		t.Error("PDF does not contain /FontFile2; font program must be embedded (ISO 19005-3 clause 6.2.11.4.1)")
@@ -89,7 +99,10 @@ func TestFontIsEmbedded(t *testing.T) {
 // PDF/A version and conformance level shall be specified using the PDF/A
 // Identification extension schema (pdfaid:part and pdfaid:conformance).
 func TestXMPHasPDFAIdentification(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !bytes.Contains(pdf, []byte(`pdfaid:part="3"`)) {
 		t.Error(`XMP metadata missing pdfaid:part="3" (ISO 19005-3 clause 6.6.4)`)
@@ -147,7 +160,10 @@ func TestGlossaryURIArrowIsASCII(t *testing.T) {
 		FileID:        strings.Repeat("0", 64),
 	}
 
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The PDF content must not contain UTF-8 multi-byte sequences. Scan for
 	// any Tj string operand that contains bytes > 127.
@@ -179,11 +195,11 @@ func TestGlossaryURIArrowIsASCII(t *testing.T) {
 //   - produces an XRef stream whose /Length matches the actual stream byte count
 //     (ISO 19005-3:2012 clause 6.1.7.1)
 func TestVerificationAppendixHasIDAndValidXRefStream(t *testing.T) {
-	base, err := CompilePDF([]byte(minimalPayloadBase))
+	base, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := AppendVerificationWitness(base, []byte(minimalPayloadBase))
+	result, err := AppendVerificationWitness(context.Background(), base, []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("AppendVerificationWitness: %v", err)
 	}
@@ -234,7 +250,10 @@ func TestVerificationAppendixHasIDAndValidXRefStream(t *testing.T) {
 // without a schema extension declaration causes veraPDF failures. C2PA data
 // belongs in the binary JUMBF attachment, not in XMP.
 func TestXMPNoUnregisteredC2PANamespace(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if bytes.Contains(pdf, []byte("c2pa.org/c2pa")) {
 		t.Error("XMP metadata references unregistered c2pa namespace (http://c2pa.org/c2pa); " +
@@ -247,7 +266,10 @@ func TestXMPNoUnregisteredC2PANamespace(t *testing.T) {
 // ISO 19005-3:2012. The absence of the xpacket wrapper is flagged by veraPDF
 // as "XMP not included in 'xpacket'" (clause 6.6.3).
 func TestXMPWrappedInXpacket(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !bytes.Contains(pdf, []byte("<?xpacket begin=")) {
 		t.Error("XMP metadata missing opening xpacket processing instruction (ISO 19005-3 clause 6.6.3)")
@@ -261,7 +283,10 @@ func TestXMPWrappedInXpacket(t *testing.T) {
 // property embeds the renderer version so consumers can identify which build
 // produced the PDF without any out-of-band version registry.
 func TestXMPCreatorToolContainsRendererVersion(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	expected := []byte(`xmp:CreatorTool="DCS-PDF-CORE ` + RendererVersion + `"`)
 	if !bytes.Contains(pdf, expected) {
@@ -274,7 +299,10 @@ func TestXMPCreatorToolContainsRendererVersion(t *testing.T) {
 // ISO 19005-3:2012 clause 6.4.7 (Table 4). veraPDF flags the absence of
 // /ModDate as "Embedded file Params has no ModDate entry".
 func TestEmbeddedFileParamsHasModDate(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The embedded file stream dict contains /Params << ... >>. Verify
 	// /ModDate appears inside it.
@@ -298,7 +326,10 @@ func TestEmbeddedFileParamsHasModDate(t *testing.T) {
 // beyond the asset boundary; such ranges are flagged by validators as
 // "extra data hash exclusions found" and cause hard-binding hash failures.
 func TestC2PAExclusionsWithinFileBounds(t *testing.T) {
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The exclusion ranges are serialised as CBOR inside the C2PA JUMBF
 	// stream. Look for the CBOR unsigned-integer encoding of the PDF length.
@@ -456,7 +487,10 @@ func TestFontWidthsConsistentWithEmbeddedTTF(t *testing.T) {
 	ttfWidths := parseTTFWidths(t, liberationSansTTF, 32, 127)
 
 	// Extract the /Widths array from a compiled PDF.
-	pdf := renderPDF(minimalDoc())
+	pdf, err := renderPDF(context.Background(), minimalDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	widthsStart := bytes.Index(pdf, []byte("/Widths ["))
 	if widthsStart < 0 {
 		t.Fatal("PDF does not contain /Widths array in font dictionary")

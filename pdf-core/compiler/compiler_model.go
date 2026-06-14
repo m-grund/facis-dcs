@@ -1,10 +1,6 @@
 package compiler
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -109,20 +105,20 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	}
 	compactSectionLinks(model.Sections)
 
-	// Glossary: fetch ontology term definitions, then match against ontology-link
-	// references collected from section content (depth-first, encounter order).
-	allTerms := ontologyTerms(rawCtx)
-	referencedIRIs := make(map[string]struct{})
-	var refIRIOrder []string
+	// Glossary: collect ontology-link IRIs from section content in depth-first encounter order.
+	seen := make(map[string]struct{})
 	var collectSectionRefs func(sections []sectionData)
 	collectSectionRefs = func(sections []sectionData) {
 		for _, section := range sections {
 			for _, clause := range section.Clauses {
 				for _, seg := range clause.Segments {
 					if seg.Type == "ontology-link" && seg.Ref != "" {
-						if _, seen := referencedIRIs[seg.Ref]; !seen {
-							refIRIOrder = append(refIRIOrder, seg.Ref)
-							referencedIRIs[seg.Ref] = struct{}{}
+						if _, ok := seen[seg.Ref]; !ok {
+							seen[seg.Ref] = struct{}{}
+							model.Glossary = append(model.Glossary, glossaryTerm{
+								Term:    compactIRI(seg.Ref, model.NamespaceMap),
+								TermURI: seg.Ref,
+							})
 						}
 					}
 				}
@@ -131,30 +127,6 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 		}
 	}
 	collectSectionRefs(model.Sections)
-
-	seen := map[string]struct{}{}
-	for _, refIRI := range refIRIOrder {
-		if _, exists := seen[refIRI]; exists {
-			continue
-		}
-		seen[refIRI] = struct{}{}
-		found := false
-		for _, term := range allTerms {
-			if term.TermURI == refIRI {
-				model.Glossary = append(model.Glossary, term)
-				found = true
-				break
-			}
-		}
-		if !found {
-			// Compact the IRI to a prefix:localName form for display if possible.
-			display := compactIRI(refIRI, model.NamespaceMap)
-			model.Glossary = append(model.Glossary, glossaryTerm{
-				Term:    display,
-				TermURI: refIRI,
-			})
-		}
-	}
 
 	return model
 }
@@ -408,125 +380,3 @@ func compactIRI(iri string, nsMap map[string]string) string {
 	return iri
 }
 
-// ---- Ontology term fetching --------------------------------------------------
-
-// ontologyTerms resolves each namespace URI declared in the @context by
-// performing a fresh HTTP GET (Cache-Control: no-cache) against the URI and
-// parsing the response as a JSON-LD expanded array. Terms are extracted from
-// rdfs:comment or skos:definition, falling back to rdfs:label.
-// This runs on every compilation — no caching — so the self-hosted ontology
-// at http://127.0.0.1:8080/ontology/dcs-pdf-core is always fetched live.
-func ontologyTerms(ctx map[string]any) []glossaryTerm {
-	client := &http.Client{}
-	keys := make([]string, 0, len(ctx))
-	for k := range ctx {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	terms := make([]glossaryTerm, 0)
-	for _, prefix := range keys {
-		uri, ok := ctx[prefix].(string)
-		if !ok || strings.HasPrefix(prefix, "@") {
-			continue
-		}
-		fetchURL := strings.TrimRight(uri, "#/")
-		req, err := http.NewRequest(http.MethodGet, fetchURL, nil)
-		if err != nil {
-			continue
-		}
-		req.Header.Set("Accept", "application/ld+json, application/json;q=0.9, text/turtle;q=0.5")
-		req.Header.Set("Cache-Control", "no-cache")
-		resp, err := client.Do(req)
-		if err != nil {
-			continue
-		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			continue
-		}
-		var doc any
-		if err := json.Unmarshal(body, &doc); err != nil {
-			continue
-		}
-		terms = append(terms, extractOntologyTerms(prefix, uri, doc)...)
-	}
-	return terms
-}
-
-// extractOntologyTerms walks a fetched ontology document (already parsed by
-// the document loader into a Go value) and collects rdfs:label +
-// rdfs:comment pairs for any entity whose @id starts with the namespace URI.
-func extractOntologyTerms(prefix, nsURI string, doc any) []glossaryTerm {
-	var nodes []any
-	switch v := doc.(type) {
-	case []any:
-		nodes = v
-	case map[string]any:
-		nodes = []any{v}
-	default:
-		return nil
-	}
-
-	terms := make([]glossaryTerm, 0)
-	seen := map[string]struct{}{}
-	for _, node := range nodes {
-		entry, ok := node.(map[string]any)
-		if !ok {
-			continue
-		}
-		id, _ := entry["@id"].(string)
-		if !strings.HasPrefix(id, nsURI) {
-			continue
-		}
-		localName := strings.TrimPrefix(id, nsURI)
-		if localName == "" {
-			continue
-		}
-		prefixed := prefix + ":" + localName
-		if _, dup := seen[prefixed]; dup {
-			continue
-		}
-		seen[prefixed] = struct{}{}
-		definition := rdfsValue(entry, "http://www.w3.org/2000/01/rdf-schema#comment")
-		if definition == "" {
-			definition = rdfsValue(entry, "http://www.w3.org/2004/02/skos/core#definition")
-		}
-		if definition == "" {
-			definition = rdfsValue(entry, "http://www.w3.org/2000/01/rdf-schema#label")
-		}
-		if definition == "" {
-			definition = fmt.Sprintf("<%s>", id)
-		}
-		terms = append(terms, glossaryTerm{Term: prefixed, Definition: definition, TermURI: id})
-	}
-	return terms
-}
-
-// rdfsValue extracts the first plain-string value of an RDF property from
-// an already-expanded JSON-LD node map.
-func rdfsValue(node map[string]any, prop string) string {
-	val, ok := node[prop]
-	if !ok {
-		return ""
-	}
-	switch v := val.(type) {
-	case string:
-		return strings.TrimSpace(v)
-	case []any:
-		for _, item := range v {
-			switch s := item.(type) {
-			case string:
-				if t := strings.TrimSpace(s); t != "" {
-					return t
-				}
-			case map[string]any:
-				if t, ok := s["@value"].(string); ok && strings.TrimSpace(t) != "" {
-					return strings.TrimSpace(t)
-				}
-			}
-		}
-	}
-	return ""
-}

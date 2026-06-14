@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
@@ -20,7 +21,10 @@ func TestRenderPDFUsesCborContentBoxForSignature(t *testing.T) {
 		FileID:          "0123456789abcdef0123456789abcdef",
 	}
 
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	contentCredential, ok := extractEmbeddedStreamByFileSpecNameForTest(pdf, "content_credential.c2pa")
 	if !ok {
 		t.Fatalf("embedded C2PA stream not found")
@@ -114,7 +118,10 @@ func TestRenderPDFIncludesAcroFormAndSigWidgets(t *testing.T) {
 		FileID:        "0123456789abcdef0123456789abcdef",
 	}
 
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, marker := range [][]byte{
 		[]byte("/AcroForm"),

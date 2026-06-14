@@ -2,13 +2,14 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-func renderPDF(doc documentModel) []byte {
+func renderPDF(ctx context.Context, doc documentModel) ([]byte, error) {
 	pages, flatSections, flatDepths := layoutDocument(doc)
 	ids := objectIDs{
 		catalogID:        1,
@@ -43,10 +44,12 @@ func renderPDF(doc documentModel) []byte {
 		}
 	}
 	// ID 14 (acroFormID) is reserved above; next dynamic IDs start at nextID.
-	// (IDs 3,4,5 were formerly static struct elems — now dynamically assigned.)
 
 	xmpMetadata := renderXMPMetadata(doc.PayloadHash)
-	c2paManifest := renderC2PAManifestStore(doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}})
+	c2paManifest, err := renderC2PAManifestStore(ctx, doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}})
+	if err != nil {
+		return nil, fmt.Errorf("render initial C2PA manifest: %w", err)
+	}
 	objects := make([]pdfObject, 0, 24+len(pages)*3)
 	objects = append(objects,
 		// Embedded TrueType font (Liberation Sans, metrically compatible with
@@ -108,7 +111,7 @@ func renderPDF(doc documentModel) []byte {
 		}
 	}
 
-	sigFieldRefs := make([]string, 0)
+	var sigFieldRefs []string
 	for _, page := range pages {
 		for _, sigField := range page.SigFields {
 			sigFieldRefs = append(sigFieldRefs, fmt.Sprintf("%d 0 R", sigField.WidgetObjectID))
@@ -147,7 +150,10 @@ func renderPDF(doc documentModel) []byte {
 
 		exclusions := buildC2PAExclusions(streamStart, streamLen)
 		assetHash := sha256WithExclusions(pdf, exclusions)
-		nextManifest := renderC2PAManifestStore(doc.PayloadHash, assetHash[:], exclusions)
+		nextManifest, err := renderC2PAManifestStore(ctx, doc.PayloadHash, assetHash[:], exclusions)
+		if err != nil {
+			return nil, fmt.Errorf("render C2PA manifest (iteration %d): %w", iteration, err)
+		}
 		if bytes.Equal(nextManifest, c2paManifest) {
 			finalPDF = pdf
 			break
@@ -171,7 +177,7 @@ func renderPDF(doc documentModel) []byte {
 		panic(fmt.Sprintf("compiler bug — C2PA coverage invariant violated: %v", err))
 	}
 
-	return finalPDF
+	return finalPDF, nil
 }
 
 // headingTag returns the PDF structure tag for a heading line at the given

@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 )
@@ -67,7 +68,10 @@ func TestTitleExtractedFromDcsCoreIRI(t *testing.T) {
 	if doc.Title != "My Canonical Title" {
 		t.Errorf("title = %q, want %q", doc.Title, "My Canonical Title")
 	}
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("My Canonical Title")) {
 		t.Error("compiled PDF does not contain the expected title text")
 	}

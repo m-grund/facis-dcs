@@ -131,7 +131,7 @@ func (s *service) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	pdf, err := compiler.CompilePDF(canonical)
+	pdf, err := compiler.CompilePDF(r.Context(), canonical)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
@@ -164,7 +164,7 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 	var payload []byte
 
 	if _, ok := compiler.SplitAtIncrementalUpdate(raw); ok {
-		if err := compiler.VerifyIncrementalUpdate(raw); err != nil {
+		if err := compiler.VerifyIncrementalUpdate(r.Context(), raw); err != nil {
 			writeError(w, errConflict(err))
 			return
 		}
@@ -179,7 +179,7 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 			writeError(w, errBadRequest(err))
 			return
 		}
-		recompiled, err := compiler.CompilePDF(payload)
+		recompiled, err := compiler.CompilePDF(r.Context(), payload)
 		if err != nil {
 			writeError(w, errUnprocessableEntity(err))
 			return
@@ -196,7 +196,7 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 	vcProofValid := vcFound && len(vcBytes) > 0 && isVCProofStructurallyValid(vcBytes)
 
 	// Append a verification witness and embed the resulting PDF as artifact.
-	witness, err := compiler.AppendVerificationWitness(raw, payload)
+	witness, err := compiler.AppendVerificationWitness(r.Context(), raw, payload)
 	if err != nil {
 		writeError(w, errBadRequest(fmt.Errorf("append verification witness: %w", err)))
 		return
@@ -275,12 +275,12 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 
 	var updated []byte
 	if len(vcBytes) > 0 {
-		updated, err = compiler.UpdatePDFWithVC(oldPDF, canonical, vcBytes)
+		updated, err = compiler.UpdatePDFWithVC(r.Context(), oldPDF, canonical, vcBytes)
 	} else {
-		updated, err = compiler.UpdatePDF(oldPDF, canonical)
+		updated, err = compiler.UpdatePDF(r.Context(), oldPDF, canonical)
 	}
 	if err != nil {
-		if strings.Contains(err.Error(), "no changes") {
+		if errors.Is(err, compiler.ErrNoChanges) {
 			writeError(w, errConflict(err))
 			return
 		}
@@ -336,7 +336,7 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	canonicalPDF, err := compiler.CompilePDF(canonical)
+	canonicalPDF, err := compiler.CompilePDF(r.Context(), canonical)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
@@ -345,7 +345,7 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errConflict(err))
 		return
 	}
-	result, err := compiler.AppendVerificationWitness(canonicalPDF, canonical)
+	result, err := compiler.AppendVerificationWitness(r.Context(), canonicalPDF, canonical)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return

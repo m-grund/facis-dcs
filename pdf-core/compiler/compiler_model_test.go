@@ -2,8 +2,37 @@ package compiler
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
+
+// TestCompilePDF_NoOntologyHTTPFetch verifies that compilation makes no outbound
+// HTTP calls to ontology endpoints. If ontologyTerms ever fetches again, the
+// test server will receive a request and the test will fail.
+func TestCompilePDF_NoOntologyHTTPFetch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected HTTP request to ontology server: %s %s", r.Method, r.URL)
+		http.Error(w, "not expected", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	payload := []byte(`{
+		"@context": {
+			"@vocab": "` + srv.URL + `/ontology/dcs-pdf-core#",
+			"dcs-pdf-core": "` + srv.URL + `/ontology/dcs-pdf-core#"
+		},
+		"@id": "urn:doc:no-fetch-test",
+		"title": "No Fetch Test",
+		"sections": [{"heading": "1. Terms", "clauses": ["No ontology fetch should occur."]}]
+	}`)
+
+	_, err := CompilePDF(context.Background(), payload)
+	if err != nil {
+		t.Fatalf("CompilePDF: %v", err)
+	}
+}
 
 // TestCompilePDF_DcsCoreIRITitleExtracted verifies that a document whose title
 // is expressed via the dcs_pdf_core:title IRI (the canonical form since
@@ -22,7 +51,7 @@ func TestCompilePDF_DcsCoreIRITitleExtracted(t *testing.T) {
 		"sections": [{"heading": "1. Terms", "clauses": ["A clause."]}]
 	}`)
 
-	pdf, err := CompilePDF(payload)
+	pdf, err := CompilePDF(context.Background(), payload)
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -52,7 +81,7 @@ func TestCompilePDF_PrefixedTermsExtracted(t *testing.T) {
 		}]
 	}`)
 
-	pdf, err := CompilePDF(payload)
+	pdf, err := CompilePDF(context.Background(), payload)
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -91,7 +120,7 @@ func TestCompilePDF_NonStablePrefixRenderedCompact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalizePayload: %v", err)
 	}
-	pdf, err := CompilePDF(canonical)
+	pdf, err := CompilePDF(context.Background(), canonical)
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

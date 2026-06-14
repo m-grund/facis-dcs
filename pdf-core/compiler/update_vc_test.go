@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"bytes"
 	"testing"
 )
@@ -12,12 +13,12 @@ const sampleVC = `{"@context":["https://www.w3.org/2018/credentials/v1"],"type":
 // VC bytes as an embedded "contract-lifecycle-vc.json" attachment in the
 // incremental update section.
 func TestUpdatePDFWithVCEmbedsAttachment(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
-	result, err := UpdatePDFWithVC(original, []byte(minimalPayloadAmended), []byte(sampleVC))
+	result, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadAmended), []byte(sampleVC))
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC: %v", err)
 	}
@@ -42,13 +43,13 @@ func TestUpdatePDFWithVCEmbedsAttachment(t *testing.T) {
 // succeeds even when the JSON-LD payload is identical to the current embedded
 // one, because the VC attachment itself is a meaningful provenance event.
 func TestUpdatePDFWithVCUnchangedPayloadProceeds(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
 	// Same payload — UpdatePDF would return "no changes" here.
-	result, err := UpdatePDFWithVC(original, []byte(minimalPayloadBase), []byte(sampleVC))
+	result, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadBase), []byte(sampleVC))
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC with unchanged payload: %v", err)
 	}
@@ -65,11 +66,11 @@ func TestUpdatePDFWithVCUnchangedPayloadProceeds(t *testing.T) {
 // TestExtractEmbeddedVC_ReturnsBytesWhenPresent verifies that ExtractEmbeddedVC
 // returns the VC bytes that were embedded by UpdatePDFWithVC.
 func TestExtractEmbeddedVC_ReturnsBytesWhenPresent(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := UpdatePDFWithVC(original, []byte(minimalPayloadAmended), []byte(sampleVC))
+	result, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadAmended), []byte(sampleVC))
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestExtractEmbeddedVC_ReturnsBytesWhenPresent(t *testing.T) {
 // TestExtractEmbeddedVC_AbsentWhenNoVC verifies that ExtractEmbeddedVC returns
 // ok=false for a PDF that has no VC attachment.
 func TestExtractEmbeddedVC_AbsentWhenNoVC(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -106,19 +107,19 @@ func TestExtractEmbeddedVC_AbsentWhenNoVC(t *testing.T) {
 // TestUpdatePDFWithVCNilVCBehavesLikeUpdatePDF verifies that when vcBytes is
 // nil UpdatePDFWithVC behaves identically to UpdatePDF.
 func TestUpdatePDFWithVCNilVCBehavesLikeUpdatePDF(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
-	want, err := UpdatePDF(original, []byte(minimalPayloadAmended))
+	want, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
 
-	got, err := UpdatePDFWithVC(original, []byte(minimalPayloadAmended), nil)
+	got, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadAmended), nil)
 	if err != nil {
-		t.Fatalf("UpdatePDFWithVC(nil vc): %v", err)
+		t.Fatalf("UpdatePDFWithVC(context.Background(), nil vc): %v", err)
 	}
 
 	if !bytes.Equal(want, got) {

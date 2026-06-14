@@ -2,12 +2,10 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
-// minimalPayload is a self-contained JSON-LD document that uses only @vocab
-// (an @-prefixed context key) so that ontologyTerms skips all HTTP fetches.
-// This makes the test network-free.
 const minimalPayloadBase = `{
   "@context": {"@vocab": "http://example.com/update-test/"},
   "@id": "urn:doc:update-test",
@@ -31,12 +29,12 @@ const minimalPayloadAmended = `{
 // but the original bytes are preserved as a prefix so C2PA / digital signatures
 // can still verify over the original byte range.
 func TestUpdatePDFProducesIncrementalReplace(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF(base): %v", err)
 	}
 
-	result, err := UpdatePDF(original, []byte(minimalPayloadAmended))
+	result, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
@@ -77,11 +75,11 @@ func TestUpdatePDFModifiedClause(t *testing.T) {
   "clauses": ["The revised wording of clause one."]
 }`)
 
-	original, err := CompilePDF(base)
+	original, err := CompilePDF(context.Background(), base)
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := UpdatePDF(original, modified)
+	result, err := UpdatePDF(context.Background(), original, modified)
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
@@ -115,11 +113,11 @@ func TestUpdatePDFModifiedClause(t *testing.T) {
 // array, including the trailers of incremental updates. Without /ID, veraPDF
 // rejects the amended PDF.
 func TestUpdatePDFIncrementalTrailerHasID(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := UpdatePDF(original, []byte(minimalPayloadAmended))
+	result, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
@@ -132,11 +130,11 @@ func TestUpdatePDFIncrementalTrailerHasID(t *testing.T) {
 // TestUpdatePDFIdenticalPayloadIsRejected verifies that submitting an unchanged
 // payload returns an error (the HTTP layer maps this to 409 Conflict).
 func TestUpdatePDFIdenticalPayloadIsRejected(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	_, err = UpdatePDF(original, []byte(minimalPayloadBase))
+	_, err = UpdatePDF(context.Background(), original, []byte(minimalPayloadBase))
 	if err == nil {
 		t.Error("UpdatePDF with identical payload must return an error")
 	}
@@ -172,11 +170,11 @@ func TestUpdatePDFPreservesSigFieldWidgets(t *testing.T) {
   "clauses": ["Amended text."]
 }`)
 
-	base, err := CompilePDF(basePayload)
+	base, err := CompilePDF(context.Background(), basePayload)
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := UpdatePDF(base, amendedPayload)
+	result, err := UpdatePDF(context.Background(), base, amendedPayload)
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
@@ -204,15 +202,15 @@ func TestUpdatePDFPreservesSigFieldWidgets(t *testing.T) {
 // VerifyIncrementalUpdate — both the original prefix and the amendment must
 // reproduce deterministically.
 func TestVerifyIncrementalUpdate_Valid(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	amended, err := UpdatePDF(original, []byte(minimalPayloadAmended))
+	amended, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
-	if err := VerifyIncrementalUpdate(amended); err != nil {
+	if err := VerifyIncrementalUpdate(context.Background(), amended); err != nil {
 		t.Errorf("VerifyIncrementalUpdate on valid amended PDF: %v", err)
 	}
 }
@@ -220,17 +218,17 @@ func TestVerifyIncrementalUpdate_Valid(t *testing.T) {
 // TestVerifyIncrementalUpdate_CorruptedIncrement checks that tampering with the
 // incremental section causes VerifyIncrementalUpdate to return an error.
 func TestVerifyIncrementalUpdate_CorruptedIncrement(t *testing.T) {
-	original, err := CompilePDF([]byte(minimalPayloadBase))
+	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	amended, err := UpdatePDF(original, []byte(minimalPayloadAmended))
+	amended, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
 	corrupted := append([]byte(nil), amended...)
 	corrupted[len(original)+50] ^= 0xFF
-	if err := VerifyIncrementalUpdate(corrupted); err == nil {
+	if err := VerifyIncrementalUpdate(context.Background(), corrupted); err == nil {
 		t.Error("expected VerifyIncrementalUpdate to reject a corrupted incremental section")
 	}
 }
@@ -238,11 +236,11 @@ func TestVerifyIncrementalUpdate_CorruptedIncrement(t *testing.T) {
 // TestVerifyIncrementalUpdate_PlainPDF checks that a plain compiled PDF (no
 // incremental update marker) returns an error from VerifyIncrementalUpdate.
 func TestVerifyIncrementalUpdate_PlainPDF(t *testing.T) {
-	plain, err := CompilePDF([]byte(minimalPayloadBase))
+	plain, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	if err := VerifyIncrementalUpdate(plain); err == nil {
+	if err := VerifyIncrementalUpdate(context.Background(), plain); err == nil {
 		t.Error("expected VerifyIncrementalUpdate to reject a plain (non-incremental) PDF")
 	}
 }
@@ -253,7 +251,7 @@ func TestVerifyIncrementalUpdate_PlainPDF(t *testing.T) {
 // compiled portion as the deterministic root and allow append-only extras before
 // and after the dcs-pdf-core incremental update.
 func TestVerifyIncrementalUpdate_SignedThenAmended(t *testing.T) {
-	compiled, err := CompilePDF([]byte(minimalPayloadBase))
+	compiled, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -262,18 +260,18 @@ func TestVerifyIncrementalUpdate_SignedThenAmended(t *testing.T) {
 	fakeSignature := []byte("\n% external-signature-appendix\nstartxref\n0\n%%EOF\n")
 	signed := append(append([]byte(nil), compiled...), fakeSignature...)
 
-	amended, err := UpdatePDF(signed, []byte(minimalPayloadAmended))
+	amended, err := UpdatePDF(context.Background(), signed, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF on signed PDF: %v", err)
 	}
-	if err := VerifyIncrementalUpdate(amended); err != nil {
+	if err := VerifyIncrementalUpdate(context.Background(), amended); err != nil {
 		t.Errorf("VerifyIncrementalUpdate on signed-then-amended PDF: %v", err)
 	}
 
 	// Also verify that amending after a PAdES-re-signed amended PDF passes.
 	fakeSignature2 := []byte("\n% external-signature-appendix-2\nstartxref\n0\n%%EOF\n")
 	reSigned := append(append([]byte(nil), amended...), fakeSignature2...)
-	if err := VerifyIncrementalUpdate(reSigned); err != nil {
+	if err := VerifyIncrementalUpdate(context.Background(), reSigned); err != nil {
 		t.Errorf("VerifyIncrementalUpdate on re-signed amended PDF: %v", err)
 	}
 }
@@ -283,11 +281,11 @@ func TestVerifyIncrementalUpdate_SignedThenAmended(t *testing.T) {
 // manifest labels are distinct — i.e. the witness manifest does not collide with
 // the update manifest label, which would cause c2patool to report a cyclic ingredient.
 func TestVerifyAfterUpdateNoCyclicC2PA(t *testing.T) {
-	compiled, err := CompilePDF([]byte(minimalPayloadBase))
+	compiled, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	amended, err := UpdatePDF(compiled, []byte(minimalPayloadAmended))
+	amended, err := UpdatePDF(context.Background(), compiled, []byte(minimalPayloadAmended))
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
@@ -295,7 +293,7 @@ func TestVerifyAfterUpdateNoCyclicC2PA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractLatestEmbeddedJSONLD: %v", err)
 	}
-	witnessed, err := AppendVerificationWitness(amended, amendedPayload)
+	witnessed, err := AppendVerificationWitness(context.Background(), amended, amendedPayload)
 	if err != nil {
 		t.Fatalf("AppendVerificationWitness: %v", err)
 	}

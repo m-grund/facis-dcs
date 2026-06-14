@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"bytes"
 	"regexp"
 	"testing"
@@ -30,7 +31,10 @@ func subsectionDoc() documentModel {
 // TestSubsectionHeadingAppearsInPDF verifies that a subsection heading appears
 // in the compiled PDF content streams.
 func TestSubsectionHeadingAppearsInPDF(t *testing.T) {
-	pdf := renderPDF(subsectionDoc())
+	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(concatBTBlocks(pdf), []byte("1.1 Subsection")) {
 		t.Error("subsection heading not found in PDF content streams")
 	}
@@ -39,7 +43,10 @@ func TestSubsectionHeadingAppearsInPDF(t *testing.T) {
 // TestSubsectionHeadingIsH2InContentStream verifies that a depth-1 subsection
 // heading is tagged /H2 in the PDF content stream.
 func TestSubsectionHeadingIsH2InContentStream(t *testing.T) {
-	pdf := renderPDF(subsectionDoc())
+	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/H2 ")) {
 		t.Error("depth-1 subsection heading must produce /H2 tag in content stream")
 	}
@@ -66,7 +73,10 @@ func TestSubsubsectionHeadingIsH3InContentStream(t *testing.T) {
 			},
 		},
 	})
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/H3 ")) {
 		t.Error("depth-2 subsection heading must produce /H3 tag in content stream")
 	}
@@ -103,7 +113,10 @@ func TestSubsectionIndentedInLayout(t *testing.T) {
 // TestSubsectionStructTreeHasH2 verifies that the PDF structure tree contains
 // an /S /H2 element for a depth-1 subsection heading.
 func TestSubsectionStructTreeHasH2(t *testing.T) {
-	pdf := renderPDF(subsectionDoc())
+	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/S /H2")) {
 		t.Error("PDF struct tree must contain /S /H2 for depth-1 subsection")
 	}
@@ -117,7 +130,10 @@ func TestSubsectionStructTreeHasH2(t *testing.T) {
 // With 1 top-level section and 1 subsection the /Document /K must have exactly
 // 3 refs: [title, meta, topSect].
 func TestSubsectionStructTreeDocumentKidsExcludesSubsects(t *testing.T) {
-	pdf := renderPDF(subsectionDoc())
+	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	re := regexp.MustCompile(`/S /Document[^>]*/K \[([^\]]+)\]`)
 	m := re.FindSubmatch(pdf)
 	if m == nil {
@@ -134,7 +150,10 @@ func TestSubsectionStructTreeDocumentKidsExcludesSubsects(t *testing.T) {
 // With 1 top-level section that has 1 clause and 1 subsection, the parent
 // /Sect's /K must have at least 3 entries: [heading, para, subsectSect].
 func TestSubsectionSectContainsChildSectRef(t *testing.T) {
-	pdf := renderPDF(subsectionDoc())
+	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	re := regexp.MustCompile(`/S /Sect[^>]*/K \[([^\]]+)\]`)
 	matches := re.FindAllSubmatch(pdf, -1)
 	if len(matches) < 2 {
@@ -155,7 +174,10 @@ func TestSubsectionSectContainsChildSectRef(t *testing.T) {
 // TestSubsectionNestedInOutline verifies that the PDF outline contains an entry
 // for the subsection heading.
 func TestSubsectionNestedInOutline(t *testing.T) {
-	pdf := renderPDF(subsectionDoc())
+	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(pdf, []byte("/Title (1.1 Subsection)")) {
 		t.Error("PDF outline must contain an entry for the subsection heading")
 	}
@@ -180,8 +202,14 @@ func TestSubsectionDeterministic(t *testing.T) {
 			},
 		},
 	})
-	pdf1 := renderPDF(doc)
-	pdf2 := renderPDF(doc)
+	pdf1, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdf2, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(pdf1, pdf2) {
 		t.Error("subsection document must produce byte-for-byte identical PDFs across compilations")
 	}
@@ -207,7 +235,11 @@ func TestSubsectionDepthFirstOrder(t *testing.T) {
 		},
 	})
 	order := []string{"Parent-Section", "SubA-Section", "SubSubA-Section", "SubB-Section"}
-	content := concatBTBlocks(renderPDF(doc))
+	_pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := concatBTBlocks(_pdf)
 	positions := make([]int, len(order))
 	for i, h := range order {
 		pos := bytes.Index(content, []byte(h))
@@ -273,7 +305,10 @@ func TestSubsectionFromPayload(t *testing.T) {
 		t.Fatalf("expected 1 sub-subsection, got %d", len(doc.Sections[0].Subsections[0].Subsections))
 	}
 
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, heading := range []string{"1. Main Section", "1.1 First Sub", "1.1.1 Deep Sub", "1.2 Second Sub"} {
 		if !bytes.Contains(concatBTBlocks(pdf), []byte(heading)) {
 			t.Errorf("heading %q not found in compiled PDF", heading)

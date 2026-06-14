@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"strings"
@@ -45,7 +46,10 @@ func TestGeneratedPDFICCProfileIsStructurallyValid(t *testing.T) {
 		NamespaceMap:  map[string]string{},
 	}
 
-	pdf := renderPDF(doc)
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	icc := findICCStreamInPDF(pdf)
 	if icc == nil {

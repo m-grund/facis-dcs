@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/x509"
@@ -132,7 +133,7 @@ func sha256WithExclusions(data []byte, exclusions []c2paExclusion) [32]byte {
 }
 
 func parseBMFFBoxes(data []byte) ([]bmffBox, error) {
-	boxes := make([]bmffBox, 0)
+	var boxes []bmffBox
 	for pos := 0; pos+8 <= len(data); {
 		size := int(binary.BigEndian.Uint32(data[pos : pos+4]))
 		if size < 8 || pos+size > len(data) {
@@ -161,7 +162,7 @@ func extractTopLevelManifestBoxes(c2pa []byte) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	manifests := make([][]byte, 0)
+	var manifests [][]byte
 	for _, child := range rootChildren {
 		if child.Type == "jumb" {
 			manifests = append(manifests, child.Raw)
@@ -221,22 +222,12 @@ func extractLabeledChildJUMBFBox(parentJumbBox []byte, label string) ([]byte, er
 	return nil, fmt.Errorf("child JUMBF box %s not found", label)
 }
 
-func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) []byte {
+func renderC2PAManifestStore(ctx context.Context, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
 	// Build a deterministic, syntactically valid JUMBF C2PA manifest-store:
 	//   jumb(c2pa) -> jumb(c2ma)
 	//                    |- jumb(c2pa.assertions)
 	//                    |- jumb(c2pa.claim.v2)
 	//                    |- jumb(c2pa.signature)
-	// This avoids invalid-header parsing failures in C2PA validators while keeping
-	// generation deterministic for the current pipeline.
-	const (
-		c2paStoreUUID = "6332706100110010800000AA00389B71" // c2pa
-		c2paManifUUID = "63326D6100110010800000AA00389B71" // c2ma
-		c2paAsrtUUID  = "6332617300110010800000AA00389B71" // c2as
-		c2paClmUUID   = "6332636C00110010800000AA00389B71" // c2cl
-		c2paSigUUID   = "6332637300110010800000AA00389B71" // c2cs
-		cborUUID      = "63626F7200110010800000AA00389B71" // cbor
-	)
 
 	hardBindingAssertionPayload := renderMinimalDataHashAssertionCBOR(hardBindingHash, exclusions)
 	hardBindingAssertionBox := renderJUMBFSuperbox(cborUUID, 0x03, "c2pa.hash.data", [][]byte{renderBMFFBox("cbor", hardBindingAssertionPayload)})
@@ -262,7 +253,10 @@ func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusi
 	//   33 -> [certDer]  (x5chain per RFC 9360)
 	// plus empty unprotected map, detached payload and a real signature over claim bytes.
 	protected := buildCoseProtectedHeadersWithX5Chain()
-	sig := signClaimSigStructure(protected, claimPayload)
+	sig, err := signClaimSigStructure(ctx, protected, claimPayload)
+	if err != nil {
+		return nil, err
+	}
 	signaturePayload := []byte{0xD2, 0x84}
 	signaturePayload = append(signaturePayload, cborBytes(protected)...)
 	signaturePayload = append(signaturePayload, 0xA0, 0xF6)
@@ -271,10 +265,10 @@ func renderC2PAManifestStore(payloadHash string, hardBindingHash []byte, exclusi
 
 	manifestLabel := urnUUIDFromHash(payloadHash)
 	manifestBox := renderJUMBFSuperbox(c2paManifUUID, 0x03, manifestLabel, [][]byte{assertionStore, claimBox, signatureBox})
-	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", [][]byte{manifestBox})
+	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", [][]byte{manifestBox}), nil
 }
 
-func renderVerificationManifestStore(originalC2PA []byte, manifestLabel string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
+func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
 	manifestBoxes, err := extractTopLevelManifestBoxes(originalC2PA)
 	if err != nil {
 		return nil, err
@@ -294,14 +288,17 @@ func renderVerificationManifestStore(originalC2PA []byte, manifestLabel string, 
 	originalManifestHash := sha256.Sum256(originalManifestBox[8:])
 	originalSignatureHash := sha256.Sum256(originalSignatureBox[8:])
 
-	updateManifestBox := renderVerificationUpdateManifest(manifestLabel, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions)
+	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions)
+	if err != nil {
+		return nil, err
+	}
 	children := make([][]byte, 0, len(manifestBoxes)+1)
 	children = append(children, manifestBoxes...)
 	children = append(children, updateManifestBox)
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", children), nil
 }
 
-func renderVerificationUpdateManifest(manifestLabel string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, parentSignatureHash []byte, hardBindingHash []byte, exclusions []c2paExclusion) []byte {
+func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
 	updateLabel := manifestLabel
 	hardBindingLabel := "c2pa.hash.data"
 	hardBindingPayload := renderMinimalDataHashAssertionCBOR(hardBindingHash, exclusions)
@@ -325,14 +322,16 @@ func renderVerificationUpdateManifest(manifestLabel string, payloadHash string, 
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	protected := buildCoseProtectedHeadersWithX5Chain()
-	sig := signClaimSigStructure(protected, claimPayload)
+	sig, err := signClaimSigStructure(ctx, protected, claimPayload)
+	if err != nil {
+		return nil, err
+	}
 	signaturePayload := []byte{0xD2, 0x84}
 	signaturePayload = append(signaturePayload, cborBytes(protected)...)
 	signaturePayload = append(signaturePayload, 0xA0, 0xF6)
 	signaturePayload = append(signaturePayload, cborBytes(sig)...)
 	signatureBox := renderJUMBFSuperbox(c2paSigUUID, 0x03, "c2pa.signature", [][]byte{renderBMFFBox("cbor", signaturePayload)})
-	_ = parentSignatureHash
-	return renderJUMBFSuperbox(c2paUpdateUUID, 0x03, updateLabel, [][]byte{assertionStore, claimBox, signatureBox})
+	return renderJUMBFSuperbox(c2paUpdateUUID, 0x03, updateLabel, [][]byte{assertionStore, claimBox, signatureBox}), nil
 }
 
 func renderJUMBFSuperbox(uuidHex string, toggles byte, label string, children [][]byte) []byte {
@@ -570,15 +569,15 @@ func buildCoseProtectedHeadersWithX5Chain() []byte {
 	return headers
 }
 
-func signClaimSigStructure(protected []byte, claimPayload []byte) []byte {
-	priv := mustSigningMaterial().signer
+func signClaimSigStructure(ctx context.Context, protected []byte, claimPayload []byte) ([]byte, error) {
+	signer := mustSigningMaterial().signer
 	sigStructure := cborArray(
 		cborText("Signature1"),
 		cborBytes(protected),
 		cborBytes([]byte{}),
 		cborBytes(claimPayload),
 	)
-	return ed25519.Sign(priv, sigStructure)
+	return signer.Sign(ctx, sigStructure)
 }
 
 func mustSigningMaterial() signingMaterial {
@@ -592,6 +591,32 @@ func mustSigningMaterial() signingMaterial {
 }
 
 func loadSigningMaterialFromEnv(getenv func(string) string, readFile func(string) ([]byte, error)) (signingMaterial, error) {
+	cryptoURL := strings.TrimSpace(getenv(envCryptoProviderURL))
+	if cryptoURL != "" {
+		ns := strings.TrimSpace(getenv(envCryptoProviderNamespace))
+		key := strings.TrimSpace(getenv(envCryptoProviderKey))
+		if ns == "" {
+			return signingMaterial{}, fmt.Errorf("%s is required when %s is set", envCryptoProviderNamespace, envCryptoProviderURL)
+		}
+		if key == "" {
+			return signingMaterial{}, fmt.Errorf("%s is required when %s is set", envCryptoProviderKey, envCryptoProviderURL)
+		}
+		chainInline := strings.TrimSpace(getenv(envX5ChainPEM))
+		chainFile := strings.TrimSpace(getenv(envX5ChainPEMFile))
+		chainPEM, chainProvided, err := resolveSigningConfigValue(readFile, chainInline, chainFile, envX5ChainPEM, envX5ChainPEMFile)
+		if err != nil {
+			return signingMaterial{}, err
+		}
+		if !chainProvided {
+			return signingMaterial{}, fmt.Errorf("x5chain must be provided when using transit signer; set %s or %s", envX5ChainPEM, envX5ChainPEMFile)
+		}
+		certs, err := parseCertificateChainPEM([]byte(chainPEM))
+		if err != nil {
+			return signingMaterial{}, err
+		}
+		return signingMaterial{signer: newTransitSigner(cryptoURL, ns, key), certChainDER: certs}, nil
+	}
+
 	keyInline := strings.TrimSpace(getenv(envSignerKeyPEM))
 	keyFile := strings.TrimSpace(getenv(envSignerKeyPEMFile))
 	keyPEM, keyProvided, err := resolveSigningConfigValue(
@@ -636,7 +661,7 @@ func loadSigningMaterialFromEnv(getenv func(string) string, readFile func(string
 	if err != nil {
 		return signingMaterial{}, err
 	}
-	return signingMaterial{signer: priv, certChainDER: certs}, nil
+	return signingMaterial{signer: localSigner{priv: priv}, certChainDER: certs}, nil
 }
 
 func resolveSigningConfigValue(readFile func(string) ([]byte, error), inlineValue string, filePath string, inlineName string, fileName string) (string, bool, error) {
@@ -674,7 +699,7 @@ func parsePKCS8Ed25519PrivateKeyPEM(pemBytes []byte) (ed25519.PrivateKey, error)
 
 func parseCertificateChainPEM(pemBytes []byte) ([][]byte, error) {
 	rest := pemBytes
-	certs := make([][]byte, 0)
+	var certs [][]byte
 	for {
 		var block *pem.Block
 		block, rest = pem.Decode(rest)

@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -62,8 +63,12 @@ func TestLoadSigningMaterialFromEnv_InlinePEM(t *testing.T) {
 	if len(material.certChainDER) != 1 {
 		t.Fatalf("cert chain length = %d, want 1", len(material.certChainDER))
 	}
-	if string(material.signer) != string(priv) {
-		t.Fatalf("signer key did not match configured key")
+	sig, err := material.signer.Sign(context.Background(), []byte("test"))
+	if err != nil {
+		t.Fatalf("signer.Sign() error = %v", err)
+	}
+	if !ed25519.Verify(priv.Public().(ed25519.PublicKey), []byte("test"), sig) {
+		t.Fatalf("signature did not verify with configured key")
 	}
 }
 

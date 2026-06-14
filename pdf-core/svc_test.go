@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -565,7 +566,7 @@ func TestClaim_MatchingPayload(t *testing.T) {
 	if !bytes.HasPrefix(result, []byte("%PDF-")) {
 		t.Fatal("result must be a PDF")
 	}
-	baseline, _ := compiler.CompilePDF([]byte(minimalPayload))
+	baseline, _ := compiler.CompilePDF(context.Background(), []byte(minimalPayload))
 	if len(result) <= len(baseline) {
 		t.Fatal("result must include a witness appendix and be larger than a bare compilation")
 	}
@@ -681,13 +682,6 @@ func TestVerify_ArtifactFieldContainsWitnessPDF(t *testing.T) {
 	if len(artifactBytes) <= len(pdf) {
 		t.Error("artifact (witness PDF) must be larger than the original compiled PDF")
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // TestVerify_JSONIncludesVCBytesWhenPresent verifies that when a PDF contains

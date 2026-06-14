@@ -219,6 +219,7 @@ cryptoProvider:
     keyType: "ecdsa-p256"
     vcKey: "dcs-vc-signing-key"
     vcKeyType: "ed25519"
+    c2paKey: "dcs-vc-signing-key"
   devCertChain:
     enabled: false
     secretName: ""
@@ -328,6 +329,9 @@ pdfCore:
     existingSecret: ""
     existingSecretSignerKeyKey: "signer-key-pem"
     existingSecretX5ChainKey: "x5chain-pem"
+    cryptoProviderURL: ""
+    cryptoProviderNamespace: ""
+    cryptoProviderKey: ""
 
 ipfs:
   enabled: false

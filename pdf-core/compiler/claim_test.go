@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ const claimAlternate = `{
 // zeroes the stream content of the embedded JSON-LD object without changing
 // the surrounding byte structure (so all object offsets remain valid).
 func TestStripEmbeddedJSONLD_RemovesPayload(t *testing.T) {
-	pdf, err := CompilePDF([]byte(claimBase))
+	pdf, err := CompilePDF(context.Background(), []byte(claimBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestStripEmbeddedJSONLD_RemovesPayload(t *testing.T) {
 // stripped of its embedded JSON-LD, when submitted to MatchPageContent against
 // a fresh compilation from the same payload, must pass.
 func TestStripEmbeddedJSONLD_IsReversible(t *testing.T) {
-	pdf, err := CompilePDF([]byte(claimBase))
+	pdf, err := CompilePDF(context.Background(), []byte(claimBase))
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -67,7 +68,7 @@ func TestStripEmbeddedJSONLD_IsReversible(t *testing.T) {
 		t.Fatalf("StripEmbeddedJSONLD: %v", err)
 	}
 
-	canonical, err := CompilePDF([]byte(claimBase))
+	canonical, err := CompilePDF(context.Background(), []byte(claimBase))
 	if err != nil {
 		t.Fatalf("CompilePDF canonical: %v", err)
 	}
@@ -79,11 +80,11 @@ func TestStripEmbeddedJSONLD_IsReversible(t *testing.T) {
 // TestMatchPageContent_SamePayloadPasses verifies that two PDFs compiled from
 // the same payload have identical page content streams.
 func TestMatchPageContent_SamePayloadPasses(t *testing.T) {
-	pdfA, err := CompilePDF([]byte(claimBase))
+	pdfA, err := CompilePDF(context.Background(), []byte(claimBase))
 	if err != nil {
 		t.Fatalf("CompilePDF A: %v", err)
 	}
-	pdfB, err := CompilePDF([]byte(claimBase))
+	pdfB, err := CompilePDF(context.Background(), []byte(claimBase))
 	if err != nil {
 		t.Fatalf("CompilePDF B: %v", err)
 	}
@@ -95,11 +96,11 @@ func TestMatchPageContent_SamePayloadPasses(t *testing.T) {
 // TestMatchPageContent_DifferentPayloadFails verifies that two PDFs compiled
 // from different payloads are rejected by MatchPageContent.
 func TestMatchPageContent_DifferentPayloadFails(t *testing.T) {
-	pdfA, err := CompilePDF([]byte(claimBase))
+	pdfA, err := CompilePDF(context.Background(), []byte(claimBase))
 	if err != nil {
 		t.Fatalf("CompilePDF A: %v", err)
 	}
-	pdfB, err := CompilePDF([]byte(claimAlternate))
+	pdfB, err := CompilePDF(context.Background(), []byte(claimAlternate))
 	if err != nil {
 		t.Fatalf("CompilePDF B: %v", err)
 	}

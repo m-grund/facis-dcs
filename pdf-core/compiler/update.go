@@ -2,15 +2,21 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+// ErrNoChanges is returned by UpdatePDF when the new payload is semantically
+// identical to the current embedded one and no VC attachment is present.
+var ErrNoChanges = errors.New("no changes: payloads are semantically identical")
 
 // DiffNQuads returns the N-Quads present in newPayload but not oldPayload (added)
 // and those present in oldPayload but not newPayload (removed).
@@ -117,8 +123,8 @@ func parseCurrentPagesKids(pdf []byte) ([]int, error) {
 // visible page content with a freshly compiled version of newPayload.
 // The original PDF bytes are preserved unchanged as a prefix so existing
 // C2PA hard-binding signatures remain verifiable over the original byte range.
-func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
-	return updatePDF(oldPDF, newPayload, nil)
+func UpdatePDF(ctx context.Context, oldPDF []byte, newPayload []byte) ([]byte, error) {
+	return updatePDF(ctx, oldPDF, newPayload, nil)
 }
 
 // UpdatePDFWithVC appends a PDF incremental update that replaces visible page
@@ -131,11 +137,11 @@ func UpdatePDF(oldPDF []byte, newPayload []byte) ([]byte, error) {
 // freshly compiled base PDF).
 //
 // When vcBytes is nil the call delegates to UpdatePDF unchanged.
-func UpdatePDFWithVC(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
+func UpdatePDFWithVC(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
 	if len(vcBytes) == 0 {
-		return UpdatePDF(oldPDF, newPayload)
+		return UpdatePDF(ctx, oldPDF, newPayload)
 	}
-	return updatePDF(oldPDF, newPayload, vcBytes)
+	return updatePDF(ctx, oldPDF, newPayload, vcBytes)
 }
 
 // ExtractManifestStore returns the raw JUMBF C2PA manifest store bytes
@@ -146,7 +152,7 @@ func ExtractManifestStore(pdf []byte) ([]byte, error) {
 
 // updatePDF is the shared implementation used by UpdatePDF and UpdatePDFWithVC.
 // The "no changes" guard is bypassed when vcBytes is non-nil.
-func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
+func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error) {
 	oldPayload, err := ExtractEmbeddedJSONLD(oldPDF)
 	if err != nil {
 		return nil, fmt.Errorf("extract embedded JSON-LD: %w", err)
@@ -166,7 +172,7 @@ func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error)
 	newHashHex := hex.EncodeToString(newHash[:])
 
 	if oldHashHex == newHashHex && len(vcBytes) == 0 {
-		return nil, fmt.Errorf("no changes: payloads are semantically identical")
+		return nil, ErrNoChanges
 	}
 
 	maxObjID, err := findTrailerMaxObjID(oldPDF)
@@ -212,7 +218,6 @@ func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error)
 		vcFileObjID = nextID
 		nextID++
 		vcSpecObjID = nextID
-		nextID++ //nolint:ineffassign // nextID may be used by future extensions
 	}
 
 	originalC2PA, err := extractEmbeddedStreamByFileSpecName(oldPDF, "content_credential.c2pa")
@@ -227,7 +232,7 @@ func updatePDF(oldPDF []byte, newPayload []byte, vcBytes []byte) ([]byte, error)
 	var result []byte
 
 	for range 6 {
-		updatedC2PA, err := renderVerificationManifestStore(originalC2PA, updateManifestLabelFromHash(newHashHex), newHashHex, hardBindingHash, exclusions)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(newHashHex), newHashHex, hardBindingHash, exclusions)
 		if err != nil {
 			return nil, fmt.Errorf("render update manifest: %w", err)
 		}
@@ -491,7 +496,7 @@ func SplitAtIncrementalUpdate(pdf []byte) (original []byte, ok bool) {
 //
 // Both conditions together prove the current visible state is reproducible from
 // the current embedded payload.
-func VerifyIncrementalUpdate(pdf []byte) error {
+func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
 	original, ok := SplitAtIncrementalUpdate(pdf)
 	if !ok {
 		return fmt.Errorf("no incremental update marker found")
@@ -506,7 +511,7 @@ func VerifyIncrementalUpdate(pdf []byte) error {
 		return fmt.Errorf("extract new payload from amended PDF: %w", err)
 	}
 
-	freshOriginal, err := CompilePDF(oldPayload)
+	freshOriginal, err := CompilePDF(ctx, oldPayload)
 	if err != nil {
 		return fmt.Errorf("recompile original payload: %w", err)
 	}
@@ -525,9 +530,9 @@ func VerifyIncrementalUpdate(pdf []byte) error {
 	embeddedVC, vcPresent, _ := ExtractEmbeddedVC(pdf)
 	var freshUpdated []byte
 	if vcPresent && len(embeddedVC) > 0 {
-		freshUpdated, err = UpdatePDFWithVC(original, newPayload, embeddedVC)
+		freshUpdated, err = UpdatePDFWithVC(ctx, original, newPayload, embeddedVC)
 	} else {
-		freshUpdated, err = UpdatePDF(original, newPayload)
+		freshUpdated, err = UpdatePDF(ctx, original, newPayload)
 	}
 	if err != nil {
 		return fmt.Errorf("re-apply amendment: %w", err)

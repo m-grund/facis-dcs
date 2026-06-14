@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 )
@@ -80,9 +81,15 @@ func TestDeterministicFullPDFSamePayload(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Second clause."}}},
 		}},
 	})
-	first := renderPDF(doc)
+	first, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i := 2; i <= 10; i++ {
-		got := renderPDF(doc)
+		got, err := renderPDF(context.Background(), doc)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !bytes.Equal(first, got) {
 			t.Fatalf("iteration %d: PDF bytes differ — full PDF determinism violated", i)
 		}
@@ -98,12 +105,20 @@ func TestDeterministicPageContentSamePayload(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Clause content here."}}},
 		}},
 	})
-	first := extractBTETBlocks(renderPDF(doc))
+	_pdf0, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := extractBTETBlocks(_pdf0)
 	if len(first) == 0 {
 		t.Fatal("no BT/ET blocks found in PDF — test setup error")
 	}
 	for i := 2; i <= 10; i++ {
-		got := extractBTETBlocks(renderPDF(doc))
+		_pdfI, err := renderPDF(context.Background(), doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := extractBTETBlocks(_pdfI)
 		if !btBlocksEqual(first, got) {
 			t.Fatalf("iteration %d: page content streams differ — rendering determinism violated", i)
 		}
@@ -135,7 +150,11 @@ func TestDeterministicSectionOrder(t *testing.T) {
 			Clauses: []clauseData{{Segments: []clauseSegment{{Type: "prose", Text: "Content."}}}},
 		}
 	}
-	content := concatBTBlocks(renderPDF(sectionDoc(sections)))
+	_pdf, err := renderPDF(context.Background(), sectionDoc(sections))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := concatBTBlocks(_pdf)
 
 	positions := make([]int, len(headings))
 	for i, h := range headings {
@@ -166,7 +185,11 @@ func TestDeterministicClauseOrder(t *testing.T) {
 	for i, text := range texts {
 		clauses[i] = clauseData{Segments: []clauseSegment{{Type: "prose", Text: text}}}
 	}
-	content := concatBTBlocks(renderPDF(sectionDoc([]sectionData{{Heading: "Section", Clauses: clauses}})))
+	_pdf, err := renderPDF(context.Background(), sectionDoc([]sectionData{{Heading: "Section", Clauses: clauses}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := concatBTBlocks(_pdf)
 
 	positions := make([]int, len(texts))
 	for i, text := range texts {
@@ -213,8 +236,14 @@ func TestDeterministicLineWrapStable(t *testing.T) {
 		Heading: "Wrap Test Section",
 		Clauses: []clauseData{{Segments: []clauseSegment{{Type: "prose", Text: longText}}}},
 	}})
-	pdf1 := renderPDF(doc)
-	pdf2 := renderPDF(doc)
+	pdf1, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdf2, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(pdf1, pdf2) {
 		t.Fatal("PDF bytes differ across two compilations — line wrap is non-deterministic")
 	}
@@ -230,7 +259,7 @@ func TestDeterministicLineWrapStable(t *testing.T) {
 // byte-for-byte identical to the original. This proves that the embedded
 // attachment is sufficient to reproduce the exact human-readable output.
 func TestReRenderingAfterRoundTrip(t *testing.T) {
-	pdf1, err := CompilePDF([]byte(referencePayload))
+	pdf1, err := CompilePDF(context.Background(), []byte(referencePayload))
 	if err != nil {
 		t.Fatalf("first CompilePDF: %v", err)
 	}
@@ -240,7 +269,7 @@ func TestReRenderingAfterRoundTrip(t *testing.T) {
 		t.Fatalf("ExtractEmbeddedJSONLD: %v", err)
 	}
 
-	pdf2, err := CompilePDF(extracted)
+	pdf2, err := CompilePDF(context.Background(), extracted)
 	if err != nil {
 		t.Fatalf("second CompilePDF (from extracted JSON-LD): %v", err)
 	}

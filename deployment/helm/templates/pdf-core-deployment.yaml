@@ -33,6 +33,20 @@ spec:
           env:
             - name: DCS_PDF_CORE_ADDR
               value: {{ printf "0.0.0.0:%v" .Values.pdfCore.service.port | quote }}
+            {{- $cpURL := include "digital-contracting-service.pdfCoreCryptoProviderURL" . }}
+            {{- if $cpURL }}
+            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_URL
+              value: {{ $cpURL | quote }}
+            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_NAMESPACE
+              value: {{ include "digital-contracting-service.cryptoProviderNamespace" . | quote }}
+            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_KEY
+              value: {{ include "digital-contracting-service.pdfCoreCryptoProviderKey" . | quote }}
+            - name: DCS_PDF_CORE_C2PA_X5CHAIN_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "digital-contracting-service.pdfCoreX5ChainSecretName" . }}
+                  key: {{ include "digital-contracting-service.pdfCoreX5ChainSecretKey" . | quote }}
+            {{- else }}
             - name: DCS_PDF_CORE_C2PA_SIGNER_KEY_PEM
               valueFrom:
                 secretKeyRef:
@@ -43,6 +57,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "digital-contracting-service.pdfCoreSigningSecretName" . }}
                   key: {{ .Values.pdfCore.signing.existingSecretX5ChainKey | default "x5chain-pem" | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /swagger.json
