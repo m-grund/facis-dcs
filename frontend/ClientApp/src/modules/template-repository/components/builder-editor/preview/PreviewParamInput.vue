@@ -71,13 +71,15 @@ const dateValue = ref('')
 const booleanValue = ref(false)
 const allowedValues = computed(() => resolveAllowedValues(props.valueConstraint))
 const tipText = computed(() => props.invalidTip ?? props.valueConstraint?.description ?? props.label ?? '')
+const placeholderBaseClass =
+  'rounded-sm border-0 border-b border-neutral/70 bg-primary/5 px-1.5 py-0.5 font-medium text-primary outline-none transition-colors focus:border-neutral focus:bg-primary/10'
 const inputClass = computed(
   () =>
-    `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
+    `min-w-20 ${placeholderBaseClass} text-sm leading-relaxed ${props.isInvalid ? 'border-error bg-error/5 text-error focus:border-error focus:bg-error/10' : ''}`,
 )
 const selectClass = computed(
   () =>
-    `select select-xs h-7 min-h-0 w-28 rounded-md bg-transparent px-1 text-sm leading-relaxed ${props.isInvalid ? 'select-error text-error' : 'select-bordered'}`,
+    `w-32 ${placeholderBaseClass} text-sm leading-relaxed ${props.isInvalid ? 'border-error bg-error/5 text-error focus:border-error focus:bg-error/10' : ''}`,
 )
 
 watch(

@@ -354,7 +354,7 @@ export function useClauseTextChips(
     const h = highlight.value
     el.replaceChildren()
     const baseClass =
-      'inline-flex items-center px-1.5 py-0.5 rounded text-primary bg-primary/10 border border-primary/30 text-xs font-medium align-baseline cursor-pointer'
+      'inline-flex items-center px-2 py-0.5 rounded text-primary bg-primary/10 border-0 border-b border-neutral/70 text-xs font-medium align-baseline cursor-pointer'
     for (const seg of segments) {
       if (isText(seg)) {
         el.appendChild(document.createTextNode(seg.value))

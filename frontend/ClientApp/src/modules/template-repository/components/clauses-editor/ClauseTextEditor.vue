@@ -430,8 +430,7 @@ onBeforeUnmount(() => {
 }
 
 .clause-editor :deep(.clause-chip-highlight) {
-  border-style: solid;
-  border-color: oklch(var(--p));
+  border-bottom-color: oklch(var(--p));
   box-shadow: none;
 }
 </style>
