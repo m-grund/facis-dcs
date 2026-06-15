@@ -144,7 +144,7 @@ function isParamUsedInText(conditionId: string, parameterName: string): boolean 
 function isParamRequiredAndUnused(conditionId: string, parameterName: string): boolean {
   const cond = props.semanticConditions.find((c) => c.conditionId === conditionId)
   const param = cond?.parameters.find((p) => p.parameterName === parameterName)
-  return !!(param?.isRequired && param.fixedValue === undefined && !isParamUsedInText(conditionId, parameterName))
+  return !!(param?.isRequired && !isParamUsedInText(conditionId, parameterName))
 }
 
 function setHighlight(payload: { conditionId: string; parameterName?: string }) {
@@ -207,7 +207,6 @@ const placeholderOptions = computed(() => {
   const list: { insertText: string; parameterName: string; label: string; conditionName: string }[] = []
   for (const c of props.semanticConditions) {
     for (const p of c.parameters) {
-      if (p.fixedValue !== undefined) continue
       if (usedKeys.has(`${c.conditionId}.${p.parameterName}`)) continue
       list.push({
         insertText: `{{${c.conditionId}.${p.parameterName}}}`,

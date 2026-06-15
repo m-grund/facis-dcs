@@ -15,6 +15,7 @@ import type {
   SemanticProfile,
   TemplateVariable,
   PlaceholderBinding,
+  PolicyBundle,
   SemanticRule,
   SLAAgreement,
 } from './semantic/facis-dcs-semantic'
@@ -49,6 +50,7 @@ export interface ContractTemplateData {
   templateVariables?: TemplateVariable[]
   placeholderBindings?: PlaceholderBinding[]
   semanticRules?: SemanticRule[]
+  policyBundle?: PolicyBundle
   sla?: SLAAgreement
   // Only when the template is a frame contract, it can have sub-templates
   subTemplateSnapshots?: SubTemplateSnapshot[]

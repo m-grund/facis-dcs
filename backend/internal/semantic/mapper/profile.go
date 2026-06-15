@@ -35,6 +35,7 @@ func DefaultProfile() OntologyProfile {
 		TemplatePromotedFields: map[string]bool{
 			"sla":           true,
 			"semanticRules": true,
+			"policyBundle":  true,
 			"provenance":    true,
 			"contentHash":   true, // DCS-FR-CWE-04: content-hash sync between machine- and human-readable
 		},
@@ -43,6 +44,7 @@ func DefaultProfile() OntologyProfile {
 			"signatories":       true,
 			"sla":               true,
 			"semanticRules":     true,
+			"policyBundle":      true,
 			"validationReports": true,
 			"clauses":           true,
 			"contractVersions":  true,

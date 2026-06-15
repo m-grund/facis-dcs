@@ -100,6 +100,7 @@ const submit = async () => {
         templateVariables: templateDraftStore.templateVariables,
         placeholderBindings: semanticExtension.placeholderBindings,
         semanticRules: semanticExtension.semanticRules,
+        policyBundle: semanticExtension.policyBundle,
         sla: templateDraftStore.sla ?? undefined,
         semanticConditionValues: contractContentValuesStore.semanticConditionValues,
       }
@@ -205,6 +206,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     templateVariables: cd.templateVariables ?? [],
     placeholderBindings: cd.placeholderBindings ?? [],
     semanticRules: cd.semanticRules ?? [],
+    policyBundle: cd.policyBundle ?? null,
     sla: cd.sla ?? null,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })

@@ -109,6 +109,11 @@ func minimalTemplateInner(t *testing.T) *datatype.JSON {
 				"severity":     "blocking",
 			},
 		},
+		"policyBundle": map[string]any{
+			"@type":  "PolicyBundle",
+			"format": "odrl-jsonld",
+			"rules":  []any{},
+		},
 		"provenance": []any{
 			map[string]any{
 				"@type":      "ProvenanceEvent",
@@ -208,6 +213,11 @@ func minimalContractInner(t *testing.T) *datatype.JSON {
 				"ruleId":   "rule-test",
 				"operator": "GreaterThanOrEqual",
 			},
+		},
+		"policyBundle": map[string]any{
+			"@type":  "PolicyBundle",
+			"format": "odrl-jsonld",
+			"rules":  []any{},
 		},
 		"validationReports": []any{
 			map[string]any{
@@ -335,11 +345,13 @@ func TestBuildTemplateJSONLD_PromotedFieldsAtTopLevel(t *testing.T) {
 	env, err := BuildTemplateJSONLD(tmpl, DefaultProfile())
 	require.NoError(t, err)
 
-	// sla, semanticRules, provenance must be promoted to envelope level.
+	// sla, semanticRules, policyBundle, provenance must be promoted to envelope level.
 	_, hasSLA := env["sla"]
 	assert.True(t, hasSLA, "sla must appear at top level")
 	_, hasRules := env["semanticRules"]
 	assert.True(t, hasRules, "semanticRules must appear at top level")
+	_, hasPolicyBundle := env["policyBundle"]
+	assert.True(t, hasPolicyBundle, "policyBundle must appear at top level")
 	_, hasProv := env["provenance"]
 	assert.True(t, hasProv, "provenance must appear at top level")
 
@@ -517,7 +529,7 @@ func TestBuildContractJSONLD_PromotedFieldsAtTopLevel(t *testing.T) {
 	require.NoError(t, err)
 
 	promoted := []string{
-		"parties", "signatories", "sla", "semanticRules", "validationReports",
+		"parties", "signatories", "sla", "semanticRules", "policyBundle", "validationReports",
 		"clauses", "contractVersions", "adjustments", "deployment",
 		"provenance", "c2paManifest", "statusCredential", "contentHash",
 		// DCS-FR-CSA-10: jurisdiction promoted for metadata indexing

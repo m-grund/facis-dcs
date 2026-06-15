@@ -715,7 +715,7 @@ func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *test
 	param["operators"] = []any{
 		map[string]any{
 			"operate": "GreaterThanOrEqual",
-			"targets": []any{"99.95"},
+			"targets": []any{99.95},
 		},
 	}
 	raw, err := datatype.NewJSON(decoded)
@@ -732,8 +732,41 @@ func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *test
 	rules := result["semanticRules"].([]any)
 	require.Len(t, rules, 1)
 	require.Equal(t, "GreaterThanOrEqual", rules[0].(map[string]any)["operator"])
+	require.Equal(t, 99.95, rules[0].(map[string]any)["rightOperand"])
 	require.Equal(t, []any{"clause-1"}, rules[0].(map[string]any)["appliesToClause"])
 	require.Equal(t, "semanticCondition", rules[0].(map[string]any)["source"])
+	policyBundle := result["policyBundle"].(map[string]any)
+	require.Equal(t, "PolicyBundle", policyBundle["@type"])
+	require.Equal(t, "odrl-jsonld", policyBundle["format"])
+	duties := policyBundle["rules"].([]any)
+	require.Len(t, duties, 1)
+	constraints := duties[0].(map[string]any)["constraint"].([]any)
+	require.Equal(t, "odrl:gteq", constraints[0].(map[string]any)["operator"])
+	require.Equal(t, 99.95, constraints[0].(map[string]any)["rightOperand"])
+}
+
+func TestNormalizeContractDataRejectsSemanticOperatorViolation(t *testing.T) {
+	raw := validSemanticContractData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &decoded))
+	conditions := decoded["semanticConditions"].([]any)
+	slaCondition := conditions[3].(map[string]any)
+	params := slaCondition["parameters"].([]any)
+	availability := params[0].(map[string]any)
+	availability["operators"] = []any{
+		map[string]any{
+			"operate": "GreaterThan",
+			"targets": []any{99.5},
+		},
+	}
+	contractData, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "sla", "availability", 99.4), true)
+	require.ErrorContains(t, err, "violates obligation")
+
+	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "sla", "availability", 99.6), true)
+	require.NoError(t, err)
 }
 
 func TestNormalizeTemplateDataAcceptsCanonicalSemanticRuleOperator(t *testing.T) {

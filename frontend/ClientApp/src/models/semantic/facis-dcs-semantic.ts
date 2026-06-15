@@ -75,6 +75,25 @@ export interface SemanticRule {
   message?: string
 }
 
+export interface OdrlConstraint {
+  '@type': 'odrl:Constraint'
+  leftOperand: unknown
+  operator: string
+  rightOperand: unknown
+}
+
+export interface OdrlDuty {
+  '@type': 'odrl:Duty'
+  uid: string
+  constraint: OdrlConstraint[]
+}
+
+export interface PolicyBundle {
+  '@type': 'PolicyBundle'
+  format: 'odrl-jsonld'
+  rules: OdrlDuty[]
+}
+
 export interface ValidationFinding {
   '@type'?: 'ValidationFinding'
   ruleId: string
@@ -189,8 +208,7 @@ interface SemanticConditionLike {
     parameterName: string
     type: ParameterType
     isRequired?: boolean
-    fixedValue?: unknown
-    operators?: ({ operate: DcsOperator; targets?: string[] } | DcsOperator)[]
+    operators?: ({ operate: DcsOperator; targets?: unknown[] } | DcsOperator)[]
   }[]
 }
 
@@ -205,6 +223,7 @@ export interface SemanticTemplateRuntimeExtension {
   semanticProfile: SemanticProfile
   placeholderBindings: PlaceholderBinding[]
   semanticRules: SemanticRule[]
+  policyBundle?: PolicyBundle
 }
 
 export function buildSemanticTemplateExtension(
@@ -212,10 +231,12 @@ export function buildSemanticTemplateExtension(
   semanticConditions: SemanticConditionLike[],
   semanticProfile: SemanticProfile = FACIS_DCS_SEMANTIC_PROFILE,
 ): SemanticTemplateRuntimeExtension {
+  const semanticRules = buildSemanticRulesFromConditions(documentBlocks, semanticConditions)
   return {
     semanticProfile,
     placeholderBindings: buildPlaceholderBindings(documentBlocks, semanticConditions),
-    semanticRules: buildSemanticRulesFromConditions(documentBlocks, semanticConditions),
+    semanticRules,
+    policyBundle: buildPolicyBundleFromSemanticRules(semanticRules),
   }
 }
 
@@ -266,7 +287,6 @@ export function buildSemanticRulesFromConditions(
   const rules: SemanticRule[] = []
   for (const condition of semanticConditions) {
     for (const parameter of condition.parameters) {
-      if (parameter.fixedValue !== undefined && parameter.fixedValue !== null && parameter.fixedValue !== '') continue
       for (const rawOperator of parameter.operators ?? []) {
         const operate = typeof rawOperator === 'string' ? rawOperator : rawOperator.operate
         const operator = normalizeSemanticOperator(operate)
@@ -302,6 +322,53 @@ export function buildSemanticRulesFromConditions(
   return rules
 }
 
+export function buildPolicyBundleFromSemanticRules(semanticRules: SemanticRule[]): PolicyBundle | undefined {
+  const rules = semanticRules
+    .map((rule): OdrlDuty | null => {
+      const operator = odrlOperatorFor(rule.operator)
+      if (!operator) return null
+      return {
+        '@type': 'odrl:Duty',
+        uid: `${rule.ruleId}-duty`,
+        constraint: [
+          {
+            '@type': 'odrl:Constraint',
+            leftOperand: rule.leftOperand,
+            operator,
+            rightOperand: rule.rightOperand,
+          },
+        ],
+      }
+    })
+    .filter((rule): rule is OdrlDuty => rule !== null)
+
+  if (!rules.length) return undefined
+  return {
+    '@type': 'PolicyBundle',
+    format: 'odrl-jsonld',
+    rules,
+  }
+}
+
+function odrlOperatorFor(operator: DcsOperator): string {
+  switch (operator) {
+    case 'Equals':
+      return 'odrl:eq'
+    case 'NotEquals':
+      return 'odrl:neq'
+    case 'GreaterThan':
+      return 'odrl:gt'
+    case 'GreaterThanOrEqual':
+      return 'odrl:gteq'
+    case 'LessThan':
+      return 'odrl:lt'
+    case 'LessThanOrEqual':
+      return 'odrl:lteq'
+    default:
+      return ''
+  }
+}
+
 export function normalizeSemanticOperator(value: string): DcsOperator | null {
   return isDcsOperator(value) ? value : null
 }
@@ -328,7 +395,7 @@ function buildRuleMessage(
   conditionName: string,
   parameterName: string,
   operator: DcsOperator,
-  targets: string[],
+  targets: unknown[],
 ): string {
   const target = targets.length ? ` ${targets.join(', ')}` : ''
   return `${conditionName}.${parameterName} must satisfy ${operator}${target}.`

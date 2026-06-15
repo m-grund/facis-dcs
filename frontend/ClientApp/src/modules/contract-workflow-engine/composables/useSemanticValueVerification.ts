@@ -249,6 +249,16 @@ export function useSemanticValueVerification() {
           })
           return
         }
+        const operatorError = validateParameterOperators(value.parameterValue, parameter.operators ?? [])
+        if (operatorError) {
+          errors.push({
+            blockId: value.blockId,
+            conditionId: value.conditionId,
+            parameterName: value.parameterName,
+            message: `"${fieldName}" violates an ODRL obligation. ${operatorError}`,
+          })
+          return
+        }
       }
     })
     if (errors.length === 0) {
@@ -258,4 +268,91 @@ export function useSemanticValueVerification() {
   }
 
   return { verifySemanticValue, hasConditionParameterForValue }
+}
+
+function validateParameterOperators(
+  value: string | number | boolean,
+  operators: { operate: string; targets: unknown[] }[],
+): string | null {
+  for (const operator of operators) {
+    const target = operator.targets?.[0]
+    if (!compareOperator(value, operator.operate, target)) {
+      return `Expected ${formatOperator(operator.operate)} ${String(target)}.`
+    }
+  }
+  return null
+}
+
+function compareOperator(value: string | number | boolean, operator: string, target: unknown): boolean {
+  switch (operator) {
+    case 'Equals':
+      return value === coerceTarget(target, value)
+    case 'NotEquals':
+      return value !== coerceTarget(target, value)
+    case 'GreaterThan':
+      return compareOrdered(value, target, (left, right) => left > right)
+    case 'GreaterThanOrEqual':
+      return compareOrdered(value, target, (left, right) => left >= right)
+    case 'LessThan':
+      return compareOrdered(value, target, (left, right) => left < right)
+    case 'LessThanOrEqual':
+      return compareOrdered(value, target, (left, right) => left <= right)
+    case 'Contains':
+      return typeof value === 'string' && typeof target === 'string' && value.includes(target)
+    case 'MatchesRegex':
+      return typeof value === 'string' && typeof target === 'string' && new RegExp(target).test(value)
+    default:
+      return true
+  }
+}
+
+function compareOrdered(
+  value: string | number | boolean,
+  target: unknown,
+  compare: (left: number, right: number) => boolean,
+): boolean {
+  const left = orderedValue(value)
+  const right = orderedValue(target)
+  if (left === null || right === null) return false
+  return compare(left, right)
+}
+
+function orderedValue(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const number = Number(value.replace(',', '.'))
+    if (Number.isFinite(number)) return number
+    const date = Date.parse(value)
+    return Number.isNaN(date) ? null : date
+  }
+  return null
+}
+
+function coerceTarget(target: unknown, value: string | number | boolean): unknown {
+  if (typeof value === 'number') return typeof target === 'number' ? target : Number(String(target).replace(',', '.'))
+  if (typeof value === 'boolean') return typeof target === 'boolean' ? target : target === 'true'
+  return target
+}
+
+function formatOperator(operator: string): string {
+  switch (operator) {
+    case 'Equals':
+      return '='
+    case 'NotEquals':
+      return '!='
+    case 'GreaterThan':
+      return '>'
+    case 'GreaterThanOrEqual':
+      return '>='
+    case 'LessThan':
+      return '<'
+    case 'LessThanOrEqual':
+      return '<='
+    case 'Contains':
+      return 'contains'
+    case 'MatchesRegex':
+      return 'matches'
+    default:
+      return operator
+  }
 }

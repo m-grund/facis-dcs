@@ -10,6 +10,7 @@ import type { TemplateDataVersion } from '@/modules/template-repository/models/t
 import type {
   CompanyParty,
   PlaceholderBinding,
+  PolicyBundle,
   SemanticProfile,
   SemanticRule,
   SLAAgreement,
@@ -37,6 +38,7 @@ export interface ContractData {
   templateVariables?: TemplateVariable[]
   placeholderBindings?: PlaceholderBinding[]
   semanticRules?: SemanticRule[]
+  policyBundle?: PolicyBundle
   parties?: CompanyParty[]
   sla?: SLAAgreement
   validationReports?: ValidationReport[]

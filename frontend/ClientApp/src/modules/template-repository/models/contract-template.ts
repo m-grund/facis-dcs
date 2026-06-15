@@ -6,6 +6,7 @@ import type {
   SLAAgreement,
   TemplateVariable,
   PlaceholderBinding,
+  PolicyBundle,
   UiMetadata,
 } from '@/models/semantic/facis-dcs-semantic'
 
@@ -22,6 +23,7 @@ export interface DocumentStructure {
   templateVariables?: TemplateVariable[]
   placeholderBindings?: PlaceholderBinding[]
   semanticRules?: SemanticRule[]
+  policyBundle?: PolicyBundle
   sla?: SLAAgreement
   templateType: TemplateTypeValue
   // TBD: title, description, jurisdiction, etc.
@@ -75,7 +77,7 @@ export interface SemanticParameterOperator {
    * { "operate": "GreaterThan", "value": "100" }
    * { "operate": "GreaterThan", "value": "{{startDate}}" }
    */
-  targets: string[]
+  targets: unknown[]
 }
 
 export interface SemanticConditionParameter {
@@ -85,7 +87,6 @@ export interface SemanticConditionParameter {
   semanticPath: DomainSemanticPath
   valueConstraint?: SemanticValueConstraint
   defaultValue?: unknown
-  fixedValue?: unknown
   semanticMeaning?: string
   uiMetadata?: UiMetadata
   isRequired: boolean

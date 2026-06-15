@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"digital-contracting-service/internal/base/datatype"
 )
@@ -274,6 +276,7 @@ func normalizeSemanticProfile(data documentData) {
 func normalizeSemanticRuntimeMetadata(data documentData) {
 	data["placeholderBindings"] = buildPlaceholderBindings(data)
 	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], buildSemanticRules(data))
+	data["policyBundle"] = buildODRLPolicyBundle(data["semanticRules"])
 }
 
 func normalizeContractSemanticRuntime(data documentData) {
@@ -286,6 +289,7 @@ func normalizeContractSemanticRuntime(data documentData) {
 	}
 	generated := buildSemanticRules(data)
 	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], generated)
+	data["policyBundle"] = buildODRLPolicyBundle(data["semanticRules"])
 }
 
 func validateSchemaRefs(data documentData, template bool) error {
@@ -462,6 +466,69 @@ func buildSemanticRules(data documentData) []map[string]any {
 	return rules
 }
 
+func buildODRLPolicyBundle(rawRules any) map[string]any {
+	rules, ok := asArray(rawRules)
+	if !ok {
+		return map[string]any{
+			"@type":  "PolicyBundle",
+			"format": "odrl-jsonld",
+			"rules":  []any{},
+		}
+	}
+	duties := []any{}
+	for _, item := range rules {
+		rule, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		operator, _ := rule[semanticRuleOperatorProperty].(string)
+		odrlOperator := odrlOperator(operator)
+		if odrlOperator == "" {
+			continue
+		}
+		ruleID, _ := rule["ruleId"].(string)
+		if ruleID == "" {
+			ruleID = "semantic-rule-" + fmt.Sprint(len(duties)+1)
+		}
+		duties = append(duties, map[string]any{
+			"@type": "odrl:Duty",
+			"uid":   ruleID + "-duty",
+			"constraint": []any{
+				map[string]any{
+					"@type":        "odrl:Constraint",
+					"leftOperand":  rule["leftOperand"],
+					"operator":     odrlOperator,
+					"rightOperand": rule[semanticRuleRightOperandProperty],
+				},
+			},
+		})
+	}
+	return map[string]any{
+		"@type":  "PolicyBundle",
+		"format": "odrl-jsonld",
+		"rules":  duties,
+	}
+}
+
+func odrlOperator(operator string) string {
+	switch operator {
+	case "Equals":
+		return "odrl:eq"
+	case "NotEquals":
+		return "odrl:neq"
+	case "GreaterThan":
+		return "odrl:gt"
+	case "GreaterThanOrEqual":
+		return "odrl:gteq"
+	case "LessThan":
+		return "odrl:lt"
+	case "LessThanOrEqual":
+		return "odrl:lteq"
+	default:
+		return ""
+	}
+}
+
 func mergeSemanticRules(rawExisting any, generated []map[string]any) []any {
 	result := []any{}
 	seen := map[string]bool{}
@@ -503,7 +570,7 @@ func canonicalizeSemanticRule(rule map[string]any) {
 	}
 }
 
-func parseSemanticOperator(raw any) (string, []string) {
+func parseSemanticOperator(raw any) (string, []any) {
 	switch value := raw.(type) {
 	case string:
 		return value, nil
@@ -512,15 +579,12 @@ func parseSemanticOperator(raw any) (string, []string) {
 		if strings.TrimSpace(operate) == "" {
 			operate, _ = value[semanticRuleOperatorProperty].(string)
 		}
-		targets := []string{}
+		targets := []any{}
 		if rawTargets, ok := asArray(value["targets"]); ok {
 			for _, rawTarget := range rawTargets {
-				target, ok := rawTarget.(string)
-				if ok {
-					targets = append(targets, target)
-				}
+				targets = append(targets, rawTarget)
 			}
-		} else if rawTarget, ok := value[semanticRuleRightOperandProperty].(string); ok {
+		} else if rawTarget, ok := value[semanticRuleRightOperandProperty]; ok {
 			targets = append(targets, rawTarget)
 		}
 		return operate, targets
@@ -757,11 +821,12 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 					return fmt.Errorf("semantic value %q on condition %q violates constraint: %w", parameterName, conditionID, err)
 				}
 			}
+			if err := valueMatchesSemanticOperators(rawValue, param); err != nil {
+				return fmt.Errorf("semantic value %q on condition %q violates obligation: %w", parameterName, conditionID, err)
+			}
 			provided[semanticValueKey(blockID, conditionID, parameterName)] = true
 		}
 	}
-	markFixedSemanticValuesProvided(blocks, embeddedConditions, conditionByID, provided)
-
 	if !requireSemanticValues {
 		return nil
 	}
@@ -779,39 +844,6 @@ func validateSemanticValues(data documentData, requireSemanticValues bool) error
 		}
 	}
 	return nil
-}
-
-func markFixedSemanticValuesProvided(blocks []any, embeddedConditions embeddedSemanticConditions, conditionByID map[string]map[string]any, provided map[string]bool) {
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok || block["type"] != "CLAUSE" {
-			continue
-		}
-		blockID, _ := block["blockId"].(string)
-		refs, _ := asArray(block["conditionIds"])
-		for _, rawConditionID := range refs {
-			conditionID, _ := rawConditionID.(string)
-			condition := embeddedConditions.conditionForBlock(blockID, conditionID)
-			if condition == nil {
-				condition = conditionByID[conditionID]
-			}
-			if condition == nil {
-				continue
-			}
-			parameters, _ := asArray(condition["parameters"])
-			for _, rawParam := range parameters {
-				param, ok := rawParam.(map[string]any)
-				if !ok {
-					continue
-				}
-				if _, exists := param["fixedValue"]; !exists {
-					continue
-				}
-				parameterName, _ := param["parameterName"].(string)
-				provided[semanticValueKey(blockID, conditionID, parameterName)] = true
-			}
-		}
-	}
 }
 
 type semanticValueRecord struct {
@@ -914,6 +946,81 @@ func validateSemanticRules(data documentData) error {
 		}
 	}
 	return nil
+}
+
+func valueMatchesSemanticOperators(value any, param map[string]any) error {
+	operators, ok := asArray(param["operators"])
+	if !ok {
+		return nil
+	}
+	for _, rawOperator := range operators {
+		operate, targets := parseSemanticOperator(rawOperator)
+		operator := normalizeSemanticOperator(operate)
+		if operator == "" || len(targets) == 0 {
+			continue
+		}
+		if !compareSemanticOperator(value, operator, targets[0]) {
+			return fmt.Errorf("expected %s %v", operator, targets[0])
+		}
+	}
+	return nil
+}
+
+func compareSemanticOperator(value any, operator string, target any) bool {
+	switch operator {
+	case "Equals":
+		return fmt.Sprint(value) == fmt.Sprint(target)
+	case "NotEquals":
+		return fmt.Sprint(value) != fmt.Sprint(target)
+	case "GreaterThan":
+		return compareOrdered(value, target, func(left float64, right float64) bool { return left > right })
+	case "GreaterThanOrEqual":
+		return compareOrdered(value, target, func(left float64, right float64) bool { return left >= right })
+	case "LessThan":
+		return compareOrdered(value, target, func(left float64, right float64) bool { return left < right })
+	case "LessThanOrEqual":
+		return compareOrdered(value, target, func(left float64, right float64) bool { return left <= right })
+	case "Contains":
+		return strings.Contains(fmt.Sprint(value), fmt.Sprint(target))
+	case "MatchesRegex":
+		pattern, err := regexp.Compile(fmt.Sprint(target))
+		return err == nil && pattern.MatchString(fmt.Sprint(value))
+	default:
+		return true
+	}
+}
+
+func compareOrdered(value any, target any, compare func(left float64, right float64) bool) bool {
+	left, ok := orderedValue(value)
+	if !ok {
+		return false
+	}
+	right, ok := orderedValue(target)
+	if !ok {
+		return false
+	}
+	return compare(left, right)
+}
+
+func orderedValue(value any) (float64, bool) {
+	if number, ok := numericValue(value); ok {
+		return number, true
+	}
+	raw, ok := value.(string)
+	if !ok {
+		return 0, false
+	}
+	normalized := strings.ReplaceAll(strings.TrimSpace(raw), ",", ".")
+	if number, err := strconv.ParseFloat(normalized, 64); err == nil {
+		return number, true
+	}
+	if parsed, err := time.Parse(time.DateOnly, normalized); err == nil {
+		return float64(parsed.UnixMilli()), true
+	}
+	if parsed, err := time.Parse(time.RFC3339, normalized); err == nil {
+		return float64(parsed.UnixMilli()), true
+	}
+	return 0, false
 }
 
 func hasContractStatementIntent(data documentData) bool {
@@ -1049,7 +1156,6 @@ func semanticValueRecords(data documentData) ([]semanticValueRecord, error) {
 		}
 		records = append(records, record)
 	}
-	records = append(records, fixedSemanticValueRecords(data, conditions, records)...)
 	return records, nil
 }
 
@@ -1076,50 +1182,6 @@ func semanticValueRecordForParameter(blockID string, conditionID string, paramet
 		Type:           field.Type,
 		Value:          value,
 	}, nil
-}
-
-func fixedSemanticValueRecords(data documentData, conditions semanticConditionsByBlock, existing []semanticValueRecord) []semanticValueRecord {
-	existingByBinding := map[string]bool{}
-	for _, record := range existing {
-		existingByBinding[semanticValueKey(record.BlockID, record.ConditionID, record.ParameterName)] = true
-	}
-	records := []semanticValueRecord{}
-	blocks, _ := asArray(data["documentBlocks"])
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok || block["type"] != "CLAUSE" {
-			continue
-		}
-		blockID, _ := block["blockId"].(string)
-		refs, _ := asArray(block["conditionIds"])
-		for _, rawConditionID := range refs {
-			conditionID, _ := rawConditionID.(string)
-			condition := conditions.conditionForBlock(blockID, conditionID)
-			if condition == nil {
-				continue
-			}
-			parameters, _ := asArray(condition["parameters"])
-			for _, rawParam := range parameters {
-				param, ok := rawParam.(map[string]any)
-				if !ok {
-					continue
-				}
-				value, hasFixedValue := param["fixedValue"]
-				if !hasFixedValue {
-					continue
-				}
-				parameterName, _ := param["parameterName"].(string)
-				if existingByBinding[semanticValueKey(blockID, conditionID, parameterName)] {
-					continue
-				}
-				record, err := semanticValueRecordForParameter(blockID, conditionID, parameterName, condition, param, value)
-				if err == nil {
-					records = append(records, record)
-				}
-			}
-		}
-	}
-	return records
 }
 
 type semanticConditionsByBlock struct {
@@ -1321,8 +1383,8 @@ func validateSemanticCondition(condition map[string]any) (string, error) {
 		if err := validateDomainParameter(id, param); err != nil {
 			return "", err
 		}
-		if err := validateFixedSemanticValue(id, param); err != nil {
-			return "", err
+		if _, exists := param["fixedValue"]; exists {
+			return "", fmt.Errorf("semantic condition %q parameter %q must not use fixedValue", id, param["parameterName"])
 		}
 		if err := validateSemanticOperators(id, param); err != nil {
 			return "", err
@@ -1421,25 +1483,6 @@ func validateDomainParameter(conditionID string, param map[string]any) error {
 	}
 	if field.Constraint != nil {
 		param["valueConstraint"] = field.Constraint.asMap()
-	}
-	return nil
-}
-
-func validateFixedSemanticValue(conditionID string, param map[string]any) error {
-	value, exists := param["fixedValue"]
-	if !exists || value == nil {
-		return nil
-	}
-	paramType, _ := param["type"].(string)
-	if !valueMatchesType(value, paramType) {
-		return fmt.Errorf("semantic condition %q parameter %q fixedValue does not match type %q", conditionID, param["parameterName"], paramType)
-	}
-	semanticPath, _ := param["semanticPath"].(string)
-	field, ok := ontologyDomainFieldIndex[semanticPath]
-	if ok && field.Constraint != nil {
-		if err := valueMatchesConstraint(value, field.Constraint); err != nil {
-			return fmt.Errorf("semantic condition %q parameter %q fixedValue violates constraint: %w", conditionID, param["parameterName"], err)
-		}
 	}
 	return nil
 }

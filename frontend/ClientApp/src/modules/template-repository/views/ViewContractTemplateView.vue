@@ -90,6 +90,7 @@ watch(
           templateVariables: template.template_data?.templateVariables ?? [],
           placeholderBindings: template.template_data?.placeholderBindings ?? [],
           semanticRules: template.template_data?.semanticRules ?? [],
+          policyBundle: template.template_data?.policyBundle ?? null,
           sla: template.template_data?.sla ?? null,
           subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
           templateType: template.template_type,

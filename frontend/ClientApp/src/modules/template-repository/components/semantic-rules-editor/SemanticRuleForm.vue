@@ -79,40 +79,38 @@
         </div>
         <div class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">
-              Type
-              <RequiredIndicator />
-            </span>
+            <span class="label-text text-xs text-base-content/60">ODRL operator</span>
           </label>
-          <select v-model="draftParameter.type" class="select-bordered select h-9 w-full select-sm" disabled>
-            <option value="date">Date</option>
-            <option value="string">Text</option>
-            <option value="decimal">Decimal</option>
-            <option value="integer">Integer</option>
-            <option value="boolean">Boolean</option>
-            <option value="enum">Enum</option>
+          <select v-model="draftOperator" class="select-bordered select h-9 w-full select-sm">
+            <option value="">None</option>
+            <option v-for="option in operatorOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
           </select>
         </div>
-        <div class="flex flex-col gap-1 md:col-span-3">
+        <div class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">Fixed value</span>
+            <span class="label-text text-xs text-base-content/60">ODRL target</span>
           </label>
           <select
-            v-if="fixedValueOptions.length"
-            v-model="draftFixedValue"
+            v-if="draftParameter.type === 'boolean'"
+            v-model="draftTarget"
             class="select-bordered select h-9 w-full select-sm"
+            :disabled="!draftOperator"
           >
-            <option value="">None</option>
-            <option v-for="value in fixedValueOptions" :key="value" :value="value">{{ value }}</option>
+            <option value="">Select</option>
+            <option value="true">true</option>
+            <option value="false">false</option>
           </select>
           <input
             v-else
-            v-model="draftFixedValue"
-            type="text"
+            v-model="draftTarget"
+            :type="draftParameter.type === 'date' ? 'date' : 'text'"
             class="input-bordered input input-sm h-9 w-full"
-            placeholder="None"
+            :disabled="!draftOperator"
+            placeholder=""
           />
-          <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
+          <p v-if="operatorError" class="text-xs text-error">{{ operatorError }}</p>
         </div>
         <div class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
@@ -161,13 +159,16 @@
               {{ semanticParameterLabel(param) }}
             </span>
             <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
-            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">
-              fixed: {{ param.fixedValue }}
-            </span>
             <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
               {{ formatValueConstraint(param.valueConstraint) }}
             </span>
-            <span class="badge badge-ghost badge-sm">{{ semanticParameterTypeLabel(param.type) }}</span>
+            <span
+              v-for="operator in param.operators"
+              :key="formatOperatorConstraint(operator)"
+              class="badge badge-outline badge-sm"
+            >
+              {{ formatOperatorConstraint(operator) }}
+            </span>
             <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
             <button
               type="button"
@@ -194,6 +195,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { DcsOperator } from '@/models/semantic/facis-dcs-semantic'
 import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import {
   type SemanticCondition,
@@ -202,12 +204,12 @@ import {
   type SemanticValueConstraint,
   type SemanticEntityRole,
   type SemanticEntityType,
+  type SemanticOperateType,
   SEMANTIC_CONDITION_SCHEMA_VERSION,
 } from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
 import { ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS } from '@/modules/template-repository/utils/ontology-domain-types'
-import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
-import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 type NewConditionPayload = Omit<SemanticCondition, 'conditionId'>
 type DraftConditionPayload = NewConditionPayload & {
@@ -258,7 +260,8 @@ function getDefaultNewCondition(): DraftConditionPayload {
 
 const newCondition = ref<DraftConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
-const draftFixedValue = ref('')
+const draftOperator = ref<SemanticOperateType | ''>('')
+const draftTarget = ref('')
 const selectedDomainPath = ref<DomainSemanticPath>('')
 const domainFieldSearch = ref('')
 const showDomainFieldOptions = ref(false)
@@ -268,8 +271,8 @@ const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rul
 const selectedDomainField = computed(() =>
   semanticRuleDomainFields.find((field) => field.semanticPath === selectedDomainPath.value),
 )
-const fixedValueOptions = computed(() => resolveAllowedValues(selectedDomainField.value?.valueConstraint))
-const fixedValueError = computed(() => validateDraftFixedValue())
+const operatorOptions = computed(() => operatorOptionsForType(draftParameter.value.type))
+const operatorError = computed(() => validateDraftOperator())
 const groupedDomainFields = computed(() => {
   const query = domainFieldSearch.value.trim().toLowerCase()
   const filtered = semanticRuleDomainFields.filter((field) => {
@@ -303,7 +306,8 @@ watch(
     if (!isEditMode.value || !props.initialCondition) {
       newCondition.value = getDefaultNewCondition()
       draftParameter.value = defaultParam()
-      draftFixedValue.value = ''
+      draftOperator.value = ''
+      draftTarget.value = ''
       selectedDomainPath.value = ''
       domainFieldSearch.value = ''
       showDomainFieldOptions.value = false
@@ -320,7 +324,8 @@ watch(
       })),
     }
     draftParameter.value = defaultParam()
-    draftFixedValue.value = ''
+    draftOperator.value = ''
+    draftTarget.value = ''
     selectedDomainPath.value = ''
     domainFieldSearch.value = ''
     showDomainFieldOptions.value = false
@@ -344,7 +349,12 @@ watch(selectedDomainPath, (path) => {
     type: field.type,
   }
   domainFieldSearch.value = formatDomainFieldLabel(field)
-  draftFixedValue.value = ''
+  draftOperator.value = ''
+  draftTarget.value = ''
+})
+
+watch(draftOperator, (operator) => {
+  if (!operator) draftTarget.value = ''
 })
 
 function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
@@ -397,7 +407,7 @@ const isParameterNameDuplicate = computed(() => {
 const canAddParameter = computed(() => {
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return false
-  if (fixedValueError.value) return false
+  if (operatorError.value) return false
   return !isParameterNameDuplicate.value
 })
 
@@ -424,17 +434,14 @@ function addParameter() {
   if (!canAddParameter.value) return
   const name = draftParameter.value.parameterName?.trim()
   if (!name) return
-  const fixedValue = parseDraftFixedValue()
   newCondition.value.parameters.push({
     ...draftParameter.value,
     parameterName: name,
-    fixedValue,
+    operators: buildDraftOperators(),
   })
-  if (fixedValue === undefined) {
-    delete newCondition.value.parameters[newCondition.value.parameters.length - 1]?.fixedValue
-  }
   draftParameter.value = defaultParam()
-  draftFixedValue.value = ''
+  draftOperator.value = ''
+  draftTarget.value = ''
   selectedDomainPath.value = ''
   domainFieldSearch.value = ''
   showDomainFieldOptions.value = false
@@ -473,19 +480,29 @@ function submitRule() {
   }
   newCondition.value = getDefaultNewCondition()
   draftParameter.value = defaultParam()
-  draftFixedValue.value = ''
+  draftOperator.value = ''
+  draftTarget.value = ''
   selectedDomainPath.value = ''
   domainFieldSearch.value = ''
   showDomainFieldOptions.value = false
 }
 
-function parseDraftFixedValue(): unknown {
-  const raw = draftFixedValue.value.trim()
-  if (raw === '') return undefined
+function buildDraftOperators() {
+  if (!draftOperator.value) return []
+  return [
+    {
+      operate: draftOperator.value,
+      targets: [parseDraftTarget()],
+    },
+  ]
+}
+
+function parseDraftTarget(): unknown {
+  const raw = draftTarget.value.trim()
   switch (draftParameter.value.type) {
     case 'decimal':
     case 'integer':
-      return Number(raw)
+      return Number(normalizeDecimalInput(raw))
     case 'boolean':
       return raw === 'true'
     default:
@@ -493,13 +510,14 @@ function parseDraftFixedValue(): unknown {
   }
 }
 
-function validateDraftFixedValue(): string {
-  const raw = draftFixedValue.value.trim()
-  if (raw === '') return ''
+function validateDraftOperator(): string {
+  if (!draftOperator.value) return ''
+  const raw = draftTarget.value.trim()
+  if (raw === '') return 'Target is required.'
   if (draftParameter.value.type === 'decimal' || draftParameter.value.type === 'integer') {
-    const number = Number(raw)
-    if (!Number.isFinite(number)) return 'Fixed value must be numeric.'
-    if (draftParameter.value.type === 'integer' && !Number.isInteger(number)) return 'Fixed value must be an integer.'
+    const number = Number(normalizeDecimalInput(raw))
+    if (!Number.isFinite(number)) return 'Target must be numeric.'
+    if (draftParameter.value.type === 'integer' && !Number.isInteger(number)) return 'Target must be an integer.'
     const constraint = selectedDomainField.value?.valueConstraint
     if (constraint?.min !== undefined && number < constraint.min) return `Minimum is ${constraint.min}.`
     if (constraint?.max !== undefined && number > constraint.max) return `Maximum is ${constraint.max}.`
@@ -508,5 +526,62 @@ function validateDraftFixedValue(): string {
     return 'Use true or false.'
   }
   return ''
+}
+
+function normalizeDecimalInput(value: string): string {
+  return value.replace(',', '.')
+}
+
+function operatorOptionsForType(type: SemanticConditionParameter['type']) {
+  const equality = [
+    { value: 'Equals' as SemanticOperateType, label: '=' },
+    { value: 'NotEquals' as SemanticOperateType, label: '!=' },
+  ]
+  if (type === 'decimal' || type === 'integer' || type === 'date') {
+    return [
+      { value: 'GreaterThan' as SemanticOperateType, label: '>' },
+      { value: 'GreaterThanOrEqual' as SemanticOperateType, label: '>=' },
+      { value: 'LessThan' as SemanticOperateType, label: '<' },
+      { value: 'LessThanOrEqual' as SemanticOperateType, label: '<=' },
+      ...equality,
+    ]
+  }
+  if (type === 'string' || type === 'enum') {
+    return [
+      ...equality,
+      { value: 'Contains' as SemanticOperateType, label: 'contains' },
+      { value: 'MatchesRegex' as SemanticOperateType, label: 'matches' },
+    ]
+  }
+  return equality
+}
+
+function formatOperatorConstraint(operator: SemanticConditionParameter['operators'][number]): string {
+  const operate = typeof operator === 'string' ? operator : operator.operate
+  const targets = typeof operator === 'string' ? [] : (operator.targets ?? [])
+  return `${operatorLabel(operate)} ${targets.join(', ')}`
+}
+
+function operatorLabel(operator: DcsOperator): string {
+  switch (operator) {
+    case 'Equals':
+      return '='
+    case 'NotEquals':
+      return '!='
+    case 'GreaterThan':
+      return '>'
+    case 'GreaterThanOrEqual':
+      return '>='
+    case 'LessThan':
+      return '<'
+    case 'LessThanOrEqual':
+      return '<='
+    case 'Contains':
+      return 'contains'
+    case 'MatchesRegex':
+      return 'matches'
+    default:
+      return operator
+  }
 }
 </script>

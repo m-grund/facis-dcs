@@ -198,6 +198,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     templateVariables: cd.templateVariables ?? [],
     placeholderBindings: cd.placeholderBindings ?? [],
     semanticRules: cd.semanticRules ?? [],
+    policyBundle: cd.policyBundle ?? null,
     sla: cd.sla ?? null,
   })
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })

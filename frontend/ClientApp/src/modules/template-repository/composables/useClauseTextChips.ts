@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import type { ClausePlaceholderHighlight } from '@template-repository/models/template-editor-ui-store'
-import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 export type Segment =
   | { type: 'text'; value: string }
@@ -125,14 +125,12 @@ export function conditionIdsInText(text: string): Set<string> {
   return set
 }
 
-/** Builds placeholder label like "paramName (type)" from conditions. */
+/** Builds placeholder label from conditions. */
 export function getPlaceholderLabelFromConditions(seg: Segment, conditions: SemanticCondition[]): string {
   if (!isPlaceholder(seg)) return ''
   const cond = conditions.find((c) => c.conditionId === seg.conditionId)
   const param = cond?.parameters.find((p) => p.parameterName === seg.parameterName)
-  const type = param?.type ?? 'string'
-  const label = param ? semanticParameterLabel(param) : seg.parameterName
-  return `${label} (${semanticParameterTypeLabel(type)})`
+  return param ? semanticParameterLabel(param) : seg.parameterName
 }
 
 export function useClauseTextChips(

@@ -2,6 +2,7 @@ import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type {
   PlaceholderBinding,
+  PolicyBundle,
   SemanticProfile,
   SemanticRule,
   SLAAgreement,
@@ -39,6 +40,7 @@ interface TemplateDraftState {
   templateVariables: TemplateVariable[]
   placeholderBindings: PlaceholderBinding[]
   semanticRules: SemanticRule[]
+  policyBundle: PolicyBundle | null
   sla: SLAAgreement | null
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue

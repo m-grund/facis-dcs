@@ -16,9 +16,9 @@
       <div class="mt-2 flex flex-wrap gap-2">
         <div v-for="(p, i) in condition.parameters" :key="i" class="badge gap-1 badge-ghost badge-sm">
           <span>{{ semanticParameterLabel(p) }}</span>
-          <span class="opacity-70">
-            ({{ semanticParameterTypeLabel(p.type) }},
-            {{ p.fixedValue !== undefined ? `fixed: ${p.fixedValue}` : p.isRequired ? 'required' : 'optional' }})
+          <span class="opacity-70">({{ p.isRequired ? 'required' : 'optional' }})</span>
+          <span v-for="operator in p.operators" :key="formatOperatorConstraint(operator)" class="opacity-70">
+            {{ formatOperatorConstraint(operator) }}
           </span>
         </div>
       </div>
@@ -49,9 +49,10 @@
 
 <script setup lang="ts">
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { DcsOperator } from '@/models/semantic/facis-dcs-semantic'
 import IconEdit from '@/core/components/icons/IconEdit.vue'
 import IconRemove from '@/core/components/icons/IconRemove.vue'
-import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 defineProps<{
   condition: SemanticCondition
@@ -63,4 +64,33 @@ defineEmits<{
   'edit-rule': [conditionId: string]
   'delete-rule': [conditionId: string]
 }>()
+
+function formatOperatorConstraint(operator: SemanticCondition['parameters'][number]['operators'][number]): string {
+  const operate = typeof operator === 'string' ? operator : operator.operate
+  const targets = typeof operator === 'string' ? [] : (operator.targets ?? [])
+  return `${operatorLabel(operate)} ${targets.join(', ')}`
+}
+
+function operatorLabel(operator: DcsOperator): string {
+  switch (operator) {
+    case 'Equals':
+      return '='
+    case 'NotEquals':
+      return '!='
+    case 'GreaterThan':
+      return '>'
+    case 'GreaterThanOrEqual':
+      return '>='
+    case 'LessThan':
+      return '<'
+    case 'LessThanOrEqual':
+      return '<='
+    case 'Contains':
+      return 'contains'
+    case 'MatchesRegex':
+      return 'matches'
+    default:
+      return operator
+  }
+}
 </script>
