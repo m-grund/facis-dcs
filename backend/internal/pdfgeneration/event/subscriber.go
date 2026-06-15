@@ -135,7 +135,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	var jsonldBytes []byte
 	if contract.ContractData != nil {
 		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData), contract.Name)
+		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData))
 		if err != nil {
 			return fmt.Errorf("marshal contract JSON-LD for %s: %w", cweEvt.DID, err)
 		}
@@ -225,7 +225,7 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
 		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData), tpl.Name)
+		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
 		if err != nil {
 			return fmt.Errorf("marshal template JSON-LD for %s: %w", tplEvt.DID, err)
 		}

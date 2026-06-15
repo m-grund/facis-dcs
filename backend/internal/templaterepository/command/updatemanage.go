@@ -46,7 +46,7 @@ type UpdateManager struct {
 
 func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 	if cmd.TemplateData != nil && cmd.TemplateData.IsNotNullValue() {
-		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID)
+		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID, cmd.Name)
 		if err != nil {
 			return fmt.Errorf("template data validation failed: %w", err)
 		}

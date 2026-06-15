@@ -98,7 +98,7 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 	var jsonldBytes []byte
 	if contract.ContractData != nil {
 		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData), contract.Name)
+		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData))
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal contract JSON-LD: %w", err))
 		}
@@ -178,7 +178,7 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
 		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData), tpl.Name)
+		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal template JSON-LD: %w", err))
 		}

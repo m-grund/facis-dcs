@@ -35,6 +35,7 @@ import (
 	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
 	pdfpkg "digital-contracting-service/internal/pdfgeneration"
+	"digital-contracting-service/internal/base/validation"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
@@ -297,6 +298,7 @@ func main() {
 	}
 	mapper.SetOntologyContextIRI(pdfCoreContextIRI)
 	pdfpkg.SetVocabIRI(pdfCoreContextIRI + "#")
+	validation.SetVocabIRI(pdfCoreContextIRI + "#")
 
 	// Initialize pdf-core client (PDF rendering + C2PA provenance microservice).
 	pdfCoreURL := os.Getenv("PDF_CORE_URL")

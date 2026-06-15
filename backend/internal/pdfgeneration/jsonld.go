@@ -15,12 +15,12 @@ func SetVocabIRI(iri string) {
 	dcsCoreVocabIRI = iri
 }
 
-// MarshalJSONLD converts a raw JSON-LD data blob and entity name into a
-// fully term-expanded JSON object for pdf-core. All compact property names
-// become absolute IRIs using the dcs-pdf-core vocab; @context is dropped.
+// MarshalJSONLD converts a raw JSON-LD data blob into a fully term-expanded
+// JSON object for pdf-core. All compact property names become absolute IRIs
+// using the dcs-pdf-core vocab; @context is dropped.
 // DCS is authoritative about the term mapping — all document structure terms
 // live in the dcs-pdf-core ontology, so no prefix table is needed.
-func MarshalJSONLD(data []byte, name *string) ([]byte, error) {
+func MarshalJSONLD(data []byte) ([]byte, error) {
 	if dcsCoreVocabIRI == "" {
 		return nil, fmt.Errorf("pdfgeneration: vocab IRI not configured; call SetVocabIRI at startup")
 	}
@@ -28,10 +28,6 @@ func MarshalJSONLD(data []byte, name *string) ([]byte, error) {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("unmarshal JSON-LD data: %w", err)
-	}
-
-	if name != nil && *name != "" {
-		raw["title"] = *name
 	}
 
 	return json.Marshal(expandObject(raw))

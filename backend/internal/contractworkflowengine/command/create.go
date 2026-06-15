@@ -37,7 +37,7 @@ type Creator struct {
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, false)
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, nil, false)
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
