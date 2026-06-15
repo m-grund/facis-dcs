@@ -1,0 +1,11 @@
+{{- if .Files.Glob "flows/*.json" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-orce-flows
+data:
+  {{- range $path, $_ := .Files.Glob "flows/*.json" }}
+  {{ base $path }}: |
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+{{- end }}
