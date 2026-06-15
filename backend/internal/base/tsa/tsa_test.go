@@ -175,7 +175,11 @@ func TestVerify_FreeTSA_Integration(t *testing.T) {
 
 	resp, err := http.Post("https://freetsa.org/tsr", "application/timestamp-query", bytes.NewReader(reqBytes))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("could not close response body: %v", err)
+		}
+	}()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	body, err := io.ReadAll(resp.Body)
