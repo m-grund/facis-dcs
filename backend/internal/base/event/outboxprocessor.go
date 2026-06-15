@@ -15,12 +15,14 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/db"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/tsa"
 )
 
 type OutboxProcessor struct {
 	DB         *sqlx.DB
 	PubClient  *CloudEventPubClient
 	IPFSClient *ipfs.APIClient
+	TSAClient  *tsa.APIClient
 	ARepo      db.AuditTrailRepository
 }
 
@@ -157,7 +159,25 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		GlobalLogPredCID: globalLogPredCID,
 	}
 
-	result, err := j.IPFSClient.CreateFile(ctx, auditLogEntry)
+	tsaResult, err := j.TSAClient.Timestamp(ctx, auditLogEntry)
+	if err != nil {
+		return fmt.Errorf("could not timestamp event %d: %w", event.ID, err)
+	}
+
+	signedAuditLogEntry := datatype.SignedAuditLogEntry{
+		ID:            event.ID,
+		AuditLogEntry: auditLogEntry,
+		TsaSignature:  tsaResult,
+	}
+
+	// sanity check that our cert is ok
+	isVerified, verifyErr := tsa.Verify(tsaResult, auditLogEntry)
+	if !isVerified {
+		return fmt.Errorf("timestamp verification failed for event %d: %w", event.ID, verifyErr)
+	}
+	log.Printf("timestamp verification succeeded for event %d", event.ID)
+
+	result, err := j.IPFSClient.CreateFile(ctx, signedAuditLogEntry)
 	if err != nil {
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
 	}

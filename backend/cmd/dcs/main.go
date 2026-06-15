@@ -49,6 +49,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
+
+	"digital-contracting-service/internal/base/tsa"
 )
 
 func main() {
@@ -168,11 +170,22 @@ func main() {
 	}
 
 	aRepo := pq.PostgresAuditTrailRepository{}
+
+	tsaURL := os.Getenv("TSA_URL")
+	if tsaURL == "" {
+		log.Fatalf(ctx, nil, "TSA_URL is not set")
+	}
+	tsaClient, err := tsa.NewClient(tsaURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "failed to initialize TSA client")
+	}
+
 	outboxProcessor := event.OutboxProcessor{
 		DB:         db,
 		PubClient:  cepPubClient,
 		IPFSClient: ipfsAPIClient,
 		ARepo:      &aRepo,
+		TSAClient:  tsaClient,
 	}
 	err = outboxProcessor.Start(ctx)
 	if err != nil {
