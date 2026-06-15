@@ -30,6 +30,7 @@ import (
 	"digital-contracting-service/internal/base/db/pq"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/tsa"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
@@ -50,8 +51,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
-
-	"digital-contracting-service/internal/base/tsa"
 )
 
 func main() {
@@ -202,9 +201,7 @@ func main() {
 	var archiveNotaryClient cwecommand.ArchiveNotary
 	if archiveNotaryURL != "" {
 		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL)
-		log.Printf(ctx, "Archive notary endpoint configured at %s", archiveNotaryURL)
 	}
-
 	// Initialize the Federated Catalogue client.
 	fcURL := os.Getenv("FEDERATED_CATALOGUE_API_URL")
 	fcClientID := os.Getenv("FEDERATED_CATALOGUE_CLIENT_ID")
@@ -317,7 +314,7 @@ func main() {
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
 		authSvc = service.NewAuth(presentationRepo)
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, ipfsAPIClient, archiveNotaryClient)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, ipfsAPIClient, archiveNotaryClient, tsaClient)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
 		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)

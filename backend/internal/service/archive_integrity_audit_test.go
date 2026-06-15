@@ -50,11 +50,61 @@ func TestParseArchiveNotaryChainAcceptsValidChain(t *testing.T) {
 	if len(events) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(events))
 	}
-	if events[first.ArchiveEntryID].EventHash != first.EventHash {
+	if len(events[first.ArchiveEntryID]) != 1 || events[first.ArchiveEntryID][0].EventHash != first.EventHash {
 		t.Fatalf("first event hash mismatch")
 	}
-	if events[second.ArchiveEntryID].PreviousHash == nil || *events[second.ArchiveEntryID].PreviousHash != first.EventHash {
+	if len(events[second.ArchiveEntryID]) != 1 || events[second.ArchiveEntryID][0].PreviousHash == nil || *events[second.ArchiveEntryID][0].PreviousHash != first.EventHash {
 		t.Fatalf("second previous hash mismatch")
+	}
+}
+
+func TestParseArchiveNotaryChainAllowsDuplicateArchiveEntryIDs(t *testing.T) {
+	first := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-orphaned-retry",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-08T12:00:00Z",
+		ReceivedAt:      "2026-06-08T12:00:01Z",
+	}
+	first.EventHash = hashArchiveNotaryEvent(first)
+	prev := first.EventHash
+	second := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		SnapshotCID:     "bafy-successful-retry",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-08T12:01:00Z",
+		ReceivedAt:      "2026-06-08T12:01:01Z",
+		PreviousHash:    &prev,
+	}
+	second.EventHash = hashArchiveNotaryEvent(second)
+
+	events, err := parseArchiveNotaryChain(strings.NewReader(notaryLine(first) + notaryLine(second)))
+	if err != nil {
+		t.Fatalf("parseArchiveNotaryChain returned error: %v", err)
+	}
+	candidates := events[first.ArchiveEntryID]
+	if len(candidates) != 2 {
+		t.Fatalf("expected 2 duplicate candidates, got %d", len(candidates))
+	}
+	selected, err := selectArchiveNotaryEvent(first.ArchiveEntryID, &archiveNotaryReceiptData{
+		ArchiveEntryID: second.ArchiveEntryID,
+		EventHash:      second.EventHash,
+		PreviousHash:   second.PreviousHash,
+		ReceivedAt:     second.ReceivedAt,
+	}, candidates)
+	if err != nil {
+		t.Fatalf("selectArchiveNotaryEvent returned error: %v", err)
+	}
+	if selected.EventHash != second.EventHash {
+		t.Fatalf("selected wrong duplicate event")
 	}
 }
 
@@ -213,7 +263,7 @@ func TestFindArchiveStoreEventRequiresNotaryReceipt(t *testing.T) {
 		t.Fatalf("marshal event data: %v", err)
 	}
 
-	_, _, err = findArchiveStoreEvent(entry, "did:example:contract:1#1", []datatype.AuditLogEntry{{
+	_, _, _, err = findArchiveStoreEvent(entry, "did:example:contract:1#1", []datatype.AuditLogEntry{{
 		ID:        1,
 		EventType: "STORE_ARCHIVED_CONTRACT",
 		EventData: eventData,
@@ -248,7 +298,7 @@ func TestFindArchiveStoreEventReturnsNotaryReceipt(t *testing.T) {
 		t.Fatalf("marshal event data: %v", err)
 	}
 
-	_, receipt, err := findArchiveStoreEvent(entry, "did:example:contract:1#1", []datatype.AuditLogEntry{{
+	_, receipt, _, err := findArchiveStoreEvent(entry, "did:example:contract:1#1", []datatype.AuditLogEntry{{
 		ID:        1,
 		EventType: "STORE_ARCHIVED_CONTRACT",
 		EventData: eventData,
@@ -258,6 +308,22 @@ func TestFindArchiveStoreEventReturnsNotaryReceipt(t *testing.T) {
 	}
 	if receipt.EventHash != "sha256:1111111111111111111111111111111111111111111111111111111111111111" {
 		t.Fatalf("unexpected receipt event hash %q", receipt.EventHash)
+	}
+}
+
+func TestReadArchiveTSAReceiptRequiresDBReceipt(t *testing.T) {
+	entry := db.ContractArchiveEntry{
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+	}
+
+	_, err := readArchiveTSAReceipt(entry, &archiveTSAReceiptData{
+		Token:          "token",
+		TokenEncoding:  "base64",
+		MessageImprint: "abc",
+	})
+	if err == nil {
+		t.Fatal("expected missing DB TSA receipt error")
 	}
 }
 

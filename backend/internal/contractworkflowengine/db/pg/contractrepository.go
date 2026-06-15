@@ -196,20 +196,22 @@ func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sql
 func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data db.ContractArchiveEntry) error {
 	statement := `
         INSERT INTO contract_archive_entries (
-            did, contract_version, stored_by, contract_snapshot, content_hash, snapshot_cid, signature_metadata,
-            credential_hashes, evidence, retention_until
-        ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::jsonb, '{}'::jsonb), COALESCE($8::jsonb, '{}'::jsonb), COALESCE($9::jsonb, '{}'::jsonb), $10)
+            did, contract_version, stored_by, stored_at, contract_snapshot, content_hash, snapshot_cid, signature_metadata,
+            credential_hashes, tsa_receipt, evidence, retention_until
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::jsonb, '{}'::jsonb), COALESCE($9::jsonb, '{}'::jsonb), COALESCE($10::jsonb, '{}'::jsonb), COALESCE($11::jsonb, '{}'::jsonb), $12)
         ON CONFLICT (did, contract_version) DO NOTHING
     `
 	_, err := tx.ExecContext(ctx, statement,
 		data.DID,
 		data.ContractVersion,
 		data.StoredBy,
+		data.StoredAt,
 		data.ContractSnapshot,
 		data.ContentHash,
 		data.SnapshotCID,
 		data.SignatureMeta,
 		data.CredentialHashes,
+		data.TSAReceipt,
 		data.Evidence,
 		data.RetentionUntil,
 	)
@@ -219,7 +221,7 @@ func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.T
 func (r *PostgresContractRepo) ReadArchiveEntries(ctx context.Context, tx *sqlx.Tx) ([]db.ContractArchiveEntry, error) {
 	query := `
         SELECT did, contract_version, archive_status, stored_by, stored_at, contract_snapshot,
-               content_hash, snapshot_cid, snapshot_cid_created_at, signature_metadata, credential_hashes, evidence, retention_until,
+               content_hash, snapshot_cid, snapshot_cid_created_at, signature_metadata, credential_hashes, tsa_receipt, evidence, retention_until,
                deleted_at, deleted_by, deletion_reason
         FROM contract_archive_entries
         ORDER BY stored_at, did, contract_version

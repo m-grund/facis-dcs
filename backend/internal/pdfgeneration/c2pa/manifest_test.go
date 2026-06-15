@@ -3,16 +3,19 @@ package c2pa
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"io"
+	"encoding/hex"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,26 +42,23 @@ func (s *fixedSigner) CertificateChain(_ context.Context) ([][]byte, error) {
 }
 
 func TestRequestTimestamp_Success(t *testing.T) {
+	data := []byte("hello world")
 	tsa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "application/timestamp-query", r.Header.Get("Content-Type"))
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "text/plain", r.Header.Get("Content-Type"))
 		assert.Equal(t, "application/timestamp-reply", r.Header.Get("Accept"))
-
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		req, err := timestamp.ParseRequest(body)
-		require.NoError(t, err)
+		expectedHash := sha256.Sum256(data)
+		assert.Equal(t, hex.EncodeToString(expectedHash[:]), strings.TrimPrefix(r.URL.Path, "/"))
 
 		cert, key := mustTSACert(t)
 		ts := &timestamp.Timestamp{
-			HashAlgorithm: req.HashAlgorithm,
-			HashedMessage: req.HashedMessage,
+			HashAlgorithm: crypto.SHA256,
+			HashedMessage: expectedHash[:],
 			Time:          time.Now().UTC(),
 			SerialNumber:  big.NewInt(1),
 			Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
-			Nonce:         req.Nonce,
 		}
-		resp, err := ts.CreateResponseWithOpts(cert, key, nil)
+		resp, err := ts.CreateResponseWithOpts(cert, key, crypto.SHA256)
 		require.NoError(t, err)
 
 		w.Header().Set("Content-Type", "application/timestamp-reply")
@@ -66,7 +66,7 @@ func TestRequestTimestamp_Success(t *testing.T) {
 	}))
 	defer tsa.Close()
 
-	token, err := requestTimestamp(context.Background(), tsa.URL, []byte("hello world"))
+	token, err := requestTimestamp(context.Background(), tsa.URL, data)
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 }
@@ -84,22 +84,16 @@ func TestRequestTimestamp_Non200(t *testing.T) {
 
 func TestRequestTimestamp_HashMismatch(t *testing.T) {
 	tsa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		req, err := timestamp.ParseRequest(body)
-		require.NoError(t, err)
-
 		cert, key := mustTSACert(t)
 		ts := &timestamp.Timestamp{
-			HashAlgorithm: req.HashAlgorithm,
+			HashAlgorithm: crypto.SHA256,
 			// Intentionally wrong hash payload for mismatch test.
 			HashedMessage: []byte("not-the-request-hash"),
 			Time:          time.Now().UTC(),
 			SerialNumber:  big.NewInt(2),
 			Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
-			Nonce:         req.Nonce,
 		}
-		resp, err := ts.CreateResponseWithOpts(cert, key, nil)
+		resp, err := ts.CreateResponseWithOpts(cert, key, crypto.SHA256)
 		require.NoError(t, err)
 		_, _ = w.Write(resp)
 	}))

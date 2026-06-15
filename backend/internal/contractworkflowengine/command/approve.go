@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/jmoiron/sqlx"
@@ -36,6 +37,7 @@ type Approver struct {
 	ATRepo        db.ApprovalTaskRepo
 	IPFSStorer    ArchiveSnapshotStorer
 	ArchiveNotary ArchiveNotary
+	ArchiveTSA    ArchiveTimestampIssuer
 }
 
 type ArchiveSnapshotStorer interface {
@@ -116,26 +118,49 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		}
 		archiveEntry.SnapshotCID = snapshotResult.Identifier.Value
 
-		err = h.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
-		if err != nil {
-			return fmt.Errorf("could not store contract in archive: %w", err)
-		}
-
 		var notaryReceipt *ArchiveNotaryReceipt
+		notaryPayload := ArchiveNotaryPayload{
+			EventType:       "ARCHIVE_STORED",
+			ArchiveEntryID:  archiveNotaryEntryID(cmd.DID, processData.ContractVersion),
+			DID:             cmd.DID,
+			ContractVersion: processData.ContractVersion,
+			ContentHash:     archiveEntry.ContentHash,
+			SnapshotCID:     archiveEntry.SnapshotCID,
+			StoredBy:        cmd.ApprovedBy,
+			StoredAt:        archiveEntry.StoredAt,
+		}
 		if h.ArchiveNotary != nil {
-			notaryReceipt, err = h.ArchiveNotary.NotarizeArchiveEntry(ctx, ArchiveNotaryPayload{
-				EventType:       "ARCHIVE_STORED",
-				ArchiveEntryID:  archiveNotaryEntryID(cmd.DID, processData.ContractVersion),
-				DID:             cmd.DID,
-				ContractVersion: processData.ContractVersion,
-				ContentHash:     archiveEntry.ContentHash,
-				SnapshotCID:     archiveEntry.SnapshotCID,
-				StoredBy:        cmd.ApprovedBy,
-				StoredAt:        archiveEntry.StoredAt,
-			})
+			notaryReceipt, err = h.ArchiveNotary.NotarizeArchiveEntry(ctx, notaryPayload)
 			if err != nil {
 				return fmt.Errorf("could not notarize archive entry: %w", err)
 			}
+		}
+
+		var tsaReceipt *contractevents.ArchiveTSAReceipt
+		if h.ArchiveTSA != nil && h.ArchiveTSA.Enabled() && notaryReceipt != nil {
+			evidence, err := BuildArchiveTimestampEvidence(notaryPayload, notaryReceipt)
+			if err != nil {
+				return fmt.Errorf("could not build archive TSA evidence: %w", err)
+			}
+			evidenceBytes, err := CanonicalArchiveTimestampEvidence(evidence)
+			if err != nil {
+				return err
+			}
+			rawReceipt, err := h.ArchiveTSA.TimestampBytes(ctx, evidenceBytes)
+			if err != nil {
+				return fmt.Errorf("could not timestamp archive entry: %w", err)
+			}
+			tsaReceipt = archiveTSAEventReceipt(rawReceipt)
+			tsaReceiptJSON, err := datatype.NewJSON(tsaReceipt)
+			if err != nil {
+				return fmt.Errorf("could not encode archive TSA receipt: %w", err)
+			}
+			archiveEntry.TSAReceipt = &tsaReceiptJSON
+		}
+
+		err = h.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
+		if err != nil {
+			return fmt.Errorf("could not store contract in archive: %w", err)
 		}
 
 		archiveEvt := contractevents.StoreArchivedEvent{
@@ -146,6 +171,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			SnapshotCID:     archiveEntry.SnapshotCID,
 			ArchiveStatus:   "STORED",
 			NotaryReceipt:   archiveNotaryEventReceipt(notaryReceipt),
+			TSAReceipt:      tsaReceipt,
 			EvidenceSummary: contractevents.ArchiveEvidenceSummary{
 				SnapshotHashAlgorithm: archiveSnapshotHashAlgorithm,
 				SignatureStatus:       "NOT_PERFORMED",

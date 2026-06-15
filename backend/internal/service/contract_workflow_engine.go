@@ -17,6 +17,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/tsa"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -43,12 +44,13 @@ type contractWorkflowEnginesrvc struct {
 	ATrailReader  base.AuditTrailReader
 	IPFSClient    *ipfs.APIClient
 	ArchiveNotary command.ArchiveNotary
+	ArchiveTSA    *tsa.APIClient
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary) contractworkflowengine.Service {
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary, archiveTSA *tsa.APIClient) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -63,6 +65,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		ATrailReader:     auditTrailReader,
 		IPFSClient:       ipfsClient,
 		ArchiveNotary:    archiveNotary,
+		ArchiveTSA:       archiveTSA,
 	}
 }
 
@@ -714,6 +717,7 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		ATRepo:        s.ATRepo,
 		IPFSStorer:    s.IPFSClient,
 		ArchiveNotary: s.ArchiveNotary,
+		ArchiveTSA:    s.ArchiveTSA,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

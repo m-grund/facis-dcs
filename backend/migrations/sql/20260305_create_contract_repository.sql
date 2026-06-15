@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS contract_archive_entries
     snapshot_cid_created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     signature_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     credential_hashes  JSONB NOT NULL DEFAULT '{}'::jsonb,
+    tsa_receipt        JSONB NOT NULL DEFAULT '{}'::jsonb,
     evidence           JSONB NOT NULL DEFAULT '{}'::jsonb,
 
     retention_until    TIMESTAMP,
@@ -169,6 +170,7 @@ BEGIN
         OR NEW.snapshot_cid_created_at IS DISTINCT FROM OLD.snapshot_cid_created_at
         OR NEW.signature_metadata IS DISTINCT FROM OLD.signature_metadata
         OR NEW.credential_hashes IS DISTINCT FROM OLD.credential_hashes
+        OR NEW.tsa_receipt IS DISTINCT FROM OLD.tsa_receipt
         OR NEW.evidence IS DISTINCT FROM OLD.evidence THEN
         RAISE EXCEPTION 'immutable contract archive entry fields cannot be updated';
     END IF;

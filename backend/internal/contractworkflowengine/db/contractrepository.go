@@ -128,6 +128,7 @@ type ContractArchiveEntry struct {
 	SnapshotCIDCreatedAt time.Time      `db:"snapshot_cid_created_at"`
 	SignatureMeta        *datatype.JSON `db:"signature_metadata"`
 	CredentialHashes     *datatype.JSON `db:"credential_hashes"`
+	TSAReceipt           *datatype.JSON `db:"tsa_receipt"`
 	Evidence             *datatype.JSON `db:"evidence"`
 	RetentionUntil       *time.Time     `db:"retention_until"`
 	DeletedAt            *time.Time     `db:"deleted_at"`

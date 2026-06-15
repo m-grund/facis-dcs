@@ -1,9 +1,7 @@
 package c2pa
 
 import (
-	"bytes"
 	"context"
-	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,14 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
-	"net/http"
-	"time"
 
-	"github.com/digitorus/timestamp"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
 	"github.com/veraison/go-cose"
+
+	"digital-contracting-service/internal/base/tsa"
 )
 
 // producer identifies this C2PA claim generator.
@@ -220,56 +216,5 @@ func BuildManifest(
 
 // requestTimestamp requests an RFC 3161 timestamp token from the given TSA URL.
 func requestTimestamp(ctx context.Context, tsaURL string, data []byte) ([]byte, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	req, err := timestamp.CreateRequest(bytes.NewReader(data), &timestamp.RequestOptions{
-		Hash:         crypto.SHA256,
-		Certificates: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create TSA request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, tsaURL, bytes.NewReader(req))
-	if err != nil {
-		return nil, fmt.Errorf("create TSA HTTP request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/timestamp-query")
-	httpReq.Header.Set("Accept", "application/timestamp-reply")
-
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	httpResp, err := httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("call TSA endpoint: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println("could not close body")
-		}
-	}(httpResp.Body)
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read TSA response: %w", err)
-	}
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected TSA status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	ts, err := timestamp.ParseResponse(body)
-	if err != nil {
-		return nil, fmt.Errorf("parse TSA response: %w", err)
-	}
-
-	expectedHash := sha256.Sum256(data)
-	if !bytes.Equal(ts.HashedMessage, expectedHash[:]) {
-		return nil, fmt.Errorf("TSA hashed message mismatch")
-	}
-	if len(ts.RawToken) == 0 {
-		return nil, fmt.Errorf("TSA response token is empty")
-	}
-
-	return ts.RawToken, nil
+	return tsa.RequestTimestamp(ctx, tsaURL, data)
 }

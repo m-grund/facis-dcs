@@ -65,6 +65,7 @@ func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchi
 		DID:              contract.DID,
 		ContractVersion:  contract.ContractVersion,
 		StoredBy:         storedBy,
+		StoredAt:         time.Now().UTC(),
 		ContractSnapshot: snapshotJSON,
 		ContentHash:      contentHash,
 		SignatureMeta:    &signatureMetadata,

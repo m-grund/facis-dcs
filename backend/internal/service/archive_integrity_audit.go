@@ -18,6 +18,7 @@ import (
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/tsa"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -53,6 +54,17 @@ type archiveNotaryReceiptData struct {
 	ReceivedAt     string  `json:"receivedAt"`
 }
 
+type archiveTSAReceiptData struct {
+	ReceiptType    string    `json:"receipt_type"`
+	Token          string    `json:"token"`
+	TokenEncoding  string    `json:"token_encoding"`
+	HashAlgorithm  string    `json:"hash_algorithm"`
+	MessageImprint string    `json:"message_imprint"`
+	GeneratedAt    time.Time `json:"generated_at"`
+	Policy         string    `json:"policy,omitempty"`
+	SerialNumber   string    `json:"serial_number,omitempty"`
+}
+
 type archiveStoreEventData struct {
 	DID             string                    `json:"did"`
 	ContractVersion int                       `json:"contract_version"`
@@ -61,6 +73,7 @@ type archiveStoreEventData struct {
 	SnapshotCID     string                    `json:"snapshot_cid"`
 	ArchiveStatus   string                    `json:"archive_status"`
 	NotaryReceipt   *archiveNotaryReceiptData `json:"notary_receipt"`
+	TSAReceipt      *archiveTSAReceiptData    `json:"tsa_receipt"`
 }
 
 func newArchiveNotaryChainReaderFromEnv() (*archiveNotaryChainReader, error) {
@@ -79,7 +92,7 @@ func newArchiveNotaryChainReaderFromEnv() (*archiveNotaryChainReader, error) {
 	}, nil
 }
 
-func (r *archiveNotaryChainReader) Read(ctx context.Context) (map[string]archiveNotaryEvent, error) {
+func (r *archiveNotaryChainReader) Read(ctx context.Context) (map[string][]archiveNotaryEvent, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create ORCE archive audit log request: %w", err)
@@ -98,8 +111,8 @@ func (r *archiveNotaryChainReader) Read(ctx context.Context) (map[string]archive
 	return parseArchiveNotaryChain(resp.Body)
 }
 
-func parseArchiveNotaryChain(reader io.Reader) (map[string]archiveNotaryEvent, error) {
-	events := map[string]archiveNotaryEvent{}
+func parseArchiveNotaryChain(reader io.Reader) (map[string][]archiveNotaryEvent, error) {
+	events := map[string][]archiveNotaryEvent{}
 	scanner := bufio.NewScanner(reader)
 	var previousHash *string
 	lineNumber := 0
@@ -126,12 +139,9 @@ func parseArchiveNotaryChain(reader io.Reader) (map[string]archiveNotaryEvent, e
 		if calculated != event.EventHash {
 			return nil, fmt.Errorf("ORCE archive audit log line %d has invalid eventHash", lineNumber)
 		}
-		if _, exists := events[event.ArchiveEntryID]; exists {
-			return nil, fmt.Errorf("ORCE archive audit log contains duplicate archiveEntryId %s", event.ArchiveEntryID)
-		}
 		hash := event.EventHash
 		previousHash = &hash
-		events[event.ArchiveEntryID] = event
+		events[event.ArchiveEntryID] = append(events[event.ArchiveEntryID], event)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read ORCE archive audit log: %w", err)
@@ -179,12 +189,27 @@ func stringPtrsEqual(a, b *string) bool {
 	return *a == *b
 }
 
+func selectArchiveNotaryEvent(archiveEntryID string, receipt *archiveNotaryReceiptData, events []archiveNotaryEvent) (archiveNotaryEvent, error) {
+	if receipt == nil {
+		return archiveNotaryEvent{}, fmt.Errorf("archive notary receipt is required for %s", archiveEntryID)
+	}
+	for _, event := range events {
+		if receipt.ArchiveEntryID == archiveEntryID &&
+			receipt.EventHash == event.EventHash &&
+			stringPtrsEqual(receipt.PreviousHash, event.PreviousHash) &&
+			receipt.ReceivedAt == event.ReceivedAt {
+			return event, nil
+		}
+	}
+	return archiveNotaryEvent{}, fmt.Errorf("ORCE archive audit log has no event matching stored notary receipt for %s", archiveEntryID)
+}
+
 func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	ctx context.Context,
 	entry db.ContractArchiveEntry,
 	entryIndex int,
 	archiveStoreEvents []datatype.AuditLogEntry,
-	notaryEvents map[string]archiveNotaryEvent,
+	notaryEvents map[string][]archiveNotaryEvent,
 ) (*processauditandcompliance.PACResourceAuditTrailEntry, error) {
 	if !entry.ContractSnapshot.IsNotNullValue() {
 		return nil, fmt.Errorf("archive entry %s#%d has empty contract_snapshot", entry.DID, entry.ContractVersion)
@@ -221,13 +246,17 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	}
 
 	archiveEntryID := archiveNotaryEntryID(entry.DID, entry.ContractVersion)
-	storeEvent, receipt, err := findArchiveStoreEvent(entry, archiveEntryID, archiveStoreEvents)
+	storeEvent, receipt, eventTSAReceipt, err := findArchiveStoreEvent(entry, archiveEntryID, archiveStoreEvents)
 	if err != nil {
 		return nil, err
 	}
-	notaryEvent, ok := notaryEvents[archiveEntryID]
-	if !ok {
+	notaryEventCandidates := notaryEvents[archiveEntryID]
+	if len(notaryEventCandidates) == 0 {
 		return nil, fmt.Errorf("ORCE archive audit log does not contain archiveEntryId %s", archiveEntryID)
+	}
+	notaryEvent, err := selectArchiveNotaryEvent(archiveEntryID, receipt, notaryEventCandidates)
+	if err != nil {
+		return nil, err
 	}
 	if notaryEvent.ContentHash != entry.ContentHash || notaryEvent.SnapshotCID != entry.SnapshotCID {
 		return nil, fmt.Errorf("ORCE archive audit log event does not match archive entry %s", archiveEntryID)
@@ -237,6 +266,71 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	}
 	if receipt.ArchiveEntryID != archiveEntryID || receipt.EventHash != notaryEvent.EventHash || !stringPtrsEqual(receipt.PreviousHash, notaryEvent.PreviousHash) || receipt.ReceivedAt != notaryEvent.ReceivedAt {
 		return nil, fmt.Errorf("archive notary receipt does not match ORCE audit log for %s", archiveEntryID)
+	}
+
+	tsaVerified := false
+	tsaGeneratedAt := ""
+	tsaPolicy := ""
+	tsaSerialNumber := ""
+	tsaReceipt, err := readArchiveTSAReceipt(entry, eventTSAReceipt)
+	if err != nil {
+		return nil, err
+	}
+	if tsaReceipt != nil {
+		storedAt, err := time.Parse(time.RFC3339Nano, notaryEvent.StoredAt)
+		if err != nil {
+			return nil, fmt.Errorf("ORCE archive audit log event has invalid storedAt for %s: %w", archiveEntryID, err)
+		}
+		notaryReceivedAt, err := time.Parse(time.RFC3339Nano, notaryEvent.ReceivedAt)
+		if err != nil {
+			return nil, fmt.Errorf("ORCE archive audit log event has invalid receivedAt for %s: %w", archiveEntryID, err)
+		}
+		evidence, err := cwecommand.BuildArchiveTimestampEvidence(cwecommand.ArchiveNotaryPayload{
+			EventType:       notaryEvent.EventType,
+			ArchiveEntryID:  notaryEvent.ArchiveEntryID,
+			DID:             notaryEvent.DID,
+			ContractVersion: notaryEvent.ContractVersion,
+			ContentHash:     notaryEvent.ContentHash,
+			SnapshotCID:     notaryEvent.SnapshotCID,
+			StoredBy:        notaryEvent.StoredBy,
+			StoredAt:        storedAt,
+		}, &cwecommand.ArchiveNotaryReceipt{
+			ReceiptType:    receipt.ReceiptType,
+			ArchiveEntryID: receipt.ArchiveEntryID,
+			EventHash:      receipt.EventHash,
+			PreviousHash:   receipt.PreviousHash,
+			ReceivedAt:     notaryReceivedAt,
+		})
+		if err != nil {
+			return nil, err
+		}
+		evidenceBytes, err := cwecommand.CanonicalArchiveTimestampEvidence(evidence)
+		if err != nil {
+			return nil, err
+		}
+		ts, err := tsa.VerifyReceipt(tsa.Receipt{
+			Token:          tsaReceipt.Token,
+			TokenEncoding:  tsaReceipt.TokenEncoding,
+			HashAlgorithm:  tsaReceipt.HashAlgorithm,
+			MessageImprint: tsaReceipt.MessageImprint,
+			GeneratedAt:    tsaReceipt.GeneratedAt,
+			Policy:         tsaReceipt.Policy,
+			SerialNumber:   tsaReceipt.SerialNumber,
+		}, evidenceBytes)
+		if err != nil {
+			return nil, fmt.Errorf("archive TSA receipt verification failed for %s: %w", archiveEntryID, err)
+		}
+		if ts.Time.Before(storedAt) {
+			return nil, fmt.Errorf("archive TSA timestamp precedes storedAt for %s", archiveEntryID)
+		}
+		tsaVerified = true
+		tsaGeneratedAt = ts.Time.UTC().Format(time.RFC3339Nano)
+		if len(ts.Policy) > 0 {
+			tsaPolicy = ts.Policy.String()
+		}
+		if ts.SerialNumber != nil {
+			tsaSerialNumber = ts.SerialNumber.String()
+		}
 	}
 
 	did := entry.DID
@@ -258,6 +352,10 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 			"notaryEventHash":       notaryEvent.EventHash,
 			"notaryPreviousHash":    notaryEvent.PreviousHash,
 			"notaryReceivedAt":      notaryEvent.ReceivedAt,
+			"tsaTimestampVerified":  tsaVerified,
+			"tsaGeneratedAt":        tsaGeneratedAt,
+			"tsaPolicy":             tsaPolicy,
+			"tsaSerialNumber":       tsaSerialNumber,
 			"snapshotHashAlgorithm": "SHA-256",
 			"checkedAt":             now,
 		},
@@ -286,29 +384,58 @@ func jsonSemanticallyEqual(left datatype.JSON, right json.RawMessage) bool {
 	return bytes.Equal(leftCanonical, rightCanonical)
 }
 
-func findArchiveStoreEvent(entry db.ContractArchiveEntry, archiveEntryID string, auditEntries []datatype.AuditLogEntry) (datatype.AuditLogEntry, *archiveNotaryReceiptData, error) {
+func findArchiveStoreEvent(entry db.ContractArchiveEntry, archiveEntryID string, auditEntries []datatype.AuditLogEntry) (datatype.AuditLogEntry, *archiveNotaryReceiptData, *archiveTSAReceiptData, error) {
 	for _, auditEntry := range auditEntries {
 		if auditEntry.EventType != eventtype.StoreArchived.String() {
 			continue
 		}
 		var data archiveStoreEventData
 		if err := json.Unmarshal(auditEntry.EventData, &data); err != nil {
-			return datatype.AuditLogEntry{}, nil, fmt.Errorf("decode archive store event %d: %w", auditEntry.ID, err)
+			return datatype.AuditLogEntry{}, nil, nil, fmt.Errorf("decode archive store event %d: %w", auditEntry.ID, err)
 		}
 		if data.DID != entry.DID || data.ContractVersion != entry.ContractVersion || data.ContentHash != entry.ContentHash || data.SnapshotCID != entry.SnapshotCID {
 			continue
 		}
 		if data.NotaryReceipt == nil {
-			return datatype.AuditLogEntry{}, nil, fmt.Errorf("archive store event for %s has no notary_receipt", archiveEntryID)
+			return datatype.AuditLogEntry{}, nil, nil, fmt.Errorf("archive store event for %s has no notary_receipt", archiveEntryID)
 		}
 		if data.NotaryReceipt.EventHash == "" {
-			return datatype.AuditLogEntry{}, nil, fmt.Errorf("archive store event for %s has empty notary eventHash", archiveEntryID)
+			return datatype.AuditLogEntry{}, nil, nil, fmt.Errorf("archive store event for %s has empty notary eventHash", archiveEntryID)
 		}
-		return auditEntry, data.NotaryReceipt, nil
+		return auditEntry, data.NotaryReceipt, data.TSAReceipt, nil
 	}
-	return datatype.AuditLogEntry{}, nil, fmt.Errorf("archive store event for %s was not found in audit trail", archiveEntryID)
+	return datatype.AuditLogEntry{}, nil, nil, fmt.Errorf("archive store event for %s was not found in audit trail", archiveEntryID)
 }
 
 func archiveNotaryEntryID(did string, contractVersion int) string {
 	return fmt.Sprintf("%s#%d", did, contractVersion)
+}
+
+func readArchiveTSAReceipt(entry db.ContractArchiveEntry, eventReceipt *archiveTSAReceiptData) (*archiveTSAReceiptData, error) {
+	var dbReceipt *archiveTSAReceiptData
+	if entry.TSAReceipt != nil && entry.TSAReceipt.IsNotNullValue() {
+		bytes, err := entry.TSAReceipt.MarshalJSON()
+		if err != nil {
+			return nil, fmt.Errorf("marshal archive TSA receipt for %s#%d: %w", entry.DID, entry.ContractVersion, err)
+		}
+		if string(bytes) != "{}" && string(bytes) != "null" {
+			var parsed archiveTSAReceiptData
+			if err := json.Unmarshal(bytes, &parsed); err != nil {
+				return nil, fmt.Errorf("decode archive TSA receipt for %s#%d: %w", entry.DID, entry.ContractVersion, err)
+			}
+			if parsed.Token != "" {
+				dbReceipt = &parsed
+			}
+		}
+	}
+	if dbReceipt == nil {
+		return nil, fmt.Errorf("archive entry %s#%d has no tsa_receipt", entry.DID, entry.ContractVersion)
+	}
+	if eventReceipt == nil {
+		return nil, fmt.Errorf("archive store event for %s#%d has no tsa_receipt", entry.DID, entry.ContractVersion)
+	}
+	if dbReceipt.Token != eventReceipt.Token || dbReceipt.MessageImprint != eventReceipt.MessageImprint {
+		return nil, fmt.Errorf("archive TSA receipt does not match store event for %s#%d", entry.DID, entry.ContractVersion)
+	}
+	return dbReceipt, nil
 }
