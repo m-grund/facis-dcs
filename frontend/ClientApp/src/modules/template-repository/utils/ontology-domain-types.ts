@@ -95,5 +95,6 @@ function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticVal
   return {
     ...constraint,
     allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+    valueOptions: constraint.valueOptions ? constraint.valueOptions.map((option) => ({ ...option })) : undefined,
   }
 }

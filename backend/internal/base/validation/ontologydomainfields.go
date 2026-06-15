@@ -123,11 +123,12 @@ func buildOntologyRuntime() ontologyRuntimeMetadata {
 }
 
 func entityRoleAllowedValues() []string {
+	valueOptions := parseOntologyValueOptions(ontologyStatementsFromConfiguredFile())
 	for _, statement := range ontologyStatementsFromConfiguredFile() {
 		if ontologySubject(statement) != "dcst:constraint-contract-party-role" {
 			continue
 		}
-		constraint := parseOntologyValueConstraint(statement)
+		constraint := parseOntologyValueConstraint(statement, valueOptions)
 		return append([]string(nil), constraint.AllowedValues...)
 	}
 	return nil
@@ -219,12 +220,13 @@ func ontologyPathCandidates() []string {
 func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 	statements := ontologyStatements(content)
 	constraints := map[string]*valueConstraint{}
+	valueOptions := parseOntologyValueOptions(statements)
 	for _, statement := range statements {
 		if !strings.Contains(statement, " a dcs:ValueConstraint") {
 			continue
 		}
 		subject := ontologySubject(statement)
-		constraints[subject] = parseOntologyValueConstraint(statement)
+		constraints[subject] = parseOntologyValueConstraint(statement, valueOptions)
 	}
 
 	fields := map[string]domainField{}
@@ -256,6 +258,7 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 			}
 			copy := *constraint
 			copy.AllowedValues = append([]string(nil), constraint.AllowedValues...)
+			copy.ValueOptions = append([]valueOption(nil), constraint.ValueOptions...)
 			field.Constraint = &copy
 		}
 		fields[semanticPath] = field
@@ -458,17 +461,41 @@ func ontologyStatementHasType(statement string, class string) bool {
 	return false
 }
 
-func parseOntologyValueConstraint(statement string) *valueConstraint {
+func parseOntologyValueConstraint(statement string, catalogOptions map[string]valueOption) *valueConstraint {
+	allowedValues := ontologyStrings(statement, "dcs:allowedValue")
+	valueOptions := make([]valueOption, 0, len(allowedValues))
+	for _, value := range allowedValues {
+		if option, ok := catalogOptions[value]; ok {
+			valueOptions = append(valueOptions, option)
+		}
+	}
 	constraint := &valueConstraint{
 		Format:           ontologyString(statement, "dcs:format"),
 		Pattern:          ontologyString(statement, "dcs:pattern"),
-		AllowedValues:    ontologyStrings(statement, "dcs:allowedValue"),
+		AllowedValues:    allowedValues,
+		ValueOptions:     valueOptions,
 		AllowedValuesRef: ontologyString(statement, "dcs:allowedValuesRef"),
 		Description:      ontologyString(statement, "rdfs:label"),
 	}
 	constraint.Min = ontologyNumber(statement, "dcs:minInclusive")
 	constraint.Max = ontologyNumber(statement, "dcs:maxInclusive")
 	return constraint
+}
+
+func parseOntologyValueOptions(statements []string) map[string]valueOption {
+	options := map[string]valueOption{}
+	for _, statement := range statements {
+		value := ontologyString(statement, "skos:notation")
+		if value == "" {
+			continue
+		}
+		options[value] = valueOption{
+			Value:  value,
+			Label:  ontologyString(statement, "skos:prefLabel"),
+			Symbol: ontologyString(statement, "dcs:valueSymbol"),
+		}
+	}
+	return options
 }
 
 func allowedValuesForConstraint(constraint *valueConstraint) []string {
@@ -488,6 +515,28 @@ func allowedValuesForConstraint(constraint *valueConstraint) []string {
 		}
 		if len(field.Constraint.AllowedValues) > 0 {
 			return append([]string(nil), field.Constraint.AllowedValues...)
+		}
+	}
+	return nil
+}
+
+func valueOptionsForConstraint(constraint *valueConstraint) []valueOption {
+	if constraint == nil {
+		return nil
+	}
+	if len(constraint.ValueOptions) > 0 {
+		return append([]valueOption(nil), constraint.ValueOptions...)
+	}
+	ref := normalizedAllowedValuesRef(constraint.AllowedValuesRef)
+	if ref == "" {
+		return nil
+	}
+	for _, field := range ontologyDomainFieldIndex {
+		if field.Constraint == nil || normalizedAllowedValuesRef(field.Constraint.AllowedValuesRef) != ref {
+			continue
+		}
+		if len(field.Constraint.ValueOptions) > 0 {
+			return append([]valueOption(nil), field.Constraint.ValueOptions...)
 		}
 	}
 	return nil

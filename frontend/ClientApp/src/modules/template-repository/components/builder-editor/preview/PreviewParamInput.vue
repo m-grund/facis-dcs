@@ -1,14 +1,14 @@
 <template>
   <span class="tooltip tooltip-top inline-flex items-baseline" :data-tip="tipText">
     <select
-      v-if="allowedValues.length && (type === 'string' || type === 'enum')"
+      v-if="valueOptions.length && (type === 'string' || type === 'enum')"
       v-model="stringValue"
       :class="selectClass"
       :aria-label="label"
       @change="emitStringValue"
     >
       <option value=""></option>
-      <option v-for="option in allowedValues" :key="option" :value="option">{{ option }}</option>
+      <option v-for="option in valueOptions" :key="option.value" :value="option.value">{{ formatOption(option) }}</option>
     </select>
     <input
       v-else-if="type === 'string' || type === 'enum'"
@@ -53,7 +53,7 @@ import type {
   SemanticParameterType,
   SemanticValueConstraint,
 } from '@/modules/template-repository/models/contract-template'
-import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
+import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
 
 const props = defineProps<{
   type: SemanticParameterType
@@ -69,7 +69,7 @@ const stringValue = ref('')
 const numberValue = ref('')
 const dateValue = ref('')
 const booleanValue = ref(false)
-const allowedValues = computed(() => resolveAllowedValues(props.valueConstraint))
+const valueOptions = computed(() => resolveValueOptions(props.valueConstraint))
 const tipText = computed(() => props.invalidTip ?? props.valueConstraint?.description ?? props.label ?? '')
 const placeholderBaseClass =
   'rounded-sm border-0 border-b border-neutral/70 bg-primary/5 px-1.5 py-0.5 font-medium text-primary outline-none transition-colors focus:border-neutral focus:bg-primary/10'
@@ -107,6 +107,11 @@ watch(
 function emitStringValue(event: Event) {
   const next = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value ?? ''
   emit('update:value', next)
+}
+
+function formatOption(option: ValueOption) {
+  if (option.symbol) return `${option.symbol} ${option.value}`
+  return option.label === option.value ? option.value : `${option.label} (${option.value})`
 }
 
 function emitIntegerValue(event: Event) {

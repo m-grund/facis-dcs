@@ -259,6 +259,19 @@
       "@container": "@set"
     },
     "allowedValuesRef": "dcs:allowedValuesRef",
+    "valueCatalog": {
+      "@id": "dcs:valueCatalog",
+      "@type": "@id"
+    },
+    "valueOptions": {
+      "@id": "dcs:valueOption",
+      "@container": "@set"
+    },
+    "value": "dcs:value",
+    "valueLabel": "dcs:valueLabel",
+    "label": "dcs:valueLabel",
+    "valueSymbol": "dcs:valueSymbol",
+    "symbol": "dcs:valueSymbol",
     "pattern": "dcs:pattern",
     "minInclusive": "dcs:minInclusive",
     "maxInclusive": "dcs:maxInclusive",

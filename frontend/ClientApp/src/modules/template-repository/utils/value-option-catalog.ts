@@ -1,14 +1,19 @@
-import type { SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
-import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
+import type { SemanticValueConstraint, SemanticValueOption } from '@/modules/template-repository/models/contract-template'
+import { resolveAllowedValues, resolveValueConstraintOptions } from '@template-repository/utils/value-constraint-catalog'
 
-export interface ValueOption {
-  value: string
-  label: string
-}
+export type ValueOption = Required<Pick<SemanticValueOption, 'value' | 'label'>> & Pick<SemanticValueOption, 'symbol'>
 
 export function resolveValueOptions(constraint?: SemanticValueConstraint): readonly ValueOption[] {
   if (!constraint) return []
-  return resolveAllowedValues(constraint).map((value) => ({ value, label: formatValueLabel(value) }))
+  const optionsByValue = new Map((resolveValueConstraintOptions(constraint) ?? []).map((option) => [option.value, option]))
+  return resolveAllowedValues(constraint).map((value) => {
+    const option = optionsByValue.get(value)
+    return {
+      value,
+      label: option?.label || value,
+      symbol: option?.symbol,
+    }
+  })
 }
 
 export function isTokenValueConstraint(constraint?: SemanticValueConstraint): boolean {
@@ -19,9 +24,7 @@ export function isTokenValueConstraint(constraint?: SemanticValueConstraint): bo
 export function formatValueOption(value: unknown, options: readonly ValueOption[]): string {
   const raw = String(value)
   const option = options.find((item) => item.value === raw)
-  return option ? `${option.label} (${option.value})` : raw
-}
-
-function formatValueLabel(value: string): string {
-  return value.replace(/[-_]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  if (!option) return raw
+  if (option.symbol) return `${option.symbol} ${option.value}`
+  return option.label === option.value ? option.value : `${option.label} (${option.value})`
 }

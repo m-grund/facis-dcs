@@ -20,7 +20,7 @@
     <div class="space-y-4">
       <p class="label-text mb-1 text-xs text-base-content/60">Parameters</p>
       <div
-        class="grid grid-cols-1 gap-x-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50 p-3 md:grid-cols-12"
+        class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50 p-3 md:grid-cols-12"
       >
         <p class="mb-2 text-xs font-medium text-base-content/70 md:col-span-12">New parameter</p>
         <div class="flex flex-col gap-1 md:col-span-4">
@@ -77,95 +77,41 @@
           </p>
           <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
         </div>
-        <div v-if="usesSetConstraintEditor" class="flex flex-col gap-1 md:col-span-2">
+        <div class="flex flex-col gap-1 md:col-span-3">
           <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">Constraint</span>
+            <span class="label-text text-xs text-base-content/60">Obligation</span>
           </label>
-          <select v-model="draftSetOperator" class="select-bordered select h-9 w-full select-sm">
-            <option value="In">Allow only</option>
-            <option value="NotIn">Exclude</option>
+          <select v-model="draftOperator" class="select-bordered select h-9 w-full select-sm">
+            <option value="">None</option>
+            <option v-for="option in operatorOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
           </select>
         </div>
-        <div v-if="usesSetConstraintEditor" class="flex flex-col gap-1 md:col-span-4">
+        <div v-if="!usesSetConstraintEditor" class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">Values</span>
+            <span class="label-text text-xs text-base-content/60">Value</span>
           </label>
-          <input
-            v-if="valueOptions.length"
-            v-model="valueOptionSearch"
-            type="search"
-            class="input-bordered input input-sm h-9 w-full"
-            placeholder="Search values"
-          />
-          <div
-            v-if="valueOptions.length"
-            class="max-h-40 overflow-y-auto rounded border border-base-300 bg-base-100 p-2"
+          <select
+            v-if="draftParameter.type === 'boolean'"
+            v-model="draftTarget"
+            class="select-bordered select h-9 w-full select-sm"
+            :disabled="!draftOperator"
           >
-            <label
-              v-for="option in filteredValueOptions"
-              :key="option.value"
-              class="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-base-200"
-            >
-              <input
-                v-model="draftSetTargets"
-                type="checkbox"
-                class="checkbox checkbox-xs checkbox-primary"
-                :value="option.value"
-              />
-              <span>{{ option.label }} ({{ option.value }})</span>
-            </label>
-          </div>
+            <option value="">Select</option>
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
           <input
             v-else
-            v-model="draftTokenTargets"
-            type="text"
+            v-model="draftTarget"
+            :type="draftParameter.type === 'date' ? 'date' : 'text'"
             class="input-bordered input input-sm h-9 w-full"
+            :disabled="!draftOperator"
             placeholder=""
           />
-          <div v-if="draftSetTargets.length" class="flex flex-wrap gap-1">
-            <span v-for="value in draftSetTargets" :key="value" class="badge badge-outline badge-sm">
-              {{ formatSelectedValue(value) }}
-            </span>
-          </div>
           <p v-if="operatorError" class="text-xs text-error">{{ operatorError }}</p>
         </div>
-        <template v-else>
-          <div class="flex flex-col gap-1 md:col-span-2">
-            <label class="label min-h-0 py-0">
-              <span class="label-text text-xs text-base-content/60">ODRL operator</span>
-            </label>
-            <select v-model="draftOperator" class="select-bordered select h-9 w-full select-sm">
-              <option value="">None</option>
-              <option v-for="option in operatorOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </div>
-          <div class="flex flex-col gap-1 md:col-span-2">
-            <label class="label min-h-0 py-0">
-              <span class="label-text text-xs text-base-content/60">ODRL target</span>
-            </label>
-            <select
-              v-if="draftParameter.type === 'boolean'"
-              v-model="draftTarget"
-              class="select-bordered select h-9 w-full select-sm"
-              :disabled="!draftOperator"
-            >
-              <option value="">Select</option>
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-            <input
-              v-else
-              v-model="draftTarget"
-              :type="draftParameter.type === 'date' ? 'date' : 'text'"
-              class="input-bordered input input-sm h-9 w-full"
-              :disabled="!draftOperator"
-              placeholder=""
-            />
-            <p v-if="operatorError" class="text-xs text-error">{{ operatorError }}</p>
-          </div>
-        </template>
         <div class="flex flex-col gap-1 md:col-span-2">
           <label class="label min-h-0 py-0">
             <span class="label-text text-xs text-base-content/60">Required</span>
@@ -197,6 +143,52 @@
               +
             </button>
           </div>
+        </div>
+        <div
+          v-if="usesSetConstraintEditor && isSetOperator(draftOperator)"
+          class="flex flex-col gap-1 md:col-span-5 md:col-start-5"
+        >
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">Values</span>
+          </label>
+          <input
+            v-if="valueOptions.length"
+            v-model="valueOptionSearch"
+            type="search"
+            class="input-bordered input input-sm h-9 w-full"
+            placeholder="Search values"
+          />
+          <div
+            v-if="valueOptions.length"
+            class="max-h-36 overflow-y-auto rounded border border-base-300 bg-base-100 p-2"
+          >
+            <label
+              v-for="option in filteredValueOptions"
+              :key="option.value"
+              class="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-base-200"
+            >
+              <input
+                v-model="draftSetTargets"
+                type="checkbox"
+                class="checkbox checkbox-xs checkbox-primary"
+                :value="option.value"
+              />
+              <span>{{ option.label }} ({{ option.value }})</span>
+            </label>
+          </div>
+          <input
+            v-else
+            v-model="draftTokenTargets"
+            type="text"
+            class="input-bordered input input-sm h-9 w-full"
+            placeholder=""
+          />
+          <div v-if="draftSetTargets.length" class="flex flex-wrap gap-1">
+            <span v-for="value in draftSetTargets" :key="value" class="badge badge-outline badge-sm">
+              {{ formatSelectedValue(value) }}
+            </span>
+          </div>
+          <p v-if="operatorError" class="text-xs text-error">{{ operatorError }}</p>
         </div>
       </div>
 
@@ -321,7 +313,6 @@ const newCondition = ref<DraftConditionPayload>(getDefaultNewCondition())
 const draftParameter = ref<SemanticConditionParameter>(defaultParam())
 const draftOperator = ref<SemanticOperateType | ''>('')
 const draftTarget = ref('')
-const draftSetOperator = ref<Extract<SemanticOperateType, 'In' | 'NotIn'>>('In')
 const draftSetTargets = ref<string[]>([])
 const draftTokenTargets = ref('')
 const valueOptionSearch = ref('')
@@ -334,12 +325,14 @@ const submitLabel = computed(() => (isEditMode.value ? 'Save changes' : 'Add rul
 const selectedDomainField = computed(() =>
   semanticRuleDomainFields.find((field) => field.semanticPath === selectedDomainPath.value),
 )
-const operatorOptions = computed(() => operatorOptionsForType(draftParameter.value.type))
 const valueOptions = computed(() => resolveValueOptions(selectedDomainField.value?.valueConstraint))
 const usesSetConstraintEditor = computed(() => {
   const constraint = selectedDomainField.value?.valueConstraint
   return !!constraint && (valueOptions.value.length > 0 || isTokenValueConstraint(constraint))
 })
+const operatorOptions = computed(() =>
+  usesSetConstraintEditor.value ? setOperatorOptions() : operatorOptionsForType(draftParameter.value.type),
+)
 const filteredValueOptions = computed(() => {
   const query = valueOptionSearch.value.trim().toLowerCase()
   if (!query) return valueOptions.value
@@ -361,6 +354,7 @@ const groupedDomainFields = computed(() => {
       field.valueConstraint?.format ?? '',
       field.valueConstraint?.allowedValuesRef ?? '',
       field.valueConstraint?.allowedValues?.join(' ') ?? '',
+      field.valueConstraint?.valueOptions?.map((option) => `${option.label ?? ''} ${option.symbol ?? ''}`).join(' ') ?? '',
     ].some((value) => value.toLowerCase().includes(query))
   })
   const byGroup = new Map<string, typeof filtered>()
@@ -433,6 +427,11 @@ watch(selectedDomainPath, (path) => {
 
 watch(draftOperator, (operator) => {
   if (!operator) draftTarget.value = ''
+  if (isSetOperator(operator)) {
+    draftTarget.value = ''
+    return
+  }
+  clearSetConstraintTargets()
 })
 
 watch(usesSetConstraintEditor, (usesSet) => {
@@ -449,6 +448,7 @@ function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticVal
   return {
     ...constraint,
     allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+    valueOptions: constraint.valueOptions ? constraint.valueOptions.map((option) => ({ ...option })) : undefined,
   }
 }
 
@@ -578,11 +578,12 @@ function submitRule() {
 
 function buildDraftOperators() {
   if (usesSetConstraintEditor.value) {
+    if (!isSetOperator(draftOperator.value)) return []
     const targets = setConstraintTargets()
     return targets.length
       ? [
           {
-            operate: draftSetOperator.value,
+            operate: draftOperator.value,
             targets,
           },
         ]
@@ -598,6 +599,7 @@ function buildDraftOperators() {
 }
 
 function setConstraintTargets(): string[] {
+  if (!isSetOperator(draftOperator.value)) return []
   if (valueOptions.value.length) return [...draftSetTargets.value]
   return draftTokenTargets.value
     .split(',')
@@ -658,26 +660,37 @@ function normalizeDecimalInput(value: string): string {
 
 function operatorOptionsForType(type: SemanticConditionParameter['type']) {
   const equality = [
-    { value: 'Equals' as SemanticOperateType, label: '=' },
-    { value: 'NotEquals' as SemanticOperateType, label: '!=' },
+    { value: 'Equals' as SemanticOperateType, label: 'Must equal' },
+    { value: 'NotEquals' as SemanticOperateType, label: 'Must not equal' },
   ]
   if (type === 'decimal' || type === 'integer' || type === 'date') {
     return [
-      { value: 'GreaterThan' as SemanticOperateType, label: '>' },
-      { value: 'GreaterThanOrEqual' as SemanticOperateType, label: '>=' },
-      { value: 'LessThan' as SemanticOperateType, label: '<' },
-      { value: 'LessThanOrEqual' as SemanticOperateType, label: '<=' },
+      { value: 'GreaterThan' as SemanticOperateType, label: 'Must be greater than' },
+      { value: 'GreaterThanOrEqual' as SemanticOperateType, label: 'Must be at least' },
+      { value: 'LessThan' as SemanticOperateType, label: 'Must be less than' },
+      { value: 'LessThanOrEqual' as SemanticOperateType, label: 'Must be at most' },
       ...equality,
     ]
   }
   if (type === 'string' || type === 'enum') {
     return [
       ...equality,
-      { value: 'Contains' as SemanticOperateType, label: 'contains' },
-      { value: 'MatchesRegex' as SemanticOperateType, label: 'matches' },
+      { value: 'Contains' as SemanticOperateType, label: 'Must contain' },
+      { value: 'MatchesRegex' as SemanticOperateType, label: 'Must match pattern' },
     ]
   }
   return equality
+}
+
+function setOperatorOptions() {
+  return [
+    { value: 'In' as SemanticOperateType, label: 'Allow only' },
+    { value: 'NotIn' as SemanticOperateType, label: 'Exclude' },
+  ]
+}
+
+function isSetOperator(operator: SemanticOperateType | ''): operator is Extract<SemanticOperateType, 'In' | 'NotIn'> {
+  return operator === 'In' || operator === 'NotIn'
 }
 
 function formatOperatorConstraint(operator: SemanticConditionParameter['operators'][number]): string {
@@ -689,25 +702,25 @@ function formatOperatorConstraint(operator: SemanticConditionParameter['operator
 function operatorLabel(operator: DcsOperator): string {
   switch (operator) {
     case 'Equals':
-      return '='
+      return 'must equal'
     case 'NotEquals':
-      return '!='
+      return 'must not equal'
     case 'In':
       return 'allow only'
     case 'NotIn':
       return 'exclude'
     case 'GreaterThan':
-      return '>'
+      return 'must be greater than'
     case 'GreaterThanOrEqual':
-      return '>='
+      return 'must be at least'
     case 'LessThan':
-      return '<'
+      return 'must be less than'
     case 'LessThanOrEqual':
-      return '<='
+      return 'must be at most'
     case 'Contains':
-      return 'contains'
+      return 'must contain'
     case 'MatchesRegex':
-      return 'matches'
+      return 'must match pattern'
     default:
       return operator
   }
@@ -718,7 +731,10 @@ function formatSelectedValue(value: string): string {
 }
 
 function resetSetConstraintDraft() {
-  draftSetOperator.value = 'In'
+  clearSetConstraintTargets()
+}
+
+function clearSetConstraintTargets() {
   draftSetTargets.value = []
   draftTokenTargets.value = ''
   valueOptionSearch.value = ''

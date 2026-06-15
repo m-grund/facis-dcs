@@ -5,6 +5,7 @@ import type {
   SemanticEntityType,
   SemanticParameterType,
   SemanticValueConstraint,
+  SemanticValueOption,
 } from '@/modules/template-repository/models/contract-template'
 
 interface OntologyStatement {
@@ -29,10 +30,11 @@ export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntity
 export function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
   const statements = parseStatements(source)
   const constraints = new Map<string, SemanticValueConstraint>()
+  const valueOptions = parseValueOptions(statements)
 
   for (const statement of statements) {
     if (!statement.text.includes(' a dcs:ValueConstraint')) continue
-    constraints.set(statement.subject, parseValueConstraint(statement.text))
+    constraints.set(statement.subject, parseValueConstraint(statement.text, valueOptions))
   }
 
   return statements
@@ -75,10 +77,11 @@ export function parseOntologyEntityTypes(source: string): OntologySelectOption<S
 export function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
   const statements = parseStatements(source)
   const constraints = new Map<string, SemanticValueConstraint>()
+  const valueOptions = parseValueOptions(statements)
 
   for (const statement of statements) {
     if (!statement.text.includes(' a dcs:ValueConstraint')) continue
-    constraints.set(statement.subject, parseValueConstraint(statement.text))
+    constraints.set(statement.subject, parseValueConstraint(statement.text, valueOptions))
   }
 
   const allowedValues = constraints.get('dcst:constraint-contract-party-role')?.allowedValues ?? []
@@ -105,16 +108,37 @@ function parseStatements(source: string): OntologyStatement[] {
   return statements
 }
 
-function parseValueConstraint(statement: string): SemanticValueConstraint {
+function parseValueConstraint(
+  statement: string,
+  catalogOptions: ReadonlyMap<string, SemanticValueOption>,
+): SemanticValueConstraint {
+  const allowedValues = literals(statement, 'dcs:allowedValue')
   return {
     format: firstLiteral(statement, 'dcs:format') as SemanticValueConstraint['format'],
     pattern: firstLiteral(statement, 'dcs:pattern') || undefined,
-    allowedValues: literals(statement, 'dcs:allowedValue'),
+    allowedValues,
+    valueOptions: allowedValues
+      .map((value) => catalogOptions.get(value))
+      .filter((option): option is SemanticValueOption => !!option),
     allowedValuesRef: firstLiteral(statement, 'dcs:allowedValuesRef') || undefined,
     min: firstNumber(statement, 'dcs:minInclusive'),
     max: firstNumber(statement, 'dcs:maxInclusive'),
     description: firstLiteral(statement, 'rdfs:label') || undefined,
   }
+}
+
+function parseValueOptions(statements: readonly OntologyStatement[]): ReadonlyMap<string, SemanticValueOption> {
+  const options = new Map<string, SemanticValueOption>()
+  for (const statement of statements) {
+    const value = firstLiteral(statement.text, 'skos:notation')
+    if (!value) continue
+    options.set(value, {
+      value,
+      label: firstLiteral(statement.text, 'skos:prefLabel') || undefined,
+      symbol: firstLiteral(statement.text, 'dcs:valueSymbol') || undefined,
+    })
+  }
+  return options
 }
 
 function firstLiteral(statement: string, predicate: string): string {
@@ -161,6 +185,7 @@ function cloneConstraint(constraint?: SemanticValueConstraint): SemanticValueCon
   return {
     ...constraint,
     allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+    valueOptions: constraint.valueOptions ? constraint.valueOptions.map((option) => ({ ...option })) : undefined,
   }
 }
 

@@ -28,10 +28,17 @@ type valueConstraint struct {
 	Format           string
 	Pattern          string
 	AllowedValues    []string
+	ValueOptions     []valueOption
 	AllowedValuesRef string
 	Min              *float64
 	Max              *float64
 	Description      string
+}
+
+type valueOption struct {
+	Value  string
+	Label  string
+	Symbol string
 }
 
 type blockDefinition struct {
@@ -53,6 +60,25 @@ func (constraint *valueConstraint) asMap() map[string]any {
 			values[i] = value
 		}
 		result["allowedValues"] = values
+	}
+	if valueOptions := valueOptionsForConstraint(constraint); len(valueOptions) > 0 {
+		options := make([]any, 0, len(valueOptions))
+		for _, option := range valueOptions {
+			if option.Value == "" {
+				continue
+			}
+			item := map[string]any{"value": option.Value}
+			if option.Label != "" {
+				item["label"] = option.Label
+			}
+			if option.Symbol != "" {
+				item["symbol"] = option.Symbol
+			}
+			options = append(options, item)
+		}
+		if len(options) > 0 {
+			result["valueOptions"] = options
+		}
 	}
 	if constraint.AllowedValuesRef != "" {
 		result["allowedValuesRef"] = constraint.AllowedValuesRef

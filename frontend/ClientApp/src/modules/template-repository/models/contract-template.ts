@@ -100,10 +100,17 @@ export interface SemanticValueConstraint {
   format?: 'iso-3166-1-alpha-3' | 'iso-4217' | 'eidas-signature-level' | 'controlled-vocabulary'
   pattern?: string
   allowedValues?: readonly string[]
+  valueOptions?: readonly SemanticValueOption[]
   allowedValuesRef?: string
   min?: number
   max?: number
   description?: string
+}
+
+export interface SemanticValueOption {
+  value: string
+  label?: string
+  symbol?: string
 }
 
 // ---- Validation Metadata ----

@@ -18,6 +18,23 @@ export function resolveAllowedValues(constraint?: SemanticValueConstraint): read
   )
 }
 
+export function resolveValueConstraintOptions(constraint?: SemanticValueConstraint): SemanticValueConstraint['valueOptions'] {
+  if (!constraint) return []
+  if (constraint.valueOptions?.length) return constraint.valueOptions
+
+  const ref = normalizeAllowedValuesRef(constraint.allowedValuesRef)
+  if (!ref) return []
+
+  return (
+    ONTOLOGY_DOMAIN_FIELDS.find((field) => {
+      const fieldConstraint = field.valueConstraint
+      return (
+        normalizeAllowedValuesRef(fieldConstraint?.allowedValuesRef) === ref && !!fieldConstraint?.valueOptions?.length
+      )
+    })?.valueConstraint?.valueOptions ?? []
+  )
+}
+
 function normalizeAllowedValuesRef(value?: string) {
   return value?.trim().replace(/\s+/g, ' ').toLowerCase() ?? ''
 }
