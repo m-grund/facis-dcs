@@ -1,4 +1,6 @@
+import io
 import json
+from datetime import datetime, timezone
 import os
 import re
 import hashlib
@@ -1832,3 +1834,142 @@ def step_extract_manifest_store(context):
 def step_manifest_store_contains_jumbf(context):
     body = context.last_response["body"]
     assert b"jumb" in body, "manifest store response does not contain JUMBF marker 'jumb'"
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle assertion (DCS-OR-C2PA-003)
+# ---------------------------------------------------------------------------
+
+@then("the embedded C2PA manifest contains a dcs.lifecycle assertion")
+def step_manifest_has_lifecycle_assertion(context):
+    pdf_bytes = getattr(context, "compiled_pdf", None) or context.last_response["body"]
+    c2pa_bytes = _extract_embedded_stream_by_filespec_name(pdf_bytes, "content_credential.c2pa")
+    payload = _find_jumbf_cbor_payload_by_label(c2pa_bytes, "dcs.lifecycle")
+    assert payload is not None, "dcs.lifecycle CBOR assertion not found in C2PA manifest"
+    context.lifecycle_assertion = cbor2.loads(payload)
+    context.lifecycle_file_hash_compiled = context.lifecycle_assertion.get("file_hash")
+
+
+@then('the dcs.lifecycle assertion has contract_id "{expected}"')
+def step_lifecycle_contract_id(context, expected):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    assert assertion.get("contract_id") == expected, (
+        f"expected contract_id={expected!r}, got {assertion.get('contract_id')!r}"
+    )
+
+
+@then("the dcs.lifecycle assertion has a non-empty file_hash")
+def step_lifecycle_file_hash_non_empty(context):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    fh = assertion.get("file_hash")
+    assert isinstance(fh, str) and len(fh) == 64, (
+        f"expected 64-char hex file_hash, got {fh!r}"
+    )
+
+
+@then("the active C2PA manifest in the updated PDF contains a dcs.lifecycle assertion")
+def step_updated_manifest_has_lifecycle_assertion(context):
+    pdf_bytes = getattr(context, "updated_pdf", None) or context.last_response["body"]
+    c2pa_bytes = _extract_embedded_stream_by_filespec_name(pdf_bytes, "content_credential.c2pa")
+    active_manifest = _extract_active_manifest_jumbf_box(c2pa_bytes)
+    payload = _find_jumbf_cbor_payload_by_label(active_manifest, "dcs.lifecycle")
+    assert payload is not None, "dcs.lifecycle CBOR assertion not found in active update manifest"
+    context.lifecycle_assertion = cbor2.loads(payload)
+
+
+@then('the dcs.lifecycle assertion in the updated manifest has contract_id "{expected}"')
+def step_updated_lifecycle_contract_id(context, expected):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    assert assertion.get("contract_id") == expected, (
+        f"expected contract_id={expected!r}, got {assertion.get('contract_id')!r}"
+    )
+
+
+@then("the dcs.lifecycle file_hash differs from the compiled PDF file_hash")
+def step_lifecycle_file_hash_differs(context):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    compiled_hash = getattr(context, "lifecycle_file_hash_compiled", None)
+    updated_hash = assertion.get("file_hash")
+    assert isinstance(updated_hash, str) and len(updated_hash) == 64, (
+        f"updated file_hash invalid: {updated_hash!r}"
+    )
+    assert updated_hash != compiled_hash, (
+        "amended document file_hash must differ from original compiled document file_hash"
+    )
+
+
+@then('the dcs.lifecycle assertion has status "{expected}"')
+def step_lifecycle_status(context, expected):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    assert assertion.get("status") == expected, (
+        f"expected status={expected!r}, got {assertion.get('status')!r}"
+    )
+
+
+@then("the dcs.lifecycle assertion has a valid effective_at timestamp")
+def step_lifecycle_effective_at(context):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    effective_at = assertion.get("effective_at")
+    assert isinstance(effective_at, str) and len(effective_at) > 0, (
+        f"effective_at must be a non-empty string, got {effective_at!r}"
+    )
+    try:
+        datetime.fromisoformat(effective_at.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise AssertionError(f"effective_at {effective_at!r} is not valid RFC 3339: {e}")
+
+
+@then("the dcs.lifecycle assertion has an empty prev_manifest_hash")
+def step_lifecycle_prev_manifest_hash_empty(context):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    assert "prev_manifest_hash" in assertion, "prev_manifest_hash key missing from lifecycle assertion"
+    assert assertion["prev_manifest_hash"] == "", (
+        f"expected empty prev_manifest_hash for initial compile, got {assertion['prev_manifest_hash']!r}"
+    )
+
+
+@then('the dcs.lifecycle assertion has field "{field}"')
+def step_lifecycle_has_field(context, field):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    assert field in assertion, f"field {field!r} missing from lifecycle assertion; keys: {list(assertion.keys())}"
+
+
+@then('the dcs.lifecycle assertion in the updated manifest has status "{expected}"')
+def step_updated_lifecycle_status(context, expected):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    assert assertion.get("status") == expected, (
+        f"expected status={expected!r}, got {assertion.get('status')!r}"
+    )
+
+
+@then("the dcs.lifecycle assertion in the updated manifest has a valid effective_at timestamp")
+def step_updated_lifecycle_effective_at(context):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    effective_at = assertion.get("effective_at")
+    assert isinstance(effective_at, str) and len(effective_at) > 0, (
+        f"effective_at must be a non-empty string, got {effective_at!r}"
+    )
+    try:
+        datetime.fromisoformat(effective_at.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise AssertionError(f"effective_at {effective_at!r} is not valid RFC 3339: {e}")
+
+
+@then("the dcs.lifecycle assertion in the updated manifest has a non-empty prev_manifest_hash")
+def step_updated_lifecycle_prev_manifest_hash(context):
+    assertion = getattr(context, "lifecycle_assertion", None)
+    assert assertion is not None, "no lifecycle assertion in context"
+    pmh = assertion.get("prev_manifest_hash")
+    assert isinstance(pmh, str) and len(pmh) == 64, (
+        f"expected 64-char hex prev_manifest_hash, got {pmh!r}"
+    )

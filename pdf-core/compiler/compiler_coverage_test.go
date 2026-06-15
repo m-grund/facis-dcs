@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"time"
 )
 
 // TestPageContentIsFullyCoveredByC2PA compiles a reference document and verifies
@@ -125,7 +126,7 @@ func TestCoverageRangesDoNotOverlapC2PAExclusion(t *testing.T) {
 // region.
 func TestCoverageHoldsAfterVerification(t *testing.T) {
 	payload := []byte(referencePayload)
-	pdf, err := CompilePDF(context.Background(), payload)
+	pdf, err := CompilePDF(context.Background(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -146,7 +147,7 @@ func TestCoverageHoldsAfterVerification(t *testing.T) {
 // re-rendering guarantee.
 func TestReRenderingStableAfterVerification(t *testing.T) {
 	payload := []byte(referencePayload)
-	pdf1, err := CompilePDF(context.Background(), payload)
+	pdf1, err := CompilePDF(context.Background(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestReRenderingStableAfterVerification(t *testing.T) {
 		t.Fatalf("ExtractLatestEmbeddedJSONLD from verified PDF: %v", err)
 	}
 
-	pdf2, err := CompilePDF(context.Background(), extracted)
+	pdf2, err := CompilePDF(context.Background(), extracted, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF from extracted JSON-LD: %v", err)
 	}

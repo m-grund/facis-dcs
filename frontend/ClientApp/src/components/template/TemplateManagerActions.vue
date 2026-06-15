@@ -85,8 +85,14 @@ const publish = async () => {
   }
 }
 
-const exportPdf = () => {
-  alert('not implemented yet')
+const exportPdf = async () => {
+  const blob = await contractTemplateService.exportPdf(props.template.did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${props.template.did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 

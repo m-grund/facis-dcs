@@ -16,6 +16,7 @@ import (
 	compiler "example.com/m/V2/compiler"
 
 	"github.com/google/uuid"
+	"time"
 )
 
 // setPDFCoreVersionHeader emits the renderer version on every PDF-producing
@@ -131,7 +132,7 @@ func (s *service) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	pdf, err := compiler.CompilePDF(r.Context(), canonical)
+	pdf, err := compiler.CompilePDF(r.Context(), canonical, time.Now())
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
@@ -179,7 +180,12 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 			writeError(w, errBadRequest(err))
 			return
 		}
-		recompiled, err := compiler.CompilePDF(r.Context(), payload)
+		compiledAt, err := compiler.ExtractLifecycleEffectiveAt(raw)
+		if err != nil {
+			writeError(w, errBadRequest(fmt.Errorf("extract lifecycle timestamp: %w", err)))
+			return
+		}
+		recompiled, err := compiler.CompilePDF(r.Context(), payload, compiledAt)
 		if err != nil {
 			writeError(w, errUnprocessableEntity(err))
 			return
@@ -274,10 +280,11 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 	vcBytes := parts["vc"] // optional
 
 	var updated []byte
+	now := time.Now()
 	if len(vcBytes) > 0 {
-		updated, err = compiler.UpdatePDFWithVC(r.Context(), oldPDF, canonical, vcBytes)
+		updated, err = compiler.UpdatePDFWithVC(r.Context(), oldPDF, canonical, vcBytes, now)
 	} else {
-		updated, err = compiler.UpdatePDF(r.Context(), oldPDF, canonical)
+		updated, err = compiler.UpdatePDF(r.Context(), oldPDF, canonical, now)
 	}
 	if err != nil {
 		if errors.Is(err, compiler.ErrNoChanges) {
@@ -336,7 +343,7 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	canonicalPDF, err := compiler.CompilePDF(r.Context(), canonical)
+	canonicalPDF, err := compiler.CompilePDF(r.Context(), canonical, time.Now())
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return

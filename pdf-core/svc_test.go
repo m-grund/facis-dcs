@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	compiler "example.com/m/V2/compiler"
 )
@@ -566,7 +567,7 @@ func TestClaim_MatchingPayload(t *testing.T) {
 	if !bytes.HasPrefix(result, []byte("%PDF-")) {
 		t.Fatal("result must be a PDF")
 	}
-	baseline, _ := compiler.CompilePDF(context.Background(), []byte(minimalPayload))
+	baseline, _ := compiler.CompilePDF(context.Background(), []byte(minimalPayload), time.Now())
 	if len(result) <= len(baseline) {
 		t.Fatal("result must include a witness appendix and be larger than a bare compilation")
 	}

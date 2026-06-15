@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // minimalDoc returns a documentModel suitable for PDF/A compliance tests.
@@ -195,7 +196,7 @@ func TestGlossaryURIArrowIsASCII(t *testing.T) {
 //   - produces an XRef stream whose /Length matches the actual stream byte count
 //     (ISO 19005-3:2012 clause 6.1.7.1)
 func TestVerificationAppendixHasIDAndValidXRefStream(t *testing.T) {
-	base, err := CompilePDF(context.Background(), []byte(minimalPayloadBase))
+	base, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

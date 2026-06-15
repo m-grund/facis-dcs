@@ -46,7 +46,7 @@ func renderPDF(ctx context.Context, doc documentModel) ([]byte, error) {
 	// ID 14 (acroFormID) is reserved above; next dynamic IDs start at nextID.
 
 	xmpMetadata := renderXMPMetadata(doc.PayloadHash)
-	c2paManifest, err := renderC2PAManifestStore(ctx, doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}})
+	c2paManifest, err := renderC2PAManifestStore(ctx, doc.ContractID, doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}}, doc.CompiledAt)
 	if err != nil {
 		return nil, fmt.Errorf("render initial C2PA manifest: %w", err)
 	}
@@ -150,7 +150,7 @@ func renderPDF(ctx context.Context, doc documentModel) ([]byte, error) {
 
 		exclusions := buildC2PAExclusions(streamStart, streamLen)
 		assetHash := sha256WithExclusions(pdf, exclusions)
-		nextManifest, err := renderC2PAManifestStore(ctx, doc.PayloadHash, assetHash[:], exclusions)
+		nextManifest, err := renderC2PAManifestStore(ctx, doc.ContractID, doc.PayloadHash, assetHash[:], exclusions, doc.CompiledAt)
 		if err != nil {
 			return nil, fmt.Errorf("render C2PA manifest (iteration %d): %w", iteration, err)
 		}

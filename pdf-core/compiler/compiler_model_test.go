@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // TestCompilePDF_NoOntologyHTTPFetch verifies that compilation makes no outbound
@@ -28,7 +29,7 @@ func TestCompilePDF_NoOntologyHTTPFetch(t *testing.T) {
 		"sections": [{"heading": "1. Terms", "clauses": ["No ontology fetch should occur."]}]
 	}`)
 
-	_, err := CompilePDF(context.Background(), payload)
+	_, err := CompilePDF(context.Background(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -51,7 +52,7 @@ func TestCompilePDF_DcsCoreIRITitleExtracted(t *testing.T) {
 		"sections": [{"heading": "1. Terms", "clauses": ["A clause."]}]
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload)
+	pdf, err := CompilePDF(context.Background(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestCompilePDF_PrefixedTermsExtracted(t *testing.T) {
 		}]
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload)
+	pdf, err := CompilePDF(context.Background(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -120,7 +121,7 @@ func TestCompilePDF_NonStablePrefixRenderedCompact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalizePayload: %v", err)
 	}
-	pdf, err := CompilePDF(context.Background(), canonical)
+	pdf, err := CompilePDF(context.Background(), canonical, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

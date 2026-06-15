@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // referencePayload is a self-contained JSON-LD payload used across determinism
@@ -259,7 +260,7 @@ func TestDeterministicLineWrapStable(t *testing.T) {
 // byte-for-byte identical to the original. This proves that the embedded
 // attachment is sufficient to reproduce the exact human-readable output.
 func TestReRenderingAfterRoundTrip(t *testing.T) {
-	pdf1, err := CompilePDF(context.Background(), []byte(referencePayload))
+	pdf1, err := CompilePDF(context.Background(), []byte(referencePayload), time.Now())
 	if err != nil {
 		t.Fatalf("first CompilePDF: %v", err)
 	}
@@ -269,7 +270,7 @@ func TestReRenderingAfterRoundTrip(t *testing.T) {
 		t.Fatalf("ExtractEmbeddedJSONLD: %v", err)
 	}
 
-	pdf2, err := CompilePDF(context.Background(), extracted)
+	pdf2, err := CompilePDF(context.Background(), extracted, time.Now())
 	if err != nil {
 		t.Fatalf("second CompilePDF (from extracted JSON-LD): %v", err)
 	}

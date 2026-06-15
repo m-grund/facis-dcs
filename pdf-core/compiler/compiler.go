@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // liberationSansTTF is the Liberation Sans Regular font program (SIL Open Font
@@ -21,7 +22,7 @@ import (
 //go:embed testdata/fonts/LiberationSans-Regular.ttf
 var liberationSansTTF []byte
 
-func CompilePDF(ctx context.Context, payload []byte) ([]byte, error) {
+func CompilePDF(ctx context.Context, payload []byte, compiledAt time.Time) ([]byte, error) {
 	nquads, expanded, err := NormalizePayload(payload)
 	if err != nil {
 		return nil, err
@@ -37,7 +38,19 @@ func CompilePDF(ctx context.Context, payload []byte) ([]byte, error) {
 	rootID, _ := rawRoot["@id"].(string)
 
 	doc := extractDocumentModel(expanded, rootID, rawCtx, payload, hashHex)
+	doc.CompiledAt = compiledAt
 	return renderPDF(ctx, doc)
+}
+
+// ExtractLifecycleEffectiveAt extracts the effective_at timestamp from the
+// dcs.lifecycle assertion in the first (original compile) manifest of pdf.
+// Used by /verify to re-compile with the same timestamp for byte equality.
+func ExtractLifecycleEffectiveAt(pdf []byte) (time.Time, error) {
+	c2paBytes, err := extractEmbeddedStreamByFileSpecName(pdf, "content_credential.c2pa")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("extract C2PA: %w", err)
+	}
+	return extractLifecycleEffectiveAt(c2paBytes, 0)
 }
 
 func ExtractEmbeddedJSONLD(pdf []byte) ([]byte, error) {
@@ -141,7 +154,7 @@ func AppendVerificationWitness(ctx context.Context, pdf []byte, payload []byte) 
 	exclusions := []c2paExclusion{}
 	var candidate []byte
 	for iteration := 0; iteration < 6; iteration++ {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), hashHex, hardBindingHash, exclusions)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), "", hashHex, hardBindingHash, exclusions, time.Now())
 		if err != nil {
 			return nil, err
 		}

@@ -8,23 +8,23 @@ dcs_pdf_core:Document a sh:NodeShape ;
     rdfs:comment "A deterministic PDF/A-3a document produced by the dcs-pdf-core compiler. Acts as the root node of the semantic payload graph. The title and sections slots drive the human-readable PDF layout. Any additional JSON-LD properties or namespaces not defined in this ontology are preserved in the embedded JSON-LD attachment and not rendered in the PDF." ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type ) ;
-    sh:property [ sh:datatype xsd:string ;
-            sh:description "Canonical document title." ;
-            sh:maxCount 1 ;
-            sh:minCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 0 ;
-            sh:path dcs_pdf_core:title ],
+    sh:property [ sh:class dcs_pdf_core:Section ;
+            sh:description "Ordered list of headed sections constituting the document body. Each section carries a heading and an array of clauses. A top-level clauses array (without sections) is also accepted and treated as a single anonymous section." ;
+            sh:nodeKind sh:BlankNodeOrIRI ;
+            sh:order 1 ;
+            sh:path dcs_pdf_core:sections ],
         [ sh:class dcs_pdf_core:SignatureField ;
             sh:description "Ordered list of visible signature field definitions rendered as AcroForm signature widgets on a dedicated final page." ;
             sh:nodeKind sh:BlankNodeOrIRI ;
             sh:order 2 ;
             sh:path dcs_pdf_core:signatureFields ],
-        [ sh:class dcs_pdf_core:Section ;
-            sh:description "Ordered list of headed sections constituting the document body. Each section carries a heading and an array of clauses. A top-level clauses array (without sections) is also accepted and treated as a single anonymous section." ;
-            sh:nodeKind sh:BlankNodeOrIRI ;
-            sh:order 1 ;
-            sh:path dcs_pdf_core:sections ] ;
+        [ sh:datatype xsd:string ;
+            sh:description "Canonical document title." ;
+            sh:maxCount 1 ;
+            sh:minCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 0 ;
+            sh:path dcs_pdf_core:title ] ;
     sh:targetClass dcs_pdf_core:Document .
 
 dcs_pdf_core:Clause a sh:NodeShape ;
@@ -50,18 +50,18 @@ dcs_pdf_core:SignatureField a sh:NodeShape ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type ) ;
     sh:property [ sh:datatype xsd:string ;
-            sh:description "Human-readable label drawn in the signature field appearance." ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 1 ;
-            sh:path dcs_pdf_core:label ],
-        [ sh:datatype xsd:string ;
             sh:description "Stable PDF field name used in /T for a signature widget." ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path dcs_pdf_core:name ] ;
+            sh:path dcs_pdf_core:name ],
+        [ sh:datatype xsd:string ;
+            sh:description "Human-readable label drawn in the signature field appearance." ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 1 ;
+            sh:path dcs_pdf_core:label ] ;
     sh:targetClass dcs_pdf_core:SignatureField .
 
 dcs_pdf_core:Section a sh:NodeShape ;
@@ -73,19 +73,19 @@ dcs_pdf_core:Section a sh:NodeShape ;
             sh:nodeKind sh:BlankNodeOrIRI ;
             sh:order 2 ;
             sh:path dcs_pdf_core:subsections ],
-        [ sh:description "Ordered list of clause content items within a section. Each entry is either a plain string (prose) or a JSON-LD node object. Node objects dispatch on key presence: @id renders as an ontology reference with a glossary link; schema:url renders as an external hyperlink; @value/@type renders as a typed literal. Mixed-content arrays (where a clause is itself an array of these items) are supported for inline rich text." ;
-            sh:minCount 1 ;
-            sh:or ( [ sh:datatype xsd:string ;
-                        sh:nodeKind sh:Literal ] [ sh:class dcs_pdf_core:Clause ] ) ;
-            sh:order 1 ;
-            sh:path dcs_pdf_core:clauses ],
         [ sh:datatype xsd:string ;
             sh:description "Human-readable section heading rendered as a PDF heading structural element and added to the PDF outline bookmarks tree. The heading level (H1, H2, H3, …) is determined by nesting depth." ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path dcs_pdf_core:heading ] ;
+            sh:path dcs_pdf_core:heading ],
+        [ sh:description "Ordered list of clause content items within a section. Each entry is either a plain string (prose) or a JSON-LD node object. Node objects dispatch on key presence: @id renders as an ontology reference with a glossary link; schema:url renders as an external hyperlink; @value/@type renders as a typed literal. Mixed-content arrays (where a clause is itself an array of these items) are supported for inline rich text." ;
+            sh:minCount 1 ;
+            sh:or ( [ sh:datatype xsd:string ;
+                        sh:nodeKind sh:Literal ] [ sh:class dcs_pdf_core:Clause ] ) ;
+            sh:order 1 ;
+            sh:path dcs_pdf_core:clauses ] ;
     sh:targetClass dcs_pdf_core:Section .
 
 

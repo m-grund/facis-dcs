@@ -35,12 +35,22 @@ import (
 )
 
 const (
-	jsonLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
 	semanticProfileName = "FACIS DCS Semantic Contract Profile"
 	semanticProfileV1   = "v1"
 	ontologyV1          = "https://w3id.org/facis/dcs/ontology/v1"
 	shaclShapesV1       = "https://w3id.org/facis/dcs/shapes/v1"
 )
+
+// jsonLDContextV1 is the @context IRI embedded in every JSON-LD envelope.
+// It is set at startup via SetOntologyContextIRI — the service will not start
+// without it (see cmd/dcs/main.go).
+var jsonLDContextV1 string
+
+// SetOntologyContextIRI sets the @context IRI for all JSON-LD envelopes built
+// by this package.  Must be called once at startup before serving requests.
+func SetOntologyContextIRI(iri string) {
+	jsonLDContextV1 = iri
+}
 
 // templateEnvelopeSet holds field names that are set exclusively from the DB row
 // (or are structural envelope keys). They are never copied from the inner JSONB

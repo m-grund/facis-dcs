@@ -21,8 +21,9 @@ import (
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/ipfs"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
-	"digital-contracting-service/internal/pdfgeneration/provenance"
+	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 )
 
@@ -100,7 +101,10 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal contract JSON-LD: %w", err))
 		}
-		jsonldBytes = b
+		jsonldBytes, err = pdfgeneration.InjectTitle(b, contract.Name)
+		if err != nil {
+			return nil, pdfgen.MakeInternalError(fmt.Errorf("inject title into contract JSON-LD: %w", err))
+		}
 	}
 
 	cidStr, lastC2PAState, _, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contracts", p.Did)
@@ -180,7 +184,10 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal template JSON-LD: %w", err))
 		}
-		jsonldBytes = b
+		jsonldBytes, err = pdfgeneration.InjectTitle(b, tpl.Name)
+		if err != nil {
+			return nil, pdfgen.MakeInternalError(fmt.Errorf("inject title into template JSON-LD: %w", err))
+		}
 	}
 
 	cidStr, lastC2PAState, _, scanErr := readCachedPDFMetadata(ctx, tx.QueryRowContext, "contract_templates", p.Did)
@@ -486,4 +493,6 @@ func ptrToString(s string) *string {
 	}
 	return &s
 }
+
+
 

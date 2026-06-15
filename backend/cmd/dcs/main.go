@@ -34,9 +34,10 @@ import (
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/pdfgeneration/provenance"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
+	"digital-contracting-service/internal/semantic/mapper"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -273,6 +274,15 @@ func main() {
 	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
 	statusListPublisher := provenance.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
 
+	// Initialize pdf-core context IRI — used as @context in every JSON-LD envelope.
+	// In co-deployment, points at the pdf-core ontology context endpoint.
+	// Swap to a registered w3id IRI in future without any code change.
+	pdfCoreContextIRI := os.Getenv("PDF_CORE_CONTEXT_IRI")
+	if pdfCoreContextIRI == "" {
+		log.Fatalf(ctx, nil, "PDF_CORE_CONTEXT_IRI is required")
+	}
+	mapper.SetOntologyContextIRI(pdfCoreContextIRI)
+
 	// Initialize pdf-core client (PDF rendering + C2PA provenance microservice).
 	pdfCoreURL := os.Getenv("PDF_CORE_URL")
 	if pdfCoreURL == "" {
@@ -334,13 +344,13 @@ func main() {
 		}
 	}(pdfSubClient)
 	pdfSub := &pdfevent.Subscriber{
-		DB:              db,
-		IPFSClient:      ipfsAPIClient,
-		CRepo:           &cweRepo,
-		TRepo:           &ctRepo,
-		PDFCore:         pdfCoreClient,
-		IssuerDID:       issuerDID,
-		VCIssuer:  provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
+		DB:         db,
+		IPFSClient: ipfsAPIClient,
+		CRepo:      &cweRepo,
+		TRepo:      &ctRepo,
+		PDFCore:    pdfCoreClient,
+		IssuerDID:  issuerDID,
+		VCIssuer:   provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
 	}
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {

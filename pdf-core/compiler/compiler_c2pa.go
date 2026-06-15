@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 )
 
 func buildC2PAExclusions(streamStart, streamLen int) []c2paExclusion {
@@ -222,7 +223,7 @@ func extractLabeledChildJUMBFBox(parentJumbBox []byte, label string) ([]byte, er
 	return nil, fmt.Errorf("child JUMBF box %s not found", label)
 }
 
-func renderC2PAManifestStore(ctx context.Context, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
+func renderC2PAManifestStore(ctx context.Context, contractID string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
 	// Build a deterministic, syntactically valid JUMBF C2PA manifest-store:
 	//   jumb(c2pa) -> jumb(c2ma)
 	//                    |- jumb(c2pa.assertions)
@@ -237,7 +238,11 @@ func renderC2PAManifestStore(ctx context.Context, payloadHash string, hardBindin
 	actionsAssertionBox := renderJUMBFSuperbox(cborUUID, 0x03, "c2pa.actions.v2", [][]byte{renderBMFFBox("cbor", actionsAssertionPayload)})
 	actionsAssertionHash := sha256.Sum256(actionsAssertionBox[8:])
 
-	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", [][]byte{hardBindingAssertionBox, actionsAssertionBox})
+	lifecycleAssertionPayload := renderLifecycleAssertionCBOR(contractID, payloadHash, "draft", "", "", "", "", compiledAt)
+	lifecycleAssertionBox := renderJUMBFSuperbox(cborUUID, 0x03, "dcs.lifecycle", [][]byte{renderBMFFBox("cbor", lifecycleAssertionPayload)})
+	lifecycleAssertionHash := sha256.Sum256(lifecycleAssertionBox[8:])
+
+	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", [][]byte{hardBindingAssertionBox, actionsAssertionBox, lifecycleAssertionBox})
 
 	claimPayload := renderMinimalClaimCBOR(
 		payloadHash,
@@ -245,6 +250,8 @@ func renderC2PAManifestStore(ctx context.Context, payloadHash string, hardBindin
 		"self#jumbf=c2pa.assertions/c2pa.hash.data",
 		actionsAssertionHash[:],
 		"self#jumbf=c2pa.assertions/c2pa.actions.v2",
+		lifecycleAssertionHash[:],
+		"self#jumbf=c2pa.assertions/dcs.lifecycle",
 	)
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
@@ -268,7 +275,7 @@ func renderC2PAManifestStore(ctx context.Context, payloadHash string, hardBindin
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", [][]byte{manifestBox}), nil
 }
 
-func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
+func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, contractID string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
 	manifestBoxes, err := extractTopLevelManifestBoxes(originalC2PA)
 	if err != nil {
 		return nil, err
@@ -288,7 +295,7 @@ func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, m
 	originalManifestHash := sha256.Sum256(originalManifestBox[8:])
 	originalSignatureHash := sha256.Sum256(originalSignatureBox[8:])
 
-	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions)
+	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, contractID, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions, compiledAt)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +305,7 @@ func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, m
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", children), nil
 }
 
-func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion) ([]byte, error) {
+func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, contractID string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
 	updateLabel := manifestLabel
 	hardBindingLabel := "c2pa.hash.data"
 	hardBindingPayload := renderMinimalDataHashAssertionCBOR(hardBindingHash, exclusions)
@@ -317,8 +324,19 @@ func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string,
 	actionsHash := sha256.Sum256(actionsBox[8:])
 	actionsURI := absoluteAssertionURI(updateLabel, "c2pa.actions.v2")
 
-	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", [][]byte{hardBindingBox, ingredientBox, actionsBox})
-	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:])
+	var assertionChildren [][]byte
+	assertionChildren = append(assertionChildren, hardBindingBox, ingredientBox, actionsBox)
+	var lifecycleURI string
+	var lifecycleHash [32]byte
+	if contractID != "" {
+		lifecyclePayload := renderLifecycleAssertionCBOR(contractID, payloadHash, "amended", "", "", "", hex.EncodeToString(parentManifestHash), compiledAt)
+		lifecycleBox := renderJUMBFSuperbox(cborUUID, 0x03, "dcs.lifecycle", [][]byte{renderBMFFBox("cbor", lifecyclePayload)})
+		lifecycleHash = sha256.Sum256(lifecycleBox[8:])
+		lifecycleURI = absoluteAssertionURI(updateLabel, "dcs.lifecycle")
+		assertionChildren = append(assertionChildren, lifecycleBox)
+	}
+	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", assertionChildren)
+	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:], lifecycleURI, lifecycleHash[:])
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	protected := buildCoseProtectedHeadersWithX5Chain()
@@ -463,7 +481,20 @@ func renderMinimalDataHashAssertionCBOR(hashBytes []byte, exclusions []c2paExclu
 	return cborMap(pairs...)
 }
 
-func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBindingURL string, actionsHash []byte, actionsURL string) []byte {
+func renderLifecycleAssertionCBOR(contractID, fileHash, status, reason, authority, vcID, prevManifestHash string, compiledAt time.Time) []byte {
+	return cborMap(
+		cborText("contract_id"), cborText(contractID),
+		cborText("file_hash"), cborText(fileHash),
+		cborText("status"), cborText(status),
+		cborText("reason"), cborText(reason),
+		cborText("effective_at"), cborText(compiledAt.UTC().Format(time.RFC3339)),
+		cborText("authority"), cborText(authority),
+		cborText("vc_id"), cborText(vcID),
+		cborText("prev_manifest_hash"), cborText(prevManifestHash),
+	)
+}
+
+func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBindingURL string, actionsHash []byte, actionsURL string, lifecycleHash []byte, lifecycleURL string) []byte {
 	instanceID := "xmp:iid:" + uuidFromHashPrefix(payloadHash)
 	hardBindingHashedURI := cborMap(
 		cborText("url"), cborText(hardBindingURL),
@@ -475,6 +506,11 @@ func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBind
 		cborText("alg"), cborText("sha256"),
 		cborText("hash"), cborBytes(actionsHash),
 	)
+	lifecycleHashedURI := cborMap(
+		cborText("url"), cborText(lifecycleURL),
+		cborText("alg"), cborText("sha256"),
+		cborText("hash"), cborBytes(lifecycleHash),
+	)
 	claimGenInfo := cborMap(
 		cborText("name"), cborText("DCS-PDF-CORE"),
 		cborText("version"), cborText("1.0"),
@@ -484,7 +520,7 @@ func renderMinimalClaimCBOR(payloadHash string, hardBindingHash []byte, hardBind
 		cborText("claim_generator_info"), claimGenInfo,
 		cborText("alg"), cborText("sha256"),
 		cborText("signature"), cborText("self#jumbf=c2pa.signature"),
-		cborText("created_assertions"), cborArray(hardBindingHashedURI, actionsHashedURI),
+		cborText("created_assertions"), cborArray(hardBindingHashedURI, actionsHashedURI, lifecycleHashedURI),
 	)
 }
 
@@ -525,7 +561,7 @@ func renderVerificationActionsAssertionCBOR(ingredientURI string, ingredientHash
 	)
 }
 
-func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte) []byte {
+func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte, lifecycleURI string, lifecycleHash []byte) []byte {
 	instanceID := "xmp:iid:" + uuidFromHashPrefix(payloadHash)
 	hardBindingRef := cborMap(
 		cborText("url"), cborText(hardBindingURI),
@@ -542,6 +578,11 @@ func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardB
 		cborText("alg"), cborText("sha256"),
 		cborText("hash"), cborBytes(actionsHash),
 	)
+	lifecycleRef := cborMap(
+		cborText("url"), cborText(lifecycleURI),
+		cborText("alg"), cborText("sha256"),
+		cborText("hash"), cborBytes(lifecycleHash),
+	)
 	claimGenInfo := cborMap(
 		cborText("name"), cborText("DCS-PDF-CORE"),
 		cborText("version"), cborText("1.0"),
@@ -551,7 +592,7 @@ func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardB
 		cborText("claim_generator_info"), claimGenInfo,
 		cborText("alg"), cborText("sha256"),
 		cborText("signature"), cborText(absoluteSignatureURI(manifestLabel)),
-		cborText("created_assertions"), cborArray(hardBindingRef, ingredientRef, actionsRef),
+		cborText("created_assertions"), cborArray(hardBindingRef, ingredientRef, actionsRef, lifecycleRef),
 	)
 }
 
@@ -778,4 +819,122 @@ func absoluteAssertionURI(manifestLabel string, assertionLabel string) string {
 
 func absoluteSignatureURI(manifestLabel string) string {
 	return absoluteManifestURI(manifestLabel) + "/c2pa.signature"
+}
+
+// extractLifecycleEffectiveAt extracts the effective_at timestamp from the
+// dcs.lifecycle assertion in the manifest at manifestIdx (0-based) of c2paBytes.
+func extractLifecycleEffectiveAt(c2paBytes []byte, manifestIdx int) (time.Time, error) {
+	manifestBoxes, err := extractTopLevelManifestBoxes(c2paBytes)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("extract manifests: %w", err)
+	}
+	if manifestIdx >= len(manifestBoxes) {
+		return time.Time{}, fmt.Errorf("manifest index %d out of range (%d manifests)", manifestIdx, len(manifestBoxes))
+	}
+	assertionStore, err := extractLabeledChildJUMBFBox(manifestBoxes[manifestIdx], "c2pa.assertions")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("find assertion store: %w", err)
+	}
+	lifecycleBox, err := extractLabeledChildJUMBFBox(assertionStore, "dcs.lifecycle")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("find dcs.lifecycle: %w", err)
+	}
+	outerBoxes, err := parseBMFFBoxes(lifecycleBox)
+	if err != nil || len(outerBoxes) == 0 {
+		return time.Time{}, fmt.Errorf("parse lifecycle jumb: %w", err)
+	}
+	innerBoxes, err := parseBMFFBoxes(outerBoxes[0].Payload)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse lifecycle children: %w", err)
+	}
+	var cborData []byte
+	for _, b := range innerBoxes {
+		if b.Type == "cbor" {
+			cborData = b.Payload
+			break
+		}
+	}
+	if cborData == nil {
+		return time.Time{}, fmt.Errorf("cbor box not found in dcs.lifecycle")
+	}
+	fields, err := parseCBORTextMap(cborData)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("decode lifecycle CBOR: %w", err)
+	}
+	s, ok := fields["effective_at"]
+	if !ok || s == "" {
+		return time.Time{}, fmt.Errorf("effective_at missing from dcs.lifecycle")
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse effective_at %q: %w", s, err)
+	}
+	return t, nil
+}
+
+// parseCBORTextMap decodes a CBOR map whose keys and values are all text strings.
+func parseCBORTextMap(data []byte) (map[string]string, error) {
+	if len(data) < 1 {
+		return nil, fmt.Errorf("empty CBOR")
+	}
+	if data[0]>>5 != 5 {
+		return nil, fmt.Errorf("expected CBOR map (major type 5), got %d", data[0]>>5)
+	}
+	add := int(data[0] & 0x1F)
+	var count, pos int
+	switch {
+	case add <= 23:
+		count, pos = add, 1
+	case add == 24:
+		if len(data) < 2 {
+			return nil, fmt.Errorf("truncated map header")
+		}
+		count, pos = int(data[1]), 2
+	default:
+		return nil, fmt.Errorf("unsupported map size encoding (additional=%d)", add)
+	}
+	result := make(map[string]string, count)
+	for i := 0; i < count; i++ {
+		key, n, err := decodeCBORText(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("key %d: %w", i, err)
+		}
+		pos += n
+		val, n, err := decodeCBORText(data[pos:])
+		if err != nil {
+			return nil, fmt.Errorf("val %d: %w", i, err)
+		}
+		pos += n
+		result[key] = val
+	}
+	return result, nil
+}
+
+// decodeCBORText decodes a single CBOR text string, returning the string,
+// bytes consumed, and any error.
+func decodeCBORText(data []byte) (string, int, error) {
+	if len(data) < 1 {
+		return "", 0, fmt.Errorf("empty")
+	}
+	if data[0]>>5 != 3 {
+		return "", 0, fmt.Errorf("expected CBOR text (major type 3), got %d", data[0]>>5)
+	}
+	add := int(data[0] & 0x1F)
+	var length, hdr int
+	switch {
+	case add <= 23:
+		length, hdr = add, 1
+	case add == 24:
+		if len(data) < 2 {
+			return "", 0, fmt.Errorf("truncated")
+		}
+		length, hdr = int(data[1]), 2
+	default:
+		return "", 0, fmt.Errorf("unsupported text length encoding (additional=%d)", add)
+	}
+	end := hdr + length
+	if len(data) < end {
+		return "", 0, fmt.Errorf("truncated text: need %d, have %d", end, len(data))
+	}
+	return string(data[hdr:end]), end, nil
 }

@@ -240,6 +240,10 @@ cryptoProvider:
 # See charts/statuslist-service/values.yaml for all configurable fields.
 statuslistService:
   enabled: false
+  # url overrides the auto-wired ClusterIP URL when enabled=true.
+  url: ""
+  # tenantID is the tenant identifier passed as STATUSLIST_TENANT_ID (defaults to "default" when empty).
+  tenantID: ""
   image:
     repository: ghcr.io/eclipse-xfsc/statuslist-service
     tag: "latest"
@@ -296,6 +300,10 @@ pdfCore:
     port: 8080
   # url overrides the auto-wired ClusterIP URL when enabled=true.
   url: ""
+  # contextIRI overrides the JSON-LD @context IRI embedded in every envelope.
+  # Default: auto-derived as <pdfCoreURL>/ontology/dcs-pdf-core.
+  # Set to a registered w3id IRI once available.
+  contextIRI: ""
   signing:
     # Dev self-signed Ed25519 key and cert chain — safe for testing, replace for production.
     signerKeyPEM: |

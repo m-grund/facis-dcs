@@ -175,3 +175,4 @@ slots:
     description: Human-readable label drawn in the signature field appearance.
     range: string
     slot_uri: dcs_pdf_core:label
+

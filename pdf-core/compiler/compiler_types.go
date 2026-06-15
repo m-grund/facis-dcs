@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"regexp"
 	"sync"
+	"time"
 )
 
 type Signer interface {
@@ -59,6 +60,8 @@ type documentModel struct {
 	CanonicalJSON   []byte
 	PayloadHash     string
 	FileID          string
+	ContractID      string    // @id from the JSON-LD root node
+	CompiledAt      time.Time // timestamp embedded in the dcs.lifecycle assertion
 }
 
 type layoutLine struct {

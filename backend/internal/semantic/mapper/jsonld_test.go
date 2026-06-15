@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	// Tests use the future w3id IRI as a stable fixture value.
+	SetOntologyContextIRI("https://w3id.org/facis/dcs/context/v1")
+	os.Exit(m.Run())
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

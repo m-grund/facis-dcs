@@ -38,8 +38,12 @@
 #   STATUSLIST_SERVICE_URL=http://localhost:30821
 #   ISSUER_DID=did:web:localhost
 
-# In development, don't deploy the DCS container since we run it locally
+# In development, don't deploy the DCS or pdf-core containers — both run locally.
 replicaCount: 0
+
+# pdf-core runs locally (started by dev-stack.sh), not as a K8s pod.
+pdfCore:
+  enabled: false
 
 # No private registry needed for local dev (all dep images are public)
 imagePullSecrets: []

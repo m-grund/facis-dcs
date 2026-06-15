@@ -422,3 +422,28 @@ Key within the x5chain Secret for pdf-core C2PA signing.
 {{- "x5chain-pem" -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+STATUSLIST_SERVICE_URL — auto-derived from the statuslistService sub-chart when
+enabled=true, otherwise falls back to the explicit statuslistService.url override.
+*/}}
+{{- define "digital-contracting-service.statuslistServiceURL" -}}
+{{- if .Values.statuslistService.url -}}
+{{- .Values.statuslistService.url -}}
+{{- else if .Values.statuslistService.enabled -}}
+{{- printf "http://%s-statuslist-service:%v" (include "digital-contracting-service.fullname" .) .Values.statuslistService.service.port -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+PDF_CORE_CONTEXT_IRI — the @context IRI embedded in every JSON-LD envelope.
+Set pdfCore.contextIRI to override (e.g. a registered w3id IRI once available).
+Default: auto-derived as <pdfCoreURL>/ontology/dcs-pdf-core.
+*/}}
+{{- define "digital-contracting-service.pdfCoreContextIRI" -}}
+{{- if .Values.pdfCore.contextIRI -}}
+{{- .Values.pdfCore.contextIRI -}}
+{{- else -}}
+{{- printf "%s/ontology/dcs-pdf-core" (include "digital-contracting-service.pdfCoreURL" .) -}}
+{{- end -}}
+{{- end }}

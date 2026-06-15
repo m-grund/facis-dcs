@@ -23,6 +23,7 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 		CanonicalJSON:   canonical,
 		PayloadHash:     hashHex,
 		FileID:          hashHex[:32],
+		ContractID:      rootID,
 	}
 
 	// Build namespace map from raw @context (for ontology fetching and compact display).
