@@ -77,6 +77,10 @@ function operatorLabel(operator: DcsOperator): string {
       return '='
     case 'NotEquals':
       return '!='
+    case 'In':
+      return 'allow only'
+    case 'NotIn':
+      return 'exclude'
     case 'GreaterThan':
       return '>'
     case 'GreaterThanOrEqual':

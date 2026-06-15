@@ -301,7 +301,7 @@ func TestNormalizeContractDataBuildsContractStatementsAndRules(t *testing.T) {
 }
 
 func TestNormalizeContractDataRejectsInvalidStatementCountry(t *testing.T) {
-	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "provider", "country", "RUS"), true)
+	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "provider", "country", "ZZZ"), true)
 	require.ErrorContains(t, err, "violates constraint")
 }
 
@@ -704,6 +704,14 @@ func TestValueConstraintResolvesAllowedValuesRef(t *testing.T) {
 	require.ErrorContains(t, err, "expected one of")
 }
 
+func TestValueConstraintValidatesFormatWithoutAllowedValues(t *testing.T) {
+	err := valueMatchesConstraint("DEU", &valueConstraint{Format: "iso-3166-1-alpha-3"})
+	require.NoError(t, err)
+
+	err = valueMatchesConstraint("DE", &valueConstraint{Format: "iso-3166-1-alpha-3"})
+	require.ErrorContains(t, err, "expected value matching format")
+}
+
 func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
@@ -767,6 +775,55 @@ func TestNormalizeContractDataRejectsSemanticOperatorViolation(t *testing.T) {
 
 	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "sla", "availability", 99.6), true)
 	require.NoError(t, err)
+}
+
+func TestNormalizeContractDataValidatesSetOperators(t *testing.T) {
+	raw := validTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &decoded))
+	condition := decoded["semanticConditions"].([]any)[0].(map[string]any)
+	condition["conditionName"] = "Jurisdiction"
+	params := condition["parameters"].([]any)
+	param := params[0].(map[string]any)
+	param["parameterName"] = "jurisdiction"
+	param["type"] = "string"
+	param["schemaRef"] = SchemaContractV1
+	param["semanticPath"] = "contract.jurisdiction"
+	param["operators"] = []any{
+		map[string]any{
+			"operate": "In",
+			"targets": []any{"DEU", "AUT"},
+		},
+	}
+	decoded["documentBlocks"].([]any)[0].(map[string]any)["text"] = "Jurisdiction {{cond-1.jurisdiction}}"
+	decoded["semanticConditionValues"] = []any{
+		map[string]any{"blockId": "clause-1", "conditionId": "cond-1", "parameterName": "jurisdiction", "parameterValue": "DEU"},
+	}
+	contractData, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	normalized, err := NormalizeContractData(&contractData, true)
+	require.NoError(t, err)
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	policyBundle := result["policyBundle"].(map[string]any)
+	duties := policyBundle["rules"].([]any)
+	constraints := duties[0].(map[string]any)["constraint"].([]any)
+	require.Equal(t, "odrl:isAnyOf", constraints[0].(map[string]any)["operator"])
+
+	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "cond-1", "jurisdiction", "FRA"), true)
+	require.ErrorContains(t, err, "violates obligation")
+
+	param["operators"] = []any{
+		map[string]any{
+			"operate": "NotIn",
+			"targets": []any{"GBR"},
+		},
+	}
+	contractData, err = datatype.NewJSON(decoded)
+	require.NoError(t, err)
+	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "cond-1", "jurisdiction", "GBR"), true)
+	require.ErrorContains(t, err, "violates obligation")
 }
 
 func TestNormalizeTemplateDataAcceptsCanonicalSemanticRuleOperator(t *testing.T) {

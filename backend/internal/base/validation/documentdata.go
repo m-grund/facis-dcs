@@ -516,6 +516,10 @@ func odrlOperator(operator string) string {
 		return "odrl:eq"
 	case "NotEquals":
 		return "odrl:neq"
+	case "In":
+		return "odrl:isAnyOf"
+	case "NotIn":
+		return "odrl:isNoneOf"
 	case "GreaterThan":
 		return "odrl:gt"
 	case "GreaterThanOrEqual":
@@ -595,7 +599,7 @@ func parseSemanticOperator(raw any) (string, []any) {
 
 func normalizeSemanticOperator(value string) string {
 	switch value {
-	case "Equals", "NotEquals", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "Between", "Contains", "MatchesRegex":
+	case "Equals", "NotEquals", "In", "NotIn", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "Between", "Contains", "MatchesRegex":
 		return value
 	default:
 		return ""
@@ -959,19 +963,24 @@ func valueMatchesSemanticOperators(value any, param map[string]any) error {
 		if operator == "" || len(targets) == 0 {
 			continue
 		}
-		if !compareSemanticOperator(value, operator, targets[0]) {
-			return fmt.Errorf("expected %s %v", operator, targets[0])
+		if !compareSemanticOperator(value, operator, targets) {
+			return fmt.Errorf("expected %s %v", operator, targets)
 		}
 	}
 	return nil
 }
 
-func compareSemanticOperator(value any, operator string, target any) bool {
+func compareSemanticOperator(value any, operator string, targets []any) bool {
+	target := firstTarget(targets)
 	switch operator {
 	case "Equals":
 		return fmt.Sprint(value) == fmt.Sprint(target)
 	case "NotEquals":
 		return fmt.Sprint(value) != fmt.Sprint(target)
+	case "In":
+		return targetSetContains(value, targets)
+	case "NotIn":
+		return !targetSetContains(value, targets)
 	case "GreaterThan":
 		return compareOrdered(value, target, func(left float64, right float64) bool { return left > right })
 	case "GreaterThanOrEqual":
@@ -988,6 +997,22 @@ func compareSemanticOperator(value any, operator string, target any) bool {
 	default:
 		return true
 	}
+}
+
+func firstTarget(targets []any) any {
+	if len(targets) == 0 {
+		return nil
+	}
+	return targets[0]
+}
+
+func targetSetContains(value any, targets []any) bool {
+	for _, target := range targets {
+		if fmt.Sprint(value) == fmt.Sprint(target) {
+			return true
+		}
+	}
+	return false
 }
 
 func compareOrdered(value any, target any, compare func(left float64, right float64) bool) bool {
@@ -1498,9 +1523,29 @@ func validateSemanticOperators(conditionID string, param map[string]any) error {
 		return fmt.Errorf("semantic condition %q parameter %q operators must be an array", conditionID, param["parameterName"])
 	}
 	for _, rawOperator := range operators {
-		operate, _ := parseSemanticOperator(rawOperator)
+		operate, targets := parseSemanticOperator(rawOperator)
 		if normalizeSemanticOperator(operate) == "" {
 			return fmt.Errorf("semantic condition %q parameter %q uses unsupported operator %q", conditionID, param["parameterName"], operate)
+		}
+		if err := validateSemanticOperatorTargets(conditionID, param, targets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSemanticOperatorTargets(conditionID string, param map[string]any, targets []any) error {
+	if len(targets) == 0 {
+		return nil
+	}
+	semanticPath, _ := param["semanticPath"].(string)
+	field, ok := ontologyDomainFieldIndex[semanticPath]
+	if !ok || field.Constraint == nil {
+		return nil
+	}
+	for _, target := range targets {
+		if err := valueMatchesConstraint(target, field.Constraint); err != nil {
+			return fmt.Errorf("semantic condition %q parameter %q operator target violates constraint: %w", conditionID, param["parameterName"], err)
 		}
 	}
 	return nil
@@ -1561,6 +1606,11 @@ func valueMatchesConstraint(value any, constraint *valueConstraint) error {
 			return fmt.Errorf("expected value matching %s", constraint.Pattern)
 		}
 	}
+	if constraint.Format != "" {
+		if err := valueMatchesFormat(value, constraint.Format); err != nil {
+			return err
+		}
+	}
 	if constraint.Min != nil || constraint.Max != nil {
 		number, ok := value.(float64)
 		if !ok {
@@ -1571,6 +1621,20 @@ func valueMatchesConstraint(value any, constraint *valueConstraint) error {
 		}
 		if constraint.Max != nil && number > *constraint.Max {
 			return fmt.Errorf("expected value less than or equal to %v", *constraint.Max)
+		}
+	}
+	return nil
+}
+
+func valueMatchesFormat(value any, format string) error {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "iso-3166-1-alpha-3", "iso-4217":
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected value matching format %s", format)
+		}
+		if !regexp.MustCompile(`^[A-Z]{3}$`).MatchString(text) {
+			return fmt.Errorf("expected value matching format %s", format)
 		}
 	}
 	return nil

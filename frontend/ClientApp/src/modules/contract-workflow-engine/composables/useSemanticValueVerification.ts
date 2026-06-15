@@ -275,7 +275,7 @@ function validateParameterOperators(
   operators: { operate: string; targets: unknown[] }[],
 ): string | null {
   for (const operator of operators) {
-    const target = operator.targets?.[0]
+    const target = operator.operate === 'In' || operator.operate === 'NotIn' ? operator.targets : operator.targets?.[0]
     if (!compareOperator(value, operator.operate, target)) {
       return `Expected ${formatOperator(operator.operate)} ${String(target)}.`
     }
@@ -289,6 +289,10 @@ function compareOperator(value: string | number | boolean, operator: string, tar
       return value === coerceTarget(target, value)
     case 'NotEquals':
       return value !== coerceTarget(target, value)
+    case 'In':
+      return operatorTargetsContain(value, target)
+    case 'NotIn':
+      return !operatorTargetsContain(value, target)
     case 'GreaterThan':
       return compareOrdered(value, target, (left, right) => left > right)
     case 'GreaterThanOrEqual':
@@ -340,6 +344,10 @@ function formatOperator(operator: string): string {
       return '='
     case 'NotEquals':
       return '!='
+    case 'In':
+      return 'one of'
+    case 'NotIn':
+      return 'none of'
     case 'GreaterThan':
       return '>'
     case 'GreaterThanOrEqual':
@@ -355,4 +363,9 @@ function formatOperator(operator: string): string {
     default:
       return operator
   }
+}
+
+function operatorTargetsContain(value: string | number | boolean, target: unknown): boolean {
+  const targets = Array.isArray(target) ? target : [target]
+  return targets.some((item) => coerceTarget(item, value) === value)
 }

@@ -23,6 +23,8 @@ export const FACIS_DCS_SEMANTIC_PROFILE: SemanticProfile = {
 export type DcsOperator =
   | 'Equals'
   | 'NotEquals'
+  | 'In'
+  | 'NotIn'
   | 'GreaterThan'
   | 'GreaterThanOrEqual'
   | 'LessThan'
@@ -356,6 +358,10 @@ function odrlOperatorFor(operator: DcsOperator): string {
       return 'odrl:eq'
     case 'NotEquals':
       return 'odrl:neq'
+    case 'In':
+      return 'odrl:isAnyOf'
+    case 'NotIn':
+      return 'odrl:isNoneOf'
     case 'GreaterThan':
       return 'odrl:gt'
     case 'GreaterThanOrEqual':
@@ -377,6 +383,8 @@ function isDcsOperator(value: string): value is DcsOperator {
   return [
     'Equals',
     'NotEquals',
+    'In',
+    'NotIn',
     'GreaterThan',
     'GreaterThanOrEqual',
     'LessThan',
