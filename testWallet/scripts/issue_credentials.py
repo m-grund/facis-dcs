@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Issue testWallet access credentials from templates or explicit roles.
+
+Entry point:
+  python3 testWallet/scripts/issue_credentials.py --all
+  python3 testWallet/scripts/issue_credentials.py --credential test
+  python3 testWallet/scripts/issue_credentials.py --name test --organization "Acme Corp" --roles "Contract Manager,Contract Signer"
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+WALLET_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(WALLET_ROOT))
+
+from dcs_wallet.issuer import (
+    DEFAULT_ISSUER_DID,
+    DEFAULT_KB_AUD,
+    DEFAULT_KB_NONCE,
+    CREDENTIAL_EXT,
+    issue_access_credential,
+    issue_all_template_files,
+    issue_credential_file,
+)
+from dcs_wallet.keys import load_json, private_key_material, write_text
+
+
+def _load_private_keys(keys_dir: Path) -> tuple[dict, dict]:
+    issuer_path = keys_dir / "issuer-dev.jwk"
+    wallet_path = keys_dir / "wallet.jwk"
+    if not issuer_path.is_file() or not wallet_path.is_file():
+        raise FileNotFoundError(
+            f"missing issuer-dev.jwk or wallet.jwk — run: python3 testWallet/scripts/generate_keys.py --yes"
+        )
+    return private_key_material(load_json(issuer_path)), private_key_material(load_json(wallet_path))
+
+
+def _parse_roles(raw: str) -> list[str]:
+    roles = [role.strip() for role in raw.split(",") if role.strip()]
+    if not roles:
+        raise ValueError("--roles must contain at least one role")
+    return roles
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Issue testWallet SD-JWT+KB credentials")
+    parser.add_argument("--issuer-did", default=DEFAULT_ISSUER_DID)
+    parser.add_argument("--keys-dir", type=Path, default=WALLET_ROOT / "keys")
+    parser.add_argument("--credentials-dir", type=Path, default=WALLET_ROOT / "credentials")
+    parser.add_argument("--aud", default=DEFAULT_KB_AUD)
+    parser.add_argument("--nonce", default=DEFAULT_KB_NONCE)
+
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--all", action="store_true", help="issue one JWT for every *.template.json file")
+    source.add_argument("--credential", action="append", help="issue selected credential template by stem, e.g. test")
+
+    parser.add_argument("--name", default="test", help="output stem when using --organization/--roles")
+    parser.add_argument("--organization", help="organization for an on-the-fly credential")
+    parser.add_argument("--roles", help="comma-separated roles for an on-the-fly credential")
+    args = parser.parse_args()
+
+    issuer_private, wallet_private = _load_private_keys(args.keys_dir)
+
+    if args.organization or args.roles:
+        if not args.organization or not args.roles:
+            raise ValueError("--organization and --roles must be used together")
+        token = issue_access_credential(
+            organization=args.organization,
+            roles=_parse_roles(args.roles),
+            issuer_private=issuer_private,
+            wallet_private=wallet_private,
+            issuer_did=args.issuer_did,
+            aud=args.aud,
+            nonce=args.nonce,
+        )
+        output_path = args.credentials_dir / f"{args.name.removesuffix(CREDENTIAL_EXT)}{CREDENTIAL_EXT}"
+        write_text(output_path, token)
+        print(f"issued: {output_path}")
+        return 0
+
+    if args.credential:
+        paths = [
+            issue_credential_file(
+                credentials_dir=args.credentials_dir,
+                credential_name=name,
+                issuer_private=issuer_private,
+                wallet_private=wallet_private,
+                issuer_did=args.issuer_did,
+                aud=args.aud,
+                nonce=args.nonce,
+            )
+            for name in args.credential
+        ]
+    else:
+        # Default to all templates so the entry point is useful without flags.
+        paths = issue_all_template_files(
+            credentials_dir=args.credentials_dir,
+            issuer_private=issuer_private,
+            wallet_private=wallet_private,
+            issuer_did=args.issuer_did,
+            aud=args.aud,
+            nonce=args.nonce,
+        )
+
+    if not paths:
+        raise FileNotFoundError(f"no *.template.json files found in {args.credentials_dir}")
+    for path in paths:
+        print(f"issued: {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

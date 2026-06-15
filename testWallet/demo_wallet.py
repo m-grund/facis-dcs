@@ -33,7 +33,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload
+from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload, load_credential_claims
 from dcs_wallet.presentation import build_vp_token
 
 DEFAULT_API_BASE = os.environ.get("DCS_API_BASE", "http://localhost:8991/api")
@@ -42,7 +42,7 @@ REQUEST_URI_MARKER = "/auth/presentation/request/"
 _CREDENTIALS_DIR = Path(__file__).resolve().parent / "credentials"
 _KEYS_DIR = Path(__file__).resolve().parent / "keys"
 _REQUIRED_KEYS = ("issuer-dev.jwk", "wallet.jwk")
-_GENERATE_HINT = "python3 testWallet/scripts/generate_dev_keys.py"
+_GENERATE_HINT = "python3 testWallet/scripts/generate_keys.py --yes && python3 testWallet/scripts/issue_credentials.py"
 
 
 @dataclass(frozen=True)
@@ -206,7 +206,7 @@ def decode_authorization_request_jwt(token: str) -> dict:
 def list_available_credentials() -> list[CredentialOption]:
     options: list[CredentialOption] = []
     for path in sorted(_CREDENTIALS_DIR.glob(f"*{CREDENTIAL_EXT}")):
-        data = decode_jwt_payload(path.read_text(encoding="utf-8").strip())
+        data = load_credential_claims(path.stem)
         roles_raw = data.get("roles") or []
         roles = [r for r in roles_raw if isinstance(r, str)]
         options.append(

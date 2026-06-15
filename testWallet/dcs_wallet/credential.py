@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from dcs_wallet.sdjwt import merge_disclosed_claims, split_sd_jwt
+
 CREDENTIAL_EXT = ".jwt"
 
 
@@ -33,17 +35,30 @@ def decode_jwt_payload(token: str) -> dict[str, Any]:
     return raw
 
 
-def load_credential_jwt(name: str) -> str:
+def load_credential_sd_jwt(name: str) -> str:
     path = credential_path(name)
     if not path.is_file():
         raise FileNotFoundError(
-            f"{path} not found — run: python3 testWallet/scripts/generate_dev_keys.py"
+            f"{path} not found — run: python3 testWallet/scripts/generate_keys.py --yes && python3 testWallet/scripts/issue_credentials.py"
         )
     token = path.read_text(encoding="utf-8").strip()
     if not token.startswith("eyJ"):
-        raise ValueError(f"{path} must contain a single-line compact JWT")
+        raise ValueError(f"{path} must contain an SD-JWT credential")
     return token
 
 
+def load_credential_jwt(name: str) -> str:
+    issuer_jwt, _, _ = split_sd_jwt(load_credential_sd_jwt(name))
+    return issuer_jwt
+
+
+def load_credential_disclosures(name: str) -> list[str]:
+    _, disclosures, _ = split_sd_jwt(load_credential_sd_jwt(name))
+    return disclosures
+
+
 def load_credential_claims(name: str) -> dict[str, Any]:
-    return decode_jwt_payload(load_credential_jwt(name))
+    raw = load_credential_sd_jwt(name)
+    issuer_jwt, disclosures, _ = split_sd_jwt(raw)
+    issuer_payload = decode_jwt_payload(issuer_jwt)
+    return merge_disclosed_claims(issuer_payload, disclosures)
