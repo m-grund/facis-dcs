@@ -14,6 +14,7 @@ import (
 	genauth "digital-contracting-service/gen/auth"
 	authdb "digital-contracting-service/internal/auth/db"
 	"digital-contracting-service/internal/auth/oid4vp"
+	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/pathutil"
 
 	goa "goa.design/goa/v3/pkg"
@@ -179,7 +180,7 @@ func (s *authSvc) PresentationRequest(ctx context.Context, p *genauth.Presentati
 	}
 
 	responseURI := strings.TrimRight(s.publicAPIBase, "/") + "/auth/presentation/callback"
-	jwt, err := oid4vp.BuildAuthorizationRequestJWT(s.requestSigner, oid4vp.AuthorizationRequestParams{
+	jwt, err := oid4vprequest.BuildJWT(s.requestSigner, oid4vprequest.Params{
 		ClientID:    s.hydra.ClientID(),
 		ResponseURI: responseURI,
 		State:       attempt.PresentationState,
@@ -241,33 +242,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		return nil, goa.PermanentError("unauthorized", "vp verification failed: %v", err)
 	}
 
-	if err := oid4vp.CheckCredentialRevocation(verified.RawClaims); err != nil {
-		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
-		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
-			PresentationState: attempt.PresentationState,
-			Success:           false,
-			SubjectDID:        verified.SubjectDID,
-			ParticipantDID:    verified.ParticipantDID,
-			Roles:             verified.Roles,
-			ErrorMessage:      err.Error(),
-		})
-		return nil, goa.PermanentError("unauthorized", "credential revocation check failed: %v", err)
-	}
-
-	grantedRoles, err := oid4vp.EvaluateLoginPolicy(verified)
-
-	if err != nil {
-		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
-		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
-			PresentationState: attempt.PresentationState,
-			Success:           false,
-			SubjectDID:        verified.SubjectDID,
-			ParticipantDID:    verified.ParticipantDID,
-			Roles:             verified.Roles,
-			ErrorMessage:      err.Error(),
-		})
-		return nil, goa.PermanentError("unauthorized", "login policy denied: %v", err)
-	}
+	grantedRoles := verified.GrantedRoles
 
 	redirectTo, err := s.hydra.AcceptLoginAndConsent(
 		ctx,
@@ -413,7 +388,7 @@ func buildOpenID4VPPresentationURI(clientID, httpsRequestURI string) string {
 	q := url.Values{}
 	q.Set("client_id", clientID)
 	q.Set("request_uri", httpsRequestURI)
-	q.Set("request_uri_method", "get")
+	q.Set("request_uri_method", "post")
 
 	return "openid4vp://?" + q.Encode()
 }

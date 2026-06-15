@@ -1,4 +1,4 @@
-package oid4vp
+package request
 
 import (
 	"encoding/json"
@@ -9,13 +9,13 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// AuthorizationRequestSigner signs OpenID4VP authorization request JWTs.
-type AuthorizationRequestSigner interface {
+// Signer signs OpenID4VP authorization request JWTs.
+type Signer interface {
 	SignAuthorizationRequestJWT(claims jwt.MapClaims) (string, error)
 }
 
-// AuthorizationRequestParams are the OpenID4VP parameters encoded in the signed request JWT.
-type AuthorizationRequestParams struct {
+// Params are the OpenID4VP parameters encoded in the signed request JWT.
+type Params struct {
 	ClientID    string
 	ResponseURI string
 	State       string
@@ -24,8 +24,8 @@ type AuthorizationRequestParams struct {
 	DCQLQuery   any
 }
 
-// BuildAuthorizationRequestJWT creates a signed OpenID4VP authorization request object.
-func BuildAuthorizationRequestJWT(signer AuthorizationRequestSigner, params AuthorizationRequestParams) (string, error) {
+// BuildJWT creates a signed OpenID4VP authorization request object (JAR).
+func BuildJWT(signer Signer, params Params) (string, error) {
 	if signer == nil {
 		return "", fmt.Errorf("request signer is not configured (set VAULT_ADDR and VAULT_TOKEN)")
 	}

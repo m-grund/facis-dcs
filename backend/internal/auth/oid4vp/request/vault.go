@@ -1,4 +1,4 @@
-package oid4vp
+package request
 
 import (
 	"bytes"
@@ -32,8 +32,8 @@ type VaultTransitSigner struct {
 	client *http.Client
 }
 
-// LoadAuthorizationRequestSignerFromEnv returns a Vault transit signer from VAULT_* env vars.
-func LoadAuthorizationRequestSignerFromEnv() (AuthorizationRequestSigner, error) {
+// LoadSignerFromEnv returns a Vault transit signer from VAULT_* env vars.
+func LoadSignerFromEnv() (Signer, error) {
 	return NewVaultTransitSignerFromEnv()
 }
 
@@ -74,7 +74,6 @@ func (s *VaultTransitSigner) SignAuthorizationRequestJWT(claims jwt.MapClaims) (
 	if s == nil {
 		return "", fmt.Errorf("vault transit signer is not configured")
 	}
-
 	return signES256JWT(oauthAuthzReqJWTType, s.kid, claims, s.signSigningInput)
 }
 
@@ -101,6 +100,7 @@ func (s *VaultTransitSigner) signSigningInput(signingInput string) ([]byte, erro
 	req.Header.Set("X-Vault-Token", s.token)
 
 	resp, err := s.client.Do(req)
+
 	if err != nil {
 		return nil, fmt.Errorf("vault transit sign: %w", err)
 	}
@@ -123,6 +123,7 @@ func (s *VaultTransitSigner) signSigningInput(signingInput string) ([]byte, erro
 	}
 
 	err = json.Unmarshal(respBody, &parsed)
+
 	if err != nil {
 		return nil, fmt.Errorf("parse vault sign response: %w", err)
 	}
@@ -132,6 +133,7 @@ func (s *VaultTransitSigner) signSigningInput(signingInput string) ([]byte, erro
 
 func decodeVaultTransitSignature(value string) ([]byte, error) {
 	value = strings.TrimSpace(value)
+
 	if value == "" {
 		return nil, fmt.Errorf("vault signature is empty")
 	}
@@ -143,6 +145,7 @@ func decodeVaultTransitSignature(value string) ([]byte, error) {
 
 	payload := strings.TrimPrefix(value, prefix)
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
+
 	if err != nil {
 		return nil, fmt.Errorf("decode vault jws signature: %w", err)
 	}
@@ -150,6 +153,5 @@ func decodeVaultTransitSignature(value string) ([]byte, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("vault signature is empty after decode")
 	}
-
 	return raw, nil
 }

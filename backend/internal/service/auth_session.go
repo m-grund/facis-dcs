@@ -15,6 +15,7 @@ import (
 	authdb "digital-contracting-service/internal/auth/db"
 	"digital-contracting-service/internal/auth/hydra"
 	"digital-contracting-service/internal/auth/oid4vp"
+	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/pathutil"
 
 	"github.com/jmoiron/sqlx"
@@ -30,7 +31,7 @@ type authSvc struct {
 	uiBasePath        string
 	publicAPIBase     string
 	presentations     authdb.PresentationAttemptRepo
-	requestSigner     oid4vp.AuthorizationRequestSigner
+	requestSigner     oid4vprequest.Signer
 }
 
 func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo) genauth.Service {
@@ -38,8 +39,8 @@ func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo) genauth.
 		oid4vp.ConfigurePresentationAuditRecorder(&authaudit.Recorder{DB: db})
 	}
 
-	var requestSigner oid4vp.AuthorizationRequestSigner
-	if signer, err := oid4vp.LoadAuthorizationRequestSignerFromEnv(); err == nil {
+	var requestSigner oid4vprequest.Signer
+	if signer, err := oid4vprequest.LoadSignerFromEnv(); err == nil {
 		requestSigner = signer
 	} else if strings.TrimSpace(os.Getenv("VAULT_ADDR")) != "" {
 		log.Printf(context.Background(), "oid4vp request signer not loaded: %v", err)

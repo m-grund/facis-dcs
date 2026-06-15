@@ -175,7 +175,7 @@ var _ = Service("Auth", func() {
 			Required("state")
 		})
 		HTTP(func() {
-			GET("/auth/presentation/request/{state}")
+			POST("/auth/presentation/request/{state}")
 			SkipResponseBodyEncodeDecode()
 			Response(StatusOK, func() {
 				ContentType("application/oauth-authz-req+jwt")

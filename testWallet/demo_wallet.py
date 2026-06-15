@@ -116,9 +116,13 @@ class _Session:
                 return _Response(exc.code, {k.lower(): v for k, v in exc.headers.items()}, exc.read())
             raise
 
-    def post(self, url: str, *, json_body: dict | None = None, timeout: float = 30) -> _Response:
-        data = json.dumps(json_body or {}).encode()
-        headers = {**self._headers, "Content-Type": "application/json"}
+    def post(self, url: str, *, json_body: dict | None = None, timeout: float = 30, accept: str | None = None) -> _Response:
+        data = b"" if json_body is None else json.dumps(json_body).encode()
+        headers = dict(self._headers)
+        if json_body is not None:
+            headers["Content-Type"] = "application/json"
+        if accept:
+            headers["Accept"] = accept
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         return self._open(self._opener, req, timeout)
 
@@ -309,9 +313,13 @@ def run_wallet_flow(
     *,
     credential_name: str | None,
 ) -> int:
-    log("fetch", "GET OpenID4VP request object", url=request_uri[:120])
+    log("fetch", "POST OpenID4VP request object", url=request_uri[:120])
     try:
-        r = session.get(request_uri, timeout=30)
+        r = session.post(
+            request_uri,
+            timeout=30,
+            accept="application/oauth-authz-req+jwt, application/jwt",
+        )
     except RuntimeError as exc:
         log("fetch", "FAILED", error=str(exc))
         return 1

@@ -1,4 +1,4 @@
-package oid4vp
+package request
 
 import (
 	"encoding/base64"
