@@ -49,7 +49,7 @@ func (unconfiguredVerifier) Verify(_ string, _ PresentationContext) (*VerifiedLo
 
 func (v verifier) Verify(vpToken string, ctx PresentationContext) (*VerifiedLoginClaims, error) {
 	// Policy verification steps, in order of execution:
-	// 1. trust list + wallet binding
+	// 1. trust list + wallet binding (parse VP, issuer sig, trust, cnf/sub, KB sig + aud/nonce/sd_hash)
 	// 2. status list
 	// 3. login roles
 	verified, err := verifyTrustAndWallet(vpToken, ctx, v.trust)
@@ -76,16 +76,19 @@ func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustC
 		return nil, fmt.Errorf("trust config is not configured")
 	}
 
+	// Parse SD-JWT~disclosures~KB-JWT presentation.
 	presentation, err := sdjwt.ParsePresentation(vpToken)
 	if err != nil {
 		return nil, err
 	}
 
+	// Verify issuer signature, header.jwk trust, vct/exp/iat, merge disclosures.
 	issuerClaims, err := sdjwt.VerifyCredential(presentation.IssuerJWT, presentation.Disclosures, trust)
 	if err != nil {
 		return nil, err
 	}
 
+	// Holder binding: cnf.jwk is the verification key; sub must match did:jwk from cnf.
 	cnfJWK, err := sdjwt.CNFJWKFromClaims(issuerClaims)
 	if err != nil {
 		return nil, err
@@ -107,6 +110,7 @@ func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustC
 		return nil, fmt.Errorf("credential sub does not match cnf.jwk holder binding")
 	}
 
+	// KB-JWT: signature via cnf.jwk; payload aud, nonce, sd_hash.
 	err = sdjwt.VerifyKB(presentation.KBJWT, presentation.SDHash, cnfJWK, sub, ctx.Nonce, ctx.ClientID)
 	if err != nil {
 		return nil, err

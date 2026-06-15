@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Issue testWallet access credentials from templates or explicit roles.
+"""Issue testWallet SD-JWT credentials for wallet storage (no KB-JWT).
+
+KB-JWT with aud/nonce is added at presentation time (demo_wallet, issue_vp_jwt).
 
 Entry point:
   python3 testWallet/scripts/issue_credentials.py --all
@@ -18,12 +20,10 @@ sys.path.insert(0, str(WALLET_ROOT))
 
 from dcs_wallet.issuer import (
     DEFAULT_ISSUER_DID,
-    DEFAULT_KB_AUD,
-    DEFAULT_KB_NONCE,
     CREDENTIAL_EXT,
-    issue_access_credential,
     issue_all_template_files,
     issue_credential_file,
+    issue_stored_credential,
 )
 from dcs_wallet.keys import load_json, private_key_material, write_text
 
@@ -46,12 +46,10 @@ def _parse_roles(raw: str) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Issue testWallet SD-JWT+KB credentials")
+    parser = argparse.ArgumentParser(description="Issue testWallet SD-JWT credentials (issuer JWT + disclosures only)")
     parser.add_argument("--issuer-did", default=DEFAULT_ISSUER_DID)
     parser.add_argument("--keys-dir", type=Path, default=WALLET_ROOT / "keys")
     parser.add_argument("--credentials-dir", type=Path, default=WALLET_ROOT / "credentials")
-    parser.add_argument("--aud", default=DEFAULT_KB_AUD)
-    parser.add_argument("--nonce", default=DEFAULT_KB_NONCE)
 
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--all", action="store_true", help="issue one JWT for every *.template.json file")
@@ -67,14 +65,12 @@ def main() -> int:
     if args.organization or args.roles:
         if not args.organization or not args.roles:
             raise ValueError("--organization and --roles must be used together")
-        token = issue_access_credential(
+        token = issue_stored_credential(
             organization=args.organization,
             roles=_parse_roles(args.roles),
             issuer_private=issuer_private,
             wallet_private=wallet_private,
             issuer_did=args.issuer_did,
-            aud=args.aud,
-            nonce=args.nonce,
         )
         output_path = args.credentials_dir / f"{args.name.removesuffix(CREDENTIAL_EXT)}{CREDENTIAL_EXT}"
         write_text(output_path, token)
@@ -89,20 +85,15 @@ def main() -> int:
                 issuer_private=issuer_private,
                 wallet_private=wallet_private,
                 issuer_did=args.issuer_did,
-                aud=args.aud,
-                nonce=args.nonce,
             )
             for name in args.credential
         ]
     else:
-        # Default to all templates so the entry point is useful without flags.
         paths = issue_all_template_files(
             credentials_dir=args.credentials_dir,
             issuer_private=issuer_private,
             wallet_private=wallet_private,
             issuer_did=args.issuer_did,
-            aud=args.aud,
-            nonce=args.nonce,
         )
 
     if not paths:

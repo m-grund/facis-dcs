@@ -114,16 +114,15 @@ def attach_key_binding(
     return join_sd_jwt(issuer_jwt, disclosures, kb_jwt)
 
 
-def issue_access_credential(
+def issue_stored_credential(
     *,
     organization: str,
     roles: list[str],
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
-    aud: str = DEFAULT_KB_AUD,
-    nonce: str = DEFAULT_KB_NONCE,
 ) -> str:
+    """Issuer-signed SD-JWT for wallet storage (no KB-JWT; aud/nonce belong to presentation)."""
     holder_public = public_jwk(wallet_private)
     holder_did = did_jwk_from_public_jwk(holder_public)
     visible_claims = {
@@ -138,10 +137,30 @@ def issue_access_credential(
         "organization": organization,
         "roles": roles,
     }
-    issued_sd_jwt = sign_credential_sd_jwt(
+    return sign_credential_sd_jwt(
         visible_claims=visible_claims,
         selective_claims=selective_claims,
         issuer_private=issuer_private,
+    )
+
+
+def issue_access_credential(
+    *,
+    organization: str,
+    roles: list[str],
+    issuer_private: dict[str, Any],
+    wallet_private: dict[str, Any],
+    issuer_did: str = DEFAULT_ISSUER_DID,
+    aud: str = DEFAULT_KB_AUD,
+    nonce: str = DEFAULT_KB_NONCE,
+) -> str:
+    """Build SD-JWT+KB vp_token for an OpenID4VP request (presentation-time)."""
+    issued_sd_jwt = issue_stored_credential(
+        organization=organization,
+        roles=roles,
+        issuer_private=issuer_private,
+        wallet_private=wallet_private,
+        issuer_did=issuer_did,
     )
     return attach_key_binding(
         issued_sd_jwt=issued_sd_jwt,
@@ -157,8 +176,6 @@ def issue_credential_from_template(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
-    aud: str = DEFAULT_KB_AUD,
-    nonce: str = DEFAULT_KB_NONCE,
 ) -> str:
     with template_path.open(encoding="utf-8") as fh:
         template_data = json.load(fh)
@@ -168,14 +185,12 @@ def issue_credential_from_template(
         raise ValueError(f"{template_path} must contain a non-empty organization")
     if not isinstance(roles, list) or not all(isinstance(role, str) for role in roles):
         raise ValueError(f"{template_path} must contain roles as a list of strings")
-    return issue_access_credential(
+    return issue_stored_credential(
         organization=organization,
         roles=roles,
         issuer_private=issuer_private,
         wallet_private=wallet_private,
         issuer_did=issuer_did,
-        aud=aud,
-        nonce=nonce,
     )
 
 
@@ -186,8 +201,6 @@ def issue_credential_file(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
-    aud: str = DEFAULT_KB_AUD,
-    nonce: str = DEFAULT_KB_NONCE,
 ) -> Path:
     stem = credential_name.removesuffix(CREDENTIAL_EXT).removesuffix(".template")
     template_path = credentials_dir / f"{stem}.template.json"
@@ -198,8 +211,6 @@ def issue_credential_file(
         issuer_private=issuer_private,
         wallet_private=wallet_private,
         issuer_did=issuer_did,
-        aud=aud,
-        nonce=nonce,
     )
     output_path = credentials_dir / f"{stem}{CREDENTIAL_EXT}"
     write_text(output_path, token)
@@ -212,8 +223,6 @@ def issue_all_template_files(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
-    aud: str = DEFAULT_KB_AUD,
-    nonce: str = DEFAULT_KB_NONCE,
 ) -> list[Path]:
     paths: list[Path] = []
     for template_path in sorted(credentials_dir.glob("*.template.json")):
@@ -225,8 +234,6 @@ def issue_all_template_files(
                 issuer_private=issuer_private,
                 wallet_private=wallet_private,
                 issuer_did=issuer_did,
-                aud=aud,
-                nonce=nonce,
             )
         )
     return paths

@@ -66,8 +66,9 @@ def build_kb_jwt(*, issuer_jwt: str, disclosures: list[str], nonce: str, aud: st
 
 
 def build_vp_token(*, credential_name: str, nonce: str, client_id: str = "") -> str:
+    """Attach a fresh KB-JWT (aud/nonce from the OpenID4VP request) to a stored credential."""
     raw_credential = load_credential_sd_jwt(credential_name)
-    issuer_jwt, disclosures, _ = split_sd_jwt(raw_credential)
+    issuer_jwt, disclosures, _stored_kb = split_sd_jwt(raw_credential)
     issuer_payload = decode_jwt_payload(issuer_jwt)
     credential_claims = load_credential_claims(credential_name)
     wallet_jwk = load_jwk("wallet.jwk")

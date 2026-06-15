@@ -30,11 +30,11 @@ class PresentationTest(unittest.TestCase):
         cnf_jwk = payload["cnf"]["jwk"]
         self.assertEqual(set(cnf_jwk.keys()), {"kty", "crv", "x", "y"})
 
-    def test_stored_credential_is_complete_sd_jwt_kb_for_debugging(self) -> None:
+    def test_stored_credential_is_issuer_sd_jwt_without_kb(self) -> None:
         issuer_jwt, disclosures, kb_jwt = split_sd_jwt(load_credential_sd_jwt("johndoe"))
         self.assertTrue(issuer_jwt.startswith("eyJ"))
         self.assertGreater(len(disclosures), 0)
-        self.assertIsNotNone(kb_jwt)
+        self.assertIsNone(kb_jwt, "stored credentials must not include presentation-time KB-JWT")
 
         issuer_payload = decode_jwt_payload(issuer_jwt)
         self.assertIn("sub", issuer_payload)

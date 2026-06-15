@@ -130,7 +130,7 @@ class AuthService:
         client_id: str,
         keys: WalletKeys | None = None,
     ) -> str:
-        """Build SD-JWT+KB vp_token for the given roles and organization."""
+        """Build vp_token: issuer SD-JWT from roles, then KB-JWT with request aud/nonce."""
         if not nonce:
             raise ValueError("nonce is required to build vp_token")
         if not client_id:
@@ -138,14 +138,23 @@ class AuthService:
 
         wallet_keys = keys or AuthService.load_wallet_keys()
         AuthService._ensure_dcs_wallet_importable()
-        from dcs_wallet.issuer import DEFAULT_ISSUER_DID, issue_access_credential  # noqa: PLC0415
+        from dcs_wallet.issuer import (
+            DEFAULT_ISSUER_DID,
+            attach_key_binding,
+            issue_stored_credential,
+        )
 
-        return issue_access_credential(
+        issuer_did = os.getenv("BDD_ISSUER_DID", DEFAULT_ISSUER_DID)
+        stored_sd_jwt = issue_stored_credential(
             organization=credentials.organization,
             roles=credentials.roles,
             issuer_private=wallet_keys.issuer_private,
             wallet_private=wallet_keys.wallet_private,
-            issuer_did=os.getenv("BDD_ISSUER_DID", DEFAULT_ISSUER_DID),
+            issuer_did=issuer_did,
+        )
+        return attach_key_binding(
+            issued_sd_jwt=stored_sd_jwt,
+            wallet_private=wallet_keys.wallet_private,
             aud=client_id,
             nonce=nonce,
         )

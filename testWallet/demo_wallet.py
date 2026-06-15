@@ -35,6 +35,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload, load_credential_claims
 from dcs_wallet.presentation import build_vp_token
+from dcs_wallet.sdjwt import split_sd_jwt
 
 DEFAULT_API_BASE = os.environ.get("DCS_API_BASE", "http://localhost:8991/api")
 DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "test")
@@ -305,6 +306,28 @@ def state_from_request_uri(request_uri: str) -> str:
     return state
 
 
+def log_vp_token(vp_token: str, *, credential: str, aud: str, nonce: str) -> None:
+    """Print a short, human-readable summary of the SD-JWT+KB presentation."""
+    issuer_jwt, disclosures, kb_jwt = split_sd_jwt(vp_token)
+    issuer_claims = decode_jwt_payload(issuer_jwt)
+    kb_claims = decode_jwt_payload(kb_jwt) if kb_jwt else {}
+
+    print()
+    print("=== Verifiable Presentation (vp_token) ===")
+    print(f"credential file : credentials/{credential}{CREDENTIAL_EXT} (issuer SD-JWT, stored without KB)")
+    print(f"presentation    : issuer-jwt + {len(disclosures)} disclosure(s) + kb-jwt")
+    print(f"issuer          : {issuer_claims.get('iss', '?')}")
+    print(f"holder (sub)    : {issuer_claims.get('sub', '?')}")
+    print(f"KB aud          : {kb_claims.get('aud', aud)}  (from OpenID4VP client_id)")
+    print(f"KB nonce        : {kb_claims.get('nonce', nonce)}  (from OpenID4VP request)")
+    print(f"KB sd_hash      : {str(kb_claims.get('sd_hash', ''))[:24]}...")
+    print()
+    print("compact vp_token (value for POST /auth/presentation/callback):")
+    print(vp_token)
+    print("=== end vp_token ===")
+    print()
+
+
 def run_wallet_flow(
     session: _Session,
     api: str,
@@ -363,6 +386,7 @@ def run_wallet_flow(
     except Exception as exc:
         log("present", "FAILED to build VP", error=str(exc))
         return 1
+    log_vp_token(vp_token, credential=chosen, aud=client_id, nonce=nonce)
     log("present", "POST /auth/presentation/callback", credential=chosen)
     try:
         r = session.post(
