@@ -97,13 +97,10 @@ func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.Exp
 
 	var jsonldBytes []byte
 	if contract.ContractData != nil {
-		b, err := json.Marshal(contract.ContractData)
+		var err error
+		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData), contract.Name)
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal contract JSON-LD: %w", err))
-		}
-		jsonldBytes, err = pdfgeneration.InjectTitle(b, contract.Name)
-		if err != nil {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("inject title into contract JSON-LD: %w", err))
 		}
 	}
 
@@ -180,13 +177,10 @@ func (s *pdfGenerationSrvc) ExportTemplatePdf(ctx context.Context, p *pdfgen.Exp
 
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
-		b, err := json.Marshal(tpl.TemplateData)
+		var err error
+		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData), tpl.Name)
 		if err != nil {
 			return nil, pdfgen.MakeInternalError(fmt.Errorf("marshal template JSON-LD: %w", err))
-		}
-		jsonldBytes, err = pdfgeneration.InjectTitle(b, tpl.Name)
-		if err != nil {
-			return nil, pdfgen.MakeInternalError(fmt.Errorf("inject title into template JSON-LD: %w", err))
 		}
 	}
 
