@@ -287,3 +287,16 @@ route:
 ## License
 
 Apache License 2.0. See [LICENSE](../LICENSE).
+
+## TSA (Timestamp Authority)
+
+DCS uses an RFC 3161 Timestamp Authority to cryptographically prove that a document or contract existed at a specific point in time. The timestamp is unforgeable and independent of DCS itself.
+
+- Timestamps are requested via ORCE, which forwards requests to the upstream TSA provider
+- The TSR (timestamp response) is verified by DCS using the TSA's CA certificate embedded in the binary (`backend/internal/base/tsa/certs/tsa.crt`)
+- Stored TSRs can be re-verified at any time against the original data to prove it has not been altered
+
+### Switching TSA providers
+
+1. Update the TSA flow in ORCE to point to the new provider
+2. Replace `backend/internal/base/tsa/certs/tsa.crt` with the new provider's CA certificate (PEM format) and rebuild the backend
