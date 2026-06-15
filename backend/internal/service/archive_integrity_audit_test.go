@@ -152,14 +152,47 @@ func TestArchiveSnapshotHashDetectsChangedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJSON returned error: %v", err)
 	}
-	first := cwecommand.HashArchiveSnapshot(snapshot)
-	second := cwecommand.HashArchiveSnapshot(snapshot)
-	third := cwecommand.HashArchiveSnapshot(changed)
+	first, err := cwecommand.HashArchiveSnapshot(snapshot)
+	if err != nil {
+		t.Fatalf("HashArchiveSnapshot returned error: %v", err)
+	}
+	second, err := cwecommand.HashArchiveSnapshot(snapshot)
+	if err != nil {
+		t.Fatalf("HashArchiveSnapshot returned error: %v", err)
+	}
+	third, err := cwecommand.HashArchiveSnapshot(changed)
+	if err != nil {
+		t.Fatalf("HashArchiveSnapshot returned error: %v", err)
+	}
 	if first != second {
 		t.Fatal("expected deterministic hash")
 	}
 	if first == third {
 		t.Fatal("expected changed snapshot to produce a different hash")
+	}
+}
+
+func TestArchiveSnapshotHashCanonicalizesJSON(t *testing.T) {
+	first := datatype.JSON(`{"did":"did:example:1","state":"APPROVED","contract_data":{"b":2,"a":1}}`)
+	second := datatype.JSON(`{
+		"contract_data": {
+			"a": 1,
+			"b": 2
+		},
+		"state": "APPROVED",
+		"did": "did:example:1"
+	}`)
+
+	firstHash, err := cwecommand.HashArchiveSnapshot(first)
+	if err != nil {
+		t.Fatalf("HashArchiveSnapshot returned error: %v", err)
+	}
+	secondHash, err := cwecommand.HashArchiveSnapshot(second)
+	if err != nil {
+		t.Fatalf("HashArchiveSnapshot returned error: %v", err)
+	}
+	if firstHash != secondHash {
+		t.Fatalf("expected canonical JSON hashes to match: %s != %s", firstHash, secondHash)
 	}
 }
 

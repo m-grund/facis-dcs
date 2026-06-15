@@ -192,7 +192,10 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	if !archiveContentHashPattern.MatchString(entry.ContentHash) {
 		return nil, fmt.Errorf("archive entry %s#%d has invalid content_hash", entry.DID, entry.ContractVersion)
 	}
-	calculatedHash := cwecommand.HashArchiveSnapshot(entry.ContractSnapshot)
+	calculatedHash, err := cwecommand.HashArchiveSnapshot(entry.ContractSnapshot)
+	if err != nil {
+		return nil, fmt.Errorf("archive entry %s#%d has invalid contract_snapshot JSON: %w", entry.DID, entry.ContractVersion, err)
+	}
 	if calculatedHash != entry.ContentHash {
 		return nil, fmt.Errorf("archive entry %s#%d content_hash mismatch", entry.DID, entry.ContractVersion)
 	}
@@ -206,7 +209,11 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	if err != nil {
 		return nil, fmt.Errorf("fetch archive snapshot from IPFS: %w", err)
 	}
-	if cwecommand.HashArchiveSnapshot(datatype.JSON(ipfsResult.Data)) != entry.ContentHash {
+	ipfsHash, err := cwecommand.HashArchiveSnapshot(datatype.JSON(ipfsResult.Data))
+	if err != nil {
+		return nil, fmt.Errorf("archive entry %s#%d has invalid IPFS snapshot JSON: %w", entry.DID, entry.ContractVersion, err)
+	}
+	if ipfsHash != entry.ContentHash {
 		return nil, fmt.Errorf("archive entry %s#%d IPFS snapshot hash mismatch", entry.DID, entry.ContractVersion)
 	}
 	if !jsonSemanticallyEqual(entry.ContractSnapshot, ipfsResult.Data) {

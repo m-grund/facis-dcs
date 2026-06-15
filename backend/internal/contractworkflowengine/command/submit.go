@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
@@ -134,6 +135,14 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approvers provided")
 		}
 
+		contractData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("could not read contract data: %w", err)
+		}
+		if err := validation.ValidateContractSemantics(contractData.ContractData); err != nil {
+			return fmt.Errorf("contract semantic validation failed: %w", err)
+		}
+
 		resp := db.Responsible{
 			Creator:     processData.CreatedBy,
 			Reviewers:   cmd.Reviewers,
@@ -144,7 +153,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			DID:         cmd.DID,
 			Responsible: &resp,
 		}
-		err := h.CRepo.Update(ctx, tx, updateData)
+		err = h.CRepo.Update(ctx, tx, updateData)
 		if err != nil {
 			return fmt.Errorf("could not update contract: %w", err)
 		}
@@ -167,7 +176,15 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid participant")
 		}
 
-		err := h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
+		contractData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("could not read contract data: %w", err)
+		}
+		if err := validation.ValidateContractSemantics(contractData.ContractData); err != nil {
+			return fmt.Errorf("contract semantic validation failed: %w", err)
+		}
+
+		err = h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
 		if err != nil {
 			return errors.New("could not reopen review tasks")
 		}

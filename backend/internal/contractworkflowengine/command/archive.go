@@ -1,10 +1,12 @@
 package command
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -27,7 +29,10 @@ func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchi
 	if err != nil {
 		return db.ContractArchiveEntry{}, err
 	}
-	contentHash := HashArchiveSnapshot(snapshotJSON)
+	contentHash, err := HashArchiveSnapshot(snapshotJSON)
+	if err != nil {
+		return db.ContractArchiveEntry{}, err
+	}
 
 	signatureMetadata, err := datatype.NewJSON(map[string]any{
 		"status":   "NOT_PERFORMED",
@@ -94,9 +99,36 @@ func buildContractSnapshot(contract *db.Contract) (datatype.JSON, error) {
 	return datatype.NewJSON(snapshot)
 }
 
-func HashArchiveSnapshot(snapshot datatype.JSON) string {
-	sum := sha256.Sum256(snapshot)
-	return "sha256:" + hex.EncodeToString(sum[:])
+func HashArchiveSnapshot(snapshot datatype.JSON) (string, error) {
+	canonicalSnapshot, err := CanonicalizeArchiveSnapshot(snapshot)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canonicalSnapshot)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func CanonicalizeArchiveSnapshot(snapshot datatype.JSON) ([]byte, error) {
+	decoder := json.NewDecoder(bytes.NewReader(snapshot))
+	decoder.UseNumber()
+
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, fmt.Errorf("decode archive snapshot JSON: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("decode archive snapshot JSON: multiple JSON values")
+		}
+		return nil, fmt.Errorf("decode archive snapshot JSON: %w", err)
+	}
+
+	canonicalSnapshot, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalize archive snapshot JSON: %w", err)
+	}
+	return canonicalSnapshot, nil
 }
 
 func formatArchiveTime(value *time.Time) any {

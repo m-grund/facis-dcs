@@ -22,6 +22,12 @@ func (s *processAuditAndCompliancesrvc) auditArchiveTrailEntries(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
+	if len(entries) == 0 {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 
 	chainReader, err := newArchiveNotaryChainReaderFromEnv()
 	if err != nil {
