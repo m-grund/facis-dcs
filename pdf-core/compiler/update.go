@@ -189,7 +189,10 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 	json.Unmarshal(newPayload, &rawNewRoot) //nolint:errcheck // already validated by NormalizePayload
 	newCtx, _ := rawNewRoot["@context"].(map[string]any)
 	newRootID, _ := rawNewRoot["@id"].(string)
-	newDoc := extractDocumentModel(newExpanded, newRootID, newCtx, newPayload, newHashHex)
+	newDoc, err := extractDocumentModel(newExpanded, newRootID, newCtx, newPayload, newHashHex)
+	if err != nil {
+		return nil, err
+	}
 
 	// Compile the new document into full page layouts and assign new object IDs
 	// beyond the current maximum so the original objects are never overwritten.

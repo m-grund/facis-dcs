@@ -21,7 +21,7 @@ func TestCompilePDF_NoOntologyHTTPFetch(t *testing.T) {
 
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "` + srv.URL + `/ontology/dcs-pdf-core#",
+			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
 			"dcs-pdf-core": "` + srv.URL + `/ontology/dcs-pdf-core#"
 		},
 		"@id": "urn:doc:no-fetch-test",
@@ -36,11 +36,11 @@ func TestCompilePDF_NoOntologyHTTPFetch(t *testing.T) {
 }
 
 // TestCompilePDF_DcsCoreIRITitleExtracted verifies that a document whose title
-// is expressed via the dcs_pdf_core:title IRI (the canonical form since
-// dcterms:title was removed) is correctly extracted and rendered.
+// is expressed via the dcs-pdf-core:title IRI is correctly extracted and rendered
+// as the document heading.
 //
 // Failure mode: if initOntologyIRI is not called or modelTitleIRIs is stale,
-// the title is invisible and the PDF falls back to the default title.
+// the title is invisible and the PDF compilation returns an error.
 func TestCompilePDF_DcsCoreIRITitleExtracted(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
@@ -56,13 +56,9 @@ func TestCompilePDF_DcsCoreIRITitleExtracted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	// Check the rendered content stream form, not just any occurrence in the PDF
-	// (the raw JSON is also embedded as an attachment and would produce a false positive).
 	if !bytes.Contains(pdf, []byte("(IRI Title Test Document) Tj")) {
-		t.Errorf("dcs_pdf_core:title must be RENDERED in the page content stream; " +
-			"model extraction must use IRI-based lookup, not verbatim JSON key matching.\n" +
-			"Default title still present: %v",
-			bytes.Contains(pdf, []byte("(Deterministic Semantic Ledger) Tj")))
+		t.Errorf("dcs-pdf-core:title must be RENDERED in the page content stream; " +
+			"model extraction must use IRI-based lookup, not verbatim JSON key matching.")
 	}
 }
 
@@ -94,6 +90,45 @@ func TestCompilePDF_PrefixedTermsExtracted(t *testing.T) {
 	}
 }
 
+// TestCompilePDF_TitleFieldRendered verifies that the document "title"
+// field (dcsCoreIRI + "title") is used as the PDF heading.
+func TestCompilePDF_TitleFieldRendered(t *testing.T) {
+	payload := []byte(`{
+		"@context": {
+			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+		},
+		"@id": "urn:doc:title-test",
+		"title": "My Contract Template",
+		"sections": [{"heading": "1. Terms", "clauses": ["A clause."]}]
+	}`)
+
+	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	if err != nil {
+		t.Fatalf("CompilePDF: %v", err)
+	}
+	if !bytes.Contains(pdf, []byte("(My Contract Template) Tj")) {
+		t.Errorf("dcs-pdf-core:title must be rendered as the document heading")
+	}
+}
+
+// TestCompilePDF_MissingTitleReturnsError verifies that CompilePDF returns an
+// error when the payload contains no dcs-pdf-core:title. The title IRI is
+// mandatory; a missing title is a malformed document, not a fallback situation.
+func TestCompilePDF_MissingTitleReturnsError(t *testing.T) {
+	payload := []byte(`{
+		"@context": {
+			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+		},
+		"@id": "urn:doc:no-title-test",
+		"sections": [{"heading": "1. Terms", "clauses": ["A clause."]}]
+	}`)
+
+	_, err := CompilePDF(context.Background(), payload, time.Now())
+	if err == nil {
+		t.Error("CompilePDF must return an error when dcs-pdf-core:title is absent")
+	}
+}
+
 // TestCompilePDF_NonStablePrefixRenderedCompact verifies that ontology-link terms
 // from a namespace that is NOT in the internal stable context (e.g. odrl) are still
 // rendered with their compact prefix form in the PDF body text when the service
@@ -111,6 +146,7 @@ func TestCompilePDF_NonStablePrefixRenderedCompact(t *testing.T) {
 			"odrl": "http://www.w3.org/ns/odrl/2/"
 		},
 		"@id": "urn:doc:odrl-compact-test",
+		"title": "ODRL Compact Test",
 		"sections": [{"heading": "1. Test", "clauses": [{"content": [
 			"Subject to the applicable ",
 			{"@id": "odrl:Policy"},

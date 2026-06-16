@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -107,8 +108,6 @@ func TestFetchFileUsesKuboWhenTenantBaseURLIsEmpty(t *testing.T) {
 	}
 }
 
-// TestFetchKuboFile_DecodesBase64WrapPayload verifies that binary data stored
-// via base64Wrap (a JSON-quoted base64 string) is correctly decoded on fetch.
 func TestFetchKuboFile_DecodesBase64WrapPayload(t *testing.T) {
 	payload := []byte("%PDF-1.3\nhello pdf content")
 	encoded := base64.StdEncoding.EncodeToString(payload)
@@ -130,6 +129,45 @@ func TestFetchKuboFile_DecodesBase64WrapPayload(t *testing.T) {
 	}
 	if string(result.Data) != string(payload) {
 		t.Fatalf("expected decoded binary payload, got %q", result.Data[:min(20, len(result.Data))])
+	}
+}
+
+func TestCreateFetchFileTenantAPI_BinaryRoundTrip(t *testing.T) {
+	payload := []byte("%PDF-1.3\nbinary pdf content here")
+
+	var storedBytes []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/ipfs/create":
+			body, _ := io.ReadAll(r.Body)
+			storedBytes = body
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":"tenant-cid"},"data":null}`)
+		case "/api/ipfs/tenant-cid":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":"tenant-cid"},"data":%q}`,
+				base64.StdEncoding.EncodeToString(storedBytes))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "")
+	if _, err := client.CreateFile(context.Background(), payload); err != nil {
+		t.Fatalf("CreateFile returned error: %v", err)
+	}
+
+	result, err := client.FetchFile("tenant-cid")
+	if err != nil {
+		t.Fatalf("FetchFile returned error: %v", err)
+	}
+
+	if string(result.Data) != string(payload) {
+		t.Fatalf("expected decoded binary payload %q, got %q",
+			payload[:min(20, len(payload))],
+			result.Data[:min(20, len(result.Data))],
+		)
 	}
 }
 

@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -13,9 +14,8 @@ import (
 // IRI-based: dcterms:title, dcs-pdf-core:sections, and schema:name are all
 // resolved to their full IRIs before extraction, so the compiler is not
 // sensitive to the compact key spellings in the submitted payload.
-func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, canonical []byte, hashHex string) documentModel {
+func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, canonical []byte, hashHex string) (documentModel, error) {
 	model := documentModel{
-		Title:           "Deterministic Semantic Ledger",
 		Sections:        []sectionData{},
 		SignatureFields: []sigFieldDef{},
 		Glossary:        []glossaryTerm{},
@@ -34,17 +34,19 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	}
 
 	if len(expanded) == 0 {
-		return model
+		return model, fmt.Errorf("dcs-pdf-core:title is required but the payload expanded to an empty graph")
 	}
 	root, ok := findExpandedRootNode(expanded, rootID)
 	if !ok {
-		return model
+		return model, fmt.Errorf("dcs-pdf-core:title is required but no root node was found in the payload")
 	}
 
-	// Title — only disambiguated title IRIs are considered.
-	if t := ldFirstString(root, modelTitleIRIs...); t != "" {
-		model.Title = t
+	// Title — only disambiguated title IRIs are considered. Missing title is an error.
+	t := ldFirstString(root, modelTitleIRIs...)
+	if t == "" {
+		return model, fmt.Errorf("dcs-pdf-core:title is required but was not found in the payload")
 	}
+	model.Title = t
 
 	for _, item := range ldGetAny(root, modelSectionsIRIs...) {
 		node, ok := item.(map[string]any)
@@ -129,7 +131,7 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	}
 	collectSectionRefs(model.Sections)
 
-	return model
+	return model, nil
 }
 
 func findExpandedRootNode(expanded []any, rootID string) (map[string]any, bool) {

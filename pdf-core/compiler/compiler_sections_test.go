@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mustExtractFromPayload runs a raw JSON-LD payload through NormalizePayload
@@ -25,7 +26,11 @@ func mustExtractFromPayload(t *testing.T, payload []byte) documentModel {
 	}
 	rawCtx, _ := rawRoot["@context"].(map[string]any)
 	rootID, _ := rawRoot["@id"].(string)
-	return extractDocumentModel(expanded, rootID, rawCtx, payload, strings.Repeat("0", 64))
+	doc, err := extractDocumentModel(expanded, rootID, rawCtx, payload, strings.Repeat("0", 64))
+	if err != nil {
+		t.Fatalf("extractDocumentModel: %v", err)
+	}
+	return doc
 }
 
 // sectionDoc builds a documentModel with sections for testing.
@@ -146,11 +151,10 @@ func TestLargePDFSpansMultiplePages(t *testing.T) {
 func TestExtractDocumentModelParsesSectionsFormat(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-			"dcterms": "http://purl.org/dc/terms/"
+			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
 		},
 		"@id": "urn:doc:sections-format-test",
-		"dcterms:title": "Contract",
+		"title": "Contract",
 		"sections": [
 			{"heading": "1. Parties", "clauses": ["Plain prose clause."]},
 			{"heading": "2. Terms", "clauses": [{"content": ["Structured content."]}]}
@@ -185,6 +189,7 @@ func TestExtractDocumentModelParsesAtIdContentItem(t *testing.T) {
 			"schema": "https://schema.org/"
 		},
 		"@id": "urn:doc:content-id-test",
+		"title": "Content ID Test",
 		"sections": [{"heading": "1. Section", "clauses": [{"content": [
 			"prefix text ",
 			{"@id": "prov:Entity", "schema:name": "entity"},
@@ -217,6 +222,7 @@ func TestExtractDocumentModelParsesSchemaUrlContentItem(t *testing.T) {
 			"schema": "https://schema.org/"
 		},
 		"@id": "urn:doc:url-test",
+		"title": "URL Test",
 		"sections": [{"heading": "1. Section", "clauses": [{"content": [
 			{"schema:url": "https://example.com", "schema:name": "Example Site"}
 		]}]}]
@@ -246,6 +252,7 @@ func TestExtractDocumentModelParsesAtValueContentItem(t *testing.T) {
 			"xsd": "http://www.w3.org/2001/XMLSchema#"
 		},
 		"@id": "urn:doc:value-test",
+		"title": "Value Test",
 		"sections": [{"heading": "1. Section", "clauses": [{"content": [
 			{"@value": "500", "@type": "xsd:decimal"}
 		]}]}]
@@ -268,6 +275,7 @@ func TestExtractDocumentModelParsesAtValueContentItem(t *testing.T) {
 // TestExtractDocumentModelIgnoresUnknownNamespaceTitle verifies that a
 // property whose local name is "title" in an unrelated namespace does not
 // drive the rendered document title. Only disambiguated title IRIs are valid.
+// Because no dcs-pdf-core title is present, CompilePDF must return an error.
 func TestExtractDocumentModelIgnoresUnknownNamespaceTitle(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
@@ -279,9 +287,9 @@ func TestExtractDocumentModelIgnoresUnknownNamespaceTitle(t *testing.T) {
 		"sections": [{"heading": "1. Terms", "clauses": ["A clause."]}]
 	}`)
 
-	model := mustExtractFromPayload(t, payload)
-	if model.Title != "Deterministic Semantic Ledger" {
-		t.Fatalf("unknown namespace title must be ignored; got %q", model.Title)
+	_, err := CompilePDF(context.Background(), payload, time.Now())
+	if err == nil {
+		t.Fatal("CompilePDF must return an error when no dcs-pdf-core title is present (evil:title must be ignored)")
 	}
 }
 
@@ -295,6 +303,7 @@ func TestExtractDocumentModelIgnoresUnknownNamespaceSections(t *testing.T) {
 			"evil": "https://example.com/evil#"
 		},
 		"@id": "urn:doc:unknown-sections-ns",
+		"title": "Unknown Sections NS Test",
 		"evil:sections": [{"evil:heading": "Wrong Heading", "evil:clauses": ["Wrong clause."]}],
 		"sections": [{"heading": "Correct Heading", "clauses": ["Correct clause."]}]
 	}`)
@@ -317,6 +326,7 @@ func TestSignatureFieldSchemaName(t *testing.T) {
 			"schema": "https://schema.org/"
 		},
 		"@id": "urn:doc:sig-schema-name-test",
+		"title": "Sig Schema Name Test",
 		"signatureFields": [{"schema:name": "SignerOne"}]
 	}`)
 	model := mustExtractFromPayload(t, payload)
@@ -335,6 +345,7 @@ func TestTopLevelClausesCreateUnnamedSection(t *testing.T) {
 	payload := []byte(`{
 		"@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
 		"@id": "urn:doc:top-clauses-test",
+		"title": "Top Clauses Test",
 		"clauses": ["First clause.", "Second clause."]
 	}`)
 	model := mustExtractFromPayload(t, payload)
@@ -783,6 +794,7 @@ func TestOntologyLinkWithoutSchemaNameUsesCompactedIRI(t *testing.T) {
 			"prov": "http://www.w3.org/ns/prov#"
 		},
 		"@id": "urn:doc:compact-iri-test",
+		"title": "Compact IRI Test",
 		"sections": [{"heading": "1. Test", "clauses": [{"content": [
 			"A term: ",
 			{"@id": "prov:Entity"}
@@ -818,6 +830,7 @@ func TestGlossaryAnnotationCreatedForBodyTextTerm(t *testing.T) {
 			"prov": "http://www.w3.org/ns/prov#"
 		},
 		"@id": "urn:doc:glossary-link-test",
+		"title": "Glossary Link Test",
 		"sections": [{"heading": "1. Test", "clauses": [{"content": [
 			"A term: ",
 			{"@id": "prov:Entity"},

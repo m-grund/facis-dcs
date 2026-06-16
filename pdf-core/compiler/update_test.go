@@ -8,14 +8,14 @@ import (
 )
 
 const minimalPayloadBase = `{
-  "@context": {"@vocab": "http://example.com/update-test/"},
+  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
   "@id": "urn:doc:update-test",
   "title": "Update Test",
   "clauses": ["Original clause text."]
 }`
 
 const minimalPayloadAmended = `{
-  "@context": {"@vocab": "http://example.com/update-test/"},
+  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
   "@id": "urn:doc:update-test",
   "title": "Update Test",
   "clauses": ["Original clause text.", "Newly added clause text."]
@@ -64,13 +64,13 @@ func TestUpdatePDFProducesIncrementalReplace(t *testing.T) {
 // (for provenance) while the incremental section contains only the new text.
 func TestUpdatePDFModifiedClause(t *testing.T) {
 	base := []byte(`{
-  "@context": {"@vocab": "http://example.com/update-test/"},
+  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
   "@id": "urn:doc:mod-test",
   "title": "Mod Test",
   "clauses": ["The original wording of clause one."]
 }`)
 	modified := []byte(`{
-  "@context": {"@vocab": "http://example.com/update-test/"},
+  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
   "@id": "urn:doc:mod-test",
   "title": "Mod Test",
   "clauses": ["The revised wording of clause one."]
@@ -152,21 +152,19 @@ func TestUpdatePDFIdenticalPayloadIsRejected(t *testing.T) {
 func TestUpdatePDFPreservesSigFieldWidgets(t *testing.T) {
 	basePayload := []byte(`{
 	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcterms": "http://purl.org/dc/terms/"
+		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
 	},
   "@id": "urn:doc:sig-field-test",
-	"dcterms:title": "Sig Field Update Test",
+	"title": "Sig Field Update Test",
   "signatureFields": [{"name": "Signer1"}],
   "clauses": ["Original text."]
 }`)
 	amendedPayload := []byte(`{
 	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcterms": "http://purl.org/dc/terms/"
+		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
 	},
   "@id": "urn:doc:sig-field-test",
-	"dcterms:title": "Sig Field Update Test",
+	"title": "Sig Field Update Test",
   "signatureFields": [{"name": "Signer1"}],
   "clauses": ["Amended text."]
 }`)

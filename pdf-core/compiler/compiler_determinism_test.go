@@ -14,12 +14,11 @@ import (
 const referencePayload = `{
 	"@context": {
 		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcterms": "http://purl.org/dc/terms/"
+		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
 	},
 	"@id": "urn:doc:determinism-ref",
 	"@type": "dcs-pdf-core:Document",
-	"dcterms:title": "Determinism Reference Document",
+	"title": "Determinism Reference Document",
 	"sections": [
 		{
 			"@type": "dcs-pdf-core:Section",

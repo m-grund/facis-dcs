@@ -61,16 +61,10 @@ fi
 mv "$tmp_cert_file" "$CERT_FILE"
 echo "✓ Cert-chain ready at $CERT_FILE"
 
-# Build and start pdf-core locally (not deployed in K8s in dev mode).
-echo ""
-echo "=== Building and starting pdf-core ==="
-(cd "$PDF_CORE_DIR" && go build -o pdf-core .)
-echo "✓ pdf-core built"
-
 # Copy .dev.env → .env so pdf-core main.go picks it up at startup.
 cp "$PDF_CORE_DEV_ENV" "$PDF_CORE_ENV"
 
-(cd "$PDF_CORE_DIR" && ./pdf-core) &> /tmp/pdf-core-live.log &
+(cd "$PDF_CORE_DIR" && air) &> /tmp/pdf-core-live.log &
 PDF_CORE_PID=$!
 echo "✓ pdf-core started (PID $PDF_CORE_PID) — log: /tmp/pdf-core-live.log"
 
@@ -101,8 +95,10 @@ sleep 2
 echo ""
 echo "=== Starting backend (air) ==="
 cd backend
-air &> /tmp/backend-live.log
+air &> /tmp/backend-live.log &
+BACKEND_PID=$!
 
 # Cleanup on exit
 wait $VITE_PID 2>/dev/null || true
 wait $PDF_CORE_PID 2>/dev/null || true
+wait $BACKEND_PID 2>/dev/null || true

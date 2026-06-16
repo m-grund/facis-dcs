@@ -8,7 +8,7 @@ import (
 
 // claimBase is a self-contained JSON-LD payload used across claim tests.
 const claimBase = `{
-  "@context": {"@vocab": "http://example.com/claim-test/"},
+  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
   "@id": "urn:doc:claim-test",
   "title": "Claim Test",
   "clauses": ["Original clause for claim verification."]
@@ -16,7 +16,7 @@ const claimBase = `{
 
 // claimAlternate has different clause text so MatchPageContent must reject it.
 const claimAlternate = `{
-  "@context": {"@vocab": "http://example.com/claim-test/"},
+  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
   "@id": "urn:doc:claim-test",
   "title": "Claim Test",
   "clauses": ["Completely different content that renders differently."]

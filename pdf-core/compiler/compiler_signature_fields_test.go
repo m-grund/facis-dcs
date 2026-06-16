@@ -77,6 +77,7 @@ func TestExtractDocumentModelParsesSignatureFields(t *testing.T) {
 			"schema": "https://schema.org/"
 		},
 		"@id": "urn:doc:sig-fields-test",
+		"title": "Sig Fields Test",
 		"signatureFields": [
 			{"schema:name": "SignerOne", "label": "Primary Signer"},
 			{"name": "SignerTwo"},

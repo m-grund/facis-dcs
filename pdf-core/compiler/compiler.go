@@ -37,7 +37,10 @@ func CompilePDF(ctx context.Context, payload []byte, compiledAt time.Time) ([]by
 	rawCtx, _ := rawRoot["@context"].(map[string]any)
 	rootID, _ := rawRoot["@id"].(string)
 
-	doc := extractDocumentModel(expanded, rootID, rawCtx, payload, hashHex)
+	doc, err := extractDocumentModel(expanded, rootID, rawCtx, payload, hashHex)
+	if err != nil {
+		return nil, err
+	}
 	doc.CompiledAt = compiledAt
 	return renderPDF(ctx, doc)
 }

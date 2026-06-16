@@ -48,8 +48,13 @@ func (c *APIClient) CreateFile(ctx context.Context, data any) (*IPFSResult, erro
 		return c.createKuboFile(ctx, jsonData)
 	}
 
+	body := jsonData
+	if raw, ok := data.([]byte); ok {
+		body = raw
+	}
+
 	url := c.baseURL + "/api/ipfs/create"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -263,10 +268,6 @@ func (c *APIClient) fetchKuboFile(cid string) (*IPFSResult, error) {
 		return nil, fmt.Errorf("read Kubo cat response: %w", err)
 	}
 
-	// Content written by createKuboFile is JSON-marshalled.
-	// If the stored value is a JSON string it was produced by base64Wrap (binary
-	// data); unmarshal and decode to recover the original bytes.
-	// Any other JSON type (object, array, …) is returned verbatim.
 	var dataStr string
 	var resultData []byte
 	if json.Unmarshal(body, &dataStr) == nil {
