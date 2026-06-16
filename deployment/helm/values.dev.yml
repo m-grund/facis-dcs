@@ -188,10 +188,6 @@ cryptoProvider:
 # XFSC Status List Service (DCS-OR-C2PA-005)
 statuslistService:
   enabled: true
-  image:
-    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
-    tag: "main"
-    pullPolicy: IfNotPresent
   service:
     type: NodePort
     port: 8080
