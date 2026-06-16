@@ -183,16 +183,23 @@ function syncDraftFromOperators(operators: readonly SemanticParameterOperator[])
   const targets = operator?.targets ?? []
   if (isSetOperator(draftOperator.value)) {
     draftTarget.value = ''
-    draftSetTargets.value = targets.map((target) => String(target))
+    draftSetTargets.value = targets.map((target) => formatOperatorTarget(target))
     draftTokenTargets.value = draftSetTargets.value.join(', ')
   } else {
-    draftTarget.value = targets[0] === undefined ? '' : String(targets[0])
+    draftTarget.value = formatOperatorTarget(targets[0])
     clearSetConstraintTargets()
   }
   valueOptionSearch.value = ''
   void nextTick(() => {
     isSyncingFromProps = false
   })
+}
+
+function formatOperatorTarget(target: unknown): string {
+  if (target === undefined || target === null) return ''
+  if (typeof target === 'string') return target
+  if (typeof target === 'number' || typeof target === 'boolean' || typeof target === 'bigint') return String(target)
+  return JSON.stringify(target) ?? ''
 }
 
 function emitOperators() {

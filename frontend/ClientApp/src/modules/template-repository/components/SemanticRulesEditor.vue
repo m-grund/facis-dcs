@@ -188,17 +188,11 @@ interface RequirementItem {
   subTemplateRef?: SubTemplateReference
 }
 
-type RequirementActionId =
-  | 'contract-party'
-  | 'payment-term'
-  | 'jurisdiction'
-  | 'sla-objective'
-  | 'signature-requirement'
-
 interface RequirementAction {
-  id: RequirementActionId
+  id: string
   label: string
   roleRequired: boolean
+  order: number
   domainType?: OntologyDomainType
   entityType?: string
   fields: readonly DomainFieldDefinition[]
@@ -207,7 +201,7 @@ interface RequirementAction {
 interface RequirementDraft {
   action: RequirementAction
   name: string
-  role: SemanticEntityRole | ''
+  role: SemanticEntityRole
   parameters: SemanticConditionParameter[]
   parameterValidity: Record<string, boolean>
 }
@@ -284,7 +278,7 @@ function cancelRequirementDraft() {
 
 function syncDraftNameWithRole() {
   const draft = requirementDraft.value
-  if (!draft || !draft.action.roleRequired) return
+  if (!draft?.action.roleRequired) return
   draft.name = defaultRequirementName(draft.action, draft.role)
 }
 
@@ -361,52 +355,43 @@ function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticVal
 }
 
 function buildRequirementActions(): RequirementAction[] {
-  return [
-    buildContractPartyAction(),
-    buildGroupedFieldAction('payment-term', 'Payment term', isPaymentTermField),
-    buildGroupedFieldAction('jurisdiction', 'Jurisdiction', (field) => field.semanticPath === 'contract.jurisdiction'),
-    buildGroupedFieldAction('sla-objective', 'SLA objective', isSlaObjectiveField),
-    buildGroupedFieldAction('signature-requirement', 'Signature requirement', isSignatureRequirementField),
-  ].filter((action): action is RequirementAction => !!action && !!action.fields.length)
+  return [buildContractPartyAction(), ...buildOntologyGroupedFieldActions()]
+    .filter((action): action is RequirementAction => !!action && !!action.fields.length)
+    .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label))
 }
 
 function buildContractPartyAction(): RequirementAction | undefined {
   if (!companyDomainType) return undefined
   return {
-    id: 'contract-party',
-    label: 'Contract party',
+    id: `domain-type:${companyDomainType.id}`,
+    label: companyDomainType.label,
     roleRequired: true,
+    order: 10,
     domainType: companyDomainType,
     entityType: companyDomainType.entityType,
     fields: companyDomainType.fields,
   }
 }
 
-function buildGroupedFieldAction(
-  id: RequirementActionId,
-  label: string,
-  predicate: (field: DomainFieldDefinition) => boolean,
-): RequirementAction | undefined {
-  const fields = ONTOLOGY_DOMAIN_FIELDS.filter(predicate).sort((left, right) => left.label.localeCompare(right.label))
-  if (!fields.length) return undefined
-  return {
-    id,
-    label,
-    roleRequired: false,
-    fields,
+function buildOntologyGroupedFieldActions(): RequirementAction[] {
+  const groups = new Map<string, DomainFieldDefinition[]>()
+  for (const field of ONTOLOGY_DOMAIN_FIELDS) {
+    if (!field.requirementGroupId) continue
+    const fields = groups.get(field.requirementGroupId) ?? []
+    fields.push(field)
+    groups.set(field.requirementGroupId, fields)
   }
-}
 
-function isPaymentTermField(field: DomainFieldDefinition) {
-  return localOntologyName(field.statementType ?? '') === 'PaymentTerm' || field.semanticPath.startsWith('contract.payment.')
-}
-
-function isSlaObjectiveField(field: DomainFieldDefinition) {
-  return localOntologyName(field.statementType ?? '') === 'SLO' || field.semanticPath.startsWith('service.sla.')
-}
-
-function isSignatureRequirementField(field: DomainFieldDefinition) {
-  return field.semanticPath.startsWith('signature.')
+  return [...groups.entries()].map(([id, fields]) => {
+    const sortedFields = [...fields].sort((left, right) => left.label.localeCompare(right.label))
+    return {
+      id,
+      label: firstRequirementGroupLabel(sortedFields),
+      roleRequired: false,
+      order: firstRequirementGroupOrder(sortedFields),
+      fields: sortedFields,
+    }
+  })
 }
 
 function actionSummary(action: RequirementAction) {
@@ -415,16 +400,20 @@ function actionSummary(action: RequirementAction) {
   return `${action.fields.length} fields`
 }
 
-function defaultRequirementName(action: RequirementAction, role: SemanticEntityRole | '') {
+function defaultRequirementName(action: RequirementAction, role: SemanticEntityRole) {
   if (action.roleRequired) {
     const roleLabel = role ? roleLabelFor(role) : ''
-    return roleLabel ? `${roleLabel} Company` : 'Company'
+    return roleLabel ? `${roleLabel} ${action.label}` : action.label
   }
   return action.label
 }
 
-function localOntologyName(resource: string) {
-  return resource.replace(/^.*[:#/]/, '')
+function firstRequirementGroupLabel(fields: readonly DomainFieldDefinition[]) {
+  return fields.find((field) => field.requirementGroupLabel)?.requirementGroupLabel ?? fields[0]?.group ?? 'Requirement'
+}
+
+function firstRequirementGroupOrder(fields: readonly DomainFieldDefinition[]) {
+  return fields.find((field) => field.requirementGroupOrder !== undefined)?.requirementGroupOrder ?? 100
 }
 
 function formatValueConstraint(constraint: SemanticValueConstraint) {

@@ -54,6 +54,9 @@ export function parseOntologyDomainFields(source: string): DomainFieldDefinition
         type,
         label,
         group: inferDomainFieldGroup(semanticPath),
+        requirementGroupId: firstLiteral(statement.text, 'dcs:requirementGroupId') || undefined,
+        requirementGroupLabel: firstLiteral(statement.text, 'dcs:requirementGroupLabel') || undefined,
+        requirementGroupOrder: firstNumber(statement.text, 'dcs:requirementGroupOrder'),
         statementType: firstResource(statement.text, 'dcs:statementType') || undefined,
         valueConstraint: valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined,
       }

@@ -10,7 +10,7 @@ export function resolveValueOptions(constraint?: SemanticValueConstraint): reado
     const option = optionsByValue.get(value)
     return {
       value,
-      label: option?.label || value,
+      label: option?.label ?? value,
       symbol: option?.symbol,
     }
   })

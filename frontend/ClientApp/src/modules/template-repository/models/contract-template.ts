@@ -134,6 +134,9 @@ export interface DomainFieldDefinition {
   type: SemanticParameterType
   label: string
   group: string
+  requirementGroupId?: string
+  requirementGroupLabel?: string
+  requirementGroupOrder?: number
   statementType?: string
   valueConstraint?: SemanticValueConstraint
 }
