@@ -703,6 +703,12 @@ dcs:BlockCatalogueEntry a rdfs:Class ;
 dcs:PaymentTerm a rdfs:Class ;
   rdfs:label "Payment Term"@en .
 
+dcs:LegalTerms a rdfs:Class ;
+  rdfs:label "Legal Terms"@en .
+
+dcs:SignatureRequirement a rdfs:Class ;
+  rdfs:label "Signature Requirement"@en .
+
 dcs:LiabilityTerms a rdfs:Class ;
   rdfs:label "Liability Terms"@en .
 
@@ -785,24 +791,6 @@ dcs:statementValuePrefix a rdf:Property ;
   rdfs:label "Contract Statement Value Prefix"@en ;
   rdfs:comment "Optional resource prefix used to normalize compact controlled-vocabulary values for statement output."@en ;
   rdfs:domain dcs:DomainField .
-
-dcs:requirementGroupId a rdf:Property ;
-  rdfs:label "Requirement Group ID"@en ;
-  rdfs:comment "Stable UI group identifier used to derive template-builder data requirement actions from ontology domain fields."@en ;
-  rdfs:domain dcs:DomainField ;
-  rdfs:range xsd:string .
-
-dcs:requirementGroupLabel a rdf:Property ;
-  rdfs:label "Requirement Group Label"@en ;
-  rdfs:comment "Human-readable template-builder data requirement action label."@en ;
-  rdfs:domain dcs:DomainField ;
-  rdfs:range xsd:string .
-
-dcs:requirementGroupOrder a rdf:Property ;
-  rdfs:label "Requirement Group Order"@en ;
-  rdfs:comment "Sort key for ontology-derived template-builder data requirement actions."@en ;
-  rdfs:domain dcs:DomainField ;
-  rdfs:range xsd:integer .
 
 dcs:documentProperty a rdf:Property ;
   rdfs:label "Document Property"@en ;
@@ -1583,60 +1571,70 @@ dcst:field-company-legalName a dcs:DomainField ;
 
 dcst:field-company-registrationNumber a dcs:DomainField ;
   dcs:semanticPath "company.registrationNumber" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Registration Number"@en .
 
 dcst:field-company-vatId a dcs:DomainField ;
   dcs:semanticPath "company.vatId" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company VAT ID"@en .
 
 dcst:field-company-representative-name a dcs:DomainField ;
   dcs:semanticPath "company.representative.name" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Representative Name"@en .
 
 dcst:field-company-representative-role a dcs:DomainField ;
   dcs:semanticPath "company.representative.role" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Representative Role"@en .
 
 dcst:field-company-contact-email a dcs:DomainField ;
   dcs:semanticPath "company.contact.email" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Contact Email"@en .
 
 dcst:field-company-contact-phone a dcs:DomainField ;
   dcs:semanticPath "company.contact.phone" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Contact Phone"@en .
 
 dcst:field-company-location-street a dcs:DomainField ;
   dcs:semanticPath "company.location.street" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Street"@en .
 
 dcst:field-company-location-postalCode a dcs:DomainField ;
   dcs:semanticPath "company.location.postalCode" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Postal Code"@en .
 
 dcst:field-company-location-city a dcs:DomainField ;
   dcs:semanticPath "company.location.city" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company City"@en .
 
 dcst:field-company-location-region a dcs:DomainField ;
   dcs:semanticPath "company.location.region" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Region"@en .
@@ -1667,31 +1665,25 @@ dcst:field-contract-title a dcs:DomainField ;
 dcst:field-contract-jurisdiction a dcs:DomainField ;
   dcs:semanticPath "contract.jurisdiction" ;
   dcs:statementField "contract.jurisdiction" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "legal-terms" ;
-  dcs:requirementGroupLabel "Legal Terms"@en ;
-  dcs:requirementGroupOrder 30 ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
   rdfs:label "Contract Jurisdiction"@en .
 
 dcst:field-contract-governingLaw a dcs:DomainField ;
   dcs:semanticPath "contract.governingLaw" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "legal-terms" ;
-  dcs:requirementGroupLabel "Legal Terms"@en ;
-  dcs:requirementGroupOrder 30 ;
   dcs:hasValueConstraint dcst:constraint-governing-law ;
   rdfs:label "Governing Law"@en .
 
 dcst:field-contract-disputeResolution-venue a dcs:DomainField ;
   dcs:semanticPath "contract.disputeResolution.venue" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "legal-terms" ;
-  dcs:requirementGroupLabel "Legal Terms"@en ;
-  dcs:requirementGroupOrder 30 ;
   rdfs:label "Dispute Venue"@en .
 
 dcst:field-contract-validity-startDate a dcs:DomainField ;
@@ -1734,9 +1726,6 @@ dcst:field-contract-payment-amount a dcs:DomainField ;
   dcs:statementId "payment-main" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "decimal" ;
-  dcs:requirementGroupId "payment-term" ;
-  dcs:requirementGroupLabel "Payment Term"@en ;
-  dcs:requirementGroupOrder 20 ;
   rdfs:label "Payment Amount"@en .
 
 dcst:field-contract-payment-currency a dcs:DomainField ;
@@ -1746,9 +1735,6 @@ dcst:field-contract-payment-currency a dcs:DomainField ;
   dcs:statementId "payment-main" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "payment-term" ;
-  dcs:requirementGroupLabel "Payment Term"@en ;
-  dcs:requirementGroupOrder 20 ;
   dcs:hasValueConstraint dcst:constraint-iso4217-currency ;
   rdfs:label "Payment Currency"@en .
 
@@ -1759,18 +1745,13 @@ dcst:field-contract-payment-dueDate a dcs:DomainField ;
   dcs:statementId "payment-main" ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "date" ;
-  dcs:requirementGroupId "payment-term" ;
-  dcs:requirementGroupLabel "Payment Term"@en ;
-  dcs:requirementGroupOrder 20 ;
   rdfs:label "Payment Due Date"@en .
 
 dcst:field-contract-payment-dueDays a dcs:DomainField ;
   dcs:semanticPath "contract.payment.dueDays" ;
+  dcs:statementType dcs:PaymentTerm ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "integer" ;
-  dcs:requirementGroupId "payment-term" ;
-  dcs:requirementGroupLabel "Payment Term"@en ;
-  dcs:requirementGroupOrder 20 ;
   rdfs:label "Payment Due Days"@en .
 
 dcst:field-contract-liability-capAmount a dcs:DomainField ;
@@ -1806,11 +1787,9 @@ dcst:field-contract-dataProtection-role a dcs:DomainField ;
 
 dcst:field-contract-disputeResolution-method a dcs:DomainField ;
   dcs:semanticPath "contract.disputeResolution.method" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "legal-terms" ;
-  dcs:requirementGroupLabel "Legal Terms"@en ;
-  dcs:requirementGroupOrder 30 ;
   dcs:hasValueConstraint dcst:constraint-dispute-method ;
   rdfs:label "Dispute Resolution Method"@en .
 
@@ -1865,69 +1844,54 @@ dcst:field-service-sla-availability a dcs:DomainField ;
   dcs:statementId "slo-availability" ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "decimal" ;
-  dcs:requirementGroupId "sla-objective" ;
-  dcs:requirementGroupLabel "SLA Objective"@en ;
-  dcs:requirementGroupOrder 40 ;
   dcs:hasValueConstraint dcst:constraint-sla-availability-percent ;
   rdfs:label "SLA Availability"@en .
 
 dcst:field-service-sla-responseTime a dcs:DomainField ;
   dcs:semanticPath "service.sla.responseTime" ;
+  dcs:statementType dcs:SLO ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "integer" ;
-  dcs:requirementGroupId "sla-objective" ;
-  dcs:requirementGroupLabel "SLA Objective"@en ;
-  dcs:requirementGroupOrder 40 ;
   dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative ;
   rdfs:label "SLA Response Time"@en .
 
 dcst:field-service-sla-resolutionTime a dcs:DomainField ;
   dcs:semanticPath "service.sla.resolutionTime" ;
+  dcs:statementType dcs:SLO ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "integer" ;
-  dcs:requirementGroupId "sla-objective" ;
-  dcs:requirementGroupLabel "SLA Objective"@en ;
-  dcs:requirementGroupOrder 40 ;
   dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative ;
   rdfs:label "SLA Resolution Time"@en .
 
 dcst:field-service-sla-supportHours a dcs:DomainField ;
   dcs:semanticPath "service.sla.supportHours" ;
+  dcs:statementType dcs:SLO ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "sla-objective" ;
-  dcs:requirementGroupLabel "SLA Objective"@en ;
-  dcs:requirementGroupOrder 40 ;
   rdfs:label "Support Hours"@en .
 
 dcst:field-signature-requiredLevel a dcs:DomainField ;
   dcs:semanticPath "signature.requiredLevel" ;
   dcs:statementField "signature.requiredLevel" ;
+  dcs:statementType dcs:SignatureRequirement ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "signature-requirement" ;
-  dcs:requirementGroupLabel "Signature Requirement"@en ;
-  dcs:requirementGroupOrder 50 ;
   dcs:hasValueConstraint dcst:constraint-eidas-signature-level ;
   rdfs:label "Required Signature Level"@en .
 
 dcst:field-signature-requiredSignerRole a dcs:DomainField ;
   dcs:semanticPath "signature.requiredSignerRole" ;
   dcs:statementField "signature.requiredSignerRole" ;
+  dcs:statementType dcs:SignatureRequirement ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
-  dcs:requirementGroupId "signature-requirement" ;
-  dcs:requirementGroupLabel "Signature Requirement"@en ;
-  dcs:requirementGroupOrder 50 ;
   rdfs:label "Required Signer Role"@en .
 
 dcst:field-signature-deadline a dcs:DomainField ;
   dcs:semanticPath "signature.deadline" ;
+  dcs:statementType dcs:SignatureRequirement ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "date" ;
-  dcs:requirementGroupId "signature-requirement" ;
-  dcs:requirementGroupLabel "Signature Requirement"@en ;
-  dcs:requirementGroupOrder 50 ;
   rdfs:label "Signature Deadline"@en .
 
 dcst:block-document-section a dcs:BlockCatalogueEntry ;

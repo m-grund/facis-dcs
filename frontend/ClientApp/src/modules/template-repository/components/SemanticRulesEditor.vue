@@ -212,7 +212,6 @@ const { semanticConditions: mainSemanticConditions, documentBlocks, subTemplateS
 
 const roleOptions = ontologyRoleOptions
 const requirementDraft = ref<RequirementDraft | null>(null)
-const companyDomainType = ONTOLOGY_DOMAIN_TYPES.find((type) => type.roleRequired)
 const requirementActions = buildRequirementActions()
 const canAddRequirementDraft = computed(() => {
   const draft = requirementDraft.value
@@ -355,43 +354,52 @@ function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticVal
 }
 
 function buildRequirementActions(): RequirementAction[] {
-  return [buildContractPartyAction(), ...buildOntologyGroupedFieldActions()]
+  return [...buildOntologyDomainTypeActions(), ...buildOntologyGroupedFieldActions()]
     .filter((action): action is RequirementAction => !!action && !!action.fields.length)
     .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label))
 }
 
-function buildContractPartyAction(): RequirementAction | undefined {
-  if (!companyDomainType) return undefined
-  return {
-    id: `domain-type:${companyDomainType.id}`,
-    label: companyDomainType.label,
-    roleRequired: true,
-    order: 10,
-    domainType: companyDomainType,
-    entityType: companyDomainType.entityType,
-    fields: companyDomainType.fields,
-  }
+function buildOntologyDomainTypeActions(): RequirementAction[] {
+  return ONTOLOGY_DOMAIN_TYPES.map((domainType, index) => ({
+    id: `domain-type:${domainType.id}`,
+    label: domainType.label,
+    roleRequired: domainType.roleRequired,
+    order: index + 1,
+    domainType,
+    entityType: domainType.entityType,
+    fields: domainType.fields,
+  }))
 }
 
 function buildOntologyGroupedFieldActions(): RequirementAction[] {
-  const groups = new Map<string, DomainFieldDefinition[]>()
+  const groups = new Map<string, { label: string; order: number; fields: DomainFieldDefinition[] }>()
+  const entityTypes = new Set(ONTOLOGY_DOMAIN_TYPES.map((domainType) => domainType.entityType))
   for (const field of ONTOLOGY_DOMAIN_FIELDS) {
-    if (!field.requirementGroupId) continue
-    const fields = groups.get(field.requirementGroupId) ?? []
-    fields.push(field)
-    groups.set(field.requirementGroupId, fields)
+    const statementType = localOntologyName(field.statementType ?? '')
+    if (!statementType || entityTypes.has(statementType)) continue
+    const group = groups.get(statementType) ?? {
+      label: field.statementTypeLabel ?? statementType,
+      order: groups.size + ONTOLOGY_DOMAIN_TYPES.length + 1,
+      fields: [],
+    }
+    group.fields.push(field)
+    groups.set(statementType, group)
   }
 
-  return [...groups.entries()].map(([id, fields]) => {
-    const sortedFields = [...fields].sort((left, right) => left.label.localeCompare(right.label))
+  return [...groups.entries()].map(([id, group]) => {
+    const sortedFields = [...group.fields].sort((left, right) => left.label.localeCompare(right.label))
     return {
       id,
-      label: firstRequirementGroupLabel(sortedFields),
+      label: group.label,
       roleRequired: false,
-      order: firstRequirementGroupOrder(sortedFields),
+      order: group.order,
       fields: sortedFields,
     }
   })
+}
+
+function localOntologyName(resource: string) {
+  return resource.replace(/^.*[:#/]/, '')
 }
 
 function actionSummary(action: RequirementAction) {
@@ -406,14 +414,6 @@ function defaultRequirementName(action: RequirementAction, role: SemanticEntityR
     return roleLabel ? `${roleLabel} ${action.label}` : action.label
   }
   return action.label
-}
-
-function firstRequirementGroupLabel(fields: readonly DomainFieldDefinition[]) {
-  return fields.find((field) => field.requirementGroupLabel)?.requirementGroupLabel ?? 'Requirement'
-}
-
-function firstRequirementGroupOrder(fields: readonly DomainFieldDefinition[]) {
-  return fields.find((field) => field.requirementGroupOrder !== undefined)?.requirementGroupOrder ?? 100
 }
 
 function formatValueConstraint(constraint: SemanticValueConstraint) {

@@ -18,18 +18,22 @@ export interface OntologySelectOption<TValue extends string = string> {
   label: string
 }
 
+export interface OntologyEntityTypeOption extends OntologySelectOption<SemanticEntityType> {
+  roleRequired: boolean
+}
+
 const quotedValue = /"([^"]*)"/g
 const numericValue = /[-+]?[0-9]+(?:\.[0-9]+)?/
 
 export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = parseOntologyDomainFields(ontologyText)
-export const ONTOLOGY_ENTITY_TYPES: readonly OntologySelectOption<SemanticEntityType>[] =
-  parseOntologyEntityTypes(ontologyText)
+export const ONTOLOGY_ENTITY_TYPES: readonly OntologyEntityTypeOption[] = parseOntologyEntityTypes(ontologyText)
 export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
   parseOntologyEntityRoles(ontologyText)
 
 function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
   const statements = parseStatements(source)
   const constraints = parseValueConstraints(statements)
+  const classLabels = parseClassLabels(statements)
 
   return statements
     .filter((statement) => statement.text.includes(' a dcs:DomainField'))
@@ -42,35 +46,44 @@ function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
         throw new Error(`Ontology domain field ${statement.subject} is incomplete.`)
       }
       const valueConstraintRef = firstResource(statement.text, 'dcs:hasValueConstraint')
+      const statementType = firstResource(statement.text, 'dcs:statementType') || undefined
       return {
         semanticPath,
         schemaRef,
         type,
         label,
-        requirementGroupId: firstLiteral(statement.text, 'dcs:requirementGroupId') || undefined,
-        requirementGroupLabel: firstLiteral(statement.text, 'dcs:requirementGroupLabel') || undefined,
-        requirementGroupOrder: firstNumber(statement.text, 'dcs:requirementGroupOrder'),
-        statementType: firstResource(statement.text, 'dcs:statementType') || undefined,
+        statementType,
+        statementTypeLabel: statementType ? classLabels.get(localName(statementType)) : undefined,
         valueConstraint: valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined,
       }
     })
     .sort((left, right) => left.semanticPath.localeCompare(right.semanticPath))
 }
 
-export function parseOntologyEntityTypes(source: string): OntologySelectOption<SemanticEntityType>[] {
-  return parseStatements(source)
+function parseOntologyEntityTypes(source: string): OntologyEntityTypeOption[] {
+  const statements = parseStatements(source)
+  const entityTypeNames = new Set(
+    statements
+      .filter((statement) => statement.text.includes(' a dcs:DomainField'))
+      .filter((statement) => firstLiteral(statement.text, 'dcs:schemaRef') === 'facis.dcs.party.v1')
+      .map((statement) => localName(firstResource(statement.text, 'dcs:statementType')))
+      .filter(Boolean),
+  )
+  const roleRequired = parseOntologyEntityRoles(source).length > 0
+
+  return statements
     .filter((statement) => statement.text.includes(' a rdfs:Class'))
-    .filter((statement) => statement.subject === 'dcs:CompanyParty')
+    .filter((statement) => entityTypeNames.has(localName(statement.subject)))
     .map((statement) => {
       const value = localName(statement.subject)
       const label = firstLiteral(statement.text, 'rdfs:label') || value
       if (!value) throw new Error(`Ontology entity type ${statement.subject} is incomplete.`)
-      return { value, label }
+      return { value, label, roleRequired }
     })
     .sort((left, right) => left.label.localeCompare(right.label))
 }
 
-export function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
+function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
   const statements = parseStatements(source)
   const constraints = parseValueConstraints(statements)
 
@@ -79,6 +92,17 @@ export function parseOntologyEntityRoles(source: string): OntologySelectOption<S
   return allowedValues
     .map((value) => ({ value, label: formatOntologyLabel(value) }))
     .sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function parseClassLabels(statements: readonly OntologyStatement[]): ReadonlyMap<string, string> {
+  const labels = new Map<string, string>()
+  for (const statement of statements) {
+    if (!statement.text.includes(' a rdfs:Class') && !statement.text.includes(' a owl:Class')) continue
+    const name = localName(statement.subject)
+    const label = firstLiteral(statement.text, 'rdfs:label') || name
+    if (name) labels.set(name, label)
+  }
+  return labels
 }
 
 function parseValueConstraints(statements: readonly OntologyStatement[]): ReadonlyMap<string, SemanticValueConstraint> {

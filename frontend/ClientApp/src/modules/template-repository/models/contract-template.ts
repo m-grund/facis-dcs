@@ -133,10 +133,8 @@ export interface DomainFieldDefinition {
   schemaRef: string
   type: SemanticParameterType
   label: string
-  requirementGroupId?: string
-  requirementGroupLabel?: string
-  requirementGroupOrder?: number
   statementType?: string
+  statementTypeLabel?: string
   valueConstraint?: SemanticValueConstraint
 }
 

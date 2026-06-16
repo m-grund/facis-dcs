@@ -17,9 +17,6 @@ export interface OntologyDomainType {
 export const ontologyRoleOptions = ONTOLOGY_ENTITY_ROLES
 
 export const ONTOLOGY_DOMAIN_TYPES: readonly OntologyDomainType[] = buildOntologyDomainTypes()
-export const ONTOLOGY_DOMAIN_TYPE_FIELD_PATHS: ReadonlySet<string> = new Set(
-  ONTOLOGY_DOMAIN_TYPES.flatMap((domainType) => domainType.fields.map((field) => field.semanticPath)),
-)
 
 export function buildOntologyDomainTypeParameters(domainType: OntologyDomainType): SemanticConditionParameter[] {
   return domainType.fields.map((field) => ({
@@ -35,24 +32,8 @@ export function buildOntologyDomainTypeParameters(domainType: OntologyDomainType
   }))
 }
 
-export function buildOntologyDomainTypeClauseText(
-  conditionId: string,
-  domainType: OntologyDomainType,
-  role?: SemanticEntityRole,
-): string {
-  const roleLabel = role ? roleLabelFor(role) : ''
-  const title = roleLabel ? `${roleLabel} ${domainType.label}` : domainType.label
-  const fieldLines = domainType.fields.map((field) => buildDomainTypeClauseFieldLine(conditionId, field))
-  return [title, '', ...fieldLines].join('\n')
-}
-
 export function roleLabelFor(role: SemanticEntityRole): string {
   return ONTOLOGY_ENTITY_ROLES.find((option) => option.value === role)?.label ?? role
-}
-
-function buildDomainTypeClauseFieldLine(conditionId: string, field: DomainFieldDefinition): string {
-  const label = field.label || field.semanticPath
-  return `${label}: {{${conditionId}.${field.semanticPath}}}`
 }
 
 function buildOntologyDomainTypes(): OntologyDomainType[] {
@@ -64,7 +45,7 @@ function buildOntologyDomainTypes(): OntologyDomainType[] {
       id: entityType.value,
       label: entityType.label,
       entityType: entityType.value,
-      roleRequired: fields.some((field) => firstSemanticPathSegment(field.semanticPath) === 'company'),
+      roleRequired: entityType.roleRequired,
       fields,
     })
   }
@@ -72,18 +53,9 @@ function buildOntologyDomainTypes(): OntologyDomainType[] {
 }
 
 function fieldsForEntityType(entityType: string): DomainFieldDefinition[] {
-  const directlyTyped = ONTOLOGY_DOMAIN_FIELDS.filter(
-    (field) => localOntologyName(field.statementType ?? '') === entityType,
-  )
-  const fieldPrefixes = new Set(directlyTyped.map((field) => firstSemanticPathSegment(field.semanticPath)))
-  if (!fieldPrefixes.size) return []
-  return ONTOLOGY_DOMAIN_FIELDS.filter((field) => fieldPrefixes.has(firstSemanticPathSegment(field.semanticPath))).sort(
+  return ONTOLOGY_DOMAIN_FIELDS.filter((field) => localOntologyName(field.statementType ?? '') === entityType).sort(
     (left, right) => left.label.localeCompare(right.label),
   )
-}
-
-function firstSemanticPathSegment(path: string): string {
-  return path.split('.', 1)[0] ?? path
 }
 
 function localOntologyName(resource: string): string {

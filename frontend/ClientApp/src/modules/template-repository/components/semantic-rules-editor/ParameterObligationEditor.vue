@@ -86,7 +86,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type {
-  DomainFieldDefinition,
   SemanticConditionParameter,
   SemanticOperateType,
   SemanticParameterOperator,
@@ -99,7 +98,6 @@ import {
 
 const props = defineProps<{
   parameter: SemanticConditionParameter
-  domainField?: DomainFieldDefinition
   operators: SemanticParameterOperator[]
 }>()
 
@@ -115,7 +113,7 @@ const draftTokenTargets = ref('')
 const valueOptionSearch = ref('')
 let isSyncingFromProps = false
 
-const valueConstraint = computed(() => props.domainField?.valueConstraint ?? props.parameter.valueConstraint)
+const valueConstraint = computed(() => props.parameter.valueConstraint)
 const valueOptions = computed(() => resolveValueOptions(valueConstraint.value))
 const usesSetConstraintEditor = computed(() => {
   const constraint = valueConstraint.value
