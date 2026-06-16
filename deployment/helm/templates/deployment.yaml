@@ -171,6 +171,8 @@ spec:
               {{- end }}
             - name: IPFS_MFS_BASE_URL
               value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
+            - name: STATUSLIST_SERVICE_URL
+              value: {{ include "digital-contracting-service.statuslistServiceURL" . | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

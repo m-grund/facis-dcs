@@ -340,6 +340,17 @@ Resolve signer cert-chain secret key.
 {{- end }}
 
 {{/*
+STATUSLIST_SERVICE_URL: auto-derived from the co-deployed statuslist service.
+*/}}
+{{- define "digital-contracting-service.statuslistServiceURL" -}}
+{{- if .Values.statuslistService.enabled -}}
+{{- printf "http://%s-statuslist-service:%v" .Release.Name .Values.statuslistService.service.port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 IPFS_MFS_BASE_URL: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
