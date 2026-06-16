@@ -27,15 +27,9 @@ export const ONTOLOGY_ENTITY_TYPES: readonly OntologySelectOption<SemanticEntity
 export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
   parseOntologyEntityRoles(ontologyText)
 
-export function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
+function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
   const statements = parseStatements(source)
-  const constraints = new Map<string, SemanticValueConstraint>()
-  const valueOptions = parseValueOptions(statements)
-
-  for (const statement of statements) {
-    if (!statement.text.includes(' a dcs:ValueConstraint')) continue
-    constraints.set(statement.subject, parseValueConstraint(statement.text, valueOptions))
-  }
+  const constraints = parseValueConstraints(statements)
 
   return statements
     .filter((statement) => statement.text.includes(' a dcs:DomainField'))
@@ -53,7 +47,6 @@ export function parseOntologyDomainFields(source: string): DomainFieldDefinition
         schemaRef,
         type,
         label,
-        group: inferDomainFieldGroup(semanticPath),
         requirementGroupId: firstLiteral(statement.text, 'dcs:requirementGroupId') || undefined,
         requirementGroupLabel: firstLiteral(statement.text, 'dcs:requirementGroupLabel') || undefined,
         requirementGroupOrder: firstNumber(statement.text, 'dcs:requirementGroupOrder'),
@@ -79,6 +72,16 @@ export function parseOntologyEntityTypes(source: string): OntologySelectOption<S
 
 export function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
   const statements = parseStatements(source)
+  const constraints = parseValueConstraints(statements)
+
+  const allowedValues = constraints.get('dcst:constraint-contract-party-role')?.allowedValues ?? []
+
+  return allowedValues
+    .map((value) => ({ value, label: formatOntologyLabel(value) }))
+    .sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function parseValueConstraints(statements: readonly OntologyStatement[]): ReadonlyMap<string, SemanticValueConstraint> {
   const constraints = new Map<string, SemanticValueConstraint>()
   const valueOptions = parseValueOptions(statements)
 
@@ -86,12 +89,7 @@ export function parseOntologyEntityRoles(source: string): OntologySelectOption<S
     if (!statement.text.includes(' a dcs:ValueConstraint')) continue
     constraints.set(statement.subject, parseValueConstraint(statement.text, valueOptions))
   }
-
-  const allowedValues = constraints.get('dcst:constraint-contract-party-role')?.allowedValues ?? []
-
-  return allowedValues
-    .map((value) => ({ value, label: formatOntologyLabel(value) }))
-    .sort((left, right) => left.label.localeCompare(right.label))
+  return constraints
 }
 
 function parseStatements(source: string): OntologyStatement[] {
@@ -190,40 +188,4 @@ function cloneConstraint(constraint?: SemanticValueConstraint): SemanticValueCon
     allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
     valueOptions: constraint.valueOptions ? constraint.valueOptions.map((option) => ({ ...option })) : undefined,
   }
-}
-
-function inferDomainFieldGroup(semanticPath: string): string {
-  if (semanticPath.startsWith('company.location.')) return 'Address'
-  if (semanticPath.startsWith('company.')) return 'Parties'
-  if (semanticPath.startsWith('service.sla.')) return 'SLA'
-  if (semanticPath.startsWith('service.')) return 'Service'
-  if (semanticPath.startsWith('signature.')) return 'Signature'
-  if (
-    semanticPath.startsWith('contract.payment.') ||
-    semanticPath.startsWith('contract.renewal.') ||
-    semanticPath.startsWith('contract.termination.')
-  ) {
-    return 'Commercial'
-  }
-  if (
-    semanticPath.startsWith('contract.liability.') ||
-    semanticPath.startsWith('contract.insurance.') ||
-    semanticPath.startsWith('contract.forceMajeure.')
-  ) {
-    return 'Risk'
-  }
-  if (semanticPath.startsWith('contract.dataProtection.') || semanticPath.startsWith('contract.auditRights.')) {
-    return 'Compliance'
-  }
-  if (
-    semanticPath.startsWith('contract.disputeResolution.') ||
-    semanticPath.startsWith('contract.confidentiality.') ||
-    semanticPath.startsWith('contract.ipRights.') ||
-    semanticPath === 'contract.governingLaw' ||
-    semanticPath === 'contract.jurisdiction'
-  ) {
-    return 'Legal'
-  }
-  if (semanticPath.startsWith('contract.validity.') || semanticPath === 'contract.effectiveDate') return 'Dates'
-  return 'Contract basics'
 }

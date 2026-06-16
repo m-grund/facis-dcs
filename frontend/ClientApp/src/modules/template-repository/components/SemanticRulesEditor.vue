@@ -409,7 +409,7 @@ function defaultRequirementName(action: RequirementAction, role: SemanticEntityR
 }
 
 function firstRequirementGroupLabel(fields: readonly DomainFieldDefinition[]) {
-  return fields.find((field) => field.requirementGroupLabel)?.requirementGroupLabel ?? fields[0]?.group ?? 'Requirement'
+  return fields.find((field) => field.requirementGroupLabel)?.requirementGroupLabel ?? 'Requirement'
 }
 
 function firstRequirementGroupOrder(fields: readonly DomainFieldDefinition[]) {
