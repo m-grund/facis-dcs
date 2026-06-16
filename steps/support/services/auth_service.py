@@ -433,66 +433,6 @@ class AuthService:
             timeout=timeout,
         )
 
-    @staticmethod
-    def roles_from_access_token(access_token: str) -> list[str]:
-        """Read Hydra access-token roles from the JWT ext claim (no signature verify)."""
-        payload = AuthService.decode_jwt_payload(access_token)
-        ext = payload.get("ext")
-        if not isinstance(ext, dict):
-            return []
-        roles = ext.get("roles")
-        if not isinstance(roles, list):
-            return []
-        return [str(role) for role in roles if isinstance(role, str) and role.strip()]
-
-    @staticmethod
-    def probe_endpoint_for_roles(roles: list[str]) -> str:
-        """Pick a protected GET endpoint that should accept the given roles."""
-        role_set = set(roles)
-        template_roles = {
-            "Template Creator",
-            "Template Reviewer",
-            "Template Approver",
-            "Template Manager",
-        }
-        if role_set & template_roles:
-            return "/template/search"
-        return "/contract/search"
-
-    @staticmethod
-    def verify_access_token_accepted(
-        api_base: str,
-        access_token: str,
-        *,
-        expected_roles: list[str] | None = None,
-        timeout: float = 30,
-    ) -> dict[str, Any]:
-        """Confirm DCS accepts the bearer token and returns the expected roles."""
-        token_roles = AuthService.roles_from_access_token(access_token)
-        if expected_roles is not None:
-            missing = [role for role in expected_roles if role not in token_roles]
-            if missing:
-                raise RuntimeError(
-                    f"access token missing expected roles {missing}; token roles={token_roles}"
-                )
-
-        endpoint = AuthService.probe_endpoint_for_roles(expected_roles or token_roles)
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        }
-        response = requests.get(
-            f"{api_base.rstrip('/')}{endpoint}",
-            headers=headers,
-            timeout=timeout,
-        )
-        if response.status_code == 401:
-            raise RuntimeError(f"DCS rejected access token on {endpoint}: {response.text[:300]}")
-        if response.status_code >= 400:
-            raise RuntimeError(
-                f"{endpoint} failed ({response.status_code}): {response.text[:300]}"
-            )
-        return {"token_roles": token_roles, "probe_endpoint": endpoint, "probe_status": response.status_code}
 
     # ------------------------------------------------------------------
     # Step 4 — set context headers for Behave steps
@@ -508,6 +448,7 @@ class AuthService:
     ):
         """Set context.headers with a bearer token for the given roles."""
         del username_prefix  # OID4VP login derives identity from VP, not BDD username.
+        # TBD: extend issue_credentials.py to support generating expired JWT credentials
         if use_expired_jwt:
             username = AuthService.username_for_roles(roles, "bdd")
             token = AuthService.create_expired_jwt(AuthService.CLIENT_ID, username, roles)
@@ -576,6 +517,7 @@ class AuthService:
             return redirect_uri.replace(f"{target.scheme}://{target.netloc}", api_origin, 1)
         return redirect_uri
 
+    # TBD: credential didn't contain any username info.
     @staticmethod
     def username_for_roles(roles: list[str], username_prefix: str = "bdd") -> str:
         """Convert role names to a deterministic BDD username."""

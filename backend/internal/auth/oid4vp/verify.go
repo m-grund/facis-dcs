@@ -159,7 +159,6 @@ func checkStatusList(rawClaims json.RawMessage) error {
 }
 
 // evaluateLoginRoles applies login authorization policy to disclosed roles.
-// TODO: evaluate Rego policy from OID4VP_POLICY_PATH.
 func evaluateLoginRoles(disclosedRoles []string) ([]string, error) {
 	if len(disclosedRoles) == 0 {
 		return nil, fmt.Errorf("no roles disclosed in presentation")
