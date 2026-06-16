@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/templaterepository/datatype/approvaltaskstate"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -73,27 +75,46 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 	}
 
 	if oldData.State == contracttemplatestate.Published.String() ||
-		oldData.State == contracttemplatestate.Deleted.String() ||
 		oldData.State == contracttemplatestate.Deprecated.String() ||
-		oldData.State == contracttemplatestate.Approved.String() {
+		oldData.State == contracttemplatestate.Registered.String() {
 		return errors.New("invalid contract template state")
 	}
 
 	if cmd.State != nil {
-		isValidState := *cmd.State == contracttemplatestate.Draft || *cmd.State == contracttemplatestate.Deleted
-		if oldData.State == contracttemplatestate.Draft.String() && !isValidState {
-			reviewTasksExist, err := h.RTRepo.TaskExist(ctx, tx, cmd.DID)
+		reviewTasksExist, err := h.RTRepo.TaskExist(ctx, tx, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("could not check existing review tasks: %w", err)
+		}
+
+		approvalTaskExists, err := h.ATRepo.TaskExists(ctx, tx, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("could not check existing approval tasks: %w", err)
+		}
+
+		if !reviewTasksExist {
+			reviewTask := db.ReviewTaskData{
+				DID:       cmd.DID,
+				Reviewer:  cmd.UpdatedBy,
+				State:     reviewtaskstate.Open.String(),
+				CreatedBy: cmd.UpdatedBy,
+			}
+			_, err := h.RTRepo.Create(ctx, tx, reviewTask)
 			if err != nil {
-				return fmt.Errorf("could not check existing review tasks: %w", err)
+				return fmt.Errorf("could not create review tasks: %w", err)
+			}
+		}
+
+		if !approvalTaskExists {
+			data := db.ApprovalTaskData{
+				DID:       cmd.DID,
+				CreatedBy: cmd.UpdatedBy,
+				Approver:  cmd.UpdatedBy,
+				State:     reviewtaskstate.Open.String(),
 			}
 
-			approvalTaskExists, err := h.ATRepo.TaskExists(ctx, tx, cmd.DID)
+			_, err = h.ATRepo.Create(ctx, tx, data)
 			if err != nil {
-				return fmt.Errorf("could not check existing approval tasks: %w", err)
-			}
-
-			if !reviewTasksExist || !approvalTaskExists {
-				return errors.New("invalid state change")
+				return fmt.Errorf("could not create approval task: %w", err)
 			}
 		}
 	}
@@ -101,7 +122,7 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 	newState := oldData.State
 	if cmd.State != nil {
 		switch *cmd.State {
-		case contracttemplatestate.Draft, contracttemplatestate.Deleted, contracttemplatestate.Deprecated:
+		case contracttemplatestate.Draft, contracttemplatestate.Deleted:
 			err = h.RTRepo.Delete(ctx, tx, cmd.DID)
 			if err != nil {
 				return fmt.Errorf("could not delete review tasks: %w", err)
@@ -125,6 +146,15 @@ func (h *UpdateManager) Handle(ctx context.Context, cmd UpdateManageCmd) error {
 				return err
 			}
 			err = h.ATRepo.ReopenTasks(ctx, tx, cmd.DID)
+			if err != nil {
+				return err
+			}
+		case contracttemplatestate.Approved:
+			err = h.RTRepo.UpdateStateForAllTasks(ctx, tx, cmd.DID, reviewtaskstate.Approved.String())
+			if err != nil {
+				return err
+			}
+			err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.UpdatedBy, approvaltaskstate.Approved.String())
 			if err != nil {
 				return err
 			}

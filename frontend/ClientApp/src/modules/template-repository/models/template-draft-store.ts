@@ -42,7 +42,7 @@ interface TemplateDraftState {
   sla: SLAAgreement | null
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue
-  state: ContractTemplateState | null
+  state: ContractTemplateState | undefined
   document_number: string | null
   version: number | null
   updated_at: string | null

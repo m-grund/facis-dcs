@@ -79,8 +79,6 @@ watch(
             return
           }
           const uneditableStates = [
-            TemplateState.approved,
-            TemplateState.deleted,
             TemplateState.deprecated,
             TemplateState.published,
             TemplateState.registered,
@@ -132,10 +130,19 @@ const submit = async () => {
       const data = draftStore.templateCreateRequestData
       await contractTemplateService.create(data)
     } else {
-      // update existing template
-      const data = draftStore.templateUpdateRequestData
-      if (data) {
-        await contractTemplateService.update(data)
+
+      if (isManager) {
+        // update existing template
+        const data = draftStore.templateUpdateManageRequestData
+        if (data) {
+          await contractTemplateService.updateManage(data)
+        }
+      } else {
+        // update existing template
+        const data = draftStore.templateUpdateRequestData
+        if (data) {
+          await contractTemplateService.update(data)
+        }
       }
     }
     await router.push({ name: ROUTES.TEMPLATES.LIST })

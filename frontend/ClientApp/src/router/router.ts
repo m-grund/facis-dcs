@@ -113,7 +113,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Edit Template',
-      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER'],
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -138,7 +138,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Review Template',
-      roles: ['TEMPLATE_REVIEWER'],
+      roles: ['TEMPLATE_REVIEWER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -150,7 +150,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Approve Template',
-      roles: ['TEMPLATE_APPROVER'],
+      roles: ['TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
