@@ -87,7 +87,7 @@ export interface ContractTemplateArchiveRequest {
 
 export interface ContractTemplateRegisterRequest {
   did: string
-  version: number
+  version?: number
 }
 
 export interface ContractTemplateAuditRequest {

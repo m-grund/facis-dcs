@@ -11,7 +11,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/validation"
@@ -21,27 +20,20 @@ import (
 )
 
 type CreateCmd struct {
-	DID          string
-	TemplateDID  string
-	CreatedBy    string
-	Name         *string
-	Description  *string
-	ContractData *datatype.JSON
-	HolderDID    string
-	UserRoles    userrole.UserRoles
+	DID         string
+	TemplateDID string
+	CreatedBy   string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
 }
 
 type Creator struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB     *sqlx.DB
+	CRepo  db.ContractRepo
+	CTRepo db.ContractTemplateRepo
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, false)
-	if err != nil {
-		return fmt.Errorf("contract data validation failed: %w", err)
-	}
-	cmd.ContractData = normalizedContractData
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -53,13 +45,21 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		}
 	}(tx)
 
+	contractTemplate, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, cmd.TemplateDID)
+	if err != nil {
+		return fmt.Errorf("could not read frame contract template data: %w", err)
+	}
+
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate, cmd.DID, false)
+	if err != nil {
+		return fmt.Errorf("contract data validation failed: %w", err)
+	}
+
 	data := db.Contract{
 		DID:          cmd.DID,
 		CreatedBy:    cmd.CreatedBy,
 		State:        contractstate.Draft.String(),
-		Name:         cmd.Name,
-		Description:  cmd.Description,
-		ContractData: cmd.ContractData,
+		ContractData: normalizedContractData,
 	}
 	createdAt, err := h.CRepo.Create(ctx, tx, data)
 	if err != nil {
@@ -70,9 +70,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		DID:          cmd.DID,
 		TemplateDID:  cmd.TemplateDID,
 		CreatedBy:    cmd.CreatedBy,
-		Name:         cmd.Name,
-		Description:  cmd.Description,
-		ContractData: cmd.ContractData,
+		ContractData: normalizedContractData,
 		OccurredAt:   *createdAt,
 		HolderDID:    cmd.HolderDID,
 		UserRoles:    cmd.UserRoles,

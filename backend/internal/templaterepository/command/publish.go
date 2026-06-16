@@ -67,8 +67,8 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
 
-	if processData.State != contracttemplatestate.Approved.String() {
-		return errors.New("contract template must be in approved state to publish")
+	if processData.State != contracttemplatestate.Registered.String() {
+		return errors.New("contract template must be in registered state to publish")
 	}
 
 	if h.FCClient == nil {
@@ -100,8 +100,8 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 	if processData.State == contracttemplatestate.Published.String() {
 		return nil
 	}
-	if processData.State != contracttemplatestate.Approved.String() {
-		return errors.New("contract template must be in approved state to publish")
+	if processData.State != contracttemplatestate.Registered.String() {
+		return errors.New("contract template must be in registered state to publish")
 	}
 
 	err = h.CTRepo.UpdateState(ctx, tx, cmd.DID, contracttemplatestate.Published.String())

@@ -614,15 +614,9 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	newDID, err := base.GetDID(datatype.TemplateResourceType)
-	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
-	}
-
 	cmd := command.RegisterCmd{
 		DID:          req.Did,
-		NewDID:       *newDID,
-		Version:      req.Version,
+		Version:      base.DerefInt(req.Version),
 		RegisteredBy: middleware.GetParticipantID(ctx),
 		HolderDID:    middleware.GetHolderDID(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
@@ -632,13 +626,13 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 		CTRepo:   s.CTRepo,
 		FCClient: s.FCClient,
 	}
-	err = handler.Handle(ctx, cmd)
+	did, err := handler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
 	return &templaterepository.ContractTemplateRegisterResponse{
-		Did: *newDID,
+		Did: *did,
 	}, nil
 }
 
