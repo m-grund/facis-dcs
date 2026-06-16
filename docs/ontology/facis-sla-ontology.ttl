@@ -997,7 +997,7 @@ dcs:hasConstraint a rdf:Property ;
 
 dcs:hasValueConstraint a rdf:Property ;
   rdfs:label "Has Value Constraint"@en ;
-  rdfs:domain dcs:DomainField ;
+  rdfs:comment "Associates a domain field or ontology property with its value constraint."@en ;
   rdfs:range dcs:ValueConstraint .
 
 dcs:ruleId a rdf:Property ;
@@ -1202,7 +1202,8 @@ dcs:party a rdf:Property ;
 dcs:role a rdf:Property ;
   rdfs:label "Role"@en ;
   rdfs:comment "Contract-scoped function of a party, for example supplier or customer."@en ;
-  rdfs:range xsd:string .
+  rdfs:range dcs:ContractPartyRoleCode ;
+  dcs:hasValueConstraint dcst:constraint-contract-party-role .
 
 dcs:legalName a rdf:Property ;
   rdfs:label "Legal Name"@en ;

@@ -62,12 +62,22 @@ function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
 
 function parseOntologyEntityTypes(source: string): OntologyEntityTypeOption[] {
   const statements = parseStatements(source)
-  const entityTypeNames = new Set(
+  const statementTypeNames = new Set(
     statements
       .filter((statement) => statement.text.includes(' a dcs:DomainField'))
-      .filter((statement) => firstLiteral(statement.text, 'dcs:schemaRef') === 'facis.dcs.party.v1')
       .map((statement) => localName(firstResource(statement.text, 'dcs:statementType')))
       .filter(Boolean),
+  )
+  const documentEntityTypeNames = new Set(
+    statements
+      .filter((statement) => statement.text.includes('dcs:documentProperty'))
+      .map((statement) => localName(firstResource(statement.text, 'rdfs:range')))
+      .filter((name) => name && statementTypeNames.has(name)),
+  )
+  const entityTypeNames = new Set(
+    documentEntityTypeNames.size
+      ? documentEntityTypeNames
+      : [...statementTypeNames].filter((name) => !isPrimitiveCodeType(name)),
   )
   const roleRequired = parseOntologyEntityRoles(source).length > 0
 
@@ -86,12 +96,20 @@ function parseOntologyEntityTypes(source: string): OntologyEntityTypeOption[] {
 function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
   const statements = parseStatements(source)
   const constraints = parseValueConstraints(statements)
-
-  const allowedValues = constraints.get('dcst:constraint-contract-party-role')?.allowedValues ?? []
+  const roleConstraintRefs = statements
+    .filter((statement) => statement.text.includes(' a rdf:Property'))
+    .filter((statement) => localName(firstResource(statement.text, 'rdfs:range')).endsWith('RoleCode'))
+    .map((statement) => firstResource(statement.text, 'dcs:hasValueConstraint'))
+    .filter(Boolean)
+  const allowedValues = roleConstraintRefs.flatMap((ref) => constraints.get(ref)?.allowedValues ?? [])
 
   return allowedValues
     .map((value) => ({ value, label: formatOntologyLabel(value) }))
     .sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function isPrimitiveCodeType(name: string): boolean {
+  return name.endsWith('Code')
 }
 
 function parseClassLabels(statements: readonly OntologyStatement[]): ReadonlyMap<string, string> {
