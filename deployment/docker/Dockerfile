@@ -13,6 +13,7 @@ RUN npm ci
 # Copy frontend source
 COPY frontend/ClientApp/ ./
 COPY docs/semantic-ontology/ /docs/semantic-ontology/
+COPY docs/ontology/ /docs/ontology/
 
 # Build frontend (type-checking skipped — use build:docker to avoid blocking on TS errors)
 RUN npm run build:docker
@@ -79,6 +80,7 @@ COPY --from=go-builder --chown=$DOCKER_USER:$DOCKER_USER \
 # Copy generated OpenAPI spec from go-builder stage
 COPY --from=go-builder /build/gen/http/openapi3.json /app/gen/http/openapi3.json
 COPY --chown=$DOCKER_USER:$DOCKER_USER docs/semantic-ontology/ /app/docs/semantic-ontology/
+COPY --chown=$DOCKER_USER:$DOCKER_USER docs/ontology/ /app/docs/ontology/
 
 # Copy built frontend from frontend-builder stage
 COPY --from=frontend-builder --chown=$DOCKER_USER:$DOCKER_USER /frontend/dist /app/web/dist

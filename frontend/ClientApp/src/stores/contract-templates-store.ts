@@ -16,17 +16,17 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
   const error = ref<string | null>(null)
 
   const hasTemplates = computed(() => contractTemplates.value.length > 0)
-  const hasApprovedOrPublishedTemplates = computed(() =>
+  const hasRegisteredOrPublishedTemplates = computed(() =>
     contractTemplates.value.some(
       (template) =>
-        (template.state === TemplateState.approved || template.state === TemplateState.published) &&
+        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
         template.template_type === TemplateType.frameContract,
     ),
   )
-  const approvedOrPublishedTemplates = computed(() =>
+  const registeredOrPublishedTemplates = computed(() =>
     contractTemplates.value.filter(
       (template) =>
-        (template.state === TemplateState.approved || template.state === TemplateState.published) &&
+        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
         template.template_type === TemplateType.frameContract,
     ),
   )
@@ -53,8 +53,8 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
     reviewTasks,
     approvalTasks,
     hasTemplates,
-    hasApprovedOrPublishedTemplates,
-    approvedOrPublishedTemplates,
+    hasRegisteredOrPublishedTemplates: hasRegisteredOrPublishedTemplates,
+    registeredOrPublishedTemplates: registeredOrPublishedTemplates,
     findTemplateByDid,
     loadTemplates,
     loading,

@@ -23,7 +23,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationactionflag"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	contracttemplatequery "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 	"digital-contracting-service/internal/middleware"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 
@@ -71,31 +70,17 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	qry := contracttemplatequery.GetTemplateDataByDIDQry{
-		DID: req.Did,
-	}
-	queryHandler := contracttemplatequery.GetTemplateDataByDIDHandler{
-		Ctx:      ctx,
-		DB:       s.DB,
-		CTRepo:   s.CTRepo,
-		FCClient: s.FCClient,
-	}
-	contractData, err := queryHandler.Handle(ctx, qry)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
 	cmd := command.CreateCmd{
-		DID:          *did,
-		TemplateDID:  req.Did,
-		CreatedBy:    middleware.GetParticipantID(ctx),
-		HolderDID:    middleware.GetHolderDID(ctx),
-		UserRoles:    middleware.GetUserRoles(ctx),
-		ContractData: contractData,
+		DID:         *did,
+		TemplateDID: req.Did,
+		CreatedBy:   middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	createHandler := command.Creator{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:     s.DB,
+		CRepo:  s.CRepo,
+		CTRepo: s.CTRepo,
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
