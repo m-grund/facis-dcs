@@ -1,5 +1,12 @@
 # BDD test values: used by tests/bdd/Makefile kind_deploy target (kind cluster).
 # Assumes release name "dcs" (HELM_RELEASE default in the Makefile).
+pdfCore:
+  enabled: true
+  image:
+    repository: pdf-core
+    tag: bdd
+    pullPolicy: Never
+
 extraEnv:
   - name: JWT_ALG_NONE_SUPPORTED
     value: "true"
