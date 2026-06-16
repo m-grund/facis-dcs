@@ -13,7 +13,7 @@ const defaultState: Readonly<TemplateEditorUiState> = {
   activeTab: 'details',
   tabs: [
     { id: 'details', label: 'Details' },
-    { id: 'semantic', label: 'Semantic Rules' },
+    { id: 'semantic', label: 'Data Requirements' },
     { id: 'clauses', label: 'Clauses' },
     { id: 'builder', label: 'Builder' },
     { id: 'meta', label: 'Meta Data' },

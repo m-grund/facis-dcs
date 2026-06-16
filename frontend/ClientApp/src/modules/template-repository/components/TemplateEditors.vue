@@ -1,6 +1,6 @@
 <template>
   <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
-    <div class="mx-auto max-w-4xl px-6 pt-3">
+    <div class="mx-auto max-w-5xl px-6 pt-3">
       <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">
         {{ title }}
       </p>
@@ -21,7 +21,7 @@
 
   <!-- Tab content -->
   <div class="mt-5 grow">
-    <div class="mx-auto max-w-4xl p-6">
+    <div class="mx-auto max-w-5xl p-6">
       <div class="grid grid-cols-1 gap-4">
         <!-- DETAILS TAB -->
         <div v-show="activeTab === 'details'">
@@ -39,13 +39,13 @@
           </div>
         </div>
 
-        <!-- SEMANTIC RULES TAB -->
+        <!-- DATA REQUIREMENTS TAB -->
         <div v-show="activeTab === 'semantic'">
           <div class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-5">
               <h2 class="card-title text-sm">
                 <span class="badge w-8 badge-sm badge-primary">0{{ currentTabNumber }}</span>
-                Semantic Rules
+                Data Requirements
               </h2>
               <SemanticRulesEditor />
             </div>
