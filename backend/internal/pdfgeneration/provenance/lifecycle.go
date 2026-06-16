@@ -62,8 +62,8 @@ func MapCWEStateToC2PA(cweState string) (string, error) {
 	switch strings.ToUpper(cweState) {
 	case "DRAFT":
 		return "draft", nil
-	case "SUBMITTED", "REVIEWED", "APPROVED":
-		// Reviewed/submitted/approved are intermediate steps toward an active
+	case "SUBMITTED", "REVIEWED", "APPROVED", "REGISTERED":
+		// Reviewed/submitted/approved/registered are intermediate steps toward an active
 		// contract; map to "active" as the closest SRS equivalent.
 		return "active", nil
 	case "NEGOTIATION", "REJECTED":
@@ -81,6 +81,12 @@ func MapCWEStateToC2PA(cweState string) (string, error) {
 	case "REPLACED":
 		return "replaced", nil
 	default:
-		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,SUBMITTED,REVIEWED,APPROVED,NEGOTIATION,REJECTED,TERMINATED,EXPIRED,SUSPENDED,REPLACED)", cweState)
+		// Pass-through if the caller already uses the SRS vocabulary.
+		lower := strings.ToLower(cweState)
+		switch lower {
+		case "draft", "active", "amended", "suspended", "terminated", "expired", "replaced":
+			return lower, nil
+		}
+		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,SUBMITTED,REVIEWED,APPROVED,REGISTERED,NEGOTIATION,REJECTED,TERMINATED,EXPIRED,SUSPENDED,REPLACED,draft,active,amended,suspended,terminated,expired,replaced)", cweState)
 	}
 }

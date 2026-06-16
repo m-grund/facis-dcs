@@ -41,7 +41,7 @@ const router = useRouter()
 
 const errorStore = useErrorStore()
 const templatesStore = useContractTemplatesStore()
-const { approvedOrPublishedTemplates, hasApprovedOrPublishedTemplates } = storeToRefs(templatesStore)
+const { registeredOrPublishedTemplates, hasRegisteredOrPublishedTemplates } = storeToRefs(templatesStore)
 const templateDraftStore = useTemplateDraftStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -59,7 +59,7 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 const contract: Ref<Contract | null> = ref(null)
 
 const canSubmit = computed(
-  () => isEditMode.value || (hasApprovedOrPublishedTemplates.value && selectedTemplate.value !== null),
+  () => isEditMode.value || (hasRegisteredOrPublishedTemplates.value && selectedTemplate.value !== null),
 )
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
@@ -138,7 +138,7 @@ watch(
       } catch (err: unknown) {
         console.error('Failed to load contract', err)
       }
-    } else if (!hasApprovedOrPublishedTemplates.value) {
+    } else if (!hasRegisteredOrPublishedTemplates.value) {
       await templatesStore.loadTemplates()
     }
   },
@@ -230,11 +230,11 @@ onBeforeRouteLeave(() => {
   <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <div v-if="!isEditMode" class="px-6 py-12">
       <div class="flex justify-center">
-        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedOrPublishedTemplates">
+        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasRegisteredOrPublishedTemplates">
           <option :value="null" disabled selected>
-            {{ hasApprovedOrPublishedTemplates ? 'Pick a template' : 'No templates available' }}
+            {{ hasRegisteredOrPublishedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
-          <option v-for="template in approvedOrPublishedTemplates" :key="template.did" :value="template">
+          <option v-for="template in registeredOrPublishedTemplates" :key="template.did" :value="template">
             {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>

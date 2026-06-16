@@ -40,9 +40,14 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	scope, err := componenttype.NewComponentType(req.Scope)
-	if err != nil {
-		return nil, processauditandcompliance.MakeBadRequest(err)
+	var scope componenttype.ComponentType
+	switch req.Scope {
+	case "templates":
+		scope = componenttype.ContractTemplateRepo
+	case "contracts":
+		scope = componenttype.ContractWorkflowEngine
+	default:
+		return res, fmt.Errorf("unknown scope: %s", req.Scope)
 	}
 
 	if isStaticContractAudit(req) {
