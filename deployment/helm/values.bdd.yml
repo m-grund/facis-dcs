@@ -9,9 +9,6 @@ image:
 extraEnv:
   - name: JWT_ALG_NONE_SUPPORTED
     value: "true"
-  # Not auto-wired by the chart template; must be set explicitly.
-  - name: STATUSLIST_SERVICE_URL
-    value: "http://dcs-statuslist-service:8080"
 
 postgresql:
   enabled: true
