@@ -109,14 +109,9 @@ async function register() {
   }
 }
 
-const exportPDF = () => {
-  alert('not implemented yet')
-}
-
 </script>
 
 <template>
-  <button :class="$attrs.class" @click="exportPDF">Export PDF</button>
   <button v-if="showRegisterButton" :class="$attrs.class" @click="register">
     Register
   </button>

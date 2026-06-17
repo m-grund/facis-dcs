@@ -5,7 +5,7 @@
       <h1 class="text-2xl font-bold text-base-content">Choose contract type</h1>
       <TemplateTypeSelect :model-value="templateType" @update:model-value="onTemplateTypeChosen($event)" />
       <div class="flex justify-end pt-4">
-        <button type="button" class="btn btn-outline" @click="router.back()">Cancel</button>
+        <button type="button" class="btn btn-outline" @click="router.back()">Back</button>
       </div>
     </div>
     <template v-else>

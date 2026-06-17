@@ -7,7 +7,8 @@
       <!-- Decision notes container -->
       <ConfirmationModal ref="decision-note-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="reject">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
@@ -209,4 +210,9 @@ async function reject() {
     isSubmitting.value = false
   }
 }
+
+const exportPDF = () => {
+  alert('not implemented yet')
+}
+
 </script>

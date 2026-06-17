@@ -7,7 +7,8 @@
       <!-- Comments container -->
       <ConfirmationModal ref="comment-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <!-- Return to draft / request changes -->
         <button class="btn flex-1 btn-primary" :disabled="!isReviewer || isSubmitting" @click="returnToDraft">
@@ -176,4 +177,9 @@ const returnToDraft = async () => {
     isSubmitting.value = false
   }
 }
+
+const exportPDF = () => {
+  alert('not implemented yet')
+}
+
 </script>

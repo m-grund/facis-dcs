@@ -334,7 +334,7 @@ onBeforeRouteLeave(() => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn flex-1 btn-primary" :disabled="isSubmitting || !canSubmit" @click="submit">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           {{ isEditMode ? 'Update' : 'Create' }}
