@@ -24,7 +24,11 @@ import {
   FACIS_TEMPLATE_VALIDATION_PROFILE,
 } from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
-import type { ContractTemplateCreateRequest, ContractTemplateUpdateManageRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
+import type {
+  ContractTemplateCreateRequest,
+  ContractTemplateUpdateManageRequest,
+  ContractTemplateUpdateRequest,
+} from '@/models/requests/template-request'
 import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 

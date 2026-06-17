@@ -78,6 +78,7 @@ watch(
           }
           const uneditableStates = [
             TemplateState.deprecated,
+            TemplateState.registered,
             TemplateState.published,
             TemplateState.registered,
           ].map((s) => s.toLowerCase())
@@ -128,7 +129,6 @@ const submit = async () => {
       const data = draftStore.templateCreateRequestData
       await contractTemplateService.create(data)
     } else {
-
       if (isManager.value) {
         // update existing template
         const data = draftStore.templateUpdateManageRequestData

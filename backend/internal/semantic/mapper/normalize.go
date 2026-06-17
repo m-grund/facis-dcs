@@ -16,7 +16,7 @@ import (
 // placeholderBindings, semanticRules, semanticProfile, and @context/@type injection.
 // This function adds the sla-specific operator pass.
 func NormalizeSemanticTemplateData(raw *datatype.JSON, did string) (*datatype.JSON, error) {
-	normalized, err := validation.NormalizeTemplateDataForPersistence(raw, did)
+	normalized, err := validation.NormalizeTemplateDataForPersistence(raw, did, nil)
 	if err != nil {
 		return nil, fmt.Errorf("base template normalization: %w", err)
 	}
@@ -32,7 +32,7 @@ func NormalizeSemanticTemplateData(raw *datatype.JSON, did string) (*datatype.JS
 // with sla operator canonicalization. When requireSemanticValues is false, required
 // semantic values may be absent (draft-creation from a template).
 func NormalizeSemanticContractData(raw *datatype.JSON, did string, requireSemanticValues bool) (*datatype.JSON, error) {
-	normalized, err := validation.NormalizeContractDataForPersistence(raw, did, requireSemanticValues)
+	normalized, err := validation.NormalizeContractDataForPersistence(raw, did, nil, requireSemanticValues)
 	if err != nil {
 		return nil, fmt.Errorf("base contract normalization: %w", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/middleware"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -23,6 +24,7 @@ import (
 type signatureManagementsrvc struct {
 	DB           *sqlx.DB
 	CRepo        db.ContractRepo
+	PDFCore      *pdfcore.Client
 	ATrailReader base.AuditTrailReader
 	DSSClient    dss.Client
 	IPFSClient   *ipfs.APIClient
@@ -30,12 +32,13 @@ type signatureManagementsrvc struct {
 }
 
 func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo,
-	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient) signaturemanagement.Service {
+	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
+		PDFCore:          pdfCore,
 		ATrailReader:     auditTrailReader,
 		DSSClient:        dssClient,
 		IPFSClient:       ipfsClient,
@@ -143,24 +146,6 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
 
-	var startDate *string
-	if result.Contract.StartDate != nil {
-		s := result.Contract.StartDate.Format(time.RFC3339)
-		startDate = &s
-	}
-
-	var expDate *string
-	if result.Contract.ExpDate != nil {
-		s := result.Contract.ExpDate.Format(time.RFC3339)
-		expDate = &s
-	}
-
-	var expPolicy *string
-	if result.Contract.ExpPolicy != nil {
-		s := result.Contract.ExpPolicy.String()
-		expPolicy = &s
-	}
-
 	contract := signaturemanagement.SMContractItem{
 		Did:             result.Contract.DID,
 		ContractVersion: result.Contract.ContractVersion,
@@ -169,13 +154,6 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		Description:     result.Contract.Description,
 		CreatedAt:       result.Contract.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       result.Contract.UpdatedAt.Format(time.RFC3339),
-		Responsible:     result.Contract.Responsible,
-		ContractData:    result.Contract.ContractData,
-		ExpNoticePeriod: result.Contract.ExpNoticePeriod,
-		StartDate:       startDate,
-		ExpDate:         expDate,
-		ExpPolicy:       expPolicy,
-		CreatedBy:       result.Contract.CreatedBy,
 	}
 
 	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{
@@ -206,8 +184,9 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := query.SignatureVerifier{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:      s.DB,
+		CRepo:   s.CRepo,
+		PDFCore: s.PDFCore,
 	}
 	_, err = handler.Handle(ctx, qry)
 	if err != nil {

@@ -340,17 +340,6 @@ Resolve signer cert-chain secret key.
 {{- end }}
 
 {{/*
-STATUSLIST_SERVICE_URL: auto-derived from the co-deployed statuslist service.
-*/}}
-{{- define "digital-contracting-service.statuslistServiceURL" -}}
-{{- if .Values.statuslistService.enabled -}}
-{{- printf "http://%s-statuslist-service:%v" .Release.Name .Values.statuslistService.service.port -}}
-{{- else -}}
-{{- "" -}}
-{{- end -}}
-{{- end }}
-
-{{/*
 IPFS_MFS_BASE_URL: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
@@ -366,3 +355,108 @@ Normalize Keycloak route path (leading slash, no trailing slash).
 {{- end -}}
 {{- end }}
 
+{{/*
+OID4VP trust ConfigMap name.
+*/}}
+{{- define "digital-contracting-service.oid4vpTrustConfigMapName" -}}
+{{- default (printf "%s-oid4vp-trust" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.trust.configMapName -}}
+{{- end }}
+
+{{/*
+Kubernetes secret holding demo wallet private keys (synced from Vault).
+*/}}
+{{- define "digital-contracting-service.demoWalletSecretName" -}}
+{{- default (printf "%s-demo-wallet" (include "digital-contracting-service.fullname" .)) .Values.oid4vp.demoWallet.secretName -}}
+{{- end }}
+
+{{/*
+PDF-Core internal service URL — auto-wired when pdfCore.enabled=true.
+*/}}
+{{- define "digital-contracting-service.pdfCoreURL" -}}
+{{- if .Values.pdfCore.url -}}
+{{- .Values.pdfCore.url -}}
+{{- else if .Values.pdfCore.enabled -}}
+{{- printf "http://%s-pdf-core:%v" (include "digital-contracting-service.fullname" .) .Values.pdfCore.service.port -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the Secret that holds the pdf-core C2PA signing material.
+*/}}
+{{- define "digital-contracting-service.pdfCoreSigningSecretName" -}}
+{{- default (printf "%s-pdf-core-signing" (include "digital-contracting-service.fullname" .)) .Values.pdfCore.signing.existingSecret -}}
+{{- end }}
+
+{{/*
+DCS_PDF_CORE_CRYPTO_PROVIDER_URL
+*/}}
+{{- define "digital-contracting-service.pdfCoreCryptoProviderURL" -}}
+{{- if .Values.pdfCore.signing.cryptoProviderURL -}}
+{{- .Values.pdfCore.signing.cryptoProviderURL -}}
+{{- else -}}
+{{- include "digital-contracting-service.cryptoProviderURL" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+DCS_PDF_CORE_CRYPTO_PROVIDER_KEY
+*/}}
+{{- define "digital-contracting-service.pdfCoreCryptoProviderKey" -}}
+{{- if .Values.pdfCore.signing.cryptoProviderKey -}}
+{{- .Values.pdfCore.signing.cryptoProviderKey -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- .Values.cryptoProvider.transit.c2paKey -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Name of the Secret that holds the x5chain PEM for pdf-core C2PA signing.
+Falls back to the devCertChain secret when the crypto provider is co-deployed.
+*/}}
+{{- define "digital-contracting-service.pdfCoreX5ChainSecretName" -}}
+{{- if .Values.pdfCore.signing.existingSecret -}}
+{{- .Values.pdfCore.signing.existingSecret -}}
+{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- include "digital-contracting-service.signingCertChainSecretName" . -}}
+{{- else -}}
+{{- include "digital-contracting-service.pdfCoreSigningSecretName" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Key within the x5chain Secret for pdf-core C2PA signing.
+*/}}
+{{- define "digital-contracting-service.pdfCoreX5ChainSecretKey" -}}
+{{- if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
+{{- include "digital-contracting-service.signingCertChainSecretKey" . -}}
+{{- else if .Values.pdfCore.signing.existingSecretX5ChainKey -}}
+{{- .Values.pdfCore.signing.existingSecretX5ChainKey -}}
+{{- else -}}
+{{- "x5chain-pem" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+STATUSLIST_SERVICE_URL — auto-derived from the statuslistService sub-chart when
+enabled=true, otherwise falls back to the explicit statuslistService.url override.
+*/}}
+{{- define "digital-contracting-service.statuslistServiceURL" -}}
+{{- if .Values.statuslistService.url -}}
+{{- .Values.statuslistService.url -}}
+{{- else if .Values.statuslistService.enabled -}}
+{{- printf "http://%s-statuslist-service:%v" .Release.Name .Values.statuslistService.service.port -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+PDF_CORE_CONTEXT_IRI — the @context IRI embedded in every JSON-LD envelope.
+Set pdfCore.contextIRI to override (e.g. a registered w3id IRI once available).
+Default: auto-derived as <pdfCoreURL>/ontology/dcs-pdf-core.
+*/}}
+{{- define "digital-contracting-service.pdfCoreContextIRI" -}}
+{{- if .Values.pdfCore.contextIRI -}}
+{{- .Values.pdfCore.contextIRI -}}
+{{- else -}}
+{{- printf "%s/ontology/dcs-pdf-core" (include "digital-contracting-service.pdfCoreURL" .) -}}
+{{- end -}}
+{{- end }}

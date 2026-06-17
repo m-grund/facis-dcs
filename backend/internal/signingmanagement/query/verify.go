@@ -6,16 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
-
-	signaturemanagement "digital-contracting-service/gen/signature_management"
-	"digital-contracting-service/internal/pdfgeneration/verify"
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	"digital-contracting-service/internal/signingmanagement/db"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
 
@@ -42,13 +42,13 @@ type SignatureVerifyResult struct {
 
 // SignatureVerifier handles the SignatureVerifyQry command.
 type SignatureVerifier struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB      *sqlx.DB
+	CRepo   db.ContractRepo
+	PDFCore *pdfcore.Client
 }
 
 // Handle verifies that the contract is APPROVED and returns the count of
-// active (non-revoked) signatures. Hash comparison is performed at the
-// service layer where PDF bytes are available.
+// active (non-revoked) signatures.
 func (h *SignatureVerifier) Handle(ctx context.Context, cmd SignatureVerifyQry) (*SignatureVerifyResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -84,17 +84,23 @@ func (h *SignatureVerifier) Handle(ctx context.Context, cmd SignatureVerifyQry) 
 		}, nil
 	}
 
-	contractVerifier := &verify.ContractVerifier{
-		BuildFn: func(jsonld []byte) ([]byte, error) {
-			return h.CRepo.RebuildContractPDFFromJSONLD(ctx, tx, cmd.DID, jsonld)
-		},
-		FetchFn:         h.CRepo.ContractIPFSFetchFn(ctx, tx, cmd.DID),
-		FetchManifestFn: h.CRepo.ContractManifestIPFSFetchFn(ctx, tx, cmd.DID),
-		CheckStatusFn:   h.CRepo.StatusListCheckFn(ctx, tx),
-	}
-	hashResult, err := contractVerifier.Verify(pdfBytes)
-	if err != nil {
-		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("verify PDF: %w", err))
+	// pdf-core /verify: re-renders JSON-LD and compares, validates C2PA chain.
+	// 200 → intact; 409 → content mismatch; other → C2PA invalid.
+	verifyResult, verifyErr := h.PDFCore.Verify(ctx, pdfBytes)
+	match := verifyErr == nil
+	c2paManifestFound := verifyErr == nil || (verifyErr != nil && strings.Contains(verifyErr.Error(), "status 409"))
+	c2paSignatureValid := verifyErr == nil
+
+	// Query live revocation state from the XFSC status list (DCS-OR-C2PA-006).
+	// VC bytes are returned directly by pdf-core — no PDF byte scanning required.
+	statusListStatus := ""
+	if verifyResult.VCProofValid && len(verifyResult.VCBytes) > 0 {
+		if cred, idx, ok := provenance.ExtractCredentialStatusFields(verifyResult.VCBytes); ok {
+			httpClient := &http.Client{Timeout: 10 * time.Second}
+			if status, statusErr := provenance.QueryStatusListStatus(ctx, httpClient, cred, idx); statusErr == nil {
+				statusListStatus = status
+			}
+		}
 	}
 
 	evt := event2.VerifyEvent{
@@ -105,8 +111,7 @@ func (h *SignatureVerifier) Handle(ctx context.Context, cmd SignatureVerifyQry) 
 		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 	}
-	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
-	if err != nil {
+	if err = event.Create(ctx, tx, evt, componenttype.SignatureManagement); err != nil {
 		return nil, fmt.Errorf("could not create event: %w", err)
 	}
 
@@ -115,30 +120,21 @@ func (h *SignatureVerifier) Handle(ctx context.Context, cmd SignatureVerifyQry) 
 	}
 
 	findings := make([]string, 0, 4)
-	if hashResult.PDFSignatureCount == 0 {
-		findings = append(findings, "No PDF signature found")
-	} else if hashResult.PDFSignatureValid {
-		findings = append(findings, fmt.Sprintf("PDF signature verification passed (%d signature(s))", hashResult.PDFSignatureCount))
-	} else {
-		findings = append(findings, fmt.Sprintf("PDF signature verification failed (%d signature(s))", hashResult.PDFSignatureCount))
-	}
-	if !hashResult.C2PAManifestFound {
+	if !c2paManifestFound {
 		findings = append(findings, "C2PA manifest not found")
-	} else if !hashResult.C2PASignatureValid {
+	} else if !c2paSignatureValid {
 		findings = append(findings, "C2PA signature invalid")
 	}
-	if !hashResult.VCProofValid {
+	if !verifyResult.VCProofValid {
 		findings = append(findings, "VC proof invalid or missing")
 	}
-	if status := strings.TrimSpace(hashResult.StatusListStatus); status != "" {
+	if status := strings.TrimSpace(statusListStatus); status != "" {
 		findings = append(findings, fmt.Sprintf("Status list state: %s", status))
 	}
 
 	return &SignatureVerifyResult{
-		Match:       hashResult.Match,
-		Findings:    findings,
-		SigCount:    sigCount,
-		JsonldHash:  &hashResult.JSONLDHash,
-		BasePdfHash: &hashResult.BasePDFHash,
+		Match:    match,
+		Findings: findings,
+		SigCount: sigCount,
 	}, nil
 }

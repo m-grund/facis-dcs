@@ -44,7 +44,7 @@ type Updater struct {
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
-		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, true)
+		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, nil, true)
 		if err != nil {
 			return fmt.Errorf("contract data validation failed: %w", err)
 		}

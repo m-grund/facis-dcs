@@ -202,6 +202,25 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 	return err
 }
 
+func (r *PostgresContractRepo) ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractPDFState, error) {
+	var state db.ContractPDFState
+	err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_renderer_version,''), COALESCE(pdf_c2pa_state,'') FROM contracts WHERE did=$1`, did,
+	).Scan(&state.IPFSCID, &state.RendererVersion, &state.C2PAState)
+	if err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (r *PostgresContractRepo) UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data db.ContractPDFState) error {
+	_, err := tx.ExecContext(ctx,
+		`UPDATE contracts SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3 WHERE did=$4`,
+		data.IPFSCID, data.RendererVersion, data.C2PAState, did,
+	)
+	return err
+}
+
 func (r *PostgresContractRepo) Update(ctx context.Context, tx *sqlx.Tx, data db.ContractUpdateData) error {
 	query, params, err := createQuery(data)
 	if err != nil {

@@ -208,6 +208,7 @@ cryptoProvider:
     keyType: "ecdsa-p256"
     vcKey: "dcs-vc-signing-key"
     vcKeyType: "ed25519"
+    c2paKey: "dcs-vc-signing-key"
   devCertChain:
     enabled: false
     secretName: ""
@@ -228,6 +229,10 @@ cryptoProvider:
 # See charts/statuslist-service/values.yaml for all configurable fields.
 statuslistService:
   enabled: false
+  # url overrides the auto-wired ClusterIP URL when enabled=true.
+  url: ""
+  # tenantID is the tenant identifier passed as STATUSLIST_TENANT_ID (defaults to "default" when empty).
+  tenantID: ""
   image:
     repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
     tag: "main"
@@ -271,6 +276,59 @@ federatedCatalogue:
 # See charts/custom-policy-agent/values.yaml for all configurable fields.
 mongodb:
   enabled: false
+
+# PDF-Core: C2PA-aware PDF compiler and verifier (DCS-OR-C2PA-*)
+pdfCore:
+  enabled: true
+  image:
+    repository: ""     # set to your registry image, e.g. registry.example.com/facis/pdf-core
+    tag: ""            # set to the image tag; falls back to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8080
+  # url overrides the auto-wired ClusterIP URL when enabled=true.
+  url: ""
+  # contextIRI overrides the JSON-LD @context IRI embedded in every envelope.
+  # Default: auto-derived as <pdfCoreURL>/ontology/dcs-pdf-core.
+  # Set to a registered w3id IRI once available.
+  contextIRI: ""
+  signing:
+    # Dev self-signed Ed25519 key and cert chain — safe for testing, replace for production.
+    signerKeyPEM: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEIMznz7D2Un+TH3DiK9glcGSP9Q6rxFjihMGqsTEW7awX
+      -----END PRIVATE KEY-----
+    x5ChainPEM: |
+      -----BEGIN CERTIFICATE-----
+      MIIBqDCCAVqgAwIBAgIUM9PuXdCa7mqXFjzXnvhTnnUMhjowBQYDK2VwMC0xGzAZ
+      BgNVBAMMEnBkZnVuIGMycGEgdGVzdCBDQTEOMAwGA1UECgwFcGRmdW4wHhcNMjYw
+      NjAzMTMzMzEzWhcNMzYwNTMxMTMzMzEzWjAsMRowGAYDVQQDDBFwZGZ1biBjMnBh
+      IHNpZ25lcjEOMAwGA1UECgwFcGRmdW4wKjAFBgMrZXADIQA7sS/jnmbqxqHcFi2t
+      7bZbREYxwQHD1kB+9pM7w1w2zaOBjDCBiTAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB
+      /wQEAwIHgDApBgNVHSUEIjAgBggrBgEFBQcDBAYIKwYBBQUHAyQGCisGAQQBg+he
+      AgEwHQYDVR0OBBYEFBVHg6RflTD1XD4N3cgojDMhpx0fMB8GA1UdIwQYMBaAFOSY
+      RbGZZwS3IRVmI1S2UmBrw71FMAUGAytlcANBAC3/N0dzgWUGpVrA7LmHVcxWOpFA
+      xhYhSsQfXNB4lwYM7GqoL6KH35569b6/yGSYaYvNWrf00UHGvQJubEWRtQo=
+      -----END CERTIFICATE-----
+      -----BEGIN CERTIFICATE-----
+      MIIBgjCCATSgAwIBAgIUc5iFXsue8tDJngSHTX5yRs00k8kwBQYDK2VwMC0xGzAZ
+      BgNVBAMMEnBkZnVuIGMycGEgdGVzdCBDQTEOMAwGA1UECgwFcGRmdW4wHhcNMjYw
+      NjAzMTMzMzEzWhcNMzYwNTMxMTMzMzEzWjAtMRswGQYDVQQDDBJwZGZ1biBjMnBh
+      IHRlc3QgQ0ExDjAMBgNVBAoMBXBkZnVuMCowBQYDK2VwAyEAH8U1I/LoaK7n8fKn
+      NTYPd+GZy4MN73Qac+sptG+L9LGjZjBkMB8GA1UdIwQYMBaAFOSYRbGZZwS3IRVm
+      I1S2UmBrw71FMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgEGMB0G
+      A1UdDgQWBBTkmEWxmWcEtyEVZiNUtlJga8O9RTAFBgMrZXADQQBLWt6SomwYBgIP
+      P1TpcKjIWT37PIwi0ofLy/7cVvkEFmflWydY3EZKAs3CmtoP1AVXBk0I9mrMo24g
+      b1CuzjcF
+      -----END CERTIFICATE-----
+    # Set to use an existing Secret instead of auto-creating one from the inline values above.
+    existingSecret: ""
+    existingSecretSignerKeyKey: "signer-key-pem"
+    existingSecretX5ChainKey: "x5chain-pem"
+    cryptoProviderURL: ""
+    cryptoProviderNamespace: ""
+    cryptoProviderKey: ""
 
 ipfs:
   enabled: false

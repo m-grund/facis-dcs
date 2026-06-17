@@ -32,7 +32,7 @@
       <legend class="fieldset-legend">Template State</legend>
       <select
         v-model="state"
-        class="select input-bordered w-full"
+        class="input-bordered select w-full"
         type="text"
         required
         :disabled="!uiStore.isTemplateEditable"
@@ -145,7 +145,6 @@
       </div>
       <p v-else class="mt-2 fieldset-label">No subcontract templates selected yet.</p>
     </fieldset>
-
   </div>
 </template>
 
@@ -169,7 +168,7 @@ interface SubcontractKey {
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, responsible, version } = storeToRefs(store)
+const { templateType, documentBlocks, subTemplateSnapshots, state, version } = storeToRefs(store)
 
 const { isManager } = useTemplatePermissions()
 

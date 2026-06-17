@@ -125,6 +125,12 @@ type SearchValues struct {
 	ContractData    string
 }
 
+type ContractPDFState struct {
+	IPFSCID         string `db:"pdf_ipfs_cid"`
+	RendererVersion string `db:"pdf_renderer_version"`
+	C2PAState       string `db:"pdf_c2pa_state"`
+}
+
 type ContractRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data Contract) (*time.Time, error)
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
@@ -136,4 +142,6 @@ type ContractRepo interface {
 	ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractUpdateData) error
+	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractPDFState, error)
+	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractPDFState) error
 }

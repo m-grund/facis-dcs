@@ -10,17 +10,21 @@
         <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
-        <!-- Verify / Return to draft / request changes -->
-         <button class="btn flex-1 btn-primary" :disabled="(!isReviewer && !isManager) || isSubmitting" @click="verifyTemplate">
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          Verify
-        </button>
-        <button class="btn flex-1 btn-primary" :disabled="(!isReviewer && !isManager) || isSubmitting" @click="returnToDraft">
+        <!-- Return to draft / request changes -->
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="returnToDraft"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Reject
         </button>
         <!-- Complete review (verify then forward to approval) -->
-        <button class="btn flex-1 btn-primary" :disabled="(!isReviewer && !isManager) || isSubmitting" @click="forwardToApproval">
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="forwardToApproval"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Approve
         </button>
@@ -209,8 +213,18 @@ const returnToDraft = async () => {
   }
 }
 
-const exportPDF = () => {
-  alert('not implemented yet')
-}
+const exportPDF = async () => {
+  if (route.params?.did === null || route.params?.did === undefined || Array.isArray(route.params?.did)) {
+    return
+  }
 
+  const did = route.params?.did ?? ''
+  const blob = await contractTemplateService.exportPdf(did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>

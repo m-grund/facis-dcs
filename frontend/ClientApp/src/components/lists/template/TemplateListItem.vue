@@ -18,11 +18,11 @@ const canEdit = computed(() => {
   const inSubmittedState = props.template.state === TemplateState.submitted && isReviewer.value
   const inValidStateForManager =
     (props.template.state === TemplateState.draft ||
-    props.template.state === TemplateState.submitted ||
-    props.template.state === TemplateState.rejected ||
-    props.template.state === TemplateState.reviewed ||
-    props.template.state === TemplateState.approved ||
-    props.template.state === TemplateState.deleted) &&
+      props.template.state === TemplateState.submitted ||
+      props.template.state === TemplateState.rejected ||
+      props.template.state === TemplateState.reviewed ||
+      props.template.state === TemplateState.approved ||
+      props.template.state === TemplateState.deleted) &&
     isManager.value
   return inDraftOrRejectedState || inSubmittedState || inValidStateForManager
 })

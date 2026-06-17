@@ -16,7 +16,7 @@ const props = defineProps<{
 const authStore = useAuthStore()
 const issuer = computed(() => authStore.user?.issuer)
 
-const { isCreator, isReviewer } = useContractPermissions();
+const { isCreator, isReviewer } = useContractPermissions()
 
 const emit = defineEmits<{ selectedNegotiation: [negotiation: ContractNegotiation | null] }>()
 

@@ -14,7 +14,11 @@
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Reject
         </button>
-        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="resubmit">
+        <button
+          :disabled="isSubmitting || (!isApprover && !isManager)"
+          class="btn flex-1 btn-primary"
+          @click="resubmit"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Resubmit
         </button>
@@ -211,8 +215,18 @@ async function reject() {
   }
 }
 
-const exportPDF = () => {
-  alert('not implemented yet')
-}
+const exportPDF = async () => {
+  if (route.params?.did === null || route.params?.did === undefined || Array.isArray(route.params?.did)) {
+    return
+  }
 
+  const did = route.params?.did ?? ''
+  const blob = await contractTemplateService.exportPdf(did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
