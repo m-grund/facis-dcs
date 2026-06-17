@@ -112,6 +112,7 @@ async function register() {
 const exportPDF = () => {
   alert('not implemented yet')
 }
+
 </script>
 
 <template>

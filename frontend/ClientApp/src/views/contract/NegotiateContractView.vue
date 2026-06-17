@@ -373,16 +373,10 @@ const hasActiveNegotiations = computed(() => {
   )
 })
 
-const exportPdf = async () => {
-  const did = route.params.did as string
-  const blob = await contractWorkflowService.exportPdf(did)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `contract-${did}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+const exportPDF = () => {
+  alert('not implemented yet')
 }
+
 </script>
 
 <template>
@@ -475,7 +469,7 @@ const exportPdf = async () => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
-        <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn flex-1 btn-primary"

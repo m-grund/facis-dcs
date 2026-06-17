@@ -14,6 +14,7 @@ import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-e
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
@@ -28,6 +29,8 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const navStore = useNavStore()
 const authStore = useAuthStore()
+
+const { isApprover } = useContractPermissions();
 
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -203,6 +206,11 @@ function applyContractDataToDraft(contractData?: unknown) {
   contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   verificationResult.value = null
 }
+
+const exportPDF = () => {
+  alert('not implemented yet')
+}
+
 </script>
 
 <template>
@@ -275,10 +283,11 @@ function applyContractDataToDraft(contractData?: unknown) {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.reviewed"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting"
+          :disabled="!isApprover || isSubmitting"
           @click="reject"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
@@ -287,7 +296,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <button
           v-if="contract?.state === ContractState.reviewed"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting"
+          :disabled="!isApprover || isSubmitting"
           @click="resubmit"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
@@ -296,7 +305,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <button
           v-if="contract?.state === ContractState.reviewed"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting"
+          :disabled="!isApprover || isSubmitting"
           @click="approve"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
