@@ -18,8 +18,22 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 LOCAL_FORWARD_PORT ?= 18991
 SERVICE_PORT ?= 8991
+HYDRA_SERVICE ?= $(HELM_RELEASE)-hydra
+LOCAL_HYDRA_PORT ?= 4444
+HYDRA_SERVICE_PORT ?= 4444
 DCS_ISSUER ?= localhost
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
+BDD_HYDRA_PUBLIC_ISSUER_URL ?= http://127.0.0.1:$(LOCAL_HYDRA_PORT)
+BDD_PUBLIC_ORIGIN ?= http://127.0.0.1:$(LOCAL_FORWARD_PORT)
+BDD_DCS_PUBLIC_BASE_URL ?= $(BDD_PUBLIC_ORIGIN)$(DCS_API_BASE_PATH)
+BDD_HELM_SET := \
+	--set-string hydra.config.publicIssuerURL="$(BDD_HYDRA_PUBLIC_ISSUER_URL)" \
+	--set-string route.publicBaseURL="$(BDD_DCS_PUBLIC_BASE_URL)" \
+	--set-string hydra.config.loginURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/ui/" \
+	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/consent" \
+	--set-string hydra.config.logoutURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
+	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/callback" \
+	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete"
 HELM_CHART_PATH ?= ../../deployment/helm
 HELM_TIMEOUT ?= 20m
 
@@ -87,6 +101,10 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
+		HYDRA_SERVICE="$(HYDRA_SERVICE)" \
+		LOCAL_HYDRA_PORT="$(LOCAL_HYDRA_PORT)" \
+		HYDRA_SERVICE_PORT="$(HYDRA_SERVICE_PORT)" \
+		BDD_HYDRA_PUBLIC_ISSUER_URL="$(BDD_HYDRA_PUBLIC_ISSUER_URL)" \
 		DCS_ISSUER="$(DCS_ISSUER)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
@@ -150,6 +168,7 @@ kind_deploy: kind_load_image
 		--values "$(HELM_CHART_PATH)/values.bdd.yml" \
 		--set image.repository="$(DOCKER_IMAGE_REPOSITORY)" \
 		--set image.tag="$(DOCKER_IMAGE_TAG)" \
+		$(BDD_HELM_SET) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
