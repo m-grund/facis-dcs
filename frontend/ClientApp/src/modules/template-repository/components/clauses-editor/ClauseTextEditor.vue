@@ -15,7 +15,7 @@
       <!-- placeholder suggestions -->
       <div v-show="showPlaceholderSuggestions" :style="placeholderDropdownStyle" :class="placeholderDropdownClass">
         <p class="border-b border-base-200 px-3 py-2 text-xs text-base-content/50">
-          Pick a rule parameter to insert (each rule once)
+          Pick a requirement field
         </p>
         <button
           v-for="(opt, idx) in filteredPlaceholderOptions"
@@ -37,7 +37,7 @@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <SemanticRuleList
         title="Used in text"
-        empty-message="No rules used yet."
+        empty-message="No requirements used yet."
         :conditions="usedConditions"
         :is-param-used-in-text="isParamUsedInText"
         :is-param-required-and-unused="isParamRequiredAndUnused"
@@ -48,8 +48,8 @@
         @insert-placeholder="onInsertPlaceholderFromPanel"
       />
       <SemanticRuleList
-        title="Not used"
-        empty-message="All rules used or none defined."
+        title="Available requirements"
+        empty-message="All requirements used or none defined."
         :conditions="unusedConditions"
         @highlight-rule="(id) => setHighlight({ conditionId: id })"
         @highlight-param="(id, name) => setHighlight({ conditionId: id, parameterName: name })"

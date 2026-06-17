@@ -34,6 +34,24 @@
           </div>
 
           <div class="border-t border-base-300 pt-4">
+            <div v-if="pendingPlacementClause" class="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <p class="mb-2 text-xs font-semibold text-primary">Selected clause</p>
+              <button
+                type="button"
+                class="flex min-h-[44px] w-full cursor-pointer flex-col justify-center rounded-lg border border-primary/40 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+                @click="handleAddClause(pendingPlacementClause.blockId)"
+              >
+                <span class="text-sm font-medium text-base-content">
+                  {{ pendingPlacementClause.title || 'Untitled clause' }}
+                </span>
+                <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
+                  <ClauseSegmentsPreview
+                    :segments="getSegments(pendingPlacementClause)"
+                    :get-placeholder-label="getPlaceholderLabel"
+                  />
+                </p>
+              </button>
+            </div>
             <div class="mb-2 flex flex-col gap-2">
               <p class="text-sm text-base-content/70">Defined clauses:</p>
               <input
@@ -96,7 +114,7 @@ import {
 
 const draftStore = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { addBlockModalContext } = storeToRefs(uiStore)
+const { addBlockModalContext, pendingPlacementClauseBlockId } = storeToRefs(uiStore)
 const { documentBlocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
 
 const isContractWorkflow = computed(() => uiStore.workflow === 'contract')
@@ -126,11 +144,15 @@ const unusedClauses = computed((): ClauseBlock[] => {
   const unused = clauses.filter((c) => !inOutline.has(c.blockId))
   return [...unused].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''))
 })
+const pendingPlacementClause = computed(() =>
+  unusedClauses.value.find((clause) => clause.blockId === pendingPlacementClauseBlockId.value),
+)
 const clauseSearch = ref('')
 const filteredUnusedClauses = computed((): ClauseBlock[] => {
   const query = clauseSearch.value.trim().toLowerCase()
-  if (!query) return unusedClauses.value
-  return unusedClauses.value.filter((clause) =>
+  const clauses = unusedClauses.value.filter((clause) => clause.blockId !== pendingPlacementClauseBlockId.value)
+  if (!query) return clauses
+  return clauses.filter((clause) =>
     [
       clause.title ?? '',
       clause.text ?? '',

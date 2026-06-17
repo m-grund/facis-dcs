@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-2">
     <p v-if="!clauseBlocks.length" class="py-6 text-center text-xs text-base-content/40 italic">
-      No clauses defined yet.
+      Create clauses from Data Requirements to see them here.
     </p>
     <div
       v-for="clause in clauseBlocks"
@@ -22,8 +22,11 @@
         <div v-else>
           <div class="text-sm font-semibold text-base-content">
             {{ clause.title ?? '' }}
-            <span v-if="outlineBlockIds.has(clause.blockId)" class="ml-1 font-normal text-base-content/60">
-              (used in builder)
+            <span
+              class="badge ml-1 badge-sm"
+              :class="outlineBlockIds.has(clause.blockId) ? 'badge-success' : 'badge-outline'"
+            >
+              {{ outlineBlockIds.has(clause.blockId) ? 'Placed' : 'Not placed' }}
             </span>
           </div>
           <p class="mt-1 text-xs leading-relaxed whitespace-pre-wrap text-base-content/70">
@@ -36,6 +39,14 @@
         v-if="editable && editingBlockId !== clause.blockId"
         class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
       >
+        <button
+          v-if="!outlineBlockIds.has(clause.blockId)"
+          type="button"
+          class="btn btn-secondary btn-xs"
+          @click="$emit('place', clause.blockId)"
+        >
+          Place in document
+        </button>
         <button
           type="button"
           class="btn btn-ghost btn-xs"
@@ -87,6 +98,7 @@ defineEmits<{
   delete: [blockId: string]
   edit: [blockId: string]
   save: [payload: { blockId: string; title: string; text: string }]
+  place: [blockId: string]
   'cancel-edit': []
 }>()
 

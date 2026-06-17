@@ -102,19 +102,19 @@
                 <span v-if="item.condition.entityRole" class="badge badge-outline badge-sm">
                   {{ item.condition.entityRole }}
                 </span>
-                <span class="badge badge-ghost badge-sm">
-                  used in {{ item.usedInClauseCount }} clause{{ item.usedInClauseCount === 1 ? '' : 's' }}
+                <span class="badge badge-sm" :class="requirementStatusClass(item)">
+                  {{ requirementStatusLabel(item) }}
                 </span>
               </div>
             </div>
-            <button
-              v-if="uiStore.isTemplateEditable"
-              type="button"
-              class="btn btn-ghost btn-xs text-error"
-              @click="deleteRequirement(item)"
-            >
-              Delete
-            </button>
+            <div v-if="uiStore.isTemplateEditable && !item.subTemplateRef" class="flex shrink-0 gap-1">
+              <button type="button" class="btn btn-secondary btn-xs" @click="createClauseFromRequirement(item)">
+                Create clause
+              </button>
+              <button type="button" class="btn btn-ghost btn-xs text-error" @click="deleteRequirement(item)">
+                Delete
+              </button>
+            </div>
           </div>
 
           <div class="space-y-3">
@@ -238,6 +238,16 @@ const clauseCountByConditionId = computed(() => {
   return counts
 })
 
+const placedClauseCountByConditionId = computed(() => {
+  const counts: Record<string, number> = {}
+  const inOutline = store.blockIdsInOutline
+  for (const block of allBlocks.value) {
+    if (!isClauseBlock(block) || !inOutline.has(block.blockId)) continue
+    for (const id of block.conditionIds) counts[id] = (counts[id] ?? 0) + 1
+  }
+  return counts
+})
+
 const conditionItems = computed<RequirementItem[]>(() => {
   const main = mainSemanticConditions.value.map((condition) => ({
     condition,
@@ -342,6 +352,33 @@ function updateParameterOperators(condition: SemanticCondition, index: number, o
 
 function deleteRequirement(item: RequirementItem) {
   store.deleteSemanticCondition(item.condition.conditionId, item.subTemplateRef)
+}
+
+function createClauseFromRequirement(item: RequirementItem) {
+  const condition = item.condition
+  const requiredParameters = condition.parameters.filter((parameter) => parameter.isRequired)
+  const text = requiredParameters
+    .map((parameter) => `${semanticParameterLabel(parameter)}: {{${condition.conditionId}.${parameter.parameterName}}}`)
+    .join('\n')
+  uiStore.startClauseDraft({
+    title: condition.conditionName,
+    text,
+    conditionIds: [condition.conditionId],
+    sourceConditionName: condition.conditionName,
+  })
+}
+
+function requirementStatusLabel(item: RequirementItem) {
+  if ((placedClauseCountByConditionId.value[item.condition.conditionId] ?? 0) > 0) return 'Placed'
+  if (item.usedInClauseCount > 0) return 'Clause drafted'
+  return 'No clause'
+}
+
+function requirementStatusClass(item: RequirementItem) {
+  const status = requirementStatusLabel(item)
+  if (status === 'Placed') return 'badge-success'
+  if (status === 'Clause drafted') return 'badge-info'
+  return 'badge-outline'
 }
 
 function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {

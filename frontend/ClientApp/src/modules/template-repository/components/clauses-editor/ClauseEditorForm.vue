@@ -1,7 +1,7 @@
 <template>
   <!-- <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm"> -->
   <h3 class="mb-4 text-sm font-semibold text-base-content/80">
-    {{ mode === 'edit' ? 'Edit clause' : 'New clause' }}
+    {{ heading }}
   </h3>
   <div class="space-y-4">
     <div>
@@ -26,6 +26,9 @@
       <button v-if="mode === 'edit'" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">
         Cancel
       </button>
+      <button v-else-if="showCancel" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">
+        Cancel
+      </button>
       <span v-else />
       <button type="button" class="btn btn-sm btn-secondary" :disabled="!canSubmit" @click="handleSubmit">
         {{ mode === 'edit' ? 'Save changes' : 'Add clause' }}
@@ -47,6 +50,8 @@ const props = defineProps<{
   initialTitle: string
   initialText: string
   semanticConditions: SemanticCondition[]
+  sourceRequirementName?: string
+  showCancel?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -56,6 +61,11 @@ const emit = defineEmits<{
 
 const localTitle = ref(props.initialTitle)
 const localText = ref(props.initialText)
+
+const heading = computed(() => {
+  if (props.mode === 'edit') return 'Edit clause'
+  return props.sourceRequirementName ? `Create clause from ${props.sourceRequirementName}` : 'New clause'
+})
 
 watch(
   () => [props.initialTitle, props.initialText] as const,

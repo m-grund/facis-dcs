@@ -4,10 +4,13 @@
     <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
       <ClauseEditorForm
         mode="create"
-        :initial-title="newClauseTitle"
-        :initial-text="newClauseText"
+        :initial-title="draftTitle"
+        :initial-text="draftText"
         :semantic-conditions="newClauseSemanticConditions"
+        :source-requirement-name="pendingClauseDraft?.sourceConditionName"
+        :show-cancel="!!pendingClauseDraft"
         @submit="addClause"
+        @cancel="cancelPendingClauseDraft"
       />
     </section>
 
@@ -22,6 +25,7 @@
         :editable="uiStore.isTemplateEditable"
         @delete="deleteClause"
         @edit="startEditClause"
+        @place="placeClause"
         @save="saveEditedClause"
         @cancel-edit="cancelEdit"
       />
@@ -40,11 +44,18 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { documentBlocks, semanticConditions: mainSemanticConditions, subTemplateSnapshots } = storeToRefs(store)
+const {
+  documentBlocks,
+  documentOutline,
+  semanticConditions: mainSemanticConditions,
+  subTemplateSnapshots,
+} = storeToRefs(store)
+const { pendingClauseDraft } = storeToRefs(uiStore)
 
 const editingBlockId = ref<string | null>(null)
 const newClauseTitle = ref('')
 const newClauseText = ref('')
+const rootBlock = computed(() => documentOutline.value.find((block) => block.isRoot))
 
 /** Extract conditionIds from clause text placeholders {{conditionId.parameterName}}. */
 function conditionIdsFromText(text: string): string[] {
@@ -76,6 +87,8 @@ const semanticConditions = computed(() => {
 })
 
 const newClauseSemanticConditions = computed(() => semanticConditions.value)
+const draftTitle = computed(() => pendingClauseDraft.value?.title ?? newClauseTitle.value)
+const draftText = computed(() => pendingClauseDraft.value?.text ?? newClauseText.value)
 
 function addClause(payload: { title: string; text: string }) {
   const text = payload.text
@@ -86,6 +99,13 @@ function addClause(payload: { title: string; text: string }) {
     text,
     conditionIds,
   })
+  newClauseTitle.value = ''
+  newClauseText.value = ''
+  uiStore.clearPendingClauseDraft()
+}
+
+function cancelPendingClauseDraft() {
+  uiStore.clearPendingClauseDraft()
   newClauseTitle.value = ''
   newClauseText.value = ''
 }
@@ -113,5 +133,12 @@ function saveEditedClause(payload: { blockId: string; title: string; text: strin
 function deleteClause(blockId: string) {
   store.deleteClause(blockId)
   if (editingBlockId.value === blockId) cancelEdit()
+}
+
+function placeClause(blockId: string) {
+  const root = rootBlock.value
+  if (!root) return
+  uiStore.startClausePlacement(blockId)
+  uiStore.openAddBlockModal(root.blockId, root.children.length)
 }
 </script>
