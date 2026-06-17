@@ -18,7 +18,6 @@
       >
         <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
           <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-          <CopyTemplateButton :disabled="!isEditMode || (!isCreator && !isManager)" class="btn flex-1 btn-primary" />
           <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="submit">
             <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
             {{ isEditMode ? 'Update' : 'Create' }}
@@ -41,7 +40,6 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
 const router = useRouter()
 const route = useRoute()

@@ -28,7 +28,7 @@ const route = useRoute()
 const navStore = useNavStore()
 const authStore = useAuthStore()
 
-const { isReviewer } = useContractPermissions();
+const { isReviewer, isManager } = useContractPermissions();
 
 const errorStore = useErrorStore()
 
