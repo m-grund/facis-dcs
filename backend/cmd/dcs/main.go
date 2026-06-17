@@ -327,7 +327,10 @@ func main() {
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
-		authSvc = service.NewAuth(db, presentationRepo)
+		authSvc, err = service.NewAuth(db, presentationRepo)
+		if err != nil {
+			log.Fatalf(ctx, err, "auth service init failed")
+		}
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)

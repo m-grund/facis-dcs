@@ -34,26 +34,29 @@ type authSvc struct {
 	requestSigner     oid4vprequest.Signer
 }
 
-func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo) genauth.Service {
+func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo) (genauth.Service, error) {
 	if db != nil {
 		oid4vp.ConfigurePresentationAuditRecorder(&authaudit.Recorder{DB: db})
 	}
 
-	var requestSigner oid4vprequest.Signer
-	if signer, err := oid4vprequest.LoadSignerFromEnv(); err == nil {
-		requestSigner = signer
-	} else if strings.TrimSpace(os.Getenv("VAULT_ADDR")) != "" {
-		log.Printf(context.Background(), "oid4vp request signer not loaded: %v", err)
+	requestSigner, err := oid4vprequest.LoadSignerFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("oid4vp request signer: %w", err)
+	}
+
+	publicAPIBase, err := publicAPIBaseURL()
+	if err != nil {
+		return nil, err
 	}
 
 	return &authSvc{
 		hydra:             hydra.NewFromEnv(),
 		logoutRedirectURI: os.Getenv("HYDRA_POST_LOGOUT_REDIRECT_URI"),
 		uiBasePath:        pathutil.NormalizePath(os.Getenv("DCS_UI_PATH"), "/ui/", true),
-		publicAPIBase:     publicAPIBaseURL(),
+		publicAPIBase:     publicAPIBase,
 		presentations:     presentations,
 		requestSigner:     requestSigner,
-	}
+	}, nil
 }
 
 func (s *authSvc) Callback(ctx context.Context, p *genauth.CallbackPayload) (*genauth.CallbackResult, error) {

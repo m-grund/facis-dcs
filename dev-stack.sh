@@ -37,10 +37,8 @@ kubectl wait --for=condition=ready pod \
   --timeout=10m
 
 # Setup backend .env
-if [ ! -f backend/.env ]; then
-  cp backend/.env.dev backend/.env
-  echo "✓ .env file created from .env.dev"
-fi
+cp backend/.env.dev backend/.env
+echo "✓ .env updated from .env.dev"
 
 # Fetch cert-chain from K8s secret
 mkdir -p "$(dirname "$CERT_FILE")"
