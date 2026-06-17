@@ -169,6 +169,22 @@ BDD scenarios live in `features/` at the project root. Tests are run against a f
 
 ### Run locally
 
+These steps are primarily for working on tests. Start the deployment, run the tests as often as you want, stop the deployment.
+```bash
+# 1. Start the environment
+make -C tests/bdd kind_up
+
+# 2. Run tests
+# All
+make -C tests/bdd run_bdd_kind_once
+# File/Folder
+make -C tests/bdd run_bdd_kind_once F=features/<PATH>
+
+# 3. Stop the environment and reset
+make -C tests/bdd kind_down
+```
+
+These step is for deploy and auto-run all tests a single time
 ```bash
 # Build DCS image, spin up kind cluster, deploy via Helm, run all scenarios
 make -C tests/bdd run_bdd_kind_ci
