@@ -34,13 +34,32 @@ echo "Starting port-forward svc/$DCS_SERVICE $LOCAL_FORWARD_PORT:$SERVICE_PORT i
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/$DCS_SERVICE" "$LOCAL_FORWARD_PORT:$SERVICE_PORT" > .tmp/port-forward.log 2>&1 &
 echo $! > .tmp/port-forward.pid
 
-sleep 2
+echo "Waiting for port-forward on $LOCAL_FORWARD_PORT to be ready..."
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 "$LOCAL_FORWARD_PORT" 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for port-forward on $LOCAL_FORWARD_PORT"
+    cat .tmp/port-forward.log || true
+    exit 1
+  fi
+  sleep 1
+done
+echo "Port-forward on $LOCAL_FORWARD_PORT is ready"
 
 echo "Starting port-forward for PostgreSQL"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/dcs-postgresql" 5432:5432 > .tmp/port-forward-db.log 2>&1 &
 echo $! > .tmp/port-forward-db.pid
 
-sleep 2
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 5432 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for port-forward on 5432"
+    cat .tmp/port-forward-db.log || true
+    exit 1
+  fi
+  sleep 1
+done
+echo "Port-forward on 5432 is ready"
 
 source "$VENV_PATH/bin/activate"
 export HOSTALIASES="$PWD/.tmp/hostaliases"
