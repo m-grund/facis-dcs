@@ -14,6 +14,7 @@ import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-e
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
@@ -44,6 +45,8 @@ const contractContentValuesStore = useContractContentValuesStore()
 const scrollStore = useScrollStore()
 
 const isSubmitting = ref(false)
+
+const { isCreator, isReviewer } = useContractPermissions();
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
@@ -485,7 +488,7 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
+          :disabled="(!isCreator && !isReviewer) || isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>

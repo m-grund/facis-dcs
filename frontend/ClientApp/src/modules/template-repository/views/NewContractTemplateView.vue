@@ -18,7 +18,7 @@
       >
         <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
           <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-          <CopyTemplateButton v-if="isEditMode && (isCreator || isManager)" class="btn flex-1 btn-primary" />
+          <CopyTemplateButton :disabled="!isEditMode || (!isCreator && !isManager)" class="btn flex-1 btn-primary" />
           <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="submit">
             <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
             {{ isEditMode ? 'Update' : 'Create' }}
@@ -131,7 +131,7 @@ const submit = async () => {
       await contractTemplateService.create(data)
     } else {
 
-      if (isManager) {
+      if (isManager.value) {
         // update existing template
         const data = draftStore.templateUpdateManageRequestData
         if (data) {

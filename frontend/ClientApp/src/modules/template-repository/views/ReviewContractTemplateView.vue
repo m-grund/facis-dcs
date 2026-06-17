@@ -8,14 +8,14 @@
       <ConfirmationModal ref="comment-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-        <CopyTemplateButton v-if="isReviewer || isManager" class="btn flex-1 btn-primary" />
+        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <!-- Return to draft / request changes -->
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="returnToDraft">
+        <button class="btn flex-1 btn-primary" :disabled="!isReviewer || isSubmitting" @click="returnToDraft">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Reject
         </button>
         <!-- Complete review (verify then forward to approval) -->
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="forwardToApproval">
+        <button class="btn flex-1 btn-primary" :disabled="!isReviewer || isSubmitting" @click="forwardToApproval">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Approve
         </button>
@@ -55,7 +55,7 @@ const commentDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('co
 const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const { isReviewer, isManager: isManagerBase } = useTemplatePermissions()
+const { isCreator, isReviewer, isManager: isManagerBase } = useTemplatePermissions()
 const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)

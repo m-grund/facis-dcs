@@ -7,7 +7,6 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState, type ContractTemplateState } from '@/types/contract-template-state'
-import { error } from 'console'
 import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 

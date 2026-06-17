@@ -15,9 +15,10 @@ const { isCreator, isReviewer, isApprover, isManager } = useTemplatePermissions(
 const canEdit = computed(() => {
   const inDraftOrRejectedState =
     (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) && isCreator.value
-  const inSubmittedState = props.template.state === TemplateState.submitted && isManager.value
+  const inSubmittedState = props.template.state === TemplateState.submitted && isReviewer.value
   const inValidStateForManager =
     (props.template.state === TemplateState.draft ||
+    props.template.state === TemplateState.submitted ||
     props.template.state === TemplateState.rejected ||
     props.template.state === TemplateState.reviewed ||
     props.template.state === TemplateState.approved ||

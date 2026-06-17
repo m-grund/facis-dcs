@@ -6,7 +6,7 @@
     <div v-if="$route.params.did === did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <CopyTemplateButton v-if="isCreator || isManager" class="btn flex-1 btn-primary" />
+        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <template v-if="isCreator || isManager">
           <button v-if="state === TemplateState.draft" class="btn flex-1 btn-primary" @click="submitTemplate">
             Submit
