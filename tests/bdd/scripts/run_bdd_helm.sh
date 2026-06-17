@@ -28,7 +28,6 @@ trap cleanup EXIT
 : "${LOCAL_FORWARD_PORT:?LOCAL_FORWARD_PORT is required}"
 : "${SERVICE_PORT:?SERVICE_PORT is required}"
 : "${DCS_API_BASE_PATH:?DCS_API_BASE_PATH is required}"
-: "${BDD_RUN_MODE:?BDD_RUN_MODE is required (dev|all)}"
 : "${PROJECT_ROOT:?PROJECT_ROOT is required}"
 
 mkdir -p .tmp .reports/junit
@@ -131,13 +130,8 @@ if [[ -n "${ARG_BDD_JUNIT:-}" ]]; then
 fi
 
 echo "Running BDD suite via bdd-executor environment"
-if [[ "$BDD_RUN_MODE" == "all" ]]; then
-  cd "$PROJECT_ROOT"
-  "$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
-else
-  cd "$PROJECT_ROOT"
-  "$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
-fi
+cd "$PROJECT_ROOT"
+"$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
 
 JUNIT_COUNT=$(find "$REPORTS_JUNIT_DIR" -name "*.xml" 2>/dev/null | wc -l || true)
 echo "Generated $JUNIT_COUNT junit XML files in $REPORTS_JUNIT_DIR/"
