@@ -160,21 +160,41 @@ kind_load_image: kind_create
 	@docker image inspect "$(DOCKER_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(DOCKER_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(DOCKER_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
+CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
+
 kind_deploy: kind_load_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+	@"$(HELM_BIN)" repo add hashicorp https://helm.releases.hashicorp.com --force-update
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
-	@if ! "$(HELM_BIN)" upgrade --install "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
+	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
+	@# ready, but DCS can't become ready until the devCertChain post-install hook has
+	@# created its Secret — a deadlock. We break the cycle by letting helm return as
+	@# soon as resources are applied, then waiting for the secret and DCS separately.
+	@"$(HELM_BIN)" upgrade --install "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
 		--namespace "$(KIND_NAMESPACE)" \
 		--create-namespace \
-		--wait \
 		--timeout "$(HELM_TIMEOUT)" \
 		--values "$(HELM_CHART_PATH)/values.bdd.yml" \
 		--set image.repository="$(DOCKER_IMAGE_REPOSITORY)" \
 		--set image.tag="$(DOCKER_IMAGE_TAG)" \
 		$(KIND_HELM_VALUES) \
-		$(KIND_HELM_SET); then \
+		$(KIND_HELM_SET)
+	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
+	@deadline=$$(( $$(date +%s) + 1200 )); \
+	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
+		if [ $$(date +%s) -gt $$deadline ]; then \
+			echo "Timed out waiting for $(CERT_CHAIN_SECRET)"; \
+			"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -o wide || true; \
+			"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
+			exit 1; \
+		fi; \
+		sleep 5; \
+	done
+	@echo "Waiting for DCS deployment to become available..."
+	@if ! "$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout status \
+		deployment/"$(DCS_DEPLOYMENT)" --timeout "$(HELM_TIMEOUT)"; then \
 		echo "=== PODS ==="; \
 		"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -o wide || true; \
 		echo "=== DEPLOYMENTS ==="; \
@@ -182,7 +202,7 @@ kind_deploy: kind_load_image
 		echo "=== EVENTS ==="; \
 		"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
 		echo "=== DCS LOGS ==="; \
-		"$(KUBECTL_BIN)" logs deployment/$(DCS_DEPLOYMENT) -n "$(KIND_NAMESPACE)" --tail=200 || true; \
+		"$(KUBECTL_BIN)" logs deployment/"$(DCS_DEPLOYMENT)" -n "$(KIND_NAMESPACE)" --tail=200 || true; \
 		exit 1; \
 	fi
 
