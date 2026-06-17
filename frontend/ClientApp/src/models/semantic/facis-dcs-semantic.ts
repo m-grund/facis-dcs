@@ -21,17 +21,17 @@ export const FACIS_DCS_SEMANTIC_PROFILE: SemanticProfile = {
 }
 
 export type DcsOperator =
-  | 'Equals'
-  | 'NotEquals'
-  | 'In'
-  | 'NotIn'
-  | 'GreaterThan'
-  | 'GreaterThanOrEqual'
-  | 'LessThan'
-  | 'LessThanOrEqual'
-  | 'Between'
-  | 'Contains'
-  | 'MatchesRegex'
+  | 'odrl:eq'
+  | 'odrl:neq'
+  | 'odrl:gt'
+  | 'odrl:gteq'
+  | 'odrl:lt'
+  | 'odrl:lteq'
+  | 'odrl:isAnyOf'
+  | 'odrl:isNoneOf'
+  | 'odrl:hasPart'
+  | 'dcs:between'
+  | 'dcs:matchesRegex'
 
 export interface UiMetadata {
   label?: string
@@ -352,46 +352,23 @@ export function buildPolicyBundleFromSemanticRules(semanticRules: SemanticRule[]
   }
 }
 
-function odrlOperatorFor(operator: DcsOperator): string {
-  switch (operator) {
-    case 'Equals':
-      return 'odrl:eq'
-    case 'NotEquals':
-      return 'odrl:neq'
-    case 'In':
-      return 'odrl:isAnyOf'
-    case 'NotIn':
-      return 'odrl:isNoneOf'
-    case 'GreaterThan':
-      return 'odrl:gt'
-    case 'GreaterThanOrEqual':
-      return 'odrl:gteq'
-    case 'LessThan':
-      return 'odrl:lt'
-    case 'LessThanOrEqual':
-      return 'odrl:lteq'
-    default:
-      return ''
-  }
-}
-
 export function normalizeSemanticOperator(value: string): DcsOperator | null {
   return isDcsOperator(value) ? value : null
 }
 
 function isDcsOperator(value: string): value is DcsOperator {
   return [
-    'Equals',
-    'NotEquals',
-    'In',
-    'NotIn',
-    'GreaterThan',
-    'GreaterThanOrEqual',
-    'LessThan',
-    'LessThanOrEqual',
-    'Between',
-    'Contains',
-    'MatchesRegex',
+    'odrl:eq',
+    'odrl:neq',
+    'odrl:gt',
+    'odrl:gteq',
+    'odrl:lt',
+    'odrl:lteq',
+    'odrl:isAnyOf',
+    'odrl:isNoneOf',
+    'odrl:hasPart',
+    'dcs:between',
+    'dcs:matchesRegex',
   ].includes(value)
 }
 

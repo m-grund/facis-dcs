@@ -280,23 +280,23 @@ function normalizeDecimalInput(value: string): string {
 
 function operatorOptionsForType(type: SemanticConditionParameter['type']) {
   const equality = [
-    { value: 'Equals' as SemanticOperateType, label: 'Must equal' },
-    { value: 'NotEquals' as SemanticOperateType, label: 'Must not equal' },
+    { value: 'odrl:eq' as SemanticOperateType, label: 'Must equal' },
+    { value: 'odrl:neq' as SemanticOperateType, label: 'Must not equal' },
   ]
   if (type === 'decimal' || type === 'integer' || type === 'date') {
     return [
-      { value: 'GreaterThan' as SemanticOperateType, label: 'Must be greater than' },
-      { value: 'GreaterThanOrEqual' as SemanticOperateType, label: 'Must be at least' },
-      { value: 'LessThan' as SemanticOperateType, label: 'Must be less than' },
-      { value: 'LessThanOrEqual' as SemanticOperateType, label: 'Must be at most' },
+      { value: 'odrl:gt' as SemanticOperateType, label: 'Must be greater than' },
+      { value: 'odrl:gteq' as SemanticOperateType, label: 'Must be at least' },
+      { value: 'odrl:lt' as SemanticOperateType, label: 'Must be less than' },
+      { value: 'odrl:lteq' as SemanticOperateType, label: 'Must be at most' },
       ...equality,
     ]
   }
   if (type === 'string' || type === 'enum') {
     return [
       ...equality,
-      { value: 'Contains' as SemanticOperateType, label: 'Must contain' },
-      { value: 'MatchesRegex' as SemanticOperateType, label: 'Must match pattern' },
+      { value: 'odrl:hasPart' as SemanticOperateType, label: 'Must contain' },
+      { value: 'dcs:matchesRegex' as SemanticOperateType, label: 'Must match pattern' },
     ]
   }
   return equality
@@ -304,13 +304,13 @@ function operatorOptionsForType(type: SemanticConditionParameter['type']) {
 
 function setOperatorOptions() {
   return [
-    { value: 'In' as SemanticOperateType, label: 'Allow only' },
-    { value: 'NotIn' as SemanticOperateType, label: 'Exclude' },
+    { value: 'odrl:isAnyOf' as SemanticOperateType, label: 'Allow only' },
+    { value: 'odrl:isNoneOf' as SemanticOperateType, label: 'Exclude' },
   ]
 }
 
-function isSetOperator(operator: SemanticOperateType | ''): operator is Extract<SemanticOperateType, 'In' | 'NotIn'> {
-  return operator === 'In' || operator === 'NotIn'
+function isSetOperator(operator: SemanticOperateType | ''): operator is Extract<SemanticOperateType, 'odrl:isAnyOf' | 'odrl:isNoneOf'> {
+  return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
 }
 
 function formatSelectedValue(value: string): string {

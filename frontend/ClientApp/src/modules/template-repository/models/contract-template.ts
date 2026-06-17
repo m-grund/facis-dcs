@@ -56,15 +56,17 @@ export type SemanticEntityType = string
 export type SemanticEntityRole = string
 
 export const SemanticOperate = {
-  lessThan: 'LessThan',
-  lessThanOrEqual: 'LessThanOrEqual',
-  greaterThan: 'GreaterThan',
-  greaterThanOrEqual: 'GreaterThanOrEqual',
-  equal: 'Equals',
-  notEqual: 'NotEquals',
-  between: 'Between',
-  contains: 'Contains',
-  matchesRegex: 'MatchesRegex',
+  lessThan: 'odrl:lt',
+  lessThanOrEqual: 'odrl:lteq',
+  greaterThan: 'odrl:gt',
+  greaterThanOrEqual: 'odrl:gteq',
+  equal: 'odrl:eq',
+  notEqual: 'odrl:neq',
+  in: 'odrl:isAnyOf',
+  notIn: 'odrl:isNoneOf',
+  contains: 'odrl:hasPart',
+  between: 'dcs:between',
+  matchesRegex: 'dcs:matchesRegex',
 } as const
 
 export type SemanticOperateType = DcsOperator

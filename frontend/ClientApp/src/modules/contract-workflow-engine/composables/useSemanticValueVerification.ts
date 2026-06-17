@@ -275,7 +275,7 @@ function validateParameterOperators(
   operators: { operate: string; targets: unknown[] }[],
 ): string | null {
   for (const operator of operators) {
-    const target = operator.operate === 'In' || operator.operate === 'NotIn' ? operator.targets : operator.targets?.[0]
+    const target = operator.operate === 'odrl:isAnyOf' || operator.operate === 'odrl:isNoneOf' ? operator.targets : operator.targets?.[0]
     if (!compareOperator(value, operator.operate, target)) {
       return `Expected ${formatOperator(operator.operate)} ${String(target)}.`
     }
@@ -285,25 +285,25 @@ function validateParameterOperators(
 
 function compareOperator(value: string | number | boolean, operator: string, target: unknown): boolean {
   switch (operator) {
-    case 'Equals':
+    case 'odrl:eq':
       return value === coerceTarget(target, value)
-    case 'NotEquals':
+    case 'odrl:neq':
       return value !== coerceTarget(target, value)
-    case 'In':
+    case 'odrl:isAnyOf':
       return operatorTargetsContain(value, target)
-    case 'NotIn':
+    case 'odrl:isNoneOf':
       return !operatorTargetsContain(value, target)
-    case 'GreaterThan':
+    case 'odrl:gt':
       return compareOrdered(value, target, (left, right) => left > right)
-    case 'GreaterThanOrEqual':
+    case 'odrl:gteq':
       return compareOrdered(value, target, (left, right) => left >= right)
-    case 'LessThan':
+    case 'odrl:lt':
       return compareOrdered(value, target, (left, right) => left < right)
-    case 'LessThanOrEqual':
+    case 'odrl:lteq':
       return compareOrdered(value, target, (left, right) => left <= right)
-    case 'Contains':
+    case 'odrl:hasPart':
       return typeof value === 'string' && typeof target === 'string' && value.includes(target)
-    case 'MatchesRegex':
+    case 'dcs:matchesRegex':
       return typeof value === 'string' && typeof target === 'string' && new RegExp(target).test(value)
     default:
       return true
@@ -340,28 +340,17 @@ function coerceTarget(target: unknown, value: string | number | boolean): unknow
 
 function formatOperator(operator: string): string {
   switch (operator) {
-    case 'Equals':
-      return '='
-    case 'NotEquals':
-      return '!='
-    case 'In':
-      return 'one of'
-    case 'NotIn':
-      return 'none of'
-    case 'GreaterThan':
-      return '>'
-    case 'GreaterThanOrEqual':
-      return '>='
-    case 'LessThan':
-      return '<'
-    case 'LessThanOrEqual':
-      return '<='
-    case 'Contains':
-      return 'contains'
-    case 'MatchesRegex':
-      return 'matches'
-    default:
-      return operator
+    case 'odrl:eq':       return '='
+    case 'odrl:neq':      return '!='
+    case 'odrl:isAnyOf':  return 'one of'
+    case 'odrl:isNoneOf': return 'none of'
+    case 'odrl:gt':       return '>'
+    case 'odrl:gteq':     return '>='
+    case 'odrl:lt':       return '<'
+    case 'odrl:lteq':     return '<='
+    case 'odrl:hasPart':  return 'contains'
+    case 'dcs:matchesRegex': return 'matches'
+    default:              return operator
   }
 }
 

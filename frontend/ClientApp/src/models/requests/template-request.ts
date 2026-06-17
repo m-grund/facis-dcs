@@ -2,13 +2,14 @@ import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
 import type { ContractTemplateActionFlag } from '../../types/contract-template-action-flag'
 import type { ContractTemplateData } from '../contract-template'
+import type { DcsTemplateData } from '../dcs-jsonld'
 
 export interface ContractTemplateCreateRequest {
   template_type: TemplateType
   name?: string
   description?: string
   /** The template data of the contract template */
-  template_data?: ContractTemplateData
+  template_data?: DcsTemplateData
 }
 
 export interface ContractTemplateCopyRequest {
@@ -31,7 +32,7 @@ export interface ContractTemplateUpdateRequest {
   name?: string
   description?: string
   /** The template data of the contract template */
-  template_data?: ContractTemplateData
+  template_data?: DcsTemplateData
 }
 
 export interface ContractTemplateUpdateManageRequest {

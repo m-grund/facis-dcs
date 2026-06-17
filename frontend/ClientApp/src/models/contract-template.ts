@@ -19,6 +19,7 @@ import type {
   SemanticRule,
   SLAAgreement,
 } from './semantic/facis-dcs-semantic'
+import type { DcsTemplateData } from './dcs-jsonld'
 
 export interface ContractTemplate {
   did: string
@@ -30,7 +31,7 @@ export interface ContractTemplate {
   state: ContractTemplateState
   name?: string
   description?: string
-  template_data?: ContractTemplateData
+  template_data?: ContractTemplateData | DcsTemplateData
   updated_at: string
   responsible?: ContractTemplateResponsible
 }
@@ -63,5 +64,5 @@ export interface SubTemplateSnapshot {
   version: number
   name?: string
   description?: string
-  template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'>
+  template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'> | DcsTemplateData
 }
