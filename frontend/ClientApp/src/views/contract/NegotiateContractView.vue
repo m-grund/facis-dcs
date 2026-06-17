@@ -373,8 +373,18 @@ const hasActiveNegotiations = computed(() => {
   )
 })
 
-const exportPDF = () => {
-  alert('not implemented yet')
+const exportPDF = async () => {
+  if (contract?.value?.did === null || contract?.value?.did === undefined) {
+    return
+  }
+
+  const blob = await contractWorkflowService.exportPdf(contract?.value?.did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `contract-${contract?.value?.did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 

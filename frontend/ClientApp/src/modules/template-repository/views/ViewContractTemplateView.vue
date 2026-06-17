@@ -139,7 +139,13 @@ const submitRejectedTemplate = async () => {
   }
 }
 
-const exportPDF = () => {
-  alert('not implemented yet')
+const exportPDF = async () => {
+  const blob = await contractTemplateService.exportPdf(props.did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${props.did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
