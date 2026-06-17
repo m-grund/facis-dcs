@@ -96,7 +96,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 # Environment variable declarations (no defaults - must be provided at runtime)
 ENV DATABASE_URL=""
 ENV NATS_URL=""
-ENV HYDRA_ISSUER_URL=""
+ENV HYDRA_INTERNAL_ISSUER_URL=""
 ENV HYDRA_CLIENT_ID=""
 ENV HYDRA_CLIENT_SECRET=""
 ENV HYDRA_REDIRECT_URI=""

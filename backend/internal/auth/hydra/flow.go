@@ -40,9 +40,15 @@ type consentAcceptReq struct {
 
 // AuthorizeURL builds the Hydra OAuth2 authorize URL (OIDC state = presentation state).
 func (c *Client) AuthorizeURL(ctx context.Context, oidcState string) (string, error) {
-	metadata, err := c.ProviderMetadata(ctx)
-	if err != nil {
-		return "", err
+	authEndpoint := strings.TrimSpace(c.cfg.PublicIssuerURL)
+	if authEndpoint == "" {
+		metadata, err := c.ProviderMetadata(ctx)
+		if err != nil {
+			return "", err
+		}
+		authEndpoint = metadata.AuthorizationEndpoint
+	} else {
+		authEndpoint = strings.TrimRight(authEndpoint, "/") + "/oauth2/auth"
 	}
 	params := url.Values{}
 	params.Set("client_id", c.cfg.ClientID)
@@ -50,7 +56,7 @@ func (c *Client) AuthorizeURL(ctx context.Context, oidcState string) (string, er
 	params.Set("response_type", "code")
 	params.Set("scope", "openid offline_access") // the combination of the open and offline scopes is the standard OpenID Connect method for requesting a Refresh Token
 	params.Set("state", oidcState)
-	return metadata.AuthorizationEndpoint + "?" + params.Encode(), nil
+	return authEndpoint + "?" + params.Encode(), nil
 }
 
 // AcceptConsent accepts a consent challenge via the Hydra admin API.
