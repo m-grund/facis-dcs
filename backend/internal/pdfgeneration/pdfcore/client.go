@@ -42,7 +42,7 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("pdf-core version: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkStatus(resp); err != nil {
 		return "", err
 	}
@@ -69,7 +69,7 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 	if err != nil {
 		return nil, "", fmt.Errorf("pdf-core download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkStatus(resp); err != nil {
 		return nil, "", err
 	}
@@ -114,7 +114,7 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 	if err != nil {
 		return nil, "", fmt.Errorf("pdf-core update: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkStatus(resp); err != nil {
 		return nil, "", err
 	}
@@ -152,7 +152,7 @@ func (c *Client) Verify(ctx context.Context, pdf []byte) (VerifyResult, error) {
 	if err != nil {
 		return VerifyResult{}, fmt.Errorf("pdf-core verify: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkStatus(resp); err != nil {
 		return VerifyResult{}, err
 	}
@@ -194,7 +194,7 @@ func (c *Client) ExtractManifest(ctx context.Context, pdf []byte) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("pdf-core extract-manifest: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkStatus(resp); err != nil {
 		return nil, err
 	}

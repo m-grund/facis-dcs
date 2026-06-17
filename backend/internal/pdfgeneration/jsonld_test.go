@@ -58,7 +58,9 @@ func TestMarshalJSONLD(t *testing.T) {
 			t.Fatal(err)
 		}
 		var doc map[string]any
-		json.Unmarshal(out, &doc)
+		if err := json.Unmarshal(out, &doc); err != nil {
+			t.Fatal(err)
+		}
 		if doc[nameIRI] != "From JSONB" {
 			t.Errorf("name IRI %q = %v, want %q", nameIRI, doc[nameIRI], "From JSONB")
 		}

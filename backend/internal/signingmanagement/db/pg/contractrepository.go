@@ -309,4 +309,3 @@ func (r *PostgresContractRepo) CollectComplianceFindings(ctx context.Context, tx
 
 	return findings, nil
 }
-
