@@ -136,7 +136,7 @@ func (s *authSvc) Consent(ctx context.Context, p *genauth.ConsentPayload) (*gena
 		return nil, goa.PermanentError("unauthorized", "hydra consent redirect: %v", err)
 	}
 
-	location := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
+	location := normalizeBrowserContinueURL(s.hydra.RedirectURI(), rewritePublicHydraURL(redirectTo))
 	return &genauth.ConsentResult{Location: location}, nil
 }
 
@@ -265,7 +265,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		return nil, goa.PermanentError("unauthorized", "hydra login: %v", err)
 	}
 
-	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
+	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), rewritePublicHydraURL(redirectTo))
 	rolesJSON, _ := json.Marshal(grantedRoles)
 
 	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.ParticipantDID, rolesJSON, continueURL); err != nil {
@@ -343,6 +343,49 @@ func (s *authSvc) loadPresentationAttempt(ctx context.Context, presentationState
 	return attempt, nil
 }
 
+// rewritePublicHydraURL maps in-cluster Hydra issuer URLs to the client-facing public base.
+func rewritePublicHydraURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+
+	publicBase := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_PUBLIC_ISSUER_URL")), "/")
+	internalBase := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_INTERNAL_ISSUER_URL")), "/")
+
+	if publicBase == "" || internalBase == "" || publicBase == internalBase {
+		return raw
+	}
+
+	if strings.HasPrefix(raw, internalBase) {
+		return publicBase + strings.TrimPrefix(raw, internalBase)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+
+	internal, err := url.Parse(internalBase)
+	if err != nil {
+		return raw
+	}
+
+	public, err := url.Parse(publicBase)
+	if err != nil {
+		return raw
+	}
+
+	if !strings.EqualFold(parsed.Host, internal.Host) {
+		return raw
+	}
+
+	parsed.Scheme = public.Scheme
+	parsed.Host = public.Host
+
+	return parsed.String()
+}
+
 // normalizeBrowserContinueURL maps Hydra redirects to the RP callback URL when code is present.
 func normalizeBrowserContinueURL(configuredRedirectURI, redirectTo string) string {
 	redirectTo = strings.TrimSpace(redirectTo)
@@ -405,6 +448,10 @@ func oid4vpStateTTL() time.Duration {
 }
 
 func publicAPIBaseURL() string {
+	if base := strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")); base != "" {
+		return strings.TrimRight(base, "/")
+	}
+
 	port := strings.TrimSpace(os.Getenv("DCS_HTTP_PORT"))
 	if port == "" {
 		port = "8991"

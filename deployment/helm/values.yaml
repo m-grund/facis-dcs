@@ -81,6 +81,7 @@ extraEnvFrom: []
 # Route and path configuration
 route:
   basePath: "/digital-contracting-service"
+  publicBaseURL: ""
 
 # Override individual paths (derived from route.basePath if not set)
 paths:
@@ -183,6 +184,8 @@ keycloak:
 
 hydra:
   enabled: false
+  config:
+    publicIssuerURL: ""
   clients: []
 
 nats:

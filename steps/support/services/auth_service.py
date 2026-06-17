@@ -56,6 +56,7 @@ class AuthService:
     """Handle auth headers and role-based OID4VP token exchange."""
 
     CLIENT_ID = "dcs-client"
+    DEFAULT_ORGANIZATION = "Acme Corp"
 
     # ------------------------------------------------------------------
     # Step 1 — resolve roles / organization
@@ -67,9 +68,12 @@ class AuthService:
         normalized_roles = [role.strip() for role in roles if role and role.strip()]
         if not normalized_roles:
             raise ValueError("roles must contain at least one non-empty role")
+        org = (organization or AuthService.DEFAULT_ORGANIZATION).strip()
+        if not org:
+            org = AuthService.DEFAULT_ORGANIZATION
         return AuthCredentials(
             roles=normalized_roles,
-            organization=(organization or "").strip(),
+            organization=org,
         )
 
     # ------------------------------------------------------------------

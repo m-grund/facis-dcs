@@ -125,10 +125,10 @@ func main() {
 	}(cepPubClient)
 
 	// Initialize OIDC validator and JWT authenticator.
-	hydraIssuerURL := os.Getenv("HYDRA_ISSUER_URL")
+	hydraIssuerURL := os.Getenv("HYDRA_INTERNAL_ISSUER_URL")
 	hydraClientID := os.Getenv("HYDRA_CLIENT_ID")
 	if hydraIssuerURL == "" || hydraClientID == "" {
-		log.Fatalf(ctx, nil, "Hydra configuration missing: HYDRA_ISSUER_URL and HYDRA_CLIENT_ID must be set")
+		log.Fatalf(ctx, nil, "Hydra configuration missing: HYDRA_INTERNAL_ISSUER_URL and HYDRA_CLIENT_ID must be set")
 	}
 	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
 		IssuerURL: hydraIssuerURL,

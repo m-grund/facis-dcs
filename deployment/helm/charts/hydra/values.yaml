@@ -14,6 +14,7 @@ config:
   # For production, use a persistent DSN (for example PostgreSQL).
   dsn: "memory"
   selfIssuerURL: ""
+  publicIssuerURL: ""
   loginURL: ""
   consentURL: ""
   logoutURL: ""

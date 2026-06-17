@@ -157,20 +157,16 @@ func (s *authSvc) Logout(ctx context.Context) (*genauth.LogoutResult, error) {
 		}
 	}
 
-	metadata, err := s.hydra.ProviderMetadata(ctx)
+	endSessionEndpoint, err := s.hydra.EndSessionURL(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("hydra openid discovery failed: %w", err)
-	}
-
-	if metadata.EndSessionEndpoint == "" {
-		return nil, goa.PermanentError("unauthorized", "Hydra provider missing end_session_endpoint")
+		return nil, fmt.Errorf("hydra end session endpoint: %w", err)
 	}
 
 	params := url.Values{}
 	params.Set("client_id", s.hydra.ClientID())
 	params.Set("id_token_hint", idTokenHint)
 	params.Set("post_logout_redirect_uri", s.logoutRedirectURI)
-	logoutURL := metadata.EndSessionEndpoint + "?" + params.Encode()
+	logoutURL := endSessionEndpoint + "?" + params.Encode()
 
 	ClearRefreshTokenCookie(ctx)
 	ClearIDTokenCookie(ctx)
