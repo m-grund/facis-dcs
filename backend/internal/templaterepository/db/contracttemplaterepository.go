@@ -117,6 +117,12 @@ type SearchValues struct {
 	TemplateData   string
 }
 
+type ContractTemplatePDFState struct {
+	IPFSCID         string `db:"pdf_ipfs_cid"`
+	RendererVersion string `db:"pdf_renderer_version"`
+	C2PAState       string `db:"pdf_c2pa_state"`
+}
+
 type ContractTemplateRepo interface {
 	CopyFromDID(ctx context.Context, tx *sqlx.Tx, copyDID string, newDID string) (int, error)
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
@@ -128,4 +134,6 @@ type ContractTemplateRepo interface {
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplateProcessData, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractTemplateUpdateData) error
+	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplatePDFState, error)
+	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractTemplatePDFState) error
 }

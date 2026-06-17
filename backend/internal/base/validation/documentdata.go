@@ -10,6 +10,19 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 )
 
+var jsonLDContextIRI string
+var documentVocabIRI string
+
+func SetJSONLDContextIRI(iri string) {
+	jsonLDContextIRI = iri
+}
+
+// SetVocabIRI configures the fully-expanded vocab IRI used to store document
+// title. Must be called at startup before any normalization call.
+func SetVocabIRI(iri string) {
+	documentVocabIRI = iri
+}
+
 type domainField struct {
 	SchemaRef      string
 	Type           string
@@ -94,12 +107,19 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 
 // NormalizeTemplateDataForPersistence keeps stored template JSON-LD
 // self-identifying when it is read outside the relational row envelope.
-func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datatype.JSON, error) {
+func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string, name *string) (*datatype.JSON, error) {
 	normalized, err := NormalizeTemplateData(raw)
 	if err != nil {
 		return nil, err
 	}
-	return addDocumentIdentity(normalized, did)
+	result, err := addDocumentIdentity(normalized, did)
+	if err != nil {
+		return nil, err
+	}
+	if name != nil && *name != "" {
+		return addDocumentTitle(result, *name)
+	}
+	return result, nil
 }
 
 // NormalizeContractData adds FACIS contract schema and policy references and
@@ -139,12 +159,19 @@ func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*dat
 
 // NormalizeContractDataForPersistence keeps stored contract JSON-LD
 // self-identifying when it is read outside the relational row envelope.
-func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, requireSemanticValues bool) (*datatype.JSON, error) {
+func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, name *string, requireSemanticValues bool) (*datatype.JSON, error) {
 	normalized, err := NormalizeContractData(raw, requireSemanticValues)
 	if err != nil {
 		return nil, err
 	}
-	return addDocumentIdentity(normalized, did)
+	result, err := addDocumentIdentity(normalized, did)
+	if err != nil {
+		return nil, err
+	}
+	if name != nil && *name != "" {
+		return addDocumentTitle(result, *name)
+	}
+	return result, nil
 }
 
 // BuildContractStatements derives machine-readable contract statements from
@@ -178,6 +205,18 @@ func ValidateContractSemantics(raw *datatype.JSON) error {
 	}
 	normalizeContractSemanticRuntime(data)
 	return validateContractSemanticsData(data, true)
+}
+
+func addDocumentTitle(raw *datatype.JSON, title string) (*datatype.JSON, error) {
+	if documentVocabIRI == "" {
+		return nil, fmt.Errorf("validation: vocab IRI not configured; call SetVocabIRI at startup")
+	}
+	data, err := decodeDocumentData(raw)
+	if err != nil {
+		return nil, err
+	}
+	data[documentVocabIRI+"title"] = title
+	return encodeDocumentData(data)
 }
 
 func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error) {
@@ -215,7 +254,7 @@ func encodeDocumentData(data documentData) (*datatype.JSON, error) {
 }
 
 func normalizeTemplateMetadata(data documentData) {
-	data["@context"] = SchemaJSONLDContextV1
+	data["@context"] = jsonLDContextIRI
 	data["@type"] = "ContractTemplate"
 	data["schemaRefs"] = map[string]any{
 		"documentStructure": SchemaDocumentStructureV1,
@@ -237,7 +276,7 @@ func normalizeTemplateMetadata(data documentData) {
 }
 
 func normalizeContractMetadata(data documentData) {
-	data["@context"] = SchemaJSONLDContextV1
+	data["@context"] = jsonLDContextIRI
 	data["@type"] = "Contract"
 	data["schemaRefs"] = map[string]any{
 		"documentStructure": SchemaDocumentStructureV1,

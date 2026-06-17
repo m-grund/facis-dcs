@@ -179,8 +179,21 @@ spec:
               {{- end }}
             - name: IPFS_MFS_BASE_URL
               value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
+            # ---- PDF-Core (C2PA PDF compiler/verifier) --------------------------
+            - name: PDF_CORE_URL
+              value: {{ include "digital-contracting-service.pdfCoreURL" . | quote }}
+            - name: PDF_CORE_CONTEXT_IRI
+              value: {{ include "digital-contracting-service.pdfCoreContextIRI" . | quote }}
+            # ---- Status List Service (DCS-OR-C2PA-005) --------------------------
+            {{- $statuslistURL := include "digital-contracting-service.statuslistServiceURL" . }}
+            {{- if $statuslistURL }}
             - name: STATUSLIST_SERVICE_URL
-              value: {{ include "digital-contracting-service.statuslistServiceURL" . | quote }}
+              value: {{ $statuslistURL | quote }}
+            {{- end }}
+            {{- if .Values.statuslistService.tenantID }}
+            - name: STATUSLIST_TENANT_ID
+              value: {{ .Values.statuslistService.tenantID | quote }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

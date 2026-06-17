@@ -13,6 +13,7 @@ import type {
   ContractTemplateSearchRequest,
   ContractTemplateSubmitRequest,
   ContractTemplateUpdateRequest,
+  ContractTemplateUpdateManageRequest,
   ContractTemplateVerifyRequest,
 } from '../requests/template-request'
 import type {
@@ -28,6 +29,7 @@ import type {
   ContractTemplateSearchResponse,
   ContractTemplateSubmitResponse,
   ContractTemplateUpdateResponse,
+  ContractTemplateUpdateManageResponse,
   ContractTemplateVerifyResponse,
 } from '../responses/template-response'
 
@@ -36,6 +38,7 @@ export interface ContractTemplateService {
   copy: (request: ContractTemplateCopyRequest) => Promise<ContractTemplateCopyResponse>
   submit: (request: ContractTemplateSubmitRequest) => Promise<ContractTemplateSubmitResponse>
   update: (request: ContractTemplateUpdateRequest) => Promise<ContractTemplateUpdateResponse>
+  updateManage: (request: ContractTemplateUpdateManageRequest) => Promise<ContractTemplateUpdateManageResponse>
   search: (request: ContractTemplateSearchRequest) => Promise<ContractTemplateSearchResponse>
   retrieve: (request?: ContractTemplateRetrieveRequest) => Promise<ContractTemplateRetrieveResponse>
   retrieveById: (request: ContractTemplateRetrieveByIdRequest) => Promise<ContractTemplate | null>

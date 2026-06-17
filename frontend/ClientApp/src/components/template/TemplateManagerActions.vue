@@ -7,7 +7,6 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState, type ContractTemplateState } from '@/types/contract-template-state'
-import { error } from 'console'
 import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -102,24 +101,26 @@ async function register() {
     const registered = await contractTemplateService.register({
       did: props.template.did,
     })
-    
 
     await templatesStore.loadTemplates()
     await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: registered.did } })
-  } catch {
-  }
+  } catch {}
 }
 
-const exportPDF = () => {
-  alert('not implemented yet')
+const exportPDF = async () => {
+  const blob = await contractTemplateService.exportPdf(props.template.did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${props.template.did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 
 <template>
   <button :class="$attrs.class" @click="exportPDF">Export PDF</button>
-  <button v-if="showRegisterButton" :class="$attrs.class" @click="register">
-    Register
-  </button>
+  <button v-if="showRegisterButton" :class="$attrs.class" @click="register">Register</button>
   <button v-if="showPublishButton" :class="$attrs.class" :disabled="isPublishing" @click="publish">
     <span v-if="isPublishing" class="loading loading-sm loading-spinner"></span>
     Publish

@@ -42,6 +42,9 @@ KIND_WAIT ?= 120s
 DOCKER_IMAGE_REPOSITORY ?= digital-contracting-service
 DOCKER_IMAGE_TAG ?= bdd
 DOCKER_IMAGE ?= $(DOCKER_IMAGE_REPOSITORY):$(DOCKER_IMAGE_TAG)
+PDF_CORE_IMAGE_REPOSITORY ?= pdf-core
+PDF_CORE_IMAGE_TAG ?= bdd
+PDF_CORE_IMAGE ?= $(PDF_CORE_IMAGE_REPOSITORY):$(PDF_CORE_IMAGE_TAG)
 KIND_NAMESPACE ?= dcs-bdd
 KIND_HELM_VALUES ?=
 KIND_HELM_SET ?=
@@ -51,7 +54,7 @@ HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
 CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
 
-.PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
+.PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
@@ -114,6 +117,9 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 build_dcs_image:
 	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
+build_pdf_core_image:
+	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../../pdf-core
+
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
 
@@ -151,7 +157,15 @@ kind_load_image: kind_create
 	@docker image inspect "$(DOCKER_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(DOCKER_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(DOCKER_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
-kind_deploy: kind_load_image
+kind_load_pdf_core_image: kind_create
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "docker is required to load $(PDF_CORE_IMAGE) into kind"; \
+		exit 1; \
+	fi
+	@docker image inspect "$(PDF_CORE_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(PDF_CORE_IMAGE). Build it first." && exit 1)
+	@"$(KIND_BIN)" load docker-image "$(PDF_CORE_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
+
+kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 	@"$(HELM_BIN)" repo add hashicorp https://helm.releases.hashicorp.com --force-update
 	@"$(HELM_BIN)" repo update
@@ -204,11 +218,23 @@ run_bdd_kind: kind_deploy
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
 
-run_bdd_kind_ci: build_dcs_image run_bdd_kind
+run_bdd_kind_all: kind_deploy
+	@$(MAKE) run_bdd_helm_all \
+		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
+		HELM_RELEASE="$(HELM_RELEASE)"
+
+run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
+
+# Nur Deployment hochfahren (ohne Tests)
+kind_up: build_dcs_image build_pdf_core_image kind_deploy
+
+# Nur Tests ausführen gegen ein bereits laufendes Deployment
+run_bdd_kind_once: setup_dev ensure_k8s_tools
+	@$(MAKE) run_bdd_helm_dev \
 # start kind cluster, deploy DCS and dependencies, and prepare for BDD runs
 kind_up: build_dcs_image kind_deploy setup_environment ensure_k8s_tools
 

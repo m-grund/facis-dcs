@@ -90,7 +90,7 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal contract data: %w", err)
 			}
-			normalizedContractData, err := validation.NormalizeContractDataForPersistence(&newContractData, contract.DID, true)
+			normalizedContractData, err := validation.NormalizeContractDataForPersistence(&newContractData, contract.DID, nil, true)
 			if err != nil {
 				return nil, fmt.Errorf("contract data validation failed after merging change requests: %w", err)
 			}

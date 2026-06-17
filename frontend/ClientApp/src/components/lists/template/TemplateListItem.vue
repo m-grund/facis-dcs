@@ -10,13 +10,21 @@ const props = defineProps<{
   template: PartialContractTemplate
 }>()
 
-const { isCreator, isReviewer, isApprover } = useTemplatePermissions()
+const { isCreator, isReviewer, isApprover, isManager } = useTemplatePermissions()
 
 const canEdit = computed(() => {
   const inDraftOrRejectedState =
     (props.template.state === TemplateState.draft || props.template.state === TemplateState.rejected) && isCreator.value
   const inSubmittedState = props.template.state === TemplateState.submitted && isReviewer.value
-  return inDraftOrRejectedState || inSubmittedState
+  const inValidStateForManager =
+    (props.template.state === TemplateState.draft ||
+      props.template.state === TemplateState.submitted ||
+      props.template.state === TemplateState.rejected ||
+      props.template.state === TemplateState.reviewed ||
+      props.template.state === TemplateState.approved ||
+      props.template.state === TemplateState.deleted) &&
+    isManager.value
+  return inDraftOrRejectedState || inSubmittedState || inValidStateForManager
 })
 
 const canReview = computed(() => {
@@ -50,9 +58,9 @@ const resolveViewRouteName = computed(() => {
             <div class="badge badge-secondary">{{ template.state }}</div>
           </div>
         </h2>
-        <div class="flex justify-between">
-          <div v-if="template.document_number">Document number: {{ template.document_number }}</div>
+        <div class="flex flex-col">
           <div v-if="template.version">Version: {{ template.version }}</div>
+          <div v-if="template.document_number">Document number: {{ template.document_number }}</div>
         </div>
         <div class="flex min-w-0 justify-between">
           <div>Creation date: {{ new Date(template.created_at).toLocaleDateString() }}</div>

@@ -15,7 +15,6 @@ import (
 	authdb "digital-contracting-service/internal/auth/db"
 	"digital-contracting-service/internal/auth/oid4vp"
 	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
-	"digital-contracting-service/internal/pathutil"
 
 	goa "goa.design/goa/v3/pkg"
 )
@@ -447,20 +446,9 @@ func oid4vpStateTTL() time.Duration {
 	return defaultOID4VPStateTTL
 }
 
-func publicAPIBaseURL() string {
-	if base := strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")); base != "" {
-		return strings.TrimRight(base, "/")
+func publicAPIBaseURL() (string, error) {
+	if v := strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/"), nil
 	}
-
-	port := strings.TrimSpace(os.Getenv("DCS_HTTP_PORT"))
-	if port == "" {
-		port = "8991"
-	}
-
-	apiPath := pathutil.JoinPaths(apiPathPrefixEnv, defaultAPIPathPrefix, "")
-	if apiPath == "" {
-		apiPath = "/api"
-	}
-
-	return fmt.Sprintf("http://localhost:%s%s", port, apiPath)
+	return "", fmt.Errorf("DCS_PUBLIC_BASE_URL is required")
 }

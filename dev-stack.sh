@@ -1,7 +1,11 @@
 #!/bin/bash
-# Full dev stack orchestration: Helm → Vite → Air
+# Full dev stack orchestration: Helm → pdf-core → Vite → Air
 # Run from project root: bash dev-stack.sh
 # Press Ctrl+C to stop everything
+#
+# Expected flow:
+#   1. helm install dcs deployment/helm -f deployment/helm/values.dev.yml
+#   2. bash dev-stack.sh   ← fetches certs, then starts pdf-core + frontend + backend
 
 set -euo pipefail
 
@@ -15,19 +19,26 @@ K8S_NAMESPACE="default"
 K8S_SECRET_NAME="dcs-crypto-provider-dev-cert-chain"
 K8S_SECRET_KEY="chain.pem"
 CERT_FILE="backend/certs/dev/chain.pem"
+PDF_CORE_DIR="pdf-core"
+PDF_CORE_DEV_ENV="$PDF_CORE_DIR/.dev.env"
+PDF_CORE_ENV="$PDF_CORE_DIR/.env"
 
 echo "=== Setting up dev environment ==="
 
-# Setup Helm
+# Helm: idempotent install-or-upgrade so this script works whether or not
+# the release was already installed manually first.
 echo "Updating Helm dependencies and deploying to Kubernetes..."
 helm dependency update "$HELM_CHART_PATH"
-helm install "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
+helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
 
-# Setup .env
-if [ ! -f backend/.env ]; then
-  cp backend/.env.dev backend/.env
-  echo "✓ .env file created from .env.dev"
-fi
+echo "Waiting for Federated Catalogue to become ready..."
+kubectl wait --for=condition=ready pod \
+  -l "app.kubernetes.io/instance=${HELM_RELEASE},app.kubernetes.io/name=federated-catalogue" \
+  --timeout=10m
+
+# Setup backend .env
+cp backend/.env.dev backend/.env
+echo "✓ .env updated from .env.dev"
 
 # Fetch cert-chain from K8s secret
 mkdir -p "$(dirname "$CERT_FILE")"
@@ -48,6 +59,28 @@ fi
 mv "$tmp_cert_file" "$CERT_FILE"
 echo "✓ Cert-chain ready at $CERT_FILE"
 
+# Copy .dev.env → .env so pdf-core main.go picks it up at startup.
+cp "$PDF_CORE_DEV_ENV" "$PDF_CORE_ENV"
+
+(cd "$PDF_CORE_DIR" && air) &> /tmp/pdf-core-live.log &
+PDF_CORE_PID=$!
+echo "✓ pdf-core started (PID $PDF_CORE_PID) — log: /tmp/pdf-core-live.log"
+
+# Wait for pdf-core to be ready before starting the backend (the backend
+# probes /version at startup and will Fatalf if pdf-core is unreachable).
+echo "Waiting for pdf-core to become ready..."
+for i in $(seq 1 15); do
+  if curl -sf http://localhost:8080/version >/dev/null 2>&1; then
+    echo "✓ pdf-core ready"
+    break
+  fi
+  if [ "$i" -eq 15 ]; then
+    echo "error: pdf-core did not become ready in time" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
 echo ""
 echo "=== Starting Vite dev server ==="
 cd frontend/ClientApp
@@ -60,7 +93,10 @@ sleep 2
 echo ""
 echo "=== Starting backend (air) ==="
 cd backend
-air
+air &> /tmp/backend-live.log &
+BACKEND_PID=$!
 
 # Cleanup on exit
 wait $VITE_PID 2>/dev/null || true
+wait $PDF_CORE_PID 2>/dev/null || true
+wait $BACKEND_PID 2>/dev/null || true

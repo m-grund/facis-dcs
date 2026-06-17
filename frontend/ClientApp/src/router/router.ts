@@ -33,9 +33,11 @@ import {
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import FrontPageView from '@/views/FrontPageView.vue'
 
 const ROUTES = {
   HOME: 'home',
+  FRONT_PAGE: 'front_page',
   TEMPLATES: {
     LIST: 'templates.list',
     NEW: 'templates.new',
@@ -81,6 +83,18 @@ const routes: RouteRecordRaw[] = [
     component: LoginView,
   },
   {
+    path: '/frontpage',
+    name: ROUTES.FRONT_PAGE,
+    component: FrontPageView,
+    meta: {
+      name: 'DCS',
+      icon: SquaresPlusIcon,
+      hideInSidebar: true,
+      requiresAuth: false,
+      title: 'DCS',
+    },
+  },
+  {
     path: '/templates',
     name: ROUTES.TEMPLATES.LIST,
     component: ContractTemplateListView,
@@ -90,6 +104,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Templates',
       order: 1,
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -101,7 +116,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - New Template',
-      roles: ['TEMPLATE_CREATOR'],
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -113,7 +128,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Edit Template',
-      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER'],
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -138,7 +153,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Review Template',
-      roles: ['TEMPLATE_REVIEWER'],
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -150,7 +165,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Approve Template',
-      roles: ['TEMPLATE_APPROVER'],
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -302,7 +317,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Negotiate Contract',
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER'],
+      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER'],
     },
   },
   {
@@ -314,7 +329,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Review Contract',
-      roles: ['CONTRACT_REVIEWER'],
+      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER'],
     },
   },
   {
@@ -326,7 +341,7 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Approve Contract',
-      roles: ['CONTRACT_APPROVER'],
+      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER'],
     },
   },
   {
@@ -368,7 +383,7 @@ router.beforeEach(async (to) => {
       }
     }
     if (authStore.isAuthenticated) {
-      return { name: ROUTES.TEMPLATES.LIST }
+      return { name: ROUTES.FRONT_PAGE }
     }
     return true
   }

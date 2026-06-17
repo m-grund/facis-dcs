@@ -2,16 +2,29 @@ package mapper
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testContextIRI = "https://w3id.org/facis/dcs/context/v1"
+const testVocabIRI = testContextIRI + "#"
+
+func TestMain(m *testing.M) {
+	// Tests use the future w3id IRI as a stable fixture value.
+	SetOntologyContextIRI(testContextIRI)
+	validation.SetJSONLDContextIRI(testContextIRI)
+	validation.SetVocabIRI(testVocabIRI)
+	os.Exit(m.Run())
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

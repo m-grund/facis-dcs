@@ -14,7 +14,7 @@
 # Services exposed on localhost via NodePort (Rancher Desktop forwards these automatically):
 #   PostgreSQL       : localhost:30432
 #   Keycloak         : localhost:30080  →  realm: http://localhost:30080/realms/gaia-x
-#   Hydra public : localhost:30444
+#   Hydra public : localhost:30444  (backend + Vite proxy only — browser goes via Vite)
 #   Hydra admin  : localhost:30085
 #   NATS             : localhost:30422
 #   Neo4j HTTP       : localhost:30474
@@ -38,8 +38,12 @@
 #   STATUSLIST_SERVICE_URL=http://localhost:30821
 #   ISSUER_DID=did:web:localhost
 
-# In development, don't deploy the DCS container since we run it locally
+# In development, don't deploy the DCS or pdf-core containers — both run locally.
 replicaCount: 0
+
+# pdf-core runs locally (started by dev-stack.sh), not as a K8s pod.
+pdfCore:
+  enabled: false
 
 # No private registry needed for local dev (all dep images are public)
 imagePullSecrets: []
@@ -91,7 +95,7 @@ hydra:
   config:
     dsn: "postgres://dcs:dcs@dcs-postgresql:5432/hydra?sslmode=disable"
     dev: true
-    selfIssuerURL: "http://localhost:30444"
+    selfIssuerURL: "http://localhost:5173"
     loginURL: "http://localhost:5173/ui/"
     consentURL: "http://localhost:5173/api/auth/consent"
     logoutURL: "http://localhost:5173/api/auth/logout-complete"

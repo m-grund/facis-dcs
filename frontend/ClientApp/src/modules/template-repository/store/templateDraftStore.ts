@@ -24,7 +24,11 @@ import {
   FACIS_TEMPLATE_VALIDATION_PROFILE,
 } from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
-import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
+import type {
+  ContractTemplateCreateRequest,
+  ContractTemplateUpdateManageRequest,
+  ContractTemplateUpdateRequest,
+} from '@/models/requests/template-request'
 import { FACIS_DCS_SEMANTIC_PROFILE, buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 
@@ -52,7 +56,7 @@ const defaultState: Readonly<TemplateDraftState> = {
   sla: null,
   subTemplateSnapshots: [],
   templateType: TemplateType.subContract,
-  state: null,
+  state: undefined,
   document_number: null,
   version: null,
   updated_at: null,
@@ -116,6 +120,42 @@ export const useTemplateDraftStore = defineStore(storeId, {
         updated_at: this.updated_at,
         name: this.name,
         description: this.description,
+        document_number: this.document_number ?? undefined,
+        template_data: {
+          documentOutline: this.documentOutline,
+          documentBlocks: this.documentBlocks,
+          semanticConditions: this.semanticConditions,
+          customMetaData: this.customMetaData,
+          schemaRefs: this.schemaRefs,
+          policyRefs: this.policyRefs,
+          validation: this.validation,
+          semanticProfile: semanticExtension.semanticProfile,
+          templateVariables: this.templateVariables,
+          placeholderBindings: mergePlaceholderBindings(
+            this.placeholderBindings,
+            semanticExtension.placeholderBindings,
+          ),
+          semanticRules: mergeSemanticRules(this.semanticRules, semanticExtension.semanticRules),
+          sla: this.sla ?? undefined,
+          subTemplateSnapshots: normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
+          templateDataVersion: this.templateDataVersion,
+        },
+      }
+    },
+    templateUpdateManageRequestData(): ContractTemplateUpdateManageRequest | null {
+      if (!this.did || !this.updated_at) return null
+      const semanticExtension = buildSemanticTemplateExtension(
+        this.documentBlocks,
+        this.semanticConditions,
+        this.semanticProfile,
+      )
+      return {
+        did: this.did,
+        updated_at: this.updated_at,
+        name: this.name,
+        description: this.description,
+        state: this.state,
+        document_number: this.document_number ?? undefined,
         template_data: {
           documentOutline: this.documentOutline,
           documentBlocks: this.documentBlocks,
@@ -324,6 +364,9 @@ export const useTemplateDraftStore = defineStore(storeId, {
       /**  TBD: after changing template type, the blocks that are not allowed in the new
        * template type should be removed. For example, if changing from frameContract
        * to subContract, the APPROVED_TEMPLATE blocks should be removed. */
+    },
+    updateDocumentNumber(document_number: string): void {
+      this.document_number = document_number
     },
     updateName(name: string): void {
       this.name = name

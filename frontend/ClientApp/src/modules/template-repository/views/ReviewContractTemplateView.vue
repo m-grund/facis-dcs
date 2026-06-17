@@ -7,15 +7,24 @@
       <!-- Comments container -->
       <ConfirmationModal ref="comment-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-        <CopyTemplateButton v-if="isReviewer || isManager" class="btn flex-1 btn-primary" />
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <!-- Return to draft / request changes -->
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="returnToDraft">
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="returnToDraft"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Reject
         </button>
         <!-- Complete review (verify then forward to approval) -->
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="forwardToApproval">
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="forwardToApproval"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Approve
         </button>
@@ -55,7 +64,7 @@ const commentDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('co
 const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const { isReviewer, isManager: isManagerBase } = useTemplatePermissions()
+const { isCreator, isReviewer, isManager: isManagerBase } = useTemplatePermissions()
 const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
@@ -106,6 +115,35 @@ watch(
 const isSubmitting = ref(false)
 const comment = ref<string>('')
 
+const verifyTemplate = async () => {
+  const did = draftStore.did
+  const updatedAt = draftStore.updated_at
+  if (!did || !updatedAt) {
+    console.error('Missing did or updated_at for submission')
+    return
+  }
+  isSubmitting.value = true
+  try {
+   
+    const verificationResult = await contractTemplateService.verify({
+      did,
+    })
+    
+    if (verificationResult.findings.length > 0) {
+      const title = 'Verification findings:'
+      const message = verificationResult.findings.join('\n')
+      console.log(`${title}\n${message}`)
+      alert(`${title}\n${message}`)
+    }
+
+  } catch (error) {
+    console.error('Submission failed', error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+
 const forwardToApproval = async () => {
   const did = draftStore.did
   const updatedAt = draftStore.updated_at
@@ -124,9 +162,7 @@ const forwardToApproval = async () => {
     } else if (commentResult?.data) {
       comment.value = commentResult.data
     }
-    await contractTemplateService.verify({
-      did,
-    })
+
     await contractTemplateService.submit({
       did,
       updated_at: updatedAt,
@@ -175,5 +211,20 @@ const returnToDraft = async () => {
   } finally {
     isSubmitting.value = false
   }
+}
+
+const exportPDF = async () => {
+  if (route.params?.did === null || route.params?.did === undefined || Array.isArray(route.params?.did)) {
+    return
+  }
+
+  const did = route.params?.did ?? ''
+  const blob = await contractTemplateService.exportPdf(did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>

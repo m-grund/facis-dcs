@@ -7,17 +7,22 @@
       <!-- Decision notes container -->
       <ConfirmationModal ref="decision-note-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-        <CopyTemplateButton v-if="isCreator || isManager" class="btn flex-1 btn-primary" />
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="reject">
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
+        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="reject">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Reject
         </button>
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="resubmit">
+        <button
+          :disabled="isSubmitting || (!isApprover && !isManager)"
+          class="btn flex-1 btn-primary"
+          @click="resubmit"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Resubmit
         </button>
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="approve">
+        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="approve">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Approve
         </button>
@@ -57,7 +62,7 @@ const decisionNoteDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>
 const hasDid = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
 
-const { isCreator, isManager: isManagerBase } = useTemplatePermissions()
+const { isCreator, isManager: isManagerBase, isApprover } = useTemplatePermissions()
 const isManager = computed(() => hasDid.value && isManagerBase.value)
 
 const contractTemplate: Ref<PartialContractTemplate | null> = ref(null)
@@ -208,5 +213,20 @@ async function reject() {
   } finally {
     isSubmitting.value = false
   }
+}
+
+const exportPDF = async () => {
+  if (route.params?.did === null || route.params?.did === undefined || Array.isArray(route.params?.did)) {
+    return
+  }
+
+  const did = route.params?.did ?? ''
+  const blob = await contractTemplateService.exportPdf(did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `template-${did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>

@@ -34,7 +34,6 @@ type Creator struct {
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
-
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -50,7 +49,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not read frame contract template data: %w", err)
 	}
 
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate, cmd.DID, false)
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate, cmd.DID, nil, false)
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}

@@ -2,6 +2,7 @@ package validation
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -9,6 +10,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	SetJSONLDContextIRI(SchemaJSONLDContextV1)
+	SetVocabIRI(SchemaJSONLDContextV1 + "#")
+	os.Exit(m.Run())
+}
 
 func validTemplateData(t *testing.T) *datatype.JSON {
 	t.Helper()
@@ -232,7 +239,7 @@ func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {
 }
 
 func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
-	normalized, err := NormalizeTemplateDataForPersistence(validTemplateData(t), "did:web:facis.example:template:1")
+	normalized, err := NormalizeTemplateDataForPersistence(validTemplateData(t), "did:web:facis.example:template:1", nil)
 	require.NoError(t, err)
 
 	var data map[string]any
@@ -242,7 +249,7 @@ func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 }
 
 func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
-	normalized, err := NormalizeContractDataForPersistence(validTemplateData(t), "did:web:facis.example:contract:1", false)
+	normalized, err := NormalizeContractDataForPersistence(validTemplateData(t), "did:web:facis.example:contract:1", nil, false)
 	require.NoError(t, err)
 
 	var data map[string]any

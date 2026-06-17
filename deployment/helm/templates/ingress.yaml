@@ -60,5 +60,18 @@ spec:
                 port:
                   number: {{ $.Values.keycloak.service.port | int }}
           {{- end }}
+          {{- /* Hydra public OAuth2/OIDC routes — keeps Hydra off the edge; browser traffic
+               proxied through this ingress. selfIssuerURL must match the ingress host. */}}
+          {{- if and $.Values.hydra.enabled $.Values.hydra.route.paths }}
+          {{- range $.Values.hydra.route.paths }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Release.Name }}-hydra
+                port:
+                  number: {{ $.Values.hydra.service.publicPort | int }}
+          {{- end }}
+          {{- end }}
     {{- end }}
 {{- end }}
