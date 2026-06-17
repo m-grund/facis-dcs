@@ -255,6 +255,19 @@ CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.moun
 {{- end }}
 
 {{/*
+VAULT_ADDR for OID4VP authorization request signing (transit engine).
+*/}}
+{{- define "digital-contracting-service.vaultAddr" -}}
+{{- if .Values.oid4vp.trust.vaultAddr -}}
+{{- .Values.oid4vp.trust.vaultAddr -}}
+{{- else if .Values.cryptoProvider.enabled -}}
+{{- printf "http://%s-crypto-provider-vault:%v" .Release.Name .Values.cryptoProvider.vault.service.port -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
 */}}
 {{- define "digital-contracting-service.ipfsMfsBaseURL" -}}
@@ -431,7 +444,7 @@ enabled=true, otherwise falls back to the explicit statuslistService.url overrid
 {{- if .Values.statuslistService.url -}}
 {{- .Values.statuslistService.url -}}
 {{- else if .Values.statuslistService.enabled -}}
-{{- printf "http://%s-statuslist-service:%v" (include "digital-contracting-service.fullname" .) .Values.statuslistService.service.port -}}
+{{- printf "http://%s-statuslist-service:%v" .Release.Name .Values.statuslistService.service.port -}}
 {{- end -}}
 {{- end }}
 

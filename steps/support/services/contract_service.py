@@ -165,7 +165,8 @@ class ContractService:
 
         retrieve_resp = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
         assert retrieve_resp.status_code == 200, retrieve_resp.text
-        assert retrieve_resp.json().get("state") == 'NEGOTIATION', f"Contract should be in NEGOTIATION state, but it is {retrieve_resp.json().get("state")}"
+        assert retrieve_resp.json().get("state") == "NEGOTIATION", \
+            f'Contract should be in NEGOTIATION state, but it is {retrieve_resp.json().get("state")}'
         updated_at = retrieve_resp.json().get("updated_at")
 
         ContractService._ensure_store(context, "contract_dids", {})

@@ -60,22 +60,11 @@ volumeMounts: []
 oid4vp:
   trust:
     enabled: true
-    mountPath: /app/config/oid4vp
-    configMapName: ""
-    issuerDID: did:web:dev.example:issuer:poa
-  demoWallet:
-    secretName: ""
-    # When false, vault-init seeds from chart files/oid4vp/*.
-    autoGenerate: false
-
-vault:
-  enabled: false
-  injector:
-    enabled: false
-  server:
-    dev:
-      enabled: true
-      devRootToken: root
+    # Baked into the container image (see deployment/docker/Dockerfile).
+    dataPath: /app/config/oid4vp/trust.dev.json
+    vaultAddr: ""
+    verifierSigningVaultMount: transit
+    verifierSigningVaultKey: dcs-oid4vp-verifier-signing
 
 customCA:
   enabled: false
@@ -245,8 +234,8 @@ statuslistService:
   # tenantID is the tenant identifier passed as STATUSLIST_TENANT_ID (defaults to "default" when empty).
   tenantID: ""
   image:
-    repository: ghcr.io/eclipse-xfsc/statuslist-service
-    tag: "latest"
+    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
+    tag: "main"
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP

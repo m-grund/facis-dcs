@@ -168,8 +168,9 @@ cryptoProvider:
       enabled: true
       rootToken: "root"
     service:
-      type: ClusterIP
+      type: NodePort
       port: 8200
+      nodePort: 30820
   signer:
     service:
       type: NodePort
@@ -180,6 +181,8 @@ cryptoProvider:
     keyType: "ecdsa-p256"
     vcKey: "dcs-vc-signing-key"
     vcKeyType: "ed25519"
+    oid4vpVerifierKey: "dcs-oid4vp-verifier-signing"
+    oid4vpVerifierKeyType: "ecdsa-p256"
   devCertChain:
     enabled: true
     overwrite: true
@@ -189,10 +192,6 @@ cryptoProvider:
 # XFSC Status List Service (DCS-OR-C2PA-005)
 statuslistService:
   enabled: true
-  image:
-    repository: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/status-list-service
-    tag: "main"
-    pullPolicy: IfNotPresent
   service:
     type: NodePort
     port: 8080
@@ -287,7 +286,3 @@ ipfsDocumentManager:
 
 route:
   basePath: "/api"
-
-# Local dev uses committed testWallet keys + static trust ConfigMap (no Vault seeding).
-vault:
-  enabled: false

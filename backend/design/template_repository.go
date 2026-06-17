@@ -451,6 +451,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Creator")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateCreateRequest)
@@ -474,6 +475,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Creator")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateCopyRequest)
@@ -501,6 +503,7 @@ var _ = Service("TemplateRepository", func() {
 			Scope("Template Creator")
 			Scope("Template Reviewer")
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateSubmitRequest)
@@ -527,6 +530,7 @@ var _ = Service("TemplateRepository", func() {
 		Security(JWTAuth, func() {
 			Scope("Template Creator")
 			Scope("Template Reviewer")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateUpdateRequest)
@@ -543,7 +547,7 @@ var _ = Service("TemplateRepository", func() {
 		})
 	})
 
-	// POST /template/update
+	// POST /template/update_manage
 	Method("update_manage", func() {
 		Description("update template data or status.")
 		Meta("dcs:requirements", "DCS-IR-TR-07")
@@ -562,7 +566,7 @@ var _ = Service("TemplateRepository", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			POST("/template/update")
+			POST("/template/update_manage")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -705,6 +709,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Reviewer")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateVerifyRequest)
@@ -730,6 +735,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateApproveRequest)
@@ -755,6 +761,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateRejectRequest)

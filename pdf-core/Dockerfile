@@ -4,7 +4,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 make gen && go build -o dcspdfcore .
+RUN CGO_ENABLED=0 go build -o dcspdfcore .
 
 FROM alpine:3.20
 RUN addgroup -S app && adduser -S -G app app

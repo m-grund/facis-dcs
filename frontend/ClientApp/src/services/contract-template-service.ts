@@ -74,6 +74,16 @@ export const contractTemplateService: ContractTemplateService = {
       })
   },
 
+  async updateManage(request: ContractTemplateUpdateRequest) {
+    return http
+      .post<ContractTemplateUpdateResponse>('/template/update_manage', request)
+      .then((res) => res.data)
+      .catch((err: unknown) => {
+        console.error('Update Error:', err)
+        throw err
+      })
+  },
+
   async search(request: ContractTemplateSearchRequest): Promise<ContractTemplateSearchResponse> {
     return http
       .get<ContractTemplateSearchResponse>('/template/search', { params: request })

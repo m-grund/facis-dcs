@@ -28,6 +28,24 @@
       </div>
     </fieldset>
 
+    <fieldset v-if="isManager" class="fieldset border-none p-0">
+      <legend class="fieldset-legend">Template State</legend>
+      <select
+        v-model="state"
+        class="input-bordered select w-full"
+        type="text"
+        required
+        :disabled="!uiStore.isTemplateEditable"
+      >
+        <option>DRAFT</option>
+        <option>REJECTED</option>
+        <option>SUBMITTED</option>
+        <option>REVIEWED</option>
+        <option>APPROVED</option>
+        <option>DELETED</option>
+      </select>
+    </fieldset>
+
     <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Global Name</legend>
       <input
@@ -79,7 +97,7 @@
         <ul class="menu mt-1 max-h-48 w-full flex-nowrap overflow-y-auto menu-sm rounded-box bg-base-200">
           <li v-if="!filteredSubcontractTemplates.length">
             <span class="pointer-events-none text-xs text-base-content/40 italic">
-              {{ subcontractSearchQuery ? 'No results' : 'All templates already selected' }}
+              {{ subcontractSearchQuery ? 'No results' : 'All templates already  ed' }}
             </span>
           </li>
           <li v-for="t in filteredSubcontractTemplates" :key="`${t.did}-${t.version}-${t.document_number}`">
@@ -151,6 +169,7 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { TemplateState } from '@/types/contract-template-state'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
 interface SubcontractKey {
   did: string
@@ -162,6 +181,8 @@ const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
 const { templateType, documentBlocks, subTemplateSnapshots, state, responsible, version } = storeToRefs(store)
+
+const { isManager } = useTemplatePermissions()
 
 const name = computed({
   get: () => store.name,

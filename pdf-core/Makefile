@@ -1,4 +1,4 @@
-.PHONY: all build test bdd test-all ontology clean
+.PHONY: all build gen test bdd test-all ontology clean
 
 SCHEMA    := ontology/dcs-pdf-core.yaml
 ONTOL_DIR := ontology/generated
@@ -26,6 +26,8 @@ ontology: $(ONTOL_DIR)/dcs-pdf-core-context.jsonld \
           $(ONTOL_DIR)/dcs-pdf-core.owl.ttl \
 	      $(ONTOL_DIR)/dcs-pdf-core.owl.jsonld \
 	      $(ONTOL_DIR)/dcs-pdf-core.shacl.ttl
+
+gen: ontology
 
 # ── Tests ────────────────────────────────────────────────────────────
 # Unit + integration tests (fast, no server required)

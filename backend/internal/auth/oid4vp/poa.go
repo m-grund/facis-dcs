@@ -10,6 +10,9 @@ import (
 // PoAVCT is the DCS Proof of Authority credential type (version 1).
 const PoAVCT = "urn:dcs:poa:v1"
 
+// CredentialJWTTyp is the JWT typ for issued dc+sd-jwt PoA credentials.
+const CredentialJWTTyp = "dc+sd-jwt"
+
 const poaCredentialQueryID = "dcs_poa_credential"
 
 // DefaultDCQLQuery requests a dc+sd-jwt PoA credential for OpenID4VP presentation.
@@ -35,12 +38,17 @@ func DefaultDCQLQuery() map[string]any {
 
 func LoadDCQLQuery() (any, error) {
 	raw := strings.TrimSpace(os.Getenv("OID4VP_DCQL_QUERY"))
+
 	if raw == "" {
 		return DefaultDCQLQuery(), nil
 	}
+
 	var q any
-	if err := json.Unmarshal([]byte(raw), &q); err != nil {
+
+	err := json.Unmarshal([]byte(raw), &q)
+	if err != nil {
 		return nil, fmt.Errorf("invalid OID4VP_DCQL_QUERY JSON: %w", err)
 	}
+
 	return q, nil
 }
