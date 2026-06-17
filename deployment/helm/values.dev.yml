@@ -164,8 +164,9 @@ cryptoProvider:
       enabled: true
       rootToken: "root"
     service:
-      type: ClusterIP
+      type: NodePort
       port: 8200
+      nodePort: 30820
   signer:
     service:
       type: NodePort
@@ -176,6 +177,8 @@ cryptoProvider:
     keyType: "ecdsa-p256"
     vcKey: "dcs-vc-signing-key"
     vcKeyType: "ed25519"
+    oid4vpVerifierKey: "dcs-oid4vp-verifier-signing"
+    oid4vpVerifierKeyType: "ecdsa-p256"
   devCertChain:
     enabled: true
     overwrite: true
@@ -279,7 +282,3 @@ ipfsDocumentManager:
 
 route:
   basePath: "/api"
-
-# Local dev uses committed testWallet keys + static trust ConfigMap (no Vault seeding).
-vault:
-  enabled: false

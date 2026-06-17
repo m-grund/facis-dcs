@@ -112,7 +112,17 @@ spec:
               value: {{ include "digital-contracting-service.uiPath" . | quote }}
             {{- if .Values.oid4vp.trust.enabled }}
             - name: OID4VP_TRUST_DATA_PATH
-              value: {{ printf "%s/trust.json" .Values.oid4vp.trust.mountPath | quote }}
+              value: {{ .Values.oid4vp.trust.dataPath | quote }}
+            {{- if .Values.cryptoProvider.enabled }}
+            - name: VAULT_ADDR
+              value: {{ include "digital-contracting-service.vaultAddr" . | quote }}
+            - name: VAULT_TOKEN
+              value: {{ .Values.cryptoProvider.vault.dev.rootToken | quote }}
+            - name: OID4VP_VERIFIER_SIGNING_VAULT_MOUNT
+              value: {{ .Values.oid4vp.trust.verifierSigningVaultMount | quote }}
+            - name: OID4VP_VERIFIER_SIGNING_VAULT_KEY
+              value: {{ .Values.oid4vp.trust.verifierSigningVaultKey | quote }}
+            {{- end }}
             {{- end }}
             # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
             - name: CRYPTO_PROVIDER_URL
@@ -182,7 +192,7 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumeMounts }}
+          {{- if or .Values.customCA.enabled .Values.volumeMounts }}
           {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
           {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
           {{- if or .Values.customCA.enabled .Values.volumeMounts (and $certChainEnabled $certSecretName) }}
@@ -197,17 +207,12 @@ spec:
               mountPath: {{ .Values.signing.certChain.mountPath | quote }}
               readOnly: true
           {{- end }}
-          {{- if .Values.oid4vp.trust.enabled }}
-            - name: oid4vp-trust
-              mountPath: {{ .Values.oid4vp.trust.mountPath | quote }}
-              readOnly: true
-          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
           {{- end }}
-      {{- if or .Values.customCA.enabled .Values.oid4vp.trust.enabled .Values.volumes }}
+      {{- if or .Values.customCA.enabled .Values.volumes }}
       {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
       {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
       {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
@@ -216,11 +221,6 @@ spec:
         - name: custom-ca-certs
           configMap:
             name: {{ .Values.customCA.configMapName }}
-      {{- end }}
-      {{- if .Values.oid4vp.trust.enabled }}
-        - name: oid4vp-trust
-          configMap:
-            name: {{ include "digital-contracting-service.oid4vpTrustConfigMapName" . }}
       {{- end }}
       {{- if and $certChainEnabled $certSecretName }}
         - name: signer-cert-chain

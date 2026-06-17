@@ -60,22 +60,11 @@ volumeMounts: []
 oid4vp:
   trust:
     enabled: true
-    mountPath: /app/config/oid4vp
-    configMapName: ""
-    issuerDID: did:web:dev.example:issuer:poa
-  demoWallet:
-    secretName: ""
-    # When false, vault-init seeds from chart files/oid4vp/*.
-    autoGenerate: false
-
-vault:
-  enabled: false
-  injector:
-    enabled: false
-  server:
-    dev:
-      enabled: true
-      devRootToken: root
+    # Baked into the container image (see deployment/docker/Dockerfile).
+    dataPath: /app/config/oid4vp/trust.dev.json
+    vaultAddr: ""
+    verifierSigningVaultMount: transit
+    verifierSigningVaultKey: dcs-oid4vp-verifier-signing
 
 customCA:
   enabled: false

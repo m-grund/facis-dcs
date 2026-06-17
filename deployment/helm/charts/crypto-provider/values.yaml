@@ -40,6 +40,10 @@ transit:
   # Key algorithm for the VC proof key.
   vcKeyType: "ed25519"
 
+  # OpenID4VP authorization request JWT signing.
+  oid4vpVerifierKey: "dcs-oid4vp-verifier-signing"
+  oid4vpVerifierKeyType: "ecdsa-p256"
+
 # Dev-only signer certificate-chain provisioning for C2PA x5chain.
 # Generates a local CA and issues a leaf certificate whose public key is the
 # transit signing key public key. Stores leaf+CA chain in a Kubernetes Secret.
