@@ -53,7 +53,7 @@ const hasChosenType = ref(false)
 const showTypeSelectionOnly = computed(() => !isEditMode.value && !hasChosenType.value)
 const title = computed(() => (isEditMode.value ? 'Update Template' : 'Create Template'))
 
-const { isCreator, isManager } = useTemplatePermissions()
+const { isManager } = useTemplatePermissions()
 
 function onTemplateTypeChosen(value: typeof templateType.value) {
   draftStore.reset({ templateType: value })

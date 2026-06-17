@@ -47,6 +47,17 @@
     </fieldset>
 
     <fieldset class="fieldset border-none p-0">
+      <legend class="fieldset-legend">Document number</legend>
+      <input
+        v-model="document_number"
+        class="input-bordered input w-full"
+        type="text"
+        required
+        :disabled="!uiStore.isTemplateEditable"
+      />
+    </fieldset>
+
+    <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Global Name</legend>
       <input
         v-model="name"
@@ -183,6 +194,11 @@ const { templates: allTemplates } = useTemplateList()
 const { templateType, documentBlocks, subTemplateSnapshots, state, responsible, version } = storeToRefs(store)
 
 const { isManager } = useTemplatePermissions()
+
+const document_number = computed({
+  get: () => store.document_number,
+  set: (value: string) => store.updateDocumentNumber(value),
+})
 
 const name = computed({
   get: () => store.name,

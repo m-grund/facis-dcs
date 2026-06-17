@@ -116,6 +116,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
         updated_at: this.updated_at,
         name: this.name,
         description: this.description,
+        document_number: this.document_number ?? undefined,
         template_data: {
           documentOutline: this.documentOutline,
           documentBlocks: this.documentBlocks,
@@ -150,6 +151,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
         name: this.name,
         description: this.description,
         state: this.state,
+        document_number: this.document_number ?? undefined,
         template_data: {
           documentOutline: this.documentOutline,
           documentBlocks: this.documentBlocks,
@@ -358,6 +360,9 @@ export const useTemplateDraftStore = defineStore(storeId, {
       /**  TBD: after changing template type, the blocks that are not allowed in the new
        * template type should be removed. For example, if changing from frameContract
        * to subContract, the APPROVED_TEMPLATE blocks should be removed. */
+    },
+    updateDocumentNumber(document_number: string): void {
+      this.document_number = document_number
     },
     updateName(name: string): void {
       this.name = name
