@@ -11,12 +11,20 @@
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <!-- Return to draft / request changes -->
-        <button class="btn flex-1 btn-primary" :disabled="!isReviewer || isSubmitting" @click="returnToDraft">
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="returnToDraft"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Reject
         </button>
         <!-- Complete review (verify then forward to approval) -->
-        <button class="btn flex-1 btn-primary" :disabled="!isReviewer || isSubmitting" @click="forwardToApproval">
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="forwardToApproval"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           Approve
         </button>

@@ -33,9 +33,11 @@ import {
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import FrontPageView from '@/views/FrontPageView.vue'
 
 const ROUTES = {
   HOME: 'home',
+  FRONT_PAGE: 'front_page',
   TEMPLATES: {
     LIST: 'templates.list',
     NEW: 'templates.new',
@@ -81,6 +83,18 @@ const routes: RouteRecordRaw[] = [
     component: LoginView,
   },
   {
+    path: '/frontpage',
+    name: ROUTES.FRONT_PAGE,
+    component: FrontPageView,
+    meta: {
+      name: 'DCS',
+      icon: SquaresPlusIcon,
+      hideInSidebar: true,
+      requiresAuth: false,
+      title: 'DCS',
+    },
+  },
+  {
     path: '/templates',
     name: ROUTES.TEMPLATES.LIST,
     component: ContractTemplateListView,
@@ -90,6 +104,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Templates',
       order: 1,
+      roles: ['TEMPLATE_CREATOR', 'TEMPLATE_REVIEWER', 'TEMPLATE_APPROVER', 'TEMPLATE_MANAGER'],
     },
   },
   {
@@ -368,7 +383,7 @@ router.beforeEach(async (to) => {
       }
     }
     if (authStore.isAuthenticated) {
-      return { name: ROUTES.TEMPLATES.LIST }
+      return { name: ROUTES.FRONT_PAGE }
     }
     return true
   }
