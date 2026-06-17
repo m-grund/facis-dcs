@@ -146,28 +146,6 @@
       <p v-else class="mt-2 fieldset-label">No subcontract templates selected yet.</p>
     </fieldset>
 
-    <fieldset v-if="state !== TemplateState.draft" class="fieldset border-none p-0">
-      <div class="collapse-arrow collapse [&>input~.collapse-title::after]:scale-75">
-        <input type="checkbox" name="responsibles" />
-        <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Participants</legend>
-        <div class="collapse-content grid px-0">
-          <ul class="list col-start-1 row-start-1">
-            <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Creator</li>
-            <li class="list-row py-0">{{ responsible?.creator }}</li>
-          </ul>
-          <ul class="list col-start-2 row-start-1">
-            <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Approver</li>
-            <li class="list-row py-0">{{ responsible?.approver }}</li>
-          </ul>
-          <ul class="list col-start-1 row-start-2">
-            <li class="p-4 pb-2 text-xs tracking-wide opacity-60">Reviewers</li>
-            <li v-for="(reviewer, i) in responsible?.reviewers" :key="i + reviewer" class="list-row py-0">
-              {{ reviewer }}
-            </li>
-          </ul>
-        </div>
-      </div>
-    </fieldset>
   </div>
 </template>
 
