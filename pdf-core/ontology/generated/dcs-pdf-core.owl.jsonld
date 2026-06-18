@@ -1,229 +1,5 @@
 [
   {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#subsections",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#ObjectProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "subsections"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Ordered list of nested subsections. Each subsection is itself a Section and may contain further subsections, enabling arbitrary nesting depth. The heading level of each subsection is determined by its depth in the nesting hierarchy."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#signatureFields",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#ObjectProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "signatureFields"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Ordered list of visible signature field definitions rendered as AcroForm signature widgets on a dedicated final page."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Class"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "SignatureField"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b19"
-      },
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b20"
-      },
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b21"
-      },
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b22"
-      },
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b23"
-      },
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b24"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "A visible signature field placeholder rendered in the compiled PDF as an AcroForm /Sig widget annotation. Field names are stable anchors used by external PAdES signing tools."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#exactMatch": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b19",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#maxCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 1
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b20",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#minCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 1
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b21",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#minCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 0
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#label"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b22",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#maxCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 1
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#label"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b23",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#allValuesFrom": [
-      {
-        "@id": "http://www.w3.org/2001/XMLSchema#string"
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b24",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#allValuesFrom": [
-      {
-        "@id": "http://www.w3.org/2001/XMLSchema#string"
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#label"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#title",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#DatatypeProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "title"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "http://www.w3.org/2001/XMLSchema#string"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Canonical document title."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
     "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Clause",
     "@type": [
       "http://www.w3.org/2002/07/owl#Class"
@@ -235,10 +11,10 @@
     ],
     "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b14"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b14"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b15"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b15"
       }
     ],
     "http://www.w3.org/2004/02/skos/core#definition": [
@@ -258,7 +34,7 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b14",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b14",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
@@ -275,13 +51,13 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b15",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b15",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
     "http://www.w3.org/2002/07/owl#allValuesFrom": [
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b16"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b16"
       }
     ],
     "http://www.w3.org/2002/07/owl#onProperty": [
@@ -291,7 +67,7 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b16",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b16",
     "http://www.w3.org/2002/07/owl#unionOf": [
       {
         "@list": [
@@ -300,172 +76,6 @@
           },
           {
             "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#ContentNode"
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#DatatypeProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "name"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "http://www.w3.org/2001/XMLSchema#string"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Stable PDF field name used in /T for a signature widget."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#heading",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#DatatypeProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "heading"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "http://www.w3.org/2001/XMLSchema#string"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Human-readable section heading rendered as a PDF heading structural element and added to the PDF outline bookmarks tree. The heading level (H1, H2, H3, …) is determined by nesting depth."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#ContentNode",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Class"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "ContentNode"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Generic JSON-LD node object used inside clause content arrays for ontology references, external links, and typed literals."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#exactMatch": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#ContentNode"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core.owl.ttl",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Ontology"
-    ],
-    "http://purl.org/dc/terms/title": [
-      {
-        "@value": "dcs-pdf-core Structural Document Ontology"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "dcs_pdf_core"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Base ontology for the dcs-pdf-core deterministic PDF/A-3a compiler. Defines structural document primitives used to drive human-readable layout generation from an embedded JSON-LD data twin. Content items within clauses are expressed using standard JSON-LD patterns: plain strings for prose, @id for ontology references, schema:url for external links, and @value/@type for typed literals. Additional namespaced properties not defined in this ontology (e.g. ODRL policies, provenance graphs) are carried through in the embedded JSON-LD attachment unchanged and are not rendered in the human-readable PDF output."
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#sections",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#ObjectProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "sections"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Ordered list of headed sections constituting the document body. Each section carries a heading and an array of clauses. A top-level clauses array (without sections) is also accepted and treated as a single anonymous section."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#DatatypeProperty"
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-      {
-        "@value": "clauses"
-      }
-    ],
-    "http://www.w3.org/2000/01/rdf-schema#range": [
-      {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b8"
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#definition": [
-      {
-        "@value": "Ordered list of clause content items within a section. Each entry is either a plain string (prose) or a JSON-LD node object. Node objects dispatch on key presence: @id renders as an ontology reference with a glossary link; schema:url renders as an external hyperlink; @value/@type renders as a typed literal. Mixed-content arrays (where a clause is itself an array of these items) are supported for inline rich text."
-      }
-    ],
-    "http://www.w3.org/2004/02/skos/core#inScheme": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b8",
-    "http://www.w3.org/2002/07/owl#unionOf": [
-      {
-        "@list": [
-          {
-            "@id": "http://www.w3.org/2001/XMLSchema#string"
-          },
-          {
-            "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Clause"
           }
         ]
       }
@@ -483,25 +93,25 @@
     ],
     "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b25"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b25"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b26"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b26"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b27"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b30"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b28"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b31"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b29"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b32"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b30"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b33"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b31"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b34"
       }
     ],
     "http://www.w3.org/2004/02/skos/core#definition": [
@@ -521,7 +131,87 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b25",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b25",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#subsections"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b26",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b27"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b27",
+    "http://www.w3.org/2002/07/owl#unionOf": [
+      {
+        "@list": [
+          {
+            "@id": "http://www.w3.org/2001/XMLSchema#string"
+          },
+          {
+            "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Clause"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b30",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#minCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 1
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b31",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+      {
+        "@id": "http://www.w3.org/2001/XMLSchema#string"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#heading"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b32",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
@@ -538,40 +228,7 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b26",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#minCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 1
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b27",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#allValuesFrom": [
-      {
-        "@id": "http://www.w3.org/2001/XMLSchema#string"
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#heading"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b28",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b33",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
@@ -588,23 +245,7 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b29",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#allValuesFrom": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section"
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#subsections"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b30",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b34",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
@@ -621,33 +262,148 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b31",
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "SignatureField"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b19"
+      },
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b20"
+      },
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b21"
+      },
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b22"
+      },
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b23"
+      },
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b24"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "A visible signature field placeholder rendered in the compiled PDF as an AcroForm /Sig widget annotation. Field names are stable anchors used by external PAdES signing tools."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#exactMatch": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b19",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#maxCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 1
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#label"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b20",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
     "http://www.w3.org/2002/07/owl#allValuesFrom": [
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b32"
+        "@id": "http://www.w3.org/2001/XMLSchema#string"
       }
     ],
     "http://www.w3.org/2002/07/owl#onProperty": [
       {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses"
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name"
       }
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b32",
-    "http://www.w3.org/2002/07/owl#unionOf": [
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b21",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#minCardinality": [
       {
-        "@list": [
-          {
-            "@id": "http://www.w3.org/2001/XMLSchema#string"
-          },
-          {
-            "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Clause"
-          }
-        ]
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 1
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b22",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+      {
+        "@id": "http://www.w3.org/2001/XMLSchema#string"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#label"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b23",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#minCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 0
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#label"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b24",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#maxCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 1
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name"
       }
     ]
   },
@@ -689,25 +445,25 @@
     ],
     "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b1"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b1"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b2"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b2"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b3"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b3"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b4"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b4"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b5"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b5"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b6"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b6"
       },
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b7"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b7"
       }
     ],
     "http://www.w3.org/2004/02/skos/core#definition": [
@@ -727,7 +483,90 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b1",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b1",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#minCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 0
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#signatureFields"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b2",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#signatureFields"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b3",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#minCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 1
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#title"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b4",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+      {
+        "@id": "http://www.w3.org/2001/XMLSchema#string"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#title"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b5",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#minCardinality": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer",
+        "@value": 0
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#sections"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b6",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
@@ -744,57 +583,7 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b2",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#minCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 1
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#title"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b3",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#minCardinality": [
-      {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 0
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#sections"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b4",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#allValuesFrom": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField"
-      }
-    ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#signatureFields"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b5",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b7",
     "@type": [
       "http://www.w3.org/2002/07/owl#Restriction"
     ],
@@ -810,35 +599,28 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b6",
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#title",
     "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
+      "http://www.w3.org/2002/07/owl#DatatypeProperty"
     ],
-    "http://www.w3.org/2002/07/owl#minCardinality": [
+    "http://www.w3.org/2000/01/rdf-schema#label": [
       {
-        "@type": "http://www.w3.org/2001/XMLSchema#integer",
-        "@value": 0
+        "@value": "title"
       }
     ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
-      {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#signatureFields"
-      }
-    ]
-  },
-  {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b7",
-    "@type": [
-      "http://www.w3.org/2002/07/owl#Restriction"
-    ],
-    "http://www.w3.org/2002/07/owl#allValuesFrom": [
+    "http://www.w3.org/2000/01/rdf-schema#range": [
       {
         "@id": "http://www.w3.org/2001/XMLSchema#string"
       }
     ],
-    "http://www.w3.org/2002/07/owl#onProperty": [
+    "http://www.w3.org/2004/02/skos/core#definition": [
       {
-        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#title"
+        "@value": "Canonical document title."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
       }
     ]
   },
@@ -854,7 +636,7 @@
     ],
     "http://www.w3.org/2000/01/rdf-schema#range": [
       {
-        "@id": "_:n4df61c3caf3c41b19512eb7a87225731b11"
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b11"
       }
     ],
     "http://www.w3.org/2004/02/skos/core#definition": [
@@ -869,7 +651,7 @@
     ]
   },
   {
-    "@id": "_:n4df61c3caf3c41b19512eb7a87225731b11",
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b11",
     "http://www.w3.org/2002/07/owl#unionOf": [
       {
         "@list": [
@@ -880,6 +662,224 @@
             "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#ContentNode"
           }
         ]
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#sections",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "sections"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#range": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Ordered list of headed sections constituting the document body. Each section carries a heading and an array of clauses. A top-level clauses array (without sections) is also accepted and treated as a single anonymous section."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#name",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#DatatypeProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "name"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#range": [
+      {
+        "@id": "http://www.w3.org/2001/XMLSchema#string"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Stable PDF field name used in /T for a signature widget."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core.owl.ttl",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Ontology"
+    ],
+    "http://purl.org/dc/terms/title": [
+      {
+        "@value": "dcs-pdf-core Structural Document Ontology"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "dcs_pdf_core"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Base ontology for the dcs-pdf-core deterministic PDF/A-3a compiler. Defines structural document primitives used to drive human-readable layout generation from an embedded JSON-LD data twin. Content items within clauses are expressed using standard JSON-LD patterns: plain strings for prose, @id for ontology references, schema:url for external links, and @value/@type for typed literals. Additional namespaced properties not defined in this ontology (e.g. ODRL policies, provenance graphs) are carried through in the embedded JSON-LD attachment unchanged and are not rendered in the human-readable PDF output."
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#signatureFields",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "signatureFields"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#range": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#SignatureField"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Ordered list of visible signature field definitions rendered as AcroForm signature widgets on a dedicated final page."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#ContentNode",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "ContentNode"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Generic JSON-LD node object used inside clause content arrays for ontology references, external links, and typed literals."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#exactMatch": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#ContentNode"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#subsections",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "subsections"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#range": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Ordered list of nested subsections. Each subsection is itself a Section and may contain further subsections, enabling arbitrary nesting depth. The heading level of each subsection is determined by its depth in the nesting hierarchy."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#DatatypeProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "clauses"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#range": [
+      {
+        "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b8"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Ordered list of clause content items within a section. Each entry is either a plain string (prose) or a JSON-LD node object. Node objects dispatch on key presence: @id renders as an ontology reference with a glossary link; schema:url renders as an external hyperlink; @value/@type renders as a typed literal. Mixed-content arrays (where a clause is itself an array of these items) are supported for inline rich text."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
+      }
+    ]
+  },
+  {
+    "@id": "_:n453f7dea2de8473a94b6b513c98edcb0b8",
+    "http://www.w3.org/2002/07/owl#unionOf": [
+      {
+        "@list": [
+          {
+            "@id": "http://www.w3.org/2001/XMLSchema#string"
+          },
+          {
+            "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Clause"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core#heading",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#DatatypeProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@value": "heading"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#range": [
+      {
+        "@id": "http://www.w3.org/2001/XMLSchema#string"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#definition": [
+      {
+        "@value": "Human-readable section heading rendered as a PDF heading structural element and added to the PDF outline bookmarks tree. The heading level (H1, H2, H3, …) is determined by nesting depth."
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#inScheme": [
+      {
+        "@id": "http://127.0.0.1:8080/ontology/dcs-pdf-core"
       }
     ]
   }

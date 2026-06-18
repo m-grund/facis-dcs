@@ -33,7 +33,11 @@ func loadEnvFile(path string) error {
 		if !ok {
 			continue
 		}
-		if err := os.Setenv(strings.TrimSpace(key), strings.TrimSpace(value)); err != nil {
+		k := strings.TrimSpace(key)
+		if existing, alreadySet := os.LookupEnv(k); alreadySet && existing != "" {
+			continue
+		}
+		if err := os.Setenv(k, strings.TrimSpace(value)); err != nil {
 			return err
 		}
 	}
