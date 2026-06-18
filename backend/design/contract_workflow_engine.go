@@ -628,6 +628,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
 		})
 
 		Payload(ContractRetrieveRequest)
@@ -663,6 +664,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
 		})
 
 		Payload(ContractRetrieveByIDRequest)
