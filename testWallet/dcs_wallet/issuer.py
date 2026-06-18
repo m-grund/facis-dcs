@@ -11,6 +11,7 @@ from jwt.algorithms import ECAlgorithm
 
 from dcs_wallet.keys import cnf_jwk, did_jwk_from_public_jwk, private_key_material, public_key_material, public_jwk, write_text
 from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, KB_JWT_IAT_LEEWAY_SEC, create_property_disclosure, join_sd_jwt, sd_hash, split_sd_jwt
+from dcs_wallet.status_list import DEFAULT_SERVICE_BASE, build_credential_status
 
 POA_VCT = "urn:dcs:poa:v1"
 CREDENTIAL_JWT_TYP = "dc+sd-jwt"
@@ -121,10 +122,17 @@ def issue_stored_credential(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
+    credential_status: dict[str, Any] | None = None,
+    statuslist_service_base: str | None = None,
 ) -> str:
     """Issuer-signed SD-JWT for wallet storage (no KB-JWT; aud/nonce belong to presentation)."""
     holder_public = public_jwk(wallet_private)
     holder_did = did_jwk_from_public_jwk(holder_public)
+    status_base = (
+        statuslist_service_base.strip()
+        if statuslist_service_base and statuslist_service_base.strip()
+        else DEFAULT_SERVICE_BASE
+    )
     visible_claims = {
         "iss": issuer_did,
         "sub": holder_did,
@@ -132,6 +140,13 @@ def issue_stored_credential(
         "iat": CREDENTIAL_IAT,
         "exp": CREDENTIAL_EXP,
         "cnf": {"jwk": cnf_jwk(holder_public)},
+        "credentialStatus": credential_status
+        or build_credential_status(
+            sub=holder_did,
+            organization=organization,
+            roles=roles,
+            service_base=status_base,
+        ),
     }
     selective_claims = {
         "organization": organization,
@@ -176,6 +191,7 @@ def issue_credential_from_template(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
+    credential_status: dict[str, Any] | None = None,
 ) -> str:
     with template_path.open(encoding="utf-8") as fh:
         template_data = json.load(fh)
@@ -191,6 +207,7 @@ def issue_credential_from_template(
         issuer_private=issuer_private,
         wallet_private=wallet_private,
         issuer_did=issuer_did,
+        credential_status=credential_status,
     )
 
 
@@ -201,6 +218,7 @@ def issue_credential_file(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
+    credential_status: dict[str, Any] | None = None,
 ) -> Path:
     stem = credential_name.removesuffix(CREDENTIAL_EXT).removesuffix(".template")
     template_path = credentials_dir / f"{stem}.template.json"
@@ -211,6 +229,7 @@ def issue_credential_file(
         issuer_private=issuer_private,
         wallet_private=wallet_private,
         issuer_did=issuer_did,
+        credential_status=credential_status,
     )
     output_path = credentials_dir / f"{stem}{CREDENTIAL_EXT}"
     write_text(output_path, token)
@@ -223,6 +242,7 @@ def issue_all_template_files(
     issuer_private: dict[str, Any],
     wallet_private: dict[str, Any],
     issuer_did: str = DEFAULT_ISSUER_DID,
+    credential_status: dict[str, Any] | None = None,
 ) -> list[Path]:
     paths: list[Path] = []
     for template_path in sorted(credentials_dir.glob("*.template.json")):
@@ -234,6 +254,7 @@ def issue_all_template_files(
                 issuer_private=issuer_private,
                 wallet_private=wallet_private,
                 issuer_did=issuer_did,
+                credential_status=credential_status,
             )
         )
     return paths

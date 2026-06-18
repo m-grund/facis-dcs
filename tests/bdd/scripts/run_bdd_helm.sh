@@ -17,6 +17,10 @@ trap cleanup EXIT
 : "${BDD_DCS_BASE_URL:?BDD_DCS_BASE_URL is required}"
 : "${PROJECT_ROOT:?PROJECT_ROOT is required}"
 
+BDD_PUBLIC_ORIGIN="${BDD_PUBLIC_ORIGIN:-http://dcs.bdd:18080}"
+export BDD_PUBLIC_ORIGIN
+export STATUSLIST_SERVICE_URL="${STATUSLIST_SERVICE_URL:-$BDD_PUBLIC_ORIGIN}"
+
 mkdir -p .tmp .reports/junit
 REPORTS_JUNIT_DIR="$PWD/.reports/junit"
 
@@ -55,9 +59,9 @@ wait_for_dcs_http() {
 
 echo "Waiting for DCS deployment ($DCS_DEPLOYMENT) to be available"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=180s "deployment/$DCS_DEPLOYMENT"
-echo "Waiting for DCS pod to accept traffic"
+echo "Waiting for DCS backend pod to accept traffic"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=ready pod \
-  -l "app.kubernetes.io/name=digital-contracting-service" \
+  -l "app.kubernetes.io/name=digital-contracting-service,app.kubernetes.io/component=backend" \
   --timeout=180s
 
 echo "Waiting for DCS HTTP via Traefik ingress at $DCS_HEALTH_URL ..."
@@ -84,6 +88,10 @@ echo "Port-forward on 5432 is ready"
 
 source "$VENV_PATH/bin/activate"
 export BDD_DCS_BASE_URL
+export STATUSLIST_SERVICE_URL
+
+echo "Checking statuslist for BDD at $STATUSLIST_SERVICE_URL"
+python "$PWD/scripts/ensure_statuslist_for_bdd.py"
 
 export DATABASE_URL="host=localhost port=5432 user=dcs password=dcs dbname=dcs sslmode=disable"
 

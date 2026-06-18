@@ -68,6 +68,7 @@ oid4vp:
     vaultAddr: ""
     verifierSigningVaultMount: transit
     verifierSigningVaultKey: dcs-oid4vp-verifier-signing
+    statusListSkipJWSVerify: false
 
 customCA:
   enabled: false

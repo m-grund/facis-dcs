@@ -149,12 +149,19 @@ class AuthService:
         )
 
         issuer_did = os.getenv("BDD_ISSUER_DID", DEFAULT_ISSUER_DID)
+        statuslist_base = os.getenv("STATUSLIST_SERVICE_URL", "").strip()
+        if not statuslist_base:
+            raise RuntimeError(
+                "STATUSLIST_SERVICE_URL is required for BDD OID4VP credentials "
+                "(set by run_bdd_helm.sh; dev uses credentials/*.jwt with localhost:30821)"
+            )
         stored_sd_jwt = issue_stored_credential(
             organization=credentials.organization,
             roles=credentials.roles,
             issuer_private=wallet_keys.issuer_private,
             wallet_private=wallet_keys.wallet_private,
             issuer_did=issuer_did,
+            statuslist_service_base=statuslist_base,
         )
         return attach_key_binding(
             issued_sd_jwt=stored_sd_jwt,

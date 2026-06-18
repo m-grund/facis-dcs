@@ -29,13 +29,13 @@ from pathlib import Path
 WALLET_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WALLET_ROOT))
 
-from dcs_wallet.issuer import (  # noqa: E402
+from dcs_wallet.issuer import (
     DEFAULT_ISSUER_DID,
     DEFAULT_KB_AUD,
     DEFAULT_KB_NONCE,
     issue_access_credential,
 )
-from dcs_wallet.keys import load_json, private_key_material  # noqa: E402
+from dcs_wallet.keys import load_json, private_key_material
 
 
 def _load_private_keys(keys_dir: Path) -> tuple[dict, dict]:

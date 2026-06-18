@@ -133,6 +133,10 @@ spec:
               value: {{ .Values.oid4vp.trust.verifierSigningVaultMount | quote }}
             - name: OID4VP_VERIFIER_SIGNING_VAULT_KEY
               value: {{ .Values.oid4vp.trust.verifierSigningVaultKey | quote }}
+            {{- if .Values.oid4vp.trust.statusListSkipJWSVerify }}
+            - name: OID4VP_STATUSLIST_SKIP_JWS_VERIFY
+              value: "true"
+            {{- end }}
             {{- end }}
             {{- end }}
             # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------

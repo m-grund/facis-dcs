@@ -38,6 +38,10 @@ extraEnv:
   - name: JWT_ALG_NONE_SUPPORTED
     value: "true"
 
+oid4vp:
+  trust:
+    statusListSkipJWSVerify: true
+
 postgresql:
   enabled: true
   auth:
@@ -143,6 +147,15 @@ cryptoProvider:
 # XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
 statuslistService:
   enabled: true
+  url: "http://dcs.bdd:18080"
+  ingress:
+    enabled: true
+    className: traefik
+    hosts:
+      - host: dcs.bdd
+        paths:
+          - path: /v1
+            pathType: Prefix
   database:
     enabled: true
     host: "dcs-postgresql"
@@ -153,6 +166,8 @@ statuslistService:
     sslMode: "disable"
   nats:
     url: "nats://dcs-nats:4222"
+  bddListInit:
+    enabled: true
 
 # IPFS: required — IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL are fatal on startup.
 ipfs:

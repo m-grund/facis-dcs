@@ -50,7 +50,13 @@ topics:
   signer: "signer"
 
 # List configuration
-listSize: "125000"
+listSize: "131072"
+
+# BDD list initialization
+bddListInit:
+  enabled: false
+  tenantID: "default"
+  listID: "1"
 
 # Logging level
 logging:

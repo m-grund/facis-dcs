@@ -28,7 +28,8 @@ BDD_HELM_SET := \
 	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/consent" \
 	--set-string hydra.config.logoutURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
 	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/callback" \
-	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete"
+	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
+	--set-string statuslistService.url="$(BDD_PUBLIC_ORIGIN)"
 HELM_CHART_PATH ?= ../../deployment/helm
 HELM_TIMEOUT ?= 20m
 
@@ -98,6 +99,7 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		K8S_NAMESPACE="$(K8S_NAMESPACE)" \
 		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
 		BDD_DCS_BASE_URL="$(BDD_DCS_BASE_URL)" \
+		BDD_PUBLIC_ORIGIN="$(BDD_PUBLIC_ORIGIN)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
 		ARG_BDD="$(ARG_BDD)" \
@@ -174,6 +176,16 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 		$(BDD_HELM_SET) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
+	@TRAEFIK_IP=$$("$(KUBECTL_BIN)" get svc traefik -n kube-system -o jsonpath='{.spec.clusterIP}' 2>/dev/null); \
+	if [ -z "$$TRAEFIK_IP" ]; then \
+		echo "Traefik service not found in kube-system"; \
+		exit 1; \
+	fi; \
+	echo "Setting hostAliases: dcs.bdd -> $$TRAEFIK_IP (pods reach ingress for STATUSLIST_SERVICE_URL)"; \
+	"$(HELM_BIN)" upgrade "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
+		--namespace "$(KIND_NAMESPACE)" \
+		--reuse-values \
+		--set-json "hostAliases=[{\"ip\":\"$$TRAEFIK_IP\",\"hostnames\":[\"dcs.bdd\"]}]"
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
