@@ -231,6 +231,8 @@ clean:
 
 # start kind cluster, deploy DCS and dependencies, and prepare for BDD runs
 kind_up: build_dcs_image build_pdf_core_image kind_deploy setup_environment ensure_k8s_tools
+	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with DCS deployed in namespace $(KIND_NAMESPACE)"
+	@echo "You can now run 'make run_bdd_kind_once' to execute the BDD suite against this cluster without redeploying between runs."
 
 # run BDD suite once against kind deployment (without redeploying cluster between runs)
 # Optionally pass F=<path> to run a single feature file, e.g. make run_bdd_kind_once F=features/login.feature
