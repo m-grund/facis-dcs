@@ -81,7 +81,7 @@ export FEDERATED_CATALOGUE_CLIENT_ID="dcs-fc-client"
 export FEDERATED_CATALOGUE_CLIENT_SECRET="dcs-fc-client-secret"
 
 # Hydra Authentication
-export HYDRA_INTERNAL_ISSUER_URL="http://localhost:30444"
+export HYDRA_ISSUER_URL="http://localhost:5173"
 export HYDRA_CLIENT_ID="dcs-client"
 export HYDRA_CLIENT_SECRET="dcs-secret"
 export HYDRA_REDIRECT_URI="http://localhost:5173/api/auth/callback"

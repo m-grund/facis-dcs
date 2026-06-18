@@ -16,18 +16,13 @@ K8S_NAMESPACE ?= default
 HELM_RELEASE ?= dcs
 DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
-LOCAL_FORWARD_PORT ?= 18991
-SERVICE_PORT ?= 8991
-HYDRA_SERVICE ?= $(HELM_RELEASE)-hydra
-LOCAL_HYDRA_PORT ?= 4444
-HYDRA_SERVICE_PORT ?= 4444
-DCS_ISSUER ?= localhost
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
-BDD_HYDRA_PUBLIC_ISSUER_URL ?= http://127.0.0.1:$(LOCAL_HYDRA_PORT)
-BDD_PUBLIC_ORIGIN ?= http://127.0.0.1:$(LOCAL_FORWARD_PORT)
+BDD_INGRESS_PORT ?= 18080
+BDD_PUBLIC_ORIGIN ?= http://127.0.0.1:$(BDD_INGRESS_PORT)
 BDD_DCS_PUBLIC_BASE_URL ?= $(BDD_PUBLIC_ORIGIN)$(DCS_API_BASE_PATH)
+KIND_CONFIG ?= $(THIS_DIR)kind-config.yaml
 BDD_HELM_SET := \
-	--set-string hydra.config.publicIssuerURL="$(BDD_HYDRA_PUBLIC_ISSUER_URL)" \
+	--set-string hydra.config.selfIssuerURL="$(BDD_PUBLIC_ORIGIN)" \
 	--set-string route.publicBaseURL="$(BDD_DCS_PUBLIC_BASE_URL)" \
 	--set-string hydra.config.loginURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/ui/" \
 	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/consent" \
@@ -59,7 +54,7 @@ CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
 	@echo "make run_bdd_test		# Run all BDD scenarios"
-	@echo "make run_bdd_helm		# Port-forward Helm service and run all scenarios"
+	@echo "make run_bdd_helm		# Run BDD via Traefik on http://127.0.0.1:18080"
 	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
 	@echo "make ensure_kind			# Validate kind is available in PATH"
 	@echo "make ensure_k8s_tools	# Validate kubectl and helm are available in PATH"
@@ -102,14 +97,7 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		KUBECTL_BIN="$(KUBECTL_BIN)" \
 		K8S_NAMESPACE="$(K8S_NAMESPACE)" \
 		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
-		DCS_SERVICE="$(DCS_SERVICE)" \
-		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
-		SERVICE_PORT="$(SERVICE_PORT)" \
-		HYDRA_SERVICE="$(HYDRA_SERVICE)" \
-		LOCAL_HYDRA_PORT="$(LOCAL_HYDRA_PORT)" \
-		HYDRA_SERVICE_PORT="$(HYDRA_SERVICE_PORT)" \
-		BDD_HYDRA_PUBLIC_ISSUER_URL="$(BDD_HYDRA_PUBLIC_ISSUER_URL)" \
-		DCS_ISSUER="$(DCS_ISSUER)" \
+		BDD_PUBLIC_ORIGIN="$(BDD_PUBLIC_ORIGIN)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
 		ARG_BDD="$(ARG_BDD)" \
@@ -140,7 +128,7 @@ kind_create: ensure_kind ensure_k8s_tools
 		fi; \
 	fi; \
 	if [[ "$$cluster_healthy" == "false" ]]; then \
-		"$(KIND_BIN)" create cluster --name "$(KIND_CLUSTER_NAME)" --wait "$(KIND_WAIT)"; \
+		"$(KIND_BIN)" create cluster --name "$(KIND_CLUSTER_NAME)" --config "$(KIND_CONFIG)" --wait "$(KIND_WAIT)"; \
 	fi
 
 kind_delete: ensure_kind

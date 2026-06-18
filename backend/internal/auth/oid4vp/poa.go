@@ -3,7 +3,6 @@ package oid4vp
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -36,8 +35,8 @@ func DefaultDCQLQuery() map[string]any {
 	}
 }
 
-func LoadDCQLQuery() (any, error) {
-	raw := strings.TrimSpace(os.Getenv("OID4VP_DCQL_QUERY"))
+func LoadDCQLQuery(raw string) (any, error) {
+	raw = strings.TrimSpace(raw)
 
 	if raw == "" {
 		return DefaultDCQLQuery(), nil

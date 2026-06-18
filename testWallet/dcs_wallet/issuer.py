@@ -10,7 +10,7 @@ import jwt
 from jwt.algorithms import ECAlgorithm
 
 from dcs_wallet.keys import cnf_jwk, did_jwk_from_public_jwk, private_key_material, public_key_material, public_jwk, write_text
-from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, create_property_disclosure, join_sd_jwt, sd_hash, split_sd_jwt
+from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, KB_JWT_IAT_LEEWAY_SEC, create_property_disclosure, join_sd_jwt, sd_hash, split_sd_jwt
 
 POA_VCT = "urn:dcs:poa:v1"
 CREDENTIAL_JWT_TYP = "dc+sd-jwt"
@@ -81,7 +81,7 @@ def sign_key_binding_jwt(
         raise ValueError("nonce is required for KB-JWT")
 
     kb_claims = {
-        "iat": int(time.time()),
+        "iat": int(time.time()) - KB_JWT_IAT_LEEWAY_SEC,
         "aud": aud,
         "nonce": nonce,
         "sd_hash": sd_hash(issuer_jwt, disclosures, sd_alg=sd_alg),

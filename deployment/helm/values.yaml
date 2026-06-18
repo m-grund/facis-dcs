@@ -40,6 +40,9 @@ ingress:
   hosts: []
   tls: []
 
+traefik:
+  enabled: false
+
 # Istio VirtualService (optional)
 istio:
   enabled: false
@@ -184,8 +187,6 @@ keycloak:
 
 hydra:
   enabled: false
-  config:
-    publicIssuerURL: ""
   clients: []
 
 nats:

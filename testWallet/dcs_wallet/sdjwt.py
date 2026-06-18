@@ -8,6 +8,7 @@ from typing import Any
 
 KB_JWT_TYP = "kb+jwt"
 DEFAULT_SD_ALG = "sha-256"
+KB_JWT_IAT_LEEWAY_SEC = 60
 SUPPORTED_SD_ALGS = {DEFAULT_SD_ALG: hashlib.sha256}
 
 

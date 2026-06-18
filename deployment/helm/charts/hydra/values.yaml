@@ -17,7 +17,6 @@ config:
   # Hydra stamps this into every redirect_to URL it returns, so it must be externally reachable.
   # Route Hydra's public paths (/oauth2, /.well-known) through the parent ingress via route.paths.
   selfIssuerURL: ""
-  publicIssuerURL: ""
   loginURL: ""
   consentURL: ""
   logoutURL: ""
