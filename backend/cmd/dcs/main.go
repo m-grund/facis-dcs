@@ -129,14 +129,13 @@ func main() {
 	}(cepPubClient)
 
 	// Initialize OIDC validator and JWT authenticator.
-	hydraIssuerURL := os.Getenv("HYDRA_INTERNAL_ISSUER_URL")
-	hydraClientID := os.Getenv("HYDRA_CLIENT_ID")
-	if hydraIssuerURL == "" || hydraClientID == "" {
-		log.Fatalf(ctx, nil, "Hydra configuration missing: HYDRA_INTERNAL_ISSUER_URL and HYDRA_CLIENT_ID must be set")
+	authCfg, err := loadAuthConfig(ctx)
+	if err != nil {
+		log.Fatalf(ctx, nil, "%s", err.Error())
 	}
 	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
-		IssuerURL: hydraIssuerURL,
-		ClientID:  hydraClientID,
+		IssuerURL: authCfg.Hydra.IssuerURL(),
+		ClientID:  authCfg.Hydra.ClientID(),
 	})
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to initialize Hydra JWT validator")
@@ -327,7 +326,7 @@ func main() {
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
-		authSvc, err = service.NewAuth(db, presentationRepo)
+		authSvc, err = service.NewAuth(db, presentationRepo, authCfg)
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}

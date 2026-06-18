@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -42,7 +41,7 @@ func (s *authSvc) LoginRenew(ctx context.Context, p *genauth.LoginRenewPayload) 
 		return nil, goa.PermanentError("bad_request", "presentation state cannot be renewed")
 	}
 
-	ttl := oid4vpStateTTL()
+	ttl := s.oid4vpStateTTL
 	expiresAt := time.Now().UTC().Add(ttl)
 
 	if err := s.presentations.RenewPending(ctx, state, expiresAt); err != nil {
@@ -71,7 +70,7 @@ func loginResultToRenew(in *genauth.LoginResult) *genauth.LoginRenewResult {
 }
 
 func (s *authSvc) Login(ctx context.Context) (*genauth.LoginResult, error) {
-	ttl := oid4vpStateTTL()
+	ttl := s.oid4vpStateTTL
 	presentationState, err := newOAuthState()
 
 	if err != nil {
@@ -135,7 +134,7 @@ func (s *authSvc) Consent(ctx context.Context, p *genauth.ConsentPayload) (*gena
 		return nil, goa.PermanentError("unauthorized", "hydra consent redirect: %v", err)
 	}
 
-	location := normalizeBrowserContinueURL(s.hydra.RedirectURI(), rewritePublicHydraURL(redirectTo))
+	location := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
 	return &genauth.ConsentResult{Location: location}, nil
 }
 
@@ -172,11 +171,6 @@ func (s *authSvc) PresentationRequest(ctx context.Context, p *genauth.Presentati
 	if err != nil {
 		return nil, err
 	}
-	dcql, err := oid4vp.LoadDCQLQuery()
-
-	if err != nil {
-		return nil, err
-	}
 
 	responseURI := strings.TrimRight(s.publicAPIBase, "/") + "/auth/presentation/callback"
 	jwt, err := oid4vprequest.BuildJWT(s.requestSigner, oid4vprequest.Params{
@@ -185,7 +179,7 @@ func (s *authSvc) PresentationRequest(ctx context.Context, p *genauth.Presentati
 		State:       attempt.PresentationState,
 		Nonce:       attempt.Nonce,
 		ExpiresAt:   attempt.ExpiresAt,
-		DCQLQuery:   dcql,
+		DCQLQuery:   s.dcqlQuery,
 	})
 
 	if err != nil {
@@ -215,18 +209,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		vpToken = *p.VpToken
 	}
 
-	cfg, err := oid4vp.LoadTrustConfigFromEnv()
-	if err != nil {
-		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
-		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
-			PresentationState: attempt.PresentationState,
-			Success:           false,
-			ErrorMessage:      err.Error(),
-		})
-		return nil, goa.PermanentError("unauthorized", "trust config: %v", err)
-	}
-
-	verified, err := oid4vp.NewVerifier(cfg).Verify(vpToken, oid4vp.PresentationContext{
+	verified, err := oid4vp.NewVerifier(s.trust).Verify(vpToken, oid4vp.PresentationContext{
 		Nonce:    attempt.Nonce,
 		ClientID: s.hydra.ClientID(),
 	})
@@ -264,7 +247,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		return nil, goa.PermanentError("unauthorized", "hydra login: %v", err)
 	}
 
-	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), rewritePublicHydraURL(redirectTo))
+	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
 	rolesJSON, _ := json.Marshal(grantedRoles)
 
 	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.ParticipantDID, rolesJSON, continueURL); err != nil {
@@ -342,49 +325,6 @@ func (s *authSvc) loadPresentationAttempt(ctx context.Context, presentationState
 	return attempt, nil
 }
 
-// rewritePublicHydraURL maps in-cluster Hydra issuer URLs to the client-facing public base.
-func rewritePublicHydraURL(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return raw
-	}
-
-	publicBase := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_PUBLIC_ISSUER_URL")), "/")
-	internalBase := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_INTERNAL_ISSUER_URL")), "/")
-
-	if publicBase == "" || internalBase == "" || publicBase == internalBase {
-		return raw
-	}
-
-	if strings.HasPrefix(raw, internalBase) {
-		return publicBase + strings.TrimPrefix(raw, internalBase)
-	}
-
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-
-	internal, err := url.Parse(internalBase)
-	if err != nil {
-		return raw
-	}
-
-	public, err := url.Parse(publicBase)
-	if err != nil {
-		return raw
-	}
-
-	if !strings.EqualFold(parsed.Host, internal.Host) {
-		return raw
-	}
-
-	parsed.Scheme = public.Scheme
-	parsed.Host = public.Host
-
-	return parsed.String()
-}
-
 // normalizeBrowserContinueURL maps Hydra redirects to the RP callback URL when code is present.
 func normalizeBrowserContinueURL(configuredRedirectURI, redirectTo string) string {
 	redirectTo = strings.TrimSpace(redirectTo)
@@ -433,22 +373,4 @@ func buildOpenID4VPPresentationURI(clientID, httpsRequestURI string) string {
 	q.Set("request_uri_method", "post")
 
 	return "openid4vp://?" + q.Encode()
-}
-
-func oid4vpStateTTL() time.Duration {
-	if v := strings.TrimSpace(os.Getenv("OID4VP_STATE_TTL_SECONDS")); v != "" {
-		var secs int
-		if _, err := fmt.Sscanf(v, "%d", &secs); err == nil && secs > 0 {
-			return time.Duration(secs) * time.Second
-		}
-	}
-
-	return defaultOID4VPStateTTL
-}
-
-func publicAPIBaseURL() (string, error) {
-	if v := strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")); v != "" {
-		return strings.TrimRight(v, "/"), nil
-	}
-	return "", fmt.Errorf("DCS_PUBLIC_BASE_URL is required")
 }

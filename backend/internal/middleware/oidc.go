@@ -16,7 +16,7 @@ import (
 
 // HydraJWTConfig holds OIDC provider configuration.
 type HydraJWTConfig struct {
-	// Example: http://localhost:30444
+	// Example: http://localhost:5173
 	IssuerURL string
 	// Example: "dcs-client". Hydra JWT access tokens use the client_id claim (RFC 9068).
 	ClientID string
