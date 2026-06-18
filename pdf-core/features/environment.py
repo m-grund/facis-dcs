@@ -30,6 +30,9 @@ def before_all(context):
     server_addr = "127.0.0.1:8080"
     server_url = f"http://{server_addr}"
     env["DCS_PDF_CORE_ADDR"] = server_addr
+    # Force ontology base URL to match the server address so dcsCoreIRI in the
+    # compiler aligns with the 127.0.0.1 IRIs used in BDD test payloads.
+    env["DCS_PDF_CORE_ONTOLOGY_BASE_URL"] = server_url
     context.server = subprocess.Popen(
         ["go", "run", "."],
         cwd=ROOT,

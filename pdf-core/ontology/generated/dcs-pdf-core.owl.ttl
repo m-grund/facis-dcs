@@ -14,26 +14,26 @@
 dcs_pdf_core:Document a owl:Class ;
     rdfs:label "Document" ;
     rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs_pdf_core:title ],
-        [ a owl:Restriction ;
-            owl:minCardinality 1 ;
-            owl:onProperty dcs_pdf_core:title ],
-        [ a owl:Restriction ;
             owl:minCardinality 0 ;
-            owl:onProperty dcs_pdf_core:sections ],
+            owl:onProperty dcs_pdf_core:signatureFields ],
         [ a owl:Restriction ;
             owl:allValuesFrom dcs_pdf_core:SignatureField ;
             owl:onProperty dcs_pdf_core:signatureFields ],
         [ a owl:Restriction ;
-            owl:allValuesFrom dcs_pdf_core:Section ;
-            owl:onProperty dcs_pdf_core:sections ],
-        [ a owl:Restriction ;
-            owl:minCardinality 0 ;
-            owl:onProperty dcs_pdf_core:signatureFields ],
+            owl:minCardinality 1 ;
+            owl:onProperty dcs_pdf_core:title ],
         [ a owl:Restriction ;
             owl:allValuesFrom xsd:string ;
-            owl:onProperty dcs_pdf_core:title ] ;
+            owl:onProperty dcs_pdf_core:title ],
+        [ a owl:Restriction ;
+            owl:minCardinality 0 ;
+            owl:onProperty dcs_pdf_core:sections ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs_pdf_core:title ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom dcs_pdf_core:Section ;
+            owl:onProperty dcs_pdf_core:sections ] ;
     skos:definition "A deterministic PDF/A-3a document produced by the dcs-pdf-core compiler. Acts as the root node of the semantic payload graph. The title and sections slots drive the human-readable PDF layout. Any additional JSON-LD properties or namespaces not defined in this ontology are preserved in the embedded JSON-LD attachment and not rendered in the PDF." ;
     skos:exactMatch dcs_pdf_core:Document ;
     skos:inScheme <http://127.0.0.1:8080/ontology/dcs-pdf-core> .
@@ -90,22 +90,22 @@ dcs_pdf_core:SignatureField a owl:Class ;
     rdfs:label "SignatureField" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:maxCardinality 1 ;
+            owl:onProperty dcs_pdf_core:label ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
             owl:onProperty dcs_pdf_core:name ],
         [ a owl:Restriction ;
             owl:minCardinality 1 ;
             owl:onProperty dcs_pdf_core:name ],
         [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs_pdf_core:label ],
+        [ a owl:Restriction ;
             owl:minCardinality 0 ;
             owl:onProperty dcs_pdf_core:label ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs_pdf_core:label ],
-        [ a owl:Restriction ;
-            owl:allValuesFrom xsd:string ;
-            owl:onProperty dcs_pdf_core:name ],
-        [ a owl:Restriction ;
-            owl:allValuesFrom xsd:string ;
-            owl:onProperty dcs_pdf_core:label ] ;
+            owl:onProperty dcs_pdf_core:name ] ;
     skos:definition "A visible signature field placeholder rendered in the compiled PDF as an AcroForm /Sig widget annotation. Field names are stable anchors used by external PAdES signing tools." ;
     skos:exactMatch dcs_pdf_core:SignatureField ;
     skos:inScheme <http://127.0.0.1:8080/ontology/dcs-pdf-core> .
@@ -137,8 +137,11 @@ dcs_pdf_core:title a owl:DatatypeProperty ;
 dcs_pdf_core:Section a owl:Class ;
     rdfs:label "Section" ;
     rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs_pdf_core:heading ],
+            owl:allValuesFrom dcs_pdf_core:Section ;
+            owl:onProperty dcs_pdf_core:subsections ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom [ owl:unionOf ( xsd:string dcs_pdf_core:Clause ) ] ;
+            owl:onProperty dcs_pdf_core:clauses ],
         [ a owl:Restriction ;
             owl:minCardinality 1 ;
             owl:onProperty dcs_pdf_core:clauses ],
@@ -146,17 +149,14 @@ dcs_pdf_core:Section a owl:Class ;
             owl:allValuesFrom xsd:string ;
             owl:onProperty dcs_pdf_core:heading ],
         [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs_pdf_core:heading ],
+        [ a owl:Restriction ;
             owl:minCardinality 0 ;
             owl:onProperty dcs_pdf_core:subsections ],
         [ a owl:Restriction ;
-            owl:allValuesFrom dcs_pdf_core:Section ;
-            owl:onProperty dcs_pdf_core:subsections ],
-        [ a owl:Restriction ;
             owl:minCardinality 1 ;
-            owl:onProperty dcs_pdf_core:heading ],
-        [ a owl:Restriction ;
-            owl:allValuesFrom [ owl:unionOf ( xsd:string dcs_pdf_core:Clause ) ] ;
-            owl:onProperty dcs_pdf_core:clauses ] ;
+            owl:onProperty dcs_pdf_core:heading ] ;
     skos:definition "A headed section within a document, analogous to a numbered article or clause block in a legal contract. The heading is rendered as a PDF heading structural element and added to the PDF outline (bookmarks). Each clause in the section is rendered as a tagged paragraph. Sections may contain nested subsections to arbitrary depth." ;
     skos:exactMatch dcs_pdf_core:Section ;
     skos:inScheme <http://127.0.0.1:8080/ontology/dcs-pdf-core> .
