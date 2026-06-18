@@ -90,7 +90,7 @@ const routes: RouteRecordRaw[] = [
       name: 'DCS',
       icon: SquaresPlusIcon,
       hideInSidebar: true,
-      requiresAuth: false,
+      requiresAuth: true,
       title: 'DCS',
     },
   },
