@@ -31,7 +31,8 @@
     <input
       v-else-if="type === 'decimal'"
       v-model="numberValue"
-      type="number"
+      type="text"
+      inputmode="decimal"
       :class="inputClass"
       :aria-label="label"
       @input="emitDecimalValue"
@@ -53,6 +54,7 @@ import type {
   SemanticParameterType,
   SemanticValueConstraint,
 } from '@/modules/template-repository/models/contract-template'
+import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
 import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
 
 const props = defineProps<{
@@ -97,7 +99,7 @@ watch(
   (value) => {
     const next = value ?? ''
     if (props.type === 'string' || props.type === 'enum') stringValue.value = `${next}`
-    if (props.type === 'decimal' || props.type === 'integer') numberValue.value = `${next}`
+    if (props.type === 'decimal' || props.type === 'integer') numberValue.value = formatNumberInput(next)
     if (props.type === 'date') dateValue.value = `${next}`
     if (props.type === 'boolean') booleanValue.value = Boolean(next)
   },
@@ -116,6 +118,7 @@ function formatOption(option: ValueOption) {
 
 function emitIntegerValue(event: Event) {
   const next = getIntegerInput((event.target as HTMLInputElement | null)?.value ?? '')
+  numberValue.value = formatNumberInput(next)
   if (next === '' || next === '-') {
     emit('update:value', '')
     return
@@ -125,7 +128,9 @@ function emitIntegerValue(event: Event) {
 }
 
 function emitDecimalValue(event: Event) {
-  const next = (event.target as HTMLInputElement | null)?.value ?? ''
+  const input = (event.target as HTMLInputElement | null)?.value ?? ''
+  numberValue.value = formatNumberInput(input)
+  const next = normalizeNumberInput(input)
   if (next === '') {
     emit('update:value', '')
     return

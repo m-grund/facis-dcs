@@ -79,15 +79,15 @@ export interface SemanticRule {
 
 export interface OdrlConstraint {
   '@type': 'odrl:Constraint'
-  leftOperand: unknown
-  operator: string
-  rightOperand: unknown
+  'odrl:leftOperand': unknown
+  'odrl:operator': { '@id': string }
+  'odrl:rightOperand': unknown
 }
 
 export interface OdrlDuty {
   '@type': 'odrl:Duty'
-  uid: string
-  constraint: OdrlConstraint[]
+  '@id': string
+  'odrl:constraint': OdrlConstraint[]
 }
 
 export interface PolicyBundle {
@@ -307,7 +307,7 @@ export function buildSemanticRulesFromConditions(
           blockIds: blockIdsByCondition.get(condition.conditionId) ?? [],
           leftOperand: `{{${condition.conditionId}.${parameter.parameterName}}}`,
           operator,
-          rightOperand: targets.length === 1 ? targets[0] : targets,
+          rightOperand: targets.length === 1 && !isSetOperator(operator) ? targets[0] : targets,
           valueType: parameter.type,
           severity: parameter.isRequired ? 'blocking' : 'error',
           source: 'semanticCondition',
@@ -331,13 +331,13 @@ export function buildPolicyBundleFromSemanticRules(semanticRules: SemanticRule[]
       if (!operator) return null
       return {
         '@type': 'odrl:Duty',
-        uid: `${rule.ruleId}-duty`,
-        constraint: [
+        '@id': `${rule.ruleId}-duty`,
+        'odrl:constraint': [
           {
             '@type': 'odrl:Constraint',
-            leftOperand: rule.leftOperand,
-            operator,
-            rightOperand: rule.rightOperand,
+            'odrl:leftOperand': rule.leftOperand,
+            'odrl:operator': { '@id': operator },
+            'odrl:rightOperand': rule.rightOperand,
           },
         ],
       }
@@ -354,6 +354,28 @@ export function buildPolicyBundleFromSemanticRules(semanticRules: SemanticRule[]
 
 export function normalizeSemanticOperator(value: string): DcsOperator | null {
   return isDcsOperator(value) ? value : null
+}
+
+function odrlOperatorFor(operator: DcsOperator): string | null {
+  return isStandardOdrlOperator(operator) ? operator : null
+}
+
+function isSetOperator(operator: DcsOperator): boolean {
+  return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
+}
+
+function isStandardOdrlOperator(value: string): value is Exclude<DcsOperator, 'dcs:between' | 'dcs:matchesRegex'> {
+  return [
+    'odrl:eq',
+    'odrl:neq',
+    'odrl:gt',
+    'odrl:gteq',
+    'odrl:lt',
+    'odrl:lteq',
+    'odrl:isAnyOf',
+    'odrl:isNoneOf',
+    'odrl:hasPart',
+  ].includes(value)
 }
 
 function isDcsOperator(value: string): value is DcsOperator {

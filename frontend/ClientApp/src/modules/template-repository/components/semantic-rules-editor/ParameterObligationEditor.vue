@@ -30,9 +30,11 @@
         v-else
         v-model="draftTarget"
         :type="parameter.type === 'date' ? 'date' : 'text'"
+        :inputmode="isNumericParameter ? 'decimal' : undefined"
         class="input-bordered input input-sm h-9 w-full"
         :disabled="!draftOperator"
         placeholder=""
+        @input="formatNumericTarget"
       />
       <p v-if="operatorError" class="text-xs text-error">{{ operatorError }}</p>
     </div>
@@ -95,6 +97,7 @@ import {
   isTokenValueConstraint,
   resolveValueOptions,
 } from '@template-repository/utils/value-option-catalog'
+import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
 
 const props = defineProps<{
   parameter: SemanticConditionParameter
@@ -114,10 +117,12 @@ const valueOptionSearch = ref('')
 let isSyncingFromProps = false
 
 const valueConstraint = computed(() => props.parameter.valueConstraint)
+const isNumericParameter = computed(() => props.parameter.type === 'decimal' || props.parameter.type === 'integer')
 const valueOptions = computed(() => resolveValueOptions(valueConstraint.value))
 const usesSetConstraintEditor = computed(() => {
   const constraint = valueConstraint.value
-  return !!constraint && (valueOptions.value.length > 0 || isTokenValueConstraint(constraint))
+  const supportsSetConstraints = props.parameter.type === 'string' || props.parameter.type === 'enum'
+  return supportsSetConstraints && !!constraint && (valueOptions.value.length > 0 || isTokenValueConstraint(constraint))
 })
 const operatorOptions = computed(() =>
   usesSetConstraintEditor.value ? setOperatorOptions() : operatorOptionsForType(props.parameter.type),
@@ -184,7 +189,8 @@ function syncDraftFromOperators(operators: readonly SemanticParameterOperator[])
     draftSetTargets.value = targets.map((target) => formatOperatorTarget(target))
     draftTokenTargets.value = draftSetTargets.value.join(', ')
   } else {
-    draftTarget.value = formatOperatorTarget(targets[0])
+    const target = formatOperatorTarget(targets[0])
+    draftTarget.value = isNumericParameter.value ? formatNumberInput(target) : target
     clearSetConstraintTargets()
   }
   valueOptionSearch.value = ''
@@ -275,7 +281,12 @@ function targetMatchesConstraint(target: string): boolean {
 }
 
 function normalizeDecimalInput(value: string): string {
-  return value.replace(',', '.')
+  return normalizeNumberInput(value)
+}
+
+function formatNumericTarget(event: Event) {
+  if (!isNumericParameter.value) return
+  draftTarget.value = formatNumberInput((event.target as HTMLInputElement | null)?.value ?? '')
 }
 
 function operatorOptionsForType(type: SemanticConditionParameter['type']) {

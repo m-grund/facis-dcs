@@ -27,7 +27,10 @@ import {
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
 import { FACIS_DCS_SEMANTIC_PROFILE } from '@/models/semantic/facis-dcs-semantic'
-import type { SemanticConditionParameter } from '@template-repository/models/contract-template'
+import type {
+  SemanticConditionParameter,
+  SemanticParameterOperator,
+} from '@template-repository/models/contract-template'
 import type { DcsOperator } from '@/models/semantic/facis-dcs-semantic'
 import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import {
@@ -484,7 +487,12 @@ function conditionIdFromIri(iri: string): string {
 function convertDcsBlockToBuilder(block: DcsBlock): DocumentBlock {
   switch (block['@type']) {
     case 'dcs:Section':
-      return { blockId: blockIdFromIri(block['@id']), type: DocumentBlockType.Section, text: '', title: block['dcs:title'] }
+      return {
+        blockId: blockIdFromIri(block['@id']),
+        type: DocumentBlockType.Section,
+        text: '',
+        title: block['dcs:title'],
+      }
     case 'dcs:TextBlock':
       return { blockId: blockIdFromIri(block['@id']), type: DocumentBlockType.Text, text: block['dcs:content'] }
     case 'dcs:Clause':
@@ -705,12 +713,7 @@ function addBlock(
   return blockId
 }
 
-function moveBlock(
-  outline: DocumentOutlineBlock[],
-  blockId: string,
-  parentBlockId: string,
-  insertIndex: number,
-): void {
+function moveBlock(outline: DocumentOutlineBlock[], blockId: string, parentBlockId: string, insertIndex: number): void {
   const oldParent = outline.find((b) => b.children.includes(blockId))
   const newParent = outline.find((b) => b.blockId === parentBlockId)
   if (!oldParent || !newParent) return
@@ -729,11 +732,7 @@ function moveBlock(
   newParent.children = newSiblings
 }
 
-function deleteBlock(
-  outline: DocumentOutlineBlock[],
-  blocks: DocumentBlock[],
-  blockId: string,
-): void {
+function deleteBlock(outline: DocumentOutlineBlock[], blocks: DocumentBlock[], blockId: string): void {
   const block = blocks.find((b) => b.blockId === blockId)
   const parent = outline.find((b) => b.children.includes(blockId))
   if (!parent) return
@@ -878,28 +877,27 @@ function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTem
   })
 }
 
-
 // ---- SemanticCondition ↔ ODRL policy converters ----
 
-
-function semanticConditionsToOdrlPolicy(
-  conditions: SemanticCondition[],
-  policyId: string | undefined,
-): OdrlSet | undefined {
+function semanticConditionsToOdrlPolicy(conditions: SemanticCondition[], policyId: string): OdrlSet | undefined {
   if (conditions.length === 0) return undefined
 
-  const obligations: OdrlDuty[] = conditions.map((condition) => ({
-    '@type': 'odrl:Duty',
-    '@id': conditionIri(condition.conditionId),
-    'odrl:action': { '@id': 'dcs:ProvideParameter' },
-    'odrl:constraint': condition.parameters.map((param) =>
-      buildOdrlConstraint(param),
-    ),
-    'dcs:conditionName': condition.conditionName,
-    'dcs:schemaVersion': condition.schemaVersion,
-    ...(condition.entityType ? { 'dcs:entityType': condition.entityType } : {}),
-    ...(condition.entityRole ? { 'dcs:entityRole': condition.entityRole } : {}),
-  }))
+  const obligations: OdrlDuty[] = conditions.map((condition) => {
+    const constraints = condition.parameters
+      .map((param) => buildOdrlConstraint(param))
+      .filter((constraint): constraint is OdrlConstraint => !!constraint)
+
+    return {
+      '@type': 'odrl:Duty',
+      '@id': `urn:condition:${condition.conditionId}`,
+      'odrl:action': { '@id': 'dcs:ProvideParameter' },
+      ...(constraints.length > 0 ? { 'odrl:constraint': constraints } : {}),
+      'dcs:conditionName': condition.conditionName,
+      'dcs:schemaVersion': condition.schemaVersion,
+      ...(condition.entityType ? { 'dcs:entityType': condition.entityType } : {}),
+      ...(condition.entityRole ? { 'dcs:entityRole': condition.entityRole } : {}),
+    }
+  })
 
   return {
     '@type': 'odrl:Set',
@@ -908,14 +906,40 @@ function semanticConditionsToOdrlPolicy(
   }
 }
 
-function buildOdrlConstraint(param: SemanticConditionParameter): OdrlConstraint {
-  const primaryOperator = param.operators[0]?.operate
+function buildOdrlConstraint(param: SemanticConditionParameter): OdrlConstraint | undefined {
+  const primaryOperator = param.operators[0]
+  if (!primaryOperator || !isStandardOdrlOperator(primaryOperator.operate)) return undefined
+  const rightOperand = odrlRightOperand(primaryOperator)
   return {
     '@type': 'odrl:Constraint',
     'odrl:leftOperand': { '@id': `dcs:${param.semanticPath}` },
-    'odrl:operator': { '@id': primaryOperator ?? 'odrl:isProvided' },
-    ...(param.value !== null && param.value !== undefined ? { 'odrl:rightOperand': param.value } : {}),
+    'odrl:operator': { '@id': primaryOperator.operate },
+    ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
   }
+}
+
+function odrlRightOperand(operator: SemanticParameterOperator): unknown {
+  if (!operator.targets.length) return undefined
+  if (isSetOperator(operator.operate)) return operator.targets
+  return operator.targets[0]
+}
+
+function isStandardOdrlOperator(operator: string): operator is DcsOperator {
+  return [
+    'odrl:eq',
+    'odrl:neq',
+    'odrl:gt',
+    'odrl:gteq',
+    'odrl:lt',
+    'odrl:lteq',
+    'odrl:isAnyOf',
+    'odrl:isNoneOf',
+    'odrl:hasPart',
+  ].includes(operator)
+}
+
+function isSetOperator(operator: string): boolean {
+  return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
 }
 
 function odrlPolicyToSemanticConditions(policy: OdrlSet | undefined): SemanticCondition[] {
@@ -936,14 +960,21 @@ function odrlConstraintToParameter(constraint: OdrlConstraint): SemanticConditio
   const operate = constraint['odrl:operator']['@id'] as DcsOperator
   const leftOperandId = constraint['odrl:leftOperand']['@id']
   const semanticPath = leftOperandId.startsWith('dcs:') ? leftOperandId.slice(4) : leftOperandId
-  const parameterName = semanticPath.split('.').at(-1) ?? semanticPath
+  const parameterName = semanticPath.split('.').pop() ?? semanticPath
+  const rightOperand = constraint['odrl:rightOperand']
+  const targets =
+    rightOperand === undefined
+      ? []
+      : isSetOperator(operate) && Array.isArray(rightOperand)
+        ? rightOperand
+        : [rightOperand]
   return {
     parameterName,
     type: 'string',
     schemaRef: '',
     semanticPath,
     isRequired: false,
-    operators: operate !== 'odrl:isProvided' ? [{ operate, targets: [] }] : [],
-    value: constraint['odrl:rightOperand'] ?? null,
+    operators: isStandardOdrlOperator(operate) ? [{ operate, targets }] : [],
+    value: rightOperand ?? null,
   }
 }

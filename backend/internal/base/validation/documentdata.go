@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
 	"digital-contracting-service/internal/base/datatype"
 )
@@ -97,15 +95,21 @@ func (constraint *valueConstraint) asMap() map[string]any {
 
 type documentData map[string]any
 
-// NormalizeTemplateData adds FACIS schema and policy references and validates the
-// structural shape expected by the template builder.
+// NormalizeTemplateData validates and normalizes template JSON-LD data.
 func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
 	}
+	if isCanonicalEnvelope(data) {
+		normalizeCanonicalEnvelope(data, "dcs:ContractTemplate")
+		if err := validateCanonicalEnvelope(data); err != nil {
+			return nil, err
+		}
+		return encodeDocumentData(data)
+	}
 	normalizeTemplateMetadata(data)
-	if err := validateCommonStructure(data); err != nil {
+	if err := normalizeSemanticConditions(data); err != nil {
 		return nil, err
 	}
 	if err := validateSemanticRules(data); err != nil {
@@ -131,25 +135,27 @@ func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datat
 }
 
 // NormalizeContractData adds FACIS contract schema and policy references and
-// validates structure plus semantic values. When requireSemanticValues is false,
-// required semantic values may still be empty so a draft contract can be created
-// from a template before the creator has filled all parameters.
+// validates the contract JSON-LD structure.
 func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
 	}
+	if isCanonicalEnvelope(data) {
+		normalizeCanonicalEnvelope(data, "dcs:Contract")
+		if err := validateCanonicalEnvelope(data); err != nil {
+			return nil, err
+		}
+		return encodeDocumentData(data)
+	}
 	normalizeContractMetadata(data)
-	if err := validateCommonStructure(data); err != nil {
+	if err := normalizeSemanticConditions(data); err != nil {
 		return nil, err
 	}
 	if err := validateSchemaRefs(data, false); err != nil {
 		return nil, err
 	}
 	if err := validatePolicyRefs(data, false); err != nil {
-		return nil, err
-	}
-	if err := validateSemanticValues(data, requireSemanticValues); err != nil {
 		return nil, err
 	}
 	normalizeContractSemanticRuntime(data)
@@ -175,33 +181,21 @@ func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, require
 	return addDocumentIdentity(normalized, did)
 }
 
-// BuildContractStatements derives machine-readable contract statements from
-// semantic condition values.
+// BuildContractStatements returns machine-readable contract statements from the
+// canonical contract content graph.
 func BuildContractStatements(raw *datatype.JSON) ([]map[string]any, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateCommonStructure(data); err != nil {
-		return nil, err
-	}
 	return buildContractStatements(data)
 }
 
-// ValidateContractSemantics validates placeholders, bindings, semantic values,
-// derived contractStatements, and generated contract semantic rules.
+// ValidateContractSemantics validates placeholders, bindings, derived
+// contractStatements, and generated contract semantic rules.
 func ValidateContractSemantics(raw *datatype.JSON) error {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
-		return err
-	}
-	if err := validateCommonStructure(data); err != nil {
-		return err
-	}
-	if _, ok := data["semanticConditionValues"]; !ok {
-		data["semanticConditionValues"] = []any{}
-	}
-	if err := validateSemanticValues(data, true); err != nil {
 		return err
 	}
 	normalizeContractSemanticRuntime(data)
@@ -240,6 +234,113 @@ func encodeDocumentData(data documentData) (*datatype.JSON, error) {
 		return nil, err
 	}
 	return &normalized, nil
+}
+
+func isCanonicalEnvelope(data documentData) bool {
+	_, hasPrefixedDocumentStructure := data["dcs:documentStructure"]
+	_, hasDocumentStructure := data["documentStructure"]
+	return hasPrefixedDocumentStructure || hasDocumentStructure
+}
+
+func normalizeCanonicalEnvelope(data documentData, documentType string) {
+	normalizeCanonicalContext(data)
+	if rawType, _ := data["@type"].(string); strings.TrimSpace(rawType) == "" {
+		data["@type"] = documentType
+	}
+	if _, ok := topLevelValue(data, "contractData").([]any); !ok {
+		if _, exists := topLevelValueExists(data, "contractData"); !exists {
+			setTopLevelValue(data, "dcs:contractData", []any{})
+		}
+	}
+	if _, ok := topLevelValue(data, "policies").([]any); !ok {
+		if _, exists := topLevelValueExists(data, "policies"); !exists {
+			setTopLevelValue(data, "dcs:policies", []any{})
+		}
+	}
+}
+
+func normalizeCanonicalContext(data documentData) {
+	context, ok := data["@context"].(map[string]any)
+	if !ok {
+		data["@context"] = map[string]any{
+			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
+			"odrl": "http://www.w3.org/ns/odrl/2/",
+		}
+		return
+	}
+	if _, ok := context["dcs"]; !ok {
+		context["dcs"] = "https://w3id.org/facis/dcs/ontology/v1#"
+	}
+	if _, ok := context["odrl"]; !ok {
+		context["odrl"] = "http://www.w3.org/ns/odrl/2/"
+	}
+}
+
+func validateCanonicalEnvelope(data documentData) error {
+	documentStructure, ok := topLevelValue(data, "documentStructure").(map[string]any)
+	if !ok {
+		return errors.New("documentStructure must be an object")
+	}
+	if containsODRLTerms(documentStructure) {
+		return errors.New("documentStructure must not contain ODRL policy terms")
+	}
+	if metadata, exists := topLevelValueExists(data, "metadata"); exists {
+		if _, ok := metadata.(map[string]any); !ok {
+			return errors.New("metadata must be an object")
+		}
+	}
+	if contractData, exists := topLevelValueExists(data, "contractData"); exists {
+		if _, ok := contractData.([]any); !ok {
+			return errors.New("contractData must be an array")
+		}
+	}
+	if policies, exists := topLevelValueExists(data, "policies"); exists {
+		if _, ok := policies.([]any); !ok {
+			return errors.New("policies must be an array")
+		}
+	}
+	return nil
+}
+
+func topLevelValue(data documentData, localName string) any {
+	value, _ := topLevelValueExists(data, localName)
+	return value
+}
+
+func topLevelValueExists(data documentData, localName string) (any, bool) {
+	if value, ok := data["dcs:"+localName]; ok {
+		return value, true
+	}
+	value, ok := data[localName]
+	return value, ok
+}
+
+func setTopLevelValue(data documentData, key string, value any) {
+	data[key] = value
+}
+
+func containsODRLTerms(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if strings.HasPrefix(key, "odrl:") {
+				return true
+			}
+			if raw, ok := nested.(string); ok && strings.HasPrefix(raw, "odrl:") {
+				return true
+			}
+			if containsODRLTerms(nested) {
+				return true
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if containsODRLTerms(nested) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func normalizeTemplateMetadata(data documentData) {
@@ -281,9 +382,6 @@ func normalizeContractMetadata(data documentData) {
 		"profile":           "FACIS_DCS_CONTRACT_V1",
 		"requiredPolicies":  []string{PolicyContractStructureV1, PolicyContractSemanticValuesV1},
 		"validatedBySchema": true,
-	}
-	if _, ok := data["semanticConditionValues"]; !ok {
-		data["semanticConditionValues"] = []any{}
 	}
 	normalizeSemanticProfile(data)
 	normalizeSemanticRuntimeMetadata(data)
@@ -469,7 +567,7 @@ func buildSemanticRules(data documentData) []map[string]any {
 					ruleType = "ThresholdRule"
 				}
 				var rightOperand any = targets
-				if len(targets) == 1 {
+				if len(targets) == 1 && !isSetOperator(operator) {
 					rightOperand = targets[0]
 				}
 				rules = append(rules, map[string]any{
@@ -517,14 +615,14 @@ func buildODRLPolicyBundle(rawRules any) map[string]any {
 			ruleID = "semantic-rule-" + fmt.Sprint(len(duties)+1)
 		}
 		duties = append(duties, map[string]any{
+			"@id":   ruleID + "-duty",
 			"@type": "odrl:Duty",
-			"uid":   ruleID + "-duty",
-			"constraint": []any{
+			"odrl:constraint": []any{
 				map[string]any{
-					"@type":        "odrl:Constraint",
-					"leftOperand":  rule["leftOperand"],
-					"operator":     odrlOperator,
-					"rightOperand": rule[semanticRuleRightOperandProperty],
+					"@type":             "odrl:Constraint",
+					"odrl:leftOperand":  rule["leftOperand"],
+					"odrl:operator":     map[string]any{"@id": odrlOperator},
+					"odrl:rightOperand": rule[semanticRuleRightOperandProperty],
 				},
 			},
 		})
@@ -538,25 +636,31 @@ func buildODRLPolicyBundle(rawRules any) map[string]any {
 
 func odrlOperator(operator string) string {
 	switch operator {
-	case "Equals":
+	case "Equals", "odrl:eq":
 		return "odrl:eq"
-	case "NotEquals":
+	case "NotEquals", "odrl:neq":
 		return "odrl:neq"
-	case "In":
+	case "In", "odrl:isAnyOf":
 		return "odrl:isAnyOf"
-	case "NotIn":
+	case "NotIn", "odrl:isNoneOf":
 		return "odrl:isNoneOf"
-	case "GreaterThan":
+	case "GreaterThan", "odrl:gt":
 		return "odrl:gt"
-	case "GreaterThanOrEqual":
+	case "GreaterThanOrEqual", "odrl:gteq":
 		return "odrl:gteq"
-	case "LessThan":
+	case "LessThan", "odrl:lt":
 		return "odrl:lt"
-	case "LessThanOrEqual":
+	case "LessThanOrEqual", "odrl:lteq":
 		return "odrl:lteq"
+	case "Contains", "odrl:hasPart":
+		return "odrl:hasPart"
 	default:
 		return ""
 	}
+}
+
+func isSetOperator(operator string) bool {
+	return operator == "In" || operator == "NotIn" || operator == "odrl:isAnyOf" || operator == "odrl:isNoneOf"
 }
 
 func mergeSemanticRules(rawExisting any, generated []map[string]any) []any {
@@ -609,13 +713,26 @@ func parseSemanticOperator(raw any) (string, []any) {
 		if strings.TrimSpace(operate) == "" {
 			operate, _ = value[semanticRuleOperatorProperty].(string)
 		}
+		if strings.TrimSpace(operate) == "" {
+			operate = semanticResourceID(value["odrl:operator"])
+		}
 		targets := []any{}
 		if rawTargets, ok := asArray(value["targets"]); ok {
 			for _, rawTarget := range rawTargets {
 				targets = append(targets, rawTarget)
 			}
 		} else if rawTarget, ok := value[semanticRuleRightOperandProperty]; ok {
-			targets = append(targets, rawTarget)
+			if rawTargets, ok := asArray(rawTarget); ok {
+				targets = append(targets, rawTargets...)
+			} else {
+				targets = append(targets, rawTarget)
+			}
+		} else if rawTarget, ok := value["odrl:rightOperand"]; ok {
+			if rawTargets, ok := asArray(rawTarget); ok {
+				targets = append(targets, rawTargets...)
+			} else {
+				targets = append(targets, rawTarget)
+			}
 		}
 		return operate, targets
 	default:
@@ -623,9 +740,72 @@ func parseSemanticOperator(raw any) (string, []any) {
 	}
 }
 
+func semanticResourceID(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case map[string]any:
+		id, _ := typed["@id"].(string)
+		return id
+	default:
+		return ""
+	}
+}
+
 func normalizeSemanticOperator(value string) string {
 	switch value {
-	case "Equals", "NotEquals", "In", "NotIn", "GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "Between", "Contains", "MatchesRegex":
+	case "odrl:eq", "Equals":
+		return "odrl:eq"
+	case "odrl:neq", "NotEquals":
+		return "odrl:neq"
+	case "odrl:isAnyOf", "In":
+		return "odrl:isAnyOf"
+	case "odrl:isNoneOf", "NotIn":
+		return "odrl:isNoneOf"
+	case "odrl:gt", "GreaterThan":
+		return "odrl:gt"
+	case "odrl:gteq", "GreaterThanOrEqual":
+		return "odrl:gteq"
+	case "odrl:lt", "LessThan":
+		return "odrl:lt"
+	case "odrl:lteq", "LessThanOrEqual":
+		return "odrl:lteq"
+	case "odrl:hasPart", "Contains":
+		return "odrl:hasPart"
+	case "dcs:between", "Between":
+		return "dcs:between"
+	case "dcs:matchesRegex", "MatchesRegex":
+		return "dcs:matchesRegex"
+	default:
+		return ""
+	}
+}
+
+func normalizeSemanticOperateValue(value string) string {
+	switch value {
+	case "Equals":
+		return "odrl:eq"
+	case "NotEquals":
+		return "odrl:neq"
+	case "In":
+		return "odrl:isAnyOf"
+	case "NotIn":
+		return "odrl:isNoneOf"
+	case "GreaterThan":
+		return "odrl:gt"
+	case "GreaterThanOrEqual":
+		return "odrl:gteq"
+	case "LessThan":
+		return "odrl:lt"
+	case "LessThanOrEqual":
+		return "odrl:lteq"
+	case "Contains":
+		return "odrl:hasPart"
+	case "Between":
+		return "dcs:between"
+	case "MatchesRegex":
+		return "dcs:matchesRegex"
+	case "odrl:eq", "odrl:neq", "odrl:isAnyOf", "odrl:isNoneOf", "odrl:gt", "odrl:gteq", "odrl:lt", "odrl:lteq", "odrl:hasPart", "dcs:between", "dcs:matchesRegex":
 		return value
 	default:
 		return ""
@@ -654,87 +834,24 @@ func slugify(value string) string {
 	return strings.ToLower(value)
 }
 
-func validateCommonStructure(data documentData) error {
-	outline, ok := asArray(data["documentOutline"])
-	if !ok {
-		return errors.New("documentOutline must be an array")
+func buildContractStatements(data documentData) ([]map[string]any, error) {
+	if statements := statementsFromValue(data["content"]); len(statements) > 0 {
+		return statements, nil
 	}
-	blocks, ok := asArray(data["documentBlocks"])
-	if !ok {
-		return errors.New("documentBlocks must be an array")
+	if statements := statementsFromValue(data["contractData"]); len(statements) > 0 {
+		return statements, nil
 	}
+	if statementSet, ok := data[statementSetDocumentProperty()].(map[string]any); ok {
+		return statementsFromValue(statementSet["statements"]), nil
+	}
+	return []map[string]any{}, nil
+}
+
+func normalizeSemanticConditions(data documentData) error {
 	conditions, ok := asArray(data["semanticConditions"])
 	if !ok {
-		return errors.New("semanticConditions must be an array")
+		return nil
 	}
-	if _, ok := asArray(data["customMetaData"]); !ok {
-		if _, isContract := data["contractData"]; !isContract {
-			data["customMetaData"] = []any{}
-		}
-	}
-
-	blockTypes := map[string]string{}
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("documentBlocks entries must be objects")
-		}
-		id, _ := block["blockId"].(string)
-		blockType, _ := block["type"].(string)
-		if strings.TrimSpace(id) == "" {
-			return errors.New("documentBlocks entries require blockId")
-		}
-		if blockTypes[id] != "" {
-			return fmt.Errorf("duplicate document block id %q", id)
-		}
-		if !validBlockType(blockType) {
-			return fmt.Errorf("block %q has invalid type %q", id, blockType)
-		}
-		normalizeBlockCatalogue(block)
-		if err := validateBlockCatalogue(block); err != nil {
-			return fmt.Errorf("block %q catalogue validation failed: %w", id, err)
-		}
-		blockTypes[id] = blockType
-	}
-
-	outlineIDs := map[string]bool{}
-	rootCount := 0
-	for _, item := range outline {
-		node, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("documentOutline entries must be objects")
-		}
-		id, _ := node["blockId"].(string)
-		if strings.TrimSpace(id) == "" {
-			return errors.New("documentOutline entries require blockId")
-		}
-		if outlineIDs[id] {
-			return fmt.Errorf("duplicate outline block id %q", id)
-		}
-		outlineIDs[id] = true
-		if isTrue(node["isRoot"]) {
-			rootCount++
-		} else if _, ok := blockTypes[id]; !ok {
-			return fmt.Errorf("outline block %q has no matching document block", id)
-		}
-		children, ok := asArray(node["children"])
-		if !ok {
-			return fmt.Errorf("outline block %q children must be an array", id)
-		}
-		for _, rawChildID := range children {
-			childID, ok := rawChildID.(string)
-			if !ok || strings.TrimSpace(childID) == "" {
-				return fmt.Errorf("outline block %q has invalid child reference", id)
-			}
-			if _, ok := blockTypes[childID]; !ok {
-				return fmt.Errorf("outline block %q references unknown child block %q", id, childID)
-			}
-		}
-	}
-	if rootCount != 1 {
-		return fmt.Errorf("documentOutline must contain exactly one root block, got %d", rootCount)
-	}
-
 	conditionIDs := map[string]bool{}
 	for _, item := range conditions {
 		condition, ok := item.(map[string]any)
@@ -750,198 +867,31 @@ func validateCommonStructure(data documentData) error {
 		}
 		conditionIDs[id] = true
 	}
-	embeddedConditions, err := embeddedSemanticConditionsByBlockID(data)
-	if err != nil {
-		return err
-	}
-
-	for _, item := range blocks {
-		block := item.(map[string]any)
-		if block["type"] != "CLAUSE" {
-			continue
-		}
-		id, _ := block["blockId"].(string)
-		refs, ok := asArray(block["conditionIds"])
-		if !ok {
-			return fmt.Errorf("clause block %q conditionIds must be an array", id)
-		}
-		for _, rawConditionID := range refs {
-			conditionID, ok := rawConditionID.(string)
-			if !ok || !conditionReferenceExists(id, conditionID, conditionIDs, embeddedConditions) {
-				return fmt.Errorf("clause block %q references unknown semantic condition %q", id, conditionID)
-			}
-		}
-	}
 	return nil
 }
 
-func validateSemanticValues(data documentData, requireSemanticValues bool) error {
-	values, ok := asArray(data["semanticConditionValues"])
-	if !ok {
-		return errors.New("semanticConditionValues must be an array")
-	}
-	blocks, _ := asArray(data["documentBlocks"])
-	conditions, _ := asArray(data["semanticConditions"])
-	embeddedConditions, err := embeddedSemanticConditionsByBlockID(data)
-	if err != nil {
-		return err
-	}
-
-	conditionByID := map[string]map[string]any{}
-	requiredParams := map[string]map[string]string{}
-	for _, item := range conditions {
-		condition := item.(map[string]any)
-		conditionID := condition["conditionId"].(string)
-		conditionByID[conditionID] = condition
-		parameters, _ := asArray(condition["parameters"])
-		for _, rawParam := range parameters {
-			param := rawParam.(map[string]any)
-			if !isTrue(param["isRequired"]) {
-				continue
-			}
-			if _, ok := requiredParams[conditionID]; !ok {
-				requiredParams[conditionID] = map[string]string{}
-			}
-			requiredParams[conditionID][param["parameterName"].(string)] = param["type"].(string)
-		}
-	}
-
-	clauseConditions := map[string]map[string]bool{}
-	for _, item := range blocks {
-		block := item.(map[string]any)
-		if block["type"] != "CLAUSE" {
-			continue
-		}
-		blockID := block["blockId"].(string)
-		clauseConditions[blockID] = map[string]bool{}
-		refs, _ := asArray(block["conditionIds"])
-		for _, rawConditionID := range refs {
-			clauseConditions[blockID][rawConditionID.(string)] = true
-		}
-	}
-
-	provided := map[string]bool{}
-	for _, item := range values {
-		value, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("semanticConditionValues entries must be objects")
-		}
-		blockID, _ := value["blockId"].(string)
-		conditionID, _ := value["conditionId"].(string)
-		parameterName, _ := value["parameterName"].(string)
-		if !clauseConditions[blockID][conditionID] {
-			return fmt.Errorf("semantic value references unknown block/condition pair %q/%q", blockID, conditionID)
-		}
-		condition := embeddedConditions.conditionForBlock(blockID, conditionID)
-		if condition == nil {
-			condition = conditionByID[conditionID]
-		}
-		param, found := findParameter(condition, parameterName)
-		if !found {
-			return fmt.Errorf("semantic value references unknown parameter %q on condition %q", parameterName, conditionID)
-		}
-		paramType, _ := param["type"].(string)
-		if rawValue, ok := value["parameterValue"]; ok && rawValue != nil {
-			if !valueMatchesType(rawValue, paramType) {
-				return fmt.Errorf("semantic value %q on condition %q does not match type %q", parameterName, conditionID, paramType)
-			}
-			semanticPath, _ := param["semanticPath"].(string)
-			if field, ok := ontologyDomainFieldIndex[semanticPath]; ok && field.Constraint != nil {
-				if err := valueMatchesConstraint(rawValue, field.Constraint); err != nil {
-					return fmt.Errorf("semantic value %q on condition %q violates constraint: %w", parameterName, conditionID, err)
-				}
-			}
-			if err := valueMatchesSemanticOperators(rawValue, param); err != nil {
-				return fmt.Errorf("semantic value %q on condition %q violates obligation: %w", parameterName, conditionID, err)
-			}
-			provided[semanticValueKey(blockID, conditionID, parameterName)] = true
-		}
-	}
-	if !requireSemanticValues {
-		return nil
-	}
-	for blockID, conditionSet := range clauseConditions {
-		for conditionID := range conditionSet {
-			params := embeddedConditions.requiredParamsForBlock(blockID, conditionID)
-			if len(params) == 0 {
-				params = requiredParams[conditionID]
-			}
-			for parameterName := range params {
-				if !provided[semanticValueKey(blockID, conditionID, parameterName)] {
-					return fmt.Errorf("required semantic value missing: block=%s condition=%s parameter=%s", blockID, conditionID, parameterName)
-				}
+func statementsFromValue(value any) []map[string]any {
+	switch typed := value.(type) {
+	case []any:
+		statements := []map[string]any{}
+		for _, item := range typed {
+			if statement, ok := item.(map[string]any); ok {
+				statements = append(statements, statement)
 			}
 		}
-	}
-	return nil
-}
-
-type semanticValueRecord struct {
-	BlockID        string
-	ConditionID    string
-	ParameterName  string
-	EntityType     string
-	EntityRole     string
-	DomainPath     string
-	OntologyTerm   string
-	StatementField string
-	StatementType  string
-	StatementID    string
-	ValuePrefix    string
-	Type           string
-	Value          any
-}
-
-func buildContractStatements(data documentData) ([]map[string]any, error) {
-	records, err := semanticValueRecords(data)
-	if err != nil {
-		return nil, err
-	}
-	statementsByKey := map[string]map[string]any{}
-	statementKeys := []string{}
-	for _, record := range records {
-		group, fieldName, ok := splitStatementField(record.StatementField)
-		if !ok {
-			continue
+		return statements
+	case map[string]any:
+		if statements := statementsFromValue(typed["statements"]); len(statements) > 0 {
+			return statements
 		}
-		statementType := record.StatementType
-		if statementType == "" {
-			statementType = record.EntityType
+		if statements := statementsFromValue(typed["@graph"]); len(statements) > 0 {
+			return statements
 		}
-		if statementType == "" {
-			continue
+		if len(typed) > 0 {
+			return []map[string]any{typed}
 		}
-		statementID := record.StatementID
-		if statementID == "" {
-			statementID = group + "-" + slugify(record.ConditionID)
-		}
-		key := statementID
-		statement := statementsByKey[key]
-		if statement == nil {
-			statement = map[string]any{
-				"@id":   statementID,
-				"@type": statementType,
-			}
-			statementsByKey[key] = statement
-			statementKeys = append(statementKeys, key)
-		}
-		applyStatementEntityRole(statement, record.EntityRole)
-		statement[fieldName] = normalizeStatementValue(record)
 	}
-
-	statements := []map[string]any{}
-	for _, key := range statementKeys {
-		statements = append(statements, statementsByKey[key])
-	}
-	return statements, nil
-}
-
-func splitStatementField(value string) (string, string, bool) {
-	parts := strings.SplitN(strings.TrimSpace(value), ".", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	return parts[0], parts[1], true
+	return []map[string]any{}
 }
 
 func validateContractSemanticsData(data documentData, requireCompleteStatements bool) error {
@@ -978,102 +928,6 @@ func validateSemanticRules(data documentData) error {
 	return nil
 }
 
-func valueMatchesSemanticOperators(value any, param map[string]any) error {
-	operators, ok := asArray(param["operators"])
-	if !ok {
-		return nil
-	}
-	for _, rawOperator := range operators {
-		operate, targets := parseSemanticOperator(rawOperator)
-		operator := normalizeSemanticOperator(operate)
-		if operator == "" || len(targets) == 0 {
-			continue
-		}
-		if !compareSemanticOperator(value, operator, targets) {
-			return fmt.Errorf("expected %s %v", operator, targets)
-		}
-	}
-	return nil
-}
-
-func compareSemanticOperator(value any, operator string, targets []any) bool {
-	target := firstTarget(targets)
-	switch operator {
-	case "Equals":
-		return fmt.Sprint(value) == fmt.Sprint(target)
-	case "NotEquals":
-		return fmt.Sprint(value) != fmt.Sprint(target)
-	case "In":
-		return targetSetContains(value, targets)
-	case "NotIn":
-		return !targetSetContains(value, targets)
-	case "GreaterThan":
-		return compareOrdered(value, target, func(left float64, right float64) bool { return left > right })
-	case "GreaterThanOrEqual":
-		return compareOrdered(value, target, func(left float64, right float64) bool { return left >= right })
-	case "LessThan":
-		return compareOrdered(value, target, func(left float64, right float64) bool { return left < right })
-	case "LessThanOrEqual":
-		return compareOrdered(value, target, func(left float64, right float64) bool { return left <= right })
-	case "Contains":
-		return strings.Contains(fmt.Sprint(value), fmt.Sprint(target))
-	case "MatchesRegex":
-		pattern, err := regexp.Compile(fmt.Sprint(target))
-		return err == nil && pattern.MatchString(fmt.Sprint(value))
-	default:
-		return true
-	}
-}
-
-func firstTarget(targets []any) any {
-	if len(targets) == 0 {
-		return nil
-	}
-	return targets[0]
-}
-
-func targetSetContains(value any, targets []any) bool {
-	for _, target := range targets {
-		if fmt.Sprint(value) == fmt.Sprint(target) {
-			return true
-		}
-	}
-	return false
-}
-
-func compareOrdered(value any, target any, compare func(left float64, right float64) bool) bool {
-	left, ok := orderedValue(value)
-	if !ok {
-		return false
-	}
-	right, ok := orderedValue(target)
-	if !ok {
-		return false
-	}
-	return compare(left, right)
-}
-
-func orderedValue(value any) (float64, bool) {
-	if number, ok := numericValue(value); ok {
-		return number, true
-	}
-	raw, ok := value.(string)
-	if !ok {
-		return 0, false
-	}
-	normalized := strings.ReplaceAll(strings.TrimSpace(raw), ",", ".")
-	if number, err := strconv.ParseFloat(normalized, 64); err == nil {
-		return number, true
-	}
-	if parsed, err := time.Parse(time.DateOnly, normalized); err == nil {
-		return float64(parsed.UnixMilli()), true
-	}
-	if parsed, err := time.Parse(time.RFC3339, normalized); err == nil {
-		return float64(parsed.UnixMilli()), true
-	}
-	return 0, false
-}
-
 func hasContractStatementIntent(data documentData) bool {
 	statements, err := buildContractStatements(data)
 	if err != nil {
@@ -1088,18 +942,10 @@ func hasContractStatementIntent(data documentData) bool {
 	return false
 }
 
-func validatePlaceholderBindings(data documentData, requireValues bool) error {
+func validatePlaceholderBindings(data documentData, _ bool) error {
 	conditions, err := semanticConditionIndex(data)
 	if err != nil {
 		return err
-	}
-	values, err := semanticValueRecords(data)
-	if err != nil {
-		return err
-	}
-	valueByBinding := map[string]bool{}
-	for _, value := range values {
-		valueByBinding[semanticValueKey(value.BlockID, value.ConditionID, value.ParameterName)] = true
 	}
 
 	bindings, ok := asArray(data["placeholderBindings"])
@@ -1122,9 +968,6 @@ func validatePlaceholderBindings(data documentData, requireValues bool) error {
 		}
 		if _, found := findParameter(condition, parameterName); !found {
 			return fmt.Errorf("placeholder binding %q references unknown parameter %q on condition %q", placeholder, parameterName, conditionID)
-		}
-		if requireValues && !valueByBinding[semanticValueKey(blockID, conditionID, parameterName)] {
-			return fmt.Errorf("placeholder binding %q has no semantic value", placeholder)
 		}
 		bindingByPlaceholder[blockID+"\x00"+placeholder] = binding
 	}
@@ -1175,75 +1018,11 @@ func numericValue(value any) (float64, bool) {
 	}
 }
 
-func semanticValueRecords(data documentData) ([]semanticValueRecord, error) {
-	conditions, err := semanticConditionIndex(data)
-	if err != nil {
-		return nil, err
-	}
-	values, ok := asArray(data["semanticConditionValues"])
-	if !ok {
-		return nil, errors.New("semanticConditionValues must be an array")
-	}
-	records := []semanticValueRecord{}
-	for _, item := range values {
-		value, ok := item.(map[string]any)
-		if !ok {
-			return nil, errors.New("semanticConditionValues entries must be objects")
-		}
-		blockID, _ := value["blockId"].(string)
-		conditionID, _ := value["conditionId"].(string)
-		parameterName, _ := value["parameterName"].(string)
-		condition := conditions.conditionForBlock(blockID, conditionID)
-		if condition == nil {
-			return nil, fmt.Errorf("semantic value references unknown condition %q", conditionID)
-		}
-		param, found := findParameter(condition, parameterName)
-		if !found {
-			return nil, fmt.Errorf("semantic value references unknown parameter %q on condition %q", parameterName, conditionID)
-		}
-		record, err := semanticValueRecordForParameter(blockID, conditionID, parameterName, condition, param, value["parameterValue"])
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, record)
-	}
-	return records, nil
-}
-
-func semanticValueRecordForParameter(blockID string, conditionID string, parameterName string, condition map[string]any, param map[string]any, value any) (semanticValueRecord, error) {
-	semanticPath, _ := param["semanticPath"].(string)
-	field, ok := ontologyDomainFieldIndex[semanticPath]
-	if !ok {
-		return semanticValueRecord{}, fmt.Errorf("semantic value parameter %q uses unknown semanticPath %q", parameterName, semanticPath)
-	}
-	entityType, _ := condition["entityType"].(string)
-	entityRole, _ := condition["entityRole"].(string)
-	return semanticValueRecord{
-		BlockID:        blockID,
-		ConditionID:    conditionID,
-		ParameterName:  parameterName,
-		EntityType:     canonicalStatementEntityType(entityType),
-		EntityRole:     canonicalEntityRole(entityRole),
-		DomainPath:     field.DomainPath,
-		OntologyTerm:   field.OntologyTerm,
-		StatementField: field.StatementField,
-		StatementType:  field.StatementType,
-		StatementID:    field.StatementID,
-		ValuePrefix:    field.ValuePrefix,
-		Type:           field.Type,
-		Value:          value,
-	}, nil
-}
-
 type semanticConditionsByBlock struct {
 	topLevel map[string]map[string]any
-	embedded embeddedSemanticConditions
 }
 
-func (conditions semanticConditionsByBlock) conditionForBlock(blockID string, conditionID string) map[string]any {
-	if condition := conditions.embedded.conditionForBlock(blockID, conditionID); condition != nil {
-		return condition
-	}
+func (conditions semanticConditionsByBlock) conditionForBlock(_ string, conditionID string) map[string]any {
 	return conditions.topLevel[conditionID]
 }
 
@@ -1258,11 +1037,6 @@ func semanticConditionIndex(data documentData) (semanticConditionsByBlock, error
 		conditionID, _ := condition["conditionId"].(string)
 		conditions.topLevel[conditionID] = condition
 	}
-	embedded, err := embeddedSemanticConditionsByBlockID(data)
-	if err != nil {
-		return conditions, err
-	}
-	conditions.embedded = embedded
 	return conditions, nil
 }
 
@@ -1285,125 +1059,6 @@ func statementsToAny(statements []map[string]any) []any {
 		result[i] = statement
 	}
 	return result
-}
-
-type embeddedSemanticConditions struct {
-	byOuterBlock map[string]map[string]map[string]any
-}
-
-func (conditions embeddedSemanticConditions) blockHasCondition(blockID string, conditionID string) bool {
-	return conditions.conditionForBlock(blockID, conditionID) != nil
-}
-
-func (conditions embeddedSemanticConditions) hasKnownOuterBlock(blockID string) bool {
-	outerBlockID, _ := splitEmbeddedBlockID(blockID)
-	if outerBlockID == "" {
-		return false
-	}
-	return conditions.byOuterBlock[outerBlockID] != nil
-}
-
-func (conditions embeddedSemanticConditions) conditionForBlock(blockID string, conditionID string) map[string]any {
-	outerBlockID, _ := splitEmbeddedBlockID(blockID)
-	if outerBlockID == "" {
-		return nil
-	}
-	return conditions.byOuterBlock[outerBlockID][conditionID]
-}
-
-func (conditions embeddedSemanticConditions) requiredParamsForBlock(blockID string, conditionID string) map[string]string {
-	condition := conditions.conditionForBlock(blockID, conditionID)
-	if condition == nil {
-		return nil
-	}
-	requiredParams := map[string]string{}
-	parameters, _ := asArray(condition["parameters"])
-	for _, rawParam := range parameters {
-		param := rawParam.(map[string]any)
-		if !isTrue(param["isRequired"]) {
-			continue
-		}
-		requiredParams[param["parameterName"].(string)] = param["type"].(string)
-	}
-	return requiredParams
-}
-
-func conditionReferenceExists(blockID string, conditionID string, topLevelConditionIDs map[string]bool, embeddedConditions embeddedSemanticConditions) bool {
-	if embeddedConditions.hasKnownOuterBlock(blockID) {
-		return embeddedConditions.blockHasCondition(blockID, conditionID)
-	}
-	return topLevelConditionIDs[conditionID]
-}
-
-func embeddedSemanticConditionsByBlockID(data documentData) (embeddedSemanticConditions, error) {
-	result := embeddedSemanticConditions{byOuterBlock: map[string]map[string]map[string]any{}}
-	outerBlockByTemplateID := map[string]string{}
-	blocks, _ := asArray(data["documentBlocks"])
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		blockType, _ := block["type"].(string)
-		if blockType != "APPROVED_TEMPLATE" && blockType != "MERGED_APPROVED_TEMPLATE" {
-			continue
-		}
-		blockID, _ := block["blockId"].(string)
-		templateID, _ := block["templateId"].(string)
-		if strings.TrimSpace(blockID) == "" || strings.TrimSpace(templateID) == "" {
-			continue
-		}
-		outerBlockByTemplateID[templateID] = blockID
-	}
-
-	snapshots, ok := asArray(data["subTemplateSnapshots"])
-	if !ok {
-		return result, nil
-	}
-	for _, rawSnapshot := range snapshots {
-		snapshot, ok := rawSnapshot.(map[string]any)
-		if !ok {
-			return result, errors.New("subTemplateSnapshots entries must be objects")
-		}
-		did, _ := snapshot["did"].(string)
-		outerBlockID := outerBlockByTemplateID[did]
-		if outerBlockID == "" {
-			continue
-		}
-		templateData, ok := snapshot["template_data"].(map[string]any)
-		if !ok {
-			return result, fmt.Errorf("subTemplateSnapshot %q template_data must be an object", did)
-		}
-		conditions, ok := asArray(templateData["semanticConditions"])
-		if !ok {
-			return result, fmt.Errorf("subTemplateSnapshot %q semanticConditions must be an array", did)
-		}
-		conditionIDs := map[string]map[string]any{}
-		for _, item := range conditions {
-			condition, ok := item.(map[string]any)
-			if !ok {
-				return result, fmt.Errorf("subTemplateSnapshot %q semanticConditions entries must be objects", did)
-			}
-			id, err := validateSemanticCondition(condition)
-			if err != nil {
-				return result, err
-			}
-			if conditionIDs[id] != nil {
-				return result, fmt.Errorf("duplicate semantic condition id %q in subTemplateSnapshot %q", id, did)
-			}
-			conditionIDs[id] = condition
-		}
-		result.byOuterBlock[outerBlockID] = conditionIDs
-	}
-	return result, nil
-}
-
-func splitEmbeddedBlockID(blockID string) (string, string) {
-	parts := strings.SplitN(blockID, "::", 2)
-	if len(parts) != 2 {
-		return "", ""
-	}
-	return parts[0], parts[1]
 }
 
 func validateSemanticCondition(condition map[string]any) (string, error) {
@@ -1494,15 +1149,6 @@ func asArray(value any) ([]any, bool) {
 	}
 }
 
-func validBlockType(value string) bool {
-	switch value {
-	case "SECTION", "TEXT", "CLAUSE", "APPROVED_TEMPLATE", "MERGED_APPROVED_TEMPLATE":
-		return true
-	default:
-		return false
-	}
-}
-
 func validSemanticType(value string) bool {
 	switch value {
 	case "date", "string", "integer", "decimal", "boolean", "enum":
@@ -1550,8 +1196,12 @@ func validateSemanticOperators(conditionID string, param map[string]any) error {
 	}
 	for _, rawOperator := range operators {
 		operate, targets := parseSemanticOperator(rawOperator)
-		if normalizeSemanticOperator(operate) == "" {
+		normalizedOperator := normalizeSemanticOperateValue(operate)
+		if normalizedOperator == "" {
 			return fmt.Errorf("semantic condition %q parameter %q uses unsupported operator %q", conditionID, param["parameterName"], operate)
+		}
+		if operatorMap, ok := rawOperator.(map[string]any); ok {
+			operatorMap["operate"] = normalizedOperator
 		}
 		if err := validateSemanticOperatorTargets(conditionID, param, targets); err != nil {
 			return err
@@ -1698,8 +1348,4 @@ func validateRoleEntities(data documentData) error {
 		}
 	}
 	return nil
-}
-
-func semanticValueKey(blockID, conditionID, parameterName string) string {
-	return blockID + "\x00" + conditionID + "\x00" + parameterName
 }

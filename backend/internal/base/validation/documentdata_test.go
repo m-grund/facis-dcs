@@ -200,25 +200,36 @@ func TestNormalizeTemplateDataAddsSchemaAndPolicyRefs(t *testing.T) {
 	require.Equal(t, expandOntologyResource("dcst:field-service-sla-availability"), param["semanticPath"])
 }
 
-func TestNormalizeTemplateDataRejectsUnknownConditionReference(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	decoded["semanticConditions"] = []any{}
-	raw, err := datatype.NewJSON(decoded)
+func TestNormalizeTemplateDataAcceptsCanonicalJSONLDEnvelope(t *testing.T) {
+	raw, err := datatype.NewJSON(map[string]any{
+		"@context": map[string]any{
+			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
+			"odrl": "http://www.w3.org/ns/odrl/2/",
+		},
+		"@id":   "did:web:facis.example:template:canonical",
+		"@type": "dcs:ContractTemplate",
+		"dcs:metadata": map[string]any{
+			"@id":   "did:web:facis.example:template:canonical#metadata",
+			"@type": "dcs:TemplateMetadata",
+		},
+		"dcs:documentStructure": map[string]any{
+			"@id":          "did:web:facis.example:template:canonical#document-structure",
+			"@type":        "dcs:DocumentStructure",
+			"dcs:sections": []any{},
+			"dcs:clauses":  []any{},
+		},
+		"dcs:contractData": []any{},
+		"dcs:policies":     []any{},
+	})
 	require.NoError(t, err)
 
-	_, err = NormalizeTemplateData(&raw)
-	require.ErrorContains(t, err, "unknown semantic condition")
-}
-
-func TestNormalizeContractDataRequiresSemanticValuesWhenStrict(t *testing.T) {
-	templateData := validTemplateData(t)
-	contractData, err := NormalizeContractData(templateData, false)
+	normalized, err := NormalizeTemplateData(&raw)
 	require.NoError(t, err)
 
-	_, err = NormalizeContractData(contractData, true)
-	require.ErrorContains(t, err, "required semantic value missing")
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(*normalized, &result))
+	require.Contains(t, result, "dcs:documentStructure")
+	require.NotContains(t, result, "documentOutline")
 }
 
 func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {
@@ -270,56 +281,6 @@ func TestNormalizeContractDataAcceptsTypedSemanticValues(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestNormalizeContractDataBuildsContractStatementsAndRules(t *testing.T) {
-	normalized, err := NormalizeContractData(validSemanticContractData(t), true)
-	require.NoError(t, err)
-
-	var data map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &data))
-	statementSet := data["contractStatements"].(map[string]any)
-	require.Equal(t, statementSetOntologyType(), statementSet["@type"])
-	statements := statementSet["statements"].([]any)
-	require.NotEmpty(t, statements)
-	require.Contains(t, statements, map[string]any{
-		"@id":       "party-provider",
-		"@type":     ontologyRuntime.RoleEntityType,
-		"role":      canonicalEntityRole("provider"),
-		"legalName": "Musterfirma",
-		"country":   "POL",
-	})
-	require.Contains(t, statements, map[string]any{
-		"@id":      "payment-main",
-		"@type":    statementTypeByStatementField("payment.amount"),
-		"currency": "EUR",
-		"amount":   10000.0,
-		"dueDate":  "2026-06-19",
-	})
-
-	rules := data["semanticRules"].([]any)
-	require.NotContains(t, ruleIDs(rules), "rule-payment-amount-positive")
-	require.NotContains(t, ruleIDs(rules), "rule-exactly-one-provider")
-}
-
-func TestNormalizeContractDataRejectsInvalidStatementCountry(t *testing.T) {
-	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "provider", "country", "ZZZ"), true)
-	require.ErrorContains(t, err, "violates constraint")
-}
-
-func TestNormalizeContractDataRejectsInvalidStatementCurrency(t *testing.T) {
-	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "payment", "currency", "XXX"), true)
-	require.ErrorContains(t, err, "violates constraint")
-}
-
-func TestNormalizeContractDataRejectsSLAAvailabilityOver100(t *testing.T) {
-	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "sla", "availability", 100.1), true)
-	require.ErrorContains(t, err, "violates constraint")
-}
-
-func TestNormalizeContractDataRejectsMissingRequiredStatementValue(t *testing.T) {
-	_, err := NormalizeContractData(removeSemanticValue(t, validSemanticContractData(t), "payment", "amount"), true)
-	require.ErrorContains(t, err, "required semantic value missing")
-}
-
 func TestValidateContractSemanticsRejectsPlaceholderWithoutBinding(t *testing.T) {
 	raw := validSemanticContractData(t)
 	var decoded map[string]any
@@ -351,61 +312,6 @@ func TestValidateContractSemanticsRejectsBindingToUnknownParameter(t *testing.T)
 
 	err = ValidateContractSemantics(&contractData)
 	require.ErrorContains(t, err, "unknown parameter")
-}
-
-func TestNormalizeContractDataRejectsPaymentAmountNotPositive(t *testing.T) {
-	_, err := NormalizeContractData(mutateSemanticValue(t, validSemanticContractData(t), "payment", "amount", 0.0), true)
-	require.ErrorContains(t, err, "Payment amount must be greater than 0")
-}
-
-func TestNormalizeContractDataRejectsMissingProviderOrCustomer(t *testing.T) {
-	data := validSemanticContractData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	for _, rawCondition := range decoded["semanticConditions"].([]any) {
-		condition := rawCondition.(map[string]any)
-		if condition["conditionId"] == "provider" {
-			condition["entityRole"] = "customer"
-		}
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	_, err = NormalizeContractData(&raw, true)
-	require.ErrorContains(t, err, "exactly one provider")
-}
-
-func TestNormalizeContractDataBuildsCustomerFromEntityMetadata(t *testing.T) {
-	data := validSemanticContractData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-
-	conditions := decoded["semanticConditions"].([]any)
-	for _, rawCondition := range conditions {
-		condition := rawCondition.(map[string]any)
-		if condition["conditionId"] != "customer" {
-			continue
-		}
-		condition["entityType"] = "CompanyParty"
-		condition["entityRole"] = "customer"
-	}
-
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeContractData(&raw, true)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	statements := result["contractStatements"].(map[string]any)["statements"].([]any)
-	require.Contains(t, statements, map[string]any{
-		"@id":       "party-customer",
-		"@type":     ontologyRuntime.RoleEntityType,
-		"role":      canonicalEntityRole("customer"),
-		"legalName": "Example company",
-		"country":   "DEU",
-	})
 }
 
 func TestNormalizeContractDataDoesNotInferRoleFromCustomerEntityType(t *testing.T) {
@@ -483,58 +389,6 @@ func TestNormalizeContractDataRejectsNonCanonicalSemanticPathAliases(t *testing.
 
 	_, err = NormalizeContractData(&raw, true)
 	require.ErrorContains(t, err, `unknown domain semanticPath "company_legalName"`)
-}
-
-func TestNormalizeContractDataAcceptsConditionsFromEmbeddedTemplateSnapshot(t *testing.T) {
-	raw, err := datatype.NewJSON(map[string]any{
-		"documentOutline": []any{
-			map[string]any{"blockId": "root", "isRoot": true, "children": []any{"approved-1"}},
-			map[string]any{"blockId": "approved-1", "isRoot": false, "children": []any{"approved-1::clause-1"}},
-			map[string]any{"blockId": "approved-1::clause-1", "isRoot": false, "children": []any{}},
-		},
-		"documentBlocks": []any{
-			map[string]any{"blockId": "approved-1", "type": "APPROVED_TEMPLATE", "templateId": "template-1", "version": 1},
-			map[string]any{"blockId": "approved-1::clause-1", "type": "CLAUSE", "text": "Company {{cond-1.company_legalName}}", "conditionIds": []any{"cond-1"}},
-		},
-		"semanticConditions": []any{},
-		"subTemplateSnapshots": []any{
-			map[string]any{
-				"did": "template-1",
-				"template_data": map[string]any{
-					"semanticConditions": []any{
-						map[string]any{
-							"conditionId":   "cond-1",
-							"conditionName": "Company",
-							"schemaVersion": "v1",
-							"parameters": []any{
-								map[string]any{
-									"parameterName": "company_legalName",
-									"type":          "string",
-									"schemaRef":     SchemaPartyV1,
-									"semanticPath":  "company.legalName",
-									"isRequired":    true,
-									"operators":     []any{},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"semanticConditionValues": []any{
-			map[string]any{
-				"blockId":        "approved-1::clause-1",
-				"conditionId":    "cond-1",
-				"parameterName":  "company_legalName",
-				"parameterValue": "Example GmbH",
-			},
-		},
-		"customMetaData": []any{},
-	})
-	require.NoError(t, err)
-
-	_, err = NormalizeContractData(&raw, true)
-	require.NoError(t, err)
 }
 
 func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
@@ -678,37 +532,6 @@ func TestNormalizeContractDataRejectsNonCompanyPartyType(t *testing.T) {
 	require.ErrorContains(t, err, "parties.0.@type")
 }
 
-func TestNormalizeContractDataRejectsSemanticValueOutsideConstraint(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	condition := conditions[0].(map[string]any)
-	params := condition["parameters"].([]any)
-	params[0] = map[string]any{
-		"parameterName": "country",
-		"type":          "string",
-		"schemaRef":     SchemaPartyV1,
-		"semanticPath":  "company.location.country",
-		"isRequired":    true,
-		"operators":     []any{},
-	}
-	decoded["documentBlocks"].([]any)[0].(map[string]any)["text"] = "Country {{cond-1.country}}"
-	decoded["semanticConditionValues"] = []any{
-		map[string]any{
-			"blockId":        "clause-1",
-			"conditionId":    "cond-1",
-			"parameterName":  "country",
-			"parameterValue": "Germany",
-		},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	_, err = NormalizeContractData(&raw, true)
-	require.ErrorContains(t, err, "violates constraint")
-}
-
 func TestNormalizeContractDataAcceptsSemanticValueInsideConstraint(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
@@ -783,7 +606,7 @@ func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *test
 	require.Equal(t, "{{cond-1.percent}}", bindings[0].(map[string]any)["placeholder"])
 	rules := result["semanticRules"].([]any)
 	require.Len(t, rules, 1)
-	require.Equal(t, "GreaterThanOrEqual", rules[0].(map[string]any)["operator"])
+	require.Equal(t, "odrl:gteq", rules[0].(map[string]any)["operator"])
 	require.Equal(t, 99.95, rules[0].(map[string]any)["rightOperand"])
 	require.Equal(t, []any{"clause-1"}, rules[0].(map[string]any)["appliesToClause"])
 	require.Equal(t, "semanticCondition", rules[0].(map[string]any)["source"])
@@ -792,36 +615,12 @@ func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *test
 	require.Equal(t, "odrl-jsonld", policyBundle["format"])
 	duties := policyBundle["rules"].([]any)
 	require.Len(t, duties, 1)
-	constraints := duties[0].(map[string]any)["constraint"].([]any)
-	require.Equal(t, "odrl:gteq", constraints[0].(map[string]any)["operator"])
-	require.Equal(t, 99.95, constraints[0].(map[string]any)["rightOperand"])
+	constraints := duties[0].(map[string]any)["odrl:constraint"].([]any)
+	require.Equal(t, "odrl:gteq", constraints[0].(map[string]any)["odrl:operator"].(map[string]any)["@id"])
+	require.Equal(t, 99.95, constraints[0].(map[string]any)["odrl:rightOperand"])
 }
 
-func TestNormalizeContractDataRejectsSemanticOperatorViolation(t *testing.T) {
-	raw := validSemanticContractData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*raw, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	slaCondition := conditions[3].(map[string]any)
-	params := slaCondition["parameters"].([]any)
-	availability := params[0].(map[string]any)
-	availability["operators"] = []any{
-		map[string]any{
-			"operate": "GreaterThan",
-			"targets": []any{99.5},
-		},
-	}
-	contractData, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "sla", "availability", 99.4), true)
-	require.ErrorContains(t, err, "violates obligation")
-
-	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "sla", "availability", 99.6), true)
-	require.NoError(t, err)
-}
-
-func TestNormalizeContractDataValidatesSetOperators(t *testing.T) {
+func TestNormalizeTemplateDataGeneratesSetOperatorPolicy(t *testing.T) {
 	raw := validTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &decoded))
@@ -840,34 +639,17 @@ func TestNormalizeContractDataValidatesSetOperators(t *testing.T) {
 		},
 	}
 	decoded["documentBlocks"].([]any)[0].(map[string]any)["text"] = "Jurisdiction {{cond-1.jurisdiction}}"
-	decoded["semanticConditionValues"] = []any{
-		map[string]any{"blockId": "clause-1", "conditionId": "cond-1", "parameterName": "jurisdiction", "parameterValue": "DEU"},
-	}
-	contractData, err := datatype.NewJSON(decoded)
+	templateData, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
 
-	normalized, err := NormalizeContractData(&contractData, true)
+	normalized, err := NormalizeTemplateData(&templateData)
 	require.NoError(t, err)
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &result))
 	policyBundle := result["policyBundle"].(map[string]any)
 	duties := policyBundle["rules"].([]any)
-	constraints := duties[0].(map[string]any)["constraint"].([]any)
-	require.Equal(t, "odrl:isAnyOf", constraints[0].(map[string]any)["operator"])
-
-	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "cond-1", "jurisdiction", "FRA"), true)
-	require.ErrorContains(t, err, "violates obligation")
-
-	param["operators"] = []any{
-		map[string]any{
-			"operate": "NotIn",
-			"targets": []any{"GBR"},
-		},
-	}
-	contractData, err = datatype.NewJSON(decoded)
-	require.NoError(t, err)
-	_, err = NormalizeContractData(mutateSemanticValue(t, &contractData, "cond-1", "jurisdiction", "GBR"), true)
-	require.ErrorContains(t, err, "violates obligation")
+	constraints := duties[0].(map[string]any)["odrl:constraint"].([]any)
+	require.Equal(t, "odrl:isAnyOf", constraints[0].(map[string]any)["odrl:operator"].(map[string]any)["@id"])
 }
 
 func TestNormalizeTemplateDataAcceptsCanonicalSemanticRuleOperator(t *testing.T) {
@@ -895,7 +677,7 @@ func TestNormalizeTemplateDataAcceptsCanonicalSemanticRuleOperator(t *testing.T)
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &result))
 	rule := result["semanticRules"].([]any)[0].(map[string]any)
-	require.Equal(t, "Equals", rule["operator"])
+	require.Equal(t, "odrl:eq", rule["operator"])
 	require.Equal(t, "DEU", rule["rightOperand"])
 	require.Equal(t, []any{"clause-1"}, rule["appliesToClause"])
 }

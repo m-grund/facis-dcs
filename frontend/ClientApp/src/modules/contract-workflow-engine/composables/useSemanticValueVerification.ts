@@ -12,6 +12,7 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
+import { normalizeNumberInput } from '@template-repository/utils/number-format'
 import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 
 export interface VerificationResult {
@@ -324,7 +325,7 @@ function compareOrdered(
 function orderedValue(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
   if (typeof value === 'string') {
-    const number = Number(value.replace(',', '.'))
+    const number = Number(normalizeNumberInput(value))
     if (Number.isFinite(number)) return number
     const date = Date.parse(value)
     return Number.isNaN(date) ? null : date
@@ -333,7 +334,9 @@ function orderedValue(value: unknown): number | null {
 }
 
 function coerceTarget(target: unknown, value: string | number | boolean): unknown {
-  if (typeof value === 'number') return typeof target === 'number' ? target : Number(String(target).replace(',', '.'))
+  if (typeof value === 'number') {
+    return typeof target === 'number' ? target : Number(normalizeNumberInput(String(target)))
+  }
   if (typeof value === 'boolean') return typeof target === 'boolean' ? target : target === 'true'
   return target
 }

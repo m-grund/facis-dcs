@@ -187,6 +187,14 @@ func statementLeaf(statementField string) string {
 	return leaf
 }
 
+func splitStatementField(value string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(value), ".", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
 func loadOntologyDomainFields() (map[string]domainField, error) {
 	var failures []string
 	for _, path := range ontologyPathCandidates() {
@@ -363,15 +371,6 @@ func applyStatementEntityRole(statement map[string]any, role string) {
 	if role != "" {
 		statement[ontologyRuntime.EntityRoleStatementField] = role
 	}
-}
-
-func normalizeStatementValue(record semanticValueRecord) any {
-	if record.OntologyTerm == ontologyRuntime.EntityRoleField {
-		if role, ok := record.Value.(string); ok {
-			return canonicalEntityRole(role)
-		}
-	}
-	return record.Value
 }
 
 func validateOntologyRoleEntity(entity map[string]any) error {

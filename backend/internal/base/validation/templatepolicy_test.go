@@ -50,22 +50,6 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	require.NotContains(t, ruleIDs, "FACIS-TPL-SIGN-001")
 }
 
-func TestAuditTemplatePoliciesReportsStructuralErrorsAsFindings(t *testing.T) {
-	raw, err := datatype.NewJSON(map[string]any{
-		"documentOutline":    []any{},
-		"documentBlocks":     []any{},
-		"semanticConditions": []any{},
-		"customMetaData":     []any{},
-	})
-	require.NoError(t, err)
-
-	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{})
-	require.NoError(t, err)
-	require.Len(t, findings, 1)
-	require.Equal(t, "FACIS-TPL-STRUCT-000", findings[0].RuleID)
-	require.Equal(t, "error", findings[0].Severity)
-}
-
 func semanticCondition(id string, schemaRef string, semanticPath string, paramType string) map[string]any {
 	return map[string]any{
 		"conditionId":   id,
