@@ -836,7 +836,6 @@ var _ = Service("TemplateRepository", func() {
 		Meta("dcs:ui", "Template Management Dashboard")
 
 		Security(JWTAuth, func() {
-			Scope("Template Manager")
 			Scope("Auditor")
 			Scope("Compliance Officer")
 		})

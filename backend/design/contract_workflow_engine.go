@@ -866,7 +866,6 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("Sys. Administrator")
 		})
 
 		Payload(ContractAuditRequest)

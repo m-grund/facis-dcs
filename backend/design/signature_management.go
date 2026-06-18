@@ -391,7 +391,6 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("Sys. Administrator")
 		})
 
 		Payload(SMContractAuditRequest)
