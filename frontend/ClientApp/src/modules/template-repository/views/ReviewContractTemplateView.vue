@@ -115,6 +115,35 @@ watch(
 const isSubmitting = ref(false)
 const comment = ref<string>('')
 
+const verifyTemplate = async () => {
+  const did = draftStore.did
+  const updatedAt = draftStore.updated_at
+  if (!did || !updatedAt) {
+    console.error('Missing did or updated_at for submission')
+    return
+  }
+  isSubmitting.value = true
+  try {
+   
+    const verificationResult = await contractTemplateService.verify({
+      did,
+    })
+    
+    if (verificationResult.findings.length > 0) {
+      const title = 'Verification findings:'
+      const message = verificationResult.findings.join('\n')
+      console.log(`${title}\n${message}`)
+      alert(`${title}\n${message}`)
+    }
+
+  } catch (error) {
+    console.error('Submission failed', error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+
 const forwardToApproval = async () => {
   const did = draftStore.did
   const updatedAt = draftStore.updated_at
@@ -133,9 +162,7 @@ const forwardToApproval = async () => {
     } else if (commentResult?.data) {
       comment.value = commentResult.data
     }
-    await contractTemplateService.verify({
-      did,
-    })
+
     await contractTemplateService.submit({
       did,
       updated_at: updatedAt,
