@@ -282,6 +282,7 @@ func normalizeCanonicalContext(data documentData) {
 		data["@context"] = map[string]any{
 			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
 			"odrl": "http://www.w3.org/ns/odrl/2/",
+			"xsd":  "http://www.w3.org/2001/XMLSchema#",
 		}
 		return
 	}
@@ -290,6 +291,9 @@ func normalizeCanonicalContext(data documentData) {
 	}
 	if _, ok := context["odrl"]; !ok {
 		context["odrl"] = "http://www.w3.org/ns/odrl/2/"
+	}
+	if _, ok := context["xsd"]; !ok {
+		context["xsd"] = "http://www.w3.org/2001/XMLSchema#"
 	}
 }
 

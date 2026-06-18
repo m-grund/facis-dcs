@@ -117,6 +117,7 @@ func TestBuildTemplateJSONLDProducesSeparatedTopLevelSections(t *testing.T) {
 	context := env["@context"].(map[string]any)
 	require.Equal(t, dcsContextV1, context["dcs"])
 	require.Equal(t, odrlContextV2, context["odrl"])
+	require.Equal(t, xsdContext, context["xsd"])
 	require.Equal(t, "dcs:ContractTemplate", env["@type"])
 	require.Contains(t, env, "dcs:metadata")
 	require.Contains(t, env, "dcs:documentStructure")
@@ -158,7 +159,11 @@ func TestBuildTemplateJSONLDProviderCountryInIsODRLDuty(t *testing.T) {
 	require.Equal(t, "odrl:Constraint", constraint["@type"])
 	require.Equal(t, "did:web:example:template:provider-eligibility#providerCountry", constraint["odrl:leftOperand"].(map[string]any)["@id"])
 	require.Equal(t, "odrl:isAnyOf", constraint["odrl:operator"].(map[string]any)["@id"])
-	require.Equal(t, []any{"DEU", "AUT", "CHE"}, constraint["odrl:rightOperand"])
+	require.Equal(t, []any{
+		map[string]any{"@value": "DEU", "@type": "xsd:string"},
+		map[string]any{"@value": "AUT", "@type": "xsd:string"},
+		map[string]any{"@value": "CHE", "@type": "xsd:string"},
+	}, constraint["odrl:rightOperand"])
 	require.NotContains(t, duty, "dcs:severity")
 	require.NotContains(t, duty, "dcs:enforcementPhase")
 	require.NotContains(t, duty, "dcs:ruleKind")
@@ -178,6 +183,7 @@ func TestBuildTemplateJSONLDKeepsODRLRightOperand(t *testing.T) {
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "amount",
+						"type":          "decimal",
 						"semanticPath":  "contract.payment.amount",
 						"operators": []any{
 							map[string]any{
@@ -198,7 +204,42 @@ func TestBuildTemplateJSONLDKeepsODRLRightOperand(t *testing.T) {
 	require.Len(t, policies, 1)
 	constraint := policies[0].(map[string]any)["odrl:constraint"].(map[string]any)
 	require.Equal(t, "odrl:gt", constraint["odrl:operator"].(map[string]any)["@id"])
-	require.Equal(t, 500.0, constraint["odrl:rightOperand"])
+	require.Equal(t, map[string]any{"@value": "500", "@type": "xsd:decimal"}, constraint["odrl:rightOperand"])
+}
+
+func TestTypedRightOperandUsesParameterDatatype(t *testing.T) {
+	tests := []struct {
+		name          string
+		value         any
+		parameterType string
+		expected      map[string]any
+	}{
+		{name: "decimal", value: 99.95, parameterType: "decimal", expected: map[string]any{"@value": "99.95", "@type": "xsd:decimal"}},
+		{name: "integer", value: 12, parameterType: "integer", expected: map[string]any{"@value": "12", "@type": "xsd:integer"}},
+		{name: "boolean", value: true, parameterType: "boolean", expected: map[string]any{"@value": "true", "@type": "xsd:boolean"}},
+		{name: "date", value: "2026-06-18", parameterType: "date", expected: map[string]any{"@value": "2026-06-18", "@type": "xsd:date"}},
+		{name: "string", value: "DEU", parameterType: "string", expected: map[string]any{"@value": "DEU", "@type": "xsd:string"}},
+		{name: "enum", value: "GOLD", parameterType: "enum", expected: map[string]any{"@value": "GOLD", "@type": "xsd:string"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expected, typedRightOperand(test.value, test.parameterType))
+		})
+	}
+}
+
+func TestParseOperatorUnwrapsTypedRightOperands(t *testing.T) {
+	operate, targets := parseOperator(map[string]any{
+		"operate": "odrl:isAnyOf",
+		"odrl:rightOperand": []any{
+			map[string]any{"@value": "99.95", "@type": "xsd:decimal"},
+			map[string]any{"@value": "100.5", "@type": "xsd:decimal"},
+		},
+	})
+
+	require.Equal(t, "odrl:isAnyOf", operate)
+	require.Equal(t, []any{99.95, 100.5}, targets)
 }
 
 func TestBuildTemplateJSONLDContractDataContainsStableFieldIDs(t *testing.T) {
@@ -264,6 +305,7 @@ func TestBuildTemplateJSONLDSmallTemplateUsesLayeredSemanticObjectsAndODRL(t *te
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "country",
+						"type":          "string",
 						"semanticPath":  "company.country",
 						"operators": []any{
 							map[string]any{
@@ -282,6 +324,7 @@ func TestBuildTemplateJSONLDSmallTemplateUsesLayeredSemanticObjectsAndODRL(t *te
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "country",
+						"type":          "string",
 						"semanticPath":  "company.country",
 					},
 				},
@@ -293,6 +336,7 @@ func TestBuildTemplateJSONLDSmallTemplateUsesLayeredSemanticObjectsAndODRL(t *te
 				"parameters": []any{
 					map[string]any{
 						"parameterName": "amount",
+						"type":          "decimal",
 						"semanticPath":  "contract.payment.amount",
 						"operators": []any{
 							map[string]any{
@@ -340,7 +384,11 @@ func TestBuildTemplateJSONLDSmallTemplateUsesLayeredSemanticObjectsAndODRL(t *te
 	constraint := providerCountryPolicy["odrl:constraint"].(map[string]any)
 	require.Equal(t, "did:web:example:template:provider-eligibility#providerCountry", constraint["odrl:leftOperand"].(map[string]any)["@id"])
 	require.Equal(t, "odrl:isAnyOf", constraint["odrl:operator"].(map[string]any)["@id"])
-	require.Equal(t, []any{"DEU", "AUT", "CHE"}, constraint["odrl:rightOperand"])
+	require.Equal(t, []any{
+		map[string]any{"@value": "DEU", "@type": "xsd:string"},
+		map[string]any{"@value": "AUT", "@type": "xsd:string"},
+		map[string]any{"@value": "CHE", "@type": "xsd:string"},
+	}, constraint["odrl:rightOperand"])
 	require.NotContains(t, providerCountryPolicy, "odrl:assignee")
 	require.NotContains(t, providerCountryPolicy, "dcs:severity")
 }

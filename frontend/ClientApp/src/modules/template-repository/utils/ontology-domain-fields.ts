@@ -211,7 +211,8 @@ function localName(resource: string): string {
 }
 
 function expandResource(resource: string): string {
-  if (resource.startsWith('dcst:')) return `https://w3id.org/facis/dcs/taxonomy/v1#${resource.slice(6)}`
+  if (resource.startsWith('dcst:'))
+    return `https://w3id.org/facis/dcs/taxonomy/v1#${resource.slice('dcst:'.length)}`
   if (resource.startsWith('dcs:')) return `https://w3id.org/facis/dcs/ontology/v1#${resource.slice(4)}`
   return resource
 }

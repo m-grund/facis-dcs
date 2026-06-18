@@ -268,6 +268,7 @@ func TestNormalizeTemplateDataAcceptsCanonicalJSONLDEnvelope(t *testing.T) {
 	require.NoError(t, json.Unmarshal(*normalized, &result))
 	require.Contains(t, result, "dcs:documentStructure")
 	require.NotContains(t, result, "documentOutline")
+	require.Equal(t, "http://www.w3.org/2001/XMLSchema#", result["@context"].(map[string]any)["xsd"])
 }
 
 func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {

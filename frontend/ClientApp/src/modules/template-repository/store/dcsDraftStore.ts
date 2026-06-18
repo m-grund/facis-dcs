@@ -43,6 +43,7 @@ import {
   type DcsDataRequirement,
   type DcsRequirementField,
   type DcsSubTemplateSnapshot,
+  type JsonLdTypedValue,
   type OdrlRule,
 } from '@/models/dcs-jsonld'
 import type { ContractTemplateState } from '@/types/contract-template-state'
@@ -594,9 +595,7 @@ export function getOutlineFromTemplateData(td: SubTemplateSnapshot['template_dat
   return templateDataToBuilderData(td).documentOutline
 }
 
-export function getSemanticConditionsFromTemplateData(
-  td: SubTemplateSnapshot['template_data'],
-): SemanticCondition[] {
+export function getSemanticConditionsFromTemplateData(td: SubTemplateSnapshot['template_data']): SemanticCondition[] {
   return templateDataToBuilderData(td).semanticConditions
 }
 
@@ -913,8 +912,8 @@ function semanticConditionsToPolicies(
               '@type': 'odrl:Constraint',
               'odrl:leftOperand': { '@id': leftOperand },
               'odrl:operator': { '@id': operator.operate },
-              ...(odrlRightOperand(operator) !== undefined
-                ? { 'odrl:rightOperand': odrlRightOperand(operator) }
+              ...(odrlRightOperand(operator, parameter.type) !== undefined
+                ? { 'odrl:rightOperand': odrlRightOperand(operator, parameter.type) }
                 : {}),
             },
           } satisfies OdrlRule,
@@ -924,10 +923,45 @@ function semanticConditionsToPolicies(
   )
 }
 
-function odrlRightOperand(operator: SemanticParameterOperator): unknown {
+function odrlRightOperand(
+  operator: SemanticParameterOperator,
+  parameterType: SemanticConditionParameter['type'],
+): JsonLdTypedValue | JsonLdTypedValue[] | undefined {
   if (!operator.targets.length) return undefined
-  if (isSetOperator(operator.operate)) return operator.targets
-  return operator.targets[0]
+  const operands = operator.targets.map((target) => typedJsonLdValue(target, parameterType))
+  if (isSetOperator(operator.operate)) return operands
+  return operands[0]
+}
+
+function typedJsonLdValue(value: unknown, parameterType: SemanticConditionParameter['type']): JsonLdTypedValue {
+  return {
+    '@value': jsonLdLexicalValue(value, parameterType),
+    '@type': xsdTypeForParameter(parameterType),
+  }
+}
+
+function jsonLdLexicalValue(value: unknown, parameterType: SemanticConditionParameter['type']): string {
+  if (parameterType === 'boolean') return value === true || value === 'true' ? 'true' : 'false'
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'bigint') return value.toString()
+  return JSON.stringify(value) ?? ''
+}
+
+function xsdTypeForParameter(parameterType: SemanticConditionParameter['type']): JsonLdTypedValue['@type'] {
+  switch (parameterType) {
+    case 'decimal':
+      return 'xsd:decimal'
+    case 'integer':
+      return 'xsd:integer'
+    case 'boolean':
+      return 'xsd:boolean'
+    case 'date':
+      return 'xsd:date'
+    case 'string':
+    case 'enum':
+      return 'xsd:string'
+  }
 }
 
 function isStandardOdrlOperator(operator: string): operator is DcsOperator {
@@ -974,9 +1008,9 @@ function contractDataToSemanticConditions(
     const targets =
       rightOperand === undefined
         ? []
-        : isSetOperator(operate) && Array.isArray(rightOperand)
-          ? rightOperand
-          : [rightOperand]
+        : Array.isArray(rightOperand)
+          ? rightOperand.map(jsonLdValue)
+          : [jsonLdValue(rightOperand)]
     const fieldId = constraint['odrl:leftOperand']['@id']
     operatorsByField.set(fieldId, [...(operatorsByField.get(fieldId) ?? []), { operate, targets }])
   }
@@ -1009,6 +1043,19 @@ function contractDataToSemanticConditions(
       ]
     }),
   }))
+}
+
+function jsonLdValue(value: JsonLdTypedValue): unknown {
+  switch (value['@type']) {
+    case 'xsd:decimal':
+    case 'xsd:integer':
+      return Number(value['@value'])
+    case 'xsd:boolean':
+      return value['@value'] === 'true'
+    case 'xsd:string':
+    case 'xsd:date':
+      return value['@value']
+  }
 }
 
 function cloneValueConstraint(

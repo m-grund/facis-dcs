@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ const (
 	jsonLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
 	dcsContextV1        = "https://w3id.org/facis/dcs/ontology/v1#"
 	odrlContextV2       = "http://www.w3.org/ns/odrl/2/"
+	xsdContext          = "http://www.w3.org/2001/XMLSchema#"
 	semanticProfileName = "FACIS DCS Semantic Contract Profile"
 	semanticProfileV1   = "v1"
 	ontologyV1          = "https://w3id.org/facis/dcs/ontology/v1"
@@ -77,7 +79,7 @@ func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyP
 		return nil, fmt.Errorf("parse template_data: %w", err)
 	}
 	if isCanonicalJSONLDEnvelope(inner) {
-		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2}
+		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2, "xsd": xsdContext}
 		inner["@id"] = template.DID
 		inner["@type"] = "dcs:ContractTemplate"
 		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildTemplateMetadata(template, profile))
@@ -89,6 +91,7 @@ func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyP
 		"@context": map[string]any{
 			"dcs":  dcsContextV1,
 			"odrl": odrlContextV2,
+			"xsd":  xsdContext,
 		},
 		"@id":                   template.DID,
 		"@type":                 "dcs:ContractTemplate",
@@ -108,7 +111,7 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		return nil, fmt.Errorf("parse contract_data: %w", err)
 	}
 	if isCanonicalJSONLDEnvelope(inner) {
-		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2}
+		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2, "xsd": xsdContext}
 		inner["@id"] = contract.DID
 		inner["@type"] = "dcs:Contract"
 		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildContractMetadata(contract, sourceTemplate, profile))
@@ -120,6 +123,7 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		"@context": map[string]any{
 			"dcs":  dcsContextV1,
 			"odrl": odrlContextV2,
+			"xsd":  xsdContext,
 		},
 		"@id":                   contract.DID,
 		"@type":                 "dcs:Contract",
@@ -343,6 +347,7 @@ func buildPolicies(baseID string, inner map[string]any) []any {
 				continue
 			}
 			parameterName, _ := param["parameterName"].(string)
+			parameterType, _ := param["type"].(string)
 			operators, _ := asArray(param["operators"])
 			for _, rawOperator := range operators {
 				operate, targets := parseOperator(rawOperator)
@@ -350,9 +355,13 @@ func buildPolicies(baseID string, inner map[string]any) []any {
 				if odrlOperator == "" {
 					continue
 				}
-				rightOperand := any(targets)
+				typedTargets := make([]any, 0, len(targets))
+				for _, target := range targets {
+					typedTargets = append(typedTargets, typedRightOperand(target, parameterType))
+				}
+				rightOperand := any(typedTargets)
 				if len(targets) == 1 && !isSetOperator(operate) {
-					rightOperand = targets[0]
+					rightOperand = typedTargets[0]
 				}
 				policyID := baseID + "#policy-" + slugify(conditionID) + "-" + slugify(parameterName) + "-" + slugify(operate)
 				policies = append(policies, map[string]any{
@@ -725,24 +734,112 @@ func parseOperator(raw any) (string, []any) {
 			operate = resourceID(value["odrl:operator"])
 		}
 		if targets, ok := asArray(value["targets"]); ok {
-			return operate, targets
+			return operate, unwrapTypedOperands(targets)
 		}
 		if rightOperand, exists := value["rightOperand"]; exists {
 			if values, ok := asArray(rightOperand); ok {
-				return operate, values
+				return operate, unwrapTypedOperands(values)
 			}
-			return operate, []any{rightOperand}
+			return operate, []any{unwrapTypedOperand(rightOperand)}
 		}
 		if rightOperand, exists := value["odrl:rightOperand"]; exists {
 			if values, ok := asArray(rightOperand); ok {
-				return operate, values
+				return operate, unwrapTypedOperands(values)
 			}
-			return operate, []any{rightOperand}
+			return operate, []any{unwrapTypedOperand(rightOperand)}
 		}
 		return operate, nil
 	default:
 		return "", nil
 	}
+}
+
+func typedRightOperand(value any, parameterType string) any {
+	xsdType := xsdTypeForParameter(parameterType)
+	if xsdType == "" {
+		return value
+	}
+	return map[string]any{
+		"@value": lexicalOperandValue(unwrapTypedOperand(value)),
+		"@type":  xsdType,
+	}
+}
+
+func xsdTypeForParameter(parameterType string) string {
+	switch parameterType {
+	case "decimal":
+		return "xsd:decimal"
+	case "integer":
+		return "xsd:integer"
+	case "boolean":
+		return "xsd:boolean"
+	case "date":
+		return "xsd:date"
+	case "string", "enum":
+		return "xsd:string"
+	default:
+		return ""
+	}
+}
+
+func lexicalOperandValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(typed)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case bool:
+		return strconv.FormatBool(typed)
+	default:
+		return fmt.Sprint(typed)
+	}
+}
+
+func unwrapTypedOperands(values []any) []any {
+	result := make([]any, len(values))
+	for index, value := range values {
+		result[index] = unwrapTypedOperand(value)
+	}
+	return result
+}
+
+func unwrapTypedOperand(value any) any {
+	literal, ok := value.(map[string]any)
+	if !ok {
+		return value
+	}
+	raw, exists := literal["@value"]
+	if !exists {
+		return value
+	}
+	text, ok := raw.(string)
+	if !ok {
+		return raw
+	}
+	switch literal["@type"] {
+	case "xsd:decimal":
+		parsed, err := strconv.ParseFloat(text, 64)
+		if err == nil {
+			return parsed
+		}
+	case "xsd:integer":
+		parsed, err := strconv.ParseInt(text, 10, 64)
+		if err == nil {
+			return parsed
+		}
+	case "xsd:boolean":
+		parsed, err := strconv.ParseBool(text)
+		if err == nil {
+			return parsed
+		}
+	}
+	return text
 }
 
 func resourceID(value any) string {

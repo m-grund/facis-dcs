@@ -1,10 +1,16 @@
 export const DCS_JSONLD_CONTEXT = {
   dcs: 'https://w3id.org/facis/dcs/ontology/v1#',
   odrl: 'http://www.w3.org/ns/odrl/2/',
+  xsd: 'http://www.w3.org/2001/XMLSchema#',
 } as const
 
 export interface JsonLdReference {
   '@id': string
+}
+
+export interface JsonLdTypedValue {
+  '@value': string
+  '@type': `xsd:${'string' | 'decimal' | 'integer' | 'boolean' | 'date'}`
 }
 
 export interface DcsTemplateMetadata {
@@ -91,7 +97,7 @@ export interface OdrlConstraint {
   '@type': 'odrl:Constraint'
   'odrl:leftOperand': JsonLdReference
   'odrl:operator': JsonLdReference
-  'odrl:rightOperand'?: unknown
+  'odrl:rightOperand'?: JsonLdTypedValue | JsonLdTypedValue[]
 }
 
 export interface OdrlRule {
