@@ -85,6 +85,7 @@ setup_environment:
 	"$(VENV_PATH)/bin/pip" install -q --upgrade pip wheel; \
 	"$(VENV_PATH)/bin/pip" install -q -e "$$SRC_PATH[dev]"; \
 	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary
+	"$(VENV_PATH)/bin/pip" install -q -r "$(PROJECT_ROOT)/testWallet/requirements.txt"
 
 run_bdd_test: setup_environment
 	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
