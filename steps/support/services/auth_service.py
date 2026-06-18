@@ -282,9 +282,9 @@ class AuthService:
 
     @staticmethod
     def relax_secure_cookies_for_local_http(session: requests.Session) -> None:
-        """Re-store Secure cookies so requests sends them on http://127.0.0.1 (dev-stack)."""
+        """Re-store Secure cookies so requests sends them on local http."""
         for cookie in list(session.cookies):
-            if cookie.secure and cookie.domain in {"127.0.0.1", "localhost"}:
+            if cookie.secure and cookie.domain in {"127.0.0.1", "localhost", "dcs.bdd"}:
                 session.cookies.set_cookie(
                     Cookie(
                         version=0,

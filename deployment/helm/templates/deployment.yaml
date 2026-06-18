@@ -56,8 +56,10 @@ spec:
           env:
             {{- if and .Values.hydra.enabled .Values.hydra.clients }}
             {{- $hydraClient := index .Values.hydra.clients 0 }}
-            - name: HYDRA_ISSUER_URL
+            - name: HYDRA_PUBLIC_ISSUER_URL
               value: {{ include "digital-contracting-service.hydraIssuerURL" . | quote }}
+            - name: HYDRA_INTERNAL_ISSUER_URL
+              value: {{ include "digital-contracting-service.hydraInternalIssuerURL" . | quote }}
             - name: HYDRA_CLIENT_ID
               value: {{ $hydraClient.client_id | quote }}
             - name: HYDRA_CLIENT_SECRET
