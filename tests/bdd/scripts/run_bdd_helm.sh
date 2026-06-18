@@ -37,8 +37,10 @@ DCS_HEALTH_URL="http://127.0.0.1:${LOCAL_FORWARD_PORT}${DCS_API_BASE_PATH}/auth/
 
 wait_for_dcs_http() {
   local deadline=$(( $(date +%s) + 60 ))
-  until curl -sf -o /dev/null -X POST "$DCS_HEALTH_URL" \
-    -H 'Content-Type: application/json' -d '{}' 2>/dev/null; do
+  local http_code
+  until http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$DCS_HEALTH_URL" \
+      -H 'Content-Type: application/json' -d '{}' 2>/dev/null) \
+      && [[ "$http_code" =~ ^[24][0-9]{2}$ ]] && [[ "$http_code" != 404 ]]; do
     if [ "$(date +%s)" -gt "$deadline" ]; then
       echo "Timed out waiting for DCS HTTP on $DCS_HEALTH_URL"
       cat .tmp/port-forward.log || true

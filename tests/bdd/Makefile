@@ -228,15 +228,8 @@ run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
-
-# Nur Deployment hochfahren (ohne Tests)
-kind_up: build_dcs_image build_pdf_core_image kind_deploy
-
-# Nur Tests ausführen gegen ein bereits laufendes Deployment
-run_bdd_kind_once: setup_dev ensure_k8s_tools
-	@$(MAKE) run_bdd_helm_dev \
 # start kind cluster, deploy DCS and dependencies, and prepare for BDD runs
-kind_up: build_dcs_image kind_deploy setup_environment ensure_k8s_tools
+kind_up: build_dcs_image build_pdf_core_image kind_deploy setup_environment ensure_k8s_tools
 
 # run BDD suite once against kind deployment (without redeploying cluster between runs)
 # Optionally pass F=<path> to run a single feature file, e.g. make run_bdd_kind_once F=features/login.feature
