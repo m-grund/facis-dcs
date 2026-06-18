@@ -107,19 +107,9 @@ async function register() {
   } catch {}
 }
 
-const exportPDF = async () => {
-  const blob = await contractTemplateService.exportPdf(props.template.did)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `template-${props.template.did}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
-}
 </script>
 
 <template>
-  <button :class="$attrs.class" @click="exportPDF">Export PDF</button>
   <button v-if="showRegisterButton" :class="$attrs.class" @click="register">Register</button>
   <button v-if="showPublishButton" :class="$attrs.class" :disabled="isPublishing" @click="publish">
     <span v-if="isPublishing" class="loading loading-sm loading-spinner"></span>

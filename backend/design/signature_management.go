@@ -238,6 +238,7 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
 			Scope("Sys. Contract Signer")
+			Scope("Contract Observer")
 		})
 
 		Payload(SMContractRetrieveRequest)
@@ -266,6 +267,7 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
 			Scope("Sys. Contract Signer")
+			Scope("Contract Observer")
 		})
 
 		Payload(SMContractRetrieveByIDRequest)
@@ -391,7 +393,6 @@ var _ = Service("SignatureManagement", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("Sys. Administrator")
 		})
 
 		Payload(SMContractAuditRequest)

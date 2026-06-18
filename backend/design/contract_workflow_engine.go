@@ -628,6 +628,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
 		})
 
 		Payload(ContractRetrieveRequest)
@@ -663,6 +664,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
 		})
 
 		Payload(ContractRetrieveByIDRequest)
@@ -695,6 +697,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
 		})
 
 		Payload(ContractHistoryRetrieveByIDRequest)
@@ -864,7 +867,6 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("Sys. Administrator")
 		})
 
 		Payload(ContractAuditRequest)

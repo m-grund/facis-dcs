@@ -10,12 +10,15 @@ import {
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { onMounted, ref } from 'vue'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const authStore = useAuthStore()
 
 const contracts = ref<SignatureContract[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+const { isSigner } = useContractPermissions()
 
 // Per-contract state: signing in progress, result envelope, verify result.
 const signing = ref<Record<string, boolean>>({})
@@ -193,13 +196,13 @@ async function compliance(contract: SignatureContract) {
               </div>
             </td>
             <td class="flex gap-2">
-              <button class="btn btn-sm btn-primary" :disabled="signing[contract.did]" @click="sign(contract)">
+              <button class="btn btn-sm btn-primary" :disabled="(envelopes[contract.did]?.status === 'SIGNED') || !isSigner || signing[contract.did]" @click="sign(contract)">
                 <span v-if="signing[contract.did]" class="loading loading-xs loading-spinner" />
                 Sign
               </button>
-              <button class="btn btn-ghost btn-sm" @click="verify(contract)">Verify</button>
-              <button class="btn btn-ghost btn-sm" @click="validate(contract)">Validate</button>
-              <button class="btn btn-ghost btn-sm" @click="compliance(contract)">Compliance</button>
+              <button class="btn btn-sm btn-outline" :disabled="!isSigner" @click="verify(contract)">Verify</button>
+              <button class="btn btn-sm btn-outline" :disabled="!isSigner" @click="validate(contract)">Validate</button>
+              <button class="btn btn-sm btn-outline" :disabled="!isSigner" @click="compliance(contract)">Compliance</button>
             </td>
           </tr>
         </tbody>
