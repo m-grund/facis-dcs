@@ -13,18 +13,18 @@ dcs_pdf_core:Document a sh:NodeShape ;
             sh:nodeKind sh:BlankNodeOrIRI ;
             sh:order 1 ;
             sh:path dcs_pdf_core:sections ],
-        [ sh:class dcs_pdf_core:SignatureField ;
-            sh:description "Ordered list of visible signature field definitions rendered as AcroForm signature widgets on a dedicated final page." ;
-            sh:nodeKind sh:BlankNodeOrIRI ;
-            sh:order 2 ;
-            sh:path dcs_pdf_core:signatureFields ],
         [ sh:datatype xsd:string ;
             sh:description "Canonical document title." ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path dcs_pdf_core:title ] ;
+            sh:path dcs_pdf_core:title ],
+        [ sh:class dcs_pdf_core:SignatureField ;
+            sh:description "Ordered list of visible signature field definitions rendered as AcroForm signature widgets on a dedicated final page." ;
+            sh:nodeKind sh:BlankNodeOrIRI ;
+            sh:order 2 ;
+            sh:path dcs_pdf_core:signatureFields ] ;
     sh:targetClass dcs_pdf_core:Document .
 
 dcs_pdf_core:Clause a sh:NodeShape ;
@@ -50,25 +50,31 @@ dcs_pdf_core:SignatureField a sh:NodeShape ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type ) ;
     sh:property [ sh:datatype xsd:string ;
+            sh:description "Human-readable label drawn in the signature field appearance." ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 1 ;
+            sh:path dcs_pdf_core:label ],
+        [ sh:datatype xsd:string ;
             sh:description "Stable PDF field name used in /T for a signature widget." ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path dcs_pdf_core:name ],
-        [ sh:datatype xsd:string ;
-            sh:description "Human-readable label drawn in the signature field appearance." ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 1 ;
-            sh:path dcs_pdf_core:label ] ;
+            sh:path dcs_pdf_core:name ] ;
     sh:targetClass dcs_pdf_core:SignatureField .
 
 dcs_pdf_core:Section a sh:NodeShape ;
     rdfs:comment "A headed section within a document, analogous to a numbered article or clause block in a legal contract. The heading is rendered as a PDF heading structural element and added to the PDF outline (bookmarks). Each clause in the section is rendered as a tagged paragraph. Sections may contain nested subsections to arbitrary depth." ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type ) ;
-    sh:property [ sh:class dcs_pdf_core:Section ;
+    sh:property [ sh:description "Ordered list of clause content items within a section. Each entry is either a plain string (prose) or a JSON-LD node object. Node objects dispatch on key presence: @id renders as an ontology reference with a glossary link; schema:url renders as an external hyperlink; @value/@type renders as a typed literal. Mixed-content arrays (where a clause is itself an array of these items) are supported for inline rich text." ;
+            sh:minCount 1 ;
+            sh:or ( [ sh:datatype xsd:string ;
+                        sh:nodeKind sh:Literal ] [ sh:class dcs_pdf_core:Clause ] ) ;
+            sh:order 1 ;
+            sh:path dcs_pdf_core:clauses ],
+        [ sh:class dcs_pdf_core:Section ;
             sh:description "Ordered list of nested subsections. Each subsection is itself a Section and may contain further subsections, enabling arbitrary nesting depth. The heading level of each subsection is determined by its depth in the nesting hierarchy." ;
             sh:nodeKind sh:BlankNodeOrIRI ;
             sh:order 2 ;
@@ -79,13 +85,7 @@ dcs_pdf_core:Section a sh:NodeShape ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path dcs_pdf_core:heading ],
-        [ sh:description "Ordered list of clause content items within a section. Each entry is either a plain string (prose) or a JSON-LD node object. Node objects dispatch on key presence: @id renders as an ontology reference with a glossary link; schema:url renders as an external hyperlink; @value/@type renders as a typed literal. Mixed-content arrays (where a clause is itself an array of these items) are supported for inline rich text." ;
-            sh:minCount 1 ;
-            sh:or ( [ sh:datatype xsd:string ;
-                        sh:nodeKind sh:Literal ] [ sh:class dcs_pdf_core:Clause ] ) ;
-            sh:order 1 ;
-            sh:path dcs_pdf_core:clauses ] ;
+            sh:path dcs_pdf_core:heading ] ;
     sh:targetClass dcs_pdf_core:Section .
 
 
