@@ -40,7 +40,6 @@ func BuildTemplateResourceSelfDescription(input TemplateResourceInput) map[strin
 	templateContext := map[string]interface{}{
 		"gax-core":            "https://w3id.org/gaia-x/core#",
 		"gax-trust-framework": "https://w3id.org/gaia-x/gax-trust-framework#",
-		"dct":                 "http://purl.org/dc/terms/",
 		"xsd":                 "http://www.w3.org/2001/XMLSchema#",
 		"dcs-template":        schemaContextURL,
 	}

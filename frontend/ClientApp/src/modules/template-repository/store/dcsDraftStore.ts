@@ -141,7 +141,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         'dcs:children': { '@list': node.children.map((id) => ({ '@id': blockIri(id) })) },
       }))
 
-      const policyId = this.did ?? 'urn:policy:draft'
+      const policyId = this.did ?? undefined
 
       return {
         '@context': DCS_JSONLD_CONTEXT,
@@ -149,7 +149,6 @@ export const useDcsDraftStore = defineStore(storeId, {
         ...(this.did ? { '@id': this.did } : {}),
         'dcs:title': this.name,
         'dcs:templateType': this.templateType === TemplateType.frameContract ? 'dcs:FrameContract' : 'dcs:SubContract',
-        'dcterms:language': 'de',
         'dcs:blocks': blocks,
         'dcs:layout': layout,
         'odrl:policy': semanticConditionsToOdrlPolicy(this.semanticConditions, policyId),
@@ -623,7 +622,7 @@ function setSemanticConditionsOnTemplateData(
 ): void {
   if (!td) return
   if (isDcsTemplateData(td)) {
-    const policyId = td['odrl:policy']?.['@id'] ?? 'urn:policy:draft'
+    const policyId = td['odrl:policy']?.['@id'] ?? td['@id']
     td['odrl:policy'] = semanticConditionsToOdrlPolicy(conditions, policyId)
     return
   }
@@ -885,13 +884,13 @@ function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTem
 
 function semanticConditionsToOdrlPolicy(
   conditions: SemanticCondition[],
-  policyId: string,
+  policyId: string | undefined,
 ): OdrlSet | undefined {
   if (conditions.length === 0) return undefined
 
   const obligations: OdrlDuty[] = conditions.map((condition) => ({
     '@type': 'odrl:Duty',
-    '@id': `urn:condition:${condition.conditionId}`,
+    '@id': conditionIri(condition.conditionId),
     'odrl:action': { '@id': 'dcs:ProvideParameter' },
     'odrl:constraint': condition.parameters.map((param) =>
       buildOdrlConstraint(param),
@@ -904,7 +903,7 @@ function semanticConditionsToOdrlPolicy(
 
   return {
     '@type': 'odrl:Set',
-    '@id': policyId,
+    ...(policyId ? { '@id': policyId } : {}),
     'odrl:obligation': obligations,
   }
 }
@@ -944,7 +943,7 @@ function odrlConstraintToParameter(constraint: OdrlConstraint): SemanticConditio
     schemaRef: '',
     semanticPath,
     isRequired: false,
-    operators: operate !== 'isProvided' ? [{ operate, targets: [] }] : [],
+    operators: operate !== 'odrl:isProvided' ? [{ operate, targets: [] }] : [],
     value: constraint['odrl:rightOperand'] ?? null,
   }
 }

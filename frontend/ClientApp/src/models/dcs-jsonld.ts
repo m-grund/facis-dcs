@@ -1,4 +1,7 @@
-export const DCS_JSONLD_CONTEXT = 'https://w3id.org/facis/dcs/context/v1'
+export const DCS_JSONLD_CONTEXT = {
+  dcs: 'https://w3id.org/facis/dcs#',
+  odrl: 'http://www.w3.org/ns/odrl/2/',
+} as const
 
 // ---- ODRL ----
 
@@ -27,7 +30,7 @@ export type OdrlProhibition = OdrlRule & { '@type': 'odrl:Prohibition' }
 
 export interface OdrlSet {
   '@type': 'odrl:Set'
-  '@id': string
+  '@id'?: string
   'odrl:obligation'?: OdrlDuty[]
   'odrl:permission'?: OdrlPermission[]
   'odrl:prohibition'?: OdrlProhibition[]
@@ -83,12 +86,11 @@ export interface DcsLayoutNode {
 // ---- Template document ----
 
 export interface DcsTemplateData {
-  '@context': string
+  '@context': typeof DCS_JSONLD_CONTEXT
   '@type': 'dcs:ContractTemplate'
   '@id'?: string
   'dcs:title': string
   'dcs:templateType': string
-  'dcterms:language': string
   'dcs:blocks': DcsBlock[]
   'dcs:layout': DcsLayoutNode[]
   'odrl:policy'?: OdrlSet
@@ -100,7 +102,6 @@ export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {
   return (
     typeof raw === 'object' &&
     raw !== null &&
-    '@context' in raw &&
     '@type' in raw &&
     (raw as Record<string, unknown>)['@type'] === 'dcs:ContractTemplate'
   )

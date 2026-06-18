@@ -2,7 +2,6 @@
 @prefix sla: <https://w3id.org/facis/sla/ontology#> .
 @prefix slat: <https://w3id.org/facis/sla/taxonomy#> .
 @prefix dcst: <https://w3id.org/facis/dcs/taxonomy/v1#> .
-@prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -12,10 +11,6 @@
 
 <https://w3id.org/facis/sla/ontology> a owl:Ontology ;
   owl:versionInfo "1.1.0" ;
-  dcterms:created "2026-05-18" ;
-  dcterms:modified "2026-05-29" ;
-  dcterms:license <https://creativecommons.org/licenses/by/4.0/> ;
-  dcterms:isPartOf <https://w3id.org/facis/dcs/ontology/v1> ;
   rdfs:label "FACIS SLA Ontology"@en, "FACIS SLA-Ontologie"@de ;
   rdfs:comment "Turtle ontology for service level agreements in FACIS DCS. It models SLA contracts, objectives, metrics, measurement, monitoring, breach handling, remedies, service credits, support windows, incidents, evidence, reporting, and canonical DCS domain-field mappings."@en, "Turtle-Ontologie fuer Service Level Agreements in FACIS DCS. Sie modelliert SLA-Vertraege, Ziele, Metriken, Messung, Monitoring, Verletzungen, Abhilfen, Service Credits, Supportfenster, Incidents, Nachweise, Reporting und kanonische DCS-Domain-Field-Mappings."@de ;
   rdfs:seeAlso <https://w3id.org/facis/dcs/ontology>, <https://w3id.org/facis/dcs/ontology/v1> .
