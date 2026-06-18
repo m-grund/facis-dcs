@@ -131,6 +131,7 @@ export const FACIS_SCHEMA_REFS = {
 export type DomainSemanticPath = string
 
 export interface DomainFieldDefinition {
+  ontologyId: string
   semanticPath: DomainSemanticPath
   schemaRef: string
   type: SemanticParameterType

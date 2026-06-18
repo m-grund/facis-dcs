@@ -1,42 +1,29 @@
 export const DCS_JSONLD_CONTEXT = {
-  dcs: 'https://w3id.org/facis/dcs#',
+  dcs: 'https://w3id.org/facis/dcs/ontology/v1#',
   odrl: 'http://www.w3.org/ns/odrl/2/',
 } as const
 
-// ---- ODRL ----
-
-export interface OdrlConstraint {
-  '@type'?: 'odrl:Constraint'
-  'odrl:leftOperand': { '@id': string }
-  'odrl:operator': { '@id': string }
-  'odrl:rightOperand'?: unknown
+export interface JsonLdReference {
+  '@id': string
 }
 
-export interface OdrlRule {
-  '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
+export interface DcsTemplateMetadata {
   '@id'?: string
-  'odrl:action': { '@id': string }
-  'odrl:constraint'?: OdrlConstraint[]
-  // Condition metadata (on duties that represent semantic conditions)
-  'dcs:conditionName'?: string
-  'dcs:schemaVersion'?: string
-  'dcs:entityType'?: string
-  'dcs:entityRole'?: string
+  '@type': 'dcs:TemplateMetadata'
+  'dcs:title'?: string
+  'dcs:description'?: string
+  'dcs:templateType': string
+  'dcs:customMetaData'?: unknown[]
+  'dcs:subTemplates'?: DcsSubTemplateSnapshot[]
 }
 
-export type OdrlDuty = OdrlRule & { '@type': 'odrl:Duty' }
-export type OdrlPermission = OdrlRule & { '@type': 'odrl:Permission' }
-export type OdrlProhibition = OdrlRule & { '@type': 'odrl:Prohibition' }
-
-export interface OdrlSet {
-  '@type': 'odrl:Set'
-  '@id'?: string
-  'odrl:obligation'?: OdrlDuty[]
-  'odrl:permission'?: OdrlPermission[]
-  'odrl:prohibition'?: OdrlProhibition[]
+export interface DcsPlaceholder {
+  '@type': 'dcs:Placeholder'
+  'dcs:token': string
+  'dcs:bindsTo': JsonLdReference
 }
 
-// ---- DCS Blocks ----
+export type DcsContentSegment = string | DcsPlaceholder
 
 export interface DcsSection {
   '@type': 'dcs:Section'
@@ -47,16 +34,8 @@ export interface DcsSection {
 export interface DcsTextBlock {
   '@type': 'dcs:TextBlock'
   '@id': string
-  'dcs:content': string
+  'dcs:text': string
 }
-
-export interface DcsParameterRef {
-  '@type': 'dcs:ParameterRef'
-  'dcs:constraint': { '@id': string }
-  'odrl:leftOperand': { '@id': string }
-}
-
-export type DcsContentSegment = string | DcsParameterRef
 
 export interface DcsClause {
   '@type': 'dcs:Clause'
@@ -75,34 +54,78 @@ export interface DcsApprovedTemplate {
 
 export type DcsBlock = DcsSection | DcsTextBlock | DcsClause | DcsApprovedTemplate
 
-// ---- Layout (document hierarchy) ----
-
 export interface DcsLayoutNode {
   '@id': string
   'dcs:isRoot'?: boolean
-  'dcs:children': { '@list': { '@id': string }[] }
+  'dcs:children': { '@list': JsonLdReference[] }
 }
 
-// ---- Template document ----
+export interface DcsDocumentStructure {
+  '@id'?: string
+  '@type': 'dcs:DocumentStructure'
+  'dcs:blocks': DcsBlock[]
+  'dcs:layout': DcsLayoutNode[]
+}
+
+export interface DcsRequirementField {
+  '@id': string
+  '@type': 'dcs:RequirementField'
+  'dcs:parameterName': string
+  'dcs:domainField': JsonLdReference
+  'dcs:semanticPath': string
+  'dcs:required': boolean
+}
+
+export interface DcsDataRequirement {
+  '@id': string
+  '@type': 'dcs:DataRequirement'
+  'dcs:conditionId': string
+  'dcs:name': string
+  'dcs:schemaVersion': 'v1'
+  'dcs:entityType'?: string
+  'dcs:entityRole'?: string
+  'dcs:fields': DcsRequirementField[]
+}
+
+export interface OdrlConstraint {
+  '@type': 'odrl:Constraint'
+  'odrl:leftOperand': JsonLdReference
+  'odrl:operator': JsonLdReference
+  'odrl:rightOperand'?: unknown
+}
+
+export interface OdrlRule {
+  '@id': string
+  '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
+  'odrl:constraint'?: OdrlConstraint
+}
+
+export interface DcsSubTemplateSnapshot {
+  '@id': string
+  'dcs:version': number
+  'dcs:documentNumber'?: string
+  'dcs:name'?: string
+  'dcs:description'?: string
+  'dcs:template': DcsTemplateData
+}
 
 export interface DcsTemplateData {
   '@context': typeof DCS_JSONLD_CONTEXT
   '@type': 'dcs:ContractTemplate'
   '@id'?: string
-  'dcs:title': string
-  'dcs:templateType': string
-  'dcs:blocks': DcsBlock[]
-  'dcs:layout': DcsLayoutNode[]
-  'odrl:policy'?: OdrlSet
-  'dcs:customMetaData'?: unknown[]
-  'dcs:subTemplateSnapshots'?: unknown[]
+  'dcs:metadata': DcsTemplateMetadata
+  'dcs:documentStructure': DcsDocumentStructure
+  'dcs:contractData': DcsDataRequirement[]
+  'dcs:policies': OdrlRule[]
 }
 
 export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {
+  if (typeof raw !== 'object' || raw === null) return false
+  const value = raw as Record<string, unknown>
   return (
-    typeof raw === 'object' &&
-    raw !== null &&
-    '@type' in raw &&
-    (raw as Record<string, unknown>)['@type'] === 'dcs:ContractTemplate'
+    value['@type'] === 'dcs:ContractTemplate' &&
+    typeof value['dcs:documentStructure'] === 'object' &&
+    Array.isArray(value['dcs:contractData']) &&
+    Array.isArray(value['dcs:policies'])
   )
 }

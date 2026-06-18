@@ -23,6 +23,7 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
+import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'
 const NEWLINE = '\n'
@@ -193,10 +194,11 @@ function writeApprovedTemplateBlock(
   )
 
   if (snapshot?.template_data) {
+    const builderData = templateDataToBuilderData(snapshot.template_data)
     const snapshotContext = createContractContext({
-      documentOutline: snapshot.template_data.documentOutline ?? [],
-      documentBlocks: snapshot.template_data.documentBlocks ?? [],
-      semanticConditions: snapshot.template_data.semanticConditions ?? [],
+      documentOutline: builderData.documentOutline,
+      documentBlocks: builderData.documentBlocks,
+      semanticConditions: builderData.semanticConditions,
       semanticConditionValues: cxt.semanticConditionValues,
       subTemplateSnapshots: cxt.subTemplateSnapshots,
     })
@@ -269,7 +271,9 @@ function getSemanticConditionsForClauseBlock(blockId: string, cxt: ContractConte
     ),
   )
 
-  return snapshot?.template_data?.semanticConditions ?? cxt.semanticConditions
+  return snapshot?.template_data
+    ? templateDataToBuilderData(snapshot.template_data).semanticConditions
+    : cxt.semanticConditions
 }
 
 export function useContractPlainTextConverter() {

@@ -16,6 +16,7 @@ import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/sto
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
+import { getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
@@ -64,7 +65,7 @@ const verificationResult = computed(() => {
     templateId: subTemplate.did,
     version: subTemplate.version,
     document_number: subTemplate.document_number,
-    semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
+    semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
   }))
   return verifySemanticValue(
     templateDraftStore.semanticConditions,

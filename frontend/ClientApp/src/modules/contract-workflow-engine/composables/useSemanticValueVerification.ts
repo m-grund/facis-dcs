@@ -14,6 +14,7 @@ import {
 } from '@template-repository/utils/template-data-ref'
 import { normalizeNumberInput } from '@template-repository/utils/number-format'
 import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
+import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 
 export interface VerificationResult {
   isValid: boolean
@@ -81,9 +82,7 @@ function getConditionsByBlockId(
       },
     ),
   )
-  if (matchedSnapshot?.template_data?.semanticConditions) {
-    conditions = matchedSnapshot.template_data.semanticConditions
-  }
+  if (matchedSnapshot?.template_data) conditions = getSemanticConditionsFromTemplateData(matchedSnapshot.template_data)
   return conditions
 }
 

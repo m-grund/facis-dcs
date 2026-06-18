@@ -48,6 +48,7 @@ function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
       const valueConstraintRef = firstResource(statement.text, 'dcs:hasValueConstraint')
       const statementType = firstResource(statement.text, 'dcs:statementType') || undefined
       return {
+        ontologyId: expandResource(statement.subject),
         semanticPath,
         schemaRef,
         type,
@@ -207,6 +208,12 @@ function firstResource(statement: string, predicate: string): string {
 
 function localName(resource: string): string {
   return resource.replace(/^.*[:#/]/, '')
+}
+
+function expandResource(resource: string): string {
+  if (resource.startsWith('dcst:')) return `https://w3id.org/facis/dcs/taxonomy/v1#${resource.slice(6)}`
+  if (resource.startsWith('dcs:')) return `https://w3id.org/facis/dcs/ontology/v1#${resource.slice(4)}`
+  return resource
 }
 
 function formatOntologyLabel(value: string): string {

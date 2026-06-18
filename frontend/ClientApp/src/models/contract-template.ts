@@ -31,7 +31,7 @@ export interface ContractTemplate {
   state: ContractTemplateState
   name?: string
   description?: string
-  template_data?: ContractTemplateData | DcsTemplateData
+  template_data?: DcsTemplateData
   updated_at: string
   responsible?: ContractTemplateResponsible
 }
@@ -64,5 +64,5 @@ export interface SubTemplateSnapshot {
   version: number
   name?: string
   description?: string
-  template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'> | DcsTemplateData
+  template_data?: DcsTemplateData
 }

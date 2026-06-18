@@ -16,6 +16,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/middleware"
+	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/command"
 	"digital-contracting-service/internal/templaterepository/datatype/actionflag"
@@ -492,6 +493,23 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
+	templateJSONLD, err := semanticmapper.BuildTemplateJSONLD(db.ContractTemplate{
+		DID:            contractTemplate.DID,
+		DocumentNumber: contractTemplate.DocumentNumber,
+		Version:        contractTemplate.Version,
+		State:          contractTemplate.State.String(),
+		TemplateType:   contractTemplate.TemplateType.String(),
+		Name:           contractTemplate.Name,
+		Description:    contractTemplate.Description,
+		CreatedBy:      contractTemplate.CreatedBy,
+		CreatedAt:      contractTemplate.CreatedAt,
+		UpdatedAt:      contractTemplate.UpdatedAt,
+		Responsible:    contractTemplate.Responsible,
+		TemplateData:   contractTemplate.TemplateData,
+	}, semanticmapper.DefaultProfile())
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
 
 	return &templaterepository.ContractTemplateRetrieveByIDResponse{
 		Did:            contractTemplate.DID,
@@ -504,7 +522,7 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 		CreatedBy:      contractTemplate.CreatedBy,
 		CreatedAt:      contractTemplate.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      contractTemplate.UpdatedAt.Format(time.RFC3339),
-		TemplateData:   contractTemplate.TemplateData,
+		TemplateData:   templateJSONLD,
 		Responsible:    contractTemplate.Responsible,
 	}, nil
 }

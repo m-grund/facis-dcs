@@ -10,7 +10,7 @@ import (
 )
 
 func TestAuditTemplatePoliciesReturnsWarningsForMissingFinishedTemplateFields(t *testing.T) {
-	findings, err := AuditTemplatePolicies(validTemplateData(t), TemplatePolicyAuditMetadata{
+	findings, err := AuditTemplatePolicies(canonicalTemplateData(t), TemplatePolicyAuditMetadata{
 		DID:          "did:example:template",
 		TemplateType: "subContract",
 		State:        "APPROVED",
@@ -19,21 +19,19 @@ func TestAuditTemplatePoliciesReturnsWarningsForMissingFinishedTemplateFields(t 
 
 	require.NotEmpty(t, findings)
 	require.Contains(t, policyFindingRuleIDs(findings), "FACIS-TPL-LEGAL-001")
-	require.Contains(t, policyFindingRuleIDs(findings), "FACIS-TPL-PARTY-001")
+	require.NotContains(t, policyFindingRuleIDs(findings), "FACIS-TPL-PARTY-001")
 }
 
 func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
-	data := validTemplateData(t)
+	data := canonicalTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
-	decoded["semanticConditions"] = []any{
-		semanticCondition("jurisdiction", SchemaContractV1, "contract.jurisdiction", "string"),
-		semanticCondition("country", SchemaPartyV1, "company.location.country", "string"),
-		semanticCondition("signatureLevel", SchemaSignatureV1, "signature.requiredLevel", "string"),
-	}
-	blocks := decoded["documentBlocks"].([]any)
-	clause := blocks[0].(map[string]any)
-	clause["conditionIds"] = []any{"jurisdiction", "country", "signatureLevel"}
+	requirement := decoded["dcs:contractData"].([]any)[0].(map[string]any)
+	fields := requirement["dcs:fields"].([]any)
+	requirement["dcs:fields"] = append(fields,
+		canonicalRequirementField("jurisdiction", "contract.jurisdiction"),
+		canonicalRequirementField("signature-level", "signature.requiredLevel"),
+	)
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
 
@@ -50,21 +48,14 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	require.NotContains(t, ruleIDs, "FACIS-TPL-SIGN-001")
 }
 
-func semanticCondition(id string, schemaRef string, semanticPath string, paramType string) map[string]any {
+func canonicalRequirementField(id string, semanticPath string) map[string]any {
 	return map[string]any{
-		"conditionId":   id,
-		"conditionName": id,
-		"schemaVersion": "v1",
-		"parameters": []any{
-			map[string]any{
-				"parameterName": semanticPath,
-				"type":          paramType,
-				"schemaRef":     schemaRef,
-				"semanticPath":  semanticPath,
-				"isRequired":    true,
-				"operators":     []any{},
-			},
-		},
+		"@id":               "urn:uuid:field-" + id,
+		"@type":             "dcs:RequirementField",
+		"dcs:parameterName": id,
+		"dcs:domainField":   map[string]any{"@id": "urn:ontology:" + id},
+		"dcs:semanticPath":  semanticPath,
+		"dcs:required":      true,
 	}
 }
 

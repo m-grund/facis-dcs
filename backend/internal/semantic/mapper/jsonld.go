@@ -76,6 +76,13 @@ func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyP
 	if err != nil {
 		return nil, fmt.Errorf("parse template_data: %w", err)
 	}
+	if isCanonicalJSONLDEnvelope(inner) {
+		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2}
+		inner["@id"] = template.DID
+		inner["@type"] = "dcs:ContractTemplate"
+		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildTemplateMetadata(template, profile))
+		return inner, nil
+	}
 
 	baseID := stableBaseID(template.DID)
 	envelope := map[string]any{
@@ -100,6 +107,13 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 	if err != nil {
 		return nil, fmt.Errorf("parse contract_data: %w", err)
 	}
+	if isCanonicalJSONLDEnvelope(inner) {
+		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2}
+		inner["@id"] = contract.DID
+		inner["@type"] = "dcs:Contract"
+		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildContractMetadata(contract, sourceTemplate, profile))
+		return inner, nil
+	}
 
 	baseID := stableBaseID(contract.DID)
 	envelope := map[string]any{
@@ -116,6 +130,24 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 	}
 
 	return envelope, nil
+}
+
+func isCanonicalJSONLDEnvelope(value map[string]any) bool {
+	_, hasDocumentStructure := value["dcs:documentStructure"]
+	return hasDocumentStructure
+}
+
+func mergeMetadata(existing any, authoritative map[string]any) map[string]any {
+	result := map[string]any{}
+	if metadata, ok := existing.(map[string]any); ok {
+		for key, value := range metadata {
+			result[key] = value
+		}
+	}
+	for key, value := range authoritative {
+		result[key] = value
+	}
+	return result
 }
 
 func buildTemplateMetadata(template templatedb.ContractTemplate, profile OntologyProfile) map[string]any {

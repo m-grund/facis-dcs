@@ -143,6 +143,9 @@ func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolic
 }
 
 func auditRequiredSchemaRefs(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	if isCanonicalEnvelope(data) {
+		return nil
+	}
 	refs, _ := data["schemaRefs"].(map[string]any)
 	required := map[string]string{
 		"documentStructure": SchemaDocumentStructureV1,
@@ -159,6 +162,9 @@ func auditRequiredSchemaRefs(policySet *templatePolicySet, rule templatePolicyRu
 }
 
 func auditRequiredPolicyRefs(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	if isCanonicalEnvelope(data) {
+		return nil
+	}
 	policies, _ := asArray(data["policyRefs"])
 	seen := map[string]bool{}
 	for _, item := range policies {
@@ -180,6 +186,20 @@ func auditRequiredPolicyRefs(policySet *templatePolicySet, rule templatePolicyRu
 }
 
 func auditFinishedTemplateHasClauseSemantics(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	if isCanonicalEnvelope(data) {
+		structure, _ := topLevelValue(data, "documentStructure").(map[string]any)
+		blocks, _ := structure["dcs:blocks"].([]any)
+		contractData, _ := topLevelValue(data, "contractData").([]any)
+		for _, rawBlock := range blocks {
+			block, ok := rawBlock.(map[string]any)
+			if ok && block["@type"] == "dcs:Clause" {
+				if content, valid := jsonLDList(block["dcs:content"]); valid && len(content) > 0 && len(contractData) > 0 {
+					return nil
+				}
+			}
+		}
+		return []PolicyFinding{newPolicyFinding(policySet, rule, "finished templates should contain at least one clause linked to contract data", "dcs:documentStructure", "")}
+	}
 	blocks, _ := asArray(data["documentBlocks"])
 	conditions, _ := asArray(data["semanticConditions"])
 	clauseWithCondition := false
@@ -220,6 +240,9 @@ func auditCanonicalDomainFields(policySet *templatePolicySet, rule templatePolic
 }
 
 func auditConstrainedParameters(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	if isCanonicalEnvelope(data) {
+		return nil
+	}
 	findings := []PolicyFinding{}
 	forEachSemanticParameter(data, func(conditionID string, index int, param map[string]any) {
 		semanticPath, _ := param["semanticPath"].(string)
@@ -261,6 +284,12 @@ func auditMetadataComplete(policySet *templatePolicySet, rule templatePolicyRule
 	if strings.TrimSpace(metadata.State) == "" {
 		findings = append(findings, newPolicyFinding(policySet, rule, "template state is missing", "state", ""))
 	}
+	if isCanonicalEnvelope(data) {
+		if _, ok := topLevelValue(data, "metadata").(map[string]any); !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, "template metadata is missing", "dcs:metadata", ""))
+		}
+		return findings
+	}
 	if _, ok := data["validation"].(map[string]any); !ok {
 		findings = append(findings, newPolicyFinding(policySet, rule, "validation profile metadata is missing", "validation", ""))
 	}
@@ -273,6 +302,27 @@ func auditMetadataComplete(policySet *templatePolicySet, rule templatePolicyRule
 }
 
 func forEachSemanticParameter(data documentData, visit func(conditionID string, index int, param map[string]any)) {
+	if isCanonicalEnvelope(data) {
+		requirements, _ := topLevelValue(data, "contractData").([]any)
+		for _, rawRequirement := range requirements {
+			requirement, ok := rawRequirement.(map[string]any)
+			if !ok {
+				continue
+			}
+			conditionID, _ := requirement["dcs:conditionId"].(string)
+			fields, _ := requirement["dcs:fields"].([]any)
+			for index, rawField := range fields {
+				field, ok := rawField.(map[string]any)
+				if !ok {
+					continue
+				}
+				visit(conditionID, index, map[string]any{
+					"semanticPath": field["dcs:semanticPath"],
+				})
+			}
+		}
+		return
+	}
 	conditions, _ := asArray(data["semanticConditions"])
 	for _, item := range conditions {
 		condition, ok := item.(map[string]any)

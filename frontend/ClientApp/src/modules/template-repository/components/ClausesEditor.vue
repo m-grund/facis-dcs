@@ -41,6 +41,10 @@ import { isClauseBlock, type ClauseBlock } from '@/modules/template-repository/m
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import {
+  getDocumentBlocksFromTemplateData,
+  getSemanticConditionsFromTemplateData,
+} from '@template-repository/store/dcsDraftStore'
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
@@ -74,14 +78,16 @@ function conditionIdsFromText(text: string): string[] {
 const clauseBlocks = computed((): ClauseBlock[] => {
   const mainClauses = documentBlocks.value.filter((b): b is ClauseBlock => isClauseBlock(b))
   const subTemplateClauses = subTemplateSnapshots.value.flatMap((subTemplate) =>
-    (subTemplate.template_data?.documentBlocks ?? []).filter((block): block is ClauseBlock => isClauseBlock(block)),
+    getDocumentBlocksFromTemplateData(subTemplate.template_data).filter(
+      (block): block is ClauseBlock => isClauseBlock(block),
+    ),
   )
   return [...mainClauses, ...subTemplateClauses]
 })
 
 const semanticConditions = computed(() => {
   const subTemplateConditions = subTemplateSnapshots.value.flatMap(
-    (subTemplate) => subTemplate.template_data?.semanticConditions ?? [],
+    (subTemplate) => getSemanticConditionsFromTemplateData(subTemplate.template_data),
   )
   return [...mainSemanticConditions.value, ...subTemplateConditions]
 })

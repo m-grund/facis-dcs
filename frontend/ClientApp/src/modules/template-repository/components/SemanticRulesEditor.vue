@@ -170,6 +170,10 @@ import {
 } from '@template-repository/models/contract-template'
 import type { SubTemplateReference } from '@template-repository/models/template-draft-store'
 import ParameterObligationEditor from '@template-repository/components/semantic-rules-editor/ParameterObligationEditor.vue'
+import {
+  getDocumentBlocksFromTemplateData,
+  getSemanticConditionsFromTemplateData,
+} from '@template-repository/store/dcsDraftStore'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import {
   ONTOLOGY_DOMAIN_TYPES,
@@ -224,7 +228,7 @@ const canAddRequirementDraft = computed(() => {
 
 const allBlocks = computed(() => {
   const subTemplateBlocks = subTemplateSnapshots.value.flatMap(
-    (subTemplate) => subTemplate.template_data?.documentBlocks ?? [],
+    (subTemplate) => getDocumentBlocksFromTemplateData(subTemplate.template_data),
   )
   return [...documentBlocks.value, ...subTemplateBlocks]
 })
@@ -254,7 +258,7 @@ const conditionItems = computed<RequirementItem[]>(() => {
     usedInClauseCount: clauseCountByConditionId.value[condition.conditionId] ?? 0,
   }))
   const subTemplateItems = subTemplateSnapshots.value.flatMap((template) => {
-    const conditions = template.template_data?.semanticConditions ?? []
+    const conditions = getSemanticConditionsFromTemplateData(template.template_data)
     return conditions.map((condition) => ({
       condition,
       usedInClauseCount: clauseCountByConditionId.value[condition.conditionId] ?? 0,

@@ -101,24 +101,11 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	if isCanonicalEnvelope(data) {
-		normalizeCanonicalEnvelope(data, "dcs:ContractTemplate")
-		if err := validateCanonicalEnvelope(data); err != nil {
-			return nil, err
-		}
-		return encodeDocumentData(data)
+	if !isCanonicalEnvelope(data) {
+		return nil, errors.New("template data must use the canonical dcs:documentStructure envelope")
 	}
-	normalizeTemplateMetadata(data)
-	if err := normalizeSemanticConditions(data); err != nil {
-		return nil, err
-	}
-	if err := validateSemanticRules(data); err != nil {
-		return nil, err
-	}
-	if err := validateSchemaRefs(data, true); err != nil {
-		return nil, err
-	}
-	if err := validatePolicyRefs(data, true); err != nil {
+	normalizeCanonicalEnvelope(data, "dcs:ContractTemplate")
+	if err := validateCanonicalEnvelope(data); err != nil {
 		return nil, err
 	}
 	return encodeDocumentData(data)
@@ -208,10 +195,40 @@ func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error)
 		return nil, err
 	}
 	if strings.TrimSpace(did) != "" {
+		previousID, _ := data["@id"].(string)
+		rebaseDocumentIDs(map[string]any(data), previousID, did)
 		data["@id"] = did
-		data["did"] = did
+		if metadata, ok := topLevelValue(data, "metadata").(map[string]any); ok {
+			metadata["@id"] = did + "#metadata"
+		}
+		if structure, ok := topLevelValue(data, "documentStructure").(map[string]any); ok {
+			structure["@id"] = did + "#document-structure"
+		}
 	}
 	return encodeDocumentData(data)
+}
+
+func rebaseDocumentIDs(value any, previousID string, did string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if text, ok := nested.(string); ok {
+				switch {
+				case strings.HasPrefix(text, "urn:uuid:"):
+					typed[key] = did + "#" + strings.TrimPrefix(text, "urn:uuid:")
+					continue
+				case previousID != "" && previousID != did && strings.HasPrefix(text, previousID+"#"):
+					typed[key] = did + strings.TrimPrefix(text, previousID)
+					continue
+				}
+			}
+			rebaseDocumentIDs(nested, previousID, did)
+		}
+	case []any:
+		for _, nested := range typed {
+			rebaseDocumentIDs(nested, previousID, did)
+		}
+	}
 }
 
 func decodeDocumentData(raw *datatype.JSON) (documentData, error) {
@@ -299,7 +316,172 @@ func validateCanonicalEnvelope(data documentData) error {
 			return errors.New("policies must be an array")
 		}
 	}
+	return validateCanonicalReferences(data, documentStructure)
+}
+
+func validateCanonicalReferences(data documentData, documentStructure map[string]any) error {
+	blocks, ok := documentStructure["dcs:blocks"].([]any)
+	if !ok {
+		return errors.New("documentStructure.dcs:blocks must be an array")
+	}
+	layout, ok := documentStructure["dcs:layout"].([]any)
+	if !ok {
+		return errors.New("documentStructure.dcs:layout must be an array")
+	}
+
+	blockIDs := map[string]bool{}
+	for index, rawBlock := range blocks {
+		block, ok := rawBlock.(map[string]any)
+		if !ok {
+			return fmt.Errorf("documentStructure.dcs:blocks.%d must be an object", index)
+		}
+		id, _ := block["@id"].(string)
+		if strings.TrimSpace(id) == "" {
+			return fmt.Errorf("documentStructure.dcs:blocks.%d.@id is required", index)
+		}
+		if blockIDs[id] {
+			return fmt.Errorf("duplicate document block @id %q", id)
+		}
+		blockIDs[id] = true
+	}
+
+	referencedBlocks := map[string]bool{}
+	rootCount := 0
+	for index, rawNode := range layout {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			return fmt.Errorf("documentStructure.dcs:layout.%d must be an object", index)
+		}
+		nodeID, _ := node["@id"].(string)
+		if isTrueValue(node["dcs:isRoot"]) {
+			rootCount++
+		} else if !blockIDs[nodeID] {
+			return fmt.Errorf("layout references nonexistent block %q", nodeID)
+		}
+		children, ok := jsonLDList(node["dcs:children"])
+		if !ok {
+			return fmt.Errorf("documentStructure.dcs:layout.%d.dcs:children must be an @list", index)
+		}
+		for _, rawChild := range children {
+			child, ok := rawChild.(map[string]any)
+			if !ok {
+				return fmt.Errorf("layout child in %q must be an @id reference", nodeID)
+			}
+			childID, _ := child["@id"].(string)
+			if !blockIDs[childID] {
+				return fmt.Errorf("layout references nonexistent block %q", childID)
+			}
+			referencedBlocks[childID] = true
+		}
+	}
+	if rootCount != 1 {
+		return fmt.Errorf("documentStructure must contain exactly one root layout node, got %d", rootCount)
+	}
+	for blockID := range blockIDs {
+		if !referencedBlocks[blockID] {
+			return fmt.Errorf("document block %q is not referenced by layout", blockID)
+		}
+	}
+
+	fieldIDs, err := canonicalFieldIDs(data)
+	if err != nil {
+		return err
+	}
+	for _, rawBlock := range blocks {
+		block := rawBlock.(map[string]any)
+		if err := validateBlockPlaceholders(block, fieldIDs); err != nil {
+			return err
+		}
+	}
+	return validatePolicyOperands(data, fieldIDs)
+}
+
+func canonicalFieldIDs(data documentData) (map[string]bool, error) {
+	contractData, _ := topLevelValue(data, "contractData").([]any)
+	fieldIDs := map[string]bool{}
+	for requirementIndex, rawRequirement := range contractData {
+		requirement, ok := rawRequirement.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("contractData.%d must be an object", requirementIndex)
+		}
+		fields, ok := requirement["dcs:fields"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("contractData.%d.dcs:fields must be an array", requirementIndex)
+		}
+		for fieldIndex, rawField := range fields {
+			field, ok := rawField.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("contractData.%d.dcs:fields.%d must be an object", requirementIndex, fieldIndex)
+			}
+			id, _ := field["@id"].(string)
+			if strings.TrimSpace(id) == "" {
+				return nil, fmt.Errorf("contractData.%d.dcs:fields.%d.@id is required", requirementIndex, fieldIndex)
+			}
+			if fieldIDs[id] {
+				return nil, fmt.Errorf("duplicate contract data field @id %q", id)
+			}
+			fieldIDs[id] = true
+		}
+	}
+	return fieldIDs, nil
+}
+
+func validateBlockPlaceholders(block map[string]any, fieldIDs map[string]bool) error {
+	content, ok := jsonLDList(block["dcs:content"])
+	if !ok {
+		return nil
+	}
+	for _, rawSegment := range content {
+		segment, ok := rawSegment.(map[string]any)
+		if !ok || segment["@type"] != "dcs:Placeholder" {
+			continue
+		}
+		bindsTo, _ := segment["dcs:bindsTo"].(map[string]any)
+		fieldID, _ := bindsTo["@id"].(string)
+		if !fieldIDs[fieldID] {
+			return fmt.Errorf("placeholder binds to nonexistent contract data field %q", fieldID)
+		}
+	}
 	return nil
+}
+
+func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
+	policies, _ := topLevelValue(data, "policies").([]any)
+	for index, rawPolicy := range policies {
+		policy, ok := rawPolicy.(map[string]any)
+		if !ok {
+			return fmt.Errorf("policies.%d must be an object", index)
+		}
+		switch policy["@type"] {
+		case "odrl:Duty", "odrl:Permission", "odrl:Prohibition":
+		default:
+			return fmt.Errorf("policies.%d has unsupported @type %q", index, policy["@type"])
+		}
+		constraint, ok := policy["odrl:constraint"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("policies.%d.odrl:constraint must be an object", index)
+		}
+		leftOperand, _ := constraint["odrl:leftOperand"].(map[string]any)
+		fieldID, _ := leftOperand["@id"].(string)
+		if !fieldIDs[fieldID] {
+			return fmt.Errorf("policy references nonexistent contract data field %q", fieldID)
+		}
+	}
+	return nil
+}
+
+func jsonLDList(value any) ([]any, bool) {
+	container, ok := value.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	items, ok := container["@list"].([]any)
+	return items, ok
+}
+
+func isTrueValue(value any) bool {
+	result, _ := value.(bool)
+	return result
 }
 
 func topLevelValue(data documentData, localName string) any {

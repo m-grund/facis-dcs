@@ -42,6 +42,81 @@ func validTemplateData(t *testing.T) *datatype.JSON {
 	return &data
 }
 
+func canonicalTemplateData(t *testing.T) *datatype.JSON {
+	t.Helper()
+	data, err := datatype.NewJSON(map[string]any{
+		"@context": map[string]any{
+			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
+			"odrl": "http://www.w3.org/ns/odrl/2/",
+		},
+		"@type": "dcs:ContractTemplate",
+		"dcs:metadata": map[string]any{
+			"@type":            "dcs:TemplateMetadata",
+			"dcs:title":        "Provider eligibility",
+			"dcs:templateType": "dcs:SubContract",
+		},
+		"dcs:documentStructure": map[string]any{
+			"@type": "dcs:DocumentStructure",
+			"dcs:blocks": []any{
+				map[string]any{
+					"@id":   "urn:uuid:block-clause-1",
+					"@type": "dcs:Clause",
+					"dcs:content": map[string]any{"@list": []any{
+						"Provider country: ",
+						map[string]any{
+							"@type":       "dcs:Placeholder",
+							"dcs:token":   "{{provider.country}}",
+							"dcs:bindsTo": map[string]any{"@id": "urn:uuid:field-provider-country"},
+						},
+					}},
+				},
+			},
+			"dcs:layout": []any{
+				map[string]any{
+					"@id":          "urn:uuid:block-root",
+					"dcs:isRoot":   true,
+					"dcs:children": map[string]any{"@list": []any{map[string]any{"@id": "urn:uuid:block-clause-1"}}},
+				},
+			},
+		},
+		"dcs:contractData": []any{
+			map[string]any{
+				"@id":               "urn:uuid:requirement-provider",
+				"@type":             "dcs:DataRequirement",
+				"dcs:conditionId":   "provider",
+				"dcs:name":          "Provider",
+				"dcs:schemaVersion": "v1",
+				"dcs:entityType":    "CompanyParty",
+				"dcs:entityRole":    "provider",
+				"dcs:fields": []any{
+					map[string]any{
+						"@id":               "urn:uuid:field-provider-country",
+						"@type":             "dcs:RequirementField",
+						"dcs:parameterName": "country",
+						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
+						"dcs:semanticPath":  "company.location.country",
+						"dcs:required":      true,
+					},
+				},
+			},
+		},
+		"dcs:policies": []any{
+			map[string]any{
+				"@id":   "urn:uuid:policy-provider-country-0",
+				"@type": "odrl:Duty",
+				"odrl:constraint": map[string]any{
+					"@type":             "odrl:Constraint",
+					"odrl:leftOperand":  map[string]any{"@id": "urn:uuid:field-provider-country"},
+					"odrl:operator":     map[string]any{"@id": "odrl:isAnyOf"},
+					"odrl:rightOperand": []any{"DEU", "AUT", "CHE"},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	return &data
+}
+
 func validSemanticContractData(t *testing.T) *datatype.JSON {
 	t.Helper()
 	conditions := []any{
@@ -180,50 +255,13 @@ func ruleIDs(rules []any) []string {
 	return result
 }
 
-func TestNormalizeTemplateDataAddsSchemaAndPolicyRefs(t *testing.T) {
-	normalized, err := NormalizeTemplateData(validTemplateData(t))
-	require.NoError(t, err)
-
-	var data map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &data))
-	require.Equal(t, SchemaJSONLDContextV1, data["@context"])
-	require.Equal(t, "ContractTemplate", data["@type"])
-	require.Equal(t, SchemaTemplateDataV1, data["schemaRefs"].(map[string]any)["templateData"])
-	require.Equal(t, SchemaJSONLDContextV1, data["schemaRefs"].(map[string]any)["jsonLdContext"])
-	require.NotEmpty(t, data["policyRefs"])
-	require.Equal(t, "FACIS_DCS_TEMPLATE_V1", data["validation"].(map[string]any)["profile"])
-	require.Equal(t, SemanticProfileVersionV1, data["semanticProfile"].(map[string]any)["version"])
-	require.IsType(t, []any{}, data["placeholderBindings"])
-	require.IsType(t, []any{}, data["semanticRules"])
-	condition := data["semanticConditions"].([]any)[0].(map[string]any)
-	param := condition["parameters"].([]any)[0].(map[string]any)
-	require.Equal(t, expandOntologyResource("dcst:field-service-sla-availability"), param["semanticPath"])
+func TestNormalizeTemplateDataRejectsLegacyStructure(t *testing.T) {
+	_, err := NormalizeTemplateData(validTemplateData(t))
+	require.ErrorContains(t, err, "canonical dcs:documentStructure envelope")
 }
 
 func TestNormalizeTemplateDataAcceptsCanonicalJSONLDEnvelope(t *testing.T) {
-	raw, err := datatype.NewJSON(map[string]any{
-		"@context": map[string]any{
-			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
-			"odrl": "http://www.w3.org/ns/odrl/2/",
-		},
-		"@id":   "did:web:facis.example:template:canonical",
-		"@type": "dcs:ContractTemplate",
-		"dcs:metadata": map[string]any{
-			"@id":   "did:web:facis.example:template:canonical#metadata",
-			"@type": "dcs:TemplateMetadata",
-		},
-		"dcs:documentStructure": map[string]any{
-			"@id":          "did:web:facis.example:template:canonical#document-structure",
-			"@type":        "dcs:DocumentStructure",
-			"dcs:sections": []any{},
-			"dcs:clauses":  []any{},
-		},
-		"dcs:contractData": []any{},
-		"dcs:policies":     []any{},
-	})
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&raw)
+	normalized, err := NormalizeTemplateData(canonicalTemplateData(t))
 	require.NoError(t, err)
 
 	var result map[string]any
@@ -243,13 +281,83 @@ func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {
 }
 
 func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
-	normalized, err := NormalizeTemplateDataForPersistence(validTemplateData(t), "did:web:facis.example:template:1")
+	normalized, err := NormalizeTemplateDataForPersistence(canonicalTemplateData(t), "did:web:facis.example:template:1")
 	require.NoError(t, err)
 
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &data))
 	require.Equal(t, "did:web:facis.example:template:1", data["@id"])
-	require.Equal(t, "did:web:facis.example:template:1", data["did"])
+	require.NotContains(t, data, "did")
+	structure := data["dcs:documentStructure"].(map[string]any)
+	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:1#block-clause-1", block["@id"])
+	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", placeholder["dcs:bindsTo"].(map[string]any)["@id"])
+	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	constraint := policy["odrl:constraint"].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", constraint["odrl:leftOperand"].(map[string]any)["@id"])
+}
+
+func TestNormalizeTemplateDataForPersistenceRebasesCopiedTemplateIDs(t *testing.T) {
+	first, err := NormalizeTemplateDataForPersistence(canonicalTemplateData(t), "did:web:facis.example:template:source")
+	require.NoError(t, err)
+	copied, err := NormalizeTemplateDataForPersistence(first, "did:web:facis.example:template:copy")
+	require.NoError(t, err)
+
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*copied, &data))
+	structure := data["dcs:documentStructure"].(map[string]any)
+	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:copy#block-clause-1", block["@id"])
+	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	constraint := policy["odrl:constraint"].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:copy#field-provider-country", constraint["odrl:leftOperand"].(map[string]any)["@id"])
+}
+
+func TestNormalizeTemplateDataRejectsMissingPlaceholderField(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	structure := data["dcs:documentStructure"].(map[string]any)
+	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
+	placeholder["dcs:bindsTo"] = map[string]any{"@id": "urn:uuid:field-missing"}
+	invalid, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&invalid)
+	require.ErrorContains(t, err, "placeholder binds to nonexistent contract data field")
+}
+
+func TestNormalizeTemplateDataRejectsMissingPolicyField(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	constraint := policy["odrl:constraint"].(map[string]any)
+	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:field-missing"}
+	invalid, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&invalid)
+	require.ErrorContains(t, err, "policy references nonexistent contract data field")
+}
+
+func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	structure := data["dcs:documentStructure"].(map[string]any)
+	structure["dcs:blocks"] = append(structure["dcs:blocks"].([]any), map[string]any{
+		"@id":      "urn:uuid:block-unreferenced",
+		"@type":    "dcs:TextBlock",
+		"dcs:text": "unused",
+	})
+	invalid, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&invalid)
+	require.ErrorContains(t, err, "is not referenced by layout")
 }
 
 func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
@@ -259,7 +367,7 @@ func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*normalized, &data))
 	require.Equal(t, "did:web:facis.example:contract:1", data["@id"])
-	require.Equal(t, "did:web:facis.example:contract:1", data["did"])
+	require.NotContains(t, data, "did")
 }
 
 func TestNormalizeContractDataAcceptsTypedSemanticValues(t *testing.T) {
@@ -391,104 +499,6 @@ func TestNormalizeContractDataRejectsNonCanonicalSemanticPathAliases(t *testing.
 	require.ErrorContains(t, err, `unknown domain semanticPath "company_legalName"`)
 }
 
-func TestNormalizeTemplateDataAddsCanonicalValueConstraint(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	condition := conditions[0].(map[string]any)
-	params := condition["parameters"].([]any)
-	params[0] = map[string]any{
-		"parameterName": "country",
-		"type":          "string",
-		"schemaRef":     SchemaPartyV1,
-		"semanticPath":  "company.location.country",
-		"isRequired":    true,
-		"operators":     []any{},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&raw)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	normalizedCondition := result["semanticConditions"].([]any)[0].(map[string]any)
-	normalizedParam := normalizedCondition["parameters"].([]any)[0].(map[string]any)
-	require.Equal(t, expandOntologyResource("dcst:field-company-location-country"), normalizedParam["semanticPath"])
-	constraint := normalizedParam["valueConstraint"].(map[string]any)
-	require.Equal(t, "iso-3166-1-alpha-3", constraint["format"])
-	require.Contains(t, constraint["allowedValues"], "DEU")
-	require.Contains(t, constraint["allowedValues"], "DNK")
-	options := constraint["valueOptions"].([]any)
-	require.Equal(t, "Germany", valueOptionByCode(options, "DEU")["label"])
-	require.Equal(t, "Denmark", valueOptionByCode(options, "DNK")["label"])
-}
-
-func TestNormalizeTemplateDataAddsValueOptionSymbols(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	condition := conditions[0].(map[string]any)
-	params := condition["parameters"].([]any)
-	params[0] = map[string]any{
-		"parameterName": "currency",
-		"type":          "string",
-		"schemaRef":     SchemaContractV1,
-		"semanticPath":  "contract.payment.currency",
-		"isRequired":    true,
-		"operators":     []any{},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&raw)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	normalizedCondition := result["semanticConditions"].([]any)[0].(map[string]any)
-	normalizedParam := normalizedCondition["parameters"].([]any)[0].(map[string]any)
-	constraint := normalizedParam["valueConstraint"].(map[string]any)
-	require.Contains(t, constraint["allowedValues"], "EUR")
-	require.Equal(t, "€", valueOptionByCode(constraint["valueOptions"].([]any), "EUR")["symbol"])
-}
-
-func valueOptionByCode(options []any, code string) map[string]any {
-	for _, raw := range options {
-		option, ok := raw.(map[string]any)
-		if ok && option["value"] == code {
-			return option
-		}
-	}
-	return nil
-}
-
-func TestNormalizeTemplateDataRejectsCompanyRoleDomainField(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	condition := conditions[0].(map[string]any)
-	params := condition["parameters"].([]any)
-	params[0] = map[string]any{
-		"parameterName": "role",
-		"type":          "string",
-		"schemaRef":     SchemaPartyV1,
-		"semanticPath":  "company.role",
-		"isRequired":    true,
-		"operators":     []any{},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&raw)
-	require.Nil(t, normalized)
-	require.ErrorContains(t, err, `unknown domain semanticPath "company.role"`)
-}
-
 func TestNormalizeContractDataAcceptsCompanyParties(t *testing.T) {
 	data := validTemplateData(t)
 	var decoded map[string]any
@@ -577,151 +587,4 @@ func TestValueConstraintValidatesFormatWithoutAllowedValues(t *testing.T) {
 
 	err = valueMatchesConstraint("DE", &valueConstraint{Format: "iso-3166-1-alpha-3"})
 	require.ErrorContains(t, err, "expected value matching format")
-}
-
-func TestNormalizeTemplateDataGeneratesSemanticRuleAndPlaceholderBinding(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	condition := conditions[0].(map[string]any)
-	params := condition["parameters"].([]any)
-	param := params[0].(map[string]any)
-	param["operators"] = []any{
-		map[string]any{
-			"operate": "GreaterThanOrEqual",
-			"targets": []any{99.95},
-		},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&raw)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	bindings := result["placeholderBindings"].([]any)
-	require.Len(t, bindings, 1)
-	require.Equal(t, "{{cond-1.percent}}", bindings[0].(map[string]any)["placeholder"])
-	rules := result["semanticRules"].([]any)
-	require.Len(t, rules, 1)
-	require.Equal(t, "odrl:gteq", rules[0].(map[string]any)["operator"])
-	require.Equal(t, 99.95, rules[0].(map[string]any)["rightOperand"])
-	require.Equal(t, []any{"clause-1"}, rules[0].(map[string]any)["appliesToClause"])
-	require.Equal(t, "semanticCondition", rules[0].(map[string]any)["source"])
-	policyBundle := result["policyBundle"].(map[string]any)
-	require.Equal(t, "PolicyBundle", policyBundle["@type"])
-	require.Equal(t, "odrl-jsonld", policyBundle["format"])
-	duties := policyBundle["rules"].([]any)
-	require.Len(t, duties, 1)
-	constraints := duties[0].(map[string]any)["odrl:constraint"].([]any)
-	require.Equal(t, "odrl:gteq", constraints[0].(map[string]any)["odrl:operator"].(map[string]any)["@id"])
-	require.Equal(t, 99.95, constraints[0].(map[string]any)["odrl:rightOperand"])
-}
-
-func TestNormalizeTemplateDataGeneratesSetOperatorPolicy(t *testing.T) {
-	raw := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*raw, &decoded))
-	condition := decoded["semanticConditions"].([]any)[0].(map[string]any)
-	condition["conditionName"] = "Jurisdiction"
-	params := condition["parameters"].([]any)
-	param := params[0].(map[string]any)
-	param["parameterName"] = "jurisdiction"
-	param["type"] = "string"
-	param["schemaRef"] = SchemaContractV1
-	param["semanticPath"] = "contract.jurisdiction"
-	param["operators"] = []any{
-		map[string]any{
-			"operate": "In",
-			"targets": []any{"DEU", "AUT"},
-		},
-	}
-	decoded["documentBlocks"].([]any)[0].(map[string]any)["text"] = "Jurisdiction {{cond-1.jurisdiction}}"
-	templateData, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&templateData)
-	require.NoError(t, err)
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	policyBundle := result["policyBundle"].(map[string]any)
-	duties := policyBundle["rules"].([]any)
-	constraints := duties[0].(map[string]any)["odrl:constraint"].([]any)
-	require.Equal(t, "odrl:isAnyOf", constraints[0].(map[string]any)["odrl:operator"].(map[string]any)["@id"])
-}
-
-func TestNormalizeTemplateDataAcceptsCanonicalSemanticRuleOperator(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	decoded["semanticRules"] = []any{
-		map[string]any{
-			"@type":           "SemanticRule",
-			"ruleId":          "existing-rule",
-			"leftOperand":     "$.country",
-			"operator":        "Equals",
-			"rightOperand":    "DEU",
-			"appliesToClause": []any{"clause-1"},
-			"valueType":       "string",
-			"severity":        "error",
-		},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	normalized, err := NormalizeTemplateData(&raw)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal(*normalized, &result))
-	rule := result["semanticRules"].([]any)[0].(map[string]any)
-	require.Equal(t, "odrl:eq", rule["operator"])
-	require.Equal(t, "DEU", rule["rightOperand"])
-	require.Equal(t, []any{"clause-1"}, rule["appliesToClause"])
-}
-
-func TestNormalizeTemplateDataRejectsNonCanonicalSemanticRuleOperator(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	decoded["semanticRules"] = []any{
-		map[string]any{
-			"@type":           "SemanticRule",
-			"ruleId":          "existing-rule",
-			"leftOperand":     "$.country",
-			"operator":        "equal",
-			"rightOperand":    "DEU",
-			"appliesToClause": []any{"clause-1"},
-			"valueType":       "string",
-			"severity":        "error",
-		},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	_, err = NormalizeTemplateData(&raw)
-	require.ErrorContains(t, err, "unsupported semantic rule operator")
-}
-
-func TestNormalizeTemplateDataRejectsUnsupportedSemanticOperator(t *testing.T) {
-	data := validTemplateData(t)
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*data, &decoded))
-	conditions := decoded["semanticConditions"].([]any)
-	condition := conditions[0].(map[string]any)
-	params := condition["parameters"].([]any)
-	param := params[0].(map[string]any)
-	param["operators"] = []any{
-		map[string]any{
-			"operate": "unsupported",
-			"targets": []any{"99.95"},
-		},
-	}
-	raw, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-
-	_, err = NormalizeTemplateData(&raw)
-	require.ErrorContains(t, err, "unsupported operator")
 }

@@ -15,6 +15,7 @@ import {
 } from '@template-repository/models/contract-template'
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { TEMPLATE_DATA_VERSIONS, type TemplateDataVersion } from '@template-repository/models/template-draft-store'
+import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
 
 const CURRENT_TEMPLATE_DATA_VERSION: TemplateDataVersion = TEMPLATE_DATA_VERSIONS[0]
 
@@ -49,13 +50,14 @@ export function useContractDataPreprocess() {
     const approvedBlocks = contractData.documentBlocks.filter(isApprovedTemplateBlock)
     if (approvedBlocks.length === 0) return contractData
     for (const approvedBlock of approvedBlocks) {
-      const subTemplateData = findSnapshotByApprovedBlock(
+      const subTemplateEnvelope = findSnapshotByApprovedBlock(
         contractData.subTemplateSnapshots,
         approvedBlock,
       )?.template_data
+      const subTemplateData = templateDataToBuilderData(subTemplateEnvelope)
       const approvedOutlineNode = contractData.documentOutline.find((b) => b.blockId === approvedBlock.blockId)
-      const subRootOutlineBlock = subTemplateData?.documentOutline.find((b) => b.isRoot)
-      if (!subTemplateData || !approvedOutlineNode || !subRootOutlineBlock) continue
+      const subRootOutlineBlock = subTemplateData.documentOutline.find((b) => b.isRoot)
+      if (!subTemplateEnvelope || !approvedOutlineNode || !subRootOutlineBlock) continue
 
       /**
        * APPROVED_TEMPLATE blocks may point to the same template. Use an

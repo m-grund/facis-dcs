@@ -51,9 +51,9 @@
     <ConditionalWrapper v-else-if="block && isApprovedTemplate" :enabled="hasApprovedTemplateChildren">
       <TemplatePreview
         v-if="subTemplate?.template_data"
-        :document-outline="subTemplate.template_data.documentOutline"
-        :document-blocks="subTemplate.template_data.documentBlocks"
-        :semantic-conditions="subTemplate.template_data.semanticConditions"
+        :document-outline="subTemplateBuilderData.documentOutline"
+        :document-blocks="subTemplateBuilderData.documentBlocks"
+        :semantic-conditions="subTemplateBuilderData.semanticConditions"
         :sub-template-snapshots="subTemplateSnapshots"
         :sub-block-id="block.blockId"
         :section-level="sectionLevel"
@@ -106,6 +106,7 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
+import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
 
 const props = withDefaults(
   defineProps<{
@@ -132,7 +133,7 @@ const documentBlocks = computed(() => props.documentBlocks)
 const semanticConditions = computed(() => props.semanticConditions)
 const clauseSemanticConditions = computed(() => {
   if (!isMergedBlockId(props.blockId ?? '')) return props.semanticConditions
-  return subTemplate.value?.template_data?.semanticConditions ?? []
+  return subTemplateBuilderData.value.semanticConditions
 })
 const semanticConditionValues = computed(() => props.semanticConditionValues)
 const verificationResult = computed(() => props.verificationResult)
@@ -222,5 +223,6 @@ const subTemplate = computed((): SubTemplateSnapshot | undefined => {
     ),
   )
 })
+const subTemplateBuilderData = computed(() => templateDataToBuilderData(subTemplate.value?.template_data))
 const hasApprovedTemplateChildren = computed(() => isApprovedTemplate.value && childrenIds.value.length > 0)
 </script>

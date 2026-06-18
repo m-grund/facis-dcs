@@ -40,13 +40,14 @@ import {
   type DcsBlock,
   type DcsLayoutNode,
   type DcsContentSegment,
-  type DcsParameterRef,
-  type OdrlSet,
-  type OdrlDuty,
-  type OdrlConstraint,
+  type DcsDataRequirement,
+  type DcsRequirementField,
+  type DcsSubTemplateSnapshot,
+  type OdrlRule,
 } from '@/models/dcs-jsonld'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
+import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 
 const storeId = 'dcsDraft'
 
@@ -107,56 +108,69 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
     /** Assembles minimal JSON-LD document from builder state — single source of truth for the stored format. */
     templateDocument(): DcsTemplateData {
+      const documentID = this.did ?? undefined
+      const fieldIds = requirementFieldIds(this.semanticConditions, documentID)
       const blocks: DcsBlock[] = this.documentBlocks.map((b) => {
         if (isSectionBlock(b)) {
           return {
             '@type': 'dcs:Section' as const,
-            '@id': blockIri(b.blockId),
+            '@id': blockIri(b.blockId, documentID),
             ...(b.title ? { 'dcs:title': b.title } : {}),
           }
         }
         if (isTextBlock(b)) {
-          return { '@type': 'dcs:TextBlock' as const, '@id': blockIri(b.blockId), 'dcs:content': b.text }
+          return { '@type': 'dcs:TextBlock' as const, '@id': blockIri(b.blockId, documentID), 'dcs:text': b.text }
         }
         if (isClauseBlock(b)) {
           return {
             '@type': 'dcs:Clause' as const,
-            '@id': blockIri(b.blockId),
-            'dcs:content': { '@list': clauseTextToSegments(b.text) },
+            '@id': blockIri(b.blockId, documentID),
+            'dcs:content': { '@list': clauseTextToSegments(b.text, fieldIds) },
             ...(b.title ? { 'dcs:title': b.title } : {}),
           }
         }
         if (isApprovedTemplateBlock(b)) {
           return {
             '@type': 'dcs:ApprovedTemplate' as const,
-            '@id': blockIri(b.blockId),
+            '@id': blockIri(b.blockId, documentID),
             'dcs:templateDid': b.templateId,
             'dcs:version': b.version,
             ...(b.document_number ? { 'dcs:documentNumber': b.document_number } : {}),
           }
         }
-        return { '@type': 'dcs:TextBlock' as const, '@id': blockIri(b.blockId), 'dcs:content': '' }
+        return { '@type': 'dcs:TextBlock' as const, '@id': blockIri(b.blockId, documentID), 'dcs:text': '' }
       })
 
       const layout: DcsLayoutNode[] = this.documentOutline.map((node) => ({
-        '@id': blockIri(node.blockId),
+        '@id': blockIri(node.blockId, documentID),
         ...(node.isRoot ? { 'dcs:isRoot': true } : {}),
-        'dcs:children': { '@list': node.children.map((id) => ({ '@id': blockIri(id) })) },
+        'dcs:children': { '@list': node.children.map((id) => ({ '@id': blockIri(id, documentID) })) },
       }))
-
-      const policyId = this.did ?? undefined
 
       return {
         '@context': DCS_JSONLD_CONTEXT,
         '@type': 'dcs:ContractTemplate',
         ...(this.did ? { '@id': this.did } : {}),
-        'dcs:title': this.name,
-        'dcs:templateType': this.templateType === TemplateType.frameContract ? 'dcs:FrameContract' : 'dcs:SubContract',
-        'dcs:blocks': blocks,
-        'dcs:layout': layout,
-        'odrl:policy': semanticConditionsToOdrlPolicy(this.semanticConditions, policyId),
-        'dcs:customMetaData': this.customMetaData,
-        'dcs:subTemplateSnapshots': normalizeSubTemplateSnapshots(this.subTemplateSnapshots),
+        'dcs:metadata': {
+          '@type': 'dcs:TemplateMetadata',
+          ...(this.did ? { '@id': `${this.did}#metadata` } : {}),
+          'dcs:title': this.name,
+          ...(this.description ? { 'dcs:description': this.description } : {}),
+          'dcs:templateType':
+            this.templateType === TemplateType.frameContract ? 'dcs:FrameContract' : 'dcs:SubContract',
+          ...(this.customMetaData.length ? { 'dcs:customMetaData': this.customMetaData } : {}),
+          ...(this.subTemplateSnapshots.length
+            ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(this.subTemplateSnapshots) }
+            : {}),
+        },
+        'dcs:documentStructure': {
+          '@type': 'dcs:DocumentStructure',
+          ...(this.did ? { '@id': `${this.did}#document-structure` } : {}),
+          'dcs:blocks': blocks,
+          'dcs:layout': layout,
+        },
+        'dcs:contractData': semanticConditionsToContractData(this.semanticConditions, documentID),
+        'dcs:policies': semanticConditionsToPolicies(this.semanticConditions, fieldIds, documentID),
       }
     },
     templateCreateRequestData(): ContractTemplateCreateRequest {
@@ -179,34 +193,21 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
   },
   actions: {
-    /**
-     * Loads a template document (JSON-LD or legacy format) plus DB-level metadata into store state.
-     * Replaces the old pattern of calling reset({ documentOutline, documentBlocks, ... }).
-     */
+    /** Loads the canonical JSON-LD envelope plus DB-level metadata into store state. */
     loadDocument(rawDoc: unknown, meta: LoadDocumentMeta): void {
       const templateType = meta.templateType ?? TemplateType.subContract
 
       if (isDcsTemplateData(rawDoc)) {
-        const jsonLdType = rawDoc['dcs:templateType']
+        const metadata = rawDoc['dcs:metadata']
+        const jsonLdType = metadata['dcs:templateType']
         const derivedTemplateType: TemplateTypeValue =
           jsonLdType === 'dcs:FrameContract' ? TemplateType.frameContract : TemplateType.subContract
-
-        const documentBlocks: DocumentBlock[] = (rawDoc['dcs:blocks'] ?? []).map(convertDcsBlockToBuilder)
-
-        const rawLayout = rawDoc['dcs:layout'] ?? []
-        const documentOutline: DocumentOutline =
-          rawLayout.length > 0
-            ? rawLayout.map((node) => ({
-                blockId: blockIdFromIri(node['@id']),
-                isRoot: node['dcs:isRoot'] ?? false,
-                children: (node['dcs:children']['@list'] ?? []).map((ref) => blockIdFromIri(ref['@id'])),
-              }))
-            : getInitialOutline()
+        const builderData = templateDataToBuilderData(rawDoc)
 
         this.reset({
           did: meta.did,
-          name: meta.name || rawDoc['dcs:title'],
-          description: meta.description,
+          name: meta.name ? meta.name : (metadata['dcs:title'] ?? ''),
+          description: meta.description ? meta.description : (metadata['dcs:description'] ?? ''),
           templateType: templateType !== TemplateType.subContract ? templateType : derivedTemplateType,
           state: meta.state ?? null,
           version: meta.version ?? null,
@@ -214,43 +215,7 @@ export const useDcsDraftStore = defineStore(storeId, {
           updated_at: meta.updated_at ?? null,
           created_by: meta.created_by ?? '',
           responsible: meta.responsible ?? null,
-          documentOutline,
-          documentBlocks,
-          semanticConditions: odrlPolicyToSemanticConditions(rawDoc['odrl:policy']),
-          customMetaData: (rawDoc['dcs:customMetaData'] as MetaData[]) ?? [],
-          subTemplateSnapshots: (rawDoc['dcs:subTemplateSnapshots'] as SubTemplateSnapshot[]) ?? [],
-        })
-        return
-      }
-
-      if (isLegacyTemplateData(rawDoc)) {
-        const rawOutline = rawDoc.documentOutline ?? []
-        this.reset({
-          did: meta.did,
-          name: meta.name,
-          description: meta.description,
-          templateType,
-          state: meta.state ?? null,
-          version: meta.version ?? null,
-          document_number: meta.document_number ?? null,
-          updated_at: meta.updated_at ?? null,
-          created_by: meta.created_by ?? '',
-          responsible: meta.responsible ?? null,
-          documentOutline: rawOutline.length > 0 ? rawOutline : getInitialOutline(),
-          documentBlocks: rawDoc.documentBlocks ?? [],
-          semanticConditions: rawDoc.semanticConditions ?? [],
-          customMetaData: rawDoc.customMetaData ?? [],
-          schemaRefs: rawDoc.schemaRefs ?? { ...defaultState.schemaRefs },
-          policyRefs: rawDoc.policyRefs ?? defaultState.policyRefs.map((p) => ({ ...p })),
-          validation: rawDoc.validation ?? { ...defaultState.validation },
-          semanticProfile: rawDoc.semanticProfile ?? { ...defaultState.semanticProfile },
-          templateVariables: rawDoc.templateVariables ?? [],
-          placeholderBindings: rawDoc.placeholderBindings ?? [],
-          semanticRules: rawDoc.semanticRules ?? [],
-          policyBundle: rawDoc.policyBundle ?? null,
-          sla: rawDoc.sla ?? null,
-          subTemplateSnapshots: rawDoc.subTemplateSnapshots ?? [],
-          templateDataVersion: rawDoc.templateDataVersion ?? 1,
+          ...builderData,
         })
         return
       }
@@ -460,31 +425,38 @@ export const useDcsDraftStore = defineStore(storeId, {
 
 const UUID_URN_PREFIX = 'urn:uuid:'
 
-function blockIri(id: string): string {
-  return `${UUID_URN_PREFIX}${id}`
+function objectIri(kind: string, id: string, documentId?: string): string {
+  const fragment = `${kind}-${encodeURIComponent(id)}`
+  return documentId ? `${documentId}#${fragment}` : `${UUID_URN_PREFIX}${fragment}`
 }
 
-function conditionIri(id: string): string {
-  return `${UUID_URN_PREFIX}${id}`
+function blockIri(id: string, documentId?: string): string {
+  return objectIri('block', id, documentId)
+}
+
+function conditionIri(id: string, documentId?: string): string {
+  return objectIri('requirement', id, documentId)
+}
+
+function fieldIri(conditionId: string, parameterName: string, documentId?: string): string {
+  return objectIri('field', `${conditionId}-${parameterName}`, documentId)
+}
+
+function policyIri(conditionId: string, parameterName: string, index: number, documentId?: string): string {
+  return objectIri('policy', `${conditionId}-${parameterName}-${index}`, documentId)
 }
 
 function blockIdFromIri(iri: string): string {
-  if (iri.startsWith(UUID_URN_PREFIX)) return iri.slice(UUID_URN_PREFIX.length)
-  if (iri.startsWith('urn:block:')) return iri.slice('urn:block:'.length) // backwards compat
-  if (iri.startsWith('dcs:block:')) return iri.slice('dcs:block:'.length) // backwards compat
-  return iri
-}
-
-function conditionIdFromIri(iri: string): string {
-  if (iri.startsWith(UUID_URN_PREFIX)) return iri.slice(UUID_URN_PREFIX.length)
-  if (iri.startsWith('urn:condition:')) return iri.slice('urn:condition:'.length) // backwards compat
-  if (iri.startsWith('dcs:condition:')) return iri.slice('dcs:condition:'.length) // backwards compat
-  return iri
+  const local = iri.includes('#') ? iri.slice(iri.lastIndexOf('#') + 1) : iri.slice(UUID_URN_PREFIX.length)
+  return decodeURIComponent(local.replace(/^block-/, ''))
 }
 
 // ---- JSON-LD ↔ Builder model converters ----
 
-function convertDcsBlockToBuilder(block: DcsBlock): DocumentBlock {
+function convertDcsBlockToBuilder(
+  block: DcsBlock,
+  fieldsById: ReadonlyMap<string, { conditionId: string }>,
+): DocumentBlock {
   switch (block['@type']) {
     case 'dcs:Section':
       return {
@@ -494,14 +466,14 @@ function convertDcsBlockToBuilder(block: DcsBlock): DocumentBlock {
         title: block['dcs:title'],
       }
     case 'dcs:TextBlock':
-      return { blockId: blockIdFromIri(block['@id']), type: DocumentBlockType.Text, text: block['dcs:content'] }
+      return { blockId: blockIdFromIri(block['@id']), type: DocumentBlockType.Text, text: block['dcs:text'] }
     case 'dcs:Clause':
       return {
         blockId: blockIdFromIri(block['@id']),
         type: DocumentBlockType.Clause,
         text: segmentsToClauseText(block['dcs:content']),
         title: block['dcs:title'],
-        conditionIds: extractConditionIdsFromSegments(block['dcs:content']),
+        conditionIds: extractConditionIdsFromSegments(block['dcs:content'], fieldsById),
       }
     case 'dcs:ApprovedTemplate':
       return {
@@ -515,18 +487,25 @@ function convertDcsBlockToBuilder(block: DcsBlock): DocumentBlock {
   }
 }
 
-function clauseTextToSegments(text: string): DcsContentSegment[] {
+function clauseTextToSegments(text: string, fieldIds: ReadonlyMap<string, string>): DcsContentSegment[] {
   const segments: DcsContentSegment[] = []
   const regex = /\{\{([^.}]+)\.([^}]+)\}\}/g
   let lastIndex = 0
   let match
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) segments.push(text.slice(lastIndex, match.index))
+    const key = parameterKey(match[1] ?? '', match[2] ?? '')
+    const bindsTo = fieldIds.get(key)
+    if (!bindsTo) {
+      segments.push(match[0])
+      lastIndex = match.index + match[0].length
+      continue
+    }
     segments.push({
-      '@type': 'dcs:ParameterRef',
-      'dcs:constraint': { '@id': conditionIri(match[1]) },
-      'odrl:leftOperand': { '@id': `dcs:${match[2]}` },
-    } satisfies DcsParameterRef)
+      '@type': 'dcs:Placeholder',
+      'dcs:token': match[0],
+      'dcs:bindsTo': { '@id': bindsTo },
+    })
     lastIndex = match.index + match[0].length
   }
   if (lastIndex < text.length) segments.push(text.slice(lastIndex))
@@ -537,104 +516,95 @@ type RawClauseContent = { '@list': DcsContentSegment[] } | string
 
 function segmentsToClauseText(content: RawClauseContent): string {
   if (typeof content === 'string') return content
-  return content['@list']
-    .map((seg) => {
-      if (typeof seg === 'string') return seg
-      const conditionId = conditionIdFromIri(seg['dcs:constraint']['@id'])
-      const leftOperand = seg['odrl:leftOperand']['@id']
-      const semanticPath = leftOperand.startsWith('dcs:') ? leftOperand.slice(4) : leftOperand
-      return `{{${conditionId}.${semanticPath}}}`
-    })
-    .join('')
+  return content['@list'].map((segment) => (typeof segment === 'string' ? segment : segment['dcs:token'])).join('')
 }
 
-function extractConditionIdsFromSegments(content: RawClauseContent): string[] {
+function extractConditionIdsFromSegments(
+  content: RawClauseContent,
+  fieldsById: ReadonlyMap<string, { conditionId: string }>,
+): string[] {
   if (typeof content === 'string') {
     const ids: string[] = []
     const regex = /\{\{([^.}]+)\.[^}]*\}\}/g
     let match
     while ((match = regex.exec(content)) !== null) {
-      if (!ids.includes(match[1])) ids.push(match[1])
+      const conditionId = match[1] ?? ''
+      if (conditionId && !ids.includes(conditionId)) ids.push(conditionId)
     }
     return ids
   }
   const ids: string[] = []
   for (const seg of content['@list']) {
     if (typeof seg !== 'string') {
-      const id = conditionIdFromIri(seg['dcs:constraint']['@id'])
-      if (!ids.includes(id)) ids.push(id)
+      const field = fieldsById.get(seg['dcs:bindsTo']['@id'])
+      if (field && !ids.includes(field.conditionId)) ids.push(field.conditionId)
     }
   }
   return ids
 }
 
-// ---- Legacy format helpers ----
-
-interface LegacyTemplateData {
-  documentOutline?: DocumentOutline
-  documentBlocks?: DocumentBlock[]
-  semanticConditions?: SemanticCondition[]
-  customMetaData?: MetaData[]
-  schemaRefs?: TemplateDraftState['schemaRefs']
-  policyRefs?: TemplateDraftState['policyRefs']
-  validation?: TemplateDraftState['validation']
-  semanticProfile?: TemplateDraftState['semanticProfile']
-  templateVariables?: TemplateDraftState['templateVariables']
-  placeholderBindings?: TemplateDraftState['placeholderBindings']
-  semanticRules?: TemplateDraftState['semanticRules']
-  policyBundle?: TemplateDraftState['policyBundle']
-  sla?: TemplateDraftState['sla']
-  subTemplateSnapshots?: SubTemplateSnapshot[]
-  templateDataVersion?: TemplateDraftState['templateDataVersion']
+export interface TemplateBuilderData {
+  documentOutline: DocumentOutline
+  documentBlocks: DocumentBlock[]
+  semanticConditions: SemanticCondition[]
+  customMetaData: MetaData[]
+  subTemplateSnapshots: SubTemplateSnapshot[]
 }
 
-function isLegacyTemplateData(raw: unknown): raw is LegacyTemplateData {
-  return typeof raw === 'object' && raw !== null && ('documentOutline' in raw || 'documentBlocks' in raw)
-}
-
-// ---- Sub-template data accessors (handle both JSON-LD and legacy) ----
-
-function getDocumentBlocksFromTemplateData(td: SubTemplateSnapshot['template_data']): DocumentBlock[] {
-  if (!td) return []
-  if (isDcsTemplateData(td)) return (td['dcs:blocks'] ?? []).map(convertDcsBlockToBuilder)
-  return (td as LegacyTemplateData).documentBlocks ?? []
-}
-
-function setDocumentBlocksOnTemplateData(td: SubTemplateSnapshot['template_data'], blocks: DocumentBlock[]): void {
-  if (!td) return
-  if (isDcsTemplateData(td)) return // JSON-LD snapshots are read-only; skip write-back
-  ;(td as LegacyTemplateData).documentBlocks = blocks
-}
-
-function getOutlineFromTemplateData(td: SubTemplateSnapshot['template_data']): DocumentOutlineBlock[] {
-  if (!td) return []
-  if (isDcsTemplateData(td)) {
-    return (td['dcs:layout'] ?? []).map((node) => ({
-      blockId: blockIdFromIri(node['@id']),
-      isRoot: node['dcs:isRoot'] ?? false,
-      children: (node['dcs:children']['@list'] ?? []).map((ref) => blockIdFromIri(ref['@id'])),
-    }))
+export function templateDataToBuilderData(raw: unknown): TemplateBuilderData {
+  if (!isDcsTemplateData(raw)) {
+    return {
+      documentOutline: getInitialOutline(),
+      documentBlocks: [],
+      semanticConditions: [],
+      customMetaData: [],
+      subTemplateSnapshots: [],
+    }
   }
-  return (td as LegacyTemplateData).documentOutline ?? []
+
+  const semanticConditions = contractDataToSemanticConditions(raw['dcs:contractData'], raw['dcs:policies'])
+  const fieldsById = requirementFieldsById(raw['dcs:contractData'])
+  const structure = raw['dcs:documentStructure']
+  const documentBlocks = structure['dcs:blocks'].map((block) => convertDcsBlockToBuilder(block, fieldsById))
+  const documentOutline = structure['dcs:layout'].map((node) => ({
+    blockId: blockIdFromIri(node['@id']),
+    isRoot: node['dcs:isRoot'] ?? false,
+    children: node['dcs:children']['@list'].map((ref) => blockIdFromIri(ref['@id'])),
+  }))
+  const metadata = raw['dcs:metadata']
+
+  return {
+    documentOutline: documentOutline.length ? documentOutline : getInitialOutline(),
+    documentBlocks,
+    semanticConditions,
+    customMetaData: (metadata['dcs:customMetaData'] as MetaData[]) ?? [],
+    subTemplateSnapshots: deserializeSubTemplateSnapshots(metadata['dcs:subTemplates'] ?? []),
+  }
 }
 
-function getSemanticConditionsFromTemplateData(td: SubTemplateSnapshot['template_data']): SemanticCondition[] {
-  if (!td) return []
-  if (isDcsTemplateData(td)) return odrlPolicyToSemanticConditions(td['odrl:policy'])
-  return (td as LegacyTemplateData).semanticConditions ?? []
+export function getDocumentBlocksFromTemplateData(td: SubTemplateSnapshot['template_data']): DocumentBlock[] {
+  return templateDataToBuilderData(td).documentBlocks
+}
+
+function setDocumentBlocksOnTemplateData(_td: SubTemplateSnapshot['template_data'], _blocks: DocumentBlock[]): void {
+  // Sub-template snapshots are immutable canonical envelopes.
+}
+
+export function getOutlineFromTemplateData(td: SubTemplateSnapshot['template_data']): DocumentOutlineBlock[] {
+  return templateDataToBuilderData(td).documentOutline
+}
+
+export function getSemanticConditionsFromTemplateData(
+  td: SubTemplateSnapshot['template_data'],
+): SemanticCondition[] {
+  return templateDataToBuilderData(td).semanticConditions
 }
 
 function setSemanticConditionsOnTemplateData(
-  td: SubTemplateSnapshot['template_data'],
-  conditions: SemanticCondition[],
+  _td: SubTemplateSnapshot['template_data'],
+  _conditions: SemanticCondition[],
 ): void {
-  if (!td) return
-  if (isDcsTemplateData(td)) {
-    const policyId = td['odrl:policy']?.['@id'] ?? td['@id']
-    td['odrl:policy'] = semanticConditionsToOdrlPolicy(conditions, policyId)
-    return
-  }
-  ;(td as LegacyTemplateData).semanticConditions = conditions
+  // Sub-template snapshots are immutable canonical envelopes.
 }
 
 // ---- Outline helpers ----
@@ -851,71 +821,107 @@ function findSubTemplateSnapshotByRef(
   return subTemplates.find((subTemplate) => isSameTemplate(subTemplate, subTemplateRef))
 }
 
-function normalizeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): SubTemplateSnapshot[] {
-  return snapshots.map((snapshot) => {
-    if (!snapshot.template_data) return snapshot
-    if (isDcsTemplateData(snapshot.template_data)) return snapshot
-    const td = snapshot.template_data as LegacyTemplateData
-    return {
-      ...snapshot,
-      template_data: {
-        documentOutline: td.documentOutline,
-        semanticConditions: td.semanticConditions,
-        documentBlocks: td.documentBlocks,
-        customMetaData: td.customMetaData,
-        schemaRefs: td.schemaRefs,
-        policyRefs: td.policyRefs,
-        validation: td.validation,
-        semanticProfile: td.semanticProfile,
-        templateVariables: td.templateVariables,
-        placeholderBindings: td.placeholderBindings,
-        semanticRules: td.semanticRules,
-        policyBundle: td.policyBundle,
-        sla: td.sla,
+function serializeSubTemplateSnapshots(snapshots: SubTemplateSnapshot[]): DcsSubTemplateSnapshot[] {
+  return snapshots.flatMap((snapshot) => {
+    if (!isDcsTemplateData(snapshot.template_data)) return []
+    return [
+      {
+        '@id': snapshot.did,
+        'dcs:version': snapshot.version,
+        ...(snapshot.document_number ? { 'dcs:documentNumber': snapshot.document_number } : {}),
+        ...(snapshot.name ? { 'dcs:name': snapshot.name } : {}),
+        ...(snapshot.description ? { 'dcs:description': snapshot.description } : {}),
+        'dcs:template': snapshot.template_data,
       },
-    }
+    ]
   })
 }
 
-// ---- SemanticCondition ↔ ODRL policy converters ----
-
-function semanticConditionsToOdrlPolicy(conditions: SemanticCondition[], policyId: string): OdrlSet | undefined {
-  if (conditions.length === 0) return undefined
-
-  const obligations: OdrlDuty[] = conditions.map((condition) => {
-    const constraints = condition.parameters
-      .map((param) => buildOdrlConstraint(param))
-      .filter((constraint): constraint is OdrlConstraint => !!constraint)
-
-    return {
-      '@type': 'odrl:Duty',
-      '@id': `urn:condition:${condition.conditionId}`,
-      'odrl:action': { '@id': 'dcs:ProvideParameter' },
-      ...(constraints.length > 0 ? { 'odrl:constraint': constraints } : {}),
-      'dcs:conditionName': condition.conditionName,
-      'dcs:schemaVersion': condition.schemaVersion,
-      ...(condition.entityType ? { 'dcs:entityType': condition.entityType } : {}),
-      ...(condition.entityRole ? { 'dcs:entityRole': condition.entityRole } : {}),
-    }
-  })
-
-  return {
-    '@type': 'odrl:Set',
-    ...(policyId ? { '@id': policyId } : {}),
-    'odrl:obligation': obligations,
-  }
+function deserializeSubTemplateSnapshots(snapshots: DcsSubTemplateSnapshot[]): SubTemplateSnapshot[] {
+  return snapshots.map((snapshot) => ({
+    did: snapshot['@id'],
+    version: snapshot['dcs:version'],
+    document_number: snapshot['dcs:documentNumber'],
+    name: snapshot['dcs:name'],
+    description: snapshot['dcs:description'],
+    template_data: snapshot['dcs:template'],
+  }))
 }
 
-function buildOdrlConstraint(param: SemanticConditionParameter): OdrlConstraint | undefined {
-  const primaryOperator = param.operators[0]
-  if (!primaryOperator || !isStandardOdrlOperator(primaryOperator.operate)) return undefined
-  const rightOperand = odrlRightOperand(primaryOperator)
-  return {
-    '@type': 'odrl:Constraint',
-    'odrl:leftOperand': { '@id': `dcs:${param.semanticPath}` },
-    'odrl:operator': { '@id': primaryOperator.operate },
-    ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
+function parameterKey(conditionId: string, parameterName: string): string {
+  return `${conditionId}\u0000${parameterName}`
+}
+
+function requirementFieldIds(
+  conditions: readonly SemanticCondition[],
+  documentId?: string,
+): ReadonlyMap<string, string> {
+  const result = new Map<string, string>()
+  for (const condition of conditions) {
+    for (const parameter of condition.parameters) {
+      result.set(
+        parameterKey(condition.conditionId, parameter.parameterName),
+        fieldIri(condition.conditionId, parameter.parameterName, documentId),
+      )
+    }
   }
+  return result
+}
+
+function semanticConditionsToContractData(
+  conditions: readonly SemanticCondition[],
+  documentId?: string,
+): DcsDataRequirement[] {
+  return conditions.map((condition) => ({
+    '@id': conditionIri(condition.conditionId, documentId),
+    '@type': 'dcs:DataRequirement',
+    'dcs:conditionId': condition.conditionId,
+    'dcs:name': condition.conditionName,
+    'dcs:schemaVersion': condition.schemaVersion,
+    ...(condition.entityType ? { 'dcs:entityType': condition.entityType } : {}),
+    ...(condition.entityRole ? { 'dcs:entityRole': condition.entityRole } : {}),
+    'dcs:fields': condition.parameters.map((parameter) => {
+      const domainField = ONTOLOGY_DOMAIN_FIELDS.find((field) => field.semanticPath === parameter.semanticPath)
+      return {
+        '@id': fieldIri(condition.conditionId, parameter.parameterName, documentId),
+        '@type': 'dcs:RequirementField',
+        'dcs:parameterName': parameter.parameterName,
+        'dcs:domainField': { '@id': domainField?.ontologyId ?? parameter.semanticPath },
+        'dcs:semanticPath': parameter.semanticPath,
+        'dcs:required': parameter.isRequired,
+      }
+    }),
+  }))
+}
+
+function semanticConditionsToPolicies(
+  conditions: readonly SemanticCondition[],
+  fieldIds: ReadonlyMap<string, string>,
+  documentId?: string,
+): OdrlRule[] {
+  return conditions.flatMap((condition) =>
+    condition.parameters.flatMap((parameter) =>
+      parameter.operators.flatMap((operator, index) => {
+        if (!isStandardOdrlOperator(operator.operate)) return []
+        const leftOperand = fieldIds.get(parameterKey(condition.conditionId, parameter.parameterName))
+        if (!leftOperand) return []
+        return [
+          {
+            '@id': policyIri(condition.conditionId, parameter.parameterName, index, documentId),
+            '@type': 'odrl:Duty',
+            'odrl:constraint': {
+              '@type': 'odrl:Constraint',
+              'odrl:leftOperand': { '@id': leftOperand },
+              'odrl:operator': { '@id': operator.operate },
+              ...(odrlRightOperand(operator) !== undefined
+                ? { 'odrl:rightOperand': odrlRightOperand(operator) }
+                : {}),
+            },
+          } satisfies OdrlRule,
+        ]
+      }),
+    ),
+  )
 }
 
 function odrlRightOperand(operator: SemanticParameterOperator): unknown {
@@ -942,39 +948,76 @@ function isSetOperator(operator: string): boolean {
   return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
 }
 
-function odrlPolicyToSemanticConditions(policy: OdrlSet | undefined): SemanticCondition[] {
-  if (!policy) return []
-  return (policy['odrl:obligation'] ?? [])
-    .filter((duty) => typeof duty['@id'] === 'string')
-    .map((duty) => ({
-      conditionId: conditionIdFromIri(duty['@id']!),
-      conditionName: duty['dcs:conditionName'] ?? '',
-      schemaVersion: (duty['dcs:schemaVersion'] ?? 'v1') as 'v1',
-      entityType: duty['dcs:entityType'],
-      entityRole: duty['dcs:entityRole'],
-      parameters: (duty['odrl:constraint'] ?? []).map(odrlConstraintToParameter),
-    }))
+function requirementFieldsById(
+  requirements: readonly DcsDataRequirement[],
+): ReadonlyMap<string, { conditionId: string; field: DcsRequirementField }> {
+  const result = new Map<string, { conditionId: string; field: DcsRequirementField }>()
+  for (const requirement of requirements) {
+    for (const field of requirement['dcs:fields']) {
+      result.set(field['@id'], { conditionId: requirement['dcs:conditionId'], field })
+    }
+  }
+  return result
 }
 
-function odrlConstraintToParameter(constraint: OdrlConstraint): SemanticConditionParameter {
-  const operate = constraint['odrl:operator']['@id'] as DcsOperator
-  const leftOperandId = constraint['odrl:leftOperand']['@id']
-  const semanticPath = leftOperandId.startsWith('dcs:') ? leftOperandId.slice(4) : leftOperandId
-  const parameterName = semanticPath.split('.').pop() ?? semanticPath
-  const rightOperand = constraint['odrl:rightOperand']
-  const targets =
-    rightOperand === undefined
-      ? []
-      : isSetOperator(operate) && Array.isArray(rightOperand)
-        ? rightOperand
-        : [rightOperand]
+function contractDataToSemanticConditions(
+  requirements: readonly DcsDataRequirement[],
+  policies: readonly OdrlRule[],
+): SemanticCondition[] {
+  const operatorsByField = new Map<string, SemanticParameterOperator[]>()
+  for (const policy of policies) {
+    const constraint = policy['odrl:constraint']
+    if (!constraint) continue
+    const operate = constraint['odrl:operator']['@id'] as DcsOperator
+    if (!isStandardOdrlOperator(operate)) continue
+    const rightOperand = constraint['odrl:rightOperand']
+    const targets =
+      rightOperand === undefined
+        ? []
+        : isSetOperator(operate) && Array.isArray(rightOperand)
+          ? rightOperand
+          : [rightOperand]
+    const fieldId = constraint['odrl:leftOperand']['@id']
+    operatorsByField.set(fieldId, [...(operatorsByField.get(fieldId) ?? []), { operate, targets }])
+  }
+
+  return requirements.map((requirement) => ({
+    conditionId: requirement['dcs:conditionId'],
+    conditionName: requirement['dcs:name'],
+    schemaVersion: requirement['dcs:schemaVersion'],
+    entityType: requirement['dcs:entityType'],
+    entityRole: requirement['dcs:entityRole'],
+    parameters: requirement['dcs:fields'].flatMap((field) => {
+      const ontologyField = ONTOLOGY_DOMAIN_FIELDS.find(
+        (candidate) =>
+          candidate.ontologyId === field['dcs:domainField']['@id'] ||
+          candidate.semanticPath === field['dcs:semanticPath'],
+      )
+      if (!ontologyField) return []
+      return [
+        {
+          parameterName: field['dcs:parameterName'],
+          type: ontologyField.type,
+          schemaRef: ontologyField.schemaRef,
+          semanticPath: ontologyField.semanticPath,
+          valueConstraint: cloneValueConstraint(ontologyField.valueConstraint),
+          uiMetadata: { label: ontologyField.label },
+          isRequired: field['dcs:required'],
+          operators: operatorsByField.get(field['@id']) ?? [],
+          value: undefined,
+        },
+      ]
+    }),
+  }))
+}
+
+function cloneValueConstraint(
+  constraint: SemanticConditionParameter['valueConstraint'],
+): SemanticConditionParameter['valueConstraint'] {
+  if (!constraint) return undefined
   return {
-    parameterName,
-    type: 'string',
-    schemaRef: '',
-    semanticPath,
-    isRequired: false,
-    operators: isStandardOdrlOperator(operate) ? [{ operate, targets }] : [],
-    value: rightOperand ?? null,
+    ...constraint,
+    allowedValues: constraint.allowedValues ? [...constraint.allowedValues] : undefined,
+    valueOptions: constraint.valueOptions?.map((option) => ({ ...option })),
   }
 }

@@ -75,9 +75,9 @@
           <div class="max-h-64 overflow-auto rounded-md border border-base-300 bg-base-100 px-3 py-2">
             <TemplatePreview
               v-if="approvedTemplate?.template_data"
-              :document-outline="approvedTemplate.template_data.documentOutline"
-              :document-blocks="approvedTemplate.template_data.documentBlocks"
-              :semantic-conditions="approvedTemplate.template_data.semanticConditions"
+              :document-outline="approvedTemplateBuilderData.documentOutline"
+              :document-blocks="approvedTemplateBuilderData.documentBlocks"
+              :semantic-conditions="approvedTemplateBuilderData.semanticConditions"
               :sub-template-snapshots="subTemplateSnapshots"
             />
             <p v-else class="text-xs text-base-content/60 italic">No template data available.</p>
@@ -129,6 +129,7 @@ import {
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
+import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
 
 const props = defineProps<{
   item: EnrichedBlockItem
@@ -187,6 +188,7 @@ const approvedTemplate = computed<SubTemplateSnapshot | undefined>(() => {
 
 const approvedTemplateName = computed(() => approvedTemplate.value?.name ?? '')
 const approvedTemplateDescription = computed(() => approvedTemplate.value?.description ?? '')
+const approvedTemplateBuilderData = computed(() => templateDataToBuilderData(approvedTemplate.value?.template_data))
 const isApprovedPreviewOpen = ref(false)
 
 function toggleApprovedPreview() {

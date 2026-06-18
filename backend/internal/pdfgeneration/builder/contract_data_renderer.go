@@ -60,6 +60,54 @@ type templateDataJSON struct {
 	SemanticConditions []semanticConditionJSON `json:"semanticConditions"`
 }
 
+type canonicalEnvelopeJSON struct {
+	DocumentStructure canonicalDocumentStructureJSON `json:"dcs:documentStructure"`
+	Metadata          canonicalMetadataJSON          `json:"dcs:metadata"`
+}
+
+type canonicalMetadataJSON struct {
+	SubTemplates []canonicalSubTemplateJSON `json:"dcs:subTemplates"`
+}
+
+type canonicalSubTemplateJSON struct {
+	ID       string                `json:"@id"`
+	Template canonicalEnvelopeJSON `json:"dcs:template"`
+}
+
+type canonicalDocumentStructureJSON struct {
+	Blocks []json.RawMessage `json:"dcs:blocks"`
+	Layout []canonicalLayout `json:"dcs:layout"`
+}
+
+type canonicalLayout struct {
+	ID       string                 `json:"@id"`
+	IsRoot   bool                   `json:"dcs:isRoot"`
+	Children canonicalReferenceList `json:"dcs:children"`
+}
+
+type canonicalReferenceList struct {
+	List []canonicalReference `json:"@list"`
+}
+
+type canonicalReference struct {
+	ID string `json:"@id"`
+}
+
+type canonicalBlockJSON struct {
+	ID             string          `json:"@id"`
+	Type           string          `json:"@type"`
+	Title          string          `json:"dcs:title"`
+	Text           string          `json:"dcs:text"`
+	Content        json.RawMessage `json:"dcs:content"`
+	TemplateDID    string          `json:"dcs:templateDid"`
+	Version        int             `json:"dcs:version"`
+	DocumentNumber string          `json:"dcs:documentNumber"`
+}
+
+type canonicalContentList struct {
+	List []json.RawMessage `json:"@list"`
+}
+
 // ---- Render context ----
 
 type contractRenderCtx struct {
@@ -253,9 +301,112 @@ func renderApprovedTemplateBlock(f *fpdf.Fpdf, ctx *contractRenderCtx, block bas
 	}
 }
 
+func renderCanonicalEnvelope(f *fpdf.Fpdf, envelope canonicalEnvelopeJSON) bool {
+	if len(envelope.DocumentStructure.Layout) == 0 {
+		return false
+	}
+	blockMap := make(map[string]canonicalBlockJSON, len(envelope.DocumentStructure.Blocks))
+	for _, raw := range envelope.DocumentStructure.Blocks {
+		var block canonicalBlockJSON
+		if json.Unmarshal(raw, &block) == nil && block.ID != "" {
+			blockMap[block.ID] = block
+		}
+	}
+	layoutMap := make(map[string]canonicalLayout, len(envelope.DocumentStructure.Layout))
+	rootIDs := []string{}
+	for _, node := range envelope.DocumentStructure.Layout {
+		layoutMap[node.ID] = node
+		if node.IsRoot {
+			for _, child := range node.Children.List {
+				rootIDs = append(rootIDs, child.ID)
+			}
+		}
+	}
+	subTemplates := make(map[string]canonicalEnvelopeJSON, len(envelope.Metadata.SubTemplates))
+	for _, subTemplate := range envelope.Metadata.SubTemplates {
+		subTemplates[subTemplate.ID] = subTemplate.Template
+	}
+	var render func(ids []string, level int)
+	render = func(ids []string, level int) {
+		for _, id := range ids {
+			block, ok := blockMap[id]
+			if !ok {
+				continue
+			}
+			switch block.Type {
+			case "dcs:Section":
+				renderContractHeading(f, block.Title, level)
+			case "dcs:TextBlock":
+				renderCanonicalText(f, block.Text)
+			case "dcs:Clause":
+				renderCanonicalText(f, canonicalClauseText(block.Content))
+			case "dcs:ApprovedTemplate":
+				if nested, exists := subTemplates[block.TemplateDID]; exists {
+					renderCanonicalEnvelope(f, nested)
+				}
+			}
+			if node, exists := layoutMap[id]; exists {
+				childIDs := make([]string, 0, len(node.Children.List))
+				for _, child := range node.Children.List {
+					childIDs = append(childIDs, child.ID)
+				}
+				render(childIDs, level+1)
+			}
+		}
+	}
+	render(rootIDs, 1)
+	return len(rootIDs) > 0
+}
+
+func canonicalClauseText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text
+	}
+	var content canonicalContentList
+	if json.Unmarshal(raw, &content) != nil {
+		return ""
+	}
+	var result strings.Builder
+	for _, segment := range content.List {
+		if json.Unmarshal(segment, &text) == nil {
+			result.WriteString(text)
+			continue
+		}
+		var placeholder struct {
+			Type  string `json:"@type"`
+			Token string `json:"dcs:token"`
+		}
+		if json.Unmarshal(segment, &placeholder) == nil && placeholder.Type == "dcs:Placeholder" {
+			result.WriteString(defaultPlaceholderText)
+		}
+	}
+	return result.String()
+}
+
+func renderCanonicalText(f *fpdf.Fpdf, text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	f.SetFont(fontFamily, fontRegular, sizeHeading)
+	f.SetTextColor(55, 65, 81)
+	semanticWithTag(f, "P", func() {
+		f.MultiCell(bodyWidth, lineHeight, text, "", "L", false)
+	})
+	f.Ln(1)
+}
+
 // renderContractData parses raw JSON-LD bytes and renders the structured contract
 // document tree into f, mirroring the frontend useContractPlainTextConverter logic.
 func renderContractData(f *fpdf.Fpdf, raw []byte) {
+	var canonical canonicalEnvelopeJSON
+	if json.Unmarshal(raw, &canonical) == nil && renderCanonicalEnvelope(f, canonical) {
+		return
+	}
+
 	var data contractDataJSON
 	if err := json.Unmarshal(raw, &data); err != nil {
 		f.SetFont(fontFamily, fontRegular, sizeSmall)

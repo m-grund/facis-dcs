@@ -54,9 +54,9 @@
           <div class="max-h-64 overflow-auto rounded-md border border-base-300 bg-base-100 px-3 py-2">
             <TemplatePreview
               v-if="t.template_data"
-              :document-outline="t.template_data.documentOutline"
-              :document-blocks="t.template_data.documentBlocks"
-              :semantic-conditions="t.template_data.semanticConditions"
+              :document-outline="builderData(t).documentOutline"
+              :document-blocks="builderData(t).documentBlocks"
+              :semantic-conditions="builderData(t).semanticConditions"
             />
             <p v-else class="text-xs text-base-content/60 italic">No template data available.</p>
           </div>
@@ -72,6 +72,7 @@
 import { ref } from 'vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
 
 const props = withDefaults(
   defineProps<{
@@ -87,6 +88,10 @@ const props = withDefaults(
 defineEmits<(e: 'select', template: SubTemplateSnapshot) => void>()
 
 const expandedTemplateId = ref<string | null>(null)
+
+function builderData(template: SubTemplateSnapshot) {
+  return templateDataToBuilderData(template.template_data)
+}
 
 function referenceCount(did: string): number {
   if (props.referenceCountByDid == null) return 0
