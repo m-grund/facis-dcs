@@ -115,11 +115,21 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
-    SELECT did, state, name, description, created_by, created_at, updated_at,
-           contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible,
-           template_did, template_version
-    FROM contracts_effective_metadata
-`
+		SELECT cem.did, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
+			   cem.contract_version, cem.start_date, cem.exp_date, cem.exp_policy, cem.exp_notice_period, cem.responsible,
+			   cem.template_did, cem.template_version,
+			   cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
+			   AND EXISTS (
+				   SELECT 1
+				   FROM contract_templates ct
+				   WHERE ct.document_number = (
+					   SELECT document_number FROM contract_templates WHERE did = cem.template_did
+				   )
+				   AND ct.version > cem.template_version
+				   AND ct.state IN ('REGISTERED', 'PUBLISHED')
+			   ) AS outdated
+		FROM contracts_effective_metadata cem
+	`
 	var params []any
 	if pagination.Limit > 0 {
 		offset := (pagination.Offset - 1) * pagination.Limit

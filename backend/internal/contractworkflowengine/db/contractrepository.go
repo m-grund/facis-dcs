@@ -74,6 +74,7 @@ type ContractMetadata struct {
 	Description     *string      `db:"description"`
 	TemplateDID     string       `db:"template_did"`
 	TemplateVersion int          `db:"template_version"`
+	Outdated        *bool        `db:"outdated"`
 }
 
 type ContractProcessData struct {

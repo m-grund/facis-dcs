@@ -88,6 +88,11 @@ function expirationMessage(timeUtil: TimeUntil): string {
   <li class="list-row w-full min-w-0">
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
+
+        <div v-if="contract.outdated" class="-mt-9 flex w-full justify-center">
+          <div class="badge badge-md badge-warning">A newer template version is available</div>
+        </div>
+
         <h2 class="card-title justify-between">
           <div class="flex min-w-0 flex-1 items-center gap-2">
             <div class="truncate">Name: {{ contract.name }}</div>

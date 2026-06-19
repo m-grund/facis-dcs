@@ -292,6 +292,7 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 			ExpPolicy:       expPolicy,
 			ExpNoticePeriod: item.ExpNoticePeriod,
 			Responsible:     item.Responsible,
+			Outdated:        item.Outdated,
 		})
 	}
 

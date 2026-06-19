@@ -47,6 +47,7 @@ type MetadataItem struct {
 	ExpPolicy       *expirationpolicy.ExpirationPolicy
 	ExpNoticePeriod *int
 	Responsible     *db.Responsible
+	Outdated        *bool
 }
 
 type ReviewTaskItem struct {
@@ -174,6 +175,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			ExpPolicy:       expPolicy,
 			ExpNoticePeriod: data.ExpNoticePeriod,
 			Responsible:     data.Responsible,
+			Outdated:        data.Outdated,
 		}
 		contractItems = append(contractItems, metadata)
 
