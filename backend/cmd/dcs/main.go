@@ -56,14 +56,6 @@ import (
 )
 
 func main() {
-	if err := loadDotenvIfPresent(); err != nil {
-		_, err := fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
-		if err != nil {
-			return
-		}
-		os.Exit(1)
-	}
-
 	// Define command line flags, add any other flag required to configure the
 	// service.
 	var (
@@ -72,8 +64,27 @@ func main() {
 		httpPortF = flag.String("http-port", "", "HTTP port (overrides host HTTP port specified in service design)")
 		secureF   = flag.Bool("secure", false, "Use secure scheme (https or grpcs)")
 		dbgF      = flag.Bool("debug", false, "Log request and response bodies")
+		envF      = flag.String("env", "", "Set environment file for the service")
 	)
 	flag.Parse()
+
+	if envF != nil && *envF != "" {
+		if err := loadDotenvFile(*envF); err != nil {
+			_, err := fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
+			if err != nil {
+				return
+			}
+			os.Exit(1)
+		}
+	} else {
+		if err := loadDotenvIfPresent(); err != nil {
+			_, err := fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
+			if err != nil {
+				return
+			}
+			os.Exit(1)
+		}
+	}
 
 	// Setup logger. Replace logger with your own log package of choice.
 	format := log.FormatJSON
