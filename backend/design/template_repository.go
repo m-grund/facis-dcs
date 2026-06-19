@@ -13,6 +13,7 @@ var ContractTemplateCreateRequest = Type("ContractTemplateCreateRequest", func()
 
 	Attribute("name", String, "The name of the contract template")
 	Attribute("description", String, "A description for that template")
+	Attribute("document_number", String, "A document number for the contract template")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("template_type")

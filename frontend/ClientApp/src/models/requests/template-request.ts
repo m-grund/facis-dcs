@@ -7,6 +7,7 @@ export interface ContractTemplateCreateRequest {
   template_type: TemplateType
   name?: string
   description?: string
+  document_number?: string | null
   /** The template data of the contract template */
   template_data?: ContractTemplateData
 }
