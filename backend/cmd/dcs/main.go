@@ -57,7 +57,10 @@ import (
 
 func main() {
 	if err := loadDotenvIfPresent(); err != nil {
-		fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 

@@ -11,7 +11,12 @@ import (
 // loadDotenvIfPresent loads .env from the current working directory when present.
 // Existing environment variables are preserved.
 func loadDotenvIfPresent() error {
-	const dotenvPath = ".env"
+	dotenvPath := ".env"
+
+	env := os.Getenv("ENV_FILE")
+	if env != "" {
+		dotenvPath = env
+	}
 
 	if _, err := os.Stat(dotenvPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
