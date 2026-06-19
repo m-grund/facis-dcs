@@ -196,13 +196,19 @@ async function compliance(contract: SignatureContract) {
               </div>
             </td>
             <td class="flex gap-2">
-              <button class="btn btn-sm btn-primary" :disabled="(envelopes[contract.did]?.status === 'SIGNED') || !isSigner || signing[contract.did]" @click="sign(contract)">
+              <button
+                class="btn btn-sm btn-primary"
+                :disabled="envelopes[contract.did]?.status === 'SIGNED' || !isSigner || signing[contract.did]"
+                @click="sign(contract)"
+              >
                 <span v-if="signing[contract.did]" class="loading loading-xs loading-spinner" />
                 Sign
               </button>
-              <button class="btn btn-sm btn-outline" :disabled="!isSigner" @click="verify(contract)">Verify</button>
-              <button class="btn btn-sm btn-outline" :disabled="!isSigner" @click="validate(contract)">Validate</button>
-              <button class="btn btn-sm btn-outline" :disabled="!isSigner" @click="compliance(contract)">Compliance</button>
+              <button class="btn btn-outline btn-sm" :disabled="!isSigner" @click="verify(contract)">Verify</button>
+              <button class="btn btn-outline btn-sm" :disabled="!isSigner" @click="validate(contract)">Validate</button>
+              <button class="btn btn-outline btn-sm" :disabled="!isSigner" @click="compliance(contract)">
+                Compliance
+              </button>
             </td>
           </tr>
         </tbody>

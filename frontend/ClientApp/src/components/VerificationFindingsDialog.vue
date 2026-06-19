@@ -1,10 +1,9 @@
 <template>
-
   <button type="button" v-bind="$attrs" @click="openModal">
     <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
     Verify
   </button>
-  
+
   <Teleport to="body">
     <dialog ref="findingsModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
@@ -12,12 +11,13 @@
         <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
 
         <div v-if="findings.length > 0" class="mt-4 mb-4">
-              <div
-                v-for="(finding, idx) in findings" :key="idx"
-                class="card border border-base-300 bg-base-100 shadow-sm mb-2"
-              >
-                <div class="card-title text-sm p-3">{{finding}}</div>
-              </div>
+          <div
+            v-for="(finding, idx) in findings"
+            :key="idx"
+            class="card mb-2 border border-base-300 bg-base-100 shadow-sm"
+          >
+            <div class="card-title p-3 text-sm">{{ finding }}</div>
+          </div>
         </div>
 
         <div class="modal-action mt-2">
@@ -51,20 +51,17 @@ const verifyTemplate = async () => {
   }
   isSubmitting.value = true
   try {
-   
     const verificationResult = await contractTemplateService.verify({
       did,
     })
-    
-    findings.value = verificationResult.findings
 
+    findings.value = verificationResult.findings
   } catch (err) {
     console.error('Submission failed', err)
   } finally {
     isSubmitting.value = false
   }
 }
-
 
 function clearAll() {
   error.value = ''

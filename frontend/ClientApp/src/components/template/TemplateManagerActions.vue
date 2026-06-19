@@ -106,7 +106,6 @@ async function register() {
     await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: registered.did } })
   } catch {}
 }
-
 </script>
 
 <template>

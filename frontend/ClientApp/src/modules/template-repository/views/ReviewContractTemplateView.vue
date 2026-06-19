@@ -11,7 +11,7 @@
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <!-- Verify / Return to draft / request changes -->
-         <VerificationFindingsDialog
+        <VerificationFindingsDialog
           class="btn flex-1 btn-primary"
           :disabled="(!isReviewer && !isManager) || isSubmitting"
         />
