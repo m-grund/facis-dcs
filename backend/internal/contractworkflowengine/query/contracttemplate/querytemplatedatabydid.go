@@ -28,23 +28,6 @@ type GetTemplateDataByDIDHandler struct {
 	FCClient *fcclient.FederatedCatalogueClient
 }
 
-var templateDataAllowedKeys = []string{
-	"documentOutline",
-	"documentBlocks",
-	"semanticConditions",
-	"schemaRefs",
-	"policyRefs",
-	"validation",
-	"semanticProfile",
-	"templateVariables",
-	"placeholderBindings",
-	"semanticRules",
-	"contractStatements",
-	"sla",
-	"subTemplateSnapshots",
-	"templateDataVersion",
-}
-
 const getTemplateDataJSONByDIDStatement = `
 MATCH (ct:ContractTemplate)
 WHERE ct.did = $did
@@ -156,18 +139,21 @@ func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string) (
 		return nil, fmt.Errorf("unmarshal template data failed: %w", err)
 	}
 
-	contractDataMap := make(map[string]interface{}, len(templateDataAllowedKeys))
-	for _, key := range templateDataAllowedKeys {
-		if value, ok := templateDataMap[key]; ok {
-			contractDataMap[key] = value
-		}
+	if _, ok := templateDataMap["dcs:documentStructure"]; !ok {
+		return nil, errors.New("template data must use the canonical dcs:documentStructure envelope")
 	}
-	contractDataMap["sourceTemplate"] = map[string]interface{}{
+
+	templateDataMap["@type"] = "dcs:Contract"
+	if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {
+		metadata["@type"] = "dcs:ContractMetadata"
+	}
+	templateDataMap["sourceTemplate"] = map[string]interface{}{
 		"did": templateDID,
 	}
-	contractDataMap["derivedFromTemplate"] = templateDID
+	templateDataMap["derivedFromTemplate"] = templateDID
+	templateDataMap["semanticConditionValues"] = []any{}
 
-	contractData, err := datatype.NewJSON(contractDataMap)
+	contractData, err := datatype.NewJSON(templateDataMap)
 	if err != nil {
 		return nil, fmt.Errorf("marshal converted contract data failed: %w", err)
 	}

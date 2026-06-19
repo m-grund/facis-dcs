@@ -34,7 +34,7 @@ import {
   FACIS_CONTRACT_VALIDATION_PROFILE,
   FACIS_SCHEMA_REFS,
 } from '@/modules/template-repository/models/contract-template'
-import { buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
+import { buildContractDocument } from '@/modules/template-repository/store/dcsDraftStore'
 
 const route = useRoute()
 const router = useRouter()
@@ -78,32 +78,18 @@ const submit = async () => {
       did.value = response.did
       errorStore.add('Contract created.', 'info')
     } else if (contract.value) {
-      const semanticExtension = buildSemanticTemplateExtension(
-        templateDraftStore.documentBlocks,
-        templateDraftStore.semanticConditions,
-        templateDraftStore.semanticProfile,
-      )
-      const contractData: ContractData = {
+      const contractData: ContractData = buildContractDocument({
+        documentId: contract.value.did,
+        name: contract.value.name,
+        description: contract.value.description,
         documentOutline: templateDraftStore.documentOutline,
         documentBlocks: templateDraftStore.documentBlocks,
         semanticConditions: templateDraftStore.semanticConditions,
         subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
-        templateDataVersion: templateDraftStore.templateDataVersion,
-        schemaRefs: {
-          documentStructure: FACIS_SCHEMA_REFS.documentStructure,
-          semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
-          contractData: FACIS_SCHEMA_REFS.contractData,
-        },
-        policyRefs: FACIS_CONTRACT_POLICY_REFS,
-        validation: FACIS_CONTRACT_VALIDATION_PROFILE,
-        semanticProfile: semanticExtension.semanticProfile,
-        templateVariables: templateDraftStore.templateVariables,
-        placeholderBindings: semanticExtension.placeholderBindings,
-        semanticRules: semanticExtension.semanticRules,
-        policyBundle: semanticExtension.policyBundle,
-        sla: templateDraftStore.sla ?? undefined,
         semanticConditionValues: contractContentValuesStore.semanticConditionValues,
-      }
+        sourceTemplate: contract.value.contract_data?.sourceTemplate,
+        derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
+      })
       await contractWorkflowService.update({
         did: contract.value.did,
         updated_at: contract.value.updated_at,
@@ -187,7 +173,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     verificationResult.value = null
     return
   }
-  const cd = preprocessContractData(contractData as ContractData)
+  const cd = preprocessContractData(contractData)
   templateDraftStore.reset({
     workflow: 'contract',
     documentOutline: cd.documentOutline ?? [],

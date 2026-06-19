@@ -18,14 +18,14 @@ import type {
   ValidationReport,
 } from '@/models/semantic/facis-dcs-semantic'
 import type { SubTemplateSnapshot } from './contract-template'
+import type { DcsContractData } from './dcs-jsonld'
 
-export interface ContractData {
-  '@context'?: string
-  documentOutline: DocumentOutline
-  documentBlocks: DocumentBlock[]
-  semanticConditions: SemanticCondition[]
-  subTemplateSnapshots: SubTemplateSnapshot[]
-  templateDataVersion: TemplateDataVersion
+export interface ContractData extends Partial<DcsContractData> {
+  documentOutline?: DocumentOutline
+  documentBlocks?: DocumentBlock[]
+  semanticConditions?: SemanticCondition[]
+  subTemplateSnapshots?: SubTemplateSnapshot[]
+  templateDataVersion?: TemplateDataVersion
   schemaRefs?: SchemaReferenceSet
   policyRefs?: PolicyReference[]
   validation?: ValidationProfile
@@ -42,7 +42,7 @@ export interface ContractData {
   parties?: CompanyParty[]
   sla?: SLAAgreement
   validationReports?: ValidationReport[]
-  semanticConditionValues: SemanticConditionValue[]
+  semanticConditionValues?: SemanticConditionValue[]
 }
 
 export interface SemanticConditionValue {

@@ -7,7 +7,9 @@ package mapper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -115,6 +117,9 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		inner["@id"] = contract.DID
 		inner["@type"] = "dcs:Contract"
 		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildContractMetadata(contract, sourceTemplate, profile))
+		if err := materializeCanonicalContractData(inner, stableBaseID(contract.DID)); err != nil {
+			return nil, fmt.Errorf("materialize canonical contract data: %w", err)
+		}
 		return inner, nil
 	}
 
@@ -139,6 +144,121 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 func isCanonicalJSONLDEnvelope(value map[string]any) bool {
 	_, hasDocumentStructure := value["dcs:documentStructure"]
 	return hasDocumentStructure
+}
+
+func materializeCanonicalContractData(data map[string]any, baseID string) error {
+	rawRequirements, _ := asArray(data["dcs:contractData"])
+	rawValues, _ := asArray(data["semanticConditionValues"])
+
+	valuesByCondition := map[string][]map[string]any{}
+	for index, rawValue := range rawValues {
+		value, ok := rawValue.(map[string]any)
+		if !ok {
+			return fmt.Errorf("semanticConditionValues.%d must be an object", index)
+		}
+		conditionID, _ := value["conditionId"].(string)
+		parameterName, _ := value["parameterName"].(string)
+		if strings.TrimSpace(conditionID) == "" || strings.TrimSpace(parameterName) == "" {
+			return fmt.Errorf("semanticConditionValues.%d requires conditionId and parameterName", index)
+		}
+		valuesByCondition[conditionID] = append(valuesByCondition[conditionID], value)
+	}
+
+	materialized := make([]any, 0, len(rawRequirements))
+	for _, rawRequirement := range rawRequirements {
+		requirement, ok := rawRequirement.(map[string]any)
+		if !ok || requirement["@type"] != "dcs:DataRequirement" {
+			materialized = append(materialized, rawRequirement)
+			continue
+		}
+		item, err := materializeDataRequirement(baseID, requirement, valuesByCondition)
+		if err != nil {
+			return err
+		}
+		materialized = append(materialized, item)
+	}
+
+	data["dcs:contractData"] = materialized
+	delete(data, "semanticConditionValues")
+	return nil
+}
+
+func materializeDataRequirement(
+	baseID string,
+	requirement map[string]any,
+	valuesByCondition map[string][]map[string]any,
+) (map[string]any, error) {
+	conditionID, _ := requirement["dcs:conditionId"].(string)
+	if strings.TrimSpace(conditionID) == "" {
+		return nil, errors.New("dcs:DataRequirement requires dcs:conditionId")
+	}
+	entityRole, _ := requirement["dcs:entityRole"].(string)
+	entityID := conditionID
+	if strings.TrimSpace(entityRole) != "" {
+		entityID = entityRole
+	}
+	entityType, _ := requirement["dcs:entityType"].(string)
+	if strings.TrimSpace(entityType) == "" {
+		entityType = "dcs:ContractDataObject"
+	} else if !strings.Contains(entityType, ":") {
+		entityType = "dcs:" + entityType
+	}
+	item := map[string]any{
+		"@id":   baseID + "#" + slugify(entityID),
+		"@type": entityType,
+	}
+
+	fields, _ := asArray(requirement["dcs:fields"])
+	for _, rawField := range fields {
+		field, ok := rawField.(map[string]any)
+		if !ok {
+			continue
+		}
+		parameterName, _ := field["dcs:parameterName"].(string)
+		semanticPath, _ := field["dcs:semanticPath"].(string)
+		value, found, err := canonicalFieldValue(valuesByCondition[conditionID], parameterName, semanticPath)
+		if err != nil {
+			return nil, fmt.Errorf("condition %q field %q: %w", conditionID, parameterName, err)
+		}
+		if !found {
+			continue
+		}
+		item[canonicalFieldProperty(parameterName, semanticPath)] = value
+	}
+	return item, nil
+}
+
+func canonicalFieldValue(
+	values []map[string]any,
+	parameterName string,
+	semanticPath string,
+) (any, bool, error) {
+	var result any
+	found := false
+	for _, value := range values {
+		candidateName, _ := value["parameterName"].(string)
+		if candidateName != parameterName && candidateName != semanticPath {
+			continue
+		}
+		candidate, exists := value["parameterValue"]
+		if !exists {
+			continue
+		}
+		if found && !reflect.DeepEqual(result, candidate) {
+			return nil, false, errors.New("has conflicting submitted values")
+		}
+		result = candidate
+		found = true
+	}
+	return result, found, nil
+}
+
+func canonicalFieldProperty(parameterName string, semanticPath string) string {
+	leaf := parameterName
+	if index := strings.LastIndex(semanticPath, "."); index >= 0 && index < len(semanticPath)-1 {
+		leaf = semanticPath[index+1:]
+	}
+	return "dcs:" + lowerFirst(slugifyCamel(leaf))
 }
 
 func mergeMetadata(existing any, authoritative map[string]any) map[string]any {

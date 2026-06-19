@@ -24,6 +24,7 @@ import {
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
 import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
+import { isDcsContractData } from '@/models/dcs-jsonld'
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'
 const NEWLINE = '\n'
@@ -70,16 +71,17 @@ interface PlainTextWriter {
 }
 
 function createContractContext(contractData: ContractPlainTextInput): ContractContext {
-  const documentOutline: DocumentOutline = contractData?.documentOutline ?? []
-  const documentBlocks: DocumentBlock[] = contractData?.documentBlocks ?? []
+  const canonicalData = isDcsContractData(contractData) ? templateDataToBuilderData(contractData) : undefined
+  const documentOutline: DocumentOutline = canonicalData?.documentOutline ?? contractData?.documentOutline ?? []
+  const documentBlocks: DocumentBlock[] = canonicalData?.documentBlocks ?? contractData?.documentBlocks ?? []
 
   return {
     blockMap: new Map(documentBlocks.map((block) => [block.blockId, block])),
     outlineMap: new Map(documentOutline.map((node) => [node.blockId, node])),
     rootBlockIds: documentOutline.find((node) => node.isRoot)?.children ?? [],
-    semanticConditions: contractData?.semanticConditions ?? [],
+    semanticConditions: canonicalData?.semanticConditions ?? contractData?.semanticConditions ?? [],
     semanticConditionValues: contractData?.semanticConditionValues ?? [],
-    subTemplateSnapshots: contractData?.subTemplateSnapshots ?? [],
+    subTemplateSnapshots: canonicalData?.subTemplateSnapshots ?? contractData?.subTemplateSnapshots ?? [],
   }
 }
 

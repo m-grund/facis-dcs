@@ -20,11 +20,13 @@ import {
   isTextBlock,
   isSectionBlock,
   isApprovedTemplateBlock,
+  isMergedApprovedTemplateBlock,
   FACIS_SCHEMA_REFS,
   FACIS_TEMPLATE_POLICY_REFS,
   FACIS_TEMPLATE_VALIDATION_PROFILE,
 } from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
+import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
 import { FACIS_DCS_SEMANTIC_PROFILE } from '@/models/semantic/facis-dcs-semantic'
 import type {
@@ -32,10 +34,13 @@ import type {
   SemanticParameterOperator,
 } from '@template-repository/models/contract-template'
 import type { DcsOperator } from '@/models/semantic/facis-dcs-semantic'
-import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
+import { getOwnerBlockIdFromMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import {
+  isDcsDocumentData,
   isDcsTemplateData,
   DCS_JSONLD_CONTEXT,
+  type DcsContractData,
+  type DcsDocumentData,
   type DcsTemplateData,
   type DcsBlock,
   type DcsLayoutNode,
@@ -109,70 +114,18 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
     /** Assembles minimal JSON-LD document from builder state — single source of truth for the stored format. */
     templateDocument(): DcsTemplateData {
-      const documentID = this.did ?? undefined
-      const fieldIds = requirementFieldIds(this.semanticConditions, documentID)
-      const blocks: DcsBlock[] = this.documentBlocks.map((b) => {
-        if (isSectionBlock(b)) {
-          return {
-            '@type': 'dcs:Section' as const,
-            '@id': blockIri(b.blockId, documentID),
-            ...(b.title ? { 'dcs:title': b.title } : {}),
-          }
-        }
-        if (isTextBlock(b)) {
-          return { '@type': 'dcs:TextBlock' as const, '@id': blockIri(b.blockId, documentID), 'dcs:text': b.text }
-        }
-        if (isClauseBlock(b)) {
-          return {
-            '@type': 'dcs:Clause' as const,
-            '@id': blockIri(b.blockId, documentID),
-            'dcs:content': { '@list': clauseTextToSegments(b.text, fieldIds) },
-            ...(b.title ? { 'dcs:title': b.title } : {}),
-          }
-        }
-        if (isApprovedTemplateBlock(b)) {
-          return {
-            '@type': 'dcs:ApprovedTemplate' as const,
-            '@id': blockIri(b.blockId, documentID),
-            'dcs:templateDid': b.templateId,
-            'dcs:version': b.version,
-            ...(b.document_number ? { 'dcs:documentNumber': b.document_number } : {}),
-          }
-        }
-        return { '@type': 'dcs:TextBlock' as const, '@id': blockIri(b.blockId, documentID), 'dcs:text': '' }
-      })
-
-      const layout: DcsLayoutNode[] = this.documentOutline.map((node) => ({
-        '@id': blockIri(node.blockId, documentID),
-        ...(node.isRoot ? { 'dcs:isRoot': true } : {}),
-        'dcs:children': { '@list': node.children.map((id) => ({ '@id': blockIri(id, documentID) })) },
-      }))
-
-      return {
-        '@context': DCS_JSONLD_CONTEXT,
-        '@type': 'dcs:ContractTemplate',
-        ...(this.did ? { '@id': this.did } : {}),
-        'dcs:metadata': {
-          '@type': 'dcs:TemplateMetadata',
-          ...(this.did ? { '@id': `${this.did}#metadata` } : {}),
-          'dcs:title': this.name,
-          ...(this.description ? { 'dcs:description': this.description } : {}),
-          'dcs:templateType':
-            this.templateType === TemplateType.frameContract ? 'dcs:FrameContract' : 'dcs:SubContract',
-          ...(this.customMetaData.length ? { 'dcs:customMetaData': this.customMetaData } : {}),
-          ...(this.subTemplateSnapshots.length
-            ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(this.subTemplateSnapshots) }
-            : {}),
-        },
-        'dcs:documentStructure': {
-          '@type': 'dcs:DocumentStructure',
-          ...(this.did ? { '@id': `${this.did}#document-structure` } : {}),
-          'dcs:blocks': blocks,
-          'dcs:layout': layout,
-        },
-        'dcs:contractData': semanticConditionsToContractData(this.semanticConditions, documentID),
-        'dcs:policies': semanticConditionsToPolicies(this.semanticConditions, fieldIds, documentID),
-      }
+      return buildCanonicalDocument({
+        documentType: 'dcs:ContractTemplate',
+        documentId: this.did ?? undefined,
+        name: this.name,
+        description: this.description,
+        templateType: this.templateType,
+        documentOutline: this.documentOutline,
+        documentBlocks: this.documentBlocks,
+        semanticConditions: this.semanticConditions,
+        customMetaData: this.customMetaData,
+        subTemplateSnapshots: this.subTemplateSnapshots,
+      }) as DcsTemplateData
     },
     templateCreateRequestData(): ContractTemplateCreateRequest {
       return {
@@ -452,6 +405,162 @@ function blockIdFromIri(iri: string): string {
   return decodeURIComponent(local.replace(/^block-/, ''))
 }
 
+interface CanonicalDocumentInput {
+  documentType: DcsDocumentData['@type']
+  documentId?: string
+  name?: string
+  description?: string
+  templateType?: TemplateTypeValue
+  documentOutline: DocumentOutline
+  documentBlocks: DocumentBlock[]
+  semanticConditions: SemanticCondition[]
+  customMetaData?: MetaData[]
+  subTemplateSnapshots?: SubTemplateSnapshot[]
+  semanticConditionValues?: SemanticConditionValue[]
+  sourceTemplate?: DcsContractData['sourceTemplate']
+  derivedFromTemplate?: string
+}
+
+export interface ContractDocumentInput {
+  documentId: string
+  name?: string
+  description?: string
+  documentOutline: DocumentOutline
+  documentBlocks: DocumentBlock[]
+  semanticConditions: SemanticCondition[]
+  subTemplateSnapshots: SubTemplateSnapshot[]
+  semanticConditionValues: SemanticConditionValue[]
+  sourceTemplate?: DcsContractData['sourceTemplate']
+  derivedFromTemplate?: string
+}
+
+export function buildContractDocument(input: ContractDocumentInput): DcsContractData {
+  return buildCanonicalDocument({
+    ...input,
+    documentType: 'dcs:Contract',
+  }) as DcsContractData
+}
+
+function buildCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentData {
+  const fieldIds = requirementFieldIds(input.semanticConditions, input.documentId)
+  const mergedOwnerIds = new Set(
+    input.documentBlocks.filter(isMergedApprovedTemplateBlock).map((block) => block.blockId),
+  )
+  const isInjectedMergedBlock = (blockId: string): boolean => {
+    const ownerId = getOwnerBlockIdFromMergedBlockId(blockId)
+    return ownerId !== undefined && mergedOwnerIds.has(ownerId)
+  }
+  const blocks: DcsBlock[] = input.documentBlocks
+    .filter((block) => !isInjectedMergedBlock(block.blockId))
+    .map((block) => {
+      if (isMergedApprovedTemplateBlock(block)) {
+        return {
+          '@type': 'dcs:ApprovedTemplate',
+          '@id': blockIri(block.blockId, input.documentId),
+          'dcs:templateDid': block.templateId,
+          'dcs:version': block.version,
+          ...(block.document_number ? { 'dcs:documentNumber': block.document_number } : {}),
+        }
+      }
+      if (isSectionBlock(block)) {
+        return {
+          '@type': 'dcs:Section',
+          '@id': blockIri(block.blockId, input.documentId),
+          ...(block.title ? { 'dcs:title': block.title } : {}),
+        }
+      }
+      if (isTextBlock(block)) {
+        return {
+          '@type': 'dcs:TextBlock',
+          '@id': blockIri(block.blockId, input.documentId),
+          'dcs:text': block.text,
+        }
+      }
+      if (isClauseBlock(block)) {
+        return {
+          '@type': 'dcs:Clause',
+          '@id': blockIri(block.blockId, input.documentId),
+          'dcs:content': { '@list': clauseTextToSegments(block.text, fieldIds) },
+          ...(block.title ? { 'dcs:title': block.title } : {}),
+        }
+      }
+      if (isApprovedTemplateBlock(block)) {
+        return {
+          '@type': 'dcs:ApprovedTemplate',
+          '@id': blockIri(block.blockId, input.documentId),
+          'dcs:templateDid': block.templateId,
+          'dcs:version': block.version,
+          ...(block.document_number ? { 'dcs:documentNumber': block.document_number } : {}),
+        }
+      }
+      throw new Error('Unsupported document block type')
+    })
+  const layout: DcsLayoutNode[] = input.documentOutline
+    .filter((node) => !isInjectedMergedBlock(node.blockId))
+    .map((node) => ({
+      '@id': blockIri(node.blockId, input.documentId),
+      ...(node.isRoot ? { 'dcs:isRoot': true } : {}),
+      'dcs:children': {
+        '@list': canonicalChildBlockIds(node.children, mergedOwnerIds).map((id) => ({
+          '@id': blockIri(id, input.documentId),
+        })),
+      },
+    }))
+  const commonMetadata = {
+    ...(input.documentId ? { '@id': `${input.documentId}#metadata` } : {}),
+    ...(input.name ? { 'dcs:title': input.name } : {}),
+    ...(input.description ? { 'dcs:description': input.description } : {}),
+    ...(input.customMetaData?.length ? { 'dcs:customMetaData': input.customMetaData } : {}),
+    ...(input.subTemplateSnapshots?.length
+      ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(input.subTemplateSnapshots) }
+      : {}),
+  }
+  const metadata =
+    input.documentType === 'dcs:ContractTemplate'
+      ? {
+          '@type': 'dcs:TemplateMetadata' as const,
+          ...commonMetadata,
+          'dcs:templateType':
+            input.templateType === TemplateType.frameContract ? 'dcs:FrameContract' : 'dcs:SubContract',
+        }
+      : {
+          '@type': 'dcs:ContractMetadata' as const,
+          ...commonMetadata,
+        }
+
+  return {
+    '@context': DCS_JSONLD_CONTEXT,
+    '@type': input.documentType,
+    ...(input.documentId ? { '@id': input.documentId } : {}),
+    'dcs:metadata': metadata,
+    'dcs:documentStructure': {
+      '@type': 'dcs:DocumentStructure',
+      ...(input.documentId ? { '@id': `${input.documentId}#document-structure` } : {}),
+      'dcs:blocks': blocks,
+      'dcs:layout': layout,
+    },
+    'dcs:contractData': semanticConditionsToContractData(input.semanticConditions, input.documentId),
+    'dcs:policies': semanticConditionsToPolicies(input.semanticConditions, fieldIds, input.documentId),
+    ...(input.documentType === 'dcs:Contract'
+      ? {
+          semanticConditionValues: input.semanticConditionValues ?? [],
+          ...(input.sourceTemplate ? { sourceTemplate: input.sourceTemplate } : {}),
+          ...(input.derivedFromTemplate ? { derivedFromTemplate: input.derivedFromTemplate } : {}),
+        }
+      : {}),
+  }
+}
+
+function canonicalChildBlockIds(childIds: readonly string[], mergedOwnerIds: ReadonlySet<string>): string[] {
+  const result: string[] = []
+  for (const childId of childIds) {
+    const ownerId = getOwnerBlockIdFromMergedBlockId(childId)
+    const canonicalId = ownerId && mergedOwnerIds.has(ownerId) ? ownerId : childId
+    if (!result.includes(canonicalId)) result.push(canonicalId)
+  }
+  return result
+}
+
 // ---- JSON-LD ↔ Builder model converters ----
 
 function convertDcsBlockToBuilder(
@@ -553,7 +662,7 @@ export interface TemplateBuilderData {
 }
 
 export function templateDataToBuilderData(raw: unknown): TemplateBuilderData {
-  if (!isDcsTemplateData(raw)) {
+  if (!isDcsDocumentData(raw)) {
     return {
       documentOutline: getInitialOutline(),
       documentBlocks: [],

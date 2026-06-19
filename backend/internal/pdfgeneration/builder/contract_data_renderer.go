@@ -2,6 +2,7 @@ package builder
 
 import (
 	"encoding/json"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -61,8 +62,10 @@ type templateDataJSON struct {
 }
 
 type canonicalEnvelopeJSON struct {
-	DocumentStructure canonicalDocumentStructureJSON `json:"dcs:documentStructure"`
-	Metadata          canonicalMetadataJSON          `json:"dcs:metadata"`
+	DocumentStructure       canonicalDocumentStructureJSON `json:"dcs:documentStructure"`
+	Metadata                canonicalMetadataJSON          `json:"dcs:metadata"`
+	ContractData            []canonicalRequirementJSON     `json:"dcs:contractData"`
+	SemanticConditionValues []conditionValueJSON           `json:"semanticConditionValues"`
 }
 
 type canonicalMetadataJSON struct {
@@ -106,6 +109,18 @@ type canonicalBlockJSON struct {
 
 type canonicalContentList struct {
 	List []json.RawMessage `json:"@list"`
+}
+
+type canonicalRequirementJSON struct {
+	Type        string               `json:"@type"`
+	ConditionID string               `json:"dcs:conditionId"`
+	Fields      []canonicalFieldJSON `json:"dcs:fields"`
+}
+
+type canonicalFieldJSON struct {
+	ID            string `json:"@id"`
+	ParameterName string `json:"dcs:parameterName"`
+	SemanticPath  string `json:"dcs:semanticPath"`
 }
 
 // ---- Render context ----
@@ -326,6 +341,7 @@ func renderCanonicalEnvelope(f *fpdf.Fpdf, envelope canonicalEnvelopeJSON) bool 
 	for _, subTemplate := range envelope.Metadata.SubTemplates {
 		subTemplates[subTemplate.ID] = subTemplate.Template
 	}
+	placeholderValues := canonicalPlaceholderValues(envelope)
 	var render func(ids []string, level int)
 	render = func(ids []string, level int) {
 		for _, id := range ids {
@@ -339,7 +355,7 @@ func renderCanonicalEnvelope(f *fpdf.Fpdf, envelope canonicalEnvelopeJSON) bool 
 			case "dcs:TextBlock":
 				renderCanonicalText(f, block.Text)
 			case "dcs:Clause":
-				renderCanonicalText(f, canonicalClauseText(block.Content))
+				renderCanonicalText(f, canonicalClauseText(block.Content, canonicalBlockID(block.ID), placeholderValues))
 			case "dcs:ApprovedTemplate":
 				if nested, exists := subTemplates[block.TemplateDID]; exists {
 					renderCanonicalEnvelope(f, nested)
@@ -358,7 +374,47 @@ func renderCanonicalEnvelope(f *fpdf.Fpdf, envelope canonicalEnvelopeJSON) bool 
 	return len(rootIDs) > 0
 }
 
-func canonicalClauseText(raw json.RawMessage) string {
+func canonicalPlaceholderValues(envelope canonicalEnvelopeJSON) map[string]map[string]json.RawMessage {
+	result := map[string]map[string]json.RawMessage{}
+	for _, requirement := range envelope.ContractData {
+		if requirement.Type != "dcs:DataRequirement" {
+			continue
+		}
+		for _, field := range requirement.Fields {
+			for _, value := range envelope.SemanticConditionValues {
+				if value.ConditionID != requirement.ConditionID {
+					continue
+				}
+				if value.ParameterName != field.ParameterName && value.ParameterName != field.SemanticPath {
+					continue
+				}
+				if result[field.ID] == nil {
+					result[field.ID] = map[string]json.RawMessage{}
+				}
+				result[field.ID][value.BlockID] = value.ParameterValue
+			}
+		}
+	}
+	return result
+}
+
+func canonicalBlockID(id string) string {
+	local := id
+	if index := strings.LastIndex(local, "#"); index >= 0 {
+		local = local[index+1:]
+	}
+	local = strings.TrimPrefix(local, "block-")
+	if decoded, err := url.PathUnescape(local); err == nil {
+		return decoded
+	}
+	return local
+}
+
+func canonicalClauseText(
+	raw json.RawMessage,
+	blockID string,
+	placeholderValues map[string]map[string]json.RawMessage,
+) string {
 	if len(raw) == 0 {
 		return ""
 	}
@@ -377,11 +433,22 @@ func canonicalClauseText(raw json.RawMessage) string {
 			continue
 		}
 		var placeholder struct {
-			Type  string `json:"@type"`
-			Token string `json:"dcs:token"`
+			Type    string             `json:"@type"`
+			Token   string             `json:"dcs:token"`
+			BindsTo canonicalReference `json:"dcs:bindsTo"`
 		}
 		if json.Unmarshal(segment, &placeholder) == nil && placeholder.Type == "dcs:Placeholder" {
-			result.WriteString(defaultPlaceholderText)
+			rawValue := placeholderValues[placeholder.BindsTo.ID][blockID]
+			if len(rawValue) == 0 || string(rawValue) == "null" {
+				result.WriteString(defaultPlaceholderText)
+				continue
+			}
+			var stringValue string
+			if json.Unmarshal(rawValue, &stringValue) == nil {
+				result.WriteString(stringValue)
+				continue
+			}
+			result.Write(rawValue)
 		}
 	}
 	return result.String()

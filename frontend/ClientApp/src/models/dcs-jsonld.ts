@@ -23,6 +23,15 @@ export interface DcsTemplateMetadata {
   'dcs:subTemplates'?: DcsSubTemplateSnapshot[]
 }
 
+export interface DcsContractMetadata {
+  '@id'?: string
+  '@type': 'dcs:ContractMetadata'
+  'dcs:title'?: string
+  'dcs:description'?: string
+  'dcs:customMetaData'?: unknown[]
+  'dcs:subTemplates'?: DcsSubTemplateSnapshot[]
+}
+
 export interface DcsPlaceholder {
   '@type': 'dcs:Placeholder'
   'dcs:token': string
@@ -115,23 +124,53 @@ export interface DcsSubTemplateSnapshot {
   'dcs:template': DcsTemplateData
 }
 
-export interface DcsTemplateData {
+export interface DcsDocumentData {
   '@context': typeof DCS_JSONLD_CONTEXT
-  '@type': 'dcs:ContractTemplate'
+  '@type': 'dcs:ContractTemplate' | 'dcs:Contract'
   '@id'?: string
-  'dcs:metadata': DcsTemplateMetadata
+  'dcs:metadata': DcsTemplateMetadata | DcsContractMetadata
   'dcs:documentStructure': DcsDocumentStructure
   'dcs:contractData': DcsDataRequirement[]
   'dcs:policies': OdrlRule[]
 }
 
-export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {
+export interface DcsTemplateData extends DcsDocumentData {
+  '@type': 'dcs:ContractTemplate'
+  'dcs:metadata': DcsTemplateMetadata
+}
+
+export interface DcsContractData extends DcsDocumentData {
+  '@type': 'dcs:Contract'
+  'dcs:metadata': DcsContractMetadata | DcsTemplateMetadata
+  semanticConditionValues?: {
+    blockId: string
+    conditionId: string
+    parameterName: string
+    parameterValue?: string | number | boolean
+  }[]
+  sourceTemplate?: {
+    did: string
+    version?: number
+    document_number?: string
+  }
+  derivedFromTemplate?: string
+}
+
+export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {
   if (typeof raw !== 'object' || raw === null) return false
   const value = raw as Record<string, unknown>
   return (
-    value['@type'] === 'dcs:ContractTemplate' &&
+    (value['@type'] === 'dcs:ContractTemplate' || value['@type'] === 'dcs:Contract') &&
     typeof value['dcs:documentStructure'] === 'object' &&
     Array.isArray(value['dcs:contractData']) &&
     Array.isArray(value['dcs:policies'])
   )
+}
+
+export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {
+  return isDcsDocumentData(raw) && raw['@type'] === 'dcs:ContractTemplate'
+}
+
+export function isDcsContractData(raw: unknown): raw is DcsContractData {
+  return isDcsDocumentData(raw) && raw['@type'] === 'dcs:Contract'
 }

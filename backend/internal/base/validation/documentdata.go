@@ -185,6 +185,9 @@ func ValidateContractSemantics(raw *datatype.JSON) error {
 	if err != nil {
 		return err
 	}
+	if isCanonicalEnvelope(data) {
+		return validateCanonicalEnvelope(data)
+	}
 	normalizeContractSemanticRuntime(data)
 	return validateContractSemanticsData(data, true)
 }

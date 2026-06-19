@@ -414,6 +414,80 @@ func TestBuildContractJSONLDUsesSameSeparatedSections(t *testing.T) {
 	require.Contains(t, env, "dcs:policies")
 }
 
+func TestBuildContractJSONLDMaterializesCanonicalConditionValues(t *testing.T) {
+	sourceTemplate := templateFixture(t)
+	contract := contractdb.Contract{
+		DID:             "did:web:example:contract:1",
+		ContractVersion: 1,
+		State:           "SUBMITTED",
+		CreatedBy:       "user-1",
+		CreatedAt:       fixedTime(),
+		UpdatedAt:       fixedTime(),
+		ContractData: newJSON(t, map[string]any{
+			"@type": "dcs:Contract",
+			"dcs:metadata": map[string]any{
+				"@type": "dcs:ContractMetadata",
+			},
+			"dcs:documentStructure": map[string]any{
+				"@type":      "dcs:DocumentStructure",
+				"dcs:blocks": []any{},
+				"dcs:layout": []any{},
+			},
+			"dcs:contractData": []any{
+				map[string]any{
+					"@id":               "did:web:example:contract:1#requirement-customer",
+					"@type":             "dcs:DataRequirement",
+					"dcs:conditionId":   "customer",
+					"dcs:entityType":    "CompanyParty",
+					"dcs:entityRole":    "customer",
+					"dcs:schemaVersion": "v1",
+					"dcs:fields": []any{
+						map[string]any{
+							"@id":               "did:web:example:contract:1#field-customer-legalName",
+							"@type":             "dcs:RequirementField",
+							"dcs:parameterName": "legalName",
+							"dcs:semanticPath":  "company.legalName",
+						},
+						map[string]any{
+							"@id":               "did:web:example:contract:1#field-customer-country",
+							"@type":             "dcs:RequirementField",
+							"dcs:parameterName": "country",
+							"dcs:semanticPath":  "company.location.country",
+						},
+					},
+				},
+			},
+			"dcs:policies": []any{},
+			"semanticConditionValues": []any{
+				map[string]any{
+					"blockId":        "party-clause",
+					"conditionId":    "customer",
+					"parameterName":  "company.legalName",
+					"parameterValue": "A",
+				},
+				map[string]any{
+					"blockId":        "party-clause",
+					"conditionId":    "customer",
+					"parameterName":  "country",
+					"parameterValue": "DEU",
+				},
+			},
+		}),
+	}
+
+	env, err := BuildContractJSONLD(contract, sourceTemplate, DefaultProfile())
+	require.NoError(t, err)
+	require.NotContains(t, env, "semanticConditionValues")
+	require.Equal(t, []any{
+		map[string]any{
+			"@id":           "did:web:example:contract:1#customer",
+			"@type":         "dcs:CompanyParty",
+			"dcs:legalName": "A",
+			"dcs:country":   "DEU",
+		},
+	}, env["dcs:contractData"])
+}
+
 func jsonRoundTrip(value any) error {
 	raw, err := json.Marshal(value)
 	if err != nil {

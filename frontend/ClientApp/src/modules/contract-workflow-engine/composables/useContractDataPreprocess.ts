@@ -16,6 +16,7 @@ import {
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { TEMPLATE_DATA_VERSIONS, type TemplateDataVersion } from '@template-repository/models/template-draft-store'
 import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
+import { isDcsContractData } from '@/models/dcs-jsonld'
 
 const CURRENT_TEMPLATE_DATA_VERSION: TemplateDataVersion = TEMPLATE_DATA_VERSIONS[0]
 
@@ -27,12 +28,12 @@ const CURRENT_TEMPLATE_DATA_VERSION: TemplateDataVersion = TEMPLATE_DATA_VERSION
  */
 export function useContractDataPreprocess() {
   function preprocessContractData(cd: ContractData): ContractData {
+    const canonicalData = isDcsContractData(cd) ? templateDataToBuilderData(cd) : undefined
     const contractData: ContractData = {
-      ...(cd['@context'] ? { '@context': cd['@context'] } : {}),
-      documentOutline: deepClone(cd.documentOutline ?? []),
-      documentBlocks: deepClone(cd.documentBlocks ?? []),
-      semanticConditions: deepClone(cd.semanticConditions ?? []),
-      subTemplateSnapshots: deepClone(cd.subTemplateSnapshots ?? []),
+      documentOutline: deepClone(canonicalData?.documentOutline ?? cd.documentOutline ?? []),
+      documentBlocks: deepClone(canonicalData?.documentBlocks ?? cd.documentBlocks ?? []),
+      semanticConditions: deepClone(canonicalData?.semanticConditions ?? cd.semanticConditions ?? []),
+      subTemplateSnapshots: deepClone(canonicalData?.subTemplateSnapshots ?? cd.subTemplateSnapshots ?? []),
       semanticConditionValues: deepClone(cd.semanticConditionValues ?? []),
       templateDataVersion: normalizeTemplateDataVersion(cd.templateDataVersion),
       schemaRefs: deepClone(
@@ -45,17 +46,18 @@ export function useContractDataPreprocess() {
       policyRefs: deepClone(cd.policyRefs ?? FACIS_CONTRACT_POLICY_REFS),
       validation: deepClone(cd.validation ?? FACIS_CONTRACT_VALIDATION_PROFILE),
       sourceTemplate: cd.sourceTemplate ? deepClone(cd.sourceTemplate) : undefined,
+      derivedFromTemplate: cd.derivedFromTemplate,
     }
 
-    const approvedBlocks = contractData.documentBlocks.filter(isApprovedTemplateBlock)
+    const approvedBlocks = (contractData.documentBlocks ?? []).filter(isApprovedTemplateBlock)
     if (approvedBlocks.length === 0) return contractData
     for (const approvedBlock of approvedBlocks) {
       const subTemplateEnvelope = findSnapshotByApprovedBlock(
-        contractData.subTemplateSnapshots,
+        contractData.subTemplateSnapshots ?? [],
         approvedBlock,
       )?.template_data
       const subTemplateData = templateDataToBuilderData(subTemplateEnvelope)
-      const approvedOutlineNode = contractData.documentOutline.find((b) => b.blockId === approvedBlock.blockId)
+      const approvedOutlineNode = (contractData.documentOutline ?? []).find((b) => b.blockId === approvedBlock.blockId)
       const subRootOutlineBlock = subTemplateData.documentOutline.find((b) => b.isRoot)
       if (!subTemplateEnvelope || !approvedOutlineNode || !subRootOutlineBlock) continue
 
@@ -78,7 +80,9 @@ export function useContractDataPreprocess() {
       const mergedChildIds = subRootOutlineBlock.children.map((childId) => getMappedBlockId(blockIdMap, childId))
 
       // Convert block type and merge blocks
-      contractData.documentBlocks = contractData.documentBlocks.filter((b) => b.blockId !== approvedBlock.blockId)
+      contractData.documentBlocks = (contractData.documentBlocks ?? []).filter(
+        (b) => b.blockId !== approvedBlock.blockId,
+      )
       contractData.documentBlocks.push({
         ...approvedBlock,
         type: DocumentBlockType.MergedApprovedTemplate,
@@ -87,6 +91,7 @@ export function useContractDataPreprocess() {
 
       // Update main outline
       approvedOutlineNode.children = [...mergedChildIds, ...approvedOutlineNode.children]
+      contractData.documentOutline = contractData.documentOutline ?? []
       contractData.documentOutline.push(...mergedOutline)
       contractData.documentOutline = removeMergedApprovedChildrenRefs(
         contractData.documentOutline,

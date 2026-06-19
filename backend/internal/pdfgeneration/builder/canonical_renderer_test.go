@@ -19,7 +19,57 @@ func TestCanonicalClauseTextRendersPlaceholderWithoutPolicyData(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, "Provider country: __________", canonicalClauseText(raw))
+	require.Equal(t, "Provider country: __________", canonicalClauseText(raw, "clause", nil))
+}
+
+func TestCanonicalClauseTextResolvesSubmittedSemanticValue(t *testing.T) {
+	raw, err := json.Marshal(map[string]any{
+		"@list": []any{
+			"Customer: ",
+			map[string]any{
+				"@type":       "dcs:Placeholder",
+				"dcs:token":   "{{customer.company.legalName}}",
+				"dcs:bindsTo": map[string]any{"@id": "did:example:contract#field-customer-legalName"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	values := map[string]map[string]json.RawMessage{
+		"did:example:contract#field-customer-legalName": {
+			"clause": json.RawMessage(`"A"`),
+		},
+	}
+	require.Equal(t, "Customer: A", canonicalClauseText(raw, "clause", values))
+}
+
+func TestCanonicalPlaceholderValuesMatchesSemanticPathParameterName(t *testing.T) {
+	envelope := canonicalEnvelopeJSON{
+		ContractData: []canonicalRequirementJSON{
+			{
+				Type:        "dcs:DataRequirement",
+				ConditionID: "customer",
+				Fields: []canonicalFieldJSON{
+					{
+						ID:            "did:example:contract#field-customer-legalName",
+						ParameterName: "legalName",
+						SemanticPath:  "company.legalName",
+					},
+				},
+			},
+		},
+		SemanticConditionValues: []conditionValueJSON{
+			{
+				BlockID:        "clause",
+				ConditionID:    "customer",
+				ParameterName:  "company.legalName",
+				ParameterValue: json.RawMessage(`"A"`),
+			},
+		},
+	}
+
+	values := canonicalPlaceholderValues(envelope)
+	require.JSONEq(t, `"A"`, string(values["did:example:contract#field-customer-legalName"]["clause"]))
 }
 
 func TestRenderCanonicalEnvelopeRecognizesDocumentStructure(t *testing.T) {

@@ -371,6 +371,18 @@ func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 	require.NotContains(t, data, "did")
 }
 
+func TestValidateContractSemanticsAcceptsCanonicalContract(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	data["@type"] = "dcs:Contract"
+	data["semanticConditionValues"] = []any{}
+	contract, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	require.NoError(t, ValidateContractSemantics(&contract))
+}
+
 func TestNormalizeContractDataAcceptsTypedSemanticValues(t *testing.T) {
 	templateData := validTemplateData(t)
 	var decoded map[string]any
