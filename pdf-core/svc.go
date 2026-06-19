@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -15,8 +16,9 @@ import (
 
 	compiler "example.com/m/V2/compiler"
 
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // setPDFCoreVersionHeader emits the renderer version on every PDF-producing
@@ -36,6 +38,15 @@ type httpError struct {
 }
 
 func (e *httpError) Error() string { return e.message }
+
+func prettyLog(m map[string]interface{}) {
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		log.Println("error:", err)
+		return
+	}
+	log.Println("\n" + string(b))
+}
 
 // writeError writes a JSON error body matching the OpenAPI Error schema.
 func writeError(w http.ResponseWriter, err error) {
@@ -58,6 +69,8 @@ func writeError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(he.status)
 	_ = json.NewEncoder(w).Encode(body)
+
+	prettyLog(body)
 }
 
 func errBadRequest(err error) *httpError {
