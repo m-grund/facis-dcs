@@ -45,9 +45,8 @@ const isSubmitting = ref(false)
 
 const verifyTemplate = async () => {
   const did = draftStore.did
-  const updatedAt = draftStore.updated_at
-  if (!did || !updatedAt) {
-    console.error('Missing did or updated_at for submission')
+  if (!did) {
+    console.error('Missing did for verification')
     return
   }
   isSubmitting.value = true
