@@ -35,13 +35,15 @@ import {
   FACIS_SCHEMA_REFS,
 } from '@/modules/template-repository/models/contract-template'
 import { buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
+import { useContractsStore } from '@/stores/contracts-store'
 
 const route = useRoute()
 const router = useRouter()
 
 const errorStore = useErrorStore()
-const templatesStore = useContractTemplatesStore()
-const { registeredOrPublishedTemplates, hasRegisteredOrPublishedTemplates } = storeToRefs(templatesStore)
+const contractStore = useContractsStore()
+
+const { hasApprovedTemplates, approvedTemplates } = storeToRefs(contractStore)
 const templateDraftStore = useTemplateDraftStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -59,7 +61,7 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 const contract: Ref<Contract | null> = ref(null)
 
 const canSubmit = computed(
-  () => isEditMode.value || (hasRegisteredOrPublishedTemplates.value && selectedTemplate.value !== null),
+  () => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null),
 )
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
@@ -138,8 +140,8 @@ watch(
       } catch (err: unknown) {
         console.error('Failed to load contract', err)
       }
-    } else if (!hasRegisteredOrPublishedTemplates.value) {
-      await templatesStore.loadTemplates()
+    } else if (!hasApprovedTemplates.value) {
+      await contractStore.loadApprovedTemplates()
     }
   },
   { immediate: true },
@@ -230,11 +232,11 @@ onBeforeRouteLeave(() => {
   <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <div v-if="!isEditMode" class="px-6 py-12">
       <div class="flex justify-center">
-        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasRegisteredOrPublishedTemplates">
+        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedTemplates">
           <option :value="null" disabled selected>
-            {{ hasRegisteredOrPublishedTemplates ? 'Pick a template' : 'No templates available' }}
+            {{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
-          <option v-for="template in registeredOrPublishedTemplates" :key="template.did" :value="template">
+          <option v-for="template in approvedTemplates" :key="template.did" :value="template">
             {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>

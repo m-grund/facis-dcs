@@ -2,10 +2,8 @@ import type { PartialContractTemplate } from '@/models/contract-template'
 import type { ContractTemplateApprovalTask } from '@/models/contract-template-approval-task'
 import type { ContractTemplateReviewTask } from '@/models/contract-template-review-task'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { TemplateState } from '@/types/contract-template-state'
 import { defineStore } from 'pinia'
-import { computed, ref, type Ref } from 'vue'
-import { TemplateType } from '@/modules/template-repository/models/contract-template'
+import { ref, type Ref } from 'vue'
 
 export const useContractTemplatesStore = defineStore('contractTemplates', () => {
   const contractTemplates: Ref<PartialContractTemplate[]> = ref([])
@@ -13,23 +11,7 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
   const approvalTasks: Ref<ContractTemplateApprovalTask[]> = ref([])
 
   const loading = ref(false)
-  const error = ref<string | null>(null)
-
-  const hasTemplates = computed(() => contractTemplates.value.length > 0)
-  const hasRegisteredOrPublishedTemplates = computed(() =>
-    contractTemplates.value.some(
-      (template) =>
-        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
-        template.template_type === TemplateType.frameContract,
-    ),
-  )
-  const registeredOrPublishedTemplates = computed(() =>
-    contractTemplates.value.filter(
-      (template) =>
-        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
-        template.template_type === TemplateType.frameContract,
-    ),
-  )
+  const error = ref<string | null>(null)  
 
   const findTemplateByDid = (did: string) => contractTemplates.value.find((template) => template.did === did)
 
@@ -52,9 +34,6 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
     contractTemplates,
     reviewTasks,
     approvalTasks,
-    hasTemplates,
-    hasRegisteredOrPublishedTemplates: hasRegisteredOrPublishedTemplates,
-    registeredOrPublishedTemplates: registeredOrPublishedTemplates,
     findTemplateByDid,
     loadTemplates,
     loading,

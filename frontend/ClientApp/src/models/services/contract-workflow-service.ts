@@ -17,6 +17,7 @@ import type {
   ContractUpdateRequest,
 } from '@/models/requests/contract-requests'
 import type {
+  ApprovedContractTemplateRetrieveResponse,
   ContractApproveResponse,
   ContractAuditResponse,
   ContractCreateResponse,
@@ -40,6 +41,7 @@ export interface ContractWorkflowService {
   negotiate: (request: ContractNegotiationRequest) => Promise<ContractNegotiationResponse>
   respond: (request: ContractNegotiationRespondRequest) => Promise<ContractNegotiationRespondResponse>
   review: (request: ContractReviewRequest) => Promise<ContractReviewResponse>
+  retrieveApprovedTemplates: () => Promise<ApprovedContractTemplateRetrieveResponse>
   retrieve: (request?: ContractRetrieveRequest) => Promise<ContractRetrieveResponse>
   retrieveById: (request: ContractRetrieveByIdRequest) => Promise<Contract | null>
   search: (request: ContractSearchRequest) => Promise<ContractSearchResponse>
