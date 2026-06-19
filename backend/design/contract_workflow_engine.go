@@ -446,6 +446,28 @@ var ContractAuditResponse = Type("ContractAuditResponse", func() {
 	Required("id", "component", "event_type", "event_data", "created_at")
 })
 
+var ApprovedContractTemplateRetrieveRequest = Type("ApprovedContractTemplateRetrieveRequest", func() {
+	Description("Approved contract template retrieve request")
+
+	Token("token", String, "JWT token")
+})
+
+var ApprovedContractTemplateRetrieveResponse = Type("ApprovedContractTemplateRetrieveResponse", func() {
+	Attribute("did", String, "DID of the contract template")
+	Attribute("document_number", String, "Document number")
+	Attribute("version", Int, "Version")
+	Attribute("state", String, "State")
+	Attribute("template_type", String, "The type of the template")
+	Attribute("name", String, "Name")
+	Attribute("description", String, "Description")
+	Attribute("created_by", String, "Created by")
+	Attribute("created_at", String, "Created at")
+	Attribute("updated_at", String, "Updated at")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
+
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
+})
+
 // Contract Workflow Engine Service  (/contract/...)
 var _ = Service("ContractWorkflowEngine", func() {
 	Description("Contract Workflow Engine APIs (/contract/...)")
@@ -877,6 +899,28 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			POST("/contract/audit")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// GET /contract/templates
+	Method("retrieve_templates", func() {
+		Description("fetch approved templates")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+		})
+
+		Payload(ApprovedContractTemplateRetrieveRequest)
+		Result(ArrayOf(ApprovedContractTemplateRetrieveResponse))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/templates")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

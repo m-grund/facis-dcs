@@ -7,8 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
@@ -16,6 +15,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -24,6 +24,7 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 	"digital-contracting-service/internal/middleware"
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 
 	"github.com/jmoiron/sqlx"
@@ -843,4 +844,44 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 	}
 
 	return history, nil
+}
+
+// retrieve templates
+func (s *contractWorkflowEnginesrvc) RetrieveTemplates(ctx context.Context, req *contractworkflowengine.ApprovedContractTemplateRetrieveRequest) (res []*contractworkflowengine.ApprovedContractTemplateRetrieveResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := contracttemplate2.GetAllApprovedTemplatesQry{
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	queryHandler := contracttemplate2.GetAllApprovedTemplateHandler{
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+	result, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	var contractTemplates []*contractworkflowengine.ApprovedContractTemplateRetrieveResponse
+	for _, item := range result {
+		contractTemplates = append(contractTemplates, &contractworkflowengine.ApprovedContractTemplateRetrieveResponse{
+			Did:            item.DID,
+			DocumentNumber: item.DocumentNumber,
+			Version:        item.Version,
+			State:          item.State.String(),
+			TemplateType:   item.TemplateType.String(),
+			Name:           item.Name,
+			Description:    item.Description,
+			CreatedBy:      item.CreatedBy,
+			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
+			Responsible:    item.Responsible,
+		})
+	}
+
+	return contractTemplates, nil
 }

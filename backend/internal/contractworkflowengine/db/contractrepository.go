@@ -54,6 +54,8 @@ type Contract struct {
 	Description     *string        `db:"description"`
 	Responsible     *Responsible   `db:"responsible"`
 	ContractData    *datatype.JSON `db:"contract_data"`
+	TemplateDID     string         `db:"template_did"`
+	TemplateVersion int            `db:"template_version"`
 }
 
 type ContractMetadata struct {
@@ -70,6 +72,8 @@ type ContractMetadata struct {
 	Name            *string      `db:"name"`
 	Responsible     *Responsible `db:"responsible"`
 	Description     *string      `db:"description"`
+	TemplateDID     string       `db:"template_did"`
+	TemplateVersion int          `db:"template_version"`
 }
 
 type ContractProcessData struct {
@@ -114,6 +118,8 @@ type ContractHistory struct {
 	Description     *string        `db:"description"`
 	Responsible     *Responsible   `db:"responsible"`
 	ContractData    *datatype.JSON `db:"contract_data"`
+	TemplateDID     string         `db:"template_did"`
+	TemplateVersion int            `db:"template_version"`
 }
 
 type SearchValues struct {
