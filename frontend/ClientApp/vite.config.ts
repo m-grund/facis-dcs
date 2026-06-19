@@ -6,6 +6,9 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), 'DCS_')
+
+  console.log('loaded Env:\n', env)
+
   const basePath = env.DCS_UI_PATH || '/ui/'
 
   const uiRedirectPlugin: Plugin = {
@@ -53,6 +56,7 @@ export default defineConfig(({ mode, command }) => {
       },
     },
     server: {
+      port: Number(env.DCS_FRONTEND_PORT) || 5173,
       proxy: {
         '/api': {
           target: env.DCS_API_TARGET || 'http://localhost:8991',

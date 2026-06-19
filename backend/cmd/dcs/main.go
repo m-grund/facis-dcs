@@ -440,11 +440,16 @@ func main() {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(ctx)
 
+	address := "http://0.0.0.0:8991"
+	if os.Getenv("DCS_BACKEND_PORT") != "" {
+		address = fmt.Sprintf("http://0.0.0.0:%s", os.Getenv("DCS_BACKEND_PORT"))
+	}
+
 	// Start the servers and send errors (if any) to the error channel.
 	switch *hostF {
 	case "local":
 		{
-			addr := "http://0.0.0.0:8991"
+			addr := address
 			u, err := url.Parse(addr)
 			if err != nil {
 				log.Fatalf(ctx, err, "invalid URL %#v\n", addr)
