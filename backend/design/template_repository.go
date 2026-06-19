@@ -179,8 +179,9 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("outdated", Boolean, "Shows if this contract template is deprecated")
 
-	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version", "outdated")
 })
 
 var ReviewTaskItem = Type("ReviewTaskItem", func() {

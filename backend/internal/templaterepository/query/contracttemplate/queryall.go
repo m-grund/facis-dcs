@@ -42,6 +42,7 @@ type MetadataItem struct {
 	UpdatedAt      time.Time
 	*db.Responsible
 	MetaData datatype.JSON
+	Outdated bool
 }
 
 type ReviewTaskItem struct {
@@ -147,6 +148,7 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			CreatedAt:      data.CreatedAt,
 			UpdatedAt:      data.UpdatedAt,
 			Responsible:    data.Responsible,
+			Outdated:       data.Outdated,
 		}
 		contractTemplatesItems = append(contractTemplatesItems, metadata)
 

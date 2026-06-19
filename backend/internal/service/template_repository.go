@@ -438,6 +438,7 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
 			Responsible:    item.Responsible,
+			Outdated:       item.Outdated,
 		})
 	}
 

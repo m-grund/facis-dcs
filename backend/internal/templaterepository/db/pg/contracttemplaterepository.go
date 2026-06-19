@@ -124,10 +124,15 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at,
-               updated_at, responsible, base_template
-        FROM contract_templates
-    `
+		SELECT did, document_number, version, state, template_type, name, description, created_by, created_at,
+			   updated_at, responsible, base_template,
+			   CASE
+				   WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN FALSE
+				   ELSE version <> MAX(version) FILTER (WHERE state IN ('REGISTERED', 'PUBLISHED'))
+												 OVER (PARTITION BY document_number)
+			   END AS outdated
+		FROM contract_templates
+	`
 
 	var params []any
 	if pagination.Limit > 0 {
