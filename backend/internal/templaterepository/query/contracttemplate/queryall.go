@@ -42,7 +42,7 @@ type MetadataItem struct {
 	UpdatedAt      time.Time
 	*db.Responsible
 	MetaData datatype.JSON
-	Outdated bool
+	Outdated *bool
 }
 
 type ReviewTaskItem struct {

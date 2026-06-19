@@ -89,14 +89,14 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 	statement := `
         INSERT INTO contract_templates (
             did, document_number, created_by, state, name,
-            description, template_data, template_type
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            description, template_data, template_type, base_template
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING created_at
     `
 	var createdAt time.Time
 	err := tx.GetContext(ctx, &createdAt, statement,
 		data.DID, data.DocumentNumber, data.CreatedBy, data.State, data.Name,
-		data.Description, data.TemplateData, data.TemplateType,
+		data.Description, data.TemplateData, data.TemplateType, data.DID,
 	)
 	if err != nil {
 		return nil, err
@@ -128,11 +128,16 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 			   updated_at, responsible, base_template,
 			   CASE
 				   WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN FALSE
-				   ELSE version <> MAX(version) FILTER (WHERE state IN ('REGISTERED', 'PUBLISHED'))
-												 OVER (PARTITION BY document_number)
+				   ELSE outdated
 			   END AS outdated
-		FROM contract_templates
-	`
+		FROM (
+			SELECT did, document_number, version, state, template_type, name, description, created_by, created_at,
+				   updated_at, responsible, base_template,
+				   version <> MAX(version) FILTER (WHERE state IN ('REGISTERED', 'PUBLISHED'))
+											OVER (PARTITION BY base_template) AS outdated
+			FROM contract_templates
+		) sub
+`
 
 	var params []any
 	if pagination.Limit > 0 {

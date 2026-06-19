@@ -70,7 +70,7 @@ type ContractTemplateMetadata struct {
 	Responsible    *Responsible `db:"responsible"`
 	UpdatedAt      time.Time    `db:"updated_at"`
 	BaseTemplate   *string      `db:"base_template"`
-	Outdated       bool         `db:"outdated"`
+	Outdated       *bool        `db:"outdated"`
 }
 
 type ContractTemplateProcessData struct {
