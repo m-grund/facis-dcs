@@ -479,6 +479,10 @@ dcs:ContractObject a rdfs:Class ;
   rdfs:label "Contract Object"@en ;
   rdfs:comment "A lifecycle-aware digital object containing contract content, metadata, parties, semantic conditions, and evidence."@en .
 
+dcs:ContractField a rdfs:Class ;
+  rdfs:label "Contract Field"@en ;
+  rdfs:comment "A value-free reference and binding node that identifies a property on a contract data object for policies, placeholders, and UI mapping."@en .
+
 dcs:ContractVersion a rdfs:Class ;
   rdfs:label "Contract Version"@en ;
   rdfs:comment "A version of a contract created by generation, adjustment, renewal, or correction."@en .
@@ -641,6 +645,16 @@ dcs:CurrencyCode a rdfs:Class ;
   rdfs:subClassOf dcs:VocabularyTerm ;
   rdfs:label "ISO 4217 Currency Code"@en .
 
+dcs:CountryReference a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Country Taxonomy Reference"@en ;
+  rdfs:comment "A reference to a country concept in the DCS taxonomy."@en .
+
+dcs:CurrencyReference a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Currency Taxonomy Reference"@en ;
+  rdfs:comment "A reference to a currency concept in the DCS taxonomy."@en .
+
 dcs:SignatureLevelCode a rdfs:Class ;
   rdfs:subClassOf dcs:VocabularyTerm ;
   rdfs:label "eIDAS Signature Level Code"@en .
@@ -740,6 +754,11 @@ dcs:templateData a rdf:Property ;
 
 dcs:contractData a rdf:Property ;
   rdfs:label "Contract Data"@en .
+
+dcs:contractFields a rdf:Property ;
+  rdfs:label "Contract Fields"@en ;
+  rdfs:domain dcs:Contract ;
+  rdfs:range dcs:ContractField .
 
 dcs:documentOutline a rdf:Property ;
   rdfs:label "Document Outline"@en .
@@ -1176,6 +1195,14 @@ dcs:path a rdf:Property ;
   rdfs:label "Path"@en ;
   rdfs:range xsd:string .
 
+dcs:sourceObject a rdf:Property ;
+  rdfs:label "Source Object"@en ;
+  rdfs:domain dcs:ContractField .
+
+dcs:dataType a rdf:Property ;
+  rdfs:label "Data Type"@en ;
+  rdfs:domain dcs:ContractField .
+
 dcs:hasApproval a rdf:Property ;
   rdfs:label "Has Approval"@en ;
   rdfs:range dcs:Approval .
@@ -1334,6 +1361,7 @@ dcst:enforcement-contract-update a dcs:PolicyEnforcementPoint ;
   rdfs:label "Contract Update Enforcement Point"@en .
 
 dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
+  dcs:valueType dcs:CountryReference ;
   dcs:format "iso-3166-1-alpha-3" ;
   dcs:pattern "^[A-Z]{3}$" ;
   dcs:allowedValuesRef "ISO 3166-1 alpha-3" ;
@@ -1342,6 +1370,7 @@ dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
   rdfs:label "ISO 3166-1 alpha-3 Country Constraint"@en .
 
 dcst:constraint-iso4217-currency a dcs:ValueConstraint ;
+  dcs:valueType dcs:CurrencyReference ;
   dcs:format "iso-4217" ;
   dcs:pattern "^[A-Z]{3}$" ;
   dcs:allowedValuesRef "ISO 4217" ;

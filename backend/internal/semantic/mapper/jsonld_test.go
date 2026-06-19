@@ -482,10 +482,27 @@ func TestBuildContractJSONLDMaterializesCanonicalConditionValues(t *testing.T) {
 		map[string]any{
 			"@id":           "did:web:example:contract:1#customer",
 			"@type":         "dcs:CompanyParty",
-			"dcs:legalName": "A",
-			"dcs:country":   "DEU",
+			"dcs:legalName": map[string]any{"@type": "xsd:string", "@value": "A"},
+			"dcs:country":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-DEU"},
+			"dcs:role":      map[string]any{"@id": "dcs:Customer"},
 		},
 	}, env["dcs:contractData"])
+	require.Equal(t, []any{
+		map[string]any{
+			"@id":              "did:web:example:contract:1#field-customer-legalName",
+			"@type":            "dcs:ContractField",
+			"dcs:dataType":     map[string]any{"@id": "xsd:string"},
+			"dcs:sourceObject": map[string]any{"@id": "did:web:example:contract:1#customer"},
+			"dcs:path":         "dcs:legalName",
+		},
+		map[string]any{
+			"@id":              "did:web:example:contract:1#field-customer-country",
+			"@type":            "dcs:ContractField",
+			"dcs:dataType":     map[string]any{"@id": "dcs:CountryReference"},
+			"dcs:sourceObject": map[string]any{"@id": "did:web:example:contract:1#customer"},
+			"dcs:path":         "dcs:country",
+		},
+	}, env["dcs:contractFields"])
 }
 
 func jsonRoundTrip(value any) error {

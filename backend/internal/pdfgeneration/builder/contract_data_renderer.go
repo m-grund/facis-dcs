@@ -64,7 +64,8 @@ type templateDataJSON struct {
 type canonicalEnvelopeJSON struct {
 	DocumentStructure       canonicalDocumentStructureJSON `json:"dcs:documentStructure"`
 	Metadata                canonicalMetadataJSON          `json:"dcs:metadata"`
-	ContractData            []canonicalRequirementJSON     `json:"dcs:contractData"`
+	ContractData            []json.RawMessage              `json:"dcs:contractData"`
+	ContractFields          []canonicalContractFieldJSON   `json:"dcs:contractFields"`
 	SemanticConditionValues []conditionValueJSON           `json:"semanticConditionValues"`
 }
 
@@ -121,6 +122,12 @@ type canonicalFieldJSON struct {
 	ID            string `json:"@id"`
 	ParameterName string `json:"dcs:parameterName"`
 	SemanticPath  string `json:"dcs:semanticPath"`
+}
+
+type canonicalContractFieldJSON struct {
+	ID           string             `json:"@id"`
+	SourceObject canonicalReference `json:"dcs:sourceObject"`
+	Path         string             `json:"dcs:path"`
 }
 
 // ---- Render context ----
@@ -376,7 +383,31 @@ func renderCanonicalEnvelope(f *fpdf.Fpdf, envelope canonicalEnvelopeJSON) bool 
 
 func canonicalPlaceholderValues(envelope canonicalEnvelopeJSON) map[string]map[string]json.RawMessage {
 	result := map[string]map[string]json.RawMessage{}
-	for _, requirement := range envelope.ContractData {
+	objectsByID := map[string]map[string]json.RawMessage{}
+	for _, rawObject := range envelope.ContractData {
+		var object map[string]json.RawMessage
+		if json.Unmarshal(rawObject, &object) != nil {
+			continue
+		}
+		var id string
+		if json.Unmarshal(object["@id"], &id) == nil && id != "" {
+			objectsByID[id] = object
+		}
+	}
+	for _, field := range envelope.ContractFields {
+		object := objectsByID[field.SourceObject.ID]
+		rawValue := object[field.Path]
+		if len(rawValue) == 0 {
+			continue
+		}
+		result[field.ID] = map[string]json.RawMessage{"": canonicalDisplayValue(rawValue)}
+	}
+
+	for _, rawRequirement := range envelope.ContractData {
+		var requirement canonicalRequirementJSON
+		if json.Unmarshal(rawRequirement, &requirement) != nil {
+			continue
+		}
 		if requirement.Type != "dcs:DataRequirement" {
 			continue
 		}
@@ -396,6 +427,28 @@ func canonicalPlaceholderValues(envelope canonicalEnvelopeJSON) map[string]map[s
 		}
 	}
 	return result
+}
+
+func canonicalDisplayValue(raw json.RawMessage) json.RawMessage {
+	var resource canonicalReference
+	if json.Unmarshal(raw, &resource) == nil && resource.ID != "" {
+		local := resource.ID
+		if index := strings.LastIndexAny(local, "#/"); index >= 0 {
+			local = local[index+1:]
+		}
+		if index := strings.LastIndex(local, "-"); index >= 0 {
+			local = local[index+1:]
+		}
+		encoded, _ := json.Marshal(local)
+		return encoded
+	}
+	var literal struct {
+		Value json.RawMessage `json:"@value"`
+	}
+	if json.Unmarshal(raw, &literal) == nil && len(literal.Value) > 0 {
+		return literal.Value
+	}
+	return raw
 }
 
 func canonicalBlockID(id string) string {
@@ -439,6 +492,9 @@ func canonicalClauseText(
 		}
 		if json.Unmarshal(segment, &placeholder) == nil && placeholder.Type == "dcs:Placeholder" {
 			rawValue := placeholderValues[placeholder.BindsTo.ID][blockID]
+			if len(rawValue) == 0 {
+				rawValue = placeholderValues[placeholder.BindsTo.ID][""]
+			}
 			if len(rawValue) == 0 || string(rawValue) == "null" {
 				result.WriteString(defaultPlaceholderText)
 				continue

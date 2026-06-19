@@ -471,6 +471,7 @@ func parseOntologyValueConstraint(statement string, catalogOptions map[string]va
 	constraint := &valueConstraint{
 		Format:           ontologyString(statement, "dcs:format"),
 		Pattern:          ontologyString(statement, "dcs:pattern"),
+		ValueType:        expandOntologyResource(ontologyResource(statement, "dcs:valueType")),
 		AllowedValues:    allowedValues,
 		ValueOptions:     valueOptions,
 		AllowedValuesRef: ontologyString(statement, "dcs:allowedValuesRef"),
@@ -492,6 +493,7 @@ func parseOntologyValueOptions(statements []string) map[string]valueOption {
 			Value:  value,
 			Label:  ontologyString(statement, "skos:prefLabel"),
 			Symbol: ontologyString(statement, "dcs:valueSymbol"),
+			IRI:    expandOntologyResource(ontologySubject(statement)),
 		}
 	}
 	return options

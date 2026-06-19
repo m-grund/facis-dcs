@@ -68,6 +68,21 @@ The architecture follows the SRS:
 
 Runtime rule: JSON-LD is the source of record for semantic payloads. RDF export is generated for interoperability and SHACL validation. No OWL inference is required at runtime.
 
+### Contract JSON-LD layer responsibilities
+
+| Layer | Responsibility |
+| --- | --- |
+| `dcs:contractData` | Fachmodell and sole source of truth for concrete contractual values. |
+| `dcs:contractFields` | Value-free reference model for policy operands, placeholder bindings, and UI mapping; resolves through `dcs:sourceObject` plus `dcs:path`. |
+| `dcs:documentStructure` | Presentation model containing hierarchy, text fragments, and placeholders bound to contract fields. |
+| `dcs:policies` | Normative ODRL rule model referencing existing contract fields. |
+| `dcs:metadata` | Administrative lifecycle, provenance, identity, and template-origin information. |
+
+Taxonomy-backed values are IRIs in `contractData`; primitive values are typed
+JSON-LD literals. Renderers resolve document placeholders through
+`contractFields` into `contractData`, so the presentation model does not
+duplicate fachliche values.
+
 Architecture diagram descriptions:
 
 ```text

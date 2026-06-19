@@ -102,6 +102,15 @@ export interface DcsDataRequirement {
   'dcs:fields': DcsRequirementField[]
 }
 
+export interface DcsContractField {
+  '@id': string
+  '@type': 'dcs:ContractField'
+  'dcs:dataType': JsonLdReference
+  'dcs:sourceObject': JsonLdReference
+  'dcs:path': string
+  'dcs:domainField'?: JsonLdReference
+}
+
 export interface OdrlConstraint {
   '@type': 'odrl:Constraint'
   'odrl:leftOperand': JsonLdReference
@@ -142,6 +151,7 @@ export interface DcsTemplateData extends DcsDocumentData {
 export interface DcsContractData extends DcsDocumentData {
   '@type': 'dcs:Contract'
   'dcs:metadata': DcsContractMetadata | DcsTemplateMetadata
+  'dcs:contractFields'?: DcsContractField[]
   semanticConditionValues?: {
     blockId: string
     conditionId: string

@@ -44,20 +44,20 @@ func TestCanonicalClauseTextResolvesSubmittedSemanticValue(t *testing.T) {
 }
 
 func TestCanonicalPlaceholderValuesMatchesSemanticPathParameterName(t *testing.T) {
-	envelope := canonicalEnvelopeJSON{
-		ContractData: []canonicalRequirementJSON{
+	requirement, err := json.Marshal(canonicalRequirementJSON{
+		Type:        "dcs:DataRequirement",
+		ConditionID: "customer",
+		Fields: []canonicalFieldJSON{
 			{
-				Type:        "dcs:DataRequirement",
-				ConditionID: "customer",
-				Fields: []canonicalFieldJSON{
-					{
-						ID:            "did:example:contract#field-customer-legalName",
-						ParameterName: "legalName",
-						SemanticPath:  "company.legalName",
-					},
-				},
+				ID:            "did:example:contract#field-customer-legalName",
+				ParameterName: "legalName",
+				SemanticPath:  "company.legalName",
 			},
 		},
+	})
+	require.NoError(t, err)
+	envelope := canonicalEnvelopeJSON{
+		ContractData: []json.RawMessage{requirement},
 		SemanticConditionValues: []conditionValueJSON{
 			{
 				BlockID:        "clause",
@@ -70,6 +70,33 @@ func TestCanonicalPlaceholderValuesMatchesSemanticPathParameterName(t *testing.T
 
 	values := canonicalPlaceholderValues(envelope)
 	require.JSONEq(t, `"A"`, string(values["did:example:contract#field-customer-legalName"]["clause"]))
+}
+
+func TestCanonicalPlaceholderValuesResolveFinalContractData(t *testing.T) {
+	provider := json.RawMessage(`{
+		"@id": "did:example:contract#provider",
+		"dcs:legalName": {"@type": "xsd:string", "@value": "Provider AG"},
+		"dcs:country": {"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-AUT"}
+	}`)
+	envelope := canonicalEnvelopeJSON{
+		ContractData: []json.RawMessage{provider},
+		ContractFields: []canonicalContractFieldJSON{
+			{
+				ID:           "did:example:contract#field-provider-legalName",
+				SourceObject: canonicalReference{ID: "did:example:contract#provider"},
+				Path:         "dcs:legalName",
+			},
+			{
+				ID:           "did:example:contract#field-provider-country",
+				SourceObject: canonicalReference{ID: "did:example:contract#provider"},
+				Path:         "dcs:country",
+			},
+		},
+	}
+
+	values := canonicalPlaceholderValues(envelope)
+	require.JSONEq(t, `"Provider AG"`, string(values["did:example:contract#field-provider-legalName"][""]))
+	require.JSONEq(t, `"AUT"`, string(values["did:example:contract#field-provider-country"][""]))
 }
 
 func TestRenderCanonicalEnvelopeRecognizesDocumentStructure(t *testing.T) {

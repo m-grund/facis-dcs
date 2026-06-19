@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/validation"
 	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 )
@@ -117,9 +118,14 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		inner["@id"] = contract.DID
 		inner["@type"] = "dcs:Contract"
 		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildContractMetadata(contract, sourceTemplate, profile))
-		if err := materializeCanonicalContractData(inner, stableBaseID(contract.DID)); err != nil {
+		if err := materializeCanonicalContractData(
+			inner,
+			stableBaseID(contract.DID),
+			isFinalContractState(contract.State),
+		); err != nil {
 			return nil, fmt.Errorf("materialize canonical contract data: %w", err)
 		}
+		cleanupPublishedContractEnvelope(inner)
 		return inner, nil
 	}
 
@@ -146,7 +152,7 @@ func isCanonicalJSONLDEnvelope(value map[string]any) bool {
 	return hasDocumentStructure
 }
 
-func materializeCanonicalContractData(data map[string]any, baseID string) error {
+func materializeCanonicalContractData(data map[string]any, baseID string, requireComplete bool) error {
 	rawRequirements, _ := asArray(data["dcs:contractData"])
 	rawValues, _ := asArray(data["semanticConditionValues"])
 
@@ -164,6 +170,9 @@ func materializeCanonicalContractData(data map[string]any, baseID string) error 
 		valuesByCondition[conditionID] = append(valuesByCondition[conditionID], value)
 	}
 
+	valuesByFieldID := map[string]any{}
+	domainFieldByFieldID := map[string]string{}
+	contractFields := make([]any, 0)
 	materialized := make([]any, 0, len(rawRequirements))
 	for _, rawRequirement := range rawRequirements {
 		requirement, ok := rawRequirement.(map[string]any)
@@ -175,12 +184,153 @@ func materializeCanonicalContractData(data map[string]any, baseID string) error 
 		if err != nil {
 			return err
 		}
+		fields, err := materializeContractFields(
+			requirement,
+			item,
+			valuesByCondition,
+			valuesByFieldID,
+			domainFieldByFieldID,
+		)
+		if err != nil {
+			return err
+		}
+		contractFields = append(contractFields, fields...)
 		materialized = append(materialized, item)
 	}
 
+	if err := validateDocumentPlaceholderBindings(data, valuesByFieldID, requireComplete); err != nil {
+		return err
+	}
+	if requireComplete {
+		if err := validateMaterializedPolicyOperands(data["dcs:policies"], valuesByFieldID); err != nil {
+			return err
+		}
+	}
+	typePolicyOperands(data["dcs:policies"], domainFieldByFieldID)
 	data["dcs:contractData"] = materialized
+	data["dcs:contractFields"] = contractFields
 	delete(data, "semanticConditionValues")
 	return nil
+}
+
+func validateMaterializedPolicyOperands(policies any, valuesByFieldID map[string]any) error {
+	rawPolicies, _ := asArray(policies)
+	for index, rawPolicy := range rawPolicies {
+		policy, ok := rawPolicy.(map[string]any)
+		if !ok {
+			continue
+		}
+		constraint, _ := policy["odrl:constraint"].(map[string]any)
+		leftOperand, _ := constraint["odrl:leftOperand"].(map[string]any)
+		fieldID, _ := leftOperand["@id"].(string)
+		if strings.TrimSpace(fieldID) == "" {
+			continue
+		}
+		if _, found := valuesByFieldID[fieldID]; !found {
+			return fmt.Errorf("final contract policy %d references non-materialized field %q", index, fieldID)
+		}
+	}
+	return nil
+}
+
+func materializeContractFields(
+	requirement map[string]any,
+	sourceObject map[string]any,
+	valuesByCondition map[string][]map[string]any,
+	valuesByFieldID map[string]any,
+	domainFieldByFieldID map[string]string,
+) ([]any, error) {
+	conditionID, _ := requirement["dcs:conditionId"].(string)
+	sourceObjectID, _ := sourceObject["@id"].(string)
+	fields, _ := asArray(requirement["dcs:fields"])
+	result := make([]any, 0, len(fields))
+	for _, rawField := range fields {
+		field, ok := rawField.(map[string]any)
+		if !ok {
+			continue
+		}
+		fieldID, _ := field["@id"].(string)
+		parameterName, _ := field["dcs:parameterName"].(string)
+		semanticPath, _ := field["dcs:semanticPath"].(string)
+		value, found, err := canonicalFieldValue(valuesByCondition[conditionID], parameterName, semanticPath)
+		if err != nil {
+			return nil, fmt.Errorf("condition %q field %q: %w", conditionID, parameterName, err)
+		}
+		if found && strings.TrimSpace(fieldID) != "" {
+			valuesByFieldID[fieldID] = value
+			domainFieldID := semanticPath
+			if domainField, ok := field["dcs:domainField"].(map[string]any); ok {
+				if id, _ := domainField["@id"].(string); id != "" {
+					domainFieldID = id
+					domainFieldByFieldID[fieldID] = id
+				}
+			}
+			contractField := map[string]any{
+				"@id":              fieldID,
+				"@type":            "dcs:ContractField",
+				"dcs:sourceObject": map[string]any{"@id": sourceObjectID},
+				"dcs:path":         canonicalFieldProperty(parameterName, semanticPath),
+			}
+			if dataType := validation.SemanticDataType(domainFieldID); dataType != "" {
+				contractField["dcs:dataType"] = map[string]any{"@id": dataType}
+			}
+			if domainField, ok := field["dcs:domainField"].(map[string]any); ok {
+				contractField["dcs:domainField"] = domainField
+			}
+			result = append(result, contractField)
+		}
+	}
+	return result, nil
+}
+
+func validateDocumentPlaceholderBindings(
+	data map[string]any,
+	valuesByFieldID map[string]any,
+	requireComplete bool,
+) error {
+	structure, _ := data["dcs:documentStructure"].(map[string]any)
+	blocks, _ := asArray(structure["dcs:blocks"])
+	for _, rawBlock := range blocks {
+		block, ok := rawBlock.(map[string]any)
+		if !ok {
+			continue
+		}
+		content, ok := block["dcs:content"].(map[string]any)
+		if !ok {
+			continue
+		}
+		segments, ok := asArray(content["@list"])
+		if !ok {
+			continue
+		}
+		for _, rawSegment := range segments {
+			placeholder, ok := rawSegment.(map[string]any)
+			if !ok || placeholder["@type"] != "dcs:Placeholder" {
+				continue
+			}
+			bindsTo, _ := placeholder["dcs:bindsTo"].(map[string]any)
+			fieldID, _ := bindsTo["@id"].(string)
+			_, found := valuesByFieldID[fieldID]
+			if !found {
+				if requireComplete {
+					return fmt.Errorf("final contract placeholder bound to %q has no value", fieldID)
+				}
+			}
+			if requireComplete {
+				delete(placeholder, "dcs:token")
+			}
+		}
+	}
+	return nil
+}
+
+func isFinalContractState(state string) bool {
+	switch state {
+	case "APPROVED", "SIGNED", "EXECUTED", "TERMINATED", "EXPIRED", "ARCHIVED":
+		return true
+	default:
+		return false
+	}
 }
 
 func materializeDataRequirement(
@@ -207,6 +357,11 @@ func materializeDataRequirement(
 		"@id":   baseID + "#" + slugify(entityID),
 		"@type": entityType,
 	}
+	if strings.TrimSpace(entityRole) != "" {
+		item["dcs:role"] = map[string]any{
+			"@id": "dcs:" + upperFirst(slugifyCamel(entityRole)),
+		}
+	}
 
 	fields, _ := asArray(requirement["dcs:fields"])
 	for _, rawField := range fields {
@@ -223,7 +378,13 @@ func materializeDataRequirement(
 		if !found {
 			continue
 		}
-		item[canonicalFieldProperty(parameterName, semanticPath)] = value
+		domainFieldID := semanticPath
+		if domainField, ok := field["dcs:domainField"].(map[string]any); ok {
+			if id, _ := domainField["@id"].(string); id != "" {
+				domainFieldID = id
+			}
+		}
+		item[canonicalFieldProperty(parameterName, semanticPath)] = validation.TypeODRLOperand(domainFieldID, value)
 	}
 	return item, nil
 }
@@ -259,6 +420,69 @@ func canonicalFieldProperty(parameterName string, semanticPath string) string {
 		leaf = semanticPath[index+1:]
 	}
 	return "dcs:" + lowerFirst(slugifyCamel(leaf))
+}
+
+func typePolicyOperands(policies any, domainFieldByFieldID map[string]string) {
+	rawPolicies, _ := asArray(policies)
+	for _, rawPolicy := range rawPolicies {
+		policy, ok := rawPolicy.(map[string]any)
+		if !ok {
+			continue
+		}
+		constraint, _ := policy["odrl:constraint"].(map[string]any)
+		leftOperand, _ := constraint["odrl:leftOperand"].(map[string]any)
+		fieldID, _ := leftOperand["@id"].(string)
+		domainField := domainFieldByFieldID[fieldID]
+		rawRightOperand, exists := constraint["odrl:rightOperand"]
+		if !exists {
+			continue
+		}
+		if values, ok := asArray(rawRightOperand); ok {
+			typedValues := make([]any, len(values))
+			for index, value := range values {
+				typedValues[index] = validation.TypeODRLOperand(domainField, unwrapJSONLDOperand(value))
+			}
+			constraint["odrl:rightOperand"] = typedValues
+			continue
+		}
+		constraint["odrl:rightOperand"] = validation.TypeODRLOperand(
+			domainField,
+			unwrapJSONLDOperand(rawRightOperand),
+		)
+	}
+}
+
+func unwrapJSONLDOperand(value any) any {
+	if literal, ok := value.(map[string]any); ok {
+		if rawValue, exists := literal["@value"]; exists {
+			return rawValue
+		}
+		if id, exists := literal["@id"]; exists {
+			return id
+		}
+	}
+	return value
+}
+
+func cleanupPublishedContractEnvelope(data map[string]any) {
+	allowed := map[string]bool{
+		"@context":              true,
+		"@id":                   true,
+		"@type":                 true,
+		"dcs:metadata":          true,
+		"dcs:contractData":      true,
+		"dcs:contractFields":    true,
+		"dcs:documentStructure": true,
+		"dcs:policies":          true,
+	}
+	for key := range data {
+		if !allowed[key] {
+			delete(data, key)
+		}
+	}
+	if metadata, ok := data["dcs:metadata"].(map[string]any); ok {
+		delete(metadata, "dcs:templateType")
+	}
 }
 
 func mergeMetadata(existing any, authoritative map[string]any) map[string]any {
@@ -315,7 +539,7 @@ func buildContractMetadata(contract contractdb.Contract, sourceTemplate template
 		"dcs:createdBy":             contract.CreatedBy,
 		"dcs:createdAt":             contract.CreatedAt.UTC().Format(time.RFC3339),
 		"dcs:updatedAt":             contract.UpdatedAt.UTC().Format(time.RFC3339),
-		"dcs:derivedFromTemplate":   sourceTemplate.DID,
+		"dcs:derivedFromTemplate":   map[string]any{"@id": sourceTemplate.DID},
 		"dcs:sourceTemplateVersion": sourceTemplate.Version,
 		"dcs:semanticProfile":       buildSemanticProfile(profile),
 	}
@@ -467,7 +691,7 @@ func buildPolicies(baseID string, inner map[string]any) []any {
 				continue
 			}
 			parameterName, _ := param["parameterName"].(string)
-			parameterType, _ := param["type"].(string)
+			semanticPath, _ := param["semanticPath"].(string)
 			operators, _ := asArray(param["operators"])
 			for _, rawOperator := range operators {
 				operate, targets := parseOperator(rawOperator)
@@ -477,7 +701,10 @@ func buildPolicies(baseID string, inner map[string]any) []any {
 				}
 				typedTargets := make([]any, 0, len(targets))
 				for _, target := range targets {
-					typedTargets = append(typedTargets, typedRightOperand(target, parameterType))
+					typedTargets = append(
+						typedTargets,
+						validation.TypeODRLOperand(semanticPath, unwrapTypedOperand(target)),
+					)
 				}
 				rightOperand := any(typedTargets)
 				if len(targets) == 1 && !isSetOperator(operate) {

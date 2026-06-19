@@ -25,6 +25,7 @@ type domainField struct {
 type valueConstraint struct {
 	Format           string
 	Pattern          string
+	ValueType        string
 	AllowedValues    []string
 	ValueOptions     []valueOption
 	AllowedValuesRef string
@@ -37,6 +38,7 @@ type valueOption struct {
 	Value  string
 	Label  string
 	Symbol string
+	IRI    string
 }
 
 type blockDefinition struct {
@@ -51,6 +53,9 @@ func (constraint *valueConstraint) asMap() map[string]any {
 	}
 	if constraint.Pattern != "" {
 		result["pattern"] = constraint.Pattern
+	}
+	if constraint.ValueType != "" {
+		result["valueType"] = constraint.ValueType
 	}
 	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
 		values := make([]any, len(allowedValues))
@@ -71,6 +76,9 @@ func (constraint *valueConstraint) asMap() map[string]any {
 			}
 			if option.Symbol != "" {
 				item["symbol"] = option.Symbol
+			}
+			if option.IRI != "" {
+				item["iri"] = option.IRI
 			}
 			options = append(options, item)
 		}
