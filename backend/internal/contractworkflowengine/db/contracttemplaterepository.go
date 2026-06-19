@@ -26,6 +26,7 @@ type ContractTemplateMetadata struct {
 	CreatedAt      time.Time    `db:"created_at"`
 	Responsible    *Responsible `db:"responsible"`
 	UpdatedAt      time.Time    `db:"updated_at"`
+	BaseTemplate   *string      `db:"base_template"`
 }
 
 type ContractTemplateRepo interface {

@@ -21,21 +21,26 @@ type PostgresContractTemplateRepo struct {
 
 func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx.Tx, did string, copyDID string) (int, error) {
 	statement := `
-        INSERT INTO contract_templates 
-            (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible, template_data)
-        SELECT 
-            $1,
-            document_number,
-            CASE 
-                WHEN state IN ('REGISTERED', 'PUBLISHED') THEN version + 1
-                ELSE 1
-            END,
-            'DRAFT', template_type, name, description, created_by, NOW(), NOW(), 
-            responsible, template_data
-        FROM contract_templates 
-        WHERE did = $2
-        RETURNING version
+				INSERT INTO contract_templates
+			(did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at,
+			 responsible, template_data, base_template)
+		SELECT
+			$1,
+			document_number,
+			CASE
+				WHEN state IN ('REGISTERED', 'PUBLISHED') THEN version + 1
+				ELSE 1
+			END,
+			'DRAFT', template_type, name, description, created_by, NOW(), NOW(),
+			responsible, template_data,
+			CASE
+				WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN NULL
+				WHEN base_template IS NOT NULL THEN base_template
+				ELSE did
+			END
+		FROM contract_templates
+		WHERE did = $2
+		RETURNING version
     `
 	var newVersion int
 	err := tx.QueryRowContext(ctx, statement, copyDID, did).Scan(&newVersion)
@@ -52,10 +57,10 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 	statement := `
         INSERT INTO contract_templates_history 
             (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible, template_data)
+             responsible, template_data, base_template)
         SELECT 
             did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-            responsible, template_data
+            responsible, template_data, base_template
         FROM contract_templates 
         WHERE did = $1
     `
@@ -66,7 +71,7 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 func (r *PostgresContractTemplateRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractTemplateHistory, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible
+               created_by, created_at, updated_at, template_data, template_type, responsible, base_template
         FROM contract_templates_history WHERE did = $1
     `
 	var ct []db.ContractTemplateHistory
@@ -102,7 +107,8 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplate, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible
+               created_by, created_at, updated_at, template_data, template_type, responsible,
+               base_template
         FROM contract_templates WHERE did = $1
     `
 	var ct db.ContractTemplate
@@ -118,7 +124,8 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible
+        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at,
+               updated_at, responsible, base_template
         FROM contract_templates
     `
 
@@ -139,7 +146,8 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible
+        SELECT did, document_number, version, state, name, template_type, description,
+               created_by, created_at, updated_at, responsible, base_template
         FROM contract_templates
     `
 

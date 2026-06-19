@@ -54,6 +54,7 @@ type ContractTemplate struct {
 	UpdatedAt      time.Time      `db:"updated_at"`
 	Responsible    *Responsible   `db:"responsible"`
 	TemplateData   *datatype.JSON `db:"template_data"`
+	BaseTemplate   *string        `db:"base_template"`
 }
 
 type ContractTemplateMetadata struct {
@@ -68,6 +69,7 @@ type ContractTemplateMetadata struct {
 	CreatedAt      time.Time    `db:"created_at"`
 	Responsible    *Responsible `db:"responsible"`
 	UpdatedAt      time.Time    `db:"updated_at"`
+	BaseTemplate   *string      `db:"base_template"`
 }
 
 type ContractTemplateProcessData struct {
@@ -104,6 +106,7 @@ type ContractTemplateHistory struct {
 	UpdatedAt      time.Time      `db:"updated_at"`
 	Responsible    *Responsible   `db:"responsible"`
 	TemplateData   *datatype.JSON `db:"template_data"`
+	BaseTemplate   *string        `json:"base_template"`
 }
 
 type SearchValues struct {

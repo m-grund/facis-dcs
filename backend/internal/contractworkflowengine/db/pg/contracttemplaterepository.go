@@ -38,11 +38,21 @@ func (r *PostgresContractTemplateRepo) ReadFrameContractTemplateDataByID(ctx con
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible
+    WITH ranked_templates AS (
+        SELECT did, document_number, version, state, template_type, name, description,
+               created_by, created_at, updated_at, responsible, base_template,
+               ROW_NUMBER() OVER (
+                   PARTITION BY COALESCE(base_template, did)
+                   ORDER BY version DESC
+               ) AS rn
         FROM contract_templates
         WHERE state = 'REGISTERED' OR state = 'PUBLISHED'
-    `
-
+    )
+    SELECT did, document_number, version, state, template_type, name, description,
+           created_by, created_at, updated_at, responsible, base_template
+    FROM ranked_templates
+    WHERE rn = 1
+`
 	var cts []db.ContractTemplateMetadata
 	err := tx.SelectContext(ctx, &cts, query)
 	if err != nil {
