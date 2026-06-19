@@ -17,7 +17,7 @@ trap cleanup EXIT
 : "${BDD_DCS_BASE_URL:?BDD_DCS_BASE_URL is required}"
 : "${PROJECT_ROOT:?PROJECT_ROOT is required}"
 
-BDD_PUBLIC_ORIGIN="${BDD_PUBLIC_ORIGIN:-http://dcs.bdd:18080}"
+BDD_PUBLIC_ORIGIN="${BDD_PUBLIC_ORIGIN:-http://localhost:18080}"
 export BDD_PUBLIC_ORIGIN
 export STATUSLIST_SERVICE_URL="${STATUSLIST_SERVICE_URL:-$BDD_PUBLIC_ORIGIN}"
 
@@ -33,8 +33,7 @@ verify_host_ingress() {
     -H 'Content-Type: application/json' -d '{}' 2>/dev/null || echo "000")
   if [[ "$body" == "404 page not found" ]] || [[ "$http_code" == "404" && "$body" == *"page not found"* ]]; then
     echo "Host port 18080 is not reaching the kind Traefik ingress (got Go default 404)."
-    echo "Ensure /etc/hosts maps dcs.bdd to 127.0.0.1 and kind exposes port 18080."
-    echo "If needed, recreate the kind cluster: make -C tests/bdd kind_delete kind_up"
+    echo "Ensure kind exposes port 18080 and the BDD stack is deployed: make -C tests/bdd kind_up"
     return 1
   fi
   return 0
@@ -49,7 +48,7 @@ wait_for_dcs_http() {
     if [ "$(date +%s)" -gt "$deadline" ]; then
       echo "Timed out waiting for DCS HTTP on $DCS_HEALTH_URL"
       verify_host_ingress || true
-      echo "Ensure /etc/hosts maps dcs.bdd to 127.0.0.1 and kind exposes port 18080."
+      echo "Ensure kind exposes port 18080 and the BDD stack is deployed: make -C tests/bdd kind_up"
       "$KUBECTL_BIN" get pods -n kube-system -l app.kubernetes.io/name=traefik -o wide || true
       return 1
     fi
@@ -88,7 +87,6 @@ echo "Port-forward on 5432 is ready"
 
 source "$VENV_PATH/bin/activate"
 export BDD_DCS_BASE_URL
-export STATUSLIST_SERVICE_URL
 
 echo "Checking statuslist for BDD at $STATUSLIST_SERVICE_URL"
 python "$PWD/scripts/ensure_statuslist_for_bdd.py"

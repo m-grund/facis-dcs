@@ -14,7 +14,6 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
-from http.cookiejar import Cookie
 
 REQUEST_URI_MARKER = "/auth/presentation/request/"
 
@@ -288,33 +287,6 @@ class AuthService:
         return str(redirect_uri)
 
     @staticmethod
-    def relax_secure_cookies_for_local_http(session: requests.Session) -> None:
-        """Re-store Secure cookies so requests sends them on local http."""
-        for cookie in list(session.cookies):
-            if cookie.secure and cookie.domain in {"127.0.0.1", "localhost", "dcs.bdd"}:
-                session.cookies.set_cookie(
-                    Cookie(
-                        version=0,
-                        name=cookie.name,
-                        value=cookie.value,
-                        port=None,
-                        port_specified=False,
-                        domain=cookie.domain,
-                        domain_specified=True,
-                        domain_initial_dot=False,
-                        path=cookie.path,
-                        path_specified=True,
-                        secure=False,
-                        expires=cookie.expires,
-                        discard=True,
-                        comment=None,
-                        comment_url=None,
-                        rest={},
-                        rfc2109=False,
-                    )
-                )
-
-    @staticmethod
     def resolve_oauth_callback_url(
         session: requests.Session,
         redirect_uri: str,
@@ -380,14 +352,12 @@ class AuthService:
             api_base,
             timeout=timeout,
         )
-        AuthService.relax_secure_cookies_for_local_http(session)
         callback_response = session.get(callback_url, allow_redirects=False, timeout=timeout)
         if callback_response.status_code != 302:
             raise RuntimeError(
                 f"/auth/callback failed ({callback_response.status_code}): {callback_response.text[:300]}"
             )
 
-        AuthService.relax_secure_cookies_for_local_http(session)
         refresh_response = session.post(f"{api_base.rstrip('/')}/auth/refresh", timeout=timeout)
         refresh_response.raise_for_status()
         access_token = refresh_response.json().get("access_token")
@@ -412,7 +382,6 @@ class AuthService:
         })
 
         initiation = AuthService.initiate_login(session, api_base, timeout=timeout)
-        AuthService.relax_secure_cookies_for_local_http(session)
         AuthService.bind_hydra_login_challenge(
             session,
             api_base,

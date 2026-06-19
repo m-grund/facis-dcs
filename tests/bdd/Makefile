@@ -18,7 +18,7 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 BDD_INGRESS_PORT ?= 18080
-BDD_PUBLIC_ORIGIN ?= http://dcs.bdd:$(BDD_INGRESS_PORT)
+BDD_PUBLIC_ORIGIN ?= http://localhost:$(BDD_INGRESS_PORT)
 BDD_DCS_BASE_URL ?= $(BDD_PUBLIC_ORIGIN)$(DCS_API_BASE_PATH)
 KIND_CONFIG ?= $(THIS_DIR)kind-config.yaml
 BDD_HELM_SET := \
@@ -28,8 +28,7 @@ BDD_HELM_SET := \
 	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/consent" \
 	--set-string hydra.config.logoutURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
 	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/callback" \
-	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
-	--set-string statuslistService.url="$(BDD_PUBLIC_ORIGIN)"
+	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete"
 HELM_CHART_PATH ?= ../../deployment/helm
 HELM_TIMEOUT ?= 20m
 
@@ -55,7 +54,7 @@ CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
 	@echo "make run_bdd_test		# Run all BDD scenarios"
-	@echo "make run_bdd_helm		# Run BDD via Traefik on http://dcs.bdd:18080 (map dcs.bdd in /etc/hosts)"
+	@echo "make run_bdd_helm		# Run BDD via Traefik on http://localhost:18080"
 	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
 	@echo "make ensure_kind			# Validate kind is available in PATH"
 	@echo "make ensure_k8s_tools	# Validate kubectl and helm are available in PATH"
@@ -176,16 +175,6 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 		$(BDD_HELM_SET) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
-	@TRAEFIK_IP=$$("$(KUBECTL_BIN)" get svc traefik -n kube-system -o jsonpath='{.spec.clusterIP}' 2>/dev/null); \
-	if [ -z "$$TRAEFIK_IP" ]; then \
-		echo "Traefik service not found in kube-system"; \
-		exit 1; \
-	fi; \
-	echo "Setting hostAliases: dcs.bdd -> $$TRAEFIK_IP (pods reach ingress for STATUSLIST_SERVICE_URL)"; \
-	"$(HELM_BIN)" upgrade "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
-		--namespace "$(KIND_NAMESPACE)" \
-		--reuse-values \
-		--set-json "hostAliases=[{\"ip\":\"$$TRAEFIK_IP\",\"hostnames\":[\"dcs.bdd\"]}]"
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
