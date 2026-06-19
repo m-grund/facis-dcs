@@ -20,33 +20,54 @@ type PostgresContractTemplateRepo struct {
 }
 
 func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx.Tx, did string, copyDID string) (int, error) {
+	var exists bool
+	if err := tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM contract_templates WHERE did = $1)`, did); err != nil {
+		return 0, err
+	}
+	if !exists {
+		return 0, fmt.Errorf("template with did %s not found", did)
+	}
+
 	statement := `
-				INSERT INTO contract_templates
+		WITH source AS (
+			SELECT
+				did, document_number, template_type, name, description, created_by, responsible, template_data,
+				CASE
+					WHEN state IN ('REGISTERED', 'PUBLISHED') THEN version + 1
+					ELSE 1
+				END AS new_version,
+				CASE
+					WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN $1
+					ELSE base_template
+				END AS new_base_template
+			FROM contract_templates
+			WHERE did = $2
+		)
+		INSERT INTO contract_templates
 			(did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at,
 			 responsible, template_data, base_template)
 		SELECT
 			$1,
-			document_number,
-			CASE
-				WHEN state IN ('REGISTERED', 'PUBLISHED') THEN version + 1
-				ELSE 1
-			END,
-			'DRAFT', template_type, name, description, created_by, NOW(), NOW(),
-			responsible, template_data,
-			CASE
-				WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN NULL
-				WHEN base_template IS NOT NULL THEN base_template
-				ELSE did
-			END
-		FROM contract_templates
-		WHERE did = $2
+			source.document_number,
+			source.new_version,
+			'DRAFT', source.template_type, source.name, source.description, source.created_by, NOW(), NOW(),
+			source.responsible, source.template_data, source.new_base_template
+		FROM source
+		WHERE source.new_base_template IS NULL
+		   OR NOT EXISTS (
+			   SELECT 1
+			   FROM contract_templates ct
+			   WHERE ct.base_template = source.new_base_template
+				 AND ct.version = source.new_version
+				 AND ct.state IN ('REGISTERED', 'PUBLISHED')
+		   )
 		RETURNING version
-    `
+	`
 	var newVersion int
 	err := tx.QueryRowContext(ctx, statement, copyDID, did).Scan(&newVersion)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, fmt.Errorf("template with did %s not found", did)
+			return 0, fmt.Errorf("could not create new version for did %s: a template with the same version already exists in state REGISTERED or PUBLISHED", did)
 		}
 		return 0, err
 	}
@@ -211,11 +232,32 @@ func (r *PostgresContractTemplateRepo) UpdateStateForAllTasks(ctx context.Contex
 
 func (r *PostgresContractTemplateRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
-        UPDATE contract_templates SET state = $2
+        UPDATE contract_templates ct
+        SET state = $2::contract_template_state
         WHERE did = $1
+          AND (
+              $2::contract_template_state NOT IN ('REGISTERED', 'PUBLISHED')
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM contract_templates other
+                  WHERE other.version = ct.version
+                    AND other.state IN ('REGISTERED', 'PUBLISHED')
+                    AND other.did <> ct.did
+              )
+          )
     `
-	_, err := tx.ExecContext(ctx, statement, did, state)
-	return err
+	result, err := tx.ExecContext(ctx, statement, did, state)
+	if err != nil {
+		return fmt.Errorf("could not update registered state: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("could not update state for DID %q: not found or conflicting version already active", did)
+	}
+	return nil
 }
 
 func (r *PostgresContractTemplateRepo) ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplatePDFState, error) {
