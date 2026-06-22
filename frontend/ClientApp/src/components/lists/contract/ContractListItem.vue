@@ -82,6 +82,7 @@ function expirationMessage(timeUtil: TimeUntil): string {
     return `Contract expires in ${timeUtil.minutes} minutes`
   }
 }
+
 </script>
 
 <template>
@@ -90,7 +91,7 @@ function expirationMessage(timeUtil: TimeUntil): string {
       <div class="card-body min-w-0">
 
         <div v-if="contract.outdated" class="-mt-9 flex w-full justify-center">
-          <div class="badge badge-md badge-warning">A newer template version is available</div>
+          <a class="badge badge-md badge-warning" href="/ui/template/{{contract.latest_did}}">A newer template version is available</a>
         </div>
 
         <h2 class="card-title justify-between">

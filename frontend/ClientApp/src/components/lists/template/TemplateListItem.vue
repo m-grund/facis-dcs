@@ -49,7 +49,7 @@ const resolveViewRouteName = computed(() => {
         
       <div class="-mt-9 -ml-1 mr-1 grid w-full grid-cols-3 items-center">
         <div class="badge badge-md badge-accent justify-self-start">{{ toProperCase(template.template_type) }}</div>
-        <div v-if="template.outdated === true" class="badge badge-md badge-warning justify-self-center">A newer version is available</div>
+        <a v-if="template?.latest_did" class="badge badge-md badge-warning justify-self-center" href="/ui/template/{{template.latest_did}}">A newer version is available</a>
         <div></div>
       </div>
 

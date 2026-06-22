@@ -279,20 +279,20 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 		}
 
 		contracts = append(contracts, &contractworkflowengine.ContractItem{
-			Did:             item.DID,
-			ContractVersion: item.ContractVersion,
-			State:           item.State.String(),
-			Name:            item.Name,
-			Description:     item.Description,
-			CreatedBy:       item.CreatedBy,
-			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
-			StartDate:       startDate,
-			ExpDate:         expDate,
-			ExpPolicy:       expPolicy,
-			ExpNoticePeriod: item.ExpNoticePeriod,
-			Responsible:     item.Responsible,
-			Outdated:        item.Outdated,
+			Did:               item.DID,
+			ContractVersion:   item.ContractVersion,
+			State:             item.State.String(),
+			Name:              item.Name,
+			Description:       item.Description,
+			CreatedBy:         item.CreatedBy,
+			CreatedAt:         item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:         item.UpdatedAt.Format(time.RFC3339),
+			StartDate:         startDate,
+			ExpDate:           expDate,
+			ExpPolicy:         expPolicy,
+			ExpNoticePeriod:   item.ExpNoticePeriod,
+			Responsible:       item.Responsible,
+			LatestTemplateDid: item.LatestTemplateDID,
 		})
 	}
 

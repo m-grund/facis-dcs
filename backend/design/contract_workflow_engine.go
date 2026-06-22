@@ -132,7 +132,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
-	Attribute("outdated", Boolean, "Shows if this contract template is deprecated")
+	Attribute("latest_template_did", String, "The DID of the latest template for this contract")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
 })

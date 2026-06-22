@@ -145,20 +145,30 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-		SELECT did, document_number, version, state, template_type, name, description, created_by, created_at,
-			   updated_at, responsible, base_template,
-			   CASE
-				   WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN FALSE
-				   ELSE outdated
-			   END AS outdated
-		FROM (
-			SELECT did, document_number, version, state, template_type, name, description, created_by, created_at,
-				   updated_at, responsible, base_template,
-				   version <> MAX(version) FILTER (WHERE state IN ('REGISTERED', 'PUBLISHED'))
-											OVER (PARTITION BY base_template) AS outdated
+		WITH latest AS (
+			SELECT DISTINCT ON (base_template)
+				base_template,
+				did     AS latest_did,
+				version AS latest_version
 			FROM contract_templates
-		) sub
-`
+			WHERE state IN ('REGISTERED', 'PUBLISHED')
+			ORDER BY base_template, version DESC
+		)
+		SELECT
+			t.did, t.document_number, t.version, t.state, t.template_type, t.name,
+			t.description, t.created_by, t.created_at, t.updated_at, t.responsible,
+			t.base_template,
+			CASE
+				WHEN t.state NOT IN ('REGISTERED', 'PUBLISHED') THEN FALSE
+				ELSE t.version <> l.latest_version
+			END AS outdated,
+			CASE
+				WHEN t.did != l.latest_did AND t.state IN ('REGISTERED', 'PUBLISHED') THEN l.latest_did
+				ELSE NULL
+			END AS latest_did
+		FROM contract_templates t
+		LEFT JOIN latest l ON l.base_template = t.base_template
+	`
 
 	var params []any
 	if pagination.Limit > 0 {
@@ -241,6 +251,7 @@ func (r *PostgresContractTemplateRepo) UpdateState(ctx context.Context, tx *sqlx
                   SELECT 1
                   FROM contract_templates other
                   WHERE other.version = ct.version
+                    AND other.base_template = ct.base_template
                     AND other.state IN ('REGISTERED', 'PUBLISHED')
                     AND other.did <> ct.did
               )

@@ -33,6 +33,7 @@ export interface ContractTemplate {
   updated_at: string
   responsible?: ContractTemplateResponsible
   outdated: boolean
+  latest_did?: string
 }
 
 export type PartialContractTemplate = ContractTemplate

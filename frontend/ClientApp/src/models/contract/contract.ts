@@ -28,6 +28,7 @@ export interface Contract {
   contract_data?: ContractData
   negotiations?: ContractNegotiation[]
   outdated?: boolean
+  latest_did?: string
 }
 
 export type ContractChangeRequest = Pick<Contract, 'name' | 'description' | 'exp_notice_period' | 'exp_policy'> & {

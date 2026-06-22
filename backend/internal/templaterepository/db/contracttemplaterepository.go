@@ -71,6 +71,7 @@ type ContractTemplateMetadata struct {
 	UpdatedAt      time.Time    `db:"updated_at"`
 	BaseTemplate   *string      `db:"base_template"`
 	Outdated       *bool        `db:"outdated"`
+	LatestDID      *string      `db:"latest_did"`
 }
 
 type ContractTemplateProcessData struct {
