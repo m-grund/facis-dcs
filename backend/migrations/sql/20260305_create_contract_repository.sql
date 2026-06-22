@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS contracts
 
     contract_version  INT NOT NULL DEFAULT 1,
 
+    template_did VARCHAR(255) NOT NULL,
+    template_version INT NOT NULL,
+
     name              VARCHAR(255),
     description       TEXT,
     contract_data     JSONB DEFAULT '{}'::jsonb,
@@ -73,6 +76,9 @@ CREATE TABLE IF NOT EXISTS contract_history
 
     contract_version  INT NOT NULL DEFAULT 1,
 
+    template_did VARCHAR(255) NOT NULL,
+    template_version INT NOT NULL,
+
     name              VARCHAR(255),
     description       TEXT,
     contract_data     JSONB DEFAULT '{}'::jsonb,
@@ -106,7 +112,9 @@ SELECT
     description,
     contract_data,
     search_vector,
-    responsible
+    responsible,
+    template_did,
+    template_version
 FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -130,7 +138,9 @@ SELECT
     contract_version,
     name,
     description,
-    responsible
+    responsible,
+    template_did,
+    template_version
 FROM contracts;
 
 ------------------------------------------------------------------------------------------------------------------------

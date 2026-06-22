@@ -11,7 +11,7 @@ from jwt.algorithms import ECAlgorithm
 
 from dcs_wallet.keys import cnf_jwk, did_jwk_from_public_jwk, private_key_material, public_key_material, public_jwk, write_text
 from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, KB_JWT_IAT_LEEWAY_SEC, create_property_disclosure, join_sd_jwt, sd_hash, split_sd_jwt
-from dcs_wallet.status_list import DEFAULT_SERVICE_BASE, build_credential_status
+from dcs_wallet.status_list import DEFAULT_SERVICE_BASE, DEFAULT_TENANT, build_credential_status
 
 POA_VCT = "urn:dcs:poa:v1"
 CREDENTIAL_JWT_TYP = "dc+sd-jwt"

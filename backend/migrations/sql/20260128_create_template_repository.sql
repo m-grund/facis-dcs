@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS contract_templates
 
     version         INT NOT NULL DEFAULT 1,
 
+    base_template VARCHAR(255),
+
     name            VARCHAR(255),
     description     TEXT,
     template_data   JSONB DEFAULT '{}'::jsonb,
@@ -72,6 +74,8 @@ CREATE TABLE IF NOT EXISTS contract_templates_history
 
     document_number VARCHAR(255),
     version         INT NOT NULL,
+
+    base_template VARCHAR(255),
 
     name            VARCHAR(255),
     description     TEXT,

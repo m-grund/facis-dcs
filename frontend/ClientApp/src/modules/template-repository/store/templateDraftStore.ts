@@ -87,6 +87,7 @@ export const useTemplateDraftStore = defineStore(storeId, {
         name: this.name,
         description: this.description,
         template_type: this.templateType,
+        document_number: this.document_number,
         template_data: {
           documentOutline: this.documentOutline,
           documentBlocks: this.documentBlocks,

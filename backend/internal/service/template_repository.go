@@ -75,14 +75,15 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	}
 
 	cmd := command.CreateCmd{
-		DID:          *did,
-		CreatedBy:    middleware.GetParticipantID(ctx),
-		HolderDID:    middleware.GetHolderDID(ctx),
-		TemplateType: templateType,
-		Name:         req.Name,
-		Description:  req.Description,
-		TemplateData: &templateData,
-		UserRoles:    middleware.GetUserRoles(ctx),
+		DID:            *did,
+		CreatedBy:      middleware.GetParticipantID(ctx),
+		HolderDID:      middleware.GetHolderDID(ctx),
+		TemplateType:   templateType,
+		Name:           req.Name,
+		Description:    req.Description,
+		DocumentNumber: req.DocumentNumber,
+		TemplateData:   &templateData,
+		UserRoles:      middleware.GetUserRoles(ctx),
 	}
 	createHandler := command.Creator{
 		DB:     s.DB,
@@ -438,6 +439,7 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
 			Responsible:    item.Responsible,
+			LatestDid:      item.LatestDID,
 		})
 	}
 

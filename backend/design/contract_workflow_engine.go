@@ -99,6 +99,8 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("template_did", Any, "The DID of the used template")
+	Attribute("template_version", Any, "The version of the used template")
 	Attribute("start_date", String, "The timestamp when the contract starts")
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
@@ -106,7 +108,7 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("contract_data", Any, "The data of that contract")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })
 
 var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
@@ -127,13 +129,17 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("template_did", Any, "The DID of the used template")
+	Attribute("template_version", Any, "The version of the used template")
 	Attribute("start_date", String, "The timestamp when the contract starts")
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
 	Attribute("exp_notice_period", Int, "The notice period before contract expiration (in days)")
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
+	Attribute("latest_template_did", String, "The DID of the latest template for this contract")
+	Attribute("template_is_deprecated", Boolean, "Whether the template is deprecated")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })
 
 var ContractReviewTaskItem = Type("ContractReviewTaskItem", func() {
@@ -222,6 +228,9 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
+	Attribute("template_did", Any, "The DID of the used template")
+	Attribute("template_version", Any, "The version of the used template")
+
 	Attribute("start_date", String, "The timestamp when the contract starts")
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
@@ -233,7 +242,7 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 
 	Attribute("negotiations", ArrayOf(ContractNegotiationItem), "List with negotiations for that contract")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations", "contract_version", "template_did", "template_version")
 })
 
 var ContractReviewRequest = Type("ContractReviewRequest", func() {
@@ -444,6 +453,28 @@ var ContractAuditResponse = Type("ContractAuditResponse", func() {
 	Attribute("global_log_pred_cid", String, "Global audit trail predecessor on the IPFS chain")
 
 	Required("id", "component", "event_type", "event_data", "created_at")
+})
+
+var ApprovedContractTemplateRetrieveRequest = Type("ApprovedContractTemplateRetrieveRequest", func() {
+	Description("Approved contract template retrieve request")
+
+	Token("token", String, "JWT token")
+})
+
+var ApprovedContractTemplateRetrieveResponse = Type("ApprovedContractTemplateRetrieveResponse", func() {
+	Attribute("did", String, "DID of the contract template")
+	Attribute("document_number", String, "Document number")
+	Attribute("version", Int, "Version")
+	Attribute("state", String, "State")
+	Attribute("template_type", String, "The type of the template")
+	Attribute("name", String, "Name")
+	Attribute("description", String, "Description")
+	Attribute("created_by", String, "Created by")
+	Attribute("created_at", String, "Created at")
+	Attribute("updated_at", String, "Updated at")
+	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
+
+	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
 })
 
 // Contract Workflow Engine Service  (/contract/...)
@@ -697,6 +728,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Sys. Contract Approver")
 			Scope("Contract Manager")
 			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
 		})
 
 		Payload(ContractHistoryRetrieveByIDRequest)
@@ -866,7 +898,6 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("Sys. Administrator")
 		})
 
 		Payload(ContractAuditRequest)
@@ -877,6 +908,28 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			POST("/contract/audit")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// GET /contract/templates
+	Method("retrieve_templates", func() {
+		Description("fetch approved templates")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+		})
+
+		Payload(ApprovedContractTemplateRetrieveRequest)
+		Result(ArrayOf(ApprovedContractTemplateRetrieveResponse))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/templates")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

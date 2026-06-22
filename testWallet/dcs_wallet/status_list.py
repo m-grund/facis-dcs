@@ -55,12 +55,12 @@ def build_credential_status(
     list_number: int = DEFAULT_LIST_NUMBER,
     tenant: str = DEFAULT_TENANT,
 ) -> dict[str, Any]:
-    """Return W3C StatusList2021 credentialStatus for issuer JWT visible claims."""
+    """Return W3C BitstringStatusListEntry credentialStatus for issuer JWT visible claims."""
     uri = status_list_uri(service_base, list_number, tenant)
     idx = status_list_index(status_list_index_seed(sub=sub, organization=organization, roles=roles))
     return {
         "id": f"{uri}#{idx}",
-        "type": "StatusList2021Entry",
+        "type": "BitstringStatusListEntry",
         "statusPurpose": "revocation",
         "statusListIndex": str(idx),
         "statusListCredential": uri,

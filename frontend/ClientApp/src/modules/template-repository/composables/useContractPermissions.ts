@@ -20,5 +20,9 @@ export const useContractPermissions = () => {
     return authStore.user?.roles?.includes('CONTRACT_MANAGER') ?? false
   })
 
-  return { isCreator, isReviewer, isApprover, isManager }
+  const isSigner = computed(() => {
+    return authStore.user?.roles?.includes('CONTRACT_SIGNER') ?? false
+  })
+
+  return { isCreator, isReviewer, isApprover, isManager, isSigner }
 }
