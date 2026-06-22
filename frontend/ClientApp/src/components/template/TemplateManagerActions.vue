@@ -103,7 +103,7 @@ async function register() {
     })
 
     await templatesStore.loadTemplates()
-    await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: registered.did } })
+    await router.push({ name: ROUTES.TEMPLATES.LIST, params: { did: registered.did } })
   } catch {}
 }
 </script>

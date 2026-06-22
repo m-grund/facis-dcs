@@ -13,6 +13,7 @@ var ContractTemplateCreateRequest = Type("ContractTemplateCreateRequest", func()
 
 	Attribute("name", String, "The name of the contract template")
 	Attribute("description", String, "A description for that template")
+	Attribute("document_number", String, "A document number for the contract template")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("template_type")
@@ -179,6 +180,7 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("latest_did", String, "The DID of the newest contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
 })

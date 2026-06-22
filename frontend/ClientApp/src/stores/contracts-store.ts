@@ -1,10 +1,13 @@
+import type { PartialContractTemplate } from '@/models/contract-template'
 import type { Contract } from '@/models/contract/contract'
 import type { ContractApprovalTask } from '@/models/contract/contract-approval-task'
 import type { ContractNegotiationTask } from '@/models/contract/contract-negotiation-task'
 import type { ContractReviewTask } from '@/models/contract/contract-review-task'
-import { contractWorkflowService } from '@/services/contract-workflow-service'
+import { TemplateType } from '@/modules/template-repository/models/contract-template'
+import { TemplateState } from '@/types/contract-template-state'
 import { defineStore } from 'pinia'
 import { computed, ref, type Ref } from 'vue'
+import { contractWorkflowService } from '@/services/contract-workflow-service'
 
 export const useContractsStore = defineStore('contracts', () => {
   const contracts: Ref<Contract[]> = ref([])
@@ -15,9 +18,26 @@ export const useContractsStore = defineStore('contracts', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  const contractTemplates: Ref<PartialContractTemplate[]> = ref([])
+
   const hasContracts = computed(() => contracts.value.length > 0)
 
   const findContractByDid = (did: string) => contracts.value.find((contract) => contract.did === did)
+
+  const hasApprovedTemplates = computed(() =>
+    contractTemplates.value.some(
+      (template) =>
+        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
+        template.template_type === TemplateType.frameContract,
+    ),
+  )
+  const approvedTemplates = computed(() =>
+    contractTemplates.value.filter(
+      (template) =>
+        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
+        template.template_type === TemplateType.frameContract,
+    ),
+  )
 
   async function loadContracts() {
     loading.value = true
@@ -30,6 +50,18 @@ export const useContractsStore = defineStore('contracts', () => {
       negotiationTasks.value = data.negotiation_tasks.map((task) => ({ ...task, type: 'contract' }))
     } catch (err: unknown) {
       error.value = err instanceof Error && err.message ? err.message : 'Error loading the contracts'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadApprovedTemplates() {
+    loading.value = true
+    error.value = null
+    try {
+      contractTemplates.value = await contractWorkflowService.retrieveApprovedTemplates()
+    } catch (err: unknown) {
+      error.value = err instanceof Error && err.message ? err.message : 'Error loading the templates'
     } finally {
       loading.value = false
     }
@@ -60,5 +92,8 @@ export const useContractsStore = defineStore('contracts', () => {
     hasNegotiationTask,
     hasReviewTask,
     hasApprovalTask,
+    loadApprovedTemplates,
+    approvedTemplates,
+    hasApprovedTemplates
   }
 })
