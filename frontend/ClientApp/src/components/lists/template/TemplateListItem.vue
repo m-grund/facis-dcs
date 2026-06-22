@@ -40,6 +40,11 @@ const resolveViewRouteName = computed(() => {
   }
   return ROUTES.TEMPLATES.VIEW
 })
+
+function getTemplateLink(template: PartialContractTemplate): string {
+  return `/ui/templates/view/${template.latest_did}`
+}
+
 </script>
 
 <template>
@@ -49,7 +54,7 @@ const resolveViewRouteName = computed(() => {
         
       <div class="-mt-9 -ml-1 mr-1 grid w-full grid-cols-3 items-center">
         <div class="badge badge-md badge-accent justify-self-start">{{ toProperCase(template.template_type) }}</div>
-        <a v-if="template?.latest_did" class="badge badge-md badge-warning justify-self-center" href="/ui/template/{{template.latest_did}}">A newer version is available</a>
+        <a v-if="template?.latest_did" class="badge badge-md badge-warning justify-self-center" :href="getTemplateLink(template)">A newer template version is available</a>
         <div></div>
       </div>
 

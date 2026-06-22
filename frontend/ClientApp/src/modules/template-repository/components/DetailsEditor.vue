@@ -43,6 +43,8 @@
         <option>REVIEWED</option>
         <option>APPROVED</option>
         <option>DELETED</option>
+        <option v-if="state == TemplateState.registered">REGISTERED</option>
+        <option v-if="state == TemplateState.published">PUBLISHED</option>
       </select>
     </fieldset>
 

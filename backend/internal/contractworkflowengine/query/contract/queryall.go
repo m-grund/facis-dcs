@@ -49,6 +49,8 @@ type MetadataItem struct {
 	Responsible       *db.Responsible
 	Outdated          *bool
 	LatestTemplateDID *string
+	TemplateDID       interface{}
+	TemplateVersion   interface{}
 }
 
 type ReviewTaskItem struct {
@@ -171,6 +173,8 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			CreatedBy:         data.CreatedBy,
 			CreatedAt:         data.CreatedAt,
 			UpdatedAt:         data.UpdatedAt,
+			TemplateDID:       data.TemplateDID,
+			TemplateVersion:   data.TemplateVersion,
 			StartDate:         data.StartDate,
 			ExpDate:           data.ExpDate,
 			ExpPolicy:         expPolicy,

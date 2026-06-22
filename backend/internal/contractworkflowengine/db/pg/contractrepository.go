@@ -116,23 +116,23 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
 		SELECT
-			cem.did, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
-			cem.contract_version, cem.start_date, cem.exp_date, cem.exp_policy, cem.exp_notice_period, cem.responsible,
-			cem.template_did, cem.template_version,
-			cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
-			AND COALESCE(latest.version > cem.template_version, FALSE) AS outdated,
-			latest.did AS latest_did
-		FROM contracts_effective_metadata cem
-		LEFT JOIN contract_templates tpl
-			ON tpl.did = cem.template_did
-		LEFT JOIN LATERAL (
-			SELECT ct.did, ct.version
-			FROM contract_templates ct
-			WHERE ct.document_number = tpl.document_number
-			  AND ct.state IN ('REGISTERED', 'PUBLISHED')
-			ORDER BY ct.version DESC
-			LIMIT 1
-		) latest ON true
+    cem.did, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
+    cem.contract_version, cem.start_date, cem.exp_date, cem.exp_policy, cem.exp_notice_period, cem.responsible,
+    cem.template_did, cem.template_version,
+    cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
+    AND COALESCE(latest.version > cem.template_version, FALSE) AS outdated,
+    latest.did AS latest_template_did
+FROM contracts_effective_metadata cem
+LEFT JOIN contract_templates tpl
+    ON tpl.did = cem.template_did
+LEFT JOIN LATERAL (
+    SELECT ct.did, ct.version
+    FROM contract_templates ct
+    WHERE ct.base_template = tpl.base_template
+      AND ct.state IN ('REGISTERED', 'PUBLISHED')
+    ORDER BY ct.version DESC
+    LIMIT 1
+) latest ON true
 	`
 	var params []any
 	if pagination.Limit > 0 {

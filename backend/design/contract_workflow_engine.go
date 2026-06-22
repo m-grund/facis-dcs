@@ -99,6 +99,8 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("template_did", Any, "The DID of the used template")
+	Attribute("template_version", Any, "The version of the used template")
 	Attribute("start_date", String, "The timestamp when the contract starts")
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
@@ -106,7 +108,7 @@ var ContractHistoryRetrieveByIDResponse = Type("ContractHistoryRetrieveByIDRespo
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("contract_data", Any, "The data of that contract")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })
 
 var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
@@ -127,6 +129,8 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("created_by", String, "Identifier of who created the contract negotiation")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
+	Attribute("template_did", Any, "The DID of the used template")
+	Attribute("template_version", Any, "The version of the used template")
 	Attribute("start_date", String, "The timestamp when the contract starts")
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
@@ -134,7 +138,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("latest_template_did", String, "The DID of the latest template for this contract")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })
 
 var ContractReviewTaskItem = Type("ContractReviewTaskItem", func() {
@@ -223,6 +227,9 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 
+	Attribute("template_did", Any, "The DID of the used template")
+	Attribute("template_version", Any, "The version of the used template")
+
 	Attribute("start_date", String, "The timestamp when the contract starts")
 	Attribute("exp_date", String, "The timestamp when the contract expired")
 	Attribute("exp_policy", String, "The policy what should happen if the contract is expired")
@@ -234,7 +241,7 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 
 	Attribute("negotiations", ArrayOf(ContractNegotiationItem), "List with negotiations for that contract")
 
-	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations", "contract_version")
+	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations", "contract_version", "template_did", "template_version")
 })
 
 var ContractReviewRequest = Type("ContractReviewRequest", func() {

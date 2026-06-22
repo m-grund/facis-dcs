@@ -40,6 +40,8 @@ type GetByIDResult struct {
 	UpdatedAt       time.Time
 	ContractData    *datatype.JSON
 	Negotiations    []db.NegotiationData
+	TemplateDID     string
+	TemplateVersion int
 	StartDate       *time.Time
 	ExpDate         *time.Time
 	ExpPolicy       *expirationpolicy.ExpirationPolicy
@@ -117,6 +119,8 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		CreatedAt:       data.CreatedAt,
 		UpdatedAt:       data.UpdatedAt,
 		ContractData:    data.ContractData,
+		TemplateDID:     data.TemplateDID,
+		TemplateVersion: data.TemplateVersion,
 		Negotiations:    negotiations,
 		StartDate:       data.StartDate,
 		ExpDate:         data.ExpDate,
