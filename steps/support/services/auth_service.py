@@ -146,6 +146,7 @@ class AuthService:
             attach_key_binding,
             issue_stored_credential,
         )
+        from dcs_wallet.status_list import BDD_CREDENTIAL_TENANT
 
         issuer_did = os.getenv("BDD_ISSUER_DID", DEFAULT_ISSUER_DID)
         statuslist_base = os.getenv("STATUSLIST_SERVICE_URL", "").strip()
@@ -161,6 +162,7 @@ class AuthService:
             wallet_private=wallet_keys.wallet_private,
             issuer_did=issuer_did,
             statuslist_service_base=statuslist_base,
+            statuslist_tenant=BDD_CREDENTIAL_TENANT,
         )
         return attach_key_binding(
             issued_sd_jwt=stored_sd_jwt,

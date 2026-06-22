@@ -149,13 +149,15 @@ cryptoProvider:
 # XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
 statuslistService:
   enabled: true
+  tenantID: c2pa
   ingress:
     enabled: true
     className: traefik
+    stripPrefix: /statuslist
     hosts:
       - host: localhost
         paths:
-          - path: /v1
+          - path: /statuslist
             pathType: Prefix
   database:
     enabled: true
@@ -169,6 +171,9 @@ statuslistService:
     url: "nats://dcs-nats:4222"
   bddListInit:
     enabled: true
+    tenantIDs:
+      - credential
+      - c2pa
 
 statusListLocalhostProxy:
   enabled: true

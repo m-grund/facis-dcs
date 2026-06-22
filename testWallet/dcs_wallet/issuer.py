@@ -124,6 +124,7 @@ def issue_stored_credential(
     issuer_did: str = DEFAULT_ISSUER_DID,
     credential_status: dict[str, Any] | None = None,
     statuslist_service_base: str | None = None,
+    statuslist_tenant: str | None = None,
 ) -> str:
     """Issuer-signed SD-JWT for wallet storage (no KB-JWT; aud/nonce belong to presentation)."""
     holder_public = public_jwk(wallet_private)
@@ -132,6 +133,11 @@ def issue_stored_credential(
         statuslist_service_base.strip()
         if statuslist_service_base and statuslist_service_base.strip()
         else DEFAULT_SERVICE_BASE
+    )
+    status_tenant = (
+        statuslist_tenant.strip()
+        if statuslist_tenant and statuslist_tenant.strip()
+        else DEFAULT_TENANT
     )
     visible_claims = {
         "iss": issuer_did,
@@ -146,6 +152,7 @@ def issue_stored_credential(
             organization=organization,
             roles=roles,
             service_base=status_base,
+            tenant=status_tenant,
         ),
     }
     selective_claims = {

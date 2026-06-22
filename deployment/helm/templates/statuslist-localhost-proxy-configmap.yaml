@@ -19,7 +19,7 @@ data:
       server {
         listen {{ .Values.statusListLocalhostProxy.listenPort }};
         listen [::]:{{ .Values.statusListLocalhostProxy.listenPort }};
-        location /v1/ {
+        location /statuslist/ {
           proxy_pass {{ $upstream }};
           proxy_set_header Host {{ .Values.statusListLocalhostProxy.ingressHost }};
         }

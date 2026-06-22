@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 LIST_SIZE = 131072
 DEFAULT_LIST_NUMBER = 1
 DEFAULT_TENANT = "default"
+BDD_CREDENTIAL_TENANT = "credential"
 DEFAULT_SERVICE_BASE = "http://localhost:30821"
 DEFAULT_NATS_URL = "nats://localhost:30422"
 DEFAULT_CREATION_TOPIC = "status"
@@ -34,11 +35,15 @@ def status_list_index_seed(*, sub: str, organization: str, roles: list[str]) -> 
     return f"{sub}\x1e{organization}\x1e{role_part}"
 
 
-def status_list_uri(service_base: str = DEFAULT_SERVICE_BASE, list_number: int = DEFAULT_LIST_NUMBER) -> str:
+def status_list_uri(
+    service_base: str = DEFAULT_SERVICE_BASE,
+    list_number: int = DEFAULT_LIST_NUMBER,
+    tenant: str = DEFAULT_TENANT,
+) -> str:
     base = service_base.strip().rstrip("/")
     if not base.startswith("http://") and not base.startswith("https://"):
         base = f"http://{base}"
-    return f"{base}/v1/tenants/{DEFAULT_TENANT}/status/{list_number}"
+    return f"{base}/v1/tenants/{tenant}/status/{list_number}"
 
 
 def build_credential_status(
@@ -48,9 +53,10 @@ def build_credential_status(
     roles: list[str],
     service_base: str = DEFAULT_SERVICE_BASE,
     list_number: int = DEFAULT_LIST_NUMBER,
+    tenant: str = DEFAULT_TENANT,
 ) -> dict[str, Any]:
     """Return W3C StatusList2021 credentialStatus for issuer JWT visible claims."""
-    uri = status_list_uri(service_base, list_number)
+    uri = status_list_uri(service_base, list_number, tenant)
     idx = status_list_index(status_list_index_seed(sub=sub, organization=organization, roles=roles))
     return {
         "id": f"{uri}#{idx}",
@@ -156,7 +162,7 @@ async def _nats_ensure_list_async(
     list_number: int = DEFAULT_LIST_NUMBER,
     timeout: float = 10.0,
 ) -> None:
-    uri = status_list_uri(service_base, list_number)
+    uri = status_list_uri(service_base, list_number, tenant_id)
     try:
         fetch_status_list_payload(uri, timeout=timeout)
         return

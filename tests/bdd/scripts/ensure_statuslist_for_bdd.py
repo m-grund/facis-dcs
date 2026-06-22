@@ -15,7 +15,7 @@ SCRIPT_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_ROOT.parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "testWallet"))
 
-from dcs_wallet.status_list import fetch_status_list_payload, status_list_uri
+from dcs_wallet.status_list import BDD_CREDENTIAL_TENANT, fetch_status_list_payload, status_list_uri
 
 
 def main() -> int:
@@ -24,7 +24,7 @@ def main() -> int:
         print("STATUSLIST_SERVICE_URL is required for BDD statuslist preflight", file=sys.stderr)
         return 1
 
-    uri = status_list_uri(service_base)
+    uri = status_list_uri(service_base, tenant=BDD_CREDENTIAL_TENANT)
     fetch_status_list_payload(uri)
     print(f"statuslist ready for BDD: GET {uri}")
     return 0
