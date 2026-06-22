@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { PartialContractTemplate } from '@/models/contract-template'
 import type { Contract } from '@/models/contract/contract'
 import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
@@ -88,11 +87,18 @@ function getTemplateLink(contract: Contract): string {
   return `/ui/templates/view/${contract.latest_template_did}`
 }
 
-function isTemplateVersionBadgeVisible(contract: Contract) {
+function isTemplateVersionWarningVisible(contract: Contract) {
   if (contract.state === ContractState.terminated || contract.state === ContractState.signed) {
     return false
   }
-  return contract.latest_template_did !== null && contract.template_did !== contract.latest_template_did
+  return contract.template_is_deprecated == false && contract.latest_template_did !== null && contract.template_did !== contract.latest_template_did
+}
+
+function isTemplateVersionErrorVisible(contract: Contract) {
+   if (contract.state === ContractState.terminated || contract.state === ContractState.signed) {
+    return false
+  }
+  return contract.template_is_deprecated
 }
 
 </script>
@@ -102,7 +108,11 @@ function isTemplateVersionBadgeVisible(contract: Contract) {
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
 
-        <div v-if="isTemplateVersionBadgeVisible(contract)" class="-mt-9 flex w-full justify-center">
+        <div v-if="isTemplateVersionErrorVisible(contract)" class="-mt-9 flex w-full justify-center">
+          <a class="badge badge-md badge-error justify-self-center" :href="getTemplateLink(contract)">This contract uses a deprecated template</a>
+        </div>
+
+        <div v-if="isTemplateVersionWarningVisible(contract)" class="-mt-9 flex w-full justify-center">
           <a class="badge badge-md badge-warning justify-self-center" :href="getTemplateLink(contract)">A newer template version is available</a>
         </div>
 

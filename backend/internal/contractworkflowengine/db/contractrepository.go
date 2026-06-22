@@ -59,23 +59,24 @@ type Contract struct {
 }
 
 type ContractMetadata struct {
-	DID               string       `db:"did"`
-	ContractVersion   int          `db:"contract_version"`
-	State             string       `db:"state"`
-	CreatedBy         string       `db:"created_by"`
-	CreatedAt         time.Time    `db:"created_at"`
-	UpdatedAt         time.Time    `db:"updated_at"`
-	StartDate         *time.Time   `db:"start_date"`
-	ExpDate           *time.Time   `db:"exp_date"`
-	ExpPolicy         *string      `db:"exp_policy"`
-	ExpNoticePeriod   *int         `db:"exp_notice_period"`
-	Name              *string      `db:"name"`
-	Responsible       *Responsible `db:"responsible"`
-	Description       *string      `db:"description"`
-	TemplateDID       string       `db:"template_did"`
-	TemplateVersion   int          `db:"template_version"`
-	Outdated          *bool        `db:"outdated"`
-	LatestTemplateDID *string      `db:"latest_template_did"`
+	DID                  string       `db:"did"`
+	ContractVersion      int          `db:"contract_version"`
+	State                string       `db:"state"`
+	CreatedBy            string       `db:"created_by"`
+	CreatedAt            time.Time    `db:"created_at"`
+	UpdatedAt            time.Time    `db:"updated_at"`
+	StartDate            *time.Time   `db:"start_date"`
+	ExpDate              *time.Time   `db:"exp_date"`
+	ExpPolicy            *string      `db:"exp_policy"`
+	ExpNoticePeriod      *int         `db:"exp_notice_period"`
+	Name                 *string      `db:"name"`
+	Responsible          *Responsible `db:"responsible"`
+	Description          *string      `db:"description"`
+	TemplateDID          string       `db:"template_did"`
+	TemplateVersion      int          `db:"template_version"`
+	Outdated             *bool        `db:"outdated"`
+	LatestTemplateDID    *string      `db:"latest_template_did"`
+	TemplateIsDeprecated *bool        `db:"template_is_deprecated"`
 }
 
 type ContractProcessData struct {
