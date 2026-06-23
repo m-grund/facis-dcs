@@ -39,13 +39,16 @@ type contractWorkflowEnginesrvc struct {
 	NRepo        db.NegotiationRepo
 	CTRepo       db.ContractTemplateRepo
 	FCClient     *fcclient.FederatedCatalogueClient
+	DIDDocument  base.DIDDocument
 	ATrailReader base.AuditTrailReader
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader) contractworkflowengine.Service {
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
+	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader,
+	didDocument base.DIDDocument) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -57,6 +60,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		NRepo:            nRepo,
 		CTRepo:           ctRepo,
 		FCClient:         fcClient,
+		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
 	}
 }
@@ -66,13 +70,19 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	did, err := base.GetDID(datatype.ContractResourceType)
+	did, err := base.GenerateID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	origin, err := s.DIDDocument.ExtractDomainAndPath()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
 	cmd := command.CreateCmd{
 		DID:         *did,
+		Origin:      origin,
 		TemplateDID: req.Did,
 		CreatedBy:   middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),

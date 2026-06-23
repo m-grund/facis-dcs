@@ -18,7 +18,7 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 LOCAL_FORWARD_PORT ?= 18991
 SERVICE_PORT ?= 8991
-DCS_ISSUER ?= localhost
+DCS_DID ?= localhost
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 HELM_CHART_PATH ?= ../../deployment/helm
 HELM_TIMEOUT ?= 20m
@@ -99,7 +99,7 @@ run_bdd_helm_dev: setup_dev ensure_k8s_tools
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
-		DCS_ISSUER="$(DCS_ISSUER)" \
+		DCS_DID="$(DCS_DID)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		BDD_RUN_MODE=dev \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
@@ -116,7 +116,7 @@ run_bdd_helm_all: setup_dev ensure_k8s_tools
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
-		DCS_ISSUER="$(DCS_ISSUER)" \
+		DCS_DID="$(DCS_DID)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		BDD_RUN_MODE=all \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \

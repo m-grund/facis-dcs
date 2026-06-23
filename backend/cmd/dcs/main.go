@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	didservice "digital-contracting-service/gen/did_service"
 
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
@@ -54,6 +57,18 @@ import (
 
 	"digital-contracting-service/internal/base/tsa"
 )
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	// anderer Fehler (z. B. Permission denied) – bewusst nicht als "existiert nicht" werten
+	return false
+}
 
 func main() {
 	// Define command line flags, add any other flag required to configure the
@@ -117,12 +132,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	if os.Getenv("DCS_ISSUER") == "" {
-		log.Printf(ctx, "DCS_ISSUER configuration missing: DCS_ISSUER will be set to localhost as issuer")
-	} else {
-		if strings.Contains(os.Getenv("DCS_ISSUER"), ":") {
-			log.Fatalf(ctx, nil, "DCS_ISSUER must not contain service port")
-		}
+	didFilePath := os.Getenv("DCS_DID")
+	if didFilePath == "" || fileExists(didFilePath) {
+		log.Printf(ctx, "DCS_DID configuration or file is missing")
+	}
+	didFileContent, err := os.ReadFile(didFilePath)
+
+	didDocument, err := base.NewDIDDocument(didFileContent)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not read did document")
 	}
 
 	// Connect to NATS (use NATS_URL env var or default)
@@ -327,6 +345,11 @@ func main() {
 		PDFCore:    pdfCoreClient,
 	}
 
+	didService, err := service.NewDIDService(*didDocument)
+	if err != nil {
+		log.Fatalf(ctx, err, "failed to create did service")
+	}
+
 	// Initialize the service.
 	var (
 		authSvc                         genauth.Service
@@ -338,6 +361,7 @@ func main() {
 		signatureManagementSvc          signaturemanagement.Service
 		templateCatalogueIntegrationSvc templatecatalogueintegration.Service
 		templateRepositorySvc           templaterepository.Service
+		didSrv                          didservice.Service
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
@@ -346,13 +370,14 @@ func main() {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, *didDocument)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
-		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
+		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, *didDocument)
+		didSrv = didService
 	}
 
 	// Channel used by background workers and signal handler to notify main to exit.
@@ -398,6 +423,7 @@ func main() {
 		signatureManagementEndpoints          *signaturemanagement.Endpoints
 		templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints
 		templateRepositoryEndpoints           *templaterepository.Endpoints
+		didEntpoints                          *didservice.Endpoints
 	)
 	{
 		authEndpoints = genauth.NewEndpoints(authSvc)
@@ -427,6 +453,9 @@ func main() {
 		templateRepositoryEndpoints = templaterepository.NewEndpoints(templateRepositorySvc)
 		templateRepositoryEndpoints.Use(debug.LogPayloads())
 		templateRepositoryEndpoints.Use(log.Endpoint)
+		didEntpoints = didservice.NewEndpoints(didSrv)
+		didEntpoints.Use(debug.LogPayloads())
+		didEntpoints.Use(log.Endpoint)
 	}
 
 	// Setup interrupt handler. This optional step configures the process so
@@ -469,7 +498,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:

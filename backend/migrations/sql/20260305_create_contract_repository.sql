@@ -5,6 +5,7 @@ CREATE TYPE contract_expiration_policy AS ENUM ('RENEWAL', 'TERMINATION', 'ARCHI
 CREATE TABLE IF NOT EXISTS contracts
 (
     did               VARCHAR(255),
+    origin            VARCHAR(255),
 
     created_by        VARCHAR(255)   NOT NULL,
     created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS contract_history
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
     did               VARCHAR(255),
+    origin            VARCHAR(255),
 
     created_by        VARCHAR(255)   NOT NULL,
     created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +96,7 @@ CREATE TABLE IF NOT EXISTS contract_history
 CREATE OR REPLACE VIEW contracts_effective AS
 SELECT
     did,
+    origin,
     created_by,
     created_at,
     updated_at,
@@ -122,6 +125,7 @@ FROM contracts;
 CREATE OR REPLACE VIEW contracts_effective_metadata AS
 SELECT
     did,
+    origin,
     created_by,
     created_at,
     updated_at,
@@ -148,6 +152,7 @@ FROM contracts;
 CREATE OR REPLACE VIEW contracts_effective_process_data AS
 SELECT
     did,
+    origin,
     created_by,
     created_at,
     updated_at,

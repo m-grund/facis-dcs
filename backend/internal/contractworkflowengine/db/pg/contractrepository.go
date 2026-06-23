@@ -22,14 +22,14 @@ type PostgresContractRepo struct {
 func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) (*time.Time, error) {
 	statement := `
         INSERT INTO contracts (
-            did, created_by, state, name,
+            did, origin, created_by, state, name,
             description, contract_data, template_did, template_version
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING created_at
     `
 	var createdAt time.Time
 	err := tx.GetContext(ctx, &createdAt, statement,
-		data.DID, data.CreatedBy, data.State, data.Name,
+		data.DID, data.Origin, data.CreatedBy, data.State, data.Name,
 		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion)
 	if err != nil {
 		return nil, err
@@ -40,11 +40,11 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         INSERT INTO contract_history 
-            (did, state, name, description, created_by, created_at, updated_at, 
+            (did, origin, state, name, description, created_by, created_at, updated_at, 
              contract_version, contract_data, start_date, exp_date, exp_policy, 
              exp_notice_period, responsible, template_did, template_version)
         SELECT 
-            did, state, name, description, created_by, created_at, updated_at, 
+            did, origin, state, name, description, created_by, created_at, updated_at, 
             contract_version, contract_data, start_date, exp_date, exp_policy, 
             exp_notice_period, responsible, template_did, template_version
         FROM contracts_effective 
@@ -56,7 +56,7 @@ func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx 
 
 func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractHistory, error) {
 	query := `
-        SELECT did, state, name, description,
+        SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contract_history
@@ -77,7 +77,7 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 
 func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
 	query := `
-        SELECT did, state, name, description,
+        SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contract_history
@@ -96,7 +96,7 @@ func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx
 
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
-        SELECT did, state, name, description,
+        SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contracts_effective
@@ -116,7 +116,7 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
 		SELECT
-			cem.did, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
+			cem.did, cem.origin, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
 			cem.contract_version, cem.start_date, cem.exp_date, cem.exp_policy, cem.exp_notice_period, cem.responsible,
 			cem.template_did, cem.template_version,
 			cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
@@ -152,7 +152,7 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 
 func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
+        SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contracts_effective_metadata
     `
@@ -182,7 +182,7 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 
 func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
-        SELECT did, state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
+        SELECT did, origin,  state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
         FROM contracts_effective_process_data WHERE did = $1
     `
 	var processData db.ContractProcessData
@@ -198,7 +198,7 @@ func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sql
 
 func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
+    SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
            exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
     FROM contracts
     WHERE exp_date IS NOT NULL

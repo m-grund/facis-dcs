@@ -25,6 +25,7 @@ type CreateCmd struct {
 	CreatedBy   string
 	HolderDID   string
 	UserRoles   userrole.UserRoles
+	Origin      string
 }
 
 type Creator struct {
@@ -56,6 +57,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 
 	data := db.Contract{
 		DID:             cmd.DID,
+		Origin:          cmd.Origin,
 		CreatedBy:       cmd.CreatedBy,
 		State:           contractstate.Draft.String(),
 		ContractData:    normalizedContractData,

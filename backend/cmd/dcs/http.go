@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	didservice "digital-contracting-service/gen/did_service"
+
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -15,6 +17,7 @@ import (
 	contractstoragearchivesvr "digital-contracting-service/gen/http/contract_storage_archive/server"
 	contractworkflowenginesvr "digital-contracting-service/gen/http/contract_workflow_engine/server"
 	dcstodcssvr "digital-contracting-service/gen/http/dcs_to_dcs/server"
+	didsvr "digital-contracting-service/gen/http/did_service/server"
 	pdfgenerationsvr "digital-contracting-service/gen/http/pdf_generation/server"
 	processauditandcompliancesvr "digital-contracting-service/gen/http/process_audit_and_compliance/server"
 	signaturemanagementsvr "digital-contracting-service/gen/http/signature_management/server"
@@ -62,7 +65,12 @@ var (
 
 // handleHTTPServer starts configures and starts a HTTP server on the given
 // URL. It shuts down the server if any error is received in the error channel.
-func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.Endpoints, contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints, dcsToDcsEndpoints *dcstodcs.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints, signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints, templateRepositoryEndpoints *templaterepository.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup, errc chan error, dbg bool) {
+func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.Endpoints,
+	contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints,
+	dcsToDcsEndpoints *dcstodcs.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints,
+	signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints,
+	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
+	errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
 	// The goa http package has built-in support for JSON, XML and gob.
@@ -102,6 +110,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		signatureManagementServer          *signaturemanagementsvr.Server
 		templateCatalogueIntegrationServer *templatecatalogueintegrationsvr.Server
 		templateRepositoryServer           *templaterepositorysvr.Server
+		didServer                          *didsvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
@@ -115,7 +124,10 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		signatureManagementServer = signaturemanagementsvr.New(signatureManagementEndpoints, apiMux, dec, enc, eh, ef)
 		templateCatalogueIntegrationServer = templatecatalogueintegrationsvr.New(templateCatalogueIntegrationEndpoints, apiMux, dec, enc, eh, ef)
 		templateRepositoryServer = templaterepositorysvr.New(templateRepositoryEndpoints, apiMux, dec, enc, eh, ef)
+		didServer = didsvr.New(didEnpoints, apiMux, dec, enc, eh, ef)
 	}
+
+	didsvr.Mount(mux, didServer)
 
 	// Configure the mux.
 	authsvr.Mount(apiMux, authServer)
@@ -178,6 +190,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range templateRepositoryServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range didServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 

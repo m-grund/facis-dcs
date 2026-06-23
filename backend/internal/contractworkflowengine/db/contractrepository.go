@@ -41,6 +41,7 @@ func (r *Responsible) Scan(src any) error {
 
 type Contract struct {
 	DID             string         `db:"did"`
+	Origin          string         `db:"origin"`
 	ContractVersion int            `db:"contract_version"`
 	State           string         `db:"state"`
 	CreatedBy       string         `db:"created_by"`
@@ -60,6 +61,7 @@ type Contract struct {
 
 type ContractMetadata struct {
 	DID                  string       `db:"did"`
+	Origin               string       `db:"origin"`
 	ContractVersion      int          `db:"contract_version"`
 	State                string       `db:"state"`
 	CreatedBy            string       `db:"created_by"`
@@ -81,6 +83,7 @@ type ContractMetadata struct {
 
 type ContractProcessData struct {
 	DID             string     `db:"did"`
+	Origin          string     `db:"origin"`
 	ContractVersion int        `db:"contract_version"`
 	State           string     `db:"state"`
 	CreatedBy       string     `db:"created_by"`
@@ -107,6 +110,7 @@ type ContractUpdateData struct {
 
 type ContractHistory struct {
 	ID              string         `db:"id"`
+	Origin          string         `db:"origin"`
 	DID             string         `db:"did"`
 	ContractVersion int            `db:"contract_version"`
 	State           string         `db:"state"`
