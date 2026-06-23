@@ -15,6 +15,8 @@ var _ = Service("DIDService", func() {
 
 		HTTP(func() {
 			GET("/.well-known/did.json")
+			GET("/api/.well-known/did.json")
+
 			Response(StatusOK, func() {
 				ContentType("application/did+json")
 			})

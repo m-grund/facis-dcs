@@ -20,6 +20,15 @@ func NewDIDDocument(didFileContent []byte) (*DIDDocument, error) {
 	return &didFile, nil
 }
 
+func (d DIDDocument) GetID() (string, error) {
+	raw, ok := d["id"]
+	if !ok {
+		return "", errors.New(`did document does not contain "id"`)
+	}
+
+	return raw.(string), nil
+}
+
 func (d DIDDocument) ExtractDomainAndPath() (domain string, err error) {
 	raw, ok := d["id"]
 	if !ok {

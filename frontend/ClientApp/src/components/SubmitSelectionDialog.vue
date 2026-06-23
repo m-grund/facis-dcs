@@ -5,7 +5,7 @@
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
         <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
 
-        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalIssuers">Add local Issuer</button>
+        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
         <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
 
         <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
@@ -122,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import { readLocalDIDFile } from '@/services/did-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
 import type { SubmitContractAssignees } from '@/utils/submit-selection'
@@ -149,26 +150,31 @@ const reviewerError = ref('')
 const approverError = ref('')
 const negotiatorError = ref('')
 
-function addLocalIssuers() {
+async function addLocalDID() {
   error.value = ''
 
-  const issuer = authStore.user?.issuer ?? ''
+  try {
+    const didDocument = await readLocalDIDFile();
+    const did = didDocument?.id;
 
-  if (issuer === '') {
-    error.value = 'No valid value for local issuer found'
-    return
-  }
+    if (did === '') {
+      error.value = 'No valid value for local did found'
+      return
+    }
 
-  if (!isDuplicateInList(issuer, negotiators.value)) {
-    negotiators.value.push(issuer)
-  }
+    if (!isDuplicateInList(did, negotiators.value)) {
+      negotiators.value.push(did)
+    }
 
-  if (!isDuplicateInList(issuer, reviewers.value)) {
-    reviewers.value.push(issuer)
-  }
+    if (!isDuplicateInList(did, reviewers.value)) {
+      reviewers.value.push(did)
+    }
 
-  if (!isDuplicateInList(issuer, approvers.value)) {
-    approvers.value.push(issuer)
+    if (!isDuplicateInList(did, approvers.value)) {
+      approvers.value.push(did)
+    }
+  } catch {
+    error.value = 'Could not read local did'
   }
 }
 

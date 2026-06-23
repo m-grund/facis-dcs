@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -34,6 +36,7 @@ type SubmitCmd struct {
 	Comments    []string
 	HolderDID   string
 	UserRoles   userrole.UserRoles
+	DIDDocument base.DIDDocument
 }
 
 type Submitter struct {
@@ -134,8 +137,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approvers provided")
 		}
 
+		did, err := cmd.DIDDocument.GetID()
+		if err != nil {
+			return fmt.Errorf("could not get DID: %w", err)
+		}
+
 		resp := db.Responsible{
-			Creator:     processData.CreatedBy,
+			Creator:     did,
 			Reviewers:   cmd.Reviewers,
 			Approvers:   cmd.Approvers,
 			Negotiators: cmd.Negotiators,
@@ -144,7 +152,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			DID:         cmd.DID,
 			Responsible: &resp,
 		}
-		err := h.CRepo.Update(ctx, tx, updateData)
+		err = h.CRepo.Update(ctx, tx, updateData)
 		if err != nil {
 			return fmt.Errorf("could not update contract: %w", err)
 		}

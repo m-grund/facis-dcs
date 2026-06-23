@@ -75,14 +75,9 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	origin, err := s.DIDDocument.ExtractDomainAndPath()
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
 	cmd := command.CreateCmd{
 		DID:         *did,
-		Origin:      origin,
+		DIDDocument: s.DIDDocument,
 		TemplateDID: req.Did,
 		CreatedBy:   middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
@@ -196,6 +191,7 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
+		DIDDocument: s.DIDDocument,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/jmoiron/sqlx"
@@ -25,7 +27,7 @@ type CreateCmd struct {
 	CreatedBy   string
 	HolderDID   string
 	UserRoles   userrole.UserRoles
-	Origin      string
+	DIDDocument base.DIDDocument
 }
 
 type Creator struct {
@@ -55,9 +57,14 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
 
+	origin, err := cmd.DIDDocument.ExtractDomainAndPath()
+	if err != nil {
+		return fmt.Errorf("could not extract did: %w", err)
+	}
+
 	data := db.Contract{
 		DID:             cmd.DID,
-		Origin:          cmd.Origin,
+		Origin:          origin,
 		CreatedBy:       cmd.CreatedBy,
 		State:           contractstate.Draft.String(),
 		ContractData:    normalizedContractData,
