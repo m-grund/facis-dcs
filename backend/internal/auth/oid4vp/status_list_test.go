@@ -77,7 +77,7 @@ func makeJWTStatusListToken(t *testing.T, bitstring []byte, bits int) string {
 	return header + "." + payloadEnc + "."
 }
 
-func TestQueryEntryStatusFromBody_W3CGzipMultibase(t *testing.T) {
+func TestQueryEntryStatusFromEncodedList_MSB(t *testing.T) {
 	bitstring := make([]byte, 16)
 	idx := uint32(5)
 	byteIdx := idx / 8
@@ -85,17 +85,19 @@ func TestQueryEntryStatusFromBody_W3CGzipMultibase(t *testing.T) {
 	bitstring[byteIdx] |= 1 << bitIdx
 
 	body := makeW3CBitstringListBody(t, bitstring, "revocation")
+	encoded, err := encodedListFromBodyForPurpose(body, "revocation")
+	require.NoError(t, err)
 
-	status, err := queryEntryStatusFromBodyWithOptions(body, idx, 1, "revocation")
+	status, err := queryEntryStatusFromEncodedListWithPacking(encoded, idx, 1, bitPackingMSB)
 	require.NoError(t, err)
 	assert.Equal(t, "revoked", status)
 
-	status, err = queryEntryStatusFromBodyWithOptions(body, idx+1, 1, "revocation")
+	status, err = queryEntryStatusFromEncodedListWithPacking(encoded, idx+1, 1, bitPackingMSB)
 	require.NoError(t, err)
 	assert.Equal(t, "active", status)
 }
 
-func TestQueryEntryStatusFromBody_LegacyZlib(t *testing.T) {
+func TestQueryEntryStatusFromBody_LegacyZlib_MSB(t *testing.T) {
 	bitstring := make([]byte, 16)
 	idx := uint32(5)
 	byteIdx := idx / 8
@@ -108,16 +110,14 @@ func TestQueryEntryStatusFromBody_LegacyZlib(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, w.Close())
 
-	body, err := json.Marshal(map[string]any{
-		"credentialSubject": map[string]any{
-			"encodedList": base64.RawURLEncoding.EncodeToString(buf.Bytes()),
-		},
-	})
-	require.NoError(t, err)
-
-	status, err := queryEntryStatusFromBody(body, idx)
+	encoded := base64.RawURLEncoding.EncodeToString(buf.Bytes())
+	status, err := queryEntryStatusFromEncodedListWithPacking(encoded, idx, 1, bitPackingMSB)
 	require.NoError(t, err)
 	assert.Equal(t, "revoked", status)
+}
+
+func TestStatusListEntryBitPacking(t *testing.T) {
+	assert.Equal(t, bitPackingLSB, statusListEntryBitPacking)
 }
 
 func TestQueryEntryStatusFromBody_XFSCGzip(t *testing.T) {
@@ -129,6 +129,32 @@ func TestQueryEntryStatusFromBody_XFSCGzip(t *testing.T) {
 	status, err := queryEntryStatusFromBody(body, idx)
 	require.NoError(t, err)
 	assert.Equal(t, "active", status)
+}
+
+func TestQueryEntryStatusFromBody_XFSCGzip_LSBRevoked(t *testing.T) {
+	idx := uint32(38021)
+	bitstring := make([]byte, 131072)
+	byteIdx := idx / 8
+	bitstring[byteIdx] |= 1 << (idx % 8) // XFSC: LSB-first within byte
+
+	body := makeXFSCListBody(bitstring)
+
+	status, err := queryEntryStatusFromBodyWithOptions(body, idx, 1, "revocation")
+	require.NoError(t, err)
+	assert.Equal(t, "revoked", status)
+}
+
+func TestBitSetAt_LSBvsMSB(t *testing.T) {
+	data := []byte{0x20} // bit 5 set (LSB), not bit 2 (MSB for index 5)
+
+	idx := uint32(5)
+	lsb, err := bitSetAt(data, idx, true)
+	require.NoError(t, err)
+	assert.True(t, lsb)
+
+	msb, err := bitSetAt(data, idx, false)
+	require.NoError(t, err)
+	assert.False(t, msb)
 }
 
 func TestTokenStatusListJWT_UsesLSBPacking(t *testing.T) {
@@ -249,8 +275,7 @@ func TestCheckStatusList_StatusList2021_Revoked(t *testing.T) {
 	idx := uint32(3)
 	bitstring := make([]byte, 16)
 	byteIdx := idx / 8
-	bitIdx := uint(7 - (idx % 8))
-	bitstring[byteIdx] |= 1 << bitIdx
+	bitstring[byteIdx] |= 1 << (idx % 8) // XFSC body: LSB-first
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(makeXFSCListBody(bitstring))
@@ -262,6 +287,31 @@ func TestCheckStatusList_StatusList2021_Revoked(t *testing.T) {
 			"type":                 statusKindStatusList2021,
 			"statusListCredential": srv.URL,
 			"statusListIndex":      "3",
+		},
+	})
+	require.NoError(t, err)
+
+	err = checkStatusList(claims)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "revoked")
+}
+
+func TestCheckStatusList_BitstringStatusList_XFSC_LSBRevoked(t *testing.T) {
+	idx := uint32(38021)
+	bitstring := make([]byte, 131072)
+	bitstring[idx/8] |= 1 << (idx % 8)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(makeXFSCListBody(bitstring))
+	}))
+	defer srv.Close()
+
+	claims, err := json.Marshal(map[string]any{
+		"credentialStatus": map[string]any{
+			"type":                 statusKindBitstringStatusList,
+			"statusPurpose":        "revocation",
+			"statusListCredential": srv.URL,
+			"statusListIndex":      "38021",
 		},
 	})
 	require.NoError(t, err)

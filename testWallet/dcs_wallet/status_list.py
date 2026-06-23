@@ -1,4 +1,4 @@
-"""W3C StatusList2021 helpers for testWallet (aligned with backend c2pa/status_list.go)."""
+"""Status list helpers for testWallet issuance and dev scripts."""
 
 from __future__ import annotations
 
@@ -123,20 +123,50 @@ def _decompress_bitstring(encoded_list: str) -> bytes:
 
 
 def bit_is_revoked(encoded_list: str, index: int) -> bool:
+    """Return whether index is revoked (LSB: matches statuslist-service)."""
     bitstring = _decompress_bitstring(encoded_list)
     byte_idx = index // 8
-    bit_idx = 7 - (index % 8)
     if byte_idx >= len(bitstring):
         raise ValueError(f"index {index} out of range for bitstring length {len(bitstring)}")
-    return bool(bitstring[byte_idx] & (1 << bit_idx))
+    return bool(bitstring[byte_idx] & (1 << (index % 8)))
 
 
-def verify_index_active(uri: str, index: int, timeout: float = 10.0) -> None:
-    payload = fetch_status_list_payload(uri, timeout=timeout)
-    encoded = encoded_list_from_payload(payload)
-    if bit_is_revoked(encoded, index):
-        raise ValueError(f"status index {index} is revoked on {uri}")
-
+def revoke_status_index(
+    index: int,
+    *,
+    service_base: str = DEFAULT_SERVICE_BASE,
+    tenant: str = DEFAULT_TENANT,
+    list_number: int = DEFAULT_LIST_NUMBER,
+    timeout: float = 10.0,
+) -> dict[str, Any]:
+    """POST /v1/tenants/{tenant}/status/{list}/revoke/{index}."""
+    if index < 0:
+        raise ValueError(f"index must be non-negative, got {index}")
+    base = service_base.strip().rstrip("/")
+    if not base.startswith("http://") and not base.startswith("https://"):
+        base = f"http://{base}"
+    url = f"{base}/v1/tenants/{tenant}/status/{list_number}/revoke/{index}"
+    req = Request(
+        url,
+        data=b"",
+        method="POST",
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"revoke failed HTTP {exc.code}: {detail}") from exc
+    if not body:
+        return {}
+    data = json.loads(body.decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"revoke response is not a JSON object: {body!r}")
+    return data
 
 def _nats_create_event(*, tenant_id: str, request_id: str, origin: str) -> dict[str, Any]:
     return {
