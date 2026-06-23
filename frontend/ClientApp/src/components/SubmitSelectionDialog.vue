@@ -122,8 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { readLocalDIDFile } from '@/services/did-service'
-import { useAuthStore } from '@/stores/auth-store'
+import { getLocalDIDFile } from '@/services/did-service'
 import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
 import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import { nextTick, ref, type Ref } from 'vue'
@@ -133,8 +132,6 @@ defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{
   submit: [value: SubmitContractAssignees]
 }>()
-
-const authStore = useAuthStore()
 
 const assigneeModal = ref<HTMLDialogElement | null>(null)
 
@@ -154,7 +151,7 @@ async function addLocalDID() {
   error.value = ''
 
   try {
-    const didDocument = await readLocalDIDFile();
+    const didDocument = await getLocalDIDFile();
     const did = didDocument?.id;
 
     if (did === '') {
