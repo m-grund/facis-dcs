@@ -157,6 +157,7 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
+		DIDDocument: s.DIDDocument,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
