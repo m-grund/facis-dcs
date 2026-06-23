@@ -20,6 +20,7 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
+	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 )
 
 type ApproveCmd struct {
@@ -101,6 +102,24 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		approvedContract, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
 		if err != nil {
 			return fmt.Errorf("could not read approved contract for archive storage: %w", err)
+		}
+		finalContractData, err := semanticmapper.MaterializeStoredContractJSONLD(
+			*approvedContract,
+			semanticmapper.DefaultProfile(),
+		)
+		if err != nil {
+			return fmt.Errorf("could not materialize approved contract JSON-LD: %w", err)
+		}
+		finalContractJSON, err := datatype.NewJSON(finalContractData)
+		if err != nil {
+			return fmt.Errorf("could not encode approved contract JSON-LD: %w", err)
+		}
+		approvedContract.ContractData = &finalContractJSON
+		if err := h.CRepo.Update(ctx, tx, db.ContractUpdateData{
+			DID:          cmd.DID,
+			ContractData: approvedContract.ContractData,
+		}); err != nil {
+			return fmt.Errorf("could not persist approved contract JSON-LD: %w", err)
 		}
 		archiveEntry, err := BuildArchiveEntry(approvedContract, cmd.ApprovedBy)
 		if err != nil {

@@ -80,7 +80,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	converted, err := convertTemplateDataToContractData(&raw, "did:web:facis.example:template:1")
+	converted, err := convertTemplateDataToContractData(&raw, "did:web:facis.example:template:1", 7)
 	require.NoError(t, err)
 
 	var data map[string]any
@@ -88,6 +88,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	require.Equal(t, "dcs:Contract", data["@type"])
 	require.Equal(t, "did:web:facis.example:template:1", data["derivedFromTemplate"])
 	require.Equal(t, "did:web:facis.example:template:1", data["sourceTemplate"].(map[string]any)["did"])
+	require.Equal(t, float64(7), data["sourceTemplate"].(map[string]any)["version"])
 	require.Empty(t, data["semanticConditionValues"])
 	structure := data["dcs:documentStructure"].(map[string]any)
 	require.Len(t, structure["dcs:blocks"], 1)

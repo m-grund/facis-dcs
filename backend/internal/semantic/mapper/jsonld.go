@@ -107,6 +107,9 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		return nil, fmt.Errorf("parse contract_data: %w", err)
 	}
 	if isCanonicalJSONLDEnvelope(inner) {
+		if err := expandApprovedTemplateSnapshots(inner, stableBaseID(contract.DID)); err != nil {
+			return nil, fmt.Errorf("expand approved template snapshots: %w", err)
+		}
 		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2, "xsd": xsdContext}
 		inner["@id"] = contract.DID
 		inner["@type"] = "dcs:Contract"
@@ -140,14 +143,289 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 	return envelope, nil
 }
 
+// MaterializeStoredContractJSONLD finalizes a stored workflow contract through
+// the same mapper used by direct contract JSON-LD generation. Source-template
+// identity is read from the stored contract envelope.
+func MaterializeStoredContractJSONLD(contract contractdb.Contract, profile OntologyProfile) (map[string]any, error) {
+	inner, err := parseJSONB(contract.ContractData)
+	if err != nil {
+		return nil, fmt.Errorf("parse stored contract_data: %w", err)
+	}
+	sourceDID, sourceVersion := storedSourceTemplate(inner)
+	sourceTemplate := templatedb.ContractTemplate{
+		DID:     sourceDID,
+		Version: sourceVersion,
+	}
+	return BuildContractJSONLD(contract, sourceTemplate, profile)
+}
+
+func storedSourceTemplate(data map[string]any) (string, int) {
+	var did string
+	var version int
+	if source, ok := data["sourceTemplate"].(map[string]any); ok {
+		did, _ = source["did"].(string)
+		version = intFromAny(source["version"])
+	}
+	if did == "" {
+		did, _ = data["derivedFromTemplate"].(string)
+	}
+	if metadata, ok := data["dcs:metadata"].(map[string]any); ok {
+		if did == "" {
+			did = resourceID(metadata["dcs:derivedFromTemplate"])
+		}
+		if version == 0 {
+			version = intFromAny(metadata["dcs:sourceTemplateVersion"])
+		}
+		if version == 0 {
+			version = intFromAny(metadata["dcs:templateVersion"])
+		}
+	}
+	return did, version
+}
+
+func intFromAny(value any) int {
+	switch typed := value.(type) {
+	case float64:
+		return int(typed)
+	case int:
+		return typed
+	case json.Number:
+		parsed, _ := strconv.Atoi(string(typed))
+		return parsed
+	default:
+		return 0
+	}
+}
+
 func isCanonicalJSONLDEnvelope(value map[string]any) bool {
 	_, hasDocumentStructure := value["dcs:documentStructure"]
 	return hasDocumentStructure
 }
 
+func expandApprovedTemplateSnapshots(data map[string]any, baseID string) error {
+	metadata, _ := data["dcs:metadata"].(map[string]any)
+	rawSnapshots, _ := asArray(metadata["dcs:subTemplates"])
+	snapshots := map[string]map[string]any{}
+	for _, rawSnapshot := range rawSnapshots {
+		snapshot, ok := rawSnapshot.(map[string]any)
+		if !ok {
+			continue
+		}
+		templateDID, _ := snapshot["@id"].(string)
+		if _, ok := snapshot["dcs:template"].(map[string]any); ok && templateDID != "" {
+			snapshots[templateDID] = snapshot
+			if version := intFromAny(snapshot["dcs:version"]); version > 0 {
+				snapshots[templateSnapshotKey(templateDID, version)] = snapshot
+			}
+		}
+	}
+
+	structure, _ := data["dcs:documentStructure"].(map[string]any)
+	rawBlocks, _ := asArray(structure["dcs:blocks"])
+	rawLayout, _ := asArray(structure["dcs:layout"])
+	contractData, _ := asArray(data["dcs:contractData"])
+	policies, _ := asArray(data["dcs:policies"])
+
+	expandedBlocks := make([]any, 0, len(rawBlocks))
+	expandedLayout := append([]any(nil), rawLayout...)
+	for _, rawBlock := range rawBlocks {
+		block, ok := rawBlock.(map[string]any)
+		if !ok || block["@type"] != "dcs:ApprovedTemplate" {
+			expandedBlocks = append(expandedBlocks, rawBlock)
+			continue
+		}
+		templateDID, _ := block["dcs:templateDid"].(string)
+		snapshot := snapshots[templateSnapshotKey(templateDID, intFromAny(block["dcs:version"]))]
+		if snapshot == nil {
+			snapshot = snapshots[templateDID]
+		}
+		template, ok := snapshot["dcs:template"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("approved template block references missing snapshot %q", templateDID)
+		}
+		nested, err := cloneJSONMap(template)
+		if err != nil {
+			return fmt.Errorf("clone approved template %q: %w", templateDID, err)
+		}
+		if err := expandApprovedTemplateSnapshots(nested, baseID); err != nil {
+			return err
+		}
+		ownerID, _ := block["@id"].(string)
+		ownerFragment := localIRI(ownerID)
+		rebaseNestedTemplateIDs(nested, templateDID, baseID, ownerFragment)
+
+		nestedStructure, _ := nested["dcs:documentStructure"].(map[string]any)
+		nestedBlocks, _ := asArray(nestedStructure["dcs:blocks"])
+		nestedLayout, _ := asArray(nestedStructure["dcs:layout"])
+		rootChildren := nestedRootChildren(nestedLayout)
+
+		section := map[string]any{
+			"@id":   ownerID,
+			"@type": "dcs:Section",
+		}
+		if title, _ := snapshot["dcs:name"].(string); strings.TrimSpace(title) != "" {
+			section["dcs:title"] = title
+		}
+		expandedBlocks = append(expandedBlocks, section)
+		expandedBlocks = append(expandedBlocks, nestedBlocks...)
+		replaceLayoutChildren(expandedLayout, ownerID, rootChildren)
+		for _, rawNode := range nestedLayout {
+			node, ok := rawNode.(map[string]any)
+			if !ok || isTrue(node["dcs:isRoot"]) {
+				continue
+			}
+			expandedLayout = append(expandedLayout, node)
+		}
+		nestedData, _ := asArray(nested["dcs:contractData"])
+		nestedPolicies, _ := asArray(nested["dcs:policies"])
+		contractData = append(contractData, nestedData...)
+		policies = append(policies, nestedPolicies...)
+	}
+
+	structure["dcs:blocks"] = expandedBlocks
+	structure["dcs:layout"] = expandedLayout
+	data["dcs:contractData"] = contractData
+	data["dcs:policies"] = policies
+	if metadata != nil {
+		delete(metadata, "dcs:subTemplates")
+	}
+	canonicalizeContractFieldIDs(data, baseID)
+	return nil
+}
+
+func templateSnapshotKey(did string, version int) string {
+	return fmt.Sprintf("%s\x00%d", did, version)
+}
+
+func cloneJSONMap(value map[string]any) (map[string]any, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var clone map[string]any
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		return nil, err
+	}
+	return clone, nil
+}
+
+func rebaseNestedTemplateIDs(value any, templateDID string, baseID string, ownerFragment string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if text, ok := nested.(string); ok && strings.HasPrefix(text, templateDID+"#") {
+				fragment := strings.TrimPrefix(text, templateDID+"#")
+				typed[key] = baseID + "#" + ownerFragment + "-" + fragment
+				continue
+			}
+			rebaseNestedTemplateIDs(nested, templateDID, baseID, ownerFragment)
+		}
+	case []any:
+		for _, nested := range typed {
+			rebaseNestedTemplateIDs(nested, templateDID, baseID, ownerFragment)
+		}
+	}
+}
+
+func localIRI(id string) string {
+	if index := strings.LastIndex(id, "#"); index >= 0 && index < len(id)-1 {
+		return id[index+1:]
+	}
+	return slugify(id)
+}
+
+func nestedRootChildren(layout []any) []any {
+	for _, rawNode := range layout {
+		node, ok := rawNode.(map[string]any)
+		if !ok || !isTrue(node["dcs:isRoot"]) {
+			continue
+		}
+		children, _ := jsonLDListValues(node["dcs:children"])
+		return append([]any(nil), children...)
+	}
+	return nil
+}
+
+func jsonLDListValues(value any) ([]any, bool) {
+	container, ok := value.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return asArray(container["@list"])
+}
+
+func replaceLayoutChildren(layout []any, nodeID string, children []any) {
+	for _, rawNode := range layout {
+		node, ok := rawNode.(map[string]any)
+		if !ok || node["@id"] != nodeID {
+			continue
+		}
+		node["dcs:children"] = map[string]any{"@list": children}
+		return
+	}
+}
+
+func canonicalizeContractFieldIDs(data map[string]any, baseID string) {
+	rawRequirements, _ := asArray(data["dcs:contractData"])
+	replacements := map[string]string{}
+	for _, rawRequirement := range rawRequirements {
+		requirement, ok := rawRequirement.(map[string]any)
+		if !ok || requirement["@type"] != "dcs:DataRequirement" {
+			continue
+		}
+		conditionID, _ := requirement["dcs:conditionId"].(string)
+		fields, _ := asArray(requirement["dcs:fields"])
+		for _, rawField := range fields {
+			field, ok := rawField.(map[string]any)
+			if !ok {
+				continue
+			}
+			parameterName, _ := field["dcs:parameterName"].(string)
+			oldID, _ := field["@id"].(string)
+			newID := baseID + "#field-" + slugify(conditionID) + "-" + slugifyCamel(parameterName)
+			if oldID != "" {
+				replacements[oldID] = newID
+			}
+			field["@id"] = newID
+		}
+	}
+	replaceExactIRIReferences(data, replacements)
+}
+
+func replaceExactIRIReferences(value any, replacements map[string]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if text, ok := nested.(string); ok {
+				if replacement := replacements[text]; replacement != "" {
+					typed[key] = replacement
+					continue
+				}
+			}
+			replaceExactIRIReferences(nested, replacements)
+		}
+	case []any:
+		for _, nested := range typed {
+			replaceExactIRIReferences(nested, replacements)
+		}
+	}
+}
+
 func materializeCanonicalContractData(data map[string]any, baseID string, requireComplete bool) error {
 	rawRequirements, _ := asArray(data["dcs:contractData"])
 	rawValues, _ := asArray(data["semanticConditionValues"])
+	hasRequirements := false
+	for _, rawRequirement := range rawRequirements {
+		requirement, ok := rawRequirement.(map[string]any)
+		if ok && requirement["@type"] == "dcs:DataRequirement" {
+			hasRequirements = true
+			break
+		}
+	}
+	if !hasRequirements {
+		delete(data, "semanticConditionValues")
+		return nil
+	}
 
 	valuesByCondition := map[string][]map[string]any{}
 	for index, rawValue := range rawValues {
@@ -475,6 +753,8 @@ func cleanupPublishedContractEnvelope(data map[string]any) {
 	}
 	if metadata, ok := data["dcs:metadata"].(map[string]any); ok {
 		delete(metadata, "dcs:templateType")
+		delete(metadata, "dcs:templateVersion")
+		delete(metadata, "dcs:subTemplates")
 	}
 }
 
