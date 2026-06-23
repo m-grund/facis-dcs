@@ -125,6 +125,7 @@ func TestBuildTemplateJSONLDProducesSeparatedTopLevelSections(t *testing.T) {
 	require.Contains(t, env, "dcs:policies")
 	require.NotContains(t, env, "template_data")
 	require.NotContains(t, env, "semanticRules")
+	require.NotContains(t, env["dcs:metadata"].(map[string]any), "dcs:semanticProfile")
 }
 
 func TestBuildTemplateJSONLDSeparatesDocumentStructureFromPolicies(t *testing.T) {
@@ -412,6 +413,7 @@ func TestBuildContractJSONLDUsesSameSeparatedSections(t *testing.T) {
 	require.Contains(t, env, "dcs:documentStructure")
 	require.Contains(t, env, "dcs:contractData")
 	require.Contains(t, env, "dcs:policies")
+	require.NotContains(t, env["dcs:metadata"].(map[string]any), "dcs:semanticProfile")
 }
 
 func TestBuildContractJSONLDMaterializesCanonicalConditionValues(t *testing.T) {

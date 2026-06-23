@@ -558,7 +558,6 @@ func normalizeTemplateMetadata(data documentData) {
 		"requiredPolicies":  []string{PolicyTemplateStructureV1, PolicyTemplateSemanticConditionsV1},
 		"validatedBySchema": true,
 	}
-	normalizeSemanticProfile(data)
 	normalizeSemanticRuntimeMetadata(data)
 }
 
@@ -580,18 +579,7 @@ func normalizeContractMetadata(data documentData) {
 		"requiredPolicies":  []string{PolicyContractStructureV1, PolicyContractSemanticValuesV1},
 		"validatedBySchema": true,
 	}
-	normalizeSemanticProfile(data)
 	normalizeSemanticRuntimeMetadata(data)
-}
-
-func normalizeSemanticProfile(data documentData) {
-	data["semanticProfile"] = map[string]any{
-		"name":     SemanticProfileName,
-		"version":  SemanticProfileVersionV1,
-		"context":  SchemaJSONLDContextV1,
-		"ontology": SchemaOntologyV1,
-		"shapes":   SchemaSHACLShapesV1,
-	}
 }
 
 func normalizeSemanticRuntimeMetadata(data documentData) {

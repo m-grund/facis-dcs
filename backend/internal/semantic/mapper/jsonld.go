@@ -22,14 +22,9 @@ import (
 )
 
 const (
-	jsonLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
-	dcsContextV1        = "https://w3id.org/facis/dcs/ontology/v1#"
-	odrlContextV2       = "http://www.w3.org/ns/odrl/2/"
-	xsdContext          = "http://www.w3.org/2001/XMLSchema#"
-	semanticProfileName = "FACIS DCS Semantic Contract Profile"
-	semanticProfileV1   = "v1"
-	ontologyV1          = "https://w3id.org/facis/dcs/ontology/v1"
-	shaclShapesV1       = "https://w3id.org/facis/dcs/shapes/v1"
+	dcsContextV1  = "https://w3id.org/facis/dcs/ontology/v1#"
+	odrlContextV2 = "http://www.w3.org/ns/odrl/2/"
+	xsdContext    = "http://www.w3.org/2001/XMLSchema#"
 )
 
 // templateEnvelopeSet holds field names that are set exclusively from the DB row
@@ -48,7 +43,6 @@ var templateEnvelopeSet = map[string]bool{
 	"description":     true,
 	"createdAt":       true,
 	"updatedAt":       true,
-	"semanticProfile": true,
 	"template_data":   true,
 }
 
@@ -71,7 +65,6 @@ var contractEnvelopeSet = map[string]bool{
 	"validUntil":          true,
 	"derivedFromTemplate": true,
 	"templateVersion":     true,
-	"semanticProfile":     true,
 	"contractData":        true,
 }
 
@@ -85,7 +78,7 @@ func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyP
 		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2, "xsd": xsdContext}
 		inner["@id"] = template.DID
 		inner["@type"] = "dcs:ContractTemplate"
-		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildTemplateMetadata(template, profile))
+		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildTemplateMetadata(template))
 		return inner, nil
 	}
 
@@ -98,7 +91,7 @@ func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyP
 		},
 		"@id":                   template.DID,
 		"@type":                 "dcs:ContractTemplate",
-		"dcs:metadata":          buildTemplateMetadata(template, profile),
+		"dcs:metadata":          buildTemplateMetadata(template),
 		"dcs:documentStructure": buildDocumentStructure(baseID, inner),
 		"dcs:contractData":      buildContractData(baseID, inner),
 		"dcs:policies":          buildPolicies(baseID, inner),
@@ -117,7 +110,7 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		inner["@context"] = map[string]any{"dcs": dcsContextV1, "odrl": odrlContextV2, "xsd": xsdContext}
 		inner["@id"] = contract.DID
 		inner["@type"] = "dcs:Contract"
-		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildContractMetadata(contract, sourceTemplate, profile))
+		inner["dcs:metadata"] = mergeMetadata(inner["dcs:metadata"], buildContractMetadata(contract, sourceTemplate))
 		if err := materializeCanonicalContractData(
 			inner,
 			stableBaseID(contract.DID),
@@ -138,7 +131,7 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		},
 		"@id":                   contract.DID,
 		"@type":                 "dcs:Contract",
-		"dcs:metadata":          buildContractMetadata(contract, sourceTemplate, profile),
+		"dcs:metadata":          buildContractMetadata(contract, sourceTemplate),
 		"dcs:documentStructure": buildDocumentStructure(baseID, inner),
 		"dcs:contractData":      buildContractData(baseID, inner),
 		"dcs:policies":          buildPolicies(baseID, inner),
@@ -498,7 +491,7 @@ func mergeMetadata(existing any, authoritative map[string]any) map[string]any {
 	return result
 }
 
-func buildTemplateMetadata(template templatedb.ContractTemplate, profile OntologyProfile) map[string]any {
+func buildTemplateMetadata(template templatedb.ContractTemplate) map[string]any {
 	metadata := map[string]any{
 		"@id":                  stableBaseID(template.DID) + "#metadata",
 		"@type":                "dcs:TemplateMetadata",
@@ -509,7 +502,6 @@ func buildTemplateMetadata(template templatedb.ContractTemplate, profile Ontolog
 		"dcs:createdBy":        template.CreatedBy,
 		"dcs:createdAt":        template.CreatedAt.UTC().Format(time.RFC3339),
 		"dcs:updatedAt":        template.UpdatedAt.UTC().Format(time.RFC3339),
-		"dcs:semanticProfile":  buildSemanticProfile(profile),
 		"dcs:schemaVersion":    "v1",
 		"dcs:sourceSystemType": "template-repository",
 	}
@@ -528,7 +520,7 @@ func buildTemplateMetadata(template templatedb.ContractTemplate, profile Ontolog
 	return metadata
 }
 
-func buildContractMetadata(contract contractdb.Contract, sourceTemplate templatedb.ContractTemplate, profile OntologyProfile) map[string]any {
+func buildContractMetadata(contract contractdb.Contract, sourceTemplate templatedb.ContractTemplate) map[string]any {
 	metadata := map[string]any{
 		"@id":                       stableBaseID(contract.DID) + "#metadata",
 		"@type":                     "dcs:ContractMetadata",
@@ -541,7 +533,6 @@ func buildContractMetadata(contract contractdb.Contract, sourceTemplate template
 		"dcs:updatedAt":             contract.UpdatedAt.UTC().Format(time.RFC3339),
 		"dcs:derivedFromTemplate":   map[string]any{"@id": sourceTemplate.DID},
 		"dcs:sourceTemplateVersion": sourceTemplate.Version,
-		"dcs:semanticProfile":       buildSemanticProfile(profile),
 	}
 	if contract.Name != nil && *contract.Name != "" {
 		metadata["dcs:name"] = *contract.Name
@@ -1253,23 +1244,6 @@ func slugify(value string) string {
 		return "unnamed"
 	}
 	return strings.ToLower(value)
-}
-
-// buildSemanticProfile builds the semanticProfile descriptor for a given profile.
-func buildSemanticProfile(p OntologyProfile) map[string]any {
-	return map[string]any{
-		"name":     p.Name,
-		"version":  p.Version,
-		"context":  p.ContextURL,
-		"ontology": p.OntologyURL,
-		"shapes":   p.ShapesURL,
-	}
-}
-
-// standardSemanticProfile returns the default FACIS DCS v1 semantic profile descriptor.
-// Used by test fixtures that build stored JSONB; the mapper itself uses buildSemanticProfile.
-func standardSemanticProfile() map[string]any {
-	return buildSemanticProfile(DefaultProfile())
 }
 
 // semanticLifecycleState maps a DCS DB contract state to the JSON-LD ontology

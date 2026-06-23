@@ -28,7 +28,6 @@ import {
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
-import { FACIS_DCS_SEMANTIC_PROFILE } from '@/models/semantic/facis-dcs-semantic'
 import type {
   SemanticConditionParameter,
   SemanticParameterOperator,
@@ -73,7 +72,6 @@ const defaultState: Readonly<TemplateDraftState> = {
   },
   policyRefs: FACIS_TEMPLATE_POLICY_REFS,
   validation: FACIS_TEMPLATE_VALIDATION_PROFILE,
-  semanticProfile: FACIS_DCS_SEMANTIC_PROFILE,
   templateVariables: [],
   placeholderBindings: [],
   semanticRules: [],
@@ -902,7 +900,6 @@ function getInitialState(): TemplateDraftState {
       ...defaultState.validation,
       requiredPolicies: [...defaultState.validation.requiredPolicies],
     },
-    semanticProfile: { ...defaultState.semanticProfile },
     templateVariables: [...defaultState.templateVariables],
     placeholderBindings: [...defaultState.placeholderBindings],
     semanticRules: [...defaultState.semanticRules],

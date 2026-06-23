@@ -1,7 +1,6 @@
 import type {
   DcsOperator,
   ParameterType,
-  SemanticProfile,
   SemanticRule,
   SLAAgreement,
   TemplateVariable,
@@ -19,7 +18,6 @@ export interface DocumentStructure {
   schemaRefs: SchemaReferenceSet
   policyRefs: PolicyReference[]
   validation: ValidationProfile
-  semanticProfile?: SemanticProfile
   templateVariables?: TemplateVariable[]
   placeholderBindings?: PlaceholderBinding[]
   semanticRules?: SemanticRule[]

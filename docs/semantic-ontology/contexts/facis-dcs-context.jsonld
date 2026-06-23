@@ -109,7 +109,6 @@
     "blockType": "dcs:blockType",
     "type": "dcs:jsonType",
     "semanticProfileVersion": "dcs:semanticProfileVersion",
-    "semanticProfile": "dcs:semanticProfile",
     "schemaRefs": {
       "@id": "dcs:schemaRefs",
       "@type": "@json"

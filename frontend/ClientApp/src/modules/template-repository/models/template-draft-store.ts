@@ -3,7 +3,6 @@ import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type {
   PlaceholderBinding,
   PolicyBundle,
-  SemanticProfile,
   SemanticRule,
   SLAAgreement,
   TemplateVariable,
@@ -36,7 +35,6 @@ interface TemplateDraftState {
   schemaRefs: SchemaReferenceSet
   policyRefs: PolicyReference[]
   validation: ValidationProfile
-  semanticProfile: SemanticProfile
   templateVariables: TemplateVariable[]
   placeholderBindings: PlaceholderBinding[]
   semanticRules: SemanticRule[]

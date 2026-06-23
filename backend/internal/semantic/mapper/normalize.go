@@ -13,7 +13,7 @@ import (
 //     "GreaterThanOrEqual") in the sla block's SLO and MeasurementRule operators.
 //
 // The base normalization already handles semanticConditions parameter operators,
-// placeholderBindings, semanticRules, semanticProfile, and @context/@type injection.
+// placeholderBindings, semanticRules, and @context/@type injection.
 // This function adds the sla-specific operator pass.
 func NormalizeSemanticTemplateData(raw *datatype.JSON, did string) (*datatype.JSON, error) {
 	normalized, err := validation.NormalizeTemplateDataForPersistence(raw, did)

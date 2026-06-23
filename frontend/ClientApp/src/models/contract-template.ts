@@ -12,7 +12,6 @@ import type {
   SemanticCondition,
 } from '@/modules/template-repository/models/contract-template'
 import type {
-  SemanticProfile,
   TemplateVariable,
   PlaceholderBinding,
   PolicyBundle,
@@ -47,7 +46,6 @@ export interface ContractTemplateData {
   schemaRefs?: SchemaReferenceSet
   policyRefs?: PolicyReference[]
   validation?: ValidationProfile
-  semanticProfile?: SemanticProfile
   templateVariables?: TemplateVariable[]
   placeholderBindings?: PlaceholderBinding[]
   semanticRules?: SemanticRule[]

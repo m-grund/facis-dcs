@@ -7,13 +7,6 @@
   "documentNumber": "FACIS-SLA-API-ACCESS",
   "templateVersion": 1,
   "schemaVersion": "v1",
-  "semanticProfile": {
-    "name": "FACIS DCS Semantic Contract Profile",
-    "version": "v1",
-    "context": "https://w3id.org/facis/dcs/context/v1",
-    "ontology": "https://w3id.org/facis/dcs/ontology/v1",
-    "shapes": "https://w3id.org/facis/dcs/shapes/v1"
-  },
   "name": "API Access SLA Template",
   "description": "Reusable SLA template for controlled API access with uptime, temporal access, country, and credential constraints.",
   "createdAt": "2026-05-21T10:00:00Z",

@@ -11,7 +11,6 @@ import type {
   CompanyParty,
   PlaceholderBinding,
   PolicyBundle,
-  SemanticProfile,
   SemanticRule,
   SLAAgreement,
   TemplateVariable,
@@ -34,7 +33,6 @@ export interface ContractData extends Partial<DcsContractData> {
     version?: number
     document_number?: string
   }
-  semanticProfile?: SemanticProfile
   templateVariables?: TemplateVariable[]
   placeholderBindings?: PlaceholderBinding[]
   semanticRules?: SemanticRule[]

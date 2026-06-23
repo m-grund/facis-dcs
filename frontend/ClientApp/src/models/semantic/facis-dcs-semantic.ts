@@ -1,24 +1,7 @@
-export type SemanticProfileVersion = 'v1'
 export type ValidationSeverity = 'info' | 'warning' | 'error' | 'blocking'
 export type ParameterType = 'string' | 'decimal' | 'integer' | 'boolean' | 'date' | 'enum'
 export type JsonPath = `$${string}`
 export type PlaceholderRef = `{{${string}.${string}}}` | `{{${string}}}`
-
-export interface SemanticProfile {
-  name: 'FACIS DCS Semantic Contract Profile'
-  version: SemanticProfileVersion
-  context: string
-  ontology: string
-  shapes?: string
-}
-
-export const FACIS_DCS_SEMANTIC_PROFILE: SemanticProfile = {
-  name: 'FACIS DCS Semantic Contract Profile',
-  version: 'v1',
-  context: 'https://w3id.org/facis/dcs/context/v1',
-  ontology: 'https://w3id.org/facis/sla/ontology',
-  shapes: 'https://w3id.org/facis/dcs/shapes/v1',
-}
 
 export type DcsOperator =
   | 'odrl:eq'
@@ -222,7 +205,6 @@ interface DocumentBlockLike {
 }
 
 export interface SemanticTemplateRuntimeExtension {
-  semanticProfile: SemanticProfile
   placeholderBindings: PlaceholderBinding[]
   semanticRules: SemanticRule[]
   policyBundle?: PolicyBundle
@@ -231,11 +213,9 @@ export interface SemanticTemplateRuntimeExtension {
 export function buildSemanticTemplateExtension(
   documentBlocks: DocumentBlockLike[],
   semanticConditions: SemanticConditionLike[],
-  semanticProfile: SemanticProfile = FACIS_DCS_SEMANTIC_PROFILE,
 ): SemanticTemplateRuntimeExtension {
   const semanticRules = buildSemanticRulesFromConditions(documentBlocks, semanticConditions)
   return {
-    semanticProfile,
     placeholderBindings: buildPlaceholderBindings(documentBlocks, semanticConditions),
     semanticRules,
     policyBundle: buildPolicyBundleFromSemanticRules(semanticRules),

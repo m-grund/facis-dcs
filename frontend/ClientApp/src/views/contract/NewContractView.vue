@@ -188,7 +188,6 @@ function applyContractDataToDraft(contractData?: unknown) {
     },
     policyRefs: cd.policyRefs ?? FACIS_CONTRACT_POLICY_REFS,
     validation: cd.validation ?? FACIS_CONTRACT_VALIDATION_PROFILE,
-    semanticProfile: cd.semanticProfile,
     templateVariables: cd.templateVariables ?? [],
     placeholderBindings: cd.placeholderBindings ?? [],
     semanticRules: cd.semanticRules ?? [],

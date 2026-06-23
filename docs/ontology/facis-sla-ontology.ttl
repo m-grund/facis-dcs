@@ -860,9 +860,6 @@ dcs:boundToParameter a rdf:Property ;
   rdfs:label "Bound To Parameter"@en ;
   rdfs:range xsd:string .
 
-dcs:semanticProfile a rdf:Property ;
-  rdfs:label "Semantic Profile"@en .
-
 dcs:semanticProfileVersion a rdf:Property ;
   rdfs:label "Semantic Profile Version"@en ;
   rdfs:range xsd:string .

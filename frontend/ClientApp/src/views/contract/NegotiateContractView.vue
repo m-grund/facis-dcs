@@ -240,7 +240,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     contractContentValuesStore.reset()
     return
   }
-  const cd = preprocessContractData(contractData as ContractData)
+  const cd = preprocessContractData(contractData)
   templateDraftStore.reset({
     workflow: 'contract',
     documentOutline: cd.documentOutline ?? [],
@@ -248,7 +248,6 @@ function applyContractDataToDraft(contractData?: unknown) {
     semanticConditions: cd.semanticConditions ?? [],
     subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
     templateDataVersion: cd.templateDataVersion,
-    semanticProfile: cd.semanticProfile,
     templateVariables: cd.templateVariables ?? [],
     placeholderBindings: cd.placeholderBindings ?? [],
     semanticRules: cd.semanticRules ?? [],
