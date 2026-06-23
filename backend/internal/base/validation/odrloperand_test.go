@@ -23,6 +23,12 @@ func TestSemanticDataTypeUsesOntologyAndXSDTypes(t *testing.T) {
 	require.Equal(t, "xsd:string", SemanticDataType("company.legalName"))
 }
 
+func TestSemanticObjectTypeUsesDomainFieldOntologyType(t *testing.T) {
+	require.Equal(t, "dcs:PaymentTerm", SemanticObjectType("contract.payment.amount"))
+	require.Equal(t, "dcs:SLO", SemanticObjectType("service.sla.availability"))
+	require.Equal(t, "dcs:CompanyParty", SemanticObjectType("company.legalName"))
+}
+
 func TestTypeODRLOperandUsesTypedLiterals(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"@type":  "xsd:decimal",

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -373,7 +374,7 @@ func canonicalizeContractFieldIDs(data map[string]any, baseID string) {
 		if !ok || requirement["@type"] != "dcs:DataRequirement" {
 			continue
 		}
-		conditionID, _ := requirement["dcs:conditionId"].(string)
+		concept := inferRequirementConcept(requirement)
 		fields, _ := asArray(requirement["dcs:fields"])
 		for _, rawField := range fields {
 			field, ok := rawField.(map[string]any)
@@ -381,8 +382,9 @@ func canonicalizeContractFieldIDs(data map[string]any, baseID string) {
 				continue
 			}
 			parameterName, _ := field["dcs:parameterName"].(string)
+			semanticPath, _ := field["dcs:semanticPath"].(string)
 			oldID, _ := field["@id"].(string)
-			newID := baseID + "#field-" + slugify(conditionID) + "-" + slugifyCamel(parameterName)
+			newID := baseID + "#field-" + concept.ID + "-" + fieldSemanticName(parameterName, semanticPath)
 			if oldID != "" {
 				replacements[oldID] = newID
 			}
@@ -613,21 +615,12 @@ func materializeDataRequirement(
 	if strings.TrimSpace(conditionID) == "" {
 		return nil, errors.New("dcs:DataRequirement requires dcs:conditionId")
 	}
-	entityRole, _ := requirement["dcs:entityRole"].(string)
-	entityID := conditionID
-	if strings.TrimSpace(entityRole) != "" {
-		entityID = entityRole
-	}
-	entityType, _ := requirement["dcs:entityType"].(string)
-	if strings.TrimSpace(entityType) == "" {
-		entityType = "dcs:ContractDataObject"
-	} else if !strings.Contains(entityType, ":") {
-		entityType = "dcs:" + entityType
-	}
+	concept := inferRequirementConcept(requirement)
 	item := map[string]any{
-		"@id":   baseID + "#" + slugify(entityID),
-		"@type": entityType,
+		"@id":   baseID + "#" + concept.ID,
+		"@type": concept.Type,
 	}
+	entityRole, _ := requirement["dcs:entityRole"].(string)
 	if strings.TrimSpace(entityRole) != "" {
 		item["dcs:role"] = map[string]any{
 			"@id": "dcs:" + upperFirst(slugifyCamel(entityRole)),
@@ -658,6 +651,63 @@ func materializeDataRequirement(
 		item[canonicalFieldProperty(parameterName, semanticPath)] = validation.TypeODRLOperand(domainFieldID, value)
 	}
 	return item, nil
+}
+
+type requirementConcept struct {
+	ID   string
+	Type string
+}
+
+func inferRequirementConcept(requirement map[string]any) requirementConcept {
+	conditionID, _ := requirement["dcs:conditionId"].(string)
+	entityRole, _ := requirement["dcs:entityRole"].(string)
+	if strings.TrimSpace(entityRole) != "" {
+		return requirementConcept{
+			ID:   slugify(entityRole),
+			Type: "dcs:CompanyParty",
+		}
+	}
+
+	fields, _ := asArray(requirement["dcs:fields"])
+	for _, rawField := range fields {
+		field, ok := rawField.(map[string]any)
+		if !ok {
+			continue
+		}
+		semanticPath, _ := field["dcs:semanticPath"].(string)
+		domainFieldID := semanticPath
+		if domainField, ok := field["dcs:domainField"].(map[string]any); ok {
+			if id, _ := domainField["@id"].(string); id != "" {
+				domainFieldID = id
+			}
+		}
+		switch validation.SemanticObjectType(domainFieldID) {
+		case "dcs:PaymentTerm":
+			return requirementConcept{ID: "payment", Type: "dcs:PaymentTerm"}
+		case "dcs:SLO":
+			return requirementConcept{ID: "slo", Type: "dcs:SLO"}
+		case "dcs:CompanyParty":
+			return requirementConcept{ID: slugify(conditionID), Type: "dcs:CompanyParty"}
+		}
+	}
+
+	entityType, _ := requirement["dcs:entityType"].(string)
+	if strings.TrimSpace(entityType) != "" && entityType != "ContractDataObject" && entityType != "dcs:ContractDataObject" {
+		if !strings.Contains(entityType, ":") {
+			entityType = "dcs:" + entityType
+		}
+		return requirementConcept{ID: slugify(conditionID), Type: entityType}
+	}
+	log.Printf("semantic mapper: unknown contract data concept condition=%q; using dcs:ContractDataObject", conditionID)
+	return requirementConcept{ID: slugify(conditionID), Type: "dcs:ContractDataObject"}
+}
+
+func fieldSemanticName(parameterName string, semanticPath string) string {
+	leaf := parameterName
+	if index := strings.LastIndex(semanticPath, "."); index >= 0 && index < len(semanticPath)-1 {
+		leaf = semanticPath[index+1:]
+	}
+	return slugifyCamel(leaf)
 }
 
 func canonicalFieldValue(
@@ -752,6 +802,7 @@ func cleanupPublishedContractEnvelope(data map[string]any) {
 		}
 	}
 	if metadata, ok := data["dcs:metadata"].(map[string]any); ok {
+		delete(metadata, "dcs:name")
 		delete(metadata, "dcs:templateType")
 		delete(metadata, "dcs:templateVersion")
 		delete(metadata, "dcs:subTemplates")
@@ -815,7 +866,7 @@ func buildContractMetadata(contract contractdb.Contract, sourceTemplate template
 		"dcs:sourceTemplateVersion": sourceTemplate.Version,
 	}
 	if contract.Name != nil && *contract.Name != "" {
-		metadata["dcs:name"] = *contract.Name
+		metadata["dcs:title"] = *contract.Name
 	}
 	if contract.Description != nil && *contract.Description != "" {
 		metadata["dcs:description"] = *contract.Description

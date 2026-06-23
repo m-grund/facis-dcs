@@ -89,6 +89,8 @@ func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *tes
 	metadata := published["dcs:metadata"].(map[string]any)
 	require.Equal(t, "APPROVED", metadata["dcs:state"])
 	require.Equal(t, "Approved", metadata["dcs:lifecycleState"])
+	require.Equal(t, "DACH Service Agreement", metadata["dcs:title"])
+	require.NotContains(t, metadata, "dcs:name")
 	require.Equal(t,
 		map[string]any{"@id": creationTemplateDID},
 		metadata["dcs:derivedFromTemplate"],
@@ -129,7 +131,7 @@ func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *tes
 	require.Equal(t,
 		[]any{
 			"Availability must be at least ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-availability-availability"),
+			creationPipelinePublishedPlaceholder(creationContractDID + "#field-slo-availability"),
 			" percent.",
 		},
 		creationPipelineClauseContentByID(t, blocks, creationContractDID+"#block-clause-availability"),
@@ -163,10 +165,10 @@ func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *tes
 		},
 	}, creationPipelineObjectByID(t, objects, creationContractDID+"#payment"))
 	require.Equal(t, map[string]any{
-		"@id":              creationContractDID + "#availability",
+		"@id":              creationContractDID + "#slo",
 		"@type":            "dcs:SLO",
 		"dcs:availability": map[string]any{"@type": "xsd:decimal", "@value": "99.9"},
-	}, creationPipelineObjectByID(t, objects, creationContractDID+"#availability"))
+	}, creationPipelineObjectByID(t, objects, creationContractDID+"#slo"))
 
 	fields := published["dcs:contractFields"].([]any)
 	assertCreationPipelineContractField(
@@ -188,9 +190,9 @@ func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *tes
 	assertCreationPipelineContractField(
 		t,
 		fields,
-		creationContractDID+"#field-availability-availability",
+		creationContractDID+"#field-slo-availability",
 		99.9,
-		creationContractDID+"#availability",
+		creationContractDID+"#slo",
 		"dcs:availability",
 	)
 	assertCreationPipelinePolicyOperandsExist(t, published["dcs:policies"].([]any), fields)
@@ -456,11 +458,11 @@ func creationPipelineRequirements() []any {
 			creationPipelineField("provider", "legalName", "company.legalName"),
 			creationPipelineField("provider", "country", "company.location.country"),
 		),
-		creationPipelineRequirement("payment", "Payment", "PaymentTerm", "",
+		creationPipelineRequirement("payment", "Payment", "ContractDataObject", "",
 			creationPipelineField("payment", "amount", "contract.payment.amount"),
 			creationPipelineField("payment", "currency", "contract.payment.currency"),
 		),
-		creationPipelineRequirement("availability", "Availability", "SLO", "",
+		creationPipelineRequirement("availability", "Availability", "ContractDataObject", "",
 			creationPipelineField("availability", "availability", "service.sla.availability"),
 		),
 	}

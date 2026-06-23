@@ -396,6 +396,7 @@ func TestBuildTemplateJSONLDSmallTemplateUsesLayeredSemanticObjectsAndODRL(t *te
 
 func TestBuildContractJSONLDUsesSameSeparatedSections(t *testing.T) {
 	sourceTemplate := templateFixture(t)
+	name := "Final contract"
 	contract := contractdb.Contract{
 		DID:             "did:web:example:contract:1",
 		ContractVersion: 1,
@@ -403,6 +404,7 @@ func TestBuildContractJSONLDUsesSameSeparatedSections(t *testing.T) {
 		CreatedBy:       "user-1",
 		CreatedAt:       fixedTime(),
 		UpdatedAt:       fixedTime(),
+		Name:            &name,
 		ContractData:    sourceTemplate.TemplateData,
 	}
 
@@ -413,7 +415,10 @@ func TestBuildContractJSONLDUsesSameSeparatedSections(t *testing.T) {
 	require.Contains(t, env, "dcs:documentStructure")
 	require.Contains(t, env, "dcs:contractData")
 	require.Contains(t, env, "dcs:policies")
-	require.NotContains(t, env["dcs:metadata"].(map[string]any), "dcs:semanticProfile")
+	metadata := env["dcs:metadata"].(map[string]any)
+	require.NotContains(t, metadata, "dcs:semanticProfile")
+	require.NotContains(t, metadata, "dcs:name")
+	require.Equal(t, "Final contract", metadata["dcs:title"])
 }
 
 func TestBuildContractJSONLDMaterializesCanonicalConditionValues(t *testing.T) {

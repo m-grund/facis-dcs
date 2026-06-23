@@ -61,6 +61,15 @@ func SemanticDataType(domainField string) string {
 	}
 }
 
+// SemanticObjectType returns the ontology class associated with a domain field.
+func SemanticObjectType(domainField string) string {
+	field, found := ontologyDomainFieldIndex[domainField]
+	if !found {
+		return ""
+	}
+	return compactSemanticDataType(field.StatementType)
+}
+
 func compactSemanticDataType(value string) string {
 	const (
 		dcsNamespace = "https://w3id.org/facis/dcs/ontology/v1#"
