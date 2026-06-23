@@ -10,7 +10,11 @@
         <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
-        <!-- Return to draft / request changes -->
+        <!-- Verify / Return to draft / request changes -->
+        <VerificationFindingsDialog
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+        />
         <button
           class="btn flex-1 btn-primary"
           :disabled="(!isReviewer && !isManager) || isSubmitting"
@@ -51,6 +55,7 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 import { computed, ref, useTemplateRef, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
+import VerificationFindingsDialog from '@/components/VerificationFindingsDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,35 +119,6 @@ watch(
 
 const isSubmitting = ref(false)
 const comment = ref<string>('')
-
-const verifyTemplate = async () => {
-  const did = draftStore.did
-  const updatedAt = draftStore.updated_at
-  if (!did || !updatedAt) {
-    console.error('Missing did or updated_at for submission')
-    return
-  }
-  isSubmitting.value = true
-  try {
-   
-    const verificationResult = await contractTemplateService.verify({
-      did,
-    })
-    
-    if (verificationResult.findings.length > 0) {
-      const title = 'Verification findings:'
-      const message = verificationResult.findings.join('\n')
-      console.log(`${title}\n${message}`)
-      alert(`${title}\n${message}`)
-    }
-
-  } catch (error) {
-    console.error('Submission failed', error)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
 
 const forwardToApproval = async () => {
   const did = draftStore.did

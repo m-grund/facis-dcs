@@ -134,8 +134,9 @@ func main() {
 		log.Fatalf(ctx, nil, "%s", err.Error())
 	}
 	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
-		IssuerURL: authCfg.Hydra.IssuerURL(),
-		ClientID:  authCfg.Hydra.ClientID(),
+		PublicIssuerURL:   authCfg.Hydra.PublicIssuerURL(),
+		InternalIssuerURL: authCfg.Hydra.InternalIssuerURL(),
+		ClientID:          authCfg.Hydra.ClientID(),
 	})
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to initialize Hydra JWT validator")

@@ -9,6 +9,12 @@
       <fieldset class="fieldset border-none p-0">
         <legend class="fieldset-legend">Version: {{ contract.contract_version }}</legend>
       </fieldset>
+
+      <fieldset class="fieldset border-none p-0">
+        <legend class="fieldset-legend">Base Template</legend>
+        <a class="badge badge-sm badge-primary" :href="getTemplateLink(contract)">{{ contract.template_did }}</a>
+      </fieldset>
+
       <fieldset class="fieldset border-none p-0">
         <legend class="fieldset-legend">Global Name</legend>
         <input
@@ -29,6 +35,7 @@
           disabled
         />
       </fieldset>
+
       <fieldset class="fieldset border-none p-0">
         <legend class="fieldset-legend">Base Description</legend>
         <textarea
@@ -47,6 +54,7 @@
           disabled
         />
       </fieldset>
+
       <fieldset class="fieldset border-none p-0">
         <legend class="fieldset-legend">Expiration Notice Period (in days)</legend>
         <input
@@ -131,6 +139,10 @@ defineProps<{
 
 const contract = defineModel<Contract>('contract', { required: true })
 const inserted = defineModel<ContractDetailData>('inserted', { required: false })
+
+function getTemplateLink(contract: Contract): string {
+  return `/ui/templates/view/${contract.template_did}`
+}
 
 const expirationPolicies = [
   { name: 'Renewal', value: 'RENEWAL' },

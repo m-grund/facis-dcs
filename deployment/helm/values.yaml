@@ -68,6 +68,7 @@ oid4vp:
     vaultAddr: ""
     verifierSigningVaultMount: transit
     verifierSigningVaultKey: dcs-oid4vp-verifier-signing
+    statusListSkipJWSVerify: false
 
 customCA:
   enabled: false
@@ -226,6 +227,17 @@ cryptoProvider:
       repository: alpine
       tag: "3.20"
       pullPolicy: IfNotPresent
+
+# BDD only: loopback proxy so DCS Pod fetches localhost statusListCredential via Traefik ingress.
+statusListLocalhostProxy:
+  enabled: false
+  image:
+    repository: nginx
+    tag: alpine
+    pullPolicy: IfNotPresent
+  listenPort: 18080
+  upstream: ""
+  ingressHost: localhost
 
 # XFSC Status List Service (DCS-OR-C2PA-005)
 # Manages verifiable credential status lists (Status List 2021/2023 format).

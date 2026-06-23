@@ -56,8 +56,10 @@ spec:
           env:
             {{- if and .Values.hydra.enabled .Values.hydra.clients }}
             {{- $hydraClient := index .Values.hydra.clients 0 }}
-            - name: HYDRA_ISSUER_URL
+            - name: HYDRA_PUBLIC_ISSUER_URL
               value: {{ include "digital-contracting-service.hydraIssuerURL" . | quote }}
+            - name: HYDRA_INTERNAL_ISSUER_URL
+              value: {{ include "digital-contracting-service.hydraInternalIssuerURL" . | quote }}
             - name: HYDRA_CLIENT_ID
               value: {{ $hydraClient.client_id | quote }}
             - name: HYDRA_CLIENT_SECRET
@@ -131,6 +133,10 @@ spec:
               value: {{ .Values.oid4vp.trust.verifierSigningVaultMount | quote }}
             - name: OID4VP_VERIFIER_SIGNING_VAULT_KEY
               value: {{ .Values.oid4vp.trust.verifierSigningVaultKey | quote }}
+            {{- if .Values.oid4vp.trust.statusListSkipJWSVerify }}
+            - name: OID4VP_STATUSLIST_SKIP_JWS_VERIFY
+              value: "true"
+            {{- end }}
             {{- end }}
             {{- end }}
             # ---- Signing / C2PA provenance (XFSC Crypto Provider Service) ----------
@@ -232,9 +238,34 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- end }}
+        {{- if .Values.statusListLocalhostProxy.enabled }}
+        - name: statuslist-localhost-proxy
+          image: "{{ .Values.statusListLocalhostProxy.image.repository }}:{{ .Values.statusListLocalhostProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.statusListLocalhostProxy.image.pullPolicy }}
+          ports:
+            - name: sl-proxy
+              containerPort: {{ .Values.statusListLocalhostProxy.listenPort }}
+              protocol: TCP
+          volumeMounts:
+            - name: statuslist-localhost-proxy-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: sl-proxy
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+        {{- end }}
       {{- $certSecretName := include "digital-contracting-service.signingCertChainSecretName" . }}
       {{- $certChainEnabled := or .Values.signing.certChain.enabled (and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled) }}
-      {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) }}
+      {{- if or .Values.customCA.enabled .Values.volumes (and $certChainEnabled $certSecretName) .Values.statusListLocalhostProxy.enabled }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
@@ -248,6 +279,11 @@ spec:
             items:
               - key: {{ include "digital-contracting-service.signingCertChainSecretKey" . | quote }}
                 path: {{ .Values.signing.certChain.fileName | quote }}
+      {{- end }}
+      {{- if .Values.statusListLocalhostProxy.enabled }}
+        - name: statuslist-localhost-proxy-config
+          configMap:
+            name: {{ include "digital-contracting-service.fullname" . }}-statuslist-localhost-proxy
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

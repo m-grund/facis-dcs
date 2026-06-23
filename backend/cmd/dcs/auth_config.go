@@ -17,10 +17,12 @@ import (
 )
 
 func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
-	issuerURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_ISSUER_URL")), "/")
-	if issuerURL == "" {
-		return service.AuthConfig{}, fmt.Errorf("hydra configuration missing: HYDRA_ISSUER_URL must be set")
+	publicIssuerURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_PUBLIC_ISSUER_URL")), "/")
+	if publicIssuerURL == "" {
+		return service.AuthConfig{}, fmt.Errorf("hydra configuration missing: HYDRA_PUBLIC_ISSUER_URL must be set")
 	}
+
+	internalIssuerURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_INTERNAL_ISSUER_URL")), "/")
 
 	clientID := strings.TrimSpace(os.Getenv("HYDRA_CLIENT_ID"))
 	if clientID == "" {
@@ -51,6 +53,12 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 	if err != nil {
 		return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: %w", err)
 	}
+
+	skipStatusListJWS := false
+	if v := strings.TrimSpace(os.Getenv("OID4VP_STATUSLIST_SKIP_JWS_VERIFY")); strings.EqualFold(v, "true") {
+		skipStatusListJWS = true
+	}
+	oid4vp.ConfigureStatusListJWTVerification(trustCfg, skipStatusListJWS)
 
 	dcqlQuery, err := oid4vp.LoadDCQLQuery(os.Getenv("OID4VP_DCQL_QUERY"))
 	if err != nil {
@@ -93,11 +101,12 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 
 	return service.AuthConfig{
 		Hydra: hydra.New(hydra.Config{
-			IssuerURL:    issuerURL,
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			RedirectURI:  redirectURI,
-			AdminURL:     adminURL,
+			PublicIssuerURL:   publicIssuerURL,
+			InternalIssuerURL: internalIssuerURL,
+			ClientID:          clientID,
+			ClientSecret:      clientSecret,
+			RedirectURI:       redirectURI,
+			AdminURL:          adminURL,
 		}),
 		Trust:             trustCfg,
 		DCQLQuery:         dcqlQuery,

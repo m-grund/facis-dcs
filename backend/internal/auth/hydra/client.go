@@ -14,11 +14,12 @@ import (
 
 // Config holds Hydra issuer and DCS OAuth client settings.
 type Config struct {
-	IssuerURL    string
-	ClientID     string
-	ClientSecret string
-	RedirectURI  string
-	AdminURL     string
+	PublicIssuerURL   string
+	InternalIssuerURL string
+	ClientID          string
+	ClientSecret      string
+	RedirectURI       string
+	AdminURL          string
 }
 
 // Client talks to Hydra public OIDC endpoints and the admin API.
@@ -49,15 +50,43 @@ type TokenResponse struct {
 
 // New builds a Client from explicit configuration.
 func New(cfg Config) *Client {
-	cfg.IssuerURL = strings.TrimRight(strings.TrimSpace(cfg.IssuerURL), "/")
+	cfg.PublicIssuerURL = strings.TrimRight(strings.TrimSpace(cfg.PublicIssuerURL), "/")
+	cfg.InternalIssuerURL = strings.TrimRight(strings.TrimSpace(cfg.InternalIssuerURL), "/")
+	if cfg.InternalIssuerURL == "" {
+		cfg.InternalIssuerURL = cfg.PublicIssuerURL
+	}
 	cfg.AdminURL = strings.TrimRight(strings.TrimSpace(cfg.AdminURL), "/")
 
 	return &Client{cfg: cfg}
 }
 
-// IssuerURL returns the configured Hydra issuer base URL.
+// IssuerURL returns the public Hydra issuer base URL.
 func (c *Client) IssuerURL() string {
-	return c.cfg.IssuerURL
+	return c.cfg.PublicIssuerURL
+}
+
+// PublicIssuerURL returns the edge-facing Hydra issuer base URL.
+func (c *Client) PublicIssuerURL() string {
+	return c.cfg.PublicIssuerURL
+}
+
+// InternalIssuerURL returns the in-cluster Hydra public API base URL.
+func (c *Client) InternalIssuerURL() string {
+	return c.cfg.InternalIssuerURL
+}
+
+func (c *Client) toInternalEndpoint(publicURL string) string {
+	publicURL = strings.TrimSpace(publicURL)
+	if publicURL == "" {
+		return publicURL
+	}
+	if c.cfg.InternalIssuerURL == c.cfg.PublicIssuerURL {
+		return publicURL
+	}
+	if strings.HasPrefix(publicURL, c.cfg.PublicIssuerURL) {
+		return c.cfg.InternalIssuerURL + strings.TrimPrefix(publicURL, c.cfg.PublicIssuerURL)
+	}
+	return publicURL
 }
 
 // ClientID returns the OAuth client identifier.
@@ -82,7 +111,7 @@ func (c *Client) ProviderMetadata(ctx context.Context) (*ProviderMetadata, error
 
 	c.metadataMu.RUnlock()
 
-	wellKnown := c.cfg.IssuerURL + "/.well-known/openid-configuration"
+	wellKnown := c.cfg.InternalIssuerURL + "/.well-known/openid-configuration"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnown, nil)
 	if err != nil {
@@ -155,7 +184,7 @@ func (c *Client) ExchangeCode(ctx context.Context, code string) (*TokenResponse,
 
 	data.Set("redirect_uri", c.cfg.RedirectURI)
 
-	return c.postTokenEndpoint(ctx, metadata.TokenEndpoint, data)
+	return c.postTokenEndpoint(ctx, c.toInternalEndpoint(metadata.TokenEndpoint), data)
 }
 
 // RefreshAccessToken obtains a new access token from a refresh token.
@@ -175,7 +204,7 @@ func (c *Client) RefreshAccessToken(ctx context.Context, refreshToken string) (*
 		data.Set("client_secret", c.cfg.ClientSecret)
 	}
 
-	return c.postTokenEndpoint(ctx, metadata.TokenEndpoint, data)
+	return c.postTokenEndpoint(ctx, c.toInternalEndpoint(metadata.TokenEndpoint), data)
 }
 
 // RevokeRefreshToken revokes a refresh token at the provider revocation endpoint.
@@ -195,7 +224,7 @@ func (c *Client) RevokeRefreshToken(ctx context.Context, refreshToken string) er
 
 	data.Set("token_type_hint", "refresh_token")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, metadata.RevocationEndpoint, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.toInternalEndpoint(metadata.RevocationEndpoint), strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}

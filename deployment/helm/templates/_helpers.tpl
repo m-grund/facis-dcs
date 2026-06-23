@@ -169,6 +169,19 @@ Hydra OAuth2/OIDC issuer (URLs issuer / discovery). Requires hydra.enabled.
 {{- end }}
 
 {{/*
+In-cluster Hydra public API (OIDC discovery, token) for DCS backend HTTP calls.
+*/}}
+{{- define "digital-contracting-service.hydraInternalIssuerURL" -}}
+{{- if .Values.hydra.enabled -}}
+{{- if .Values.hydra.config.internalIssuerURL -}}
+{{- .Values.hydra.config.internalIssuerURL -}}
+{{- else -}}
+{{- printf "http://%s-hydra:%d" .Release.Name (.Values.hydra.service.publicPort | int) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Hydra admin API base URL (login/consent accept).
 */}}
 {{- define "digital-contracting-service.hydraAdminURL" -}}

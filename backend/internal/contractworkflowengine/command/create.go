@@ -49,16 +49,18 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not read frame contract template data: %w", err)
 	}
 
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate, cmd.DID, nil, false)
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate.TemplateData, cmd.DID, nil, false)
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
 
 	data := db.Contract{
-		DID:          cmd.DID,
-		CreatedBy:    cmd.CreatedBy,
-		State:        contractstate.Draft.String(),
-		ContractData: normalizedContractData,
+		DID:             cmd.DID,
+		CreatedBy:       cmd.CreatedBy,
+		State:           contractstate.Draft.String(),
+		ContractData:    normalizedContractData,
+		TemplateDID:     cmd.TemplateDID,
+		TemplateVersion: contractTemplate.TemplateVersion,
 	}
 	createdAt, err := h.CRepo.Create(ctx, tx, data)
 	if err != nil {

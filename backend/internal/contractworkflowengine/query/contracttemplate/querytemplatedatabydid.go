@@ -100,7 +100,7 @@ func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx con
 	if err != nil {
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
-	return templateData, nil
+	return templateData.TemplateData, nil
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateDataFromFC(qry GetTemplateDataByDIDQry) (*datatype.JSON, error) {

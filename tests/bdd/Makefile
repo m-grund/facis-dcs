@@ -18,12 +18,12 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 BDD_INGRESS_PORT ?= 18080
-BDD_PUBLIC_ORIGIN ?= http://127.0.0.1:$(BDD_INGRESS_PORT)
-BDD_DCS_PUBLIC_BASE_URL ?= $(BDD_PUBLIC_ORIGIN)$(DCS_API_BASE_PATH)
+BDD_PUBLIC_ORIGIN ?= http://localhost:$(BDD_INGRESS_PORT)
+BDD_DCS_BASE_URL ?= $(BDD_PUBLIC_ORIGIN)$(DCS_API_BASE_PATH)
 KIND_CONFIG ?= $(THIS_DIR)kind-config.yaml
 BDD_HELM_SET := \
 	--set-string hydra.config.selfIssuerURL="$(BDD_PUBLIC_ORIGIN)" \
-	--set-string route.publicBaseURL="$(BDD_DCS_PUBLIC_BASE_URL)" \
+	--set-string route.publicBaseURL="$(BDD_DCS_BASE_URL)" \
 	--set-string hydra.config.loginURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/ui/" \
 	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/consent" \
 	--set-string hydra.config.logoutURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
@@ -54,7 +54,7 @@ CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
 	@echo "make run_bdd_test		# Run all BDD scenarios"
-	@echo "make run_bdd_helm		# Run BDD via Traefik on http://127.0.0.1:18080"
+	@echo "make run_bdd_helm		# Run BDD via Traefik on http://localhost:18080"
 	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
 	@echo "make ensure_kind			# Validate kind is available in PATH"
 	@echo "make ensure_k8s_tools	# Validate kubectl and helm are available in PATH"
@@ -97,6 +97,7 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		KUBECTL_BIN="$(KUBECTL_BIN)" \
 		K8S_NAMESPACE="$(K8S_NAMESPACE)" \
 		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
+		BDD_DCS_BASE_URL="$(BDD_DCS_BASE_URL)" \
 		BDD_PUBLIC_ORIGIN="$(BDD_PUBLIC_ORIGIN)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \

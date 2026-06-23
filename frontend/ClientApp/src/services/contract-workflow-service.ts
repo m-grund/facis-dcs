@@ -16,6 +16,7 @@ import type {
   ContractUpdateRequest,
 } from '@/models/requests/contract-requests'
 import type {
+  ApprovedContractTemplateRetrieveResponse,
   ContractApproveResponse,
   ContractAuditResponse,
   ContractCreateResponse,
@@ -71,6 +72,16 @@ export const contractWorkflowService: ContractWorkflowService = {
           approval_tasks: [],
           negotiation_tasks: [],
         }
+      })
+  },
+
+  async retrieveApprovedTemplates() {
+    return http
+      .get<ApprovedContractTemplateRetrieveResponse>('/contract/templates')
+      .then((res) => res.data)
+      .catch((err: unknown) => {
+        console.error('Retrieve Error:', err)
+        return []
       })
   },
 
