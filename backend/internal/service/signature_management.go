@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
+
+	"digital-contracting-service/internal/base/event"
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/ipfs"
@@ -18,7 +22,9 @@ import (
 	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
 
+	cloudevent "github.com/cloudevents/sdk-go/v2/event"
 	"github.com/jmoiron/sqlx"
+	"goa.design/clue/log"
 )
 
 type signatureManagementsrvc struct {
@@ -28,13 +34,14 @@ type signatureManagementsrvc struct {
 	ATrailReader base.AuditTrailReader
 	DSSClient    dss.Client
 	IPFSClient   *ipfs.APIClient
+	CESubClient  *event.CloudEventSubClient
 	auth.JWTAuthenticator
 }
 
-func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo,
-	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client) signaturemanagement.Service {
+func NewSignatureManagement(ctx context.Context, db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo,
+	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client, ceSubClient *event.CloudEventSubClient) signaturemanagement.Service {
 
-	return &signatureManagementsrvc{
+	sm := &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
@@ -42,7 +49,29 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 		ATrailReader:     auditTrailReader,
 		DSSClient:        dssClient,
 		IPFSClient:       ipfsClient,
+		CESubClient:      ceSubClient,
 	}
+
+	sm.startEventHandler(ctx)
+
+	return sm
+}
+
+func (s *signatureManagementsrvc) startEventHandler(ctx context.Context) {
+	eventHandler := func(evt cloudevent.Event) {
+
+		data, err := json.Marshal(evt)
+		if err != nil {
+			log.Printf(ctx, "Could not marshal event to JSON: %v", err)
+		}
+
+		fmt.Printf("received event: %s\n", string(data))
+	}
+	go func() {
+		if err := s.CESubClient.Subscribe(eventHandler); err != nil {
+			log.Errorf(ctx, err, "could not start event printer")
+		}
+	}()
 }
 
 func (s *signatureManagementsrvc) Retrieve(ctx context.Context, req *signaturemanagement.SMContractRetrieveRequest) (res *signaturemanagement.SMContractRetrieveResponse, err error) {

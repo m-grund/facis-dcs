@@ -289,7 +289,22 @@ func main() {
 		log.Fatalf(ctx, err, "failed to start outbox processor")
 	}
 
-	eventSubClient, err := event.NewNatsSubClient(conf.EventBusTopic("*"), natsURL)
+	if os.Getenv("DEBUG_EVENTING") == "true" {
+		eventSubClient, err := event.NewNatsSubClient(conf.EventBusTopic("*"), natsURL)
+		if err != nil {
+			log.Fatalf(ctx, err, "Could not connect to events bus")
+		}
+		defer func(client *event.CloudEventSubClient) {
+			err := client.Close()
+			if err != nil {
+				log.Errorf(ctx, err, "Could not close cloud event bus client")
+			}
+		}(eventSubClient)
+
+		event.StartEventLogger(ctx, eventSubClient)
+	}
+
+	cweSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(componenttype.ContractWorkflowEngine.String()), natsURL)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not connect to events bus")
 	}
@@ -298,8 +313,29 @@ func main() {
 		if err != nil {
 			log.Errorf(ctx, err, "Could not close cloud event bus client")
 		}
-	}(eventSubClient)
-	event.StartEventLogger(ctx, eventSubClient)
+	}(cweSubClient)
+
+	smSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(componenttype.SignatureManagement.String()), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not connect to events bus")
+	}
+	defer func(client *event.CloudEventSubClient) {
+		err := client.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close cloud event bus client")
+		}
+	}(smSubClient)
+
+	csaSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(componenttype.ContractStorageArchive.String()), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not connect to events bus")
+	}
+	defer func(client *event.CloudEventSubClient) {
+		err := client.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close cloud event bus client")
+		}
+	}(csaSubClient)
 
 	auditTrailReader := base.AuditTrailReader{
 		IPFSClient: ipfsAPIClient,
@@ -448,12 +484,12 @@ func main() {
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
-		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, *didDocument)
+		contractStorageArchiveSvc = service.NewContractStorageArchive(ctx, jwtAuth, csaSubClient)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(ctx, db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, cweSubClient, *didDocument)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
+		signatureManagementSvc = service.NewSignatureManagement(ctx, db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient, smSubClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, *didDocument)
 		didSrv = didService

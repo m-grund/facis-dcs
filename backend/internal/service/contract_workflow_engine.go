@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
 	"time"
+
+	"digital-contracting-service/internal/base/event"
 
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
@@ -27,7 +30,9 @@ import (
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 
+	cloudevent "github.com/cloudevents/sdk-go/v2/event"
 	"github.com/jmoiron/sqlx"
+	"goa.design/clue/log"
 )
 
 type contractWorkflowEnginesrvc struct {
@@ -41,16 +46,17 @@ type contractWorkflowEnginesrvc struct {
 	FCClient     *fcclient.FederatedCatalogueClient
 	DIDDocument  base.DIDDocument
 	ATrailReader base.AuditTrailReader
+	CESubClient  *event.CloudEventSubClient
 	auth.JWTAuthenticator
 }
 
-func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
+func NewContractWorkflowEngine(ctx context.Context, db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
 	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader,
-	didDocument base.DIDDocument) contractworkflowengine.Service {
+	ceSubClient *event.CloudEventSubClient, didDocument base.DIDDocument) contractworkflowengine.Service {
 
-	return &contractWorkflowEnginesrvc{
+	cwe := &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
@@ -62,7 +68,29 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		FCClient:         fcClient,
 		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
+		CESubClient:      ceSubClient,
 	}
+
+	cwe.startEventHandler(ctx)
+
+	return cwe
+}
+
+func (s *contractWorkflowEnginesrvc) startEventHandler(ctx context.Context) {
+	eventHandler := func(evt cloudevent.Event) {
+
+		data, err := json.Marshal(evt)
+		if err != nil {
+			log.Printf(ctx, "Could not marshal event to JSON: %v", err)
+		}
+
+		fmt.Printf("received event: %s\n", string(data))
+	}
+	go func() {
+		if err := s.CESubClient.Subscribe(eventHandler); err != nil {
+			log.Errorf(ctx, err, "could not start event printer")
+		}
+	}()
 }
 
 func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractworkflowengine.ContractCreateRequest) (res *contractworkflowengine.ContractCreateResponse, err error) {
