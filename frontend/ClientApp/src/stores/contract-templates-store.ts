@@ -11,7 +11,7 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
   const approvalTasks: Ref<ContractTemplateApprovalTask[]> = ref([])
 
   const loading = ref(false)
-  const error = ref<string | null>(null)  
+  const error = ref<string | null>(null)
 
   const findTemplateByDid = (did: string) => contractTemplates.value.find((template) => template.did === did)
 

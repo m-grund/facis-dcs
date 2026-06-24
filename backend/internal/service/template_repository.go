@@ -352,7 +352,6 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 			Description:    item.Description,
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
-			Responsible:    item.Responsible,
 		})
 	}
 
@@ -392,7 +391,6 @@ func (s *templateRepositorysrvc) RetrieveHistoryByID(ctx context.Context, req *t
 			CreatedBy:      item.CreatedBy,
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
-			Responsible:    item.Responsible,
 			TemplateData:   item.TemplateData,
 			TemplateType:   item.TemplateType.String(),
 		})
@@ -442,7 +440,6 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 			CreatedBy:      item.CreatedBy,
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
-			Responsible:    item.Responsible,
 			LatestDid:      item.LatestDID,
 		})
 	}
@@ -511,7 +508,6 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 		CreatedAt:      contractTemplate.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      contractTemplate.UpdatedAt.Format(time.RFC3339),
 		TemplateData:   contractTemplate.TemplateData,
-		Responsible:    contractTemplate.Responsible,
 	}, nil
 }
 

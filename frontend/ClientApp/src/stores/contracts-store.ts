@@ -94,6 +94,6 @@ export const useContractsStore = defineStore('contracts', () => {
     hasApprovalTask,
     loadApprovedTemplates,
     approvedTemplates,
-    hasApprovedTemplates
+    hasApprovedTemplates,
   }
 })

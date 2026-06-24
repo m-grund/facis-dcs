@@ -40,9 +40,8 @@ type MetadataItem struct {
 	CreatedBy      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	*db.Responsible
-	MetaData  datatype.JSON
-	LatestDID *string
+	MetaData       datatype.JSON
+	LatestDID      *string
 }
 
 type ReviewTaskItem struct {
@@ -147,7 +146,6 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 			CreatedBy:      data.CreatedBy,
 			CreatedAt:      data.CreatedAt,
 			UpdatedAt:      data.UpdatedAt,
-			Responsible:    data.Responsible,
 			LatestDID:      data.LatestDID,
 		}
 		contractTemplatesItems = append(contractTemplatesItems, metadata)

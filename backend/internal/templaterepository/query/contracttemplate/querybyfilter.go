@@ -45,7 +45,6 @@ type GetAllMetadataByFilterResult struct {
 	Description    *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	Responsible    *db.Responsible
 	MetaData       datatype.JSON
 }
 
@@ -131,7 +130,6 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 			Description:    data.Description,
 			CreatedAt:      data.CreatedAt,
 			UpdatedAt:      data.UpdatedAt,
-			Responsible:    data.Responsible,
 		}
 	}
 

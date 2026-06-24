@@ -151,8 +151,8 @@ async function addLocalDID() {
   error.value = ''
 
   try {
-    const didDocument = await getLocalDIDFile();
-    const did = didDocument?.id;
+    const didDocument = await getLocalDIDFile()
+    const did = didDocument?.id
 
     if (did === '') {
       error.value = 'No valid value for local did found'

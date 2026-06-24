@@ -31,7 +31,7 @@ func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx
 	statement := `
 		WITH source AS (
 			SELECT
-				did, document_number, template_type, name, description, created_by, responsible, template_data,
+				did, document_number, template_type, name, description, created_by, template_data,
 				CASE
 					WHEN state IN ('REGISTERED', 'PUBLISHED') THEN version + 1
 					ELSE 1
@@ -45,13 +45,13 @@ func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx
 		)
 		INSERT INTO contract_templates
 			(did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at,
-			 responsible, template_data, base_template)
+			 template_data, base_template)
 		SELECT
 			$1,
 			source.document_number,
 			source.new_version,
 			'DRAFT', source.template_type, source.name, source.description, source.created_by, NOW(), NOW(),
-			source.responsible, source.template_data, source.new_base_template
+			source.template_data, source.new_base_template
 		FROM source
 		WHERE source.new_base_template IS NULL
 		   OR NOT EXISTS (
@@ -78,10 +78,10 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 	statement := `
         INSERT INTO contract_templates_history 
             (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible, template_data, base_template)
+             template_data, base_template)
         SELECT 
             did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-            responsible, template_data, base_template
+            template_data, base_template
         FROM contract_templates 
         WHERE did = $1
     `
@@ -92,7 +92,7 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 func (r *PostgresContractTemplateRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractTemplateHistory, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible, base_template
+               created_by, created_at, updated_at, template_data, template_type, base_template
         FROM contract_templates_history WHERE did = $1
     `
 	var ct []db.ContractTemplateHistory
@@ -188,7 +188,7 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
         SELECT did, document_number, version, state, name, template_type, description,
-               created_by, created_at, updated_at, responsible, base_template
+               created_by, created_at, updated_at, base_template
         FROM contract_templates
     `
 
@@ -385,9 +385,6 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 	if len(data.TemplateType) > 0 {
 		addParam("template_type", data.TemplateType)
 		contentChanged = true
-	}
-	if data.Responsible != nil {
-		addParam("responsible", data.Responsible)
 	}
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")

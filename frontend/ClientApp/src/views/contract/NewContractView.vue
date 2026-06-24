@@ -3,7 +3,6 @@ import type { PartialContractTemplate } from '@/models/contract-template'
 import type { Contract } from '@/models/contract/contract'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
-import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import {
   useSemanticValueVerification,
@@ -60,9 +59,7 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 
 const contract: Ref<Contract | null> = ref(null)
 
-const canSubmit = computed(
-  () => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null),
-)
+const canSubmit = computed(() => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null))
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
@@ -237,7 +234,8 @@ onBeforeRouteLeave(() => {
             {{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
           <option v-for="template in approvedTemplates" :key="template.did" :value="template">
-            Version {{template.version}} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
+            Version {{ template.version }} - {{ template.name?.slice(0, 80)
+            }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>
       </div>

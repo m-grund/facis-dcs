@@ -96,28 +96,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		did, err := cmd.DIDDocument.GetID()
-		if err != nil {
-			return fmt.Errorf("could not get DID: %w", err)
-		}
-
-		resp := db.Responsible{
-			Creator:   did,
-			Reviewers: []string{did},
-			Approver:  did,
-		}
-		anyResp := any(resp)
-		responsible = &anyResp
-
-		updateData := db.ContractTemplateUpdateData{
-			DID:         cmd.DID,
-			Responsible: &resp,
-		}
-		err = h.CTRepo.Update(ctx, tx, updateData)
-		if err != nil {
-			return fmt.Errorf("could not update contract template: %w", err)
-		}
-
 		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, cmd)
 		if err != nil {
 			return err

@@ -1,7 +1,6 @@
 import type { TemplateDataVersion } from '@/modules/template-repository/models/template-draft-store'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
-import type { ContractTemplateResponsible } from './contract-template-responsible'
 import type {
   SchemaReferenceSet,
   PolicyReference,
@@ -31,7 +30,6 @@ export interface ContractTemplate {
   description?: string
   template_data?: ContractTemplateData
   updated_at: string
-  responsible?: ContractTemplateResponsible
   outdated: boolean
   latest_did?: string
 }
