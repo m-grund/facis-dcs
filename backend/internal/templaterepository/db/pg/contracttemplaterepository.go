@@ -128,7 +128,7 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplate, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible,
+               created_by, created_at, updated_at, template_data, template_type,
                base_template
         FROM contract_templates WHERE did = $1
     `
@@ -156,7 +156,7 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 		)
 		SELECT
 			t.did, t.document_number, t.version, t.state, t.template_type, t.name,
-			t.description, t.created_by, t.created_at, t.updated_at, t.responsible,
+			t.description, t.created_by, t.created_at, t.updated_at,
 			t.base_template,
 			CASE
 				WHEN t.state NOT IN ('REGISTERED', 'PUBLISHED') THEN FALSE

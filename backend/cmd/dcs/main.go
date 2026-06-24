@@ -151,14 +151,26 @@ func main() {
 
 	cepPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(), natsURL)
 	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events publisher")
+		log.Fatalf(ctx, err, "Could not connect to events bus")
 	}
 	defer func(cepPubClient *event.CloudEventPubClient) {
 		err := cepPubClient.Close()
 		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event publisher")
+			log.Errorf(ctx, err, "Could not close cloud event bus client")
 		}
 	}(cepPubClient)
+
+	cepSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not connect to events bus")
+	}
+	defer func(cepSubClient *event.CloudEventSubClient) {
+		err := cepSubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close cloud event bus client")
+		}
+	}(cepSubClient)
+	event.StartEventLogger(ctx, cepSubClient)
 
 	// Initialize OIDC validator and JWT authenticator.
 	hydraIssuerURL := os.Getenv("HYDRA_ISSUER_URL")

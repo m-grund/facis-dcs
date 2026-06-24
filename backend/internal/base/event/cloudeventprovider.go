@@ -22,17 +22,17 @@ func (c CloudEventPubClient) Close() error {
 	return c.client.Close()
 }
 
-func (c CloudEventPubClient) Publish(eventSource string, eventType string, payload []byte) interface{} {
+func (c CloudEventPubClient) Publish(eventSource string, eventType string, payload json.RawMessage) interface{} {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Fatal(err)
 	}
-	event, err := cloudeventprovider.NewEvent(eventSource, eventType, data)
+	evt, err := cloudeventprovider.NewEvent(eventSource, eventType, data)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return c.client.PubCtx(c.ctx, event)
+	return c.client.PubCtx(c.ctx, evt)
 }
 
 func NewNatsPubClient(topic string, natsURL string) (*CloudEventPubClient, error) {
