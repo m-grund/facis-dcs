@@ -2,11 +2,17 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"time"
+
+	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
+
+	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 
 	"digital-contracting-service/internal/base/event"
 
@@ -77,7 +83,17 @@ func NewContractWorkflowEngine(ctx context.Context, db *sqlx.DB, jwtAuth auth.JW
 }
 
 func (s *contractWorkflowEnginesrvc) startEventHandler(ctx context.Context) {
+
+	did, err := s.DIDDocument.GetID()
+	if err != nil {
+		log.Errorf(ctx, err, "could not read did")
+	}
+
 	eventHandler := func(evt cloudevent.Event) {
+
+		if evt.Source() == did {
+			return
+		}
 
 		data, err := json.Marshal(evt)
 		if err != nil {
@@ -85,6 +101,47 @@ func (s *contractWorkflowEnginesrvc) startEventHandler(ctx context.Context) {
 		}
 
 		fmt.Printf("received event: %s\n", string(data))
+
+		eventType, err := eventtype.NewEventType(evt.Type())
+		if err != nil {
+			log.Errorf(ctx, err, "invalid event type")
+		}
+
+		tx, err := s.DB.BeginTxx(ctx, nil)
+		if err != nil {
+			return
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				return
+			}
+		}(tx)
+
+		var contract *db.Contract
+		err = json.Unmarshal(evt.Data(), &contract)
+		if err != nil {
+			log.Errorf(ctx, err, "could not unmarshal event data")
+			return
+		}
+
+		switch eventType {
+		case eventtype.Create:
+			evt := contractevents.SyncingRequestEvent{
+				RequesterDID: did,
+				OccurredAt:   time.Now().UTC(),
+				DID:          contract.DID,
+			}
+			err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+			if err != nil {
+				return
+			}
+			log.Printf(ctx, "Send sync request")
+
+		case eventtype.Update:
+			fmt.Println("Create sync request for contract update")
+		}
+
+		tx.Commit()
 	}
 	go func() {
 		if err := s.CESubClient.Subscribe(eventHandler); err != nil {

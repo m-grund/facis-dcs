@@ -34,6 +34,10 @@ func (c CloudEventPubClient) Publish(eventSource string, eventType string, paylo
 	return c.client.PubCtx(c.ctx, evt)
 }
 
+func (c CloudEventPubClient) PublishEvent(evt event.Event) error {
+	return c.client.PubCtx(c.ctx, evt)
+}
+
 func NewNatsPubClient(topic string, natsURL string) (*CloudEventPubClient, error) {
 	log.Println("nats: create publisher client for topic ", topic)
 	client, err := cloudeventprovider.New(cloudeventprovider.Config{
