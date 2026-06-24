@@ -23,7 +23,7 @@
           <div class="text-sm font-semibold text-base-content">
             {{ clause.title ?? '' }}
             <span
-              class="badge ml-1 badge-sm"
+              class="ml-1 badge badge-sm"
               :class="outlineBlockIds.has(clause.blockId) ? 'badge-success' : 'badge-outline'"
             >
               {{ outlineBlockIds.has(clause.blockId) ? 'Placed' : 'Not placed' }}
@@ -42,7 +42,7 @@
         <button
           v-if="!outlineBlockIds.has(clause.blockId)"
           type="button"
-          class="btn btn-secondary btn-xs"
+          class="btn btn-xs btn-secondary"
           @click="$emit('place', clause.blockId)"
         >
           Place in document

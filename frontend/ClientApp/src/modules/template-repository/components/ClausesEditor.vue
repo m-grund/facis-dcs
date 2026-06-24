@@ -78,16 +78,16 @@ function conditionIdsFromText(text: string): string[] {
 const clauseBlocks = computed((): ClauseBlock[] => {
   const mainClauses = documentBlocks.value.filter((b): b is ClauseBlock => isClauseBlock(b))
   const subTemplateClauses = subTemplateSnapshots.value.flatMap((subTemplate) =>
-    getDocumentBlocksFromTemplateData(subTemplate.template_data).filter(
-      (block): block is ClauseBlock => isClauseBlock(block),
+    getDocumentBlocksFromTemplateData(subTemplate.template_data).filter((block): block is ClauseBlock =>
+      isClauseBlock(block),
     ),
   )
   return [...mainClauses, ...subTemplateClauses]
 })
 
 const semanticConditions = computed(() => {
-  const subTemplateConditions = subTemplateSnapshots.value.flatMap(
-    (subTemplate) => getSemanticConditionsFromTemplateData(subTemplate.template_data),
+  const subTemplateConditions = subTemplateSnapshots.value.flatMap((subTemplate) =>
+    getSemanticConditionsFromTemplateData(subTemplate.template_data),
   )
   return [...mainSemanticConditions.value, ...subTemplateConditions]
 })

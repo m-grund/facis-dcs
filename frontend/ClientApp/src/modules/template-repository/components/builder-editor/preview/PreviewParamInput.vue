@@ -8,7 +8,9 @@
       @change="emitStringValue"
     >
       <option value=""></option>
-      <option v-for="option in valueOptions" :key="option.value" :value="option.value">{{ formatOption(option) }}</option>
+      <option v-for="option in valueOptions" :key="option.value" :value="option.value">
+        {{ formatOption(option) }}
+      </option>
     </select>
     <input
       v-else-if="type === 'string' || type === 'enum'"

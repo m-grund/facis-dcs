@@ -27,36 +27,46 @@ type Response struct {
 	Headers    http.Header
 }
 
-// QueryResults matches the JSON body returned by FC /query.
+// AssetMeta is FC asset metadata returned by GET /assets.
+type AssetMeta struct {
+	AssetHash   string `json:"assetHash"`
+	ID          string `json:"id"`
+	ContentKind string `json:"contentKind"`
+	ContentType string `json:"contentType"`
+	Issuer      string `json:"issuer"`
+	Status      string `json:"status"`
+}
+
+// AssetResult is a single asset entry from GET /assets.
+type AssetResult struct {
+	Meta    AssetMeta `json:"meta"`
+	Content *string   `json:"content"`
+}
+
+// GetAssetsResponse is the paginated GET /assets response body.
+type GetAssetsResponse struct {
+	TotalCount int           `json:"totalCount"`
+	Items      []AssetResult `json:"items"`
+}
+
+// GetAssetsRequest configures GET /assets query parameters.
+type GetAssetsRequest struct {
+	IDs         []string
+	WithContent bool
+	Offset      int
+	Limit       int
+}
+
+// QueryResults is the JSON body returned by FC POST /query/search.
 type QueryResults struct {
 	TotalCount int                      `json:"totalCount"`
 	Items      []map[string]interface{} `json:"items"`
 }
 
-// QueryRequest is the JSON payload sent to FC /query.
+// QueryRequest carries an OpenCypher query sent to FC POST /query/search.
 type QueryRequest struct {
-	Statement  string            `json:"statement"`
-	Parameters map[string]string `json:"parameters"`
-}
-
-type SelfDescriptionMeta struct {
-	SdHash string `json:"sdHash"`
-	ID     string `json:"id"`
-}
-
-type SelfDescriptionResult struct {
-	Meta    SelfDescriptionMeta `json:"meta"`
-	Content *string             `json:"content"`
-}
-
-type GetSelfDescriptionsResponse struct {
-	TotalCount int                     `json:"totalCount"`
-	Items      []SelfDescriptionResult `json:"items"`
-}
-
-type GetSelfDescriptionsRequest struct {
-	IDs         []string
-	WithContent bool
+	Statement  string
+	Parameters map[string]string
 }
 
 type fcErrorBody struct {
@@ -66,6 +76,7 @@ type fcErrorBody struct {
 
 const (
 	JSONContentType   = "application/json"
+	JSONLDContentType = "application/ld+json"
 	RDFXMLContentType = "application/rdf+xml"
 )
 
@@ -78,12 +89,12 @@ type FederatedCatalogueClient struct {
 	httpClient   *http.Client
 }
 
-const ParticipantsEndpointPath = "/participants"
-const SelfDescriptionsEndpointPath = "/self-descriptions"
-const SchemaEndpointPath = "/schemas"
-
-const QueryEndpointPath = "/query/search"
-const VerificationEndpointPath = "/verification"
+const (
+	AssetsEndpointPath       = "/assets"
+	SchemaEndpointPath       = "/schemas"
+	VerificationEndpointPath = "/verification"
+	QuerySearchEndpointPath  = "/query/search"
+)
 
 func NewFederatedCatalogueClient(cfg Config) (*FederatedCatalogueClient, error) {
 	apiURL := normalizeBaseURL(cfg.APIURL)
@@ -121,80 +132,108 @@ func (c *FederatedCatalogueClient) BaseURL() string {
 
 // Post sends a POST request to Federated Catalogue.
 func (c *FederatedCatalogueClient) Post(ctx context.Context, path string, query url.Values, body []byte) (*Response, error) {
-	return c.doRequest(ctx, http.MethodPost, path, query, JSONContentType, body)
+	return c.doRequest(ctx, http.MethodPost, path, query, JSONContentType, JSONContentType, body)
 }
 
 // PostRaw sends a POST with an explicit Content-Type.
 func (c *FederatedCatalogueClient) PostRaw(ctx context.Context, path string, query url.Values, contentType string, body []byte) (*Response, error) {
-	return c.doRequest(ctx, http.MethodPost, path, query, contentType, body)
+	return c.doRequest(ctx, http.MethodPost, path, query, contentType, JSONContentType, body)
 }
 
-// Query sends an FC /query request and decodes the JSON response.
-func (c *FederatedCatalogueClient) Query(ctx context.Context, req QueryRequest) (*QueryResults, error) {
-	bodyBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal /query request failed: %w", err)
-	}
-
-	resp, err := c.Post(ctx, QueryEndpointPath, nil, bodyBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var results QueryResults
-	if err := json.Unmarshal(resp.Body, &results); err != nil {
-		return nil, fmt.Errorf("unmarshal /query response failed: %w", err)
-	}
-	return &results, nil
-}
-
-func (c *FederatedCatalogueClient) GetSelfDescriptions(ctx context.Context, req GetSelfDescriptionsRequest) (*GetSelfDescriptionsResponse, error) {
+// GetAssets fetches asset metadata (and optionally content) from GET /assets.
+func (c *FederatedCatalogueClient) GetAssets(ctx context.Context, req GetAssetsRequest) (*GetAssetsResponse, error) {
 	query := url.Values{}
 	if len(req.IDs) > 0 {
 		query.Set("ids", strings.Join(req.IDs, ","))
 	}
-	// withContent default is false in FC API
 	if req.WithContent {
 		query.Set("withContent", "true")
 	}
+	if req.Offset > 0 {
+		query.Set("offset", fmt.Sprintf("%d", req.Offset))
+	}
+	if req.Limit > 0 {
+		query.Set("limit", fmt.Sprintf("%d", req.Limit))
+	}
 	query.Set("withMeta", "true")
 
-	resp, err := c.Get(ctx, SelfDescriptionsEndpointPath, query)
+	resp, err := c.Get(ctx, AssetsEndpointPath, query)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("get self-descriptions failed with status %d", resp.StatusCode)
+		return nil, fmt.Errorf("get assets failed with status %d", resp.StatusCode)
 	}
 
-	var out GetSelfDescriptionsResponse
+	var out GetAssetsResponse
 	if err := json.Unmarshal(resp.Body, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal self-descriptions response failed: %w", err)
+		return nil, fmt.Errorf("unmarshal assets response failed: %w", err)
 	}
 	return &out, nil
 }
 
+// Query executes an OpenCypher graph query via FC POST /query/search.
+func (c *FederatedCatalogueClient) Query(ctx context.Context, req QueryRequest) (*QueryResults, error) {
+	statement := strings.TrimSpace(req.Statement)
+	if statement == "" {
+		return nil, fmt.Errorf("query statement is empty")
+	}
+
+	body := map[string]any{
+		"statement": statement,
+		"annotations": map[string]any{
+			"queryLanguage":  "OPENCYPHER",
+			"withTotalCount": true,
+		},
+	}
+
+	if len(req.Parameters) > 0 {
+		body["parameters"] = req.Parameters
+	}
+
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal /query/search request failed: %w", err)
+	}
+
+	resp, err := c.Post(ctx, QuerySearchEndpointPath, nil, raw)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, c.queryHTTPError(resp)
+	}
+
+	var results QueryResults
+	if err := json.Unmarshal(resp.Body, &results); err != nil {
+		return nil, fmt.Errorf("unmarshal /query/search response failed: %w", err)
+	}
+
+	return &results, nil
+}
+
 // Put sends a PUT request to Federated Catalogue.
 func (c *FederatedCatalogueClient) Put(ctx context.Context, path string, query url.Values, body []byte) (*Response, error) {
-	return c.doRequest(ctx, http.MethodPut, path, query, JSONContentType, body)
+	return c.doRequest(ctx, http.MethodPut, path, query, JSONContentType, JSONContentType, body)
 }
 
 // PutRaw sends a PUT with an explicit Content-Type.
 func (c *FederatedCatalogueClient) PutRaw(ctx context.Context, path string, query url.Values, contentType string, body []byte) (*Response, error) {
-	return c.doRequest(ctx, http.MethodPut, path, query, contentType, body)
+	return c.doRequest(ctx, http.MethodPut, path, query, contentType, JSONContentType, body)
 }
 
 // Get sends a GET request to Federated Catalogue.
 func (c *FederatedCatalogueClient) Get(ctx context.Context, path string, query url.Values) (*Response, error) {
-	return c.doRequest(ctx, http.MethodGet, path, query, JSONContentType, nil)
+	return c.doRequest(ctx, http.MethodGet, path, query, JSONContentType, JSONContentType, nil)
 }
 
 // Delete sends a DELETE request to Federated Catalogue.
 func (c *FederatedCatalogueClient) Delete(ctx context.Context, path string, query url.Values) (*Response, error) {
-	return c.doRequest(ctx, http.MethodDelete, path, query, JSONContentType, nil)
+	return c.doRequest(ctx, http.MethodDelete, path, query, JSONContentType, JSONContentType, nil)
 }
 
-func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string, path string, query url.Values, contentType string, body []byte) (*Response, error) {
+func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string, path string, query url.Values, contentType string, accept string, body []byte) (*Response, error) {
 	if c.baseURL == "" {
 		return nil, fmt.Errorf("federated catalogue api url is empty")
 	}
@@ -219,7 +258,11 @@ func (c *FederatedCatalogueClient) doRequest(ctx context.Context, method string,
 	if contentType == "" {
 		contentType = JSONContentType
 	}
+	if accept == "" {
+		accept = JSONContentType
+	}
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", accept)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := c.httpClient.Do(req)
@@ -269,6 +312,21 @@ func (c *FederatedCatalogueClient) ExtractErrorCode(body []byte) string {
 		return ""
 	}
 	return errBody.Code
+}
+
+func (c *FederatedCatalogueClient) queryHTTPError(resp *Response) error {
+	code := c.ExtractErrorCode(resp.Body)
+	msg := c.ExtractErrorMessage(resp.Body)
+
+	if code != "" && msg != "" {
+		return fmt.Errorf("/query/search failed with status %d: %s: %s", resp.StatusCode, code, msg)
+	}
+
+	if msg != "" {
+		return fmt.Errorf("/query/search failed with status %d: %s", resp.StatusCode, msg)
+	}
+
+	return fmt.Errorf("/query/search failed with status %d", resp.StatusCode)
 }
 
 // SchemaHTTPError formats a failed FC /schemas HTTP response as an error.

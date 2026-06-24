@@ -2,10 +2,8 @@ package template
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -22,32 +20,22 @@ type GetByIDHandler struct {
 	FCClient *client.FederatedCatalogueClient
 }
 
+// TODO: fix FC GraphDB issue
 const retrieveTemplateByIDStatement = `
 MATCH (ct:ContractTemplate)
-WHERE ct.did = $did AND ct.version = $version
-OPTIONAL MATCH (ct)-[:operatedBy]->(p:Participant)
-OPTIONAL MATCH (p)-[:headquarterAddress]->(hq)
-OPTIONAL MATCH (p)-[:TermsAndConditions]->(tc)
+WHERE head(ct.claimsGraphUri) = $did
+OPTIONAL MATCH (m:TemplateMetadata {did: head(ct.claimsGraphUri)})
+WHERE toInteger(coalesce(m.templateVersion, ct.templateVersion, ct.version, $version)) = toInteger($version)
 RETURN {
-  did: ct.did,
+  did: head(ct.claimsGraphUri)),
   document_number: ct.documentNumber,
   version: ct.version,
   schema_version: ct.schemaVersion,
-	template_data_json: ct.templateDataJSON,
+  template_data_json: ct.templateDataJSON,
   name: ct.name,
   description: ct.description,
   template_type: ct.templateType,
-  participant_id: p.uri,
-  participant: {
-    legal_name: p.legalName,
-    registration_number: p.registrationNumber,
-    lei_code: p.leiCode,
-    headquarter_address: {
-      country: hq.country,
-      locality: hq.locality
-    },
-    terms_and_conditions: tc.url
-  },
+  participant_id: ct.participantId,
   created_at: ct.createdAt,
   updated_at: ct.updatedAt
 } AS n
@@ -79,15 +67,9 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		return nil, nil
 	}
 
-	var n map[string]interface{}
-	for _, v := range resp.Items[0] {
-		if m, ok := v.(map[string]interface{}); ok {
-			n = m
-			break
-		}
-	}
+	n := projectionMap(resp.Items[0])
 	if n == nil {
-		return nil, fmt.Errorf("query projection missing projected map for did=%s version=%d", qry.DID, qry.Version)
+		return nil, fmt.Errorf("query projection missing projected map for did=%s", qry.DID)
 	}
 
 	templateData, err := parseTemplateDataJSON(ptr.StringFromMap(n, "template_data_json"))
@@ -104,42 +86,8 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		Name:           ptr.Ref(ptr.StringFromMap(n, "name")),
 		Description:    ptr.Ref(ptr.StringFromMap(n, "description")),
 		TemplateType:   ptr.Ref(ptr.StringFromMap(n, "template_type")),
-		Participant:    mapTemplateParticipantSummary(n),
+		ParticipantID:  ptr.Ref(ptr.StringFromMap(n, "participant_id")),
 		CreatedAt:      ptr.Ref(ptr.StringFromMap(n, "created_at")),
 		UpdatedAt:      ptr.Ref(ptr.StringFromMap(n, "updated_at")),
 	}, nil
-}
-
-func parseTemplateDataJSON(templateDataJSON string) (any, error) {
-	if strings.TrimSpace(templateDataJSON) == "" {
-		return nil, nil
-	}
-
-	var templateData map[string]interface{}
-	if err := json.Unmarshal([]byte(templateDataJSON), &templateData); err != nil {
-		return nil, fmt.Errorf("unmarshal templateDataJSON failed: %w", err)
-	}
-
-	return templateData, nil
-}
-
-func mapTemplateParticipantSummary(n map[string]interface{}) *templatecatalogueintegration.TemplateCatalogueParticipantSummary {
-	participantRaw, ok := n["participant"].(map[string]interface{})
-	if !ok || participantRaw == nil {
-		// Optional participant summary
-		return nil
-	}
-
-	headquarterRaw, _ := participantRaw["headquarter_address"].(map[string]interface{})
-
-	return &templatecatalogueintegration.TemplateCatalogueParticipantSummary{
-		LegalName:          ptr.Ref(ptr.StringFromMap(participantRaw, "legal_name")),
-		RegistrationNumber: ptr.Ref(ptr.StringFromMap(participantRaw, "registration_number")),
-		LeiCode:            ptr.Ref(ptr.StringFromMap(participantRaw, "lei_code")),
-		HeadquarterAddress: &templatecatalogueintegration.TemplateCatalogueParticipantHeadquarterSummary{
-			Country:  ptr.Ref(ptr.StringFromMap(headquarterRaw, "country")),
-			Locality: ptr.Ref(ptr.StringFromMap(headquarterRaw, "locality")),
-		},
-		TermsAndConditions: ptr.Ref(ptr.StringFromMap(participantRaw, "terms_and_conditions")),
-	}
 }
