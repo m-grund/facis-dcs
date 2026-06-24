@@ -1,6 +1,7 @@
 package event
 
 import (
+	"encoding/json"
 	"time"
 
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -14,6 +15,41 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 )
+
+// SyncingRequestEvent is emitted when a new contract is created.
+type SyncingRequestEvent struct {
+	RequesterDID string    `json:"requester_did"`
+	DID          string    `json:"did"`
+	OccurredAt   time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e SyncingRequestEvent) EventType() string {
+	return eventtype.SyncingRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e SyncingRequestEvent) GetDID() string {
+	return e.DID
+}
+
+// SyncingRequestRespond is emitted when a new contract is created.
+type SyncingRequestRespond struct {
+	ResponderDID string          `json:"responder_did"`
+	DID          string          `json:"did"`
+	OccurredAt   time.Time       `json:"occurred_at"`
+	Payload      json.RawMessage `json:"payload"`
+}
+
+// EventType implements the Event interface.
+func (e SyncingRequestRespond) EventType() string {
+	return eventtype.SyncingResponse.String()
+}
+
+// GetDID implements the Event interface.
+func (e SyncingRequestRespond) GetDID() string {
+	return e.DID
+}
 
 // CreateEvent is emitted when a new contract is created.
 type CreateEvent struct {

@@ -289,7 +289,7 @@ func main() {
 		log.Fatalf(ctx, err, "failed to start outbox processor")
 	}
 
-	if os.Getenv("DEBUG_EVENTING") == "true" {
+	if os.Getenv("DCS_DEBUG_EVENTING") == "true" {
 		eventSubClient, err := event.NewNatsSubClient(conf.EventBusTopic("*"), natsURL)
 		if err != nil {
 			log.Fatalf(ctx, err, "Could not connect to events bus")

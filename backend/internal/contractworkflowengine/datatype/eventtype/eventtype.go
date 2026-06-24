@@ -28,6 +28,8 @@ const (
 	RecordEvidence          EventType = "RECORD_EVIDENCE"
 	ContractExpired         EventType = "CONTRACT_EXPIRED"
 	RetrieveAllTemplates    EventType = "RETRIEVE_ALL_TEMPLATES"
+	SyncingRequest          EventType = "SYNCING_REQUEST"
+	SyncingResponse         EventType = "SYNCING_RESPONSE"
 )
 
 var validStates = map[EventType]bool{
@@ -50,6 +52,8 @@ var validStates = map[EventType]bool{
 	Terminate:               true,
 	RecordEvidence:          true,
 	ContractExpired:         true,
+	SyncingRequest:          true,
+	SyncingResponse:         true,
 }
 
 func NewEventType(s string) (EventType, error) {
