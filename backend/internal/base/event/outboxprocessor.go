@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -116,7 +115,7 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		}
 	}(tx)
 
-	source := fmt.Sprintf("%s#%s", origin, strings.ToLower(event.Component))
+	source := fmt.Sprintf("%s", origin)
 	switch event.Component {
 	case componenttype.ContractTemplateRepo.String():
 		if err := j.TRPubClient.Publish(source, event.EventType, event.EventData); err != nil {

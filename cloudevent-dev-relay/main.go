@@ -64,7 +64,7 @@ func main() {
 		err := p.sub.Subscribe(func(evt cloudevent.Event) {
 			start := time.Now()
 
-			if slices.Contains(filteredEvents, string(evt.Type())) {
+			if slices.Contains(filteredEvents, evt.Type()) {
 				return
 			}
 
