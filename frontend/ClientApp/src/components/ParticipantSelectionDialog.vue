@@ -1,9 +1,9 @@
 <template>
-  <button type="button" v-bind="$attrs" @click="openModal">Submit</button>
+  <button type="button" v-bind="$attrs" @click="openModal">Create</button>
   <Teleport to="body">
     <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
-        <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
+        <h3 class="text-lg font-bold">Contract Participants</h3>
 
         <button class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
         <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
@@ -123,14 +123,14 @@
 
 <script setup lang="ts">
 import { getLocalDIDFile } from '@/services/did-service'
-import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
-import type { SubmitContractAssignees } from '@/utils/submit-selection'
+import { isDuplicateInList, mergeDraftIntoList } from '@/utils/participant-selection'
+import type { ParticipantSelection } from '@/utils/participant-selection'
 import { nextTick, ref, type Ref } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
 const emit = defineEmits<{
-  submit: [value: SubmitContractAssignees]
+  submit: [value: ParticipantSelection]
 }>()
 
 const assigneeModal = ref<HTMLDialogElement | null>(null)
@@ -253,7 +253,7 @@ function removeNegotiator(did: string) {
   removeFromList(negotiators, did)
 }
 
-function collectAssignees(): SubmitContractAssignees {
+function collectAssignees(): ParticipantSelection {
   return {
     reviewers: mergeDraftIntoList(reviewers.value, reviewerDraft.value),
     approvers: mergeDraftIntoList(approvers.value, approverDraft.value),

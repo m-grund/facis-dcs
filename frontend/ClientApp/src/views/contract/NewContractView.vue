@@ -35,6 +35,9 @@ import {
 } from '@/modules/template-repository/models/contract-template'
 import { buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { useContractsStore } from '@/stores/contracts-store'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
+import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
+import type { ParticipantSelection } from '@/utils/participant-selection'
 
 const route = useRoute()
 const router = useRouter()
@@ -47,7 +50,6 @@ const templateDraftStore = useTemplateDraftStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
-const { hasConditionParameterForValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 
@@ -61,6 +63,9 @@ const contract: Ref<Contract | null> = ref(null)
 
 const canSubmit = computed(() => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null))
 
+const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
+const { isCreator } = useContractPermissions()
+
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
@@ -68,57 +73,6 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
 })
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
-
-const submit = async () => {
-  isSubmitting.value = true
-  try {
-    if (!isEditMode.value && !!selectedTemplate.value) {
-      const response = await contractWorkflowService.create({ did: selectedTemplate.value.did })
-      did.value = response.did
-      errorStore.add('Contract created.', 'info')
-    } else if (contract.value) {
-      const semanticExtension = buildSemanticTemplateExtension(
-        templateDraftStore.documentBlocks,
-        templateDraftStore.semanticConditions,
-        templateDraftStore.semanticProfile,
-      )
-      const contractData: ContractData = {
-        documentOutline: templateDraftStore.documentOutline,
-        documentBlocks: templateDraftStore.documentBlocks,
-        semanticConditions: templateDraftStore.semanticConditions,
-        subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
-        templateDataVersion: templateDraftStore.templateDataVersion,
-        schemaRefs: {
-          documentStructure: FACIS_SCHEMA_REFS.documentStructure,
-          semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
-          contractData: FACIS_SCHEMA_REFS.contractData,
-        },
-        policyRefs: FACIS_CONTRACT_POLICY_REFS,
-        validation: FACIS_CONTRACT_VALIDATION_PROFILE,
-        semanticProfile: semanticExtension.semanticProfile,
-        templateVariables: templateDraftStore.templateVariables,
-        placeholderBindings: semanticExtension.placeholderBindings,
-        semanticRules: semanticExtension.semanticRules,
-        sla: templateDraftStore.sla ?? undefined,
-        semanticConditionValues: contractContentValuesStore.semanticConditionValues,
-      }
-      await contractWorkflowService.update({
-        did: contract.value.did,
-        updated_at: contract.value.updated_at,
-        exp_notice_period: contract.value.exp_notice_period,
-        exp_policy: contract.value.exp_policy,
-        name: contract.value.name,
-        description: contract.value.description,
-        contract_data: contractData,
-      })
-      await router.push({ name: ROUTES.CONTRACTS.LIST })
-    }
-  } catch (error) {
-    console.error('Submission failed', error)
-  } finally {
-    isSubmitting.value = false
-  }
-}
 
 watch(
   isEditMode,
@@ -223,6 +177,74 @@ watch(selectedTemplate, (value) => {
 onBeforeRouteLeave(() => {
   scrollStore.removeGutter()
 })
+
+const createContract = async ({ reviewers, approvers, negotiators }: ParticipantSelection) => {
+  isSubmitting.value = true
+  try {
+    if (!!selectedTemplate.value) {
+      const response = await contractWorkflowService.create({
+        did: selectedTemplate.value.did,
+      reviewers,
+      approvers,
+      negotiators
+    })
+      did.value = response.did
+      errorStore.add('Contract created.', 'info')
+    }
+  } catch (error) {
+    console.error('Submission failed', error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const updateContract = async () => {
+  isSubmitting.value = true
+  try {
+    if (contract.value) {
+      const semanticExtension = buildSemanticTemplateExtension(
+        templateDraftStore.documentBlocks,
+        templateDraftStore.semanticConditions,
+        templateDraftStore.semanticProfile,
+      )
+      const contractData: ContractData = {
+        documentOutline: templateDraftStore.documentOutline,
+        documentBlocks: templateDraftStore.documentBlocks,
+        semanticConditions: templateDraftStore.semanticConditions,
+        subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
+        templateDataVersion: templateDraftStore.templateDataVersion,
+        schemaRefs: {
+          documentStructure: FACIS_SCHEMA_REFS.documentStructure,
+          semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
+          contractData: FACIS_SCHEMA_REFS.contractData,
+        },
+        policyRefs: FACIS_CONTRACT_POLICY_REFS,
+        validation: FACIS_CONTRACT_VALIDATION_PROFILE,
+        semanticProfile: semanticExtension.semanticProfile,
+        templateVariables: templateDraftStore.templateVariables,
+        placeholderBindings: semanticExtension.placeholderBindings,
+        semanticRules: semanticExtension.semanticRules,
+        sla: templateDraftStore.sla ?? undefined,
+        semanticConditionValues: contractContentValuesStore.semanticConditionValues,
+      }
+      await contractWorkflowService.update({
+        did: contract.value.did,
+        updated_at: contract.value.updated_at,
+        exp_notice_period: contract.value.exp_notice_period,
+        exp_policy: contract.value.exp_policy,
+        name: contract.value.name,
+        description: contract.value.description,
+        contract_data: contractData,
+      })
+      await router.push({ name: ROUTES.CONTRACTS.LIST })
+    }
+  } catch (error) {
+    console.error('Submission failed', error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -335,9 +357,15 @@ onBeforeRouteLeave(() => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting || !canSubmit" @click="submit">
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          {{ isEditMode ? 'Update' : 'Create' }}
+        <ParticipantSelectionDialog
+        v-if="!isEditMode"
+        :disabled="isSubmitting || !canSubmit"
+        class="btn flex-1 btn-primary"
+          @submit="createContract"
+        />
+        <button v-else class="btn flex-1 btn-primary" @click="updateContract">
+          <span :disabled="isSubmitting || !canSubmit" class="loading loading-sm loading-spinner"></span>
+          Update
         </button>
       </div>
     </div>
