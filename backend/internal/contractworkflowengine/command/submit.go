@@ -66,7 +66,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	var responsible *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
@@ -277,7 +276,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			ActionFlag:      cmd.ActionFlag,
 			Comments:        cmd.Comments,
 			OccurredAt:      time.Now().UTC(),
-			Responsible:     responsible,
 			HolderDID:       cmd.HolderDID,
 			UserRoles:       cmd.UserRoles,
 		}

@@ -161,6 +161,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		OccurredAt:   *createdAt,
 		HolderDID:    cmd.HolderDID,
 		UserRoles:    cmd.UserRoles,
+		Responsible:  &resp,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

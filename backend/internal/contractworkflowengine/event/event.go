@@ -3,6 +3,8 @@ package event
 import (
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/db"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -24,6 +26,7 @@ type CreateEvent struct {
 	ContractData *datatype.JSON     `json:"contract_data"`
 	OccurredAt   time.Time          `json:"occurred_at"`
 	UserRoles    userrole.UserRoles `json:"user_roles"`
+	Responsible  *db.Responsible    `json:"responsible,omitempty"`
 }
 
 // EventType implements the Event interface.
@@ -80,7 +83,6 @@ type SubmitEvent struct {
 	ContractVersion int                    `json:"contract_version"`
 	ActionFlag      *actionflag.ActionFlag `json:"action_flag,omitempty"`
 	Comments        []string               `json:"comments"`
-	Responsible     *any                   `json:"responsible,omitempty"`
 	UserRoles       userrole.UserRoles     `json:"user_roles"`
 }
 
