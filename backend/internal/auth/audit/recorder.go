@@ -52,7 +52,7 @@ func (r *Recorder) RecordPresentationAudit(ctx context.Context, evt oid4vp.Prese
 			Roles:             append([]string(nil), evt.Roles...),
 			OccurredAt:        occurredAt,
 		}
-		err = event.Create(ctx, tx, out, componenttype.Authentication)
+		err = event.Create(ctx, tx, out, componenttype.System)
 	} else {
 		out := authevents.PresentationFailedEvent{
 			PresentationState: state,
@@ -62,7 +62,7 @@ func (r *Recorder) RecordPresentationAudit(ctx context.Context, evt oid4vp.Prese
 			ErrorMessage:      strings.TrimSpace(evt.ErrorMessage),
 			OccurredAt:        occurredAt,
 		}
-		err = event.Create(ctx, tx, out, componenttype.Authentication)
+		err = event.Create(ctx, tx, out, componenttype.System)
 	}
 
 	if err != nil {
