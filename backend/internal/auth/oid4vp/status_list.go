@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"goa.design/clue/log"
 )
 
 // Status list entry kinds: credentialStatus.type.
@@ -237,7 +235,6 @@ func validStatusListURI(uri string) error {
 // checkStatusList fetches statusListCredential URIs and checks revocation.
 func checkStatusList(rawClaims json.RawMessage) error {
 	ctx := context.Background()
-	log.Printf(ctx, "oid4vp checkStatusList: start")
 
 	if len(rawClaims) == 0 {
 		return fmt.Errorf("credential claims are empty")
@@ -256,8 +253,11 @@ func checkStatusList(rawClaims json.RawMessage) error {
 		return err
 	}
 
+	if len(refs) == 0 {
+		return fmt.Errorf("credential missing supported credentialStatus or status.status_list")
+	}
+
 	for _, ref := range refs {
-		log.Printf(ctx, "oid4vp checkStatusList: kind=%q uri=%q index=%d purpose=%q size=%d", ref.kind, ref.uri, ref.index, ref.purpose, ref.statusSize)
 		if err := validStatusListURI(ref.uri); err != nil {
 			return err
 		}

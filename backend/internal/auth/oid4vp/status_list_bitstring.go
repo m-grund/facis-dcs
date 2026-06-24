@@ -17,8 +17,9 @@ type bitPacking int
 
 const (
 	bitPackingMSB bitPacking = iota // W3C MSB
-	bitPackingLSB                   // IETF LSB
+	bitPackingLSB                   // IETF LSB / XFSC statuslist-service
 )
+const statusListEntryBitPacking = bitPackingLSB
 
 func encodedListFromBody(body []byte) (string, error) {
 	return encodedListFromBodyForPurpose(body, "")
@@ -160,15 +161,6 @@ func decodeBase64URLOrStd(s string) ([]byte, error) {
 	return nil, fmt.Errorf("base64 decode status list: %w", lastErr)
 }
 
-func bitRevoked(bitstring []byte, index uint32) bool {
-	status, err := statusValueAt(bitstring, index, defaultStatusSize, bitPackingMSB)
-	if err != nil {
-		return true
-	}
-
-	return status != 0
-}
-
 func queryEntryStatusFromBody(body []byte, index uint32) (string, error) {
 	return queryEntryStatusFromBodyWithOptions(body, index, defaultStatusSize, "")
 }
@@ -189,33 +181,26 @@ func queryEntryStatusFromBodyWithOptions(body []byte, index uint32, statusSize u
 		return "", err
 	}
 
-	return queryEntryStatusFromEncodedList(encoded, index, statusSize)
+	return queryEntryStatusFromEncodedListWithPacking(encoded, index, statusSize, statusListEntryBitPacking)
 }
 
-// queryEntryStatusFromEncodedList uses W3C MSB bit ordering.
-func queryEntryStatusFromEncodedList(encoded string, index uint32, bitsPerEntry uint32) (string, error) {
-	bitstring, err := decompressEncodedList(encoded)
-	if err != nil {
-		return "", err
+// bitSetAt reports whether the status bit at index is 1.
+// LSB-first: bit 0 is the least-significant bit of the byte.
+// MSB-first: index 0 is the most-significant bit of byte 0.
+func bitSetAt(bitstring []byte, index uint32, lsb bool) (bool, error) {
+	bytePos := index / 8
+	if int(bytePos) >= len(bitstring) {
+		return false, fmt.Errorf("status index %d out of range", index)
 	}
 
-	if bitsPerEntry == 1 {
-		if bitRevoked(bitstring, index) {
-			return "revoked", nil
-		}
-		return "active", nil
+	var mask uint8
+	if lsb {
+		mask = 1 << (index % 8)
+	} else {
+		mask = 1 << (7 - (index % 8))
 	}
 
-	value, err := multiBitStatusValue(bitstring, index, bitsPerEntry)
-	if err != nil {
-		return "", err
-	}
-
-	if value == 0 {
-		return "active", nil
-	}
-
-	return "revoked", nil
+	return bitstring[bytePos]&mask != 0, nil
 }
 
 func queryTokenStatusFromEncodedList(encoded string, index uint32, bitsPerEntry uint32) (string, error) {
@@ -226,6 +211,20 @@ func queryEntryStatusFromEncodedListWithPacking(encoded string, index uint32, bi
 	bitstring, err := decompressEncodedList(encoded)
 	if err != nil {
 		return "", err
+	}
+
+	if bitsPerEntry == 1 {
+		set, err := bitSetAt(bitstring, index, packing == bitPackingLSB)
+
+		if err != nil {
+			return "", err
+		}
+
+		if set {
+			return "revoked", nil
+		}
+
+		return "active", nil
 	}
 
 	statusValue, err := statusValueAt(bitstring, index, bitsPerEntry, packing)
@@ -239,19 +238,6 @@ func queryEntryStatusFromEncodedListWithPacking(encoded string, index uint32, bi
 	}
 
 	return "revoked", nil
-}
-
-func multiBitStatusValue(bitstring []byte, index, bitsPerEntry uint32) (uint32, error) {
-	value, err := statusValueAt(bitstring, index, bitsPerEntry, bitPackingMSB)
-	if err != nil {
-		return 0, err
-	}
-
-	if value > uint64(^uint32(0)) {
-		return 0, fmt.Errorf("status value overflows uint32")
-	}
-
-	return uint32(value), nil
 }
 
 func statusValueAt(bitstring []byte, index, bitsPerEntry uint32, packing bitPacking) (uint64, error) {
