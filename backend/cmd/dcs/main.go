@@ -145,12 +145,6 @@ func main() {
 		log.Fatalf(ctx, err, "Could not read did document")
 	}
 
-	// Connect to NATS (use NATS_URL env var or default)
-	natsURL := os.Getenv("NATS_URL")
-	if natsURL == "" {
-		natsURL = nats.DefaultURL
-	}
-
 	// Initialize OIDC validator and JWT authenticator.
 	hydraIssuerURL := os.Getenv("HYDRA_ISSUER_URL")
 	hydraClientID := os.Getenv("HYDRA_CLIENT_ID")
@@ -199,6 +193,12 @@ func main() {
 	tsaClient, err := tsa.NewClient(tsaURL)
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to initialize TSA client")
+	}
+
+	// Connect to NATS (use NATS_URL env var or default)
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = nats.DefaultURL
 	}
 
 	sysPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.System.String()), natsURL)
