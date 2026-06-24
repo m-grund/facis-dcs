@@ -1,0 +1,150 @@
+{
+    "@context": {
+        "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+        "odrl": "http://www.w3.org/ns/odrl/2/",
+        "xsd": "http://www.w3.org/2001/XMLSchema#"
+    },
+    "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5",
+    "@type": "dcs:ContractTemplate",
+    "dcs:contractData": [
+        {
+            "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#requirement-6d645b6f-758c-400b-9809-8cafb98269e2",
+            "@type": "dcs:DataRequirement",
+            "dcs:conditionId": "6d645b6f-758c-400b-9809-8cafb98269e2",
+            "dcs:fields": [
+                {
+                    "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.jurisdiction",
+                    "@type": "dcs:RequirementField",
+                    "dcs:domainField": {
+                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-jurisdiction"
+                    },
+                    "dcs:parameterName": "contract.jurisdiction",
+                    "dcs:required": true,
+                    "dcs:semanticPath": "contract.jurisdiction"
+                },
+                {
+                    "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.disputeResolution.method",
+                    "@type": "dcs:RequirementField",
+                    "dcs:domainField": {
+                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-disputeResolution-method"
+                    },
+                    "dcs:parameterName": "contract.disputeResolution.method",
+                    "dcs:required": true,
+                    "dcs:semanticPath": "contract.disputeResolution.method"
+                },
+                {
+                    "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.disputeResolution.venue",
+                    "@type": "dcs:RequirementField",
+                    "dcs:domainField": {
+                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-disputeResolution-venue"
+                    },
+                    "dcs:parameterName": "contract.disputeResolution.venue",
+                    "dcs:required": true,
+                    "dcs:semanticPath": "contract.disputeResolution.venue"
+                },
+                {
+                    "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.governingLaw",
+                    "@type": "dcs:RequirementField",
+                    "dcs:domainField": {
+                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-governingLaw"
+                    },
+                    "dcs:parameterName": "contract.governingLaw",
+                    "dcs:required": true,
+                    "dcs:semanticPath": "contract.governingLaw"
+                }
+            ],
+            "dcs:name": "Legal Terms",
+            "dcs:schemaVersion": "v1"
+        }
+    ],
+    "dcs:documentStructure": {
+        "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#document-structure",
+        "@type": "dcs:DocumentStructure",
+        "dcs:blocks": [
+            {
+                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#block-99264031-1bd1-467e-b5d5-b49f923d66a0",
+                "@type": "dcs:Clause",
+                "dcs:content": {
+                    "@list": [
+                        "Contract Jurisdiction: ",
+                        {
+                            "@type": "dcs:Placeholder",
+                            "dcs:bindsTo": {
+                                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.jurisdiction"
+                            },
+                            "dcs:token": "{{6d645b6f-758c-400b-9809-8cafb98269e2.contract.jurisdiction}}"
+                        },
+                        "\nDispute Resolution Method: ",
+                        {
+                            "@type": "dcs:Placeholder",
+                            "dcs:bindsTo": {
+                                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.disputeResolution.method"
+                            },
+                            "dcs:token": "{{6d645b6f-758c-400b-9809-8cafb98269e2.contract.disputeResolution.method}}"
+                        },
+                        "\nDispute Venue: ",
+                        {
+                            "@type": "dcs:Placeholder",
+                            "dcs:bindsTo": {
+                                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.disputeResolution.venue"
+                            },
+                            "dcs:token": "{{6d645b6f-758c-400b-9809-8cafb98269e2.contract.disputeResolution.venue}}"
+                        },
+                        "\nGoverning Law: ",
+                        {
+                            "@type": "dcs:Placeholder",
+                            "dcs:bindsTo": {
+                                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#field-6d645b6f-758c-400b-9809-8cafb98269e2-contract.governingLaw"
+                            },
+                            "dcs:token": "{{6d645b6f-758c-400b-9809-8cafb98269e2.contract.governingLaw}}"
+                        }
+                    ]
+                },
+                "dcs:title": "Legal Terms"
+            },
+            {
+                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#block-7bc98cd6-0ccc-4e60-8e1f-022dbf7cbc39",
+                "@type": "dcs:Section"
+            }
+        ],
+        "dcs:layout": [
+            {
+                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#block-db132f00-2c64-4d71-bf6a-af300f426489",
+                "dcs:children": {
+                    "@list": [
+                        {
+                            "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#block-7bc98cd6-0ccc-4e60-8e1f-022dbf7cbc39"
+                        },
+                        {
+                            "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#block-99264031-1bd1-467e-b5d5-b49f923d66a0"
+                        }
+                    ]
+                },
+                "dcs:isRoot": true
+            },
+            {
+                "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#block-7bc98cd6-0ccc-4e60-8e1f-022dbf7cbc39",
+                "dcs:children": {
+                    "@list": []
+                }
+            }
+        ]
+    },
+    "dcs:metadata": {
+        "@id": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5#metadata",
+        "@type": "dcs:TemplateMetadata",
+        "dcs:createdAt": "2026-06-23T13:01:21Z",
+        "dcs:createdBy": "did:web:dev.example:issuer:poa",
+        "dcs:did": "did:web:localhost:template:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5",
+        "dcs:name": "test",
+        "dcs:schemaVersion": "v1",
+        "dcs:sourceSystemType": "template-repository",
+        "dcs:state": "DRAFT",
+        "dcs:templateType": "SUB_CONTRACT",
+        "dcs:templateVersion": 1,
+        "dcs:title": "test",
+        "dcs:updatedAt": "2026-06-23T13:01:21Z",
+        "dcs:uuid": "urn:uuid:2cac3660-1aa9-4ec7-838d-cf6a4f53f0c5"
+    },
+    "dcs:policies": []
+}

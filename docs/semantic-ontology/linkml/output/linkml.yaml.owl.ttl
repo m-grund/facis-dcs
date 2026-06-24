@@ -1,64 +1,304 @@
+@prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
-@prefix personinfo: <https://w3id.org/linkml/examples/personinfo> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-personinfo:.owl.ttl a owl:Ontology ;
-    rdfs:label "personinfo" .
+<https://w3id.org/facis/dcs/ontology/v1.owl.ttl> a owl:Ontology ;
+    rdfs:label "facis-dcs" ;
+    skos:definition "FACIS Digital Contracting Service ontology" .
 
-personinfo:Person a owl:Class ;
-    rdfs:label "Person" ;
+dcs:DataRequirement a owl:Class ;
+    rdfs:label "DataRequirement" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:allValuesFrom xsd:string ;
-            owl:onProperty personinfo:phone ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty personinfo:id ],
+            owl:onProperty dcs:schemaVersion ],
         [ a owl:Restriction ;
             owl:allValuesFrom xsd:string ;
-            owl:onProperty personinfo:aliases ],
+            owl:onProperty dcs:conditionId ],
         [ a owl:Restriction ;
             owl:allValuesFrom xsd:string ;
-            owl:onProperty personinfo:age ],
+            owl:onProperty dcs:name ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty personinfo:phone ],
+            owl:onProperty dcs:name ],
+        [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:conditionId ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty personinfo:aliases ],
+            owl:onProperty dcs:schemaVersion ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom dcs:RequirementField ;
+            owl:onProperty dcs:fields ] ;
+    skos:definition "A set of fields required to fulfil a contract clause condition." ;
+    skos:exactMatch dcs:DataRequirement ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:DocumentStructure a owl:Class ;
+    rdfs:label "DocumentStructure" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:allValuesFrom dcs:Block ;
+            owl:onProperty dcs:blocks ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:anyURI ;
+            owl:onProperty dcs:layout ] ;
+    skos:definition "The block-level structure and layout of the template document." ;
+    skos:exactMatch dcs:DocumentStructure ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:Placeholder a owl:Class ;
+    rdfs:label "Placeholder" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:bindsTo ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom dcs:RequirementField ;
+            owl:onProperty dcs:bindsTo ],
         [ a owl:Restriction ;
             owl:allValuesFrom xsd:string ;
-            owl:onProperty personinfo:id ],
+            owl:onProperty dcs:token ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:token ] ;
+    skos:definition "A token in clause content that binds to a RequirementField." ;
+    skos:exactMatch dcs:Placeholder ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:TemplateMetadata a owl:Class ;
+    rdfs:label "TemplateMetadata" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:title ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:createdBy ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:templateType ],
         [ a owl:Restriction ;
             owl:allValuesFrom xsd:string ;
-            owl:onProperty personinfo:full_name ],
+            owl:onProperty dcs:schemaVersion ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:did ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:name ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty personinfo:full_name ],
+            owl:onProperty dcs:uuid ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:integer ;
+            owl:onProperty dcs:templateVersion ],
+        [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:did ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:state ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:uuid ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:createdBy ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:templateType ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty personinfo:age ] ;
-    skos:inScheme personinfo: .
+            owl:onProperty dcs:state ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:sourceSystemType ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:updatedAt ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:schemaVersion ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:createdAt ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:templateVersion ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:createdAt ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:updatedAt ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:name ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:sourceSystemType ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:title ] ;
+    skos:definition "Metadata associated with a contract template." ;
+    skos:exactMatch dcs:TemplateMetadata ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
 
-personinfo:age a owl:DatatypeProperty ;
-    rdfs:label "age" ;
-    skos:inScheme personinfo: .
+dcs:blocks a owl:ObjectProperty ;
+    rdfs:label "blocks" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
 
-personinfo:aliases a owl:DatatypeProperty ;
-    rdfs:label "aliases" ;
-    skos:inScheme personinfo: .
+dcs:children a owl:DatatypeProperty ;
+    rdfs:label "children" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
 
-personinfo:full_name a owl:DatatypeProperty ;
-    rdfs:label "full_name" ;
-    skos:inScheme personinfo: .
+dcs:fields a owl:ObjectProperty ;
+    rdfs:label "fields" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
 
-personinfo:id a owl:DatatypeProperty ;
-    rdfs:label "id" ;
-    skos:inScheme personinfo: .
+dcs:layout a owl:DatatypeProperty ;
+    rdfs:label "layout" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
 
-personinfo:phone a owl:DatatypeProperty ;
-    rdfs:label "phone" ;
-    skos:inScheme personinfo: .
+dcs:Clause a owl:Class ;
+    rdfs:label "Clause" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:title ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:title ],
+        dcs:Block ;
+    skos:definition "A document block containing mixed text and placeholder content. The dcs:content property holds an ordered RDF list of string literals and dcs:Placeholder nodes; it is left unconstrained at the property level so both literals and blank-node list heads are accepted." ;
+    skos:exactMatch dcs:Clause ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:Section a owl:Class ;
+    rdfs:label "Section" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:isRoot ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:anyURI ;
+            owl:onProperty dcs:children ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:boolean ;
+            owl:onProperty dcs:isRoot ],
+        dcs:Block ;
+    skos:definition "A structural grouping block whose children are referenced in the layout tree." ;
+    skos:exactMatch dcs:Section ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:bindsTo a owl:ObjectProperty ;
+    rdfs:label "bindsTo" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:conditionId a owl:DatatypeProperty ;
+    rdfs:label "conditionId" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:createdAt a owl:DatatypeProperty ;
+    rdfs:label "createdAt" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:createdBy a owl:DatatypeProperty ;
+    rdfs:label "createdBy" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:did a owl:DatatypeProperty ;
+    rdfs:label "did" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:domainField a owl:DatatypeProperty ;
+    rdfs:label "domainField" ;
+    skos:definition "IRI reference into the taxonomy for this field." ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:isRoot a owl:DatatypeProperty ;
+    rdfs:label "isRoot" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:parameterName a owl:DatatypeProperty ;
+    rdfs:label "parameterName" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:required a owl:DatatypeProperty ;
+    rdfs:label "required" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:semanticPath a owl:DatatypeProperty ;
+    rdfs:label "semanticPath" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:sourceSystemType a owl:DatatypeProperty ;
+    rdfs:label "sourceSystemType" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:state a owl:DatatypeProperty ;
+    rdfs:label "state" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:templateType a owl:DatatypeProperty ;
+    rdfs:label "templateType" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:templateVersion a owl:DatatypeProperty ;
+    rdfs:label "templateVersion" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:token a owl:DatatypeProperty ;
+    rdfs:label "token" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:updatedAt a owl:DatatypeProperty ;
+    rdfs:label "updatedAt" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:uuid a owl:DatatypeProperty ;
+    rdfs:label "uuid" ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:RequirementField a owl:Class ;
+    rdfs:label "RequirementField" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:parameterName ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:required ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:semanticPath ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:string ;
+            owl:onProperty dcs:parameterName ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:domainField ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:anyURI ;
+            owl:onProperty dcs:domainField ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom xsd:boolean ;
+            owl:onProperty dcs:required ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:semanticPath ] ;
+    skos:definition "A single field within a DataRequirement." ;
+    skos:exactMatch dcs:RequirementField ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:Block a owl:Class ;
+    rdfs:label "Block" ;
+    rdfs:subClassOf [ owl:unionOf ( dcs:Clause dcs:Section ) ] ;
+    skos:definition "Abstract base for document blocks (Clause or Section)." ;
+    skos:exactMatch dcs:Block ;
+    skos:inScheme <https://w3id.org/facis/dcs/ontology/v1> .
+
+dcs:name a owl:DatatypeProperty .
+
+dcs:schemaVersion a owl:DatatypeProperty .
+
+dcs:title a owl:DatatypeProperty .
 
 

@@ -1,36 +1,184 @@
-@prefix personinfo: <https://w3id.org/linkml/examples/personinfo> .
+@prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-personinfo:Person a sh:NodeShape ;
-    sh:closed true ;
+dcs:Clause a sh:NodeShape ;
+    rdfs:comment "A document block containing mixed text and placeholder content. The dcs:content property holds an ordered RDF list of string literals and dcs:Placeholder nodes; it is left unconstrained at the property level so both literals and blank-node list heads are accepted." ;
+    sh:closed false ;
     sh:ignoredProperties ( rdf:type ) ;
     sh:property [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
-            sh:order 1 ;
-            sh:path personinfo:full_name ],
+            sh:order 0 ;
+            sh:path dcs:title ] ;
+    sh:targetClass dcs:Clause .
+
+dcs:DataRequirement a sh:NodeShape ;
+    rdfs:comment "A set of fields required to fulfil a contract clause condition." ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type ) ;
+    sh:property [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 0 ;
+            sh:path dcs:conditionId ],
+        [ sh:class dcs:RequirementField ;
+            sh:nodeKind sh:IRI ;
+            sh:order 3 ;
+            sh:path dcs:fields ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
-            sh:order 4 ;
-            sh:path personinfo:age ],
+            sh:order 1 ;
+            sh:path dcs:name ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 2 ;
-            sh:path personinfo:aliases ],
+            sh:path dcs:schemaVersion ] ;
+    sh:targetClass dcs:DataRequirement .
+
+dcs:DocumentStructure a sh:NodeShape ;
+    rdfs:comment "The block-level structure and layout of the template document." ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type ) ;
+    sh:property [ sh:class dcs:Block ;
+            sh:nodeKind sh:BlankNodeOrIRI ;
+            sh:order 0 ;
+            sh:path dcs:blocks ],
+        [ sh:nodeKind sh:IRI ;
+            sh:order 1 ;
+            sh:path dcs:layout ] ;
+    sh:targetClass dcs:DocumentStructure .
+
+dcs:Placeholder a sh:NodeShape ;
+    rdfs:comment "A token in clause content that binds to a RequirementField." ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type ) ;
+    sh:property [ sh:class dcs:RequirementField ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:IRI ;
+            sh:order 1 ;
+            sh:path dcs:bindsTo ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path personinfo:id ],
+            sh:path dcs:token ] ;
+    sh:targetClass dcs:Placeholder .
+
+dcs:Section a sh:NodeShape ;
+    rdfs:comment "A structural grouping block whose children are referenced in the layout tree." ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type ) ;
+    sh:property [ sh:datatype xsd:boolean ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 1 ;
+            sh:path dcs:isRoot ],
+        [ sh:nodeKind sh:IRI ;
+            sh:order 0 ;
+            sh:path dcs:children ] ;
+    sh:targetClass dcs:Section .
+
+dcs:TemplateMetadata a sh:NodeShape ;
+    rdfs:comment "Metadata associated with a contract template." ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type ) ;
+    sh:property [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 9 ;
+            sh:path dcs:createdAt ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 8 ;
+            sh:path dcs:createdBy ],
+        [ sh:datatype xsd:integer ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 4 ;
+            sh:path dcs:templateVersion ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 11 ;
+            sh:path dcs:uuid ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 1 ;
+            sh:path dcs:name ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 6 ;
+            sh:path dcs:state ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 2 ;
+            sh:path dcs:title ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 3 ;
-            sh:path personinfo:phone ] ;
-    sh:targetClass personinfo:Person .
+            sh:path dcs:schemaVersion ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 5 ;
+            sh:path dcs:templateType ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 0 ;
+            sh:path dcs:did ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 10 ;
+            sh:path dcs:updatedAt ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 7 ;
+            sh:path dcs:sourceSystemType ] ;
+    sh:targetClass dcs:TemplateMetadata .
+
+dcs:Block a sh:NodeShape ;
+    rdfs:comment "Abstract base for document blocks (Clause or Section)." ;
+    sh:closed false ;
+    sh:ignoredProperties ( dcs:title dcs:children dcs:isRoot rdf:type ) ;
+    sh:targetClass dcs:Block .
+
+dcs:RequirementField a sh:NodeShape ;
+    rdfs:comment "A single field within a DataRequirement." ;
+    sh:closed false ;
+    sh:ignoredProperties ( rdf:type ) ;
+    sh:property [ sh:datatype xsd:boolean ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 2 ;
+            sh:path dcs:required ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 0 ;
+            sh:path dcs:parameterName ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 1 ;
+            sh:path dcs:semanticPath ],
+        [ sh:description "IRI reference into the taxonomy for this field." ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:IRI ;
+            sh:order 3 ;
+            sh:path dcs:domainField ] ;
+    sh:targetClass dcs:RequirementField .
 
 

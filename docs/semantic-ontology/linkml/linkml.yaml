@@ -1,18 +1,163 @@
-id: https://w3id.org/linkml/examples/personinfo
-name: personinfo
+id: https://w3id.org/facis/dcs/ontology/v1
+name: facis-dcs
+description: FACIS Digital Contracting Service ontology
+
 prefixes:
   linkml: https://w3id.org/linkml/
-  personinfo: https://w3id.org/linkml/examples/personinfo
+  dcs: https://w3id.org/facis/dcs/ontology/v1#
+  taxonomy: https://w3id.org/facis/dcs/taxonomy/v1#
+  xsd: http://www.w3.org/2001/XMLSchema#
+  odrl: http://www.w3.org/ns/odrl/2/
+
 imports:
   - linkml:types
+
 default_range: string
-default_prefix: personinfo
+default_prefix: dcs
 
 classes:
-  Person:
+
+  ContractTemplate:
+    class_uri: dcs:ContractTemplate
+    description: Root document representing a contract template.
     attributes:
-      id:
-      full_name:
-      aliases:
-      phone:
-      age:
+      contractData:
+        slot_uri: dcs:contractData
+        range: DataRequirement
+        multivalued: true
+        inlined_as_list: true
+      documentStructure:
+        slot_uri: dcs:documentStructure
+        range: DocumentStructure
+        inlined: true
+      metadata:
+        slot_uri: dcs:metadata
+        range: TemplateMetadata
+        inlined: true
+      policies:
+        slot_uri: dcs:policies
+        multivalued: true
+        inlined_as_list: true
+
+  TemplateMetadata:
+    class_uri: dcs:TemplateMetadata
+    description: Metadata associated with a contract template.
+    attributes:
+      did:
+        slot_uri: dcs:did
+        identifier: true
+      name:
+        slot_uri: dcs:name
+      title:
+        slot_uri: dcs:title
+      schemaVersion:
+        slot_uri: dcs:schemaVersion
+      templateVersion:
+        slot_uri: dcs:templateVersion
+        range: integer
+      templateType:
+        slot_uri: dcs:templateType
+      state:
+        slot_uri: dcs:state
+      sourceSystemType:
+        slot_uri: dcs:sourceSystemType
+      createdBy:
+        slot_uri: dcs:createdBy
+      createdAt:
+        slot_uri: dcs:createdAt
+        range: string
+      updatedAt:
+        slot_uri: dcs:updatedAt
+        range: string
+      uuid:
+        slot_uri: dcs:uuid
+
+  DataRequirement:
+    class_uri: dcs:DataRequirement
+    description: A set of fields required to fulfil a contract clause condition.
+    attributes:
+      conditionId:
+        slot_uri: dcs:conditionId
+        identifier: true
+      name:
+        slot_uri: dcs:name
+      schemaVersion:
+        slot_uri: dcs:schemaVersion
+      fields:
+        slot_uri: dcs:fields
+        range: RequirementField
+        multivalued: true
+        inlined_as_list: true
+
+  RequirementField:
+    class_uri: dcs:RequirementField
+    description: A single field within a DataRequirement.
+    attributes:
+      parameterName:
+        slot_uri: dcs:parameterName
+        identifier: true
+      semanticPath:
+        slot_uri: dcs:semanticPath
+      required:
+        slot_uri: dcs:required
+        range: boolean
+      domainField:
+        slot_uri: dcs:domainField
+        range: uri
+        description: IRI reference into the taxonomy for this field.
+
+  DocumentStructure:
+    class_uri: dcs:DocumentStructure
+    description: The block-level structure and layout of the template document.
+    attributes:
+      blocks:
+        slot_uri: dcs:blocks
+        range: Block
+        multivalued: true
+        inlined_as_list: true
+      layout:
+        slot_uri: dcs:layout
+        range: uri
+        multivalued: true
+        inlined_as_list: true
+
+  Block:
+    class_uri: dcs:Block
+    description: Abstract base for document blocks (Clause or Section).
+    abstract: true
+
+  Clause:
+    class_uri: dcs:Clause
+    is_a: Block
+    description: >-
+      A document block containing mixed text and placeholder content.
+      The dcs:content property holds an ordered RDF list of string literals
+      and dcs:Placeholder nodes; it is left unconstrained at the property
+      level so both literals and blank-node list heads are accepted.
+    attributes:
+      title:
+        slot_uri: dcs:title
+
+  Section:
+    class_uri: dcs:Section
+    is_a: Block
+    description: A structural grouping block whose children are referenced in the layout tree.
+    attributes:
+      children:
+        slot_uri: dcs:children
+        range: uri
+        multivalued: true
+        inlined_as_list: true
+      isRoot:
+        slot_uri: dcs:isRoot
+        range: boolean
+
+  Placeholder:
+    class_uri: dcs:Placeholder
+    description: A token in clause content that binds to a RequirementField.
+    attributes:
+      token:
+        slot_uri: dcs:token
+      bindsTo:
+        slot_uri: dcs:bindsTo
+        range: RequirementField
