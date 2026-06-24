@@ -11,6 +11,10 @@ var ContractCreateRequest = Type("ContractCreateRequest", func() {
 
 	Attribute("did", String, "The did of the contract template, that is to use to create a new contract")
 
+	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
+	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
+	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
+
 	Required("did")
 })
 
@@ -62,10 +66,6 @@ var ContractSubmitRequest = Type("ContractSubmitRequest", func() {
 
 	Attribute("forward_to", String, "Action flag: approval | reject")
 	Attribute("comments", ArrayOf(String), "Optional comments")
-
-	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
-	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
-	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
 
 	Required("did", "updated_at")
 })

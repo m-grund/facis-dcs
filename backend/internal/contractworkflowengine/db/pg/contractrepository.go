@@ -23,14 +23,14 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 	statement := `
         INSERT INTO contracts (
             did, origin, created_by, state, name,
-            description, contract_data, template_did, template_version
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            description, contract_data, template_did, template_version, responsible
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING created_at
     `
 	var createdAt time.Time
 	err := tx.GetContext(ctx, &createdAt, statement,
 		data.DID, data.Origin, data.CreatedBy, data.State, data.Name,
-		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion)
+		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion, data.Responsible)
 	if err != nil {
 		return nil, err
 	}

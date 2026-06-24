@@ -110,11 +110,17 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		CreatedBy:   middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
+		Reviewers:   req.Reviewers,
+		Approvers:   req.Approvers,
+		Negotiators: req.Negotiators,
 	}
 	createHandler := command.Creator{
 		DB:     s.DB,
-		CRepo:  s.CRepo,
 		CTRepo: s.CTRepo,
+		CRepo:  s.CRepo,
+		RTRepo: s.RTRepo,
+		ATRepo: s.ATRepo,
+		NTRepo: s.NTRepo,
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
@@ -226,9 +232,6 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		UserRoles:   middleware.GetUserRoles(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
-		Reviewers:   req.Reviewers,
-		Approvers:   req.Approvers,
-		Negotiators: req.Negotiators,
 	}
 	handler := command.Submitter{
 		DB:     s.DB,

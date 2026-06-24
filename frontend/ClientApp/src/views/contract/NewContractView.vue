@@ -63,8 +63,7 @@ const contract: Ref<Contract | null> = ref(null)
 
 const canSubmit = computed(() => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null))
 
-const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
-const { isCreator } = useContractPermissions()
+const { hasConditionParameterForValue } = useSemanticValueVerification()
 
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   if (!isEditMode.value) return null
@@ -192,7 +191,7 @@ const createContract = async ({ reviewers, approvers, negotiators }: Participant
       errorStore.add('Contract created.', 'info')
     }
   } catch (error) {
-    console.error('Submission failed', error)
+    console.error('creation failed', error)
   } finally {
     isSubmitting.value = false
   }
@@ -364,7 +363,6 @@ const updateContract = async () => {
           @submit="createContract"
         />
         <button v-else class="btn flex-1 btn-primary" @click="updateContract">
-          <span :disabled="isSubmitting || !canSubmit" class="loading loading-sm loading-spinner"></span>
           Update
         </button>
       </div>

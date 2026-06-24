@@ -6,6 +6,9 @@ import type { ContractChangeRequest, ExpirationPolicy } from '../contract/contra
 
 export interface ContractCreateRequest {
   did: string
+  reviewers?: string[]
+  approvers?: string[]
+  negotiators?: string[]
 }
 
 export interface ContractUpdateRequest {
@@ -24,9 +27,6 @@ export interface ContractSubmitRequest {
   updated_at: string
   forward_to?: ContractActionFlag
   comments?: string[]
-  reviewers?: string[]
-  approvers?: string[]
-  negotiators?: string[]
 }
 
 export type ContractRetrieveRequest = Record<string, unknown>
