@@ -97,7 +97,7 @@ func (h *RemoteCreator) Handle(ctx context.Context, cmd RemoteCreateCmd) error {
 	for _, task := range negotiationTasks {
 		err := h.NTRepo.RemoteCreate(ctx, tx, task)
 		if err != nil {
-			return fmt.Errorf("could not create remote approval task: %w", err)
+			return fmt.Errorf("could not create remote negotiation task: %w", err)
 		}
 	}
 
@@ -105,7 +105,7 @@ func (h *RemoteCreator) Handle(ctx context.Context, cmd RemoteCreateCmd) error {
 	for _, negotiation := range negotiations {
 		err := h.NRepo.RemoteCreateNegotiation(ctx, tx, negotiation)
 		if err != nil {
-			return fmt.Errorf("could not create remote approval task: %w", err)
+			return fmt.Errorf("could not create remote negotiation data: %w", err)
 		}
 	}
 

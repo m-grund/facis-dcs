@@ -36,11 +36,27 @@ func (r *PostgresApprovalTaskRepo) Create(ctx context.Context, tx *sqlx.Tx, data
 func (r *PostgresApprovalTaskRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.ApprovalTaskData) error {
 	statement := `
         INSERT INTO contract_approval_task (
-            did, state, approver, created_by, created_at
-        ) VALUES ($1, $2, $3, $4, $5)
+            id, did, state, approver, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
     `
 	_, err := tx.ExecContext(ctx, statement,
-		data.DID,
+		data.ID, data.DID,
+		data.State, data.Approver, data.CreatedBy, data.CreatedAt,
+	)
+	return err
+}
+
+func (r *PostgresApprovalTaskRepo) RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data db.ApprovalTaskData) error {
+	statement := `
+        INSERT INTO contract_approval_task (
+            id, did, state, approver, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+            state = EXCLUDED.state,
+            approver = EXCLUDED.approver
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.ID, data.DID,
 		data.State, data.Approver, data.CreatedBy, data.CreatedAt,
 	)
 	return err

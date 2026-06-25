@@ -55,23 +55,23 @@ func (h *GetAllReviewTasksForDIDHandler) Handle(ctx context.Context, query GetAl
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
 
-	result := make([]GetAllReviewTasksForDIDResult, len(reviewTasks))
-	for i, data := range reviewTasks {
+	var resultReviewTasks []GetAllReviewTasksForDIDResult
+	for _, data := range reviewTasks {
 
 		state, err := reviewtaskstate.NewReviewTaskState(data.State)
 		if err != nil {
 			return nil, fmt.Errorf("could not create review task state: %w", err)
 		}
 
-		result[i] = GetAllReviewTasksForDIDResult{
+		resultReviewTasks = append(resultReviewTasks, GetAllReviewTasksForDIDResult{
 			ID:        data.ID,
 			DID:       data.DID,
 			State:     state,
 			Reviewer:  data.Reviewer,
 			CreatedBy: data.CreatedBy,
 			CreatedAt: data.CreatedAt,
-		}
+		})
 	}
 
-	return result, nil
+	return resultReviewTasks, nil
 }

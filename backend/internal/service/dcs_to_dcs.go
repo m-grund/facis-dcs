@@ -372,6 +372,7 @@ func toApprovalTaskData(tasks []*dcstodcs.DCSToDCSContractApprovalTaskItem) ([]r
 			CreatedBy: task.CreatedBy,
 			CreatedAt: createAt,
 			State:     task.State,
+			Approver:  task.Approver,
 		})
 	}
 	return approvalTasks, nil

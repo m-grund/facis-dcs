@@ -80,7 +80,7 @@ func (h *RemoteUpdater) Handle(ctx context.Context, cmd RemoteUpdateCmd) error {
 
 	reviewTasks := remote.ToReviewTaskData(cmd.ReviewTasks)
 	for _, task := range reviewTasks {
-		err := h.RTRepo.RemoteCreate(ctx, tx, task)
+		err := h.RTRepo.RemoteUpdate(ctx, tx, task)
 		if err != nil {
 			return fmt.Errorf("could not create remote review task: %w", err)
 		}
@@ -88,7 +88,7 @@ func (h *RemoteUpdater) Handle(ctx context.Context, cmd RemoteUpdateCmd) error {
 
 	approvalTasks := remote.ToApprovalTaskData(cmd.ApprovalTasks)
 	for _, task := range approvalTasks {
-		err := h.ATRepo.RemoteCreate(ctx, tx, task)
+		err := h.ATRepo.RemoteUpdate(ctx, tx, task)
 		if err != nil {
 			return fmt.Errorf("could not create remote approval task: %w", err)
 		}
@@ -96,28 +96,28 @@ func (h *RemoteUpdater) Handle(ctx context.Context, cmd RemoteUpdateCmd) error {
 
 	negotiationTasks := remote.ToNegotiationTaskData(cmd.NegotiationTasks)
 	for _, task := range negotiationTasks {
-		err := h.NTRepo.RemoteCreate(ctx, tx, task)
+		err := h.NTRepo.RemoteUpdate(ctx, tx, task)
 		if err != nil {
-			return fmt.Errorf("could not create remote approval task: %w", err)
+			return fmt.Errorf("could not create remote negotiation task: %w", err)
 		}
 	}
-
-	negotiations := remote.ToNegotiationData(cmd.Negotiations)
-	for _, negotiation := range negotiations {
-		err := h.NRepo.RemoteCreateNegotiation(ctx, tx, negotiation)
-		if err != nil {
-			return fmt.Errorf("could not create remote approval task: %w", err)
+	/*
+		negotiations := remote.ToNegotiationData(cmd.Negotiations)
+		for _, negotiation := range negotiations {
+			err := h.NRepo.RemoteCreateNegotiation(ctx, tx, negotiation)
+			if err != nil {
+				return fmt.Errorf("could not create remote negotiation data: %w", err)
+			}
 		}
-	}
 
-	negotiationDecisions := remote.ToNegotiationDecisionData(cmd.NegotiationDecisions)
-	for _, decision := range negotiationDecisions {
-		err := h.NRepo.RemoteCreateNegotiationDecision(ctx, tx, decision)
-		if err != nil {
-			return fmt.Errorf("could not create remote negotiation decision: %w", err)
+		negotiationDecisions := remote.ToNegotiationDecisionData(cmd.NegotiationDecisions)
+		for _, decision := range negotiationDecisions {
+			err := h.NRepo.RemoteCreateNegotiationDecision(ctx, tx, decision)
+			if err != nil {
+				return fmt.Errorf("could not create remote negotiation decision: %w", err)
+			}
 		}
-	}
-
+	*/
 	evt := contractevents.RemoteUpdateEvent{
 		DID:             cmd.Contract.DID,
 		TemplateDID:     cmd.Contract.TemplateDID,

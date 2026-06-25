@@ -100,6 +100,7 @@ func ToApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
 			CreatedBy: task.CreatedBy,
 			CreatedAt: task.CreatedAt,
 			State:     task.State,
+			Approver:  task.Approver,
 		})
 	}
 	return approvalTasks

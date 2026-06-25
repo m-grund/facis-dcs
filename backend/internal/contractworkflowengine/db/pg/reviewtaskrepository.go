@@ -34,12 +34,33 @@ func (r *PostgresReviewTaskRepo) Create(ctx context.Context, tx *sqlx.Tx, data d
 func (r *PostgresReviewTaskRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.ReviewTaskData) error {
 	statement := `
         INSERT INTO contract_review_task (
-            did, state, reviewer, created_by, created_at
-        ) VALUES ($1, $2, $3, $4, $5)
+            id, did, state, reviewer, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
     `
 	_, err := tx.ExecContext(ctx, statement,
-		data.DID, data.State, data.Reviewer, data.CreatedBy, data.CreatedAt)
+		data.ID, data.DID, data.State, data.Reviewer, data.CreatedBy, data.CreatedAt)
 	return err
+}
+
+func (r *PostgresReviewTaskRepo) RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data db.ReviewTaskData) error {
+	statement := `
+        UPDATE contract_review_task
+        SET state = $1, reviewer = $2
+        WHERE id = $3
+    `
+	res, err := tx.ExecContext(ctx, statement,
+		data.State, data.Reviewer, data.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no review task found with id %s", data.ID)
+	}
+	return nil
 }
 
 func (r *PostgresReviewTaskRepo) IsValidReviewer(ctx context.Context, tx *sqlx.Tx, did string, reviewer string) (bool, error) {
