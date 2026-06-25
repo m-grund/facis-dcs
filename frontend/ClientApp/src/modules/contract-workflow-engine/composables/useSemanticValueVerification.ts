@@ -275,7 +275,10 @@ function validateParameterOperators(
   operators: { operate: string; targets: unknown[] }[],
 ): string | null {
   for (const operator of operators) {
-    const target = operator.operate === 'odrl:isAnyOf' || operator.operate === 'odrl:isNoneOf' ? operator.targets : operator.targets?.[0]
+    const target =
+      operator.operate === 'odrl:isAnyOf' || operator.operate === 'odrl:isNoneOf'
+        ? operator.targets
+        : operator.targets?.[0]
     if (!compareOperator(value, operator.operate, target)) {
       return `Expected ${formatOperator(operator.operate)} ${String(target)}.`
     }
@@ -342,17 +345,28 @@ function coerceTarget(target: unknown, value: string | number | boolean): unknow
 
 function formatOperator(operator: string): string {
   switch (operator) {
-    case 'odrl:eq':       return '='
-    case 'odrl:neq':      return '!='
-    case 'odrl:isAnyOf':  return 'one of'
-    case 'odrl:isNoneOf': return 'none of'
-    case 'odrl:gt':       return '>'
-    case 'odrl:gteq':     return '>='
-    case 'odrl:lt':       return '<'
-    case 'odrl:lteq':     return '<='
-    case 'odrl:hasPart':  return 'contains'
-    case 'dcs:matchesRegex': return 'matches'
-    default:              return operator
+    case 'odrl:eq':
+      return '='
+    case 'odrl:neq':
+      return '!='
+    case 'odrl:isAnyOf':
+      return 'one of'
+    case 'odrl:isNoneOf':
+      return 'none of'
+    case 'odrl:gt':
+      return '>'
+    case 'odrl:gteq':
+      return '>='
+    case 'odrl:lt':
+      return '<'
+    case 'odrl:lteq':
+      return '<='
+    case 'odrl:hasPart':
+      return 'contains'
+    case 'dcs:matchesRegex':
+      return 'matches'
+    default:
+      return operator
   }
 }
 

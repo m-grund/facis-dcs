@@ -320,7 +320,9 @@ function setOperatorOptions() {
   ]
 }
 
-function isSetOperator(operator: SemanticOperateType | ''): operator is Extract<SemanticOperateType, 'odrl:isAnyOf' | 'odrl:isNoneOf'> {
+function isSetOperator(
+  operator: SemanticOperateType | '',
+): operator is Extract<SemanticOperateType, 'odrl:isAnyOf' | 'odrl:isNoneOf'> {
   return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
 }
 

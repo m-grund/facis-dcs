@@ -1,4 +1,8 @@
-{{- $keycloakInternalUrl := .Values.keycloak.internalUrl | default (printf "http://%s-keycloak:%d" .Release.Name (.Values.keycloak.port | default 8080 | int)) }}
+{{- $releaseName := .Release.Name }}
+{{- $neo4jURI := .Values.neo4j.uri | default (printf "bolt://%s-neo4j:7687" $releaseName) }}
+{{- $neo4jUser := .Values.neo4j.username | default "neo4j" }}
+{{- $neo4jPassword := .Values.neo4j.password | default "changeme" }}
+{{- $keycloakInternalUrl := .Values.keycloak.internalUrl | default (printf "http://%s-keycloak:%d" $releaseName (.Values.keycloak.port | default 8080 | int)) }}
 {{- $keycloakIssuerUrl := "" }}
 {{- if .Values.keycloak.issuerUrl }}
 {{- $keycloakIssuerUrl = .Values.keycloak.issuerUrl }}
@@ -10,18 +14,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-federated-catalogue
+  name: {{ $releaseName }}-federated-catalogue
 spec:
   replicas: {{ .Values.replicaCount | default 1 }}
   selector:
     matchLabels:
       app.kubernetes.io/name: federated-catalogue
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/instance: {{ $releaseName }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: federated-catalogue
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/instance: {{ $releaseName }}
     spec:
       containers:
         - name: fc-service
@@ -31,30 +35,36 @@ spec:
             - name: http
               containerPort: 8081
           env:
-            # Neo4j / Graph Store
-            - name: GRAPHSTORE_URI
-              value: {{ .Values.neo4j.uri | default (printf "bolt://%s-neo4j:%d" .Release.Name (7687 | int)) | quote }}
+            # Graph store (FC >= c243a659; DCS uses co-deployed neo4j, not upstream fuseki default)
+            - name: GRAPHSTORE_IMPL
+              value: "neo4j"
+            - name: GRAPHSTORE_NEO4J_URI
+              value: {{ $neo4jURI | quote }}
+            - name: GRAPHSTORE_FUSEKI_URI
+              value: "http://localhost:3030/ds"
             - name: GRAPHSTORE_USER
-              value: {{ .Values.neo4j.username | default "neo4j" | quote }}
+              value: {{ $neo4jUser | quote }}
             - name: GRAPHSTORE_PASSWORD
-              value: {{ .Values.neo4j.password | default "changeme" | quote }}
-            - name: GRAPHSTORE_QUERY_TIMEOUT_IN_SECONDS
-              value: "5"
+              value: {{ $neo4jPassword | quote }}
+            - name: SPRING_NEO4J_URI
+              value: {{ $neo4jURI | quote }}
+            - name: SPRING_NEO4J_AUTHENTICATION_USERNAME
+              value: {{ $neo4jUser | quote }}
+            - name: SPRING_NEO4J_AUTHENTICATION_PASSWORD
+              value: {{ $neo4jPassword | quote }}
             # PostgreSQL
             {{- if .Values.database.url }}
             - name: SPRING_DATASOURCE_URL
               value: {{ .Values.database.url | quote }}
             {{- else }}
             - name: SPRING_DATASOURCE_URL
-              value: {{ printf "jdbc:postgresql://%s-postgresql:5432/%s" .Release.Name (.Values.database.name | default "fc") | quote }}
+              value: {{ printf "jdbc:postgresql://%s-postgresql:5432/%s" $releaseName (.Values.database.name | default "fc") | quote }}
             {{- end }}
             - name: SPRING_DATASOURCE_USERNAME
               value: {{ .Values.database.username | default "dcs" | quote }}
             - name: SPRING_DATASOURCE_PASSWORD
               value: {{ .Values.database.password | default "dcs" | quote }}
             # Keycloak
-            - name: KEYCLOAK_ENABLED
-              value: {{ .Values.security.enabled | toString | quote }}
             {{- if .Values.security.enabled }}
             - name: KEYCLOAK_AUTH_SERVER_URL
               value: {{ $keycloakInternalUrl | quote }}
@@ -69,7 +79,7 @@ spec:
             - name: KEYCLOAK_CREDENTIALS_SECRET
               value: {{ .Values.keycloak.clientSecret | default "federated-catalogue-secret" | quote }}
             {{- end }}
-            # FC Service config
+            # FC service config
             - name: FEDERATED_CATALOGUE_VERIFICATION_SIGNATURES
               value: {{ .Values.verifySignatures | default "false" | quote }}
             - name: FEDERATED_CATALOGUE_VERIFICATION_VP_SIGNATURE
@@ -89,6 +99,13 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: logs
+              mountPath: /logs
+            - name: tmp
+              mountPath: /tmp
+            - name: filestore
+              mountPath: /var/lib/fc-service/filestore
           livenessProbe:
             httpGet:
               path: {{ .Values.route.path | default "" }}/actuator/health
@@ -99,7 +116,14 @@ spec:
             httpGet:
               path: {{ .Values.route.path | default "" }}/actuator/health
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: filestore
+          emptyDir: {}

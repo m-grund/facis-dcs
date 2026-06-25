@@ -1,11 +1,19 @@
-import type { SemanticValueConstraint, SemanticValueOption } from '@/modules/template-repository/models/contract-template'
-import { resolveAllowedValues, resolveValueConstraintOptions } from '@template-repository/utils/value-constraint-catalog'
+import type {
+  SemanticValueConstraint,
+  SemanticValueOption,
+} from '@/modules/template-repository/models/contract-template'
+import {
+  resolveAllowedValues,
+  resolveValueConstraintOptions,
+} from '@template-repository/utils/value-constraint-catalog'
 
 export type ValueOption = Required<Pick<SemanticValueOption, 'value' | 'label'>> & Pick<SemanticValueOption, 'symbol'>
 
 export function resolveValueOptions(constraint?: SemanticValueConstraint): readonly ValueOption[] {
   if (!constraint) return []
-  const optionsByValue = new Map((resolveValueConstraintOptions(constraint) ?? []).map((option) => [option.value, option]))
+  const optionsByValue = new Map(
+    (resolveValueConstraintOptions(constraint) ?? []).map((option) => [option.value, option]),
+  )
   return resolveAllowedValues(constraint).map((value) => {
     const option = optionsByValue.get(value)
     return {

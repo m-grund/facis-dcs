@@ -18,7 +18,9 @@ export function resolveAllowedValues(constraint?: SemanticValueConstraint): read
   )
 }
 
-export function resolveValueConstraintOptions(constraint?: SemanticValueConstraint): SemanticValueConstraint['valueOptions'] {
+export function resolveValueConstraintOptions(
+  constraint?: SemanticValueConstraint,
+): SemanticValueConstraint['valueOptions'] {
   if (!constraint) return []
   if (constraint.valueOptions?.length) return constraint.valueOptions
 

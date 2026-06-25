@@ -1,5 +1,4 @@
 import type { ContractTemplateData } from '@/models/contract-template'
-import type { Participant } from '@/modules/template-catalogue/models/participant'
 
 export interface TemplateResource {
   did: string
@@ -8,10 +7,10 @@ export interface TemplateResource {
   name?: string
   description?: string
   template_type?: string
+  participant_id?: string
   created_at?: string
   updated_at?: string
   template_data?: ContractTemplateData
-  participant?: Participant
 }
 
 export interface TemplateResourcesItem {
