@@ -91,9 +91,12 @@ function isTemplateVersionWarningVisible(contract: Contract) {
   if (contract.state === ContractState.terminated || contract.state === ContractState.signed) {
     return false
   }
+  if (contract?.latest_template_did === null || contract?.latest_template_did === undefined) {
+    return false
+  }
   return (
     contract.template_is_deprecated == false &&
-    contract.latest_template_did !== null &&
+    contract?.latest_template_did !== null &&
     contract.template_did !== contract.latest_template_did
   )
 }

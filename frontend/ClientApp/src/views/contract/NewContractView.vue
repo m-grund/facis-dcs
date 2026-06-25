@@ -182,7 +182,7 @@ const createContract = async ({ reviewers, approvers, negotiators }: Participant
   try {
     if (!!selectedTemplate.value) {
       const response = await contractWorkflowService.create({
-        did: selectedTemplate.value.did,
+        template_did: selectedTemplate.value.did,
       reviewers,
       approvers,
       negotiators

@@ -9,6 +9,7 @@ type EventType string
 
 const (
 	Create                  EventType = "CREATE_CONTRACT"
+	RemoteCreate            EventType = "REMOTE_CREATE_CONTRACT"
 	Submit                  EventType = "SUBMIT_CONTRACT"
 	Negotiation             EventType = "NEGOTIATE_CONTRACT"
 	AcceptRespond           EventType = "ACCEPT_RESPOND_CONTRACT"
@@ -18,6 +19,7 @@ const (
 	Reject                  EventType = "REJECT_CONTRACT"
 	Verify                  EventType = "VERIFY_CONTRACT"
 	Update                  EventType = "UPDATE_CONTRACT"
+	RemoteUpdate            EventType = "REMOTE_UPDATE_CONTRACT"
 	RetrieveAll             EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveByID            EventType = "RETRIEVE_CONTRACT_BY_ID"
 	RetrieveHistoryByDID    EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
@@ -43,6 +45,7 @@ var validStates = map[EventType]bool{
 	Reject:                  true,
 	Verify:                  true,
 	Update:                  true,
+	RemoteUpdate:            true,
 	RetrieveAll:             true,
 	RetrieveByID:            true,
 	RetrieveHistoryByDID:    true,
