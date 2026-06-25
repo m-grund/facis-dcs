@@ -33,6 +33,19 @@ func (r *PostgresApprovalTaskRepo) Create(ctx context.Context, tx *sqlx.Tx, data
 	return &createdAt, nil
 }
 
+func (r *PostgresApprovalTaskRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.ApprovalTaskData) error {
+	statement := `
+        INSERT INTO contract_approval_task (
+            did, state, approver, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID,
+		data.State, data.Approver, data.CreatedBy, data.CreatedAt,
+	)
+	return err
+}
+
 func (r *PostgresApprovalTaskRepo) ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         UPDATE contract_approval_task SET state = 'OPEN'

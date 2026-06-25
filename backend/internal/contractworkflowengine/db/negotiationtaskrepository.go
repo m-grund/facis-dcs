@@ -18,6 +18,7 @@ type NegotiationTaskData struct {
 
 type NegotiationTaskRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data NegotiationTaskData) (*time.Time, error)
+	RemoteCreate(ctx context.Context, tx *sqlx.Tx, data NegotiationTaskData) error
 	IsValidNegotiator(ctx context.Context, tx *sqlx.Tx, did string, negotiator string) (bool, error)
 	ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]NegotiationTaskData, error)

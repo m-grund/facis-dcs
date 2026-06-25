@@ -20,13 +20,12 @@ type GetAllReviewTasksForDIDQry struct {
 }
 
 type GetAllReviewTasksForDIDResult struct {
-	ID              string
-	DID             string
-	State           reviewtaskstate.ReviewTaskState
-	Reviewer        string
-	CreatedBy       string
-	CreatedAt       time.Time
-	ContractVersion int
+	ID        string
+	DID       string
+	State     reviewtaskstate.ReviewTaskState
+	Reviewer  string
+	CreatedBy string
+	CreatedAt time.Time
 }
 
 type GetAllReviewTasksForDIDHandler struct {
@@ -65,13 +64,12 @@ func (h *GetAllReviewTasksForDIDHandler) Handle(ctx context.Context, query GetAl
 		}
 
 		result[i] = GetAllReviewTasksForDIDResult{
-			ID:              data.ID,
-			DID:             data.DID,
-			State:           state,
-			Reviewer:        data.Reviewer,
-			CreatedBy:       data.CreatedBy,
-			CreatedAt:       data.CreatedAt,
-			ContractVersion: data.ContractVersion,
+			ID:        data.ID,
+			DID:       data.DID,
+			State:     state,
+			Reviewer:  data.Reviewer,
+			CreatedBy: data.CreatedBy,
+			CreatedAt: data.CreatedAt,
 		}
 	}
 

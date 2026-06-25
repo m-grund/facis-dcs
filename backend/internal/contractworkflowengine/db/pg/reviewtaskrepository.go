@@ -31,6 +31,17 @@ func (r *PostgresReviewTaskRepo) Create(ctx context.Context, tx *sqlx.Tx, data d
 	return &createdAt, nil
 }
 
+func (r *PostgresReviewTaskRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.ReviewTaskData) error {
+	statement := `
+        INSERT INTO contract_review_task (
+            did, state, reviewer, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID, data.State, data.Reviewer, data.CreatedBy, data.CreatedAt)
+	return err
+}
+
 func (r *PostgresReviewTaskRepo) IsValidReviewer(ctx context.Context, tx *sqlx.Tx, did string, reviewer string) (bool, error) {
 	query := `
         SELECT COUNT(*) FROM contract_review_task

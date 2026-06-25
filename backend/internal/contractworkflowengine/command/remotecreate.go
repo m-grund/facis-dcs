@@ -6,13 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
-	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-
-	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
-
-	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/remote"
 
 	"github.com/jmoiron/sqlx"
 
@@ -22,28 +17,13 @@ import (
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 )
 
-type RemoteContractData struct {
-	DID             string
-	Origin          string
-	ContractVersion int
-	State           contractstate.ContractState
-	CreatedBy       string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	StartDate       *time.Time
-	ExpDate         *time.Time
-	ExpPolicy       *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod *int
-	Name            *string
-	Description     *string
-	Responsible     *db.Responsible
-	ContractData    *datatype.JSON
-	TemplateDID     string
-	TemplateVersion int
-}
-
 type RemoteCreateCmd struct {
-	Contract RemoteContractData
+	Contract             remote.ContractData
+	ReviewTasks          []remote.ReviewTaskData
+	ApprovalTasks        []remote.ApprovalTaskData
+	NegotiationTasks     []remote.NegotiationTaskData
+	Negotiations         []remote.NegotiationData
+	NegotiationDecisions []remote.NegotiationDecisionData
 }
 
 type RemoteCreator struct {
@@ -53,6 +33,7 @@ type RemoteCreator struct {
 	RTRepo db.ReviewTaskRepo
 	ATRepo db.ApprovalTaskRepo
 	NTRepo db.NegotiationTaskRepo
+	NRepo  db.NegotiationRepo
 }
 
 func (h *RemoteCreator) Handle(ctx context.Context, cmd RemoteCreateCmd) error {
@@ -94,6 +75,46 @@ func (h *RemoteCreator) Handle(ctx context.Context, cmd RemoteCreateCmd) error {
 	createdAt, err := h.CRepo.Create(ctx, tx, data)
 	if err != nil {
 		return fmt.Errorf("could not create contract: %w", err)
+	}
+
+	reviewTasks := remote.ToReviewTaskData(cmd.ReviewTasks)
+	for _, task := range reviewTasks {
+		err := h.RTRepo.RemoteCreate(ctx, tx, task)
+		if err != nil {
+			return fmt.Errorf("could not create remote review task: %w", err)
+		}
+	}
+
+	approvalTasks := remote.ToApprovalTaskData(cmd.ApprovalTasks)
+	for _, task := range approvalTasks {
+		err := h.ATRepo.RemoteCreate(ctx, tx, task)
+		if err != nil {
+			return fmt.Errorf("could not create remote approval task: %w", err)
+		}
+	}
+
+	negotiationTasks := remote.ToNegotiationTaskData(cmd.NegotiationTasks)
+	for _, task := range negotiationTasks {
+		err := h.NTRepo.RemoteCreate(ctx, tx, task)
+		if err != nil {
+			return fmt.Errorf("could not create remote approval task: %w", err)
+		}
+	}
+
+	negotiations := remote.ToNegotiationData(cmd.Negotiations)
+	for _, negotiation := range negotiations {
+		err := h.NRepo.RemoteCreateNegotiation(ctx, tx, negotiation)
+		if err != nil {
+			return fmt.Errorf("could not create remote approval task: %w", err)
+		}
+	}
+
+	negotiationDecisions := remote.ToNegotiationDecisionData(cmd.NegotiationDecisions)
+	for _, decision := range negotiationDecisions {
+		err := h.NRepo.RemoteCreateNegotiationDecision(ctx, tx, decision)
+		if err != nil {
+			return fmt.Errorf("could not create remote negotiation decision: %w", err)
+		}
 	}
 
 	evt := contractevents.RemoteCreateEvent{

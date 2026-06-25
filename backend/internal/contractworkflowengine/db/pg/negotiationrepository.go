@@ -203,3 +203,24 @@ func (r PostgresNegotiationRepo) ReadAllNegotiationDecisionsByContractDID(ctx co
 	}
 	return decisions, nil
 }
+
+func (r PostgresNegotiationRepo) RemoteCreateNegotiation(ctx context.Context, tx *sqlx.Tx, data db.NegotiationData) error {
+	statement := `
+        INSERT INTO contract_negotiations (
+            id, did, contract_version, change_request, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID, data.DID, data.ContractVersion, data.ChangeRequest, data.CreatedBy, data.CreatedAt)
+	return err
+}
+func (r PostgresNegotiationRepo) RemoteCreateNegotiationDecision(ctx context.Context, tx *sqlx.Tx, data db.NegotiationDecisionData) error {
+	statement := `
+        INSERT INTO contract_negotiation_decisions (
+            id, negotiation_id, negotiator, decision, rejection_reason
+        ) VALUES ($1, $2, $3, $4, $5)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.ID, data.NegotiationID, data.Negotiator, data.Decision, data.RejectionReason)
+	return err
+}

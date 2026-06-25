@@ -129,13 +129,12 @@ func (s *contractWorkflowEnginesrvc) readAllTasksData(ctx context.Context, did *
 	var reviewTasks []*dcstodcs.DCSToDCSContractReviewTaskItem
 	for _, rt := range rtResult {
 		reviewTasks = append(reviewTasks, &dcstodcs.DCSToDCSContractReviewTaskItem{
-			ID:              rt.ID,
-			Did:             rt.DID,
-			ContractVersion: rt.ContractVersion,
-			State:           rt.State.String(),
-			Reviewer:        rt.Reviewer,
-			CreatedBy:       rt.CreatedBy,
-			CreatedAt:       rt.CreatedAt.Format(time.RFC3339),
+			ID:        rt.ID,
+			Did:       rt.DID,
+			State:     rt.State.String(),
+			Reviewer:  rt.Reviewer,
+			CreatedBy: rt.CreatedBy,
+			CreatedAt: rt.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -155,13 +154,12 @@ func (s *contractWorkflowEnginesrvc) readAllTasksData(ctx context.Context, did *
 	var approvalTasks []*dcstodcs.DCSToDCSContractApprovalTaskItem
 	for _, at := range atResult {
 		approvalTasks = append(approvalTasks, &dcstodcs.DCSToDCSContractApprovalTaskItem{
-			ID:              at.ID,
-			Did:             at.DID,
-			ContractVersion: at.ContractVersion,
-			State:           at.State.String(),
-			Approver:        at.Approver,
-			CreatedBy:       at.CreatedBy,
-			CreatedAt:       at.CreatedAt.Format(time.RFC3339),
+			ID:        at.ID,
+			Did:       at.DID,
+			State:     at.State.String(),
+			Approver:  at.Approver,
+			CreatedBy: at.CreatedBy,
+			CreatedAt: at.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -198,7 +196,7 @@ func (s *contractWorkflowEnginesrvc) readAllTasksData(ctx context.Context, did *
 			Did:             negotiation.DID,
 			ContractVersion: negotiation.ContractVersion,
 			CreatedBy:       negotiation.CreatedBy,
-			CreatedAt:       negotiation.CreatedAd.Format(time.RFC3339),
+			CreatedAt:       negotiation.CreatedAt.Format(time.RFC3339),
 		})
 	}
 

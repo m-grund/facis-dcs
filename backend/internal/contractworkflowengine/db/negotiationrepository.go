@@ -51,4 +51,7 @@ type NegotiationRepo interface {
 	HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error)
 	Delete(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadAllNegotiationDecisionsByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]NegotiationDecisionData, error)
+
+	RemoteCreateNegotiation(ctx context.Context, tx *sqlx.Tx, data NegotiationData) error
+	RemoteCreateNegotiationDecision(ctx context.Context, tx *sqlx.Tx, data NegotiationDecisionData) error
 }

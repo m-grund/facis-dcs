@@ -31,6 +31,17 @@ func (r *PostgresNegotiationTaskRepo) Create(ctx context.Context, tx *sqlx.Tx, d
 	return &createdAt, nil
 }
 
+func (r *PostgresNegotiationTaskRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.NegotiationTaskData) error {
+	statement := `
+        INSERT INTO contract_negotiation_task (
+            did, state, negotiator, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID, data.State, data.Negotiator, data.CreatedBy, data.CreatedAt)
+	return err
+}
+
 func (r *PostgresNegotiationTaskRepo) IsValidNegotiator(ctx context.Context, tx *sqlx.Tx, did string, negotiator string) (bool, error) {
 	query := `
         SELECT COUNT(*) FROM contract_negotiation_task

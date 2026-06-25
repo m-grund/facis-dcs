@@ -21,14 +21,13 @@ type GetAllApprovalTasksForDIDQry struct {
 }
 
 type GetAllApprovalTasksForDIDResult struct {
-	ID              string
-	DID             string
-	State           aopprovaltaskstate.ApprovalTaskState
-	Approver        string
-	CreatedBy       string
-	CreatedAt       time.Time
-	CancelledAt     *time.Time
-	ContractVersion int
+	ID          string
+	DID         string
+	State       aopprovaltaskstate.ApprovalTaskState
+	Approver    string
+	CreatedBy   string
+	CreatedAt   time.Time
+	CancelledAt *time.Time
 }
 
 type GetAllApprovalTasksForDIDHandler struct {

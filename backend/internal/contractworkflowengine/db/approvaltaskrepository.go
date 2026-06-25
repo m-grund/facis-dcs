@@ -18,6 +18,7 @@ type ApprovalTaskData struct {
 
 type ApprovalTaskRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data ApprovalTaskData) (*time.Time, error)
+	RemoteCreate(ctx context.Context, tx *sqlx.Tx, data ApprovalTaskData) error
 	ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ApprovalTaskData, error)
 	ReadAllByApprover(ctx context.Context, tx *sqlx.Tx, approver string) ([]ApprovalTaskData, error)

@@ -32,25 +32,23 @@ var DCSToDCSContractItem = Type("DCSToDCSContractItem", func() {
 var DCSToDCSContractReviewTaskItem = Type("DCSToDCSContractReviewTaskItem", func() {
 	Attribute("id", String, "ID of the review task")
 	Attribute("did", String, "DID of the contract")
-	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "State of the review task")
 	Attribute("reviewer", String, "The reviewer of the contract")
 	Attribute("created_at", String, "Created at")
 	Attribute("created_by", String, "Identifier of who created the review task")
 
-	Required("id", "did", "state", "reviewer", "created_at", "contract_version", "created_by")
+	Required("id", "did", "state", "reviewer", "created_at", "created_by")
 })
 
 var DCSToDCSContractApprovalTaskItem = Type("DCSToDCSContractApprovalTaskItem", func() {
 	Attribute("id", String, "ID of the approval task")
 	Attribute("did", String, "DID of the contract")
-	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "State of the approval task")
 	Attribute("approver", String, "The approver for the contract")
 	Attribute("created_at", String, "Created at")
 	Attribute("created_by", String, "Identifier of who created the approval task")
 
-	Required("id", "did", "state", "approver", "created_at", "contract_version", "created_by")
+	Required("id", "did", "state", "approver", "created_at", "created_by")
 })
 
 var DCSToDCSContractNegotiationTaskItem = Type("DCSToDCSContractNegotiationTaskItem", func() {

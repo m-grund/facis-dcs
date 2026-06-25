@@ -6,9 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
-	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/remote"
 
 	negotiationdescision "digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
 
@@ -25,36 +24,10 @@ type GetAllNegotiationsForDIDQry struct {
 	RetrievedBy string
 }
 
-type NegotiationTaskItem struct {
-	ID         string
-	DID        string
-	State      negotiationtaskstate.NegotiationTaskState
-	Negotiator string
-	CreatedBy  string
-	CreatedAt  time.Time
-}
-
-type NegotiationItem struct {
-	ID              string
-	DID             string
-	ContractVersion int
-	ChangeRequest   *datatype.JSON
-	CreatedBy       string
-	CreatedAd       time.Time
-}
-
-type NegotiationDecisionItem struct {
-	ID            string
-	NegotiationID string
-	Negotiator    string
-	Decision      *negotiationdescision.NegotiationDecision
-	RejectReason  *string
-}
-
 type GetAllNegotiationsForDIDResult struct {
-	NegotiationTasks     []NegotiationTaskItem
-	Negotiations         []NegotiationItem
-	NegotiationDecisions []NegotiationDecisionItem
+	NegotiationTasks     []remote.NegotiationTaskData
+	Negotiations         []remote.NegotiationData
+	NegotiationDecisions []remote.NegotiationDecisionData
 }
 
 type GetAllNegotiationsForDIDHandler struct {
@@ -83,7 +56,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 		return nil, fmt.Errorf("could not read all negotiation tasks: %w", err)
 	}
 
-	var resultNegotiationTasks []NegotiationTaskItem
+	var resultNegotiationTasks []remote.NegotiationTaskData
 	for _, negotiationTask := range negotiationTasks {
 
 		state, err := negotiationtaskstate.NewNegotiationTaskState(negotiationTask.State)
@@ -91,7 +64,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 			return nil, fmt.Errorf("could not create negotiation task state: %w", err)
 		}
 
-		resultNegotiationTasks = append(resultNegotiationTasks, NegotiationTaskItem{
+		resultNegotiationTasks = append(resultNegotiationTasks, remote.NegotiationTaskData{
 			ID:         negotiationTask.ID,
 			DID:        negotiationTask.DID,
 			State:      state,
@@ -106,14 +79,14 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 		return nil, fmt.Errorf("could not read all negotiations: %w", err)
 	}
 
-	var resultNegotiations []NegotiationItem
+	var resultNegotiations []remote.NegotiationData
 	for _, negotiation := range negotiations {
-		resultNegotiations = append(resultNegotiations, NegotiationItem{
+		resultNegotiations = append(resultNegotiations, remote.NegotiationData{
 			ID:              negotiation.ID,
 			DID:             negotiation.DID,
 			ContractVersion: negotiation.ContractVersion,
 			CreatedBy:       negotiation.CreatedBy,
-			CreatedAd:       negotiation.CreatedAt,
+			CreatedAt:       negotiation.CreatedAt,
 			ChangeRequest:   negotiation.ChangeRequest,
 		})
 	}
@@ -123,7 +96,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 		return nil, fmt.Errorf("could not read all negotiation decision data: %w", err)
 	}
 
-	var resultNegotiationDecisions []NegotiationDecisionItem
+	var resultNegotiationDecisions []remote.NegotiationDecisionData
 	for _, negotiationDecision := range negotiationDecisions {
 
 		var decision *negotiationdescision.NegotiationDecision
@@ -135,12 +108,12 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 			decision = &result
 		}
 
-		resultNegotiationDecisions = append(resultNegotiationDecisions, NegotiationDecisionItem{
-			ID:            negotiationDecision.ID,
-			NegotiationID: negotiationDecision.Negotiator,
-			Negotiator:    negotiationDecision.Negotiator,
-			RejectReason:  negotiationDecision.RejectionReason,
-			Decision:      decision,
+		resultNegotiationDecisions = append(resultNegotiationDecisions, remote.NegotiationDecisionData{
+			ID:              negotiationDecision.ID,
+			NegotiationID:   negotiationDecision.Negotiator,
+			Negotiator:      negotiationDecision.Negotiator,
+			RejectionReason: negotiationDecision.RejectionReason,
+			Decision:        decision,
 		})
 	}
 

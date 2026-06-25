@@ -19,6 +19,7 @@ type ReviewTaskData struct {
 
 type ReviewTaskRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data ReviewTaskData) (*time.Time, error)
+	RemoteCreate(ctx context.Context, tx *sqlx.Tx, data ReviewTaskData) error
 	IsValidReviewer(ctx context.Context, tx *sqlx.Tx, did string, reviewer string) (bool, error)
 	ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ReviewTaskData, error)
