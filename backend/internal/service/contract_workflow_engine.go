@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"maps"
 	"net/http"
 	"os"
@@ -215,15 +214,31 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		Origin:          contractResult.Origin,
 	}
 
-	client := NewDCSToDCSHttpClient("localhost:8992")
-	response, err := client.Create(ctx, &dcstodcs.DCSToDCSContractCreateRequest{
-		Contract: &contractItem,
-		//	NegotiationTasks: negotiationList,
-	})
+	origin, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
-	log.Println(response)
+
+	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
+	for _, responsible := range responsibleList {
+		if responsible == origin {
+			continue
+		}
+
+		hostname, err := base.DIDWebToHostname(responsible)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+
+		client := NewDCSToDCSHttpClient(hostname)
+		_, err = client.Create(ctx, &dcstodcs.DCSToDCSContractCreateRequest{
+			Contract: &contractItem,
+			//	NegotiationTasks: negotiationList,
+		})
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+	}
 
 	return &contractworkflowengine.ContractCreateResponse{
 		Did: *did,
@@ -231,11 +246,6 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 }
 
 func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractworkflowengine.ContractUpdateRequest) (res *contractworkflowengine.ContractUpdateResponse, err error) {
-
-	//did, err := base.GenerateID()
-	//if err != nil {
-	//	return nil, contractworkflowengine.MakeInternalError(err)
-	//}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -339,15 +349,31 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		Origin:          contractResult.Origin,
 	}
 
-	client := NewDCSToDCSHttpClient("localhost:8992")
-	response, err := client.Update(ctx, &dcstodcs.DCSToDCSContractUpdateRequest{
-		Contract: &contractItem,
-		//	NegotiationTasks: negotiationList,
-	})
+	origin, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
-	log.Println(response)
+
+	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
+	for _, responsible := range responsibleList {
+		if responsible == origin {
+			continue
+		}
+
+		hostname, err := base.DIDWebToHostname(responsible)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+
+		client := NewDCSToDCSHttpClient(hostname)
+		_, err = client.Update(ctx, &dcstodcs.DCSToDCSContractUpdateRequest{
+			Contract: &contractItem,
+			//	NegotiationTasks: negotiationList,
+		})
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+	}
 
 	return &contractworkflowengine.ContractUpdateResponse{
 		Did: req.Did,

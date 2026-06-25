@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 )
 
 type DIDDocument map[string]interface{}
@@ -25,6 +27,54 @@ func (d DIDDocument) GetID() (string, error) {
 	}
 
 	return raw.(string), nil
+}
+
+func (d DIDDocument) GetHostname() (string, error) {
+	id, err := d.GetID()
+	if err != nil {
+		return "", err
+	}
+	return didWebToHostname(id)
+}
+
+func didWebToHostname(did string) (string, error) {
+	const prefix = "did:web:"
+	if !strings.HasPrefix(did, prefix) {
+		return "", fmt.Errorf("not a did:web identifier: %q", did)
+	}
+
+	rest := strings.TrimPrefix(did, prefix)
+
+	// Alles nach dem ersten ":" wären Pfad-Komponenten (did:web:host:path:to:res),
+	// die uns hier nicht interessieren - wir wollen nur den Host-Teil.
+	hostEncoded, _, _ := strings.Cut(rest, ":")
+	if hostEncoded == "" {
+		return "", errors.New("did:web identifier has empty host component")
+	}
+
+	host, err := url.QueryUnescape(hostEncoded) // %3A -> ":"
+	if err != nil {
+		return "", fmt.Errorf("invalid percent-encoding in did:web host: %w", err)
+	}
+
+	return host, nil
+}
+
+func HostnameToDIDWeb(host string) string {
+	return "did:web:" + strings.ReplaceAll(host, ":", "%3A")
+}
+
+func DIDWebToHostname(did string) (string, error) {
+	const prefix = "did:web:"
+	if !strings.HasPrefix(did, prefix) {
+		return "", fmt.Errorf("not a did:web identifier: %q", did)
+	}
+	rest := strings.TrimPrefix(did, prefix)
+	hostEncoded, _, _ := strings.Cut(rest, ":")
+	if hostEncoded == "" {
+		return "", errors.New("did:web identifier has empty host component")
+	}
+	return strings.ReplaceAll(hostEncoded, "%3A", ":"), nil
 }
 
 // UUID v4
