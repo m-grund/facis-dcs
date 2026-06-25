@@ -1,56 +1,35 @@
 <script setup lang="ts">
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
-import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { Contract } from '@/models/contract/contract'
-import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import {
-  useSemanticValueVerification,
-  type VerificationResult,
-} from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
+import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
-import { getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
-import { useErrorStore } from '@/stores/error-store'
-import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const route = useRoute()
-const navStore = useNavStore()
 
 const authStore = useAuthStore()
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const contractContentValuesStore = useContractContentValuesStore()
-const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 
-const errorStore = useErrorStore()
-
-const { isCreator } = useContractPermissions()
-
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
-
-const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
-  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
-    contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
-})
 
 const isAuditingAuthorized = computed(
   () =>
@@ -83,90 +62,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch(
-  () => [
-    templateDraftStore.documentBlocks,
-    templateDraftStore.semanticConditions,
-    templateDraftStore.subTemplateSnapshots,
-  ],
-  () => {
-    const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
-      (conditionValue) =>
-        !hasConditionParameterForValue(
-          conditionValue,
-          templateDraftStore.documentBlocks,
-          templateDraftStore.semanticConditions,
-          templateDraftStore.subTemplateSnapshots,
-        ),
-    )
-    contractContentValuesStore.removeSemanticConditionValues(invalidValues)
-  },
-  { deep: true },
-)
-
-const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContractAssignees) => {
-  if (!contract.value) return
-  const isSemanticValueValid = verifySemanticValues()
-  if (!isSemanticValueValid) return
-  try {
-    const response = await contractWorkflowService.submit({
-      did: contract.value.did,
-      updated_at: contract.value.updated_at,
-      reviewers,
-      approvers,
-      negotiators,
-    })
-    if (response.did) {
-      await navStore.goToPreviousRoute()
-    }
-  } catch (error) {
-    console.error('Contract Submission failed', error)
-  }
-}
-
-const submitRejectedTemplate = async () => {
-  if (!contract.value) return
-  const isSemanticValueValid = verifySemanticValues()
-  if (!isSemanticValueValid) return
-  try {
-    const response = await contractWorkflowService.submit({
-      did: contract.value.did,
-      updated_at: contract.value.updated_at,
-    })
-    if (response.did) {
-      await navStore.goToPreviousRoute()
-    }
-  } catch (error) {
-    console.error('Contract Submission failed', error)
-  }
-}
-
-const verifySemanticValues = (): boolean => {
-  const subTemplateSemanticConditions = templateDraftStore?.subTemplateSnapshots?.map((subTemplate) => {
-    return {
-      templateId: subTemplate.did,
-      version: subTemplate.version,
-      document_number: subTemplate.document_number,
-      semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
-    }
-  })
-  const result = verifySemanticValue(
-    templateDraftStore.semanticConditions,
-    subTemplateSemanticConditions,
-    contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
-  )
-  verificationResult.value = result
-  if (result.isValid) {
-    return true
-  } else {
-    result.errors.forEach((error) => errorStore.add(error.message))
-  }
-  // go to content tab and highlight semantic inconsistencies
-  contractEditorUiStore.setActiveTab('content')
-  return false
-}
 
 onMounted(() => {
   templateEditorUiStore.reset({ workflow: 'contract', isTemplateEditable: false })
@@ -259,7 +154,6 @@ const exportPdf = async () => {
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
                         :sub-template-snapshots="templateDraftStore.subTemplateSnapshots"
-                        :set-semantic-condition-value="setSemanticConditionValue"
                       />
                     </div>
                   </div>
@@ -285,18 +179,6 @@ const exportPdf = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
-        <SubmitSelectionDialog
-          v-if="contract?.state === ContractState.draft && isCreator"
-          class="btn flex-1 btn-primary"
-          @submit="submitContract"
-        />
-        <button
-          v-else-if="contract?.state === ContractState.rejected && isCreator"
-          class="btn flex-1 btn-primary"
-          @click="submitRejectedTemplate"
-        >
-          Submit
-        </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>

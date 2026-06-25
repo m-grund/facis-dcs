@@ -206,17 +206,27 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		actionFlag = &flag
 	}
 
+	var contractData *datatype.JSON
+	if req.ContractData != nil {
+		data, err := datatype.NewJSON(req.ContractData)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+		contractData = &data
+	}
+
 	cmd := command.SubmitCmd{
-		DID:         req.Did,
-		UpdatedAt:   updatedAt,
-		SubmittedBy: middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-		ActionFlag:  actionFlag,
-		Comments:    req.Comments,
-		Reviewers:   req.Reviewers,
-		Approvers:   req.Approvers,
-		Negotiators: req.Negotiators,
+		DID:          req.Did,
+		UpdatedAt:    updatedAt,
+		SubmittedBy:  middleware.GetParticipantID(ctx),
+		HolderDID:    middleware.GetHolderDID(ctx),
+		UserRoles:    middleware.GetUserRoles(ctx),
+		ActionFlag:   actionFlag,
+		Comments:     req.Comments,
+		ContractData: contractData,
+		Reviewers:    req.Reviewers,
+		Approvers:    req.Approvers,
+		Negotiators:  req.Negotiators,
 	}
 	handler := command.Submitter{
 		DB:     s.DB,

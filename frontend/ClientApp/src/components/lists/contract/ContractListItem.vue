@@ -110,16 +110,14 @@ function expirationMessage(timeUtil: TimeUntil): string {
               View
             </RouterLink>
             <RouterLink
+              v-if="canEdit"
               :to="
-                canEdit
-                  ? {
-                      name: ROUTES.CONTRACTS.EDIT,
-                      params: { did: contract.did },
-                    }
-                  : '#'
+                {
+                  name: ROUTES.CONTRACTS.EDIT,
+                  params: { did: contract.did },
+                }
               "
               class="btn gap-2 btn-sm btn-primary"
-              :class="{ 'btn-disabled': !canEdit }"
             >
               Edit
             </RouterLink>

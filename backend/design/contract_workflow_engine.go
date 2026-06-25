@@ -62,6 +62,7 @@ var ContractSubmitRequest = Type("ContractSubmitRequest", func() {
 
 	Attribute("forward_to", String, "Action flag: approval | reject")
 	Attribute("comments", ArrayOf(String), "Optional comments")
+	Attribute("contract_data", Any, "Optional updated contract data to persist atomically before submit validation")
 
 	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
 	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")

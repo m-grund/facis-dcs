@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -25,16 +26,17 @@ import (
 )
 
 type SubmitCmd struct {
-	DID         string
-	UpdatedAt   time.Time
-	SubmittedBy string
-	Reviewers   []string
-	Approvers   []string
-	Negotiators []string
-	ActionFlag  *actionflag.ActionFlag
-	Comments    []string
-	HolderDID   string
-	UserRoles   userrole.UserRoles
+	DID          string
+	UpdatedAt    time.Time
+	SubmittedBy  string
+	Reviewers    []string
+	Approvers    []string
+	Negotiators  []string
+	ActionFlag   *actionflag.ActionFlag
+	Comments     []string
+	ContractData *datatype.JSON
+	HolderDID    string
+	UserRoles    userrole.UserRoles
 }
 
 type Submitter struct {
@@ -110,6 +112,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
+	hasSubmittedContractData := cmd.ContractData != nil && cmd.ContractData.IsNotNullValue()
+	if hasSubmittedContractData && !canSubmitUpdatedContractData(processData.State) {
+		return errors.New("contract data can only be submitted in draft or rejected state")
+	}
+
 	var responsible *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
@@ -135,11 +142,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("no approvers provided")
 		}
 
-		contractData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		contractData, err := h.contractDataForSemanticValidation(ctx, tx, cmd)
 		if err != nil {
-			return fmt.Errorf("could not read contract data: %w", err)
+			return err
 		}
-		if err := validation.ValidateContractSemantics(contractData.ContractData); err != nil {
+		if err := validation.ValidateContractSemantics(contractData); err != nil {
 			return fmt.Errorf("contract semantic validation failed: %w", err)
 		}
 
@@ -176,11 +183,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid participant")
 		}
 
-		contractData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		contractData, err := h.contractDataForSemanticValidation(ctx, tx, cmd)
 		if err != nil {
-			return fmt.Errorf("could not read contract data: %w", err)
+			return err
 		}
-		if err := validation.ValidateContractSemantics(contractData.ContractData); err != nil {
+		if err := validation.ValidateContractSemantics(contractData); err != nil {
 			return fmt.Errorf("contract semantic validation failed: %w", err)
 		}
 
@@ -385,4 +392,31 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	}
 
 	return tx.Commit()
+}
+
+func (h *Submitter) contractDataForSemanticValidation(ctx context.Context, tx *sqlx.Tx, cmd SubmitCmd) (*datatype.JSON, error) {
+	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
+		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, false)
+		if err != nil {
+			return nil, fmt.Errorf("contract data validation failed: %w", err)
+		}
+		updateData := db.ContractUpdateData{
+			DID:          cmd.DID,
+			ContractData: normalizedContractData,
+		}
+		if err := h.CRepo.Update(ctx, tx, updateData); err != nil {
+			return nil, fmt.Errorf("could not update submitted contract data: %w", err)
+		}
+		return normalizedContractData, nil
+	}
+
+	contractData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+	if err != nil {
+		return nil, fmt.Errorf("could not read contract data: %w", err)
+	}
+	return contractData.ContractData, nil
+}
+
+func canSubmitUpdatedContractData(state string) bool {
+	return state == contractstate.Draft.String() || state == contractstate.Rejected.String()
 }
