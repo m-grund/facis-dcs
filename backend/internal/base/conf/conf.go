@@ -1,8 +1,6 @@
 package conf
 
 import (
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -14,12 +12,8 @@ func OutboxProcessorTimeOut() time.Duration {
 	return 1 * time.Second
 }
 
-func EventBusTopic(subTopicName string) string {
-	namespace := "dcs"
-	if subTopicName == "" || subTopicName == "*" {
-		fmt.Sprintf("%s.*", namespace)
-	}
-	return fmt.Sprintf("%s.%s", namespace, strings.ToLower(subTopicName))
+func EventBusTopic() string {
+	return "digital-contracting-service"
 }
 
 func GlobalAuditTrailName() string {

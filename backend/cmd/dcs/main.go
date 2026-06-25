@@ -13,7 +13,7 @@ import (
 	"sync"
 	"syscall"
 
-	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/signingmanagement/dss"
 
 	didservice "digital-contracting-service/gen/did_service"
 
@@ -45,7 +45,6 @@ import (
 	"digital-contracting-service/internal/semantic/mapper"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
-	"digital-contracting-service/internal/signingmanagement/dss"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
@@ -201,7 +200,7 @@ func main() {
 		natsURL = nats.DefaultURL
 	}
 
-	sysPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.System.String()), natsURL)
+	cepPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(), natsURL)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not connect to events bus")
 	}
@@ -210,62 +209,7 @@ func main() {
 		if err != nil {
 			log.Errorf(ctx, err, "Could not close cloud event bus client")
 		}
-	}(sysPubClient)
-
-	trPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.ContractTemplateRepo.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventPubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(trPubClient)
-
-	cwePubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.ContractWorkflowEngine.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventPubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(cwePubClient)
-
-	smPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.SignatureManagement.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventPubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(smPubClient)
-
-	pacPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.ProcessAuditAndCompliance.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventPubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(pacPubClient)
-
-	csaPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(componenttype.ContractStorageArchive.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventPubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(csaPubClient)
+	}(cepPubClient)
 
 	did, err := didDocument.GetID()
 	if err != nil {
@@ -274,12 +218,7 @@ func main() {
 
 	outboxProcessor := event.OutboxProcessor{
 		DB:           db,
-		SysPubClient: sysPubClient,
-		TRPubClient:  trPubClient,
-		CWEPubClient: cwePubClient,
-		SMPubClient:  smPubClient,
-		PACPubClient: pacPubClient,
-		CSAPubClient: csaPubClient,
+		CEPPubClient: cepPubClient,
 		IPFSClient:   ipfsAPIClient,
 		ARepo:        &aRepo,
 		TSAClient:    tsaClient,
@@ -290,7 +229,7 @@ func main() {
 	}
 
 	if os.Getenv("DCS_DEBUG_EVENTING") == "true" {
-		eventSubClient, err := event.NewNatsSubClient(conf.EventBusTopic("*"), natsURL)
+		cepSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
 		if err != nil {
 			log.Fatalf(ctx, err, "Could not connect to events bus")
 		}
@@ -299,43 +238,10 @@ func main() {
 			if err != nil {
 				log.Errorf(ctx, err, "Could not close cloud event bus client")
 			}
-		}(eventSubClient)
+		}(cepSubClient)
 
-		event.StartEventLogger(ctx, eventSubClient)
+		event.StartEventLogger(ctx, cepSubClient)
 	}
-
-	cweSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(componenttype.ContractWorkflowEngine.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventSubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(cweSubClient)
-
-	smSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(componenttype.SignatureManagement.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventSubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(smSubClient)
-
-	csaSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(componenttype.ContractStorageArchive.String()), natsURL)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events bus")
-	}
-	defer func(client *event.CloudEventSubClient) {
-		err := client.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event bus client")
-		}
-	}(csaSubClient)
 
 	auditTrailReader := base.AuditTrailReader{
 		IPFSClient: ipfsAPIClient,
@@ -384,7 +290,7 @@ func main() {
 
 	// Start the NATS→Webhook bridge: automatically fans out to all registered
 	// webhook subscribers whenever a DCS lifecycle event fires on the event bus.
-	webhookSubClient, err := event.NewNatsSubClient(conf.EventBusTopic("*"), natsURL)
+	webhookSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not create webhook NATS subscriber")
 	}
@@ -484,12 +390,12 @@ func main() {
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
-		contractStorageArchiveSvc = service.NewContractStorageArchive(ctx, jwtAuth, csaSubClient)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(ctx, db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, cweSubClient, *didDocument)
+		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth, *didDocument)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, *didDocument)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
-		signatureManagementSvc = service.NewSignatureManagement(ctx, db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient, smSubClient)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, *didDocument)
 		didSrv = didService
@@ -501,7 +407,7 @@ func main() {
 	// Start the PDF lifecycle C2PA subscriber (appends C2PA assertions on state changes).
 	// Only start when a real signing URL is configured; without one, the subscriber
 	// would attempt signing on every CWE event and log spurious HTTP errors.
-	pdfSubClient, err := event.NewNatsSubClient(conf.EventBusTopic("*"), natsURL)
+	pdfSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not create PDF generation NATS subscriber")
 	}

@@ -23,12 +23,7 @@ type OutboxProcessor struct {
 	IPFSClient   *ipfs.APIClient
 	TSAClient    *tsa.APIClient
 	ARepo        db.AuditTrailRepository
-	TRPubClient  *CloudEventPubClient
-	CWEPubClient *CloudEventPubClient
-	SMPubClient  *CloudEventPubClient
-	PACPubClient *CloudEventPubClient
-	CSAPubClient *CloudEventPubClient
-	SysPubClient *CloudEventPubClient
+	CEPPubClient *CloudEventPubClient
 }
 
 func (j OutboxProcessor) Start(ctx context.Context, origin string) error {
@@ -114,34 +109,6 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
-
-	source := fmt.Sprintf("%s", origin)
-	switch event.Component {
-	case componenttype.ContractTemplateRepo.String():
-		if err := j.TRPubClient.Publish(source, event.EventType, event.EventData); err != nil {
-			return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-		}
-	case componenttype.ContractWorkflowEngine.String():
-		if err := j.CWEPubClient.Publish(source, event.EventType, event.EventData); err != nil {
-			return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-		}
-	case componenttype.SignatureManagement.String():
-		if err := j.SMPubClient.Publish(source, event.EventType, event.EventData); err != nil {
-			return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-		}
-	case componenttype.ProcessAuditAndCompliance.String():
-		if err := j.PACPubClient.Publish(source, event.EventType, event.EventData); err != nil {
-			return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-		}
-	case componenttype.ContractStorageArchive.String():
-		if err := j.CSAPubClient.Publish(source, event.EventType, event.EventData); err != nil {
-			return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-		}
-	case componenttype.System.String():
-		if err := j.SysPubClient.Publish(source, event.EventType, event.EventData); err != nil {
-			return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-		}
-	}
 
 	globalLogPredCID, err := j.ARepo.ReadLogCID(ctx, tx, conf.GlobalAuditTrailName(), conf.GlobalAuditTrailName())
 	if err != nil {
@@ -235,6 +202,10 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	err = db.UpdateOutboxEvent(ctx, tx, event.ID)
 	if err != nil {
 		return fmt.Errorf("could not update outbox event: %w", err)
+	}
+
+	if err := j.CEPPubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
+		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
 	}
 
 	return tx.Commit()

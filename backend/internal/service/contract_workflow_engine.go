@@ -2,19 +2,10 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"time"
-
-	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-
-	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
-
-	"digital-contracting-service/internal/base/event"
 
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
@@ -36,9 +27,7 @@ import (
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 
-	cloudevent "github.com/cloudevents/sdk-go/v2/event"
 	"github.com/jmoiron/sqlx"
-	"goa.design/clue/log"
 )
 
 type contractWorkflowEnginesrvc struct {
@@ -52,17 +41,15 @@ type contractWorkflowEnginesrvc struct {
 	FCClient     *fcclient.FederatedCatalogueClient
 	DIDDocument  base.DIDDocument
 	ATrailReader base.AuditTrailReader
-	CESubClient  *event.CloudEventSubClient
 	auth.JWTAuthenticator
 }
 
-func NewContractWorkflowEngine(ctx context.Context, db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
+func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
-	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader,
-	ceSubClient *event.CloudEventSubClient, didDocument base.DIDDocument) contractworkflowengine.Service {
+	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument base.DIDDocument) contractworkflowengine.Service {
 
-	cwe := &contractWorkflowEnginesrvc{
+	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
@@ -74,80 +61,7 @@ func NewContractWorkflowEngine(ctx context.Context, db *sqlx.DB, jwtAuth auth.JW
 		FCClient:         fcClient,
 		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
-		CESubClient:      ceSubClient,
 	}
-
-	cwe.startEventHandler(ctx)
-
-	return cwe
-}
-
-func (s *contractWorkflowEnginesrvc) startEventHandler(ctx context.Context) {
-
-	did, err := s.DIDDocument.GetID()
-	if err != nil {
-		log.Errorf(ctx, err, "could not read did")
-	}
-
-	eventHandler := func(evt cloudevent.Event) {
-
-		if evt.Source() == did {
-			return
-		}
-
-		data, err := json.Marshal(evt)
-		if err != nil {
-			log.Printf(ctx, "Could not marshal event to JSON: %v", err)
-		}
-
-		fmt.Printf("received event: %s\n", string(data))
-
-		eventType, err := eventtype.NewEventType(evt.Type())
-		if err != nil {
-			log.Errorf(ctx, err, "invalid event type")
-		}
-
-		tx, err := s.DB.BeginTxx(ctx, nil)
-		if err != nil {
-			return
-		}
-		defer func(tx *sqlx.Tx) {
-			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-				return
-			}
-		}(tx)
-
-		var contract *db.Contract
-		err = json.Unmarshal(evt.Data(), &contract)
-		if err != nil {
-			log.Errorf(ctx, err, "could not unmarshal event data")
-			return
-		}
-
-		switch eventType {
-		case eventtype.Create:
-			evt := contractevents.SyncingRequestEvent{
-				RequesterDID: did,
-				OccurredAt:   time.Now().UTC(),
-				DID:          contract.DID,
-			}
-			err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-			if err != nil {
-				return
-			}
-			log.Printf(ctx, "Send sync request")
-
-		case eventtype.Update:
-			fmt.Println("Create sync request for contract update")
-		}
-
-		tx.Commit()
-	}
-	go func() {
-		if err := s.CESubClient.Subscribe(eventHandler); err != nil {
-			log.Errorf(ctx, err, "could not start event printer")
-		}
-	}()
 }
 
 func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractworkflowengine.ContractCreateRequest) (res *contractworkflowengine.ContractCreateResponse, err error) {

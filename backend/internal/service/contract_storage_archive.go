@@ -2,48 +2,24 @@ package service
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
-	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base"
 
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	"digital-contracting-service/internal/auth"
 
-	cloudevent "github.com/cloudevents/sdk-go/v2/event"
 	"goa.design/clue/log"
 )
 
 // ContractStorageArchive service implementation.
 type contractStorageArchivesrvc struct {
-	CESubClient *event.CloudEventSubClient
+	DIDDocument base.DIDDocument
 	auth.JWTAuthenticator
 }
 
 // NewContractStorageArchive returns the ContractStorageArchive service implementation.
-func NewContractStorageArchive(ctx context.Context, jwtAuth auth.JWTAuthenticator, ceSubClient *event.CloudEventSubClient) contractstoragearchive.Service {
-	csa := &contractStorageArchivesrvc{JWTAuthenticator: jwtAuth, CESubClient: ceSubClient}
-
-	csa.startEventHandler(ctx)
-
-	return csa
-}
-
-func (s *contractStorageArchivesrvc) startEventHandler(ctx context.Context) {
-	eventHandler := func(evt cloudevent.Event) {
-
-		data, err := json.Marshal(evt)
-		if err != nil {
-			log.Printf(ctx, "Could not marshal event to JSON: %v", err)
-		}
-
-		fmt.Printf("received event: %s\n", string(data))
-	}
-	go func() {
-		if err := s.CESubClient.Subscribe(eventHandler); err != nil {
-			log.Errorf(ctx, err, "could not start event printer")
-		}
-	}()
+func NewContractStorageArchive(jwtAuth auth.JWTAuthenticator, didDocument base.DIDDocument) contractstoragearchive.Service {
+	return &contractStorageArchivesrvc{JWTAuthenticator: jwtAuth, DIDDocument: didDocument}
 }
 
 func (s *contractStorageArchivesrvc) Retrieve(ctx context.Context, p *contractstoragearchive.RetrievePayload) (res any, err error) {
