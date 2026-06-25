@@ -16,11 +16,12 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/fcasset"
+	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/db"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
-	"digital-contracting-service/internal/templaterepository/selfdescription"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -139,7 +140,6 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 		}
 	}
 
-	templateType := fullTemplate.TemplateType
 	name := ""
 	description := ""
 	if fullTemplate.Name != nil {
@@ -155,22 +155,24 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 		}
 	}
 
-	sd := selfdescription.BuildTemplateResourceSelfDescription(selfdescription.TemplateResourceInput{
-		ParticipantID:  cmd.ParticipantID,
-		DID:            cmd.DID,
-		DocumentNumber: documentNumber,
-		Version:        processData.Version,
-		TemplateType:   templateType,
-		Name:           name,
-		Description:    description,
-		CreatedAt:      fullTemplate.CreatedAt,
-		UpdatedAt:      fullTemplate.UpdatedAt,
-		TemplateData:   fullTemplate.TemplateData,
-	})
-
-	body, err := json.Marshal(sd)
+	templateJSONLD, err := semanticmapper.BuildTemplateJSONLD(*fullTemplate, semanticmapper.DefaultProfile())
 	if err != nil {
-		return nil, fmt.Errorf("marshal template resource self-description failed: %w", err)
+		return nil, fmt.Errorf("build template json-ld failed: %w", err)
+	}
+
+	payload, err := fcasset.BuildPayload(fcasset.BuildInput{
+		TemplateDID:  cmd.DID,
+		Issuer:       cmd.ParticipantID,
+		ValidFrom:    fullTemplate.UpdatedAt,
+		TemplateData: templateJSONLD,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build template asset payload failed: %w", err)
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal template asset payload failed: %w", err)
 	}
 
 	query := url.Values{}

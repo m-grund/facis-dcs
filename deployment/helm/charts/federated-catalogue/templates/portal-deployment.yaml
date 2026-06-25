@@ -53,6 +53,11 @@ spec:
             {{- with .Values.portal.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: logs
+              mountPath: /logs
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: {{ .Values.portal.route.path | default "" }}/actuator/health
@@ -67,4 +72,9 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.portal.resources | nindent 12 }}
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 {{- end }}

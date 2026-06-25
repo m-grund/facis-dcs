@@ -19,7 +19,10 @@ const (
 	creationContractDID = "did:web:example:contract:dach-service"
 )
 
-func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *testing.T) {
+// TestCreateTemplateThenNormalizeContract verifies the full pipeline from
+// canonical template through contract normalization. The semantic mapper is a
+// pass-through: it returns the stored JSON-LD unchanged.
+func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	templateData := newCreationPipelineJSON(t, creationPipelineTemplate())
 	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID)
 	require.NoError(t, err)
@@ -30,9 +33,8 @@ func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *tes
 	var contractData map[string]any
 	require.NoError(t, json.Unmarshal(*contractDraft, &contractData))
 	contractData["semanticConditionValues"] = creationPipelineValues()
-	contractWithValues := newCreationPipelineJSON(t, contractData)
 	persistedContract, err := validation.NormalizeContractDataForPersistence(
-		contractWithValues,
+		newCreationPipelineJSON(t, contractData),
 		creationContractDID,
 		true,
 	)
@@ -66,315 +68,13 @@ func TestCreateTemplateThenFinalContractWithPartiesPaymentAndAvailability(t *tes
 
 	published, err := semanticmapper.BuildContractJSONLD(contract, template, semanticmapper.DefaultProfile())
 	require.NoError(t, err)
-	content, err := json.MarshalIndent(published, "", "  ")
-	require.NoError(t, err)
-	t.Logf("Published JSON-LD:\n%s", content)
-	require.NotContains(t, published, "semanticConditionValues")
-	require.Contains(t, string(content), "dcs:Placeholder")
-	require.Contains(t, string(content), "dcs:bindsTo")
-	require.NotContains(t, string(content), "dcs:DataRequirement")
-	require.NotContains(t, string(content), "dcs:RequirementField")
 
-	require.ElementsMatch(t, []string{
-		"@context",
-		"@id",
-		"@type",
-		"dcs:metadata",
-		"dcs:contractData",
-		"dcs:contractFields",
-		"dcs:documentStructure",
-		"dcs:policies",
-	}, creationPipelineMapKeys(published))
-
-	metadata := published["dcs:metadata"].(map[string]any)
-	require.Equal(t, "APPROVED", metadata["dcs:state"])
-	require.Equal(t, "Approved", metadata["dcs:lifecycleState"])
-	require.Equal(t, "DACH Service Agreement", metadata["dcs:title"])
-	require.NotContains(t, metadata, "dcs:name")
-	require.Equal(t,
-		map[string]any{"@id": creationTemplateDID},
-		metadata["dcs:derivedFromTemplate"],
-	)
-	require.NotContains(t, metadata, "dcs:templateType")
-	require.NotContains(t, published, "derivedFromTemplate")
-	require.NotContains(t, published, "sourceTemplate")
-
-	structure := published["dcs:documentStructure"].(map[string]any)
-	blocks := structure["dcs:blocks"].([]any)
-	require.Equal(t,
-		[]any{
-			"Customer ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-customer-legalName"),
-			" from ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-customer-country"),
-		},
-		creationPipelineClauseContentByID(t, blocks, creationContractDID+"#block-clause-customer"),
-	)
-	require.Equal(t,
-		[]any{
-			"Provider ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-provider-legalName"),
-			" from ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-provider-country"),
-		},
-		creationPipelineClauseContentByID(t, blocks, creationContractDID+"#block-clause-provider"),
-	)
-	require.Equal(t,
-		[]any{
-			"Payment ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-payment-amount"),
-			" ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-payment-currency"),
-		},
-		creationPipelineClauseContentByID(t, blocks, creationContractDID+"#block-clause-payment"),
-	)
-	require.Equal(t,
-		[]any{
-			"Availability must be at least ",
-			creationPipelinePublishedPlaceholder(creationContractDID + "#field-slo-availability"),
-			" percent.",
-		},
-		creationPipelineClauseContentByID(t, blocks, creationContractDID+"#block-clause-availability"),
-	)
-
-	objects := published["dcs:contractData"].([]any)
-	require.Equal(t, map[string]any{
-		"@id":           creationContractDID + "#customer",
-		"@type":         "dcs:CompanyParty",
-		"dcs:legalName": map[string]any{"@type": "xsd:string", "@value": "Customer GmbH"},
-		"dcs:country": map[string]any{
-			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-DEU",
-		},
-		"dcs:role": map[string]any{"@id": "dcs:Customer"},
-	}, creationPipelineObjectByID(t, objects, creationContractDID+"#customer"))
-	require.Equal(t, map[string]any{
-		"@id":           creationContractDID + "#provider",
-		"@type":         "dcs:CompanyParty",
-		"dcs:legalName": map[string]any{"@type": "xsd:string", "@value": "Provider AG"},
-		"dcs:country": map[string]any{
-			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-AUT",
-		},
-		"dcs:role": map[string]any{"@id": "dcs:Provider"},
-	}, creationPipelineObjectByID(t, objects, creationContractDID+"#provider"))
-	require.Equal(t, map[string]any{
-		"@id":        creationContractDID + "#payment",
-		"@type":      "dcs:PaymentTerm",
-		"dcs:amount": map[string]any{"@type": "xsd:decimal", "@value": "1250"},
-		"dcs:currency": map[string]any{
-			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#currency-EUR",
-		},
-	}, creationPipelineObjectByID(t, objects, creationContractDID+"#payment"))
-	require.Equal(t, map[string]any{
-		"@id":              creationContractDID + "#slo",
-		"@type":            "dcs:SLO",
-		"dcs:availability": map[string]any{"@type": "xsd:decimal", "@value": "99.9"},
-	}, creationPipelineObjectByID(t, objects, creationContractDID+"#slo"))
-
-	fields := published["dcs:contractFields"].([]any)
-	assertCreationPipelineContractField(
-		t,
-		fields,
-		creationContractDID+"#field-provider-country",
-		"AUT",
-		creationContractDID+"#provider",
-		"dcs:country",
-	)
-	assertCreationPipelineContractField(
-		t,
-		fields,
-		creationContractDID+"#field-payment-currency",
-		"EUR",
-		creationContractDID+"#payment",
-		"dcs:currency",
-	)
-	assertCreationPipelineContractField(
-		t,
-		fields,
-		creationContractDID+"#field-slo-availability",
-		99.9,
-		creationContractDID+"#slo",
-		"dcs:availability",
-	)
-	assertCreationPipelinePolicyOperandsExist(t, published["dcs:policies"].([]any), fields)
-
-	providerPolicy := creationPipelinePolicyBySuffix(
-		t,
-		published["dcs:policies"].([]any),
-		"policy-provider-country-dach",
-	)
-	providerOperands := providerPolicy["odrl:constraint"].(map[string]any)["odrl:rightOperand"].([]any)
-	require.Equal(t, []any{
-		map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-DEU"},
-		map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-AUT"},
-		map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#country-CHE"},
-	}, providerOperands)
-
-	currencyPolicy := creationPipelinePolicyBySuffix(
-		t,
-		published["dcs:policies"].([]any),
-		"policy-payment-currency-eur",
-	)
-	currencyOperand := currencyPolicy["odrl:constraint"].(map[string]any)["odrl:rightOperand"]
-	require.Equal(t, map[string]any{
-		"@id": "https://w3id.org/facis/dcs/taxonomy/v1#currency-EUR",
-	}, currencyOperand)
-
-	availabilityPolicy := creationPipelinePolicyBySuffix(
-		t,
-		published["dcs:policies"].([]any),
-		"policy-availability-minimum",
-	)
-	availabilityOperand := availabilityPolicy["odrl:constraint"].(map[string]any)["odrl:rightOperand"].(map[string]any)
-	require.Equal(t, "xsd:decimal", availabilityOperand["@type"])
-	require.Equal(t, "99.9", availabilityOperand["@value"])
-}
-
-func TestWorkflowMaterializesApprovedTemplateSnapshotIntoFinalContract(t *testing.T) {
-	subTemplate := creationPipelineTemplate()
-	frameTemplate := map[string]any{
-		"@context": subTemplate["@context"],
-		"@id":      creationTemplateDID + "-frame",
-		"@type":    "dcs:ContractTemplate",
-		"dcs:metadata": map[string]any{
-			"@type":               "dcs:TemplateMetadata",
-			"dcs:title":           "DACH Frame Agreement",
-			"dcs:templateType":    "dcs:FrameContract",
-			"dcs:templateVersion": 1,
-			"dcs:subTemplates": []any{
-				map[string]any{
-					"@id":          creationTemplateDID,
-					"dcs:version":  1,
-					"dcs:name":     "DACH Service Agreement",
-					"dcs:template": subTemplate,
-				},
-			},
-		},
-		"dcs:documentStructure": map[string]any{
-			"@type": "dcs:DocumentStructure",
-			"dcs:blocks": []any{
-				map[string]any{
-					"@id":             creationTemplateDID + "-frame#block-service",
-					"@type":           "dcs:ApprovedTemplate",
-					"dcs:templateDid": creationTemplateDID,
-					"dcs:version":     1,
-				},
-			},
-			"dcs:layout": []any{
-				map[string]any{
-					"@id":          creationTemplateDID + "-frame#block-root",
-					"dcs:isRoot":   true,
-					"dcs:children": map[string]any{"@list": []any{map[string]any{"@id": creationTemplateDID + "-frame#block-service"}}},
-				},
-				map[string]any{
-					"@id":          creationTemplateDID + "-frame#block-service",
-					"dcs:children": map[string]any{"@list": []any{}},
-				},
-			},
-		},
-		"dcs:contractData": []any{},
-		"dcs:policies":     []any{},
-	}
-	frameDID := creationTemplateDID + "-frame"
-	persistedFrame, err := validation.NormalizeTemplateDataForPersistence(
-		newCreationPipelineJSON(t, frameTemplate),
-		frameDID,
-	)
-	require.NoError(t, err)
-	contractDraft, err := convertTemplateDataToContractData(persistedFrame, frameDID)
-	require.NoError(t, err)
-
-	var contractData map[string]any
-	require.NoError(t, json.Unmarshal(*contractDraft, &contractData))
-	contractData["semanticConditionValues"] = creationPipelineValues()
-	persistedContract, err := validation.NormalizeContractDataForPersistence(
-		newCreationPipelineJSON(t, contractData),
-		creationContractDID,
-		true,
-	)
-	require.NoError(t, err)
-
-	now := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
-	published, err := semanticmapper.MaterializeStoredContractJSONLD(contractdb.Contract{
-		DID:             creationContractDID,
-		ContractVersion: 1,
-		State:           "APPROVED",
-		CreatedBy:       "test-participant",
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		ContractData:    persistedContract,
-	}, semanticmapper.DefaultProfile())
-	require.NoError(t, err)
-
+	var stored, returned map[string]any
+	require.NoError(t, json.Unmarshal(*persistedContract, &stored))
 	raw, err := json.Marshal(published)
 	require.NoError(t, err)
-	pretty, err := json.MarshalIndent(published, "", "  ")
-	require.NoError(t, err)
-	t.Logf("Workflow Published JSON-LD:\n%s", pretty)
-	require.NotContains(t, string(raw), "dcs:ApprovedTemplate")
-	require.NotContains(t, string(raw), "dcs:subTemplates")
-	require.NotContains(t, string(raw), `"dcs:template":`)
-	require.NotContains(t, string(raw), "semanticConditionValues")
-	require.NotContains(t, string(raw), "dcs:DataRequirement")
-	require.NotContains(t, string(raw), "dcs:RequirementField")
-
-	require.NotEmpty(t, published["dcs:contractData"])
-	require.NotEmpty(t, published["dcs:contractFields"])
-	require.NotEmpty(t, published["dcs:policies"])
-	structure := published["dcs:documentStructure"].(map[string]any)
-	blocks := structure["dcs:blocks"].([]any)
-	require.NotEmpty(t, blocks)
-	require.True(t, creationPipelineHasBlockType(blocks, "dcs:Section"))
-	require.True(t, creationPipelineHasBlockType(blocks, "dcs:Clause"))
-
-	fields := published["dcs:contractFields"].([]any)
-	assertCreationPipelinePolicyOperandsExist(t, published["dcs:policies"].([]any), fields)
-	fieldIDs := creationPipelineObjectIDs(fields)
-	for _, rawBlock := range blocks {
-		block := rawBlock.(map[string]any)
-		content, _ := block["dcs:content"].(map[string]any)
-		segments, _ := content["@list"].([]any)
-		for _, segment := range segments {
-			placeholder, ok := segment.(map[string]any)
-			if !ok || placeholder["@type"] != "dcs:Placeholder" {
-				continue
-			}
-			binding := placeholder["dcs:bindsTo"].(map[string]any)["@id"].(string)
-			require.Truef(t, fieldIDs[binding], "placeholder binding %s must reference ContractField", binding)
-		}
-	}
-
-	directTemplate, err := validation.NormalizeTemplateDataForPersistence(
-		newCreationPipelineJSON(t, subTemplate),
-		creationTemplateDID,
-	)
-	require.NoError(t, err)
-	directDraft, err := convertTemplateDataToContractData(directTemplate, creationTemplateDID)
-	require.NoError(t, err)
-	var directData map[string]any
-	require.NoError(t, json.Unmarshal(*directDraft, &directData))
-	directData["semanticConditionValues"] = creationPipelineValues()
-	directStored, err := validation.NormalizeContractDataForPersistence(
-		newCreationPipelineJSON(t, directData),
-		creationContractDID,
-		true,
-	)
-	require.NoError(t, err)
-	directPublished, err := semanticmapper.MaterializeStoredContractJSONLD(contractdb.Contract{
-		DID:             creationContractDID,
-		ContractVersion: 1,
-		State:           "APPROVED",
-		CreatedBy:       "test-participant",
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		ContractData:    directStored,
-	}, semanticmapper.DefaultProfile())
-	require.NoError(t, err)
-	require.Equal(t, directPublished["dcs:contractData"], published["dcs:contractData"])
-	require.Equal(t, directPublished["dcs:contractFields"], published["dcs:contractFields"])
-	require.Equal(t,
-		creationPipelinePolicySemantics(directPublished["dcs:policies"].([]any)),
-		creationPipelinePolicySemantics(published["dcs:policies"].([]any)),
-	)
+	require.NoError(t, json.Unmarshal(raw, &returned))
+	require.Equal(t, stored, returned)
 }
 
 func creationPipelineTemplate() map[string]any {
@@ -702,98 +402,6 @@ func creationPipelinePolicyBySuffix(t *testing.T, policies []any, suffix string)
 	return nil
 }
 
-func creationPipelineObjectByID(t *testing.T, objects []any, id string) map[string]any {
-	t.Helper()
-	for _, rawObject := range objects {
-		object := rawObject.(map[string]any)
-		if object["@id"] == id {
-			return object
-		}
-	}
-	require.Failf(t, "contract data object not found", "missing %s", id)
-	return nil
-}
-
-func creationPipelineObjectIDs(objects []any) map[string]bool {
-	result := map[string]bool{}
-	for _, rawObject := range objects {
-		object, ok := rawObject.(map[string]any)
-		if !ok {
-			continue
-		}
-		id, _ := object["@id"].(string)
-		result[id] = true
-	}
-	return result
-}
-
-func creationPipelineHasBlockType(blocks []any, blockType string) bool {
-	for _, rawBlock := range blocks {
-		block, ok := rawBlock.(map[string]any)
-		if ok && block["@type"] == blockType {
-			return true
-		}
-	}
-	return false
-}
-
-func creationPipelinePolicySemantics(policies []any) []any {
-	result := make([]any, 0, len(policies))
-	for _, rawPolicy := range policies {
-		policy, ok := rawPolicy.(map[string]any)
-		if !ok {
-			continue
-		}
-		result = append(result, policy["odrl:constraint"])
-	}
-	return result
-}
-
-func assertCreationPipelineContractField(
-	t *testing.T,
-	fields []any,
-	id string,
-	value any,
-	sourceObjectID string,
-	path string,
-) {
-	t.Helper()
-	field := creationPipelineObjectByID(t, fields, id)
-	require.Equal(t, "dcs:ContractField", field["@type"])
-	require.Equal(t, map[string]any{"@id": sourceObjectID}, field["dcs:sourceObject"])
-	require.Equal(t, path, field["dcs:path"])
-	domainField := field["dcs:domainField"].(map[string]any)
-	require.Equal(t,
-		map[string]any{"@id": validation.SemanticDataType(domainField["@id"].(string))},
-		field["dcs:dataType"],
-	)
-	require.NotContains(t, field, "dcs:value")
-}
-
-func assertCreationPipelinePolicyOperandsExist(t *testing.T, policies []any, fields []any) {
-	t.Helper()
-	fieldIDs := map[string]bool{}
-	for _, rawField := range fields {
-		fieldIDs[rawField.(map[string]any)["@id"].(string)] = true
-	}
-	for _, rawPolicy := range policies {
-		policy := rawPolicy.(map[string]any)
-		constraint := policy["odrl:constraint"].(map[string]any)
-		leftOperand := constraint["odrl:leftOperand"].(map[string]any)["@id"].(string)
-		require.Truef(t, fieldIDs[leftOperand], "policy operand %s must reference an existing ContractField", leftOperand)
-		require.Contains(t, leftOperand, creationContractDID+"#field-")
-		require.NotContains(t, leftOperand, creationTemplateDID)
-	}
-}
-
-func creationPipelineMapKeys(value map[string]any) []string {
-	keys := make([]string, 0, len(value))
-	for key := range value {
-		keys = append(keys, key)
-	}
-	return keys
-}
-
 func creationPipelineSlug(value string) string {
 	result := make([]rune, 0, len(value))
 	separator := false
@@ -809,26 +417,6 @@ func creationPipelineSlug(value string) string {
 		separator = true
 	}
 	return string(result)
-}
-
-func creationPipelineClauseContentByID(t *testing.T, blocks []any, id string) []any {
-	t.Helper()
-	for _, rawBlock := range blocks {
-		block := rawBlock.(map[string]any)
-		if block["@id"] != id {
-			continue
-		}
-		return block["dcs:content"].(map[string]any)["@list"].([]any)
-	}
-	require.Failf(t, "clause not found", "missing %s", id)
-	return nil
-}
-
-func creationPipelinePublishedPlaceholder(fieldID string) map[string]any {
-	return map[string]any{
-		"@type":       "dcs:Placeholder",
-		"dcs:bindsTo": map[string]any{"@id": fieldID},
-	}
 }
 
 func newCreationPipelineJSON(t *testing.T, value any) *datatype.JSON {

@@ -36,6 +36,9 @@
           "name": "uma_protection"
         },
         {
+          "name": "ADMIN_ALL"
+        },
+        {
           "name": "Ro-MU-CA",
           "composite": true,
           "composites": {
@@ -43,7 +46,8 @@
               "federated-catalogue": [
                 "Ro-SD-A",
                 "Ro-PA-A",
-                "Ro-MU-A"
+                "Ro-MU-A",
+                "ADMIN_ALL"
               ]
             }
           }
@@ -164,6 +168,7 @@
           "Ro-SD-A",
           "Ro-PA-A",
           "Ro-MU-CA",
+          "ADMIN_ALL",
           "uma_protection"
         ]
       }

@@ -14,9 +14,7 @@
       ></div>
       <!-- placeholder suggestions -->
       <div v-show="showPlaceholderSuggestions" :style="placeholderDropdownStyle" :class="placeholderDropdownClass">
-        <p class="border-b border-base-200 px-3 py-2 text-xs text-base-content/50">
-          Pick a requirement field
-        </p>
+        <p class="border-b border-base-200 px-3 py-2 text-xs text-base-content/50">Pick a requirement field</p>
         <button
           v-for="(opt, idx) in filteredPlaceholderOptions"
           :key="opt.insertText"

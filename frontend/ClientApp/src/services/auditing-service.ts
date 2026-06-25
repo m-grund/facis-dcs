@@ -36,7 +36,11 @@ const normalizeAuditResponse = (data: AuditResponse | string, scope: AuditScope)
   return data.flatMap((item, index) => normalizeAuditItem(item as AuditFinding & RawPACAuditResource, index, scope))
 }
 
-function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: number, scope: AuditScope): AuditFinding[] {
+function normalizeAuditItem(
+  item: AuditFinding & RawPACAuditResource,
+  index: number,
+  scope: AuditScope,
+): AuditFinding[] {
   const trail = item.audit_trail ?? item.auditTrail
   if (!Array.isArray(trail)) {
     if (!isVisibleAuditEvent(item.event_type ?? item.eventType)) {

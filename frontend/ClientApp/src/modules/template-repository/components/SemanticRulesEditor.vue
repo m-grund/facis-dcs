@@ -7,7 +7,7 @@
           v-for="action in requirementActions"
           :key="action.id"
           type="button"
-          class="btn btn-outline h-auto min-h-0 justify-start px-3 py-2 text-left"
+          class="btn h-auto min-h-0 justify-start px-3 py-2 text-left btn-outline"
           :class="{ 'btn-primary': requirementDraft?.action.id === action.id }"
           @click="startRequirementDraft(action)"
         >
@@ -28,7 +28,7 @@
             <span class="label-text text-xs text-base-content/60">Role *</span>
             <select
               v-model="requirementDraft.role"
-              class="select-bordered select select-sm w-full"
+              class="select-bordered select w-full select-sm"
               @change="syncDraftNameWithRole"
             >
               <option value="">Select role</option>
@@ -41,7 +41,7 @@
             <button type="button" class="btn btn-ghost btn-sm" @click="cancelRequirementDraft">Cancel</button>
             <button
               type="button"
-              class="btn btn-secondary btn-sm"
+              class="btn btn-sm btn-secondary"
               :disabled="!canAddRequirementDraft"
               @click="addRequirementDraft"
             >
@@ -108,10 +108,10 @@
               </div>
             </div>
             <div v-if="uiStore.isTemplateEditable && !item.subTemplateRef" class="flex shrink-0 gap-1">
-              <button type="button" class="btn btn-secondary btn-xs" @click="createClauseFromRequirement(item)">
+              <button type="button" class="btn btn-xs btn-secondary" @click="createClauseFromRequirement(item)">
                 Create clause
               </button>
-              <button type="button" class="btn btn-ghost btn-xs text-error" @click="deleteRequirement(item)">
+              <button type="button" class="btn text-error btn-ghost btn-xs" @click="deleteRequirement(item)">
                 Delete
               </button>
             </div>
@@ -227,8 +227,8 @@ const canAddRequirementDraft = computed(() => {
 })
 
 const allBlocks = computed(() => {
-  const subTemplateBlocks = subTemplateSnapshots.value.flatMap(
-    (subTemplate) => getDocumentBlocksFromTemplateData(subTemplate.template_data),
+  const subTemplateBlocks = subTemplateSnapshots.value.flatMap((subTemplate) =>
+    getDocumentBlocksFromTemplateData(subTemplate.template_data),
   )
   return [...documentBlocks.value, ...subTemplateBlocks]
 })
@@ -466,5 +466,4 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
   }
   return constraint.description ?? 'Constrained value'
 }
-
 </script>
