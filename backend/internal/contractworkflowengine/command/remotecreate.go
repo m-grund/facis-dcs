@@ -22,7 +22,7 @@ import (
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 )
 
-type RemoteCreateCmd struct {
+type RemoteContractData struct {
 	DID             string
 	Origin          string
 	ContractVersion int
@@ -40,6 +40,10 @@ type RemoteCreateCmd struct {
 	ContractData    *datatype.JSON
 	TemplateDID     string
 	TemplateVersion int
+}
+
+type RemoteCreateCmd struct {
+	Contract RemoteContractData
 }
 
 type RemoteCreator struct {
@@ -63,29 +67,29 @@ func (h *RemoteCreator) Handle(ctx context.Context, cmd RemoteCreateCmd) error {
 	}(tx)
 
 	var expPolicy *string
-	if cmd.ExpPolicy != nil {
-		policy := string(*cmd.ExpPolicy)
+	if cmd.Contract.ExpPolicy != nil {
+		policy := string(*cmd.Contract.ExpPolicy)
 		expPolicy = &policy
 	}
 
 	data := db.Contract{
-		DID:             cmd.DID,
-		Origin:          cmd.Origin,
-		CreatedBy:       cmd.CreatedBy,
-		State:           cmd.State.String(),
-		ContractData:    cmd.ContractData,
-		TemplateDID:     cmd.TemplateDID,
-		TemplateVersion: cmd.TemplateVersion,
-		Responsible:     cmd.Responsible,
-		Name:            cmd.Name,
-		Description:     cmd.Description,
-		StartDate:       cmd.StartDate,
-		ExpDate:         cmd.ExpDate,
-		ExpNoticePeriod: cmd.ExpNoticePeriod,
+		DID:             cmd.Contract.DID,
+		Origin:          cmd.Contract.Origin,
+		CreatedBy:       cmd.Contract.CreatedBy,
+		State:           cmd.Contract.State.String(),
+		ContractData:    cmd.Contract.ContractData,
+		TemplateDID:     cmd.Contract.TemplateDID,
+		TemplateVersion: cmd.Contract.TemplateVersion,
+		Responsible:     cmd.Contract.Responsible,
+		Name:            cmd.Contract.Name,
+		Description:     cmd.Contract.Description,
+		StartDate:       cmd.Contract.StartDate,
+		ExpDate:         cmd.Contract.ExpDate,
+		ExpNoticePeriod: cmd.Contract.ExpNoticePeriod,
 		ExpPolicy:       expPolicy,
-		UpdatedAt:       cmd.UpdatedAt,
-		CreatedAt:       cmd.CreatedAt,
-		ContractVersion: cmd.ContractVersion,
+		UpdatedAt:       cmd.Contract.UpdatedAt,
+		CreatedAt:       cmd.Contract.CreatedAt,
+		ContractVersion: cmd.Contract.ContractVersion,
 	}
 	createdAt, err := h.CRepo.Create(ctx, tx, data)
 	if err != nil {
@@ -93,24 +97,24 @@ func (h *RemoteCreator) Handle(ctx context.Context, cmd RemoteCreateCmd) error {
 	}
 
 	evt := contractevents.RemoteCreateEvent{
-		DID:             cmd.DID,
-		TemplateDID:     cmd.TemplateDID,
-		CreatedBy:       cmd.CreatedBy,
-		ContractData:    cmd.ContractData,
+		DID:             cmd.Contract.DID,
+		TemplateDID:     cmd.Contract.TemplateDID,
+		CreatedBy:       cmd.Contract.CreatedBy,
+		ContractData:    cmd.Contract.ContractData,
 		OccurredAt:      *createdAt,
-		Responsible:     cmd.Responsible,
-		Name:            cmd.Name,
-		Description:     cmd.Description,
-		StartDate:       cmd.StartDate,
-		ExpDate:         cmd.ExpDate,
-		ExpPolicy:       cmd.ExpPolicy,
-		Origin:          cmd.Origin,
+		Responsible:     cmd.Contract.Responsible,
+		Name:            cmd.Contract.Name,
+		Description:     cmd.Contract.Description,
+		StartDate:       cmd.Contract.StartDate,
+		ExpDate:         cmd.Contract.ExpDate,
+		ExpPolicy:       cmd.Contract.ExpPolicy,
+		Origin:          cmd.Contract.Origin,
 		CreatedAt:       *createdAt,
 		UpdatedAt:       *createdAt,
-		ExpNoticePeriod: cmd.ExpPolicy,
-		TemplateVersion: cmd.TemplateVersion,
-		ContractVersion: cmd.ContractVersion,
-		State:           cmd.State,
+		ExpNoticePeriod: cmd.Contract.ExpPolicy,
+		TemplateVersion: cmd.Contract.TemplateVersion,
+		ContractVersion: cmd.Contract.ContractVersion,
+		State:           cmd.Contract.State,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

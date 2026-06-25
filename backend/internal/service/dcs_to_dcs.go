@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 
 	"digital-contracting-service/internal/base"
@@ -15,7 +16,6 @@ import (
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 
 	"github.com/jmoiron/sqlx"
@@ -117,7 +117,7 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	cmd := command.RemoteCreateCmd{
+	remoteContractData := command.RemoteContractData{
 		DID:             contract.Did,
 		ContractData:    &contractData,
 		Origin:          contract.Origin,
@@ -135,6 +135,10 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		Name:            contract.Name,
 		Description:     contract.Description,
 		UpdatedAt:       updatedAt,
+	}
+
+	cmd := command.RemoteCreateCmd{
+		Contract: remoteContractData,
 	}
 	handler := command.RemoteCreator{
 		DB:     s.DB,
@@ -164,7 +168,7 @@ func (s *dcsToDcssrvc) Update(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 	contract := req.Contract
 
 	if contract.Origin == origin {
-		return nil, errors.New("could not create contract on same peer")
+		return nil, errors.New("could not update contract on same peer")
 	}
 
 	createAt, err := time.Parse(time.RFC3339, contract.CreatedAt)
