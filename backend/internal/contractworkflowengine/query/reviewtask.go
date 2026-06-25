@@ -20,12 +20,13 @@ type GetAllReviewTasksForDIDQry struct {
 }
 
 type GetAllReviewTasksForDIDResult struct {
-	ID        int
-	DID       string
-	State     reviewtaskstate.ReviewTaskState
-	Reviewer  string
-	CreatedBy string
-	CreatedAt time.Time
+	ID              string
+	DID             string
+	State           reviewtaskstate.ReviewTaskState
+	Reviewer        string
+	CreatedBy       string
+	CreatedAt       time.Time
+	ContractVersion int
 }
 
 type GetAllReviewTasksForDIDHandler struct {
@@ -45,7 +46,7 @@ func (h *GetAllReviewTasksForDIDHandler) Handle(ctx context.Context, query GetAl
 		}
 	}(tx)
 
-	reviewTasks, err := h.RTRepo.ReadAll(ctx, tx, query.DID)
+	reviewTasks, err := h.RTRepo.ReadAllByDID(ctx, tx, query.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all review tasks: %w", err)
 	}
@@ -64,11 +65,13 @@ func (h *GetAllReviewTasksForDIDHandler) Handle(ctx context.Context, query GetAl
 		}
 
 		result[i] = GetAllReviewTasksForDIDResult{
-			DID:       data.DID,
-			State:     state,
-			Reviewer:  data.Reviewer,
-			CreatedBy: data.CreatedBy,
-			CreatedAt: data.CreatedAt,
+			ID:              data.ID,
+			DID:             data.DID,
+			State:           state,
+			Reviewer:        data.Reviewer,
+			CreatedBy:       data.CreatedBy,
+			CreatedAt:       data.CreatedAt,
+			ContractVersion: data.ContractVersion,
 		}
 	}
 

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -51,7 +52,16 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 
 func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContractCreateRequest) (res *dcstodcs.DCSToDCSContractCreateResponse, err error) {
 
+	origin, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	contract := req.Contract
+
+	if contract.Origin == origin {
+		return nil, errors.New("could not create contract on same peer")
+	}
 
 	createAt, err := time.Parse(time.RFC3339, contract.CreatedAt)
 	if err != nil {
@@ -146,7 +156,16 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 
 func (s *dcsToDcssrvc) Update(ctx context.Context, req *dcstodcs.DCSToDCSContractUpdateRequest) (res *dcstodcs.DCSToDCSContractUpdateResponse, err error) {
 
+	origin, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	contract := req.Contract
+
+	if contract.Origin == origin {
+		return nil, errors.New("could not create contract on same peer")
+	}
 
 	createAt, err := time.Parse(time.RFC3339, contract.CreatedAt)
 	if err != nil {

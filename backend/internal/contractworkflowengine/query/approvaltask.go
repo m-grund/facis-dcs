@@ -21,13 +21,14 @@ type GetAllApprovalTasksForDIDQry struct {
 }
 
 type GetAllApprovalTasksForDIDResult struct {
-	ID          int
-	DID         string
-	State       aopprovaltaskstate.ApprovalTaskState
-	Approver    string
-	CreatedBy   string
-	CreatedAt   time.Time
-	CancelledAt *time.Time
+	ID              string
+	DID             string
+	State           aopprovaltaskstate.ApprovalTaskState
+	Approver        string
+	CreatedBy       string
+	CreatedAt       time.Time
+	CancelledAt     *time.Time
+	ContractVersion int
 }
 
 type GetAllApprovalTasksForDIDHandler struct {
@@ -50,7 +51,7 @@ func (h *GetAllApprovalTasksForDIDHandler) Handle(ctx context.Context, query Get
 		}
 	}(tx)
 
-	reviewTasks, err := h.ATRepo.ReadAll(ctx, tx, query.DID)
+	reviewTasks, err := h.ATRepo.ReadAllByDID(ctx, tx, query.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all review tasks: %w", err)
 	}

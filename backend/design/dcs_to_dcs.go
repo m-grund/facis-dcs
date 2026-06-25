@@ -10,7 +10,7 @@ var DCSToDCSContractItem = Type("DCSToDCSContractItem", func() {
 	Attribute("state", String, "Current state of the contract")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "The description of the contract")
-	Attribute("created_by", String, "Identifier of who created the contract negotiation")
+	Attribute("created_by", String, "Identifier of who created the contract")
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 	Attribute("template_did", Any, "The DID of the used template")
@@ -30,33 +30,59 @@ var DCSToDCSContractItem = Type("DCSToDCSContractItem", func() {
 })
 
 var DCSToDCSContractReviewTaskItem = Type("DCSToDCSContractReviewTaskItem", func() {
+	Attribute("id", String, "ID of the review task")
 	Attribute("did", String, "DID of the contract")
 	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "State of the review task")
 	Attribute("reviewer", String, "The reviewer of the contract")
 	Attribute("created_at", String, "Created at")
+	Attribute("created_by", String, "Identifier of who created the review task")
 
-	Required("did", "state", "reviewer", "created_at", "contract_version")
+	Required("id", "did", "state", "reviewer", "created_at", "contract_version", "created_by")
 })
 
 var DCSToDCSContractApprovalTaskItem = Type("DCSToDCSContractApprovalTaskItem", func() {
-	Attribute("did", String, "DID of the contract ")
+	Attribute("id", String, "ID of the approval task")
+	Attribute("did", String, "DID of the contract")
 	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "State of the approval task")
 	Attribute("approver", String, "The approver for the contract")
 	Attribute("created_at", String, "Created at")
+	Attribute("created_by", String, "Identifier of who created the approval task")
 
-	Required("did", "state", "approver", "created_at", "contract_version")
+	Required("id", "did", "state", "approver", "created_at", "contract_version", "created_by")
 })
 
 var DCSToDCSContractNegotiationTaskItem = Type("DCSToDCSContractNegotiationTaskItem", func() {
-	Attribute("did", String, "DID of the contract ")
-	Attribute("contract_version", Int, "The version of the contract")
+	Attribute("id", String, "ID of the review task")
+	Attribute("did", String, "DID of the contract")
 	Attribute("state", String, "State of the approval task")
 	Attribute("negotiator", String, "The negotiator for the contract")
 	Attribute("created_at", String, "Created at")
+	Attribute("created_by", String, "Identifier of who created the negotiation task")
 
-	Required("did", "state", "negotiator", "created_at", "contract_version")
+	Required("id", "did", "state", "negotiator", "created_at", "created_by")
+})
+
+var DCSToDCSContractNegotiationItem = Type("DCSToDCSContractNegotiationItem", func() {
+	Attribute("id", String, "ID of the review task")
+	Attribute("did", String, "DID of the contract")
+	Attribute("contract_version", Int, "Version of the contract")
+	Attribute("change_request", Any, "The change request for the contract")
+	Attribute("created_at", String, "Created at")
+	Attribute("created_by", String, "Identifier of who created the negotiation task")
+
+	Required("id", "did", "contract_version", "created_at", "created_by")
+})
+
+var DCSToDCSContractNegotiationDecisionItem = Type("DCSToDCSContractNegotiationDecisionItem", func() {
+	Attribute("id", String, "ID of the review task")
+	Attribute("negotiation_id", String, "The id of the negotiation")
+	Attribute("negotiator", String, "The negotiator who made that decision")
+	Attribute("decision", String, "The decision what was made")
+	Attribute("rejection_reason", String, "The reason for the rejection")
+
+	Required("id", "negotiation_id", "negotiator")
 })
 
 var DCSToDCSContractCreateRequest = Type("DCSToDCSContractCreateRequest", func() {
@@ -65,7 +91,9 @@ var DCSToDCSContractCreateRequest = Type("DCSToDCSContractCreateRequest", func()
 	Attribute("contract", DCSToDCSContractItem, "The contract")
 	Attribute("review_tasks", ArrayOf(DCSToDCSContractReviewTaskItem), "The review tasks for that contract")
 	Attribute("approval_tasks", ArrayOf(DCSToDCSContractApprovalTaskItem), "The approval tasks for that contract")
-	Attribute("negotiation_tasks", ArrayOf(DCSToDCSContractNegotiationTaskItem), "The approval tasks for that contract")
+	Attribute("negotiation_tasks", ArrayOf(DCSToDCSContractNegotiationTaskItem), "The negotiation tasks for that contract")
+	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
+	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
 
 	Required("contract", "review_tasks", "approval_tasks", "negotiation_tasks")
 })
@@ -84,7 +112,9 @@ var DCSToDCSContractUpdateRequest = Type("DCSToDCSContractUpdateRequest", func()
 	Attribute("contract", DCSToDCSContractItem, "The contract")
 	Attribute("review_tasks", ArrayOf(DCSToDCSContractReviewTaskItem), "The review tasks for that contract")
 	Attribute("approval_tasks", ArrayOf(DCSToDCSContractApprovalTaskItem), "The approval tasks for that contract")
-	Attribute("negotiation_tasks", ArrayOf(DCSToDCSContractNegotiationTaskItem), "The approval tasks for that contract")
+	Attribute("negotiation_tasks", ArrayOf(DCSToDCSContractNegotiationTaskItem), "The negotiation tasks for that contract")
+	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
+	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
 
 	Required("contract", "review_tasks", "approval_tasks", "negotiation_tasks")
 })
