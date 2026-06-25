@@ -86,7 +86,6 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		Name:           ptr.Ref(ptr.StringFromMap(n, "name")),
 		Description:    ptr.Ref(ptr.StringFromMap(n, "description")),
 		TemplateType:   ptr.Ref(ptr.StringFromMap(n, "template_type")),
-		ParticipantID:  ptr.Ref(ptr.StringFromMap(n, "participant_id")),
 		CreatedAt:      ptr.Ref(ptr.StringFromMap(n, "created_at")),
 		UpdatedAt:      ptr.Ref(ptr.StringFromMap(n, "updated_at")),
 	}, nil

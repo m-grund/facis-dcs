@@ -29,6 +29,7 @@ const (
 	Terminate               EventType = "TERMINATE_CONTRACT"
 	RecordEvidence          EventType = "RECORD_EVIDENCE"
 	ContractExpired         EventType = "CONTRACT_EXPIRED"
+	RetrieveAllTemplates    EventType = "RETRIEVE_ALL_TEMPLATES"
 )
 
 var validStates = map[EventType]bool{

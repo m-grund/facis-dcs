@@ -33,6 +33,8 @@ export interface ContractTemplate {
   template_data?: DcsTemplateData
   updated_at: string
   responsible?: ContractTemplateResponsible
+  outdated?: boolean
+  latest_did?: string
 }
 
 export type PartialContractTemplate = ContractTemplate

@@ -11,11 +11,14 @@ import (
 	"strings"
 
 	genauth "digital-contracting-service/gen/auth"
+	authaudit "digital-contracting-service/internal/auth/audit"
 	authdb "digital-contracting-service/internal/auth/db"
 	"digital-contracting-service/internal/auth/hydra"
 	"digital-contracting-service/internal/auth/oid4vp"
+	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/pathutil"
 
+	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
 	goa "goa.design/goa/v3/pkg"
 )
@@ -28,24 +31,32 @@ type authSvc struct {
 	uiBasePath        string
 	publicAPIBase     string
 	presentations     authdb.PresentationAttemptRepo
-	vpVerifier        oid4vp.Verifier
+	requestSigner     oid4vprequest.Signer
 }
 
-func NewAuth(presentations authdb.PresentationAttemptRepo) genauth.Service {
-	var trust *oid4vp.TrustConfig
-	if cfg, err := oid4vp.LoadTrustConfigFromEnv(); err == nil {
-		trust = cfg
-	} else if path := strings.TrimSpace(os.Getenv("OID4VP_TRUST_DATA_PATH")); path != "" {
-		log.Printf(context.Background(), "oid4vp trust config not loaded: %v", err)
+func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo) (genauth.Service, error) {
+	if db != nil {
+		oid4vp.ConfigurePresentationAuditRecorder(&authaudit.Recorder{DB: db})
 	}
+
+	requestSigner, err := oid4vprequest.LoadSignerFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("oid4vp request signer: %w", err)
+	}
+
+	publicAPIBase, err := publicAPIBaseURL()
+	if err != nil {
+		return nil, err
+	}
+
 	return &authSvc{
 		hydra:             hydra.NewFromEnv(),
 		logoutRedirectURI: os.Getenv("HYDRA_POST_LOGOUT_REDIRECT_URI"),
 		uiBasePath:        pathutil.NormalizePath(os.Getenv("DCS_UI_PATH"), "/ui/", true),
-		publicAPIBase:     publicAPIBaseURL(),
+		publicAPIBase:     publicAPIBase,
 		presentations:     presentations,
-		vpVerifier:        oid4vp.NewVerifier(trust),
-	}
+		requestSigner:     requestSigner,
+	}, nil
 }
 
 func (s *authSvc) Callback(ctx context.Context, p *genauth.CallbackPayload) (*genauth.CallbackResult, error) {
@@ -62,6 +73,7 @@ func (s *authSvc) Callback(ctx context.Context, p *genauth.CallbackPayload) (*ge
 	if p.Code != nil {
 		code = strings.TrimSpace(*p.Code)
 	}
+
 	if code == "" {
 		return nil, goa.PermanentError("bad_request", "missing authorization code")
 	}
@@ -70,6 +82,7 @@ func (s *authSvc) Callback(ctx context.Context, p *genauth.CallbackPayload) (*ge
 	if p.State != nil {
 		returnedState = *p.State
 	}
+
 	if err := validateOAuthState(ctx, returnedState); err != nil {
 		return nil, goa.PermanentError("unauthorized", "invalid oauth state: %v", err)
 	}
@@ -78,9 +91,11 @@ func (s *authSvc) Callback(ctx context.Context, p *genauth.CallbackPayload) (*ge
 	if err != nil {
 		return nil, fmt.Errorf("token exchange failed: %w", err)
 	}
+
 	if strings.TrimSpace(tokenResp.RefreshToken) == "" {
 		return nil, goa.PermanentError("unauthorized", "token response missing refresh_token")
 	}
+
 	if strings.TrimSpace(tokenResp.IDToken) == "" {
 		return nil, goa.PermanentError("unauthorized", "token response missing id_token (openid scope required)")
 	}
@@ -111,9 +126,11 @@ func (s *authSvc) Refresh(ctx context.Context) (*genauth.RefreshResult, error) {
 		ClearRefreshTokenCookie(ctx)
 		return nil, goa.PermanentError("unauthorized", "token refresh failed: %v", err)
 	}
+
 	if strings.TrimSpace(tokenResp.RefreshToken) != "" {
 		SetRefreshTokenInContext(ctx, tokenResp.RefreshToken)
 	}
+
 	if strings.TrimSpace(tokenResp.IDToken) != "" {
 		SetIDTokenCookie(ctx, tokenResp.IDToken)
 	}
@@ -147,6 +164,7 @@ func (s *authSvc) Logout(ctx context.Context) (*genauth.LogoutResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("hydra openid discovery failed: %w", err)
 	}
+
 	if metadata.EndSessionEndpoint == "" {
 		return nil, goa.PermanentError("unauthorized", "Hydra provider missing end_session_endpoint")
 	}
@@ -189,16 +207,20 @@ func oauthErrorRedirectLocation(uiBasePath string, p *genauth.CallbackPayload) s
 	if err != nil {
 		return uiBasePath
 	}
+
 	q := loc.Query()
 	if errCode := oauthCallbackError(p); errCode != "" {
 		q.Set("auth_error", errCode)
 	}
+
 	if p.ErrorDescription != nil {
 		if desc := strings.TrimSpace(*p.ErrorDescription); desc != "" {
 			q.Set("auth_error_description", desc)
 		}
 	}
+
 	loc.RawQuery = q.Encode()
+
 	return loc.String()
 }
 
@@ -211,12 +233,15 @@ func validateOAuthState(ctx context.Context, returnedState string) error {
 	if returnedState == "" {
 		return fmt.Errorf("missing state")
 	}
+
 	expected, err := ReadOAuthStateCookie(ctx)
 	if err != nil {
 		return err
 	}
+
 	if subtle.ConstantTimeCompare([]byte(expected), []byte(returnedState)) == 1 {
 		return nil
 	}
+
 	return fmt.Errorf("state mismatch")
 }

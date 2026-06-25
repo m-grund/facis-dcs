@@ -9,6 +9,7 @@ export const ContractState = {
   approved: 'APPROVED',
   terminated: 'TERMINATED',
   expired: 'EXPIRED',
+  signed: 'SIGNED'
 } as const
 
 export const contractStates: ContractState[] = Object.values(ContractState)

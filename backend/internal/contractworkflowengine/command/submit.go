@@ -396,7 +396,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 func (h *Submitter) contractDataForSemanticValidation(ctx context.Context, tx *sqlx.Tx, cmd SubmitCmd) (*datatype.JSON, error) {
 	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
-		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, false)
+		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, nil, false)
 		if err != nil {
 			return nil, fmt.Errorf("contract data validation failed: %w", err)
 		}

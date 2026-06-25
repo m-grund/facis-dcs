@@ -130,7 +130,6 @@ var _ = Service("ContractStorageArchive", func() {
 		Security(JWTAuth, func() {
 			Scope("Auditor")
 			Scope("Compliance Officer")
-			Scope("Sys. Administrator")
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")

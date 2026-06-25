@@ -3,7 +3,6 @@ import type { PartialContractTemplate } from '@/models/contract-template'
 import type { Contract } from '@/models/contract/contract'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
-import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
@@ -37,13 +36,15 @@ import {
   FACIS_SCHEMA_REFS,
 } from '@/modules/template-repository/models/contract-template'
 import { buildContractDocument, getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
+import { useContractsStore } from '@/stores/contracts-store'
 
 const route = useRoute()
 const router = useRouter()
 
 const errorStore = useErrorStore()
-const templatesStore = useContractTemplatesStore()
-const { approvedOrPublishedTemplates, hasApprovedOrPublishedTemplates } = storeToRefs(templatesStore)
+const contractStore = useContractsStore()
+
+const { hasApprovedTemplates, approvedTemplates } = storeToRefs(contractStore)
 const templateDraftStore = useTemplateDraftStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -61,7 +62,7 @@ const verificationResult: Ref<VerificationResult | null> = ref(null)
 const contract: Ref<Contract | null> = ref(null)
 
 const canSubmit = computed(
-  () => isEditMode.value || (hasApprovedOrPublishedTemplates.value && selectedTemplate.value !== null),
+  () => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null),
 )
 const canSubmitContract = computed(
   () =>
@@ -201,8 +202,8 @@ watch(
       } catch (err: unknown) {
         console.error('Failed to load contract', err)
       }
-    } else if (!hasApprovedOrPublishedTemplates.value) {
-      await templatesStore.loadTemplates()
+    } else if (!hasApprovedTemplates.value) {
+      await contractStore.loadApprovedTemplates()
     }
   },
   { immediate: true },
@@ -293,12 +294,12 @@ onBeforeRouteLeave(() => {
   <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
     <div v-if="!isEditMode" class="px-6 py-12">
       <div class="flex justify-center">
-        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedOrPublishedTemplates">
+        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedTemplates">
           <option :value="null" disabled selected>
-            {{ hasApprovedOrPublishedTemplates ? 'Pick a template' : 'No templates available' }}
+            {{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
-          <option v-for="template in approvedOrPublishedTemplates" :key="template.did" :value="template">
-            {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
+          <option v-for="template in approvedTemplates" :key="template.did" :value="template">
+            Version {{template.version}} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>
       </div>
@@ -397,8 +398,8 @@ onBeforeRouteLeave(() => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
-        <button class="btn flex-1 btn-secondary" :disabled="isSubmitting || !canSubmit" @click="submit">
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
+        <button class="btn flex-1 btn-primary" :disabled="isSubmitting || !canSubmit" @click="submit">
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
           {{ isEditMode ? 'Update' : 'Create' }}
         </button>

@@ -1,15 +1,59 @@
 # BDD test values: used by tests/bdd/Makefile kind_deploy target (kind cluster).
 # Assumes release name "dcs" (HELM_RELEASE default in the Makefile).
+#
+# Image is loaded into kind via 'kind load docker-image' before helm deploy,
+# so Never prevents spurious registry pulls.
+image:
+  pullPolicy: Never
+
+pdfCore:
+  enabled: true
+  image:
+    repository: pdf-core
+    tag: bdd
+    pullPolicy: Never
+
 extraEnv:
   - name: JWT_ALG_NONE_SUPPORTED
     value: "true"
 
 postgresql:
   enabled: true
-  additionalDatabases: ["hydra"]
+  auth:
+    username: dcs
+    password: dcs
+    database: dcs
+  additionalDatabases: ["fc", "hydra", "statuslist"]
+  persistence:
+    enabled: false
+
+keycloak:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 8080
+  auth:
+    adminUser: admin
+    adminPassword: admin
+  realm:
+    import: true
+  extraEnv:
+    - name: KC_HOSTNAME
+      value: "dcs-keycloak"
+    - name: KC_HOSTNAME_PORT
+      value: "8080"
+    - name: KC_HOSTNAME_STRICT_HTTPS
+      value: "false"
+    - name: KC_HTTP_ENABLED
+      value: "true"
 
 nats:
   enabled: true
+
+neo4j:
+  enabled: true
+  persistence:
+    enabled: false
 
 hydra:
   enabled: true
@@ -33,23 +77,97 @@ hydra:
       token_endpoint_auth_method: client_secret_post
       skip_consent: true
 
+federatedCatalogue:
+  enabled: true
+  apiURL: "http://dcs-federated-catalogue:8081"
+  oauth:
+    clientID: "dcs-fc-client"
+    clientSecret: "dcs-fc-client-secret"
+  keycloak:
+    hostname: "dcs-keycloak:8080"
+    issuerScheme: "http"
+  verificationVpSignature: false
+  verificationVcSignature: false
+
+fcKeycloak:
+  realmURL: "http://dcs-keycloak:8080/realms/gaia-x"
+
+# XFSC Crypto Provider: required for CRYPTO_PROVIDER_URL, CRYPTO_PROVIDER_CERT_CHAIN_FILE
+# (both fatal on startup). devCertChain generates the signing cert in-cluster.
+cryptoProvider:
+  enabled: true
+  vault:
+    dev:
+      enabled: true
+      rootToken: "root"
+    service:
+      type: ClusterIP
+      port: 8200
+  transit:
+    mount: "transit"
+    key: "dcs-signing-key-p256"
+    keyType: "ecdsa-p256"
+    vcKey: "dcs-vc-signing-key"
+    vcKeyType: "ed25519"
+  devCertChain:
+    enabled: true
+    overwrite: true
+
+# XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
+statuslistService:
+  enabled: true
+  database:
+    enabled: true
+    host: "dcs-postgresql"
+    port: "5432"
+    name: "statuslist"
+    user: "dcs"
+    password: "dcs"
+    sslMode: "disable"
+  nats:
+    url: "nats://dcs-nats:4222"
+
+# IPFS: required — IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL are fatal on startup.
+ipfs:
+  enabled: true
+  persistence:
+    enabled: false
+
+ipfsDocumentManager:
+  enabled: true
+  ipfs:
+    host: "dcs-ipfs"
+    apiGatewayURL: "http://dcs-ipfs:8080/ipfs"
+    rpcApiPort: 5001
+  config:
+    serverMode: "debug"
+
+# ORCE (Timestamp Authority): required — TSA_URL is fatal on startup.
+# Disable persistence: kind has no default PV provisioner for the ORCE PVC.
+orce:
+  enabled: true
+  persistence:
+    enabled: false
+
+signing:
+  # Wired as TSA_URL env var; fatal on startup if empty.
+  tsaURL: "http://dcs-orce:1880/tsa/"
+  issuerDID: "did:web:localhost"
+
 route:
   basePath: "/digital-contracting-service"
 
+# Monitoring disabled: default storageClassName 'local-path' is not available in kind,
+# causing Prometheus/Alertmanager PVCs to stay Pending and helm --wait to time out.
 monitoring:
-  enabled: true
-
+  enabled: false
 grafana:
-  enabled: true
-
+  enabled: false
 prometheus:
-  enabled: true
-
+  enabled: false
 alertmanager:
-  enabled: true
-
+  enabled: false
 nodeExporter:
-  enabled: true
-
+  enabled: false
 kubeStateMetrics:
-  enabled: true
+  enabled: false

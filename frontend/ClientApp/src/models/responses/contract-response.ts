@@ -9,6 +9,7 @@ import type { ContractNegotiation } from '../contract/contract-negotiation'
 import type { ContractNegotiationTask } from '../contract/contract-negotiation-task'
 import type { ContractResponsible } from '../contract/contract-responsible'
 import type { ContractReviewTask } from '../contract/contract-review-task'
+import type { ContractTemplate } from '../contract-template'
 
 export interface ContractCreateResponse {
   did: string
@@ -22,6 +23,9 @@ export interface ContractSubmitResponse {
   did: string
   current_state: ContractState
 }
+
+
+export type ApprovedContractTemplateRetrieveResponse = ContractTemplate[]
 
 export interface ContractRetrieveResponse {
   contracts: Contract[]

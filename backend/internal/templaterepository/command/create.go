@@ -22,14 +22,15 @@ import (
 )
 
 type CreateCmd struct {
-	DID          string
-	CreatedBy    string
-	TemplateType contracttemplatetype.ContractTemplateType
-	Name         *string
-	Description  *string
-	TemplateData *datatype.JSON
-	HolderDID    string
-	UserRoles    userrole.UserRoles
+	DID            string
+	CreatedBy      string
+	TemplateType   contracttemplatetype.ContractTemplateType
+	Name           *string
+	Description    *string
+	TemplateData   *datatype.JSON
+	HolderDID      string
+	UserRoles      userrole.UserRoles
+	DocumentNumber *string
 }
 
 type Creator struct {
@@ -38,7 +39,7 @@ type Creator struct {
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
-	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID)
+	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID, cmd.Name)
 	if err != nil {
 		return fmt.Errorf("template data validation failed: %w", err)
 	}
@@ -55,13 +56,14 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	}(tx)
 
 	data := db.ContractTemplate{
-		DID:          cmd.DID,
-		CreatedBy:    cmd.CreatedBy,
-		State:        contracttemplatestate.Draft.String(),
-		TemplateType: cmd.TemplateType.String(),
-		Name:         cmd.Name,
-		Description:  cmd.Description,
-		TemplateData: cmd.TemplateData,
+		DID:            cmd.DID,
+		CreatedBy:      cmd.CreatedBy,
+		State:          contracttemplatestate.Draft.String(),
+		TemplateType:   cmd.TemplateType.String(),
+		Name:           cmd.Name,
+		Description:    cmd.Description,
+		DocumentNumber: cmd.DocumentNumber,
+		TemplateData:   cmd.TemplateData,
 	}
 	createdAt, err := h.CTRepo.Create(ctx, tx, data)
 	if err != nil {

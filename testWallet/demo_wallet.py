@@ -16,7 +16,7 @@ Usage (from repo root):
   python3 testWallet/demo_wallet.py --credential neusta-gmbh_johndoe --presentation-url 'openid4vp://...'
 
   # Headless end-to-end (POST /auth/login, no browser tab):
-  python3 testWallet/demo_wallet.py --headless --credential acme-corp_test
+  python3 testWallet/demo_wallet.py --headless --credential test
 """
 
 from __future__ import annotations
@@ -33,15 +33,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload, load_credential_claims
 from dcs_wallet.presentation import build_vp_token
+from dcs_wallet.sdjwt import split_sd_jwt
 
 DEFAULT_API_BASE = os.environ.get("DCS_API_BASE", "http://localhost:8991/api")
-DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "acme-corp_test")
+DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "test")
 REQUEST_URI_MARKER = "/auth/presentation/request/"
 _CREDENTIALS_DIR = Path(__file__).resolve().parent / "credentials"
 _KEYS_DIR = Path(__file__).resolve().parent / "keys"
 _REQUIRED_KEYS = ("issuer-dev.jwk", "wallet.jwk")
-_GENERATE_HINT = "python3 testWallet/scripts/generate_dev_keys.py"
+_GENERATE_HINT = "python3 testWallet/scripts/generate_keys.py --yes && python3 testWallet/scripts/issue_credentials.py"
 
 
 @dataclass(frozen=True)
@@ -115,9 +117,13 @@ class _Session:
                 return _Response(exc.code, {k.lower(): v for k, v in exc.headers.items()}, exc.read())
             raise
 
-    def post(self, url: str, *, json_body: dict | None = None, timeout: float = 30) -> _Response:
-        data = json.dumps(json_body or {}).encode()
-        headers = {**self._headers, "Content-Type": "application/json"}
+    def post(self, url: str, *, json_body: dict | None = None, timeout: float = 30, accept: str | None = None) -> _Response:
+        data = b"" if json_body is None else json.dumps(json_body).encode()
+        headers = dict(self._headers)
+        if json_body is not None:
+            headers["Content-Type"] = "application/json"
+        if accept:
+            headers["Accept"] = accept
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         return self._open(self._opener, req, timeout)
 
@@ -198,13 +204,14 @@ def prompt_presentation_url() -> str:
     return resolve_https_request_uri(line)
 
 
+def decode_authorization_request_jwt(token: str) -> dict:
+    return decode_jwt_payload(token)
+
+
 def list_available_credentials() -> list[CredentialOption]:
     options: list[CredentialOption] = []
-    for path in sorted(_CREDENTIALS_DIR.glob("*.json")):
-        if path.name.endswith(".template.json"):
-            continue
-        with path.open(encoding="utf-8") as fh:
-            data = json.load(fh)
+    for path in sorted(_CREDENTIALS_DIR.glob(f"*{CREDENTIAL_EXT}")):
+        data = load_credential_claims(path.stem)
         roles_raw = data.get("roles") or []
         roles = [r for r in roles_raw if isinstance(r, str)]
         options.append(
@@ -281,7 +288,7 @@ def resolve_credential_name(credential_name: str | None) -> str | None:
         return credential_name
     options = list_available_credentials()
     if not options:
-        log("wallet", "FAILED", error=f"no credentials/*.json found — run: {_GENERATE_HINT}")
+        log("wallet", "FAILED", error=f"no credentials/*{CREDENTIAL_EXT} found — run: {_GENERATE_HINT}")
         return None
     return prompt_credential_choice(options)
 
@@ -299,6 +306,28 @@ def state_from_request_uri(request_uri: str) -> str:
     return state
 
 
+def log_vp_token(vp_token: str, *, credential: str, aud: str, nonce: str) -> None:
+    """Print a short, human-readable summary of the SD-JWT+KB presentation."""
+    issuer_jwt, disclosures, kb_jwt = split_sd_jwt(vp_token)
+    issuer_claims = decode_jwt_payload(issuer_jwt)
+    kb_claims = decode_jwt_payload(kb_jwt) if kb_jwt else {}
+
+    print()
+    print("=== Verifiable Presentation (vp_token) ===")
+    print(f"credential file : credentials/{credential}{CREDENTIAL_EXT} (issuer SD-JWT, stored without KB)")
+    print(f"presentation    : issuer-jwt + {len(disclosures)} disclosure(s) + kb-jwt")
+    print(f"issuer          : {issuer_claims.get('iss', '?')}")
+    print(f"holder (sub)    : {issuer_claims.get('sub', '?')}")
+    print(f"KB aud          : {kb_claims.get('aud', aud)}  (from OpenID4VP client_id)")
+    print(f"KB nonce        : {kb_claims.get('nonce', nonce)}  (from OpenID4VP request)")
+    print(f"KB sd_hash      : {str(kb_claims.get('sd_hash', ''))[:24]}...")
+    print()
+    print("compact vp_token (value for POST /auth/presentation/callback):")
+    print(vp_token)
+    print("=== end vp_token ===")
+    print()
+
+
 def run_wallet_flow(
     session: _Session,
     api: str,
@@ -307,9 +336,13 @@ def run_wallet_flow(
     *,
     credential_name: str | None,
 ) -> int:
-    log("fetch", "GET OpenID4VP request object", url=request_uri[:120])
+    log("fetch", "POST OpenID4VP request object", url=request_uri[:120])
     try:
-        r = session.get(request_uri, timeout=30)
+        r = session.post(
+            request_uri,
+            timeout=30,
+            accept="application/oauth-authz-req+jwt, application/jwt",
+        )
     except RuntimeError as exc:
         log("fetch", "FAILED", error=str(exc))
         return 1
@@ -318,9 +351,16 @@ def run_wallet_flow(
         if r.status_code in (400, 404):
             log("fetch", "hint: presentation link expired or unknown — copy a fresh link from /ui/ login")
         return 1
-    req_obj = r.json()
-    if not isinstance(req_obj, dict):
-        log("fetch", "FAILED", error="unexpected request object shape")
+    body = r.text.strip()
+    content_type = (r.headers.get("content-type") or "").lower()
+    if body.startswith("eyJ") or "oauth-authz-req+jwt" in content_type:
+        try:
+            req_obj = decode_authorization_request_jwt(body)
+        except ValueError as exc:
+            log("fetch", "FAILED", error=str(exc))
+            return 1
+    else:
+        log("fetch", "FAILED", error="expected signed authorization request JWT (application/oauth-authz-req+jwt)")
         return 1
     log(
         "fetch-ok",
@@ -346,6 +386,7 @@ def run_wallet_flow(
     except Exception as exc:
         log("present", "FAILED to build VP", error=str(exc))
         return 1
+    log_vp_token(vp_token, credential=chosen, aud=client_id, nonce=nonce)
     log("present", "POST /auth/presentation/callback", credential=chosen)
     try:
         r = session.post(

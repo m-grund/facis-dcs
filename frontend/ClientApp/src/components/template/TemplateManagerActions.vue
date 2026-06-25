@@ -5,6 +5,7 @@ import { TemplateType } from '@/modules/template-repository/models/contract-temp
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState, type ContractTemplateState } from '@/types/contract-template-state'
 import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
@@ -38,6 +39,8 @@ const authStore = useAuthStore()
 
 const isPublishing = ref(false)
 
+const templatesStore = useContractTemplatesStore()
+
 const isManager = computed(() => {
   return authStore.user?.roles?.includes('TEMPLATE_MANAGER') ?? false
 })
@@ -48,6 +51,14 @@ const canArchive = computed(() => {
 })
 
 const showPublishButton = computed(() => {
+  return (
+    isManager.value &&
+    props.template.state === TemplateState.registered &&
+    props.template.template_type === TemplateType.frameContract
+  )
+})
+
+const showRegisterButton = computed(() => {
   return (
     isManager.value &&
     props.template.state === TemplateState.approved &&
@@ -85,13 +96,20 @@ const publish = async () => {
   }
 }
 
-const exportPdf = () => {
-  alert('not implemented yet')
+async function register() {
+  try {
+    const registered = await contractTemplateService.register({
+      did: props.template.did,
+    })
+
+    await templatesStore.loadTemplates()
+    await router.push({ name: ROUTES.TEMPLATES.LIST, params: { did: registered.did } })
+  } catch {}
 }
 </script>
 
 <template>
-  <button :class="$attrs.class" @click="exportPdf">Export PDF</button>
+  <button v-if="showRegisterButton" :class="$attrs.class" @click="register">Register</button>
   <button v-if="showPublishButton" :class="$attrs.class" :disabled="isPublishing" @click="publish">
     <span v-if="isPublishing" class="loading loading-sm loading-spinner"></span>
     Publish

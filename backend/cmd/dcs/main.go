@@ -16,8 +16,6 @@ import (
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
-	externaltargetsystemapi "digital-contracting-service/gen/external_target_system_api"
-	orchestrationwebhooks "digital-contracting-service/gen/orchestration_webhooks"
 	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
@@ -31,13 +29,16 @@ import (
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
+	"digital-contracting-service/internal/base/validation"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
-	"digital-contracting-service/internal/pdfgeneration/c2pa"
+	pdfpkg "digital-contracting-service/internal/pdfgeneration"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -165,10 +166,6 @@ func main() {
 	cweCronJob := contractworkflowengine2.CronJob{DB: db, CRepo: &cweRepo}
 	cweCronJob.Start(ctx, db)
 
-	smCRepo := smrepo.PostgresContractRepo{
-		IPFSClient: ipfsAPIClient,
-	}
-
 	aRepo := pq.PostgresAuditTrailRepository{}
 
 	tsaURL := os.Getenv("TSA_URL")
@@ -275,8 +272,6 @@ func main() {
 		log.Fatalf(ctx, err, "load crypto provider certificate chain from file")
 	}
 
-	tsaCfg := c2pa.TSAConfig{URL: os.Getenv("TSA_URL")}
-
 	// Probe crypto provider liveness before accepting traffic.
 	if cryptoProviderURL == "" {
 		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_URL is required")
@@ -294,7 +289,32 @@ func main() {
 		log.Fatalf(ctx, err, "status list service not reachable at %s", statusListServiceURL)
 	}
 	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
-	statusListPublisher := c2pa.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
+	statusListPublisher := provenance.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
+
+	// Initialize pdf-core context IRI — used as @context in every JSON-LD envelope.
+	// In co-deployment, points at the pdf-core ontology context endpoint.
+	// Swap to a registered w3id IRI in future without any code change.
+	pdfCoreContextIRI := os.Getenv("PDF_CORE_CONTEXT_IRI")
+	if pdfCoreContextIRI == "" {
+		log.Fatalf(ctx, nil, "PDF_CORE_CONTEXT_IRI is required")
+	}
+	pdfpkg.SetVocabIRI(pdfCoreContextIRI + "#")
+	validation.SetVocabIRI(pdfCoreContextIRI + "#")
+
+	// Initialize pdf-core client (PDF rendering + C2PA provenance microservice).
+	pdfCoreURL := os.Getenv("PDF_CORE_URL")
+	if pdfCoreURL == "" {
+		log.Fatalf(ctx, nil, "PDF_CORE_URL is required")
+	}
+	if err := probeHTTP(pdfCoreURL + "/version"); err != nil {
+		log.Fatalf(ctx, err, "pdf-core not reachable at %s", pdfCoreURL)
+	}
+	pdfCoreClient := pdfcore.New(pdfCoreURL)
+
+	smCRepo := smrepo.PostgresContractRepo{
+		IPFSClient: ipfsAPIClient,
+		PDFCore:    pdfCoreClient,
+	}
 
 	// Initialize the service.
 	var (
@@ -302,8 +322,6 @@ func main() {
 		contractStorageArchiveSvc       contractstoragearchive.Service
 		contractWorkflowEngineSvc       contractworkflowengine.Service
 		dcsToDcsSvc                     dcstodcs.Service
-		externalTargetSystemAPISvc      externaltargetsystemapi.Service
-		orchestrationWebhooksSvc        orchestrationwebhooks.Service
 		pdfGenerationSvc                pdfgeneration.Service
 		processAuditAndComplianceSvc    processauditandcompliance.Service
 		signatureManagementSvc          signaturemanagement.Service
@@ -312,15 +330,16 @@ func main() {
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
-		authSvc = service.NewAuth(presentationRepo)
+		authSvc, err = service.NewAuth(db, presentationRepo)
+		if err != nil {
+			log.Fatalf(ctx, err, "auth service init failed")
+		}
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, ipfsAPIClient, archiveNotaryClient, tsaClient)
 		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
-		externalTargetSystemAPISvc = service.NewExternalTargetSystemAPI(jwtAuth)
-		orchestrationWebhooksSvc = service.NewOrchestrationWebhooks(jwtAuth)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, cryptoClient, tsaCfg, issuerDID, c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 	}
@@ -346,10 +365,9 @@ func main() {
 		IPFSClient: ipfsAPIClient,
 		CRepo:      &cweRepo,
 		TRepo:      &ctRepo,
-		Signer:     cryptoClient,
-		TSACfg:     tsaCfg,
+		PDFCore:    pdfCoreClient,
 		IssuerDID:  issuerDID,
-		VCIssuer:   c2pa.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
+		VCIssuer:   provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
 	}
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {
@@ -364,8 +382,6 @@ func main() {
 		contractStorageArchiveEndpoints       *contractstoragearchive.Endpoints
 		contractWorkflowEngineEndpoints       *contractworkflowengine.Endpoints
 		dcsToDcsEndpoints                     *dcstodcs.Endpoints
-		externalTargetSystemAPIEndpoints      *externaltargetsystemapi.Endpoints
-		orchestrationWebhooksEndpoints        *orchestrationwebhooks.Endpoints
 		pdfGenerationEndpoints                *pdfgeneration.Endpoints
 		processAuditAndComplianceEndpoints    *processauditandcompliance.Endpoints
 		signatureManagementEndpoints          *signaturemanagement.Endpoints
@@ -385,12 +401,6 @@ func main() {
 		dcsToDcsEndpoints = dcstodcs.NewEndpoints(dcsToDcsSvc)
 		dcsToDcsEndpoints.Use(debug.LogPayloads())
 		dcsToDcsEndpoints.Use(log.Endpoint)
-		externalTargetSystemAPIEndpoints = externaltargetsystemapi.NewEndpoints(externalTargetSystemAPISvc)
-		externalTargetSystemAPIEndpoints.Use(debug.LogPayloads())
-		externalTargetSystemAPIEndpoints.Use(log.Endpoint)
-		orchestrationWebhooksEndpoints = orchestrationwebhooks.NewEndpoints(orchestrationWebhooksSvc)
-		orchestrationWebhooksEndpoints.Use(debug.LogPayloads())
-		orchestrationWebhooksEndpoints.Use(log.Endpoint)
 		pdfGenerationEndpoints = pdfgeneration.NewEndpoints(pdfGenerationSvc)
 		pdfGenerationEndpoints.Use(debug.LogPayloads())
 		pdfGenerationEndpoints.Use(log.Endpoint)
@@ -443,7 +453,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, externalTargetSystemAPIEndpoints, orchestrationWebhooksEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:

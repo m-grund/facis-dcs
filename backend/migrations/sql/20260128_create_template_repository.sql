@@ -1,4 +1,4 @@
-CREATE TYPE contract_template_state AS ENUM ('DRAFT', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'PUBLISHED', 'DELETED', 'DEPRECATED');
+CREATE TYPE contract_template_state AS ENUM ('DRAFT', 'SUBMITTED', 'REJECTED', 'REVIEWED', 'APPROVED', 'REGISTERED', 'PUBLISHED', 'DELETED', 'DEPRECATED');
 
 
 CREATE TYPE contract_template_type AS ENUM ('FRAME_CONTRACT', 'SUB_CONTRACT');
@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS contract_templates
     document_number VARCHAR(255),
 
     version         INT NOT NULL DEFAULT 1,
+
+    base_template VARCHAR(255),
 
     name            VARCHAR(255),
     description     TEXT,
@@ -72,6 +74,8 @@ CREATE TABLE IF NOT EXISTS contract_templates_history
 
     document_number VARCHAR(255),
     version         INT NOT NULL,
+
+    base_template VARCHAR(255),
 
     name            VARCHAR(255),
     description     TEXT,

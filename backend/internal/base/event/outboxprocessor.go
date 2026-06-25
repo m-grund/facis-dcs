@@ -12,6 +12,7 @@ import (
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/db"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
@@ -128,6 +129,13 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		if err != nil {
 			return fmt.Errorf("could not read log CID: %w", err)
 		}
+	} else if event.Component == componenttype.Authentication.String() {
+		if event.DID != nil && len(*event.DID) > 1 {
+			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
+			if err != nil {
+				return fmt.Errorf("could not read log CID: %w", err)
+			}
+		}
 	}
 
 	auditLogEntry := datatype.AuditLogEntry{
@@ -152,6 +160,13 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		TsaSignature:  tsaResult,
 	}
 
+	// sanity check that our cert is ok
+	isVerified, verifyErr := tsa.Verify(tsaResult, auditLogEntry)
+	if !isVerified {
+		return fmt.Errorf("timestamp verification failed for event %d: %w", event.ID, verifyErr)
+	}
+	log.Printf("timestamp verification succeeded for event %d", event.ID)
+
 	result, err := j.IPFSClient.CreateFile(ctx, signedAuditLogEntry)
 	if err != nil {
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
@@ -160,6 +175,12 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	if isResourceDID(event.DID) {
 		if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
 			return fmt.Errorf("could not update log CID: %w", err)
+		}
+	} else if event.Component == componenttype.Authentication.String() {
+		if event.DID != nil && len(*event.DID) > 1 {
+			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
+				return fmt.Errorf("could not update log CID: %w", err)
+			}
 		}
 	}
 

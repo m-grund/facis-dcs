@@ -27,7 +27,11 @@ import {
 } from '@template-repository/models/contract-template'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { ContractTemplateCreateRequest, ContractTemplateUpdateRequest } from '@/models/requests/template-request'
+import type {
+  ContractTemplateCreateRequest,
+  ContractTemplateUpdateManageRequest,
+  ContractTemplateUpdateRequest,
+} from '@/models/requests/template-request'
 import type {
   SemanticConditionParameter,
   SemanticParameterOperator,
@@ -79,7 +83,7 @@ const defaultState: Readonly<TemplateDraftState> = {
   sla: null,
   subTemplateSnapshots: [],
   templateType: TemplateType.subContract,
-  state: null,
+  state: undefined,
   document_number: null,
   version: null,
   updated_at: null,
@@ -143,6 +147,19 @@ export const useDcsDraftStore = defineStore(storeId, {
         template_data: this.templateDocument,
       }
     },
+    templateUpdateManageRequestData(): ContractTemplateUpdateManageRequest | null {
+      if (!this.did || !this.updated_at) return null
+      return {
+        did: this.did,
+        state: this.state,
+        updated_at: this.updated_at,
+        document_number: this.document_number ?? undefined,
+        template_type: this.templateType,
+        name: this.name,
+        description: this.description,
+        template_data: this.templateDocument,
+      }
+    },
   },
   actions: {
     /** Loads the canonical JSON-LD envelope plus DB-level metadata into store state. */
@@ -161,7 +178,7 @@ export const useDcsDraftStore = defineStore(storeId, {
           name: meta.name ? meta.name : (metadata['dcs:title'] ?? ''),
           description: meta.description ? meta.description : (metadata['dcs:description'] ?? ''),
           templateType: templateType !== TemplateType.subContract ? templateType : derivedTemplateType,
-          state: meta.state ?? null,
+          state: meta.state ?? undefined,
           version: meta.version ?? null,
           document_number: meta.document_number ?? null,
           updated_at: meta.updated_at ?? null,
@@ -178,7 +195,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         name: meta.name,
         description: meta.description,
         templateType,
-        state: meta.state ?? null,
+          state: meta.state ?? undefined,
         version: meta.version ?? null,
         document_number: meta.document_number ?? null,
         updated_at: meta.updated_at ?? null,
@@ -348,6 +365,9 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
     updateDescription(description: string): void {
       this.description = description
+    },
+    updateDocumentNumber(documentNumber: string): void {
+      this.document_number = documentNumber || null
     },
     addSubTemplateSnapshot(template: ContractTemplate): void {
       const snapshot: SubTemplateSnapshot = {

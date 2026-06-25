@@ -54,6 +54,7 @@ type ContractTemplate struct {
 	UpdatedAt      time.Time      `db:"updated_at"`
 	Responsible    *Responsible   `db:"responsible"`
 	TemplateData   *datatype.JSON `db:"template_data"`
+	BaseTemplate   *string        `db:"base_template"`
 }
 
 type ContractTemplateMetadata struct {
@@ -68,6 +69,9 @@ type ContractTemplateMetadata struct {
 	CreatedAt      time.Time    `db:"created_at"`
 	Responsible    *Responsible `db:"responsible"`
 	UpdatedAt      time.Time    `db:"updated_at"`
+	BaseTemplate   *string      `db:"base_template"`
+	Outdated       *bool        `db:"outdated"`
+	LatestDID      *string      `db:"latest_did"`
 }
 
 type ContractTemplateProcessData struct {
@@ -104,6 +108,7 @@ type ContractTemplateHistory struct {
 	UpdatedAt      time.Time      `db:"updated_at"`
 	Responsible    *Responsible   `db:"responsible"`
 	TemplateData   *datatype.JSON `db:"template_data"`
+	BaseTemplate   *string        `json:"base_template"`
 }
 
 type SearchValues struct {
@@ -117,6 +122,12 @@ type SearchValues struct {
 	TemplateData   string
 }
 
+type ContractTemplatePDFState struct {
+	IPFSCID         string `db:"pdf_ipfs_cid"`
+	RendererVersion string `db:"pdf_renderer_version"`
+	C2PAState       string `db:"pdf_c2pa_state"`
+}
+
 type ContractTemplateRepo interface {
 	CopyFromDID(ctx context.Context, tx *sqlx.Tx, copyDID string, newDID string) (int, error)
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
@@ -128,4 +139,6 @@ type ContractTemplateRepo interface {
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplateProcessData, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractTemplateUpdateData) error
+	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplatePDFState, error)
+	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractTemplatePDFState) error
 }

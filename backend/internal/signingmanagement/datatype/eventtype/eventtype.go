@@ -9,6 +9,7 @@ type EventType string
 
 const (
 	Apply                EventType = "APPLY_SIGNATURE"
+	Applied              EventType = "APPLIED_SIGNATURE"
 	Validate             EventType = "VALIDATE_SIGNATURE"
 	Verify               EventType = "VERIFY_SIGNATURE"
 	RetrieveAll          EventType = "RETRIEVE_ALL_CONTRACTS"
@@ -17,12 +18,12 @@ const (
 	ComplianceValidation EventType = "COMPLIANCE_VALIDATION"
 	Audit                EventType = "AUDIT_CONTRACT_TEMPLATE"
 	SigningRequest       EventType = "SIGNING_REQUEST"
-	Applied              EventType = "APPLIED"
 	Search               EventType = "SEARCH"
 )
 
 var validStates = map[EventType]bool{
 	Apply:                true,
+	Applied:              true,
 	Validate:             true,
 	Verify:               true,
 	RetrieveAll:          true,
@@ -31,7 +32,6 @@ var validStates = map[EventType]bool{
 	ComplianceValidation: true,
 	Audit:                true,
 	SigningRequest:       true,
-	Applied:              true,
 	Search:               true,
 }
 

@@ -13,6 +13,7 @@ var ContractTemplateCreateRequest = Type("ContractTemplateCreateRequest", func()
 
 	Attribute("name", String, "The name of the contract template")
 	Attribute("description", String, "A description for that template")
+	Attribute("document_number", String, "A document number for the contract template")
 	Attribute("template_data", Any, "The template data of the contract template")
 
 	Required("template_type")
@@ -179,6 +180,7 @@ var ContractTemplateItem = Type("ContractTemplateItem", func() {
 	Attribute("created_at", String, "Created at")
 	Attribute("updated_at", String, "Updated at")
 	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
+	Attribute("latest_did", String, "The DID of the newest contract template")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
 })
@@ -378,7 +380,7 @@ var ContractTemplateRegisterRequest = Type("ContractTemplateRegisterRequest", fu
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 	Attribute("version", Int, "The version of the contract template")
 
-	Required("did", "version")
+	Required("did")
 })
 
 var ContractTemplateRegisterResponse = Type("ContractTemplateRegisterResponse", func() {
@@ -451,6 +453,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Creator")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateCreateRequest)
@@ -474,6 +477,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Creator")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateCopyRequest)
@@ -501,6 +505,7 @@ var _ = Service("TemplateRepository", func() {
 			Scope("Template Creator")
 			Scope("Template Reviewer")
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateSubmitRequest)
@@ -527,6 +532,7 @@ var _ = Service("TemplateRepository", func() {
 		Security(JWTAuth, func() {
 			Scope("Template Creator")
 			Scope("Template Reviewer")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateUpdateRequest)
@@ -543,7 +549,7 @@ var _ = Service("TemplateRepository", func() {
 		})
 	})
 
-	// POST /template/update
+	// POST /template/update_manage
 	Method("update_manage", func() {
 		Description("update template data or status.")
 		Meta("dcs:requirements", "DCS-IR-TR-07")
@@ -562,7 +568,7 @@ var _ = Service("TemplateRepository", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			POST("/template/update")
+			POST("/template/update_manage")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -705,6 +711,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Reviewer")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateVerifyRequest)
@@ -730,6 +737,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateApproveRequest)
@@ -755,6 +763,7 @@ var _ = Service("TemplateRepository", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Template Approver")
+			Scope("Template Manager")
 		})
 
 		Payload(ContractTemplateRejectRequest)
@@ -829,7 +838,6 @@ var _ = Service("TemplateRepository", func() {
 		Meta("dcs:ui", "Template Management Dashboard")
 
 		Security(JWTAuth, func() {
-			Scope("Template Manager")
 			Scope("Auditor")
 			Scope("Compliance Officer")
 		})

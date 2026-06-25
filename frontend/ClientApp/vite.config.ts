@@ -58,6 +58,17 @@ export default defineConfig(({ mode, command }) => {
           target: env.DCS_API_TARGET || 'http://localhost:8991',
           changeOrigin: true,
         },
+        // Proxy Hydra's public OIDC paths so the browser never needs a direct
+        // Hydra address. Set DCS_HYDRA_TARGET to the Hydra public port
+        // (e.g. http://localhost:4444 or the NodePort URL in a local cluster).
+        '/oauth2': {
+          target: env.DCS_HYDRA_TARGET || 'http://localhost:4444',
+          changeOrigin: true,
+        },
+        '/.well-known': {
+          target: env.DCS_HYDRA_TARGET || 'http://localhost:4444',
+          changeOrigin: true,
+        },
       },
     },
   }

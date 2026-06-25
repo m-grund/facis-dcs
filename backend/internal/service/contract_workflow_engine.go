@@ -7,8 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"digital-contracting-service/internal/base/datatype/componenttype"
-	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
+	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	templaterepository "digital-contracting-service/gen/template_repository"
@@ -16,6 +15,7 @@ import (
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
 	"digital-contracting-service/internal/contractworkflowengine/command"
@@ -25,8 +25,8 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationactionflag"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	contracttemplatequery "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 	"digital-contracting-service/internal/middleware"
+	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 
 	"github.com/jmoiron/sqlx"
@@ -79,31 +79,17 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	qry := contracttemplatequery.GetTemplateDataByDIDQry{
-		DID: req.Did,
-	}
-	queryHandler := contracttemplatequery.GetTemplateDataByDIDHandler{
-		Ctx:      ctx,
-		DB:       s.DB,
-		CTRepo:   s.CTRepo,
-		FCClient: s.FCClient,
-	}
-	contractData, err := queryHandler.Handle(ctx, qry)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
 	cmd := command.CreateCmd{
-		DID:          *did,
-		TemplateDID:  req.Did,
-		CreatedBy:    middleware.GetParticipantID(ctx),
-		HolderDID:    middleware.GetHolderDID(ctx),
-		UserRoles:    middleware.GetUserRoles(ctx),
-		ContractData: contractData,
+		DID:         *did,
+		TemplateDID: req.Did,
+		CreatedBy:   middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	createHandler := command.Creator{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:     s.DB,
+		CRepo:  s.CRepo,
+		CTRepo: s.CTRepo,
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
@@ -311,19 +297,23 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 		}
 
 		contracts = append(contracts, &contractworkflowengine.ContractItem{
-			Did:             item.DID,
-			ContractVersion: item.ContractVersion,
-			State:           item.State.String(),
-			Name:            item.Name,
-			Description:     item.Description,
-			CreatedBy:       item.CreatedBy,
-			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
-			StartDate:       startDate,
-			ExpDate:         expDate,
-			ExpPolicy:       expPolicy,
-			ExpNoticePeriod: item.ExpNoticePeriod,
-			Responsible:     item.Responsible,
+			Did:                  item.DID,
+			ContractVersion:      item.ContractVersion,
+			State:                item.State.String(),
+			Name:                 item.Name,
+			Description:          item.Description,
+			CreatedBy:            item.CreatedBy,
+			CreatedAt:            item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:            item.UpdatedAt.Format(time.RFC3339),
+			TemplateDid:          item.TemplateDID,
+			TemplateVersion:      item.TemplateVersion,
+			StartDate:            startDate,
+			ExpDate:              expDate,
+			ExpPolicy:            expPolicy,
+			ExpNoticePeriod:      item.ExpNoticePeriod,
+			Responsible:          item.Responsible,
+			LatestTemplateDid:    item.LatestTemplateDID,
+			TemplateIsDeprecated: item.TemplateIsDeprecated,
 		})
 	}
 
@@ -441,6 +431,8 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       contractResult.UpdatedAt.Format(time.RFC3339),
 		ContractData:    contractResult.ContractData,
+		TemplateDid:     contractResult.TemplateDID,
+		TemplateVersion: contractResult.TemplateVersion,
 		Negotiations:    negotiationList,
 		StartDate:       startDate,
 		ExpDate:         expDate,
@@ -500,6 +492,8 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, re
 			CreatedBy:       item.CreatedBy,
 			CreatedAt:       item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:       item.UpdatedAt.Format(time.RFC3339),
+			TemplateDid:     item.TemplateDID,
+			TemplateVersion: item.TemplateVersion,
 			StartDate:       startDate,
 			ExpDate:         expDate,
 			ExpPolicy:       expPolicy,
@@ -879,4 +873,44 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 	}
 
 	return history, nil
+}
+
+// retrieve templates
+func (s *contractWorkflowEnginesrvc) RetrieveTemplates(ctx context.Context, req *contractworkflowengine.ApprovedContractTemplateRetrieveRequest) (res []*contractworkflowengine.ApprovedContractTemplateRetrieveResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	qry := contracttemplate2.GetAllApprovedTemplatesQry{
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	queryHandler := contracttemplate2.GetAllApprovedTemplateHandler{
+		DB:     s.DB,
+		CTRepo: s.CTRepo,
+	}
+	result, err := queryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	var contractTemplates []*contractworkflowengine.ApprovedContractTemplateRetrieveResponse
+	for _, item := range result {
+		contractTemplates = append(contractTemplates, &contractworkflowengine.ApprovedContractTemplateRetrieveResponse{
+			Did:            item.DID,
+			DocumentNumber: item.DocumentNumber,
+			Version:        item.Version,
+			State:          item.State.String(),
+			TemplateType:   item.TemplateType.String(),
+			Name:           item.Name,
+			Description:    item.Description,
+			CreatedBy:      item.CreatedBy,
+			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
+			Responsible:    item.Responsible,
+		})
+	}
+
+	return contractTemplates, nil
 }

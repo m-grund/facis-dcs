@@ -1,90 +1,86 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
-import os
 import time
-from pathlib import Path
 from typing import Any
 
 import jwt
 from jwt.algorithms import ECAlgorithm
 
+from dcs_wallet.credential import decode_jwt_payload, load_credential_claims, load_credential_sd_jwt
+from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, join_sd_jwt, sd_hash, split_sd_jwt
+
 VP_FORMAT = "dc+sd-jwt"
-
-
-def _wallet_root() -> Path:
-    return Path(__file__).resolve().parent.parent
-
-
-def _keys_dir() -> Path:
-    override = os.environ.get("DCS_WALLET_KEYS_DIR", "").strip()
-    if override:
-        return Path(override)
-    return _wallet_root() / "keys"
+_REQUIRED_EC_PUBLIC_FIELDS = ("kty", "crv", "x", "y")
 
 
 def load_jwk(filename: str) -> dict[str, Any]:
-    path = _keys_dir() / filename
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "keys" / filename
     if not path.is_file():
         raise FileNotFoundError(
-            f"{path} not found — run: python3 testWallet/scripts/generate_dev_keys.py"
+            f"{path} not found — run: python3 testWallet/scripts/generate_keys.py --yes && python3 testWallet/scripts/issue_credentials.py"
         )
     with path.open(encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def load_credential(name: str) -> dict[str, Any]:
-    stem = name.removesuffix(".json")
-    path = _wallet_root() / "credentials" / f"{stem}.json"
-    if not path.is_file():
-        raise FileNotFoundError(
-            f"{path} not found — run: python3 testWallet/scripts/generate_dev_keys.py "
-            f"(needs testWallet/credentials/{stem}.template.json)"
-        )
-    with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+def _public_cnf_jwk(jwk: dict[str, Any]) -> dict[str, Any]:
+    return {k: jwk[k] for k in _REQUIRED_EC_PUBLIC_FIELDS if k in jwk}
 
 
-def build_vp_token(*, credential_name: str, nonce: str, client_id: str = "") -> str:
-    credential_claims = load_credential(credential_name)
-    issuer_name = os.environ.get("DCS_ISSUER_KEY_FILE", "issuer-dev.jwk")
-    wallet_name = os.environ.get("DCS_WALLET_KEY_FILE", "wallet.jwk")
-    issuer_jwk = load_jwk(issuer_name)
-    wallet_jwk = load_jwk(wallet_name)
+def _assert_holder_binding_matches_credential(*, credential_claims: dict[str, Any], wallet_jwk: dict[str, Any]) -> None:
+    cnf = credential_claims.get("cnf")
+    if not isinstance(cnf, dict) or not isinstance(cnf.get("jwk"), dict):
+        raise ValueError("credential is not holder-bound: missing cnf.jwk in issuer-signed SD-JWT")
 
-    holder_did = str(credential_claims["sub"])
-    now = int(time.time())
-    claims = dict(credential_claims)
-    claims["iat"] = now
+    credential_public = _public_cnf_jwk(cnf["jwk"])
+    wallet_public = _public_cnf_jwk(wallet_jwk)
+    missing = [field for field in _REQUIRED_EC_PUBLIC_FIELDS if field not in credential_public]
+    if missing:
+        raise ValueError(f"credential cnf.jwk is incomplete: missing {', '.join(missing)}")
+    if credential_public != wallet_public:
+        raise ValueError("wallet.jwk does not match the credential cnf.jwk holder key")
 
-    credential_jwt = jwt.encode(
-        claims,
-        ECAlgorithm.from_jwk(json.dumps(issuer_jwk)),
-        algorithm="ES256",
-        headers={"kid": issuer_jwk.get("kid", "")},
-    )
 
-    sd_hash = base64.urlsafe_b64encode(hashlib.sha256(credential_jwt.encode()).digest()).rstrip(b"=").decode()
+def build_kb_jwt(*, issuer_jwt: str, disclosures: list[str], nonce: str, aud: str, wallet_jwk: dict[str, Any], sd_alg: str = DEFAULT_SD_ALG) -> str:
+    if not nonce:
+        raise ValueError("nonce is required for a standards-compliant KB-JWT")
+    if not aud:
+        raise ValueError("aud/client_id is required for a standards-compliant KB-JWT")
+
     kb_claims = {
-        "sub": holder_did,
+        "iat": int(time.time()),
+        "aud": aud,
         "nonce": nonce,
-        "iat": now,
-        "sd_hash": sd_hash,
+        "sd_hash": sd_hash(issuer_jwt, disclosures, sd_alg=sd_alg),
     }
-    if client_id:
-        kb_claims["aud"] = client_id
-    kb_jwt = jwt.encode(
+    headers: dict[str, Any] = {"typ": KB_JWT_TYP, "alg": "ES256"}
+    return jwt.encode(
         kb_claims,
         ECAlgorithm.from_jwk(json.dumps(wallet_jwk)),
         algorithm="ES256",
-        headers={"kid": wallet_jwk.get("kid", "")},
+        headers=headers,
     )
 
-    envelope = {
-        "format": VP_FORMAT,
-        "credential_jwt": credential_jwt,
-        "kb_jwt": kb_jwt,
-    }
-    return json.dumps(envelope, separators=(",", ":"))
+
+def build_vp_token(*, credential_name: str, nonce: str, client_id: str = "") -> str:
+    """Attach a fresh KB-JWT (aud/nonce from the OpenID4VP request) to a stored credential."""
+    raw_credential = load_credential_sd_jwt(credential_name)
+    issuer_jwt, disclosures, _stored_kb = split_sd_jwt(raw_credential)
+    issuer_payload = decode_jwt_payload(issuer_jwt)
+    credential_claims = load_credential_claims(credential_name)
+    wallet_jwk = load_jwk("wallet.jwk")
+
+    _assert_holder_binding_matches_credential(credential_claims=credential_claims, wallet_jwk=wallet_jwk)
+
+    kb_jwt = build_kb_jwt(
+        issuer_jwt=issuer_jwt,
+        disclosures=disclosures,
+        nonce=nonce,
+        aud=client_id,
+        wallet_jwk=wallet_jwk,
+        sd_alg=str(issuer_payload.get("_sd_alg") or DEFAULT_SD_ALG),
+    )
+    return join_sd_jwt(issuer_jwt, disclosures, kb_jwt)

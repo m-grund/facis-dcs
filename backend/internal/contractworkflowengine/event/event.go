@@ -476,3 +476,21 @@ func (e ContractExpired) EventType() string {
 func (e ContractExpired) GetDID() string {
 	return e.DID
 }
+
+// RetrieveAllTemplatesEvent is emitted when template data is retrieved.
+type RetrieveAllTemplatesEvent struct {
+	RetrievedBy string             `json:"retrieved_by"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	HolderDID   string             `json:"holder_did"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e RetrieveAllTemplatesEvent) EventType() string {
+	return eventtype.RetrieveAllTemplates.String()
+}
+
+// GetDID implements the Event interface.
+func (e RetrieveAllTemplatesEvent) GetDID() string {
+	return "*"
+}
