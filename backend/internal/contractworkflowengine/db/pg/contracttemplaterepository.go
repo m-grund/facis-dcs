@@ -14,7 +14,7 @@ import (
 type PostgresContractTemplateRepo struct {
 }
 
-func (r *PostgresContractTemplateRepo) ReadFrameContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateQueryResult, error) {
+func (r *PostgresContractTemplateRepo) ReadFrameContractTemplateDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateQueryResult, error) {
 	statement := `
         SELECT template_data, version
         FROM contract_templates

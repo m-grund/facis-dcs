@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"github.com/jmoiron/sqlx"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -30,6 +32,7 @@ type GetAllMetadataQry struct {
 	HolderDID   string
 	Pagination  datatype.Pagination
 	UserRoles   userrole.UserRoles
+	DIDDocument base.DIDDocument
 }
 
 type MetadataItem struct {
@@ -98,6 +101,11 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	did, err := query.DIDDocument.GetID()
+	if err != nil {
+		return nil, fmt.Errorf("could not get DID: %w", err)
+	}
+
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not create transaction: %w", err)
@@ -116,17 +124,17 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		}
 	}
 
-	negotiationTasks, err := h.NTRepo.ReadAllByNegotiator(ctx, tx, query.RetrievedBy)
+	negotiationTasks, err := h.NTRepo.ReadAllByNegotiator(ctx, tx, did)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all negotiation tasks: %w", err)
 	}
 
-	reviewerTasks, err := h.RTRepo.ReadAllByReviewer(ctx, tx, query.RetrievedBy)
+	reviewerTasks, err := h.RTRepo.ReadAllByReviewer(ctx, tx, did)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all review tasks: %w", err)
 	}
 
-	approvalTasks, err := h.ATRepo.ReadAllByApprover(ctx, tx, query.RetrievedBy)
+	approvalTasks, err := h.ATRepo.ReadAllByApprover(ctx, tx, did)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all review tasks: %w", err)
 	}

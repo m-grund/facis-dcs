@@ -19,7 +19,7 @@ func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo
 		return nil, err
 	}
 
-	contract, err := cRepo.ReadDataByID(ctx, tx, did)
+	contract, err := cRepo.ReadDataByDID(ctx, tx, did)
 	if err != nil {
 		return nil, err
 	}

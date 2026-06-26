@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -20,12 +22,13 @@ import (
 )
 
 type RejectCmd struct {
-	DID        string
-	UpdatedAt  time.Time
-	RejectedBy string
-	Reason     string
-	HolderDID  string
-	UserRoles  userrole.UserRoles
+	DID         string
+	UpdatedAt   time.Time
+	RejectedBy  string
+	Reason      string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
+	DIDDocument base.DIDDocument
 }
 
 type Rejecter struct {
@@ -36,6 +39,11 @@ type Rejecter struct {
 }
 
 func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
+
+	origin, err := cmd.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -60,7 +68,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		return errors.New("invalid contract state")
 	}
 
-	exist, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, cmd.RejectedBy)
+	exist, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, origin)
 	if err != nil {
 		return err
 	}
@@ -69,7 +77,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		return errors.New("invalid user")
 	}
 
-	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.RejectedBy, approvaltaskstate.Rejected.String())
+	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, origin, approvaltaskstate.Rejected.String())
 	if err != nil {
 		return fmt.Errorf("could not update approval task state: %w", err)
 	}

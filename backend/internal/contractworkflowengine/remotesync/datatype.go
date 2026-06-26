@@ -1,14 +1,13 @@
-package remote
+package remotesync
 
 import (
 	"time"
 
-	negotiationdescision "digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
-
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
+	negotiationdescision "digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
@@ -76,7 +75,7 @@ type ReviewTaskData struct {
 	CreatedAt time.Time
 }
 
-func ToReviewTaskData(tasks []ReviewTaskData) []db.ReviewTaskData {
+func toReviewTaskData(tasks []ReviewTaskData) []db.ReviewTaskData {
 	var reviewTasks []db.ReviewTaskData
 	for _, task := range tasks {
 		reviewTasks = append(reviewTasks, db.ReviewTaskData{
@@ -91,7 +90,7 @@ func ToReviewTaskData(tasks []ReviewTaskData) []db.ReviewTaskData {
 	return reviewTasks
 }
 
-func ToApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
+func toApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
 	var approvalTasks []db.ApprovalTaskData
 	for _, task := range tasks {
 		approvalTasks = append(approvalTasks, db.ApprovalTaskData{
@@ -106,7 +105,7 @@ func ToApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
 	return approvalTasks
 }
 
-func ToNegotiationTaskData(tasks []NegotiationTaskData) []db.NegotiationTaskData {
+func toNegotiationTaskData(tasks []NegotiationTaskData) []db.NegotiationTaskData {
 	var negotiationTasks []db.NegotiationTaskData
 	for _, task := range tasks {
 		negotiationTasks = append(negotiationTasks, db.NegotiationTaskData{
@@ -121,7 +120,7 @@ func ToNegotiationTaskData(tasks []NegotiationTaskData) []db.NegotiationTaskData
 	return negotiationTasks
 }
 
-func ToNegotiationData(tasks []NegotiationData) []db.NegotiationData {
+func toNegotiationData(tasks []NegotiationData) []db.NegotiationData {
 	var negotiations []db.NegotiationData
 	for _, task := range tasks {
 		negotiations = append(negotiations, db.NegotiationData{
@@ -136,7 +135,7 @@ func ToNegotiationData(tasks []NegotiationData) []db.NegotiationData {
 	return negotiations
 }
 
-func ToNegotiationDecisionData(tasks []NegotiationDecisionData) []db.NegotiationDecisionData {
+func toNegotiationDecisionData(tasks []NegotiationDecisionData) []db.NegotiationDecisionData {
 	var negotiationDecisions []db.NegotiationDecisionData
 	for _, task := range tasks {
 

@@ -173,26 +173,6 @@ type ContractUpdateData struct {
 	Responsible     *Responsible   `db:"responsible"`
 }
 
-type RemoteContractUpdateData struct {
-	DID             string         `db:"did"`
-	Origin          string         `db:"origin"`
-	ContractVersion int            `db:"contract_version"`
-	State           string         `db:"state"`
-	CreatedBy       string         `db:"created_by"`
-	CreatedAt       time.Time      `db:"created_at"`
-	UpdatedAt       time.Time      `db:"updated_at"`
-	StartDate       *time.Time     `db:"start_date"`
-	ExpDate         *time.Time     `db:"exp_date"`
-	ExpPolicy       *string        `db:"exp_policy"`
-	ExpNoticePeriod *int           `db:"exp_notice_period"`
-	Name            *string        `db:"name"`
-	Description     *string        `db:"description"`
-	Responsible     *Responsible   `db:"responsible"`
-	ContractData    *datatype.JSON `db:"contract_data"`
-	TemplateDID     string         `db:"template_did"`
-	TemplateVersion int            `db:"template_version"`
-}
-
 type ContractHistory struct {
 	ID              string         `db:"id"`
 	Origin          string         `db:"origin"`
@@ -230,17 +210,18 @@ type ContractPDFState struct {
 }
 
 type ContractRepo interface {
-	Create(ctx context.Context, tx *sqlx.Tx, data Contract) (*time.Time, error)
+	Create(ctx context.Context, tx *sqlx.Tx, data Contract) error
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractHistory, error)
-	ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*Contract, error)
+	ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*Contract, error)
+	ExistsByDID(ctx context.Context, tx *sqlx.Tx, did string) (bool, error)
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)
 	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]ContractMetadata, error)
 	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues, pagination datatype.Pagination) ([]ContractMetadata, error)
 	ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractUpdateData) error
-	RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data RemoteContractUpdateData) error
+	RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data Contract) error
 	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractPDFState, error)
 	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractPDFState) error
 }

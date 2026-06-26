@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -27,6 +29,7 @@ type NegotiationCmd struct {
 	UpdatedAt     time.Time
 	HolderDID     string
 	UserRoles     userrole.UserRoles
+	DIDDocument   base.DIDDocument
 }
 
 type Negotiator struct {
@@ -38,6 +41,11 @@ type Negotiator struct {
 }
 
 func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
+
+	origin, err := cmd.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -65,13 +73,13 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.NegotiatedBy)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid user")
+		return errors.New("invalid permissions")
 	}
 
 	negotiators, err := h.NTRepo.ReadNegotiatorsForDID(ctx, tx, cmd.DID)

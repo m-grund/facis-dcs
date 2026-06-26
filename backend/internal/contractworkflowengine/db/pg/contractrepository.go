@@ -19,22 +19,22 @@ import (
 type PostgresContractRepo struct {
 }
 
-func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) (*time.Time, error) {
+func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) error {
+
+	if data.CreatedAt.IsZero() {
+		data.CreatedAt = time.Now()
+	}
+
 	statement := `
         INSERT INTO contracts (
             did, origin, created_by, state, name,
             description, contract_data, template_did, template_version, responsible
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING created_at
     `
-	var createdAt time.Time
-	err := tx.GetContext(ctx, &createdAt, statement,
+	_, err := tx.ExecContext(ctx, statement,
 		data.DID, data.Origin, data.CreatedBy, data.State, data.Name,
 		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion, data.Responsible)
-	if err != nil {
-		return nil, err
-	}
-	return &createdAt, nil
+	return err
 }
 
 func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
@@ -94,7 +94,7 @@ func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx
 	return ct, nil
 }
 
-func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
+func (r *PostgresContractRepo) ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
@@ -111,6 +111,15 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 		return nil, err
 	}
 	return &ct, nil
+}
+
+func (r *PostgresContractRepo) ExistsByDID(ctx context.Context, tx *sqlx.Tx, did string) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM contracts_effective WHERE did = $1)`
+	if err := tx.GetContext(ctx, &exists, query, did); err != nil {
+		return false, err
+	}
+	return exists, nil
 }
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
@@ -251,7 +260,7 @@ func (r *PostgresContractRepo) Update(ctx context.Context, tx *sqlx.Tx, data db.
 	return err
 }
 
-func (r *PostgresContractRepo) RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data db.RemoteContractUpdateData) error {
+func (r *PostgresContractRepo) RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data db.Contract) error {
 	query, params, err := createRemoteQuery(data)
 	if err != nil {
 		return err
@@ -356,7 +365,7 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	return &fullQuery, params, nil
 }
 
-func createRemoteQuery(data db.RemoteContractUpdateData) (*string, []interface{}, error) {
+func createRemoteQuery(data db.Contract) (*string, []interface{}, error) {
 	queryBase := `UPDATE contracts SET `
 	var columns []string
 	var params []interface{}

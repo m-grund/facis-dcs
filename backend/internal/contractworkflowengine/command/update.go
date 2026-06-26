@@ -61,7 +61,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		}
 	}(tx)
 
-	oldData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+	oldData, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract data: %w", err)
 	}

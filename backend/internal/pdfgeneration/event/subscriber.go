@@ -127,7 +127,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	}(tx)
 
 	// Fetch current contract state and JSON-LD.
-	contract, err := s.CRepo.ReadDataByID(ctx, tx, cweEvt.DID)
+	contract, err := s.CRepo.ReadDataByDID(ctx, tx, cweEvt.DID)
 	if err != nil {
 		return fmt.Errorf("read contract %s: %w", cweEvt.DID, err)
 	}

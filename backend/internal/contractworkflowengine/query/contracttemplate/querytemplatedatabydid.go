@@ -91,7 +91,7 @@ func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx con
 		}
 	}(tx)
 
-	templateData, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, templateDID)
+	templateData, err := h.CTRepo.ReadFrameContractTemplateDataByDID(ctx, tx, templateDID)
 	if err != nil {
 		return nil, fmt.Errorf("could not read frame contract template data: %w", err)
 	}

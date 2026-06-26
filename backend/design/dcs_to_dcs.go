@@ -83,8 +83,10 @@ var DCSToDCSContractNegotiationDecisionItem = Type("DCSToDCSContractNegotiationD
 	Required("id", "negotiation_id", "negotiator")
 })
 
-var DCSToDCSContractCreateRequest = Type("DCSToDCSContractCreateRequest", func() {
-	Description("Contract create request")
+var DCSToDCSContractSyncRequest = Type("DCSToDCSContractSyncRequest", func() {
+	Description("Contract sync request")
+
+	Attribute("origin_did", String, "The origin did of this message")
 
 	Attribute("contract", DCSToDCSContractItem, "The contract")
 	Attribute("review_tasks", ArrayOf(DCSToDCSContractReviewTaskItem), "The review tasks for that contract")
@@ -93,103 +95,52 @@ var DCSToDCSContractCreateRequest = Type("DCSToDCSContractCreateRequest", func()
 	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
 	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
 
-	Required("contract", "review_tasks", "approval_tasks", "negotiation_tasks")
+	Required("origin_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks")
 })
 
-var DCSToDCSContractCreateResponse = Type("DCSToDCSContractCreateResponse", func() {
-	Description("Result for creating a contract")
+var DCSToDCSContractSyncResponse = Type("DCSToDCSContractSyncResponse", func() {
+	Description("Result for syncing the contract")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 
 	Required("did")
-})
-
-var DCSToDCSContractUpdateRequest = Type("DCSToDCSContractUpdateRequest", func() {
-	Description("Contract update request")
-
-	Attribute("contract", DCSToDCSContractItem, "The contract")
-	Attribute("review_tasks", ArrayOf(DCSToDCSContractReviewTaskItem), "The review tasks for that contract")
-	Attribute("approval_tasks", ArrayOf(DCSToDCSContractApprovalTaskItem), "The approval tasks for that contract")
-	Attribute("negotiation_tasks", ArrayOf(DCSToDCSContractNegotiationTaskItem), "The negotiation tasks for that contract")
-	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
-	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
-
-	Required("contract", "review_tasks", "approval_tasks", "negotiation_tasks")
-})
-
-var DCSToDCSContractUpdateResponse = Type("DCSToDCSContractUpdateResponse", func() {
-	Description("Result for creating a contract")
-
-	Attribute("did", String, "Decentralized Identifier of the contract")
-
-	Required("did")
-})
-
-var DCSToDCSContractStatusRequest = Type("DCSToDCSContractStatusRequest", func() {
-	Description("Request the status of the contract on this peer")
-})
-
-var DCSToDCSContractStatusResponse = Type("DCSToDCSContractStatusResponse", func() {
-	Description("Result for the status")
-
-	Attribute("did", String, "Decentralized Identifier of the contract")
-	Attribute("status", Boolean, "Whether the contract exists (true) or not (false)")
-
-	Required("did", "status")
 })
 
 var _ = Service("DcsToDcs", func() {
 	Description("DCS supports direct interoperability between two or more DCS instances, enabling automated contract lifecycle operations across organizational boundaries.")
 
-	Method("create", func() {
+	Method("sync", func() {
 
-		Payload(DCSToDCSContractCreateRequest)
-		Result(DCSToDCSContractCreateResponse)
-
-		Error("bad_request", ErrorResult, "Bad request")
-		Error("internal_error", ErrorResult, "Internal server error")
-
-		HTTP(func() {
-			GET("/peer/create")
-			Response(StatusOK)
-			Response("bad_request", StatusBadRequest)
-			Response("internal_error", StatusInternalServerError)
-		})
-	})
-
-	Method("update", func() {
-		Description("Offer a policy-gated, read-only contract information endpoint between a DCS instance and a counterparty DCS")
-		Meta("dcs:requirements", "DCS-IR-SI-06")
-
-		Payload(DCSToDCSContractUpdateRequest)
-		Result(DCSToDCSContractUpdateResponse)
+		Payload(DCSToDCSContractSyncRequest)
+		Result(DCSToDCSContractSyncResponse)
 
 		Error("bad_request", ErrorResult, "Bad request")
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			GET("/peer/update")
+			GET("/peer/sync")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})
+	/*
+		Method("status", func() {
+			Description("Offer a policy-gated, read-only contract information endpoint between a DCS instance and a counterparty DCS")
+			Meta("dcs:requirements", "DCS-IR-SI-06")
 
-	Method("status", func() {
-		Description("Offer a policy-gated, read-only contract information endpoint between a DCS instance and a counterparty DCS")
-		Meta("dcs:requirements", "DCS-IR-SI-06")
+			Payload(DCSToDCSContractStatusRequest)
+			Result(DCSToDCSContractStatusResponse)
 
-		Payload(DCSToDCSContractStatusRequest)
-		Result(DCSToDCSContractStatusResponse)
+			Error("bad_request", ErrorResult, "Bad request")
+			Error("internal_error", ErrorResult, "Internal server error")
 
-		Error("bad_request", ErrorResult, "Bad request")
-		Error("internal_error", ErrorResult, "Internal server error")
-
-		HTTP(func() {
-			GET("/peer/status")
-			Response(StatusOK)
-			Response("bad_request", StatusBadRequest)
-			Response("internal_error", StatusInternalServerError)
+			HTTP(func() {
+				GET("/peer/status")
+				Response(StatusOK)
+				Response("bad_request", StatusBadRequest)
+				Response("internal_error", StatusInternalServerError)
+			})
 		})
-	})
+	*/
 })

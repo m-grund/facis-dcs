@@ -1,4 +1,4 @@
-package query
+package remotesync
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-
-	"digital-contracting-service/internal/contractworkflowengine/datatype/remote"
 
 	negotiationdescision "digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
 
@@ -25,9 +23,9 @@ type GetAllNegotiationsForDIDQry struct {
 }
 
 type GetAllNegotiationsForDIDResult struct {
-	NegotiationTasks     []remote.NegotiationTaskData
-	Negotiations         []remote.NegotiationData
-	NegotiationDecisions []remote.NegotiationDecisionData
+	NegotiationTasks     []NegotiationTaskData
+	Negotiations         []NegotiationData
+	NegotiationDecisions []NegotiationDecisionData
 }
 
 type GetAllNegotiationsForDIDHandler struct {
@@ -56,7 +54,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 		return nil, fmt.Errorf("could not read all negotiation tasks: %w", err)
 	}
 
-	var resultNegotiationTasks []remote.NegotiationTaskData
+	var resultNegotiationTasks []NegotiationTaskData
 	for _, negotiationTask := range negotiationTasks {
 
 		state, err := negotiationtaskstate.NewNegotiationTaskState(negotiationTask.State)
@@ -64,7 +62,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 			return nil, fmt.Errorf("could not create negotiation task state: %w", err)
 		}
 
-		resultNegotiationTasks = append(resultNegotiationTasks, remote.NegotiationTaskData{
+		resultNegotiationTasks = append(resultNegotiationTasks, NegotiationTaskData{
 			ID:         negotiationTask.ID,
 			DID:        negotiationTask.DID,
 			State:      state,
@@ -79,9 +77,9 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 		return nil, fmt.Errorf("could not read all negotiations: %w", err)
 	}
 
-	var resultNegotiations []remote.NegotiationData
+	var resultNegotiations []NegotiationData
 	for _, negotiation := range negotiations {
-		resultNegotiations = append(resultNegotiations, remote.NegotiationData{
+		resultNegotiations = append(resultNegotiations, NegotiationData{
 			ID:              negotiation.ID,
 			DID:             negotiation.DID,
 			ContractVersion: negotiation.ContractVersion,
@@ -96,7 +94,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 		return nil, fmt.Errorf("could not read all negotiation decision data: %w", err)
 	}
 
-	var resultNegotiationDecisions []remote.NegotiationDecisionData
+	var resultNegotiationDecisions []NegotiationDecisionData
 	for _, negotiationDecision := range negotiationDecisions {
 
 		var decision *negotiationdescision.NegotiationDecision
@@ -108,7 +106,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 			decision = &result
 		}
 
-		resultNegotiationDecisions = append(resultNegotiationDecisions, remote.NegotiationDecisionData{
+		resultNegotiationDecisions = append(resultNegotiationDecisions, NegotiationDecisionData{
 			ID:              negotiationDecision.ID,
 			NegotiationID:   negotiationDecision.Negotiator,
 			Negotiator:      negotiationDecision.Negotiator,

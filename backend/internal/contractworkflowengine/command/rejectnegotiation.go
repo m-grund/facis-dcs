@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -26,6 +28,7 @@ type RejectNegotiationCmd struct {
 	RejectionReason *string
 	HolderDID       string
 	UserRoles       userrole.UserRoles
+	DIDDocument     base.DIDDocument
 }
 
 type NegotiationRejector struct {
@@ -36,6 +39,11 @@ type NegotiationRejector struct {
 }
 
 func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationCmd) error {
+
+	origin, err := cmd.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -56,7 +64,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.RejectedBy)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
@@ -65,7 +73,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return errors.New("invalid user")
 	}
 
-	err = h.NRepo.Reject(ctx, tx, cmd.ID, cmd.RejectedBy, cmd.RejectionReason)
+	err = h.NRepo.Reject(ctx, tx, cmd.ID, origin, cmd.RejectionReason)
 	if err != nil {
 		return fmt.Errorf("could not reject negotiation %w", err)
 	}

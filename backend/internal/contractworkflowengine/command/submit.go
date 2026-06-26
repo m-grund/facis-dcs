@@ -47,6 +47,11 @@ type Submitter struct {
 
 func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
+	origin, err := cmd.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
+
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -109,16 +114,16 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.SubmittedBy)
+		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
 		if err != nil {
 			return fmt.Errorf("could not validate negotiator: %w", err)
 		}
 
 		if !isValidNegotiator {
-			return errors.New("invalid user")
+			return errors.New("this peer is not a valid negotiator")
 		}
 
-		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, cmd.SubmittedBy)
+		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, origin)
 		if err != nil {
 			return fmt.Errorf("could not check open negotiations: %w", err)
 		}
@@ -127,7 +132,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("not all negotiations are processed")
 		}
 
-		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, negotiationtaskstate.Accepted.String())
+		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, origin, negotiationtaskstate.Accepted.String())
 		if err != nil {
 			return fmt.Errorf("could not update negotiation task: %w", err)
 		}
@@ -187,7 +192,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.SubmittedBy)
+		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, origin)
 		if err != nil {
 			return err
 		}
@@ -199,7 +204,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		if cmd.ActionFlag != nil {
 			switch *cmd.ActionFlag {
 			case actionflag.Approval:
-				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contractstate.Approved.String())
+				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, origin, contractstate.Approved.String())
 				if err != nil {
 					return fmt.Errorf("could not update approval task: %w", err)
 				}
@@ -236,7 +241,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
+		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, origin)
 		if err != nil {
 			return err
 		}
@@ -266,23 +271,23 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not update contract state: %w", err)
 		}
+	}
 
-		evt := contractevents.SubmitEvent{
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			SubmittedBy:     cmd.SubmittedBy,
-			PreviousState:   processData.State,
-			NewState:        nextState.String(),
-			ActionFlag:      cmd.ActionFlag,
-			Comments:        cmd.Comments,
-			OccurredAt:      time.Now().UTC(),
-			HolderDID:       cmd.HolderDID,
-			UserRoles:       cmd.UserRoles,
-		}
-		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-		if err != nil {
-			return fmt.Errorf("could not create event: %w", err)
-		}
+	evt := contractevents.SubmitEvent{
+		DID:             cmd.DID,
+		ContractVersion: processData.ContractVersion,
+		SubmittedBy:     cmd.SubmittedBy,
+		PreviousState:   processData.State,
+		NewState:        nextState.String(),
+		ActionFlag:      cmd.ActionFlag,
+		Comments:        cmd.Comments,
+		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
+	}
+	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+	if err != nil {
+		return fmt.Errorf("could not create event: %w", err)
 	}
 
 	return tx.Commit()

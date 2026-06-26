@@ -5,13 +5,11 @@ import (
 	"errors"
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/remotesync"
+
 	negotiationdescision "digital-contracting-service/internal/contractworkflowengine/datatype/negotiationaction"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/negotiationtaskstate"
-
-	"digital-contracting-service/internal/contractworkflowengine/datatype/remote"
-
-	"digital-contracting-service/internal/contractworkflowengine/command"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 
@@ -57,15 +55,19 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	}
 }
 
-func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContractCreateRequest) (res *dcstodcs.DCSToDCSContractCreateResponse, err error) {
+func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractSyncRequest) (res *dcstodcs.DCSToDCSContractSyncResponse, err error) {
 
 	origin, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	if req.Contract.Origin == origin {
-		return nil, errors.New("could not create contract on same peer")
+	if req.OriginDid == "" {
+		return nil, contractworkflowengine.MakeInternalError(errors.New("origin did is empty"))
+	}
+
+	if req.OriginDid == origin {
+		return nil, errors.New("syncing contract to same peer is not allowed")
 	}
 
 	createAt, err := time.Parse(time.RFC3339, req.Contract.CreatedAt)
@@ -122,7 +124,7 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	remoteContractData := remote.ContractData{
+	remoteContractData := remotesync.ContractData{
 		DID:             req.Contract.Did,
 		ContractData:    &contractData,
 		Origin:          req.Contract.Origin,
@@ -167,7 +169,7 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	cmd := command.RemoteCreateCmd{
+	cmd := remotesync.PeerSyncCmd{
 		Contract:             remoteContractData,
 		ReviewTasks:          reviewTasks,
 		ApprovalTasks:        approvalTasks,
@@ -175,7 +177,7 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		Negotiations:         negotiations,
 		NegotiationDecisions: negotiationDecision,
 	}
-	handler := command.RemoteCreator{
+	handler := remotesync.PeerSynchronizer{
 		DB:     s.DB,
 		CTRepo: s.CTRepo,
 		CRepo:  s.CRepo,
@@ -189,163 +191,21 @@ func (s *dcsToDcssrvc) Create(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	return &dcstodcs.DCSToDCSContractCreateResponse{
+	return &dcstodcs.DCSToDCSContractSyncResponse{
 		Did: req.Contract.Did,
 	}, nil
 }
 
-func (s *dcsToDcssrvc) Update(ctx context.Context, req *dcstodcs.DCSToDCSContractUpdateRequest) (res *dcstodcs.DCSToDCSContractUpdateResponse, err error) {
-
-	origin, err := s.DIDDocument.GetID()
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	if req.Contract.Origin == origin {
-		return nil, errors.New("could not create contract on same peer")
-	}
-
-	createAt, err := time.Parse(time.RFC3339, req.Contract.CreatedAt)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	updatedAt, err := time.Parse(time.RFC3339, req.Contract.UpdatedAt)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	contractData, err := datatype.NewJSON(req.Contract.ContractData)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	var startDate *time.Time
-	if req.Contract.StartDate != nil {
-		startD, err := time.Parse(time.RFC3339, *req.Contract.StartDate)
-		if err != nil {
-			return nil, contractworkflowengine.MakeInternalError(err)
-		}
-
-		startDate = &startD
-	}
-
-	var expDate *time.Time
-	if req.Contract.ExpDate != nil {
-		expD, err := time.Parse(time.RFC3339, *req.Contract.ExpDate)
-		if err != nil {
-			return nil, contractworkflowengine.MakeInternalError(err)
-		}
-
-		expDate = &expD
-	}
-
-	var expPolicy *expirationpolicy.ExpirationPolicy
-	if req.Contract.ExpPolicy != nil {
-		policy, err := expirationpolicy.NewExpirationPolicy(*req.Contract.ExpPolicy)
-		if err != nil {
-			return nil, contractworkflowengine.MakeInternalError(err)
-		}
-		expPolicy = &policy
-	}
-
-	responsible, err := db.ToResponsible(req.Contract.Responsible)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	state, err := contractstate.NewContractState(req.Contract.State)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	remoteContractData := remote.ContractData{
-		DID:             req.Contract.Did,
-		ContractData:    &contractData,
-		Origin:          req.Contract.Origin,
-		Responsible:     responsible,
-		TemplateDID:     req.Contract.Did,
-		CreatedBy:       req.Contract.CreatedBy,
-		CreatedAt:       createAt,
-		TemplateVersion: req.Contract.ContractVersion,
-		State:           state,
-		ContractVersion: req.Contract.ContractVersion,
-		ExpPolicy:       expPolicy,
-		ExpDate:         expDate,
-		ExpNoticePeriod: req.Contract.ExpNoticePeriod,
-		StartDate:       startDate,
-		Name:            req.Contract.Name,
-		Description:     req.Contract.Description,
-		UpdatedAt:       updatedAt,
-	}
-
-	reviewTasks, err := toReviewTaskData(req.ReviewTasks)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	approvalTasks, err := toApprovalTaskData(req.ApprovalTasks)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	negotiationTasks, err := toNegotiationTaskData(req.NegotiationTasks)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	negotiations, err := toNegotiationData(req.NegotiationItems)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	negotiationDecision, err := toNegotiationDecisionData(req.NegotiationDecisions)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	cmd := command.RemoteUpdateCmd{
-		Contract:             remoteContractData,
-		ReviewTasks:          reviewTasks,
-		ApprovalTasks:        approvalTasks,
-		NegotiationTasks:     negotiationTasks,
-		Negotiations:         negotiations,
-		NegotiationDecisions: negotiationDecision,
-	}
-	handler := command.RemoteUpdater{
-		DB:     s.DB,
-		CTRepo: s.CTRepo,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
-		NTRepo: s.NTRepo,
-		NRepo:  s.NRepo,
-	}
-	err = handler.Handle(ctx, cmd)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	return &dcstodcs.DCSToDCSContractUpdateResponse{
-		Did: req.Contract.Did,
-	}, nil
-
-}
-
-func (s *dcsToDcssrvc) Status(ctx context.Context, req *dcstodcs.DCSToDCSContractStatusRequest) (res *dcstodcs.DCSToDCSContractStatusResponse, err error) {
-	return &dcstodcs.DCSToDCSContractStatusResponse{}, nil
-}
-
-func toReviewTaskData(tasks []*dcstodcs.DCSToDCSContractReviewTaskItem) ([]remote.ReviewTaskData, error) {
-	var reviewTasks []remote.ReviewTaskData
+func toReviewTaskData(tasks []*dcstodcs.DCSToDCSContractReviewTaskItem) ([]remotesync.ReviewTaskData, error) {
+	var reviewTasks []remotesync.ReviewTaskData
 	for _, task := range tasks {
 
 		createAt, err := time.Parse(time.RFC3339, task.CreatedAt)
 		if err != nil {
-			return []remote.ReviewTaskData{}, contractworkflowengine.MakeInternalError(err)
+			return []remotesync.ReviewTaskData{}, contractworkflowengine.MakeInternalError(err)
 		}
 
-		reviewTasks = append(reviewTasks, remote.ReviewTaskData{
+		reviewTasks = append(reviewTasks, remotesync.ReviewTaskData{
 			ID:        task.ID,
 			DID:       task.Did,
 			CreatedBy: task.CreatedBy,
@@ -357,16 +217,16 @@ func toReviewTaskData(tasks []*dcstodcs.DCSToDCSContractReviewTaskItem) ([]remot
 	return reviewTasks, nil
 }
 
-func toApprovalTaskData(tasks []*dcstodcs.DCSToDCSContractApprovalTaskItem) ([]remote.ApprovalTaskData, error) {
-	var approvalTasks []remote.ApprovalTaskData
+func toApprovalTaskData(tasks []*dcstodcs.DCSToDCSContractApprovalTaskItem) ([]remotesync.ApprovalTaskData, error) {
+	var approvalTasks []remotesync.ApprovalTaskData
 	for _, task := range tasks {
 
 		createAt, err := time.Parse(time.RFC3339, task.CreatedAt)
 		if err != nil {
-			return []remote.ApprovalTaskData{}, contractworkflowengine.MakeInternalError(err)
+			return []remotesync.ApprovalTaskData{}, contractworkflowengine.MakeInternalError(err)
 		}
 
-		approvalTasks = append(approvalTasks, remote.ApprovalTaskData{
+		approvalTasks = append(approvalTasks, remotesync.ApprovalTaskData{
 			ID:        task.ID,
 			DID:       task.Did,
 			CreatedBy: task.CreatedBy,
@@ -378,13 +238,13 @@ func toApprovalTaskData(tasks []*dcstodcs.DCSToDCSContractApprovalTaskItem) ([]r
 	return approvalTasks, nil
 }
 
-func toNegotiationTaskData(tasks []*dcstodcs.DCSToDCSContractNegotiationTaskItem) ([]remote.NegotiationTaskData, error) {
-	var negotiationTasks []remote.NegotiationTaskData
+func toNegotiationTaskData(tasks []*dcstodcs.DCSToDCSContractNegotiationTaskItem) ([]remotesync.NegotiationTaskData, error) {
+	var negotiationTasks []remotesync.NegotiationTaskData
 	for _, task := range tasks {
 
 		createAt, err := time.Parse(time.RFC3339, task.CreatedAt)
 		if err != nil {
-			return []remote.NegotiationTaskData{}, contractworkflowengine.MakeInternalError(err)
+			return []remotesync.NegotiationTaskData{}, contractworkflowengine.MakeInternalError(err)
 		}
 
 		state, err := negotiationtaskstate.NewNegotiationTaskState(task.State)
@@ -392,7 +252,7 @@ func toNegotiationTaskData(tasks []*dcstodcs.DCSToDCSContractNegotiationTaskItem
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
 
-		negotiationTasks = append(negotiationTasks, remote.NegotiationTaskData{
+		negotiationTasks = append(negotiationTasks, remotesync.NegotiationTaskData{
 			ID:         task.ID,
 			DID:        task.Did,
 			CreatedBy:  task.CreatedBy,
@@ -404,13 +264,13 @@ func toNegotiationTaskData(tasks []*dcstodcs.DCSToDCSContractNegotiationTaskItem
 	return negotiationTasks, nil
 }
 
-func toNegotiationData(tasks []*dcstodcs.DCSToDCSContractNegotiationItem) ([]remote.NegotiationData, error) {
-	var negotiations []remote.NegotiationData
+func toNegotiationData(tasks []*dcstodcs.DCSToDCSContractNegotiationItem) ([]remotesync.NegotiationData, error) {
+	var negotiations []remotesync.NegotiationData
 	for _, task := range tasks {
 
 		createAt, err := time.Parse(time.RFC3339, task.CreatedAt)
 		if err != nil {
-			return []remote.NegotiationData{}, contractworkflowengine.MakeInternalError(err)
+			return []remotesync.NegotiationData{}, contractworkflowengine.MakeInternalError(err)
 		}
 
 		changeRequest, err := datatype.NewJSON(task.ChangeRequest)
@@ -418,7 +278,7 @@ func toNegotiationData(tasks []*dcstodcs.DCSToDCSContractNegotiationItem) ([]rem
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
 
-		negotiations = append(negotiations, remote.NegotiationData{
+		negotiations = append(negotiations, remotesync.NegotiationData{
 			ID:              task.ID,
 			DID:             task.Did,
 			CreatedBy:       task.CreatedBy,
@@ -430,8 +290,8 @@ func toNegotiationData(tasks []*dcstodcs.DCSToDCSContractNegotiationItem) ([]rem
 	return negotiations, nil
 }
 
-func toNegotiationDecisionData(tasks []*dcstodcs.DCSToDCSContractNegotiationDecisionItem) ([]remote.NegotiationDecisionData, error) {
-	var negotiationDecisions []remote.NegotiationDecisionData
+func toNegotiationDecisionData(tasks []*dcstodcs.DCSToDCSContractNegotiationDecisionItem) ([]remotesync.NegotiationDecisionData, error) {
+	var negotiationDecisions []remotesync.NegotiationDecisionData
 	for _, task := range tasks {
 
 		var decision *negotiationdescision.NegotiationDecision
@@ -443,7 +303,7 @@ func toNegotiationDecisionData(tasks []*dcstodcs.DCSToDCSContractNegotiationDeci
 			decision = &tmpDecision
 		}
 
-		negotiationDecisions = append(negotiationDecisions, remote.NegotiationDecisionData{
+		negotiationDecisions = append(negotiationDecisions, remotesync.NegotiationDecisionData{
 			ID:              task.ID,
 			Decision:        decision,
 			Negotiator:      task.Negotiator,

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 
@@ -111,7 +112,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		}
 	}(tx)
 
-	contractTemplate, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, cmd.TemplateDID)
+	contractTemplate, err := h.CTRepo.ReadFrameContractTemplateDataByDID(ctx, tx, cmd.TemplateDID)
 	if err != nil {
 		return fmt.Errorf("could not read frame contract template data: %w", err)
 	}
@@ -142,8 +143,9 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		TemplateDID:     cmd.TemplateDID,
 		TemplateVersion: contractTemplate.TemplateVersion,
 		Responsible:     &resp,
+		CreatedAt:       time.Now().UTC(),
 	}
-	createdAt, err := h.CRepo.Create(ctx, tx, data)
+	err = h.CRepo.Create(ctx, tx, data)
 	if err != nil {
 		return fmt.Errorf("could not create contract: %w", err)
 	}
@@ -158,7 +160,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		TemplateDID:  cmd.TemplateDID,
 		CreatedBy:    cmd.CreatedBy,
 		ContractData: normalizedContractData,
-		OccurredAt:   *createdAt,
+		OccurredAt:   data.CreatedAt,
 		HolderDID:    cmd.HolderDID,
 		UserRoles:    cmd.UserRoles,
 		Responsible:  &resp,

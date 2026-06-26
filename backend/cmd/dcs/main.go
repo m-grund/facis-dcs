@@ -13,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 
+	"digital-contracting-service/internal/dcstodcssynchronizer"
+
 	"digital-contracting-service/internal/signingmanagement/dss"
 
 	didservice "digital-contracting-service/gen/did_service"
@@ -228,18 +230,29 @@ func main() {
 		log.Fatalf(ctx, err, "failed to start outbox processor")
 	}
 
-	if os.Getenv("DCS_DEBUG_EVENTING") == "true" {
-		cepSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	cepSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not connect to events bus")
+	}
+	defer func(client *event.CloudEventSubClient) {
+		err := client.Close()
 		if err != nil {
-			log.Fatalf(ctx, err, "Could not connect to events bus")
+			log.Errorf(ctx, err, "Could not close cloud event bus client")
 		}
-		defer func(client *event.CloudEventSubClient) {
-			err := client.Close()
-			if err != nil {
-				log.Errorf(ctx, err, "Could not close cloud event bus client")
-			}
-		}(cepSubClient)
+	}(cepSubClient)
 
+	dcsToDcsSynchronizer := dcstodcssynchronizer.DCSToDCSSynchronizer{
+		DB:          db,
+		CRepo:       &cweRepo,
+		NRepo:       cweNRepo,
+		NTRepo:      &cweNTRepo,
+		RTRepo:      &cweRTRepo,
+		ATRepo:      &cweATRepo,
+		DIDDocument: *didDocument,
+	}
+	dcsToDcsSynchronizer.StartSynchronizing(ctx, cepSubClient)
+
+	if os.Getenv("DCS_DEBUG_EVENTING") == "true" {
 		event.StartEventLogger(ctx, cepSubClient)
 	}
 

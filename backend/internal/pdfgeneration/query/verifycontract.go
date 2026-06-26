@@ -41,7 +41,7 @@ func (h *VerifyContractPdfHandler) Handle(ctx context.Context, qry VerifyContrac
 		}
 	}(tx)
 
-	contract, err := h.CRepo.ReadDataByID(ctx, tx, qry.DID)
+	contract, err := h.CRepo.ReadDataByDID(ctx, tx, qry.DID)
 	if err != nil {
 		return nil, fmt.Errorf("contract %s: %w", qry.DID, err)
 	}

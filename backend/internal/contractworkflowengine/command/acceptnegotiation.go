@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -19,11 +21,12 @@ import (
 )
 
 type AcceptNegotiationCmd struct {
-	ID         string
-	DID        string
-	AcceptedBy string
-	HolderDID  string
-	UserRoles  userrole.UserRoles
+	ID          string
+	DID         string
+	AcceptedBy  string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
+	DIDDocument base.DIDDocument
 }
 
 type NegotiationAcceptor struct {
@@ -34,6 +37,11 @@ type NegotiationAcceptor struct {
 }
 
 func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationCmd) error {
+
+	origin, err := cmd.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -53,7 +61,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.AcceptedBy)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
@@ -62,7 +70,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return errors.New("invalid user")
 	}
 
-	err = h.NRepo.Accept(ctx, tx, cmd.ID, cmd.AcceptedBy)
+	err = h.NRepo.Accept(ctx, tx, cmd.ID, origin)
 	if err != nil {
 		return fmt.Errorf("could not accept negotiation: %w", err)
 	}
