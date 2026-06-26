@@ -364,11 +364,7 @@ function updateDraftParameterValidity(semanticPath: string, isValid: boolean) {
 
 function updateParameterOperators(condition: SemanticCondition, index: number, operators: SemanticParameterOperator[]) {
   const parameter = condition.parameters[index]
-  console.log('[SemanticRulesEditor] updateParameterOperators', { fieldId: parameter?.fieldId, conditionId: condition.conditionId, operators })
-  if (!parameter?.fieldId) {
-    console.warn('[SemanticRulesEditor] parameter.fieldId is undefined — skipping updateFieldPolicies')
-    return
-  }
+  if (!parameter?.fieldId) return
   store.updateFieldPolicies(parameter.fieldId, condition.conditionId, parameter.parameterName, parameter.type, operators)
 }
 
