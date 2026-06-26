@@ -333,8 +333,7 @@ func creationPipelineField(conditionID string, parameterName string, semanticPat
 		"dcs:domainField": map[string]any{
 			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(semanticPath),
 		},
-		"dcs:semanticPath": semanticPath,
-		"dcs:required":     true,
+		"dcs:required": true,
 	}
 }
 

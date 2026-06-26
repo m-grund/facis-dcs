@@ -154,7 +154,8 @@
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { TemplateType, isApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
+import { TemplateType } from '@/modules/template-repository/models/contract-template'
+import type { DcsApprovedTemplate } from '@/models/dcs-jsonld'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { TemplateState } from '@/types/contract-template-state'
@@ -170,7 +171,7 @@ interface SubcontractKey {
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, version } = storeToRefs(store)
+const { templateType, blocks, subTemplateSnapshots, state, version } = storeToRefs(store)
 
 const { isManager } = useTemplatePermissions()
 
@@ -230,8 +231,11 @@ const addSubcontractTemplate = async (template: { did: string; version: number; 
 
 const isSubcontractReferenced = (item: SubcontractKey): boolean => {
   const inOutline = store.blockIdsInOutline
-  return documentBlocks.value.some(
-    (b) => isApprovedTemplateBlock(b) && inOutline.has(b.blockId) && b.templateId === item.did,
+  return blocks.value.some(
+    (b) =>
+      b['@type'] === 'dcs:ApprovedTemplate' &&
+      inOutline.has(b['@id']) &&
+      (b as DcsApprovedTemplate)['dcs:templateDid'] === item.did,
   )
 }
 

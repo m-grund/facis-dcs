@@ -5,8 +5,8 @@
       <TemplatePreview
         :block-id="id"
         :section-level="sectionLevel"
-        :document-outline="documentOutline"
-        :document-blocks="documentBlocks"
+        :layout="layout"
+        :blocks="blocks"
         :semantic-conditions="semanticConditions"
         :sub-template-snapshots="subTemplateSnapshots"
         :semantic-condition-values="semanticConditionValues"
@@ -18,14 +18,14 @@
   <!-- Nested blocks -->
   <template v-else>
     <!-- Section block -->
-    <ConditionalWrapper v-if="block && isSection" :enabled="true" tag="section" wrapper-class="w-full mb-4">
+    <ConditionalWrapper v-if="block && block['@type'] === 'dcs:Section'" :enabled="true" tag="section" wrapper-class="w-full mb-4">
       <PreviewSectionBlock :title="sectionTitle" :has-children="childrenIds.length > 0" :level="sectionLevel">
         <template v-for="childId in childrenIds" :key="childId">
           <TemplatePreview
             :block-id="childId"
             :section-level="sectionLevel + 1"
-            :document-outline="documentOutline"
-            :document-blocks="documentBlocks"
+            :layout="layout"
+            :blocks="blocks"
             :semantic-conditions="semanticConditions"
             :sub-template-snapshots="subTemplateSnapshots"
             :semantic-condition-values="semanticConditionValues"
@@ -36,26 +36,26 @@
       </PreviewSectionBlock>
     </ConditionalWrapper>
     <!-- Text block -->
-    <PreviewTextBlock v-else-if="block && isText" :text="block.text ?? ''" />
+    <PreviewTextBlock v-else-if="block && block['@type'] === 'dcs:TextBlock'" :text="textBlockText" />
     <!-- Clause block -->
     <PreviewClauseBlock
-      v-else-if="block && isClause"
-      :block-id="block.blockId"
-      :text="block.text ?? ''"
+      v-else-if="block && block['@type'] === 'dcs:Clause'"
+      :block-id="block['@id']"
+      :content="clauseContent"
       :semantic-conditions="clauseSemanticConditions"
       :semantic-condition-values="semanticConditionValues"
       :verification-result="verificationResult"
       :set-semantic-condition-value="setSemanticConditionValue"
     />
     <!-- Approved template block -->
-    <ConditionalWrapper v-else-if="block && isApprovedTemplate" :enabled="hasApprovedTemplateChildren">
+    <ConditionalWrapper v-else-if="block && block['@type'] === 'dcs:ApprovedTemplate'" :enabled="hasApprovedTemplateChildren">
       <TemplatePreview
         v-if="subTemplate?.template_data"
-        :document-outline="subTemplateBuilderData.documentOutline"
-        :document-blocks="subTemplateBuilderData.documentBlocks"
-        :semantic-conditions="subTemplateBuilderData.semanticConditions"
+        :layout="subTemplateLayout"
+        :blocks="subTemplateBlocks"
+        :semantic-conditions="subTemplateSemanticConditions"
         :sub-template-snapshots="subTemplateSnapshots"
-        :sub-block-id="block.blockId"
+        :sub-block-id="block['@id']"
         :section-level="sectionLevel"
         :semantic-condition-values="semanticConditionValues"
         :verification-result="verificationResult"
@@ -65,8 +65,8 @@
         <TemplatePreview
           :block-id="childId"
           :section-level="sectionLevel + 1"
-          :document-outline="documentOutline"
-          :document-blocks="documentBlocks"
+          :layout="layout"
+          :blocks="blocks"
           :semantic-conditions="semanticConditions"
           :sub-template-snapshots="subTemplateSnapshots"
           :semantic-condition-values="semanticConditionValues"
@@ -83,20 +83,16 @@ import { computed } from 'vue'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type {
-  DocumentBlock,
-  DocumentOutline,
-  SectionBlock,
-  SemanticCondition,
-} from '@template-repository/models/contract-template'
-import {
-  isSectionBlock,
-  isTextBlock,
-  isClauseBlock,
-  isApprovedTemplateBlock,
-  isMergedApprovedTemplateBlock,
-} from '@template-repository/models/contract-template'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { DcsBlock, DcsLayoutNode, DcsContentSegment } from '@/models/dcs-jsonld'
+import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
+import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
+import {
+  getBlocksFromTemplateData,
+  getLayoutFromTemplateData,
+  getSemanticConditionsFromTemplateData,
+} from '@template-repository/store/dcsDraftStore'
 import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
 import PreviewSectionBlock from './PreviewSectionBlock.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
@@ -106,18 +102,15 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
-import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
 
 const props = withDefaults(
   defineProps<{
-    /** If blockId is provided, the preview will render only that block and its children.
-     *  If not provided, it will render all root-level blocks.
-     */
+    /** If blockId is provided, the preview will render only that block and its children. */
     blockId?: string
     /** Section nesting level for headings (1 = top-level) */
     sectionLevel?: number
-    documentOutline: DocumentOutline
-    documentBlocks: DocumentBlock[]
+    layout: DcsLayoutNode[]
+    blocks: (DcsBlock | MergedApprovedTemplateBlock)[]
     semanticConditions: SemanticCondition[]
     subTemplateSnapshots?: SubTemplateSnapshot[]
     semanticConditionValues?: SemanticConditionValue[]
@@ -126,103 +119,90 @@ const props = withDefaults(
   }>(),
   { sectionLevel: 1, semanticConditionValues: () => [], verificationResult: null, setSemanticConditionValue: null },
 )
+
 const hasBlockId = computed(() => props.blockId != null)
 
-const documentOutline = computed(() => props.documentOutline)
-const documentBlocks = computed(() => props.documentBlocks)
-const semanticConditions = computed(() => props.semanticConditions)
-const clauseSemanticConditions = computed(() => {
-  if (!isMergedBlockId(props.blockId ?? '')) return props.semanticConditions
-  return subTemplateBuilderData.value.semanticConditions
-})
-const semanticConditionValues = computed(() => props.semanticConditionValues)
-const verificationResult = computed(() => props.verificationResult)
-const setSemanticConditionValue = computed(() => props.setSemanticConditionValue)
-
 const rootChildren = computed(() => {
-  const root = documentOutline.value.find((b) => b.isRoot)
-  return root?.children ?? []
+  const root = props.layout.find((n) => n['dcs:isRoot'])
+  return root ? root['dcs:children']['@list'].map((r) => r['@id']) : []
 })
 
-const block = computed<DocumentBlock | undefined>(() => {
+const block = computed<DcsBlock | MergedApprovedTemplateBlock | undefined>(() => {
   if (!props.blockId) return undefined
-  return documentBlocks.value.find((b) => b.blockId === props.blockId)
+  return props.blocks.find((b) => b['@id'] === props.blockId)
 })
 
 const outlineNode = computed(() => {
   if (!props.blockId) return undefined
-  return documentOutline.value.find((o) => o.blockId === props.blockId)
+  return props.layout.find((n) => n['@id'] === props.blockId)
 })
 
-const childrenIds = computed(() => outlineNode.value?.children ?? [])
-
-const isSection = computed(() => !!block.value && isSectionBlock(block.value))
-const isText = computed(() => !!block.value && isTextBlock(block.value))
-const isClause = computed(() => !!block.value && isClauseBlock(block.value))
-const isApprovedTemplate = computed(() => !!block.value && isApprovedTemplateBlock(block.value))
-
-const sectionTitle = computed(() => {
-  const b = block.value as SectionBlock | undefined
-  return b?.title ?? b?.text ?? ''
-})
+const childrenIds = computed(() => outlineNode.value?.['dcs:children']['@list'].map((r) => r['@id']) ?? [])
 
 const sectionLevel = computed(() => props.sectionLevel ?? 1)
+
+const sectionTitle = computed(() => {
+  const b = block.value
+  if (!b || b['@type'] !== 'dcs:Section') return ''
+  return b['dcs:title'] ?? ''
+})
+
+const textBlockText = computed(() => {
+  const b = block.value
+  if (!b || b['@type'] !== 'dcs:TextBlock') return ''
+  return b['dcs:text'] ?? ''
+})
+
+const clauseContent = computed((): DcsContentSegment[] => {
+  const b = block.value
+  if (!b || b['@type'] !== 'dcs:Clause') return []
+  const content = b['dcs:content']
+  if (typeof content === 'string') return []
+  return content['@list']
+})
+
+const clauseSemanticConditions = computed(() => {
+  if (!isMergedBlockId(props.blockId ?? '')) return props.semanticConditions
+  return subTemplateSemanticConditions.value
+})
+
 const subTemplate = computed((): SubTemplateSnapshot | undefined => {
   const b = block.value
   if (!b) return
   if (!props.subTemplateSnapshots?.length) return undefined
-  if (isMergedApprovedTemplateBlock(b)) {
+  if (isDcsMergedApprovedTemplate(b)) {
     return props.subTemplateSnapshots.find((snapshot) =>
       isSameTemplateDataRef(
-        {
-          templateId: snapshot.did,
-          version: snapshot.version,
-          document_number: snapshot.document_number,
-        },
-        {
-          templateId: b.templateId,
-          version: b.version,
-          document_number: b.document_number,
-        },
+        { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
+        { templateId: b['dcs:templateDid'], version: b['dcs:version'], document_number: b['dcs:documentNumber'] },
       ),
     )
   }
-  if (isMergedBlockId(b.blockId)) {
-    const mergedOwnerBlockId = getOwnerBlockIdFromMergedBlockId(b.blockId)
-    const mergedBlock = props.documentBlocks.find((candidate) => candidate.blockId === mergedOwnerBlockId)
-    if (mergedBlock && isMergedApprovedTemplateBlock(mergedBlock)) {
+  if (isMergedBlockId(b['@id'])) {
+    const mergedOwnerBlockId = getOwnerBlockIdFromMergedBlockId(b['@id'])
+    const mergedBlock = mergedOwnerBlockId ? props.blocks.find((c) => c['@id'] === mergedOwnerBlockId) : undefined
+    if (mergedBlock && isDcsMergedApprovedTemplate(mergedBlock)) {
       return props.subTemplateSnapshots.find((snapshot) =>
         isSameTemplateDataRef(
-          {
-            templateId: snapshot.did,
-            version: snapshot.version,
-            document_number: snapshot.document_number,
-          },
-          {
-            templateId: mergedBlock.templateId,
-            version: mergedBlock.version,
-            document_number: mergedBlock.document_number,
-          },
+          { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
+          { templateId: mergedBlock['dcs:templateDid'], version: mergedBlock['dcs:version'], document_number: mergedBlock['dcs:documentNumber'] },
         ),
       )
     }
   }
-  if (!isApprovedTemplateBlock(b)) return undefined
+  if (b['@type'] !== 'dcs:ApprovedTemplate') return undefined
   return props.subTemplateSnapshots.find((snapshot) =>
     isSameTemplateDataRef(
-      {
-        templateId: snapshot.did,
-        version: snapshot.version,
-        document_number: snapshot.document_number,
-      },
-      {
-        templateId: b.templateId,
-        version: b.version,
-        document_number: b.document_number,
-      },
+      { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
+      { templateId: b['dcs:templateDid'], version: b['dcs:version'], document_number: b['dcs:documentNumber'] },
     ),
   )
 })
-const subTemplateBuilderData = computed(() => templateDataToBuilderData(subTemplate.value?.template_data))
-const hasApprovedTemplateChildren = computed(() => isApprovedTemplate.value && childrenIds.value.length > 0)
+
+const subTemplateBlocks = computed(() => getBlocksFromTemplateData(subTemplate.value?.template_data))
+const subTemplateLayout = computed(() => getLayoutFromTemplateData(subTemplate.value?.template_data))
+const subTemplateSemanticConditions = computed(() =>
+  getSemanticConditionsFromTemplateData(subTemplate.value?.template_data),
+)
+const hasApprovedTemplateChildren = computed(() => block.value?.['@type'] === 'dcs:ApprovedTemplate' && childrenIds.value.length > 0)
 </script>

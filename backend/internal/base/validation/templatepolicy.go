@@ -316,8 +316,10 @@ func forEachSemanticParameter(data documentData, visit func(conditionID string, 
 				if !ok {
 					continue
 				}
+				domainField, _ := field["dcs:domainField"].(map[string]any)
+				domainFieldID, _ := domainField["@id"].(string)
 				visit(conditionID, index, map[string]any{
-					"semanticPath": field["dcs:semanticPath"],
+					"semanticPath": domainFieldID,
 				})
 			}
 		}

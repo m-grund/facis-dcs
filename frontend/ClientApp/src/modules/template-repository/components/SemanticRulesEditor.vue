@@ -160,7 +160,6 @@ import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   SEMANTIC_CONDITION_SCHEMA_VERSION,
-  isClauseBlock,
   type DomainFieldDefinition,
   type SemanticCondition,
   type SemanticConditionParameter,
@@ -171,9 +170,11 @@ import {
 import type { SubTemplateReference } from '@template-repository/models/template-draft-store'
 import ParameterObligationEditor from '@template-repository/components/semantic-rules-editor/ParameterObligationEditor.vue'
 import {
-  getDocumentBlocksFromTemplateData,
+  getBlocksFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
+import { conditionIdsInContent } from '@template-repository/composables/useClauseTextChips'
+import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import {
   ONTOLOGY_DOMAIN_TYPES,
@@ -212,7 +213,7 @@ interface RequirementDraft {
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { semanticConditions: mainSemanticConditions, documentBlocks, subTemplateSnapshots } = storeToRefs(store)
+const { semanticConditions: mainSemanticConditions, blocks, subTemplateSnapshots } = storeToRefs(store)
 
 const roleOptions = ontologyRoleOptions
 const requirementDraft = ref<RequirementDraft | null>(null)
@@ -228,16 +229,29 @@ const canAddRequirementDraft = computed(() => {
 
 const allBlocks = computed(() => {
   const subTemplateBlocks = subTemplateSnapshots.value.flatMap((subTemplate) =>
-    getDocumentBlocksFromTemplateData(subTemplate.template_data),
+    getBlocksFromTemplateData(subTemplate.template_data),
   )
-  return [...documentBlocks.value, ...subTemplateBlocks]
+  return [...blocks.value, ...subTemplateBlocks]
 })
+
+const allSemanticConditions = computed(() => {
+  const subTemplateConditions = subTemplateSnapshots.value.flatMap((subTemplate) =>
+    getSemanticConditionsFromTemplateData(subTemplate.template_data),
+  )
+  return [...mainSemanticConditions.value, ...subTemplateConditions]
+})
+
+function clauseConditionIds(clause: DcsClause): Set<string> {
+  const content = clause['dcs:content']
+  const segments: DcsContentSegment[] = typeof content === 'string' ? [] : content['@list']
+  return conditionIdsInContent(segments, allSemanticConditions.value)
+}
 
 const clauseCountByConditionId = computed(() => {
   const counts: Record<string, number> = {}
   for (const block of allBlocks.value) {
-    if (!isClauseBlock(block)) continue
-    for (const id of block.conditionIds) counts[id] = (counts[id] ?? 0) + 1
+    if (block['@type'] !== 'dcs:Clause') continue
+    for (const id of clauseConditionIds(block as DcsClause)) counts[id] = (counts[id] ?? 0) + 1
   }
   return counts
 })
@@ -246,8 +260,8 @@ const placedClauseCountByConditionId = computed(() => {
   const counts: Record<string, number> = {}
   const inOutline = store.blockIdsInOutline
   for (const block of allBlocks.value) {
-    if (!isClauseBlock(block) || !inOutline.has(block.blockId)) continue
-    for (const id of block.conditionIds) counts[id] = (counts[id] ?? 0) + 1
+    if (block['@type'] !== 'dcs:Clause' || !inOutline.has(block['@id'])) continue
+    for (const id of clauseConditionIds(block as DcsClause)) counts[id] = (counts[id] ?? 0) + 1
   }
   return counts
 })
@@ -350,8 +364,12 @@ function updateDraftParameterValidity(semanticPath: string, isValid: boolean) {
 
 function updateParameterOperators(condition: SemanticCondition, index: number, operators: SemanticParameterOperator[]) {
   const parameter = condition.parameters[index]
-  if (!parameter) return
-  parameter.operators = operators
+  console.log('[SemanticRulesEditor] updateParameterOperators', { fieldId: parameter?.fieldId, conditionId: condition.conditionId, operators })
+  if (!parameter?.fieldId) {
+    console.warn('[SemanticRulesEditor] parameter.fieldId is undefined — skipping updateFieldPolicies')
+    return
+  }
+  store.updateFieldPolicies(parameter.fieldId, condition.conditionId, parameter.parameterName, parameter.type, operators)
 }
 
 function deleteRequirement(item: RequirementItem) {

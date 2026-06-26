@@ -29,8 +29,8 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	requirement := decoded["dcs:contractData"].([]any)[0].(map[string]any)
 	fields := requirement["dcs:fields"].([]any)
 	requirement["dcs:fields"] = append(fields,
-		canonicalRequirementField("jurisdiction", "contract.jurisdiction"),
-		canonicalRequirementField("signature-level", "signature.requiredLevel"),
+		canonicalRequirementField("jurisdiction"),
+		canonicalRequirementField("signature-level"),
 	)
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
@@ -48,13 +48,16 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	require.NotContains(t, ruleIDs, "FACIS-TPL-SIGN-001")
 }
 
-func canonicalRequirementField(id string, semanticPath string) map[string]any {
+func canonicalRequirementField(id string) map[string]any {
+	ontologyIRIs := map[string]string{
+		"jurisdiction":    "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-jurisdiction",
+		"signature-level": "https://w3id.org/facis/dcs/taxonomy/v1#field-signature-requiredLevel",
+	}
 	return map[string]any{
 		"@id":               "urn:uuid:field-" + id,
 		"@type":             "dcs:RequirementField",
 		"dcs:parameterName": id,
-		"dcs:domainField":   map[string]any{"@id": "urn:ontology:" + id},
-		"dcs:semanticPath":  semanticPath,
+		"dcs:domainField":   map[string]any{"@id": ontologyIRIs[id]},
 		"dcs:required":      true,
 	}
 }

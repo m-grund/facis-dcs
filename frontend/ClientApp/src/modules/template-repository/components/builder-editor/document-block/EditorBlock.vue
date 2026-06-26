@@ -11,7 +11,7 @@
   >
     <div class="min-w-0 flex-1 px-3 py-2">
       <!-- Section: title input -->
-      <template v-if="block && isSectionBlock(block)">
+      <template v-if="block && block['@type'] === 'dcs:Section'">
         <label class="text-[10px] font-bold uppercase opacity-60">Section</label>
         <input
           v-model="localTitle"
@@ -22,7 +22,7 @@
         />
       </template>
       <!-- Text: textarea -->
-      <template v-else-if="block && isTextBlock(block)">
+      <template v-else-if="block && block['@type'] === 'dcs:TextBlock'">
         <label class="text-[10px] font-bold uppercase opacity-60">Text</label>
         <textarea
           v-model="localText"
@@ -33,17 +33,17 @@
         />
       </template>
       <!-- Clause: read-only -->
-      <template v-else-if="block && isClauseBlock(block)">
+      <template v-else-if="block && block['@type'] === 'dcs:Clause'">
         <label class="text-[10px] font-bold uppercase opacity-60">
           Clause
-          <span class="mt-0.5 text-[10px] font-semibold text-base-content">({{ block.title ?? '' }})</span>
+          <span class="mt-0.5 text-[10px] font-semibold text-base-content">({{ clauseBlock?.['dcs:title'] ?? '' }})</span>
         </label>
         <p class="mt-1 text-xs leading-relaxed whitespace-pre-wrap text-base-content/70">
           <ClauseSegmentsPreview :segments="clauseSegments" :get-placeholder-label="getPlaceholderLabel" />
         </p>
       </template>
       <!-- Approved sub-template: read-only -->
-      <template v-else-if="block && isApprovedTemplateBlock(block)">
+      <template v-else-if="block && block['@type'] === 'dcs:ApprovedTemplate'">
         <label class="text-[10px] font-bold uppercase opacity-60">Sub template</label>
         <div class="mt-1 flex items-start gap-2">
           <!-- Collapse button -->
@@ -75,9 +75,9 @@
           <div class="max-h-64 overflow-auto rounded-md border border-base-300 bg-base-100 px-3 py-2">
             <TemplatePreview
               v-if="approvedTemplate?.template_data"
-              :document-outline="approvedTemplateBuilderData.documentOutline"
-              :document-blocks="approvedTemplateBuilderData.documentBlocks"
-              :semantic-conditions="approvedTemplateBuilderData.semanticConditions"
+              :layout="approvedTemplateLayout"
+              :blocks="approvedTemplateBlocks"
+              :semantic-conditions="approvedTemplateSemanticConditions"
               :sub-template-snapshots="subTemplateSnapshots"
             />
             <p v-else class="text-xs text-base-content/60 italic">No template data available.</p>
@@ -111,25 +111,24 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
-import {
-  isSectionBlock,
-  isTextBlock,
-  isClauseBlock,
-  isApprovedTemplateBlock,
-} from '@/modules/template-repository/models/contract-template'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import {
-  parseSegments,
+  parseSegmentsFromContent,
   getPlaceholderLabelFromConditions,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
-import { templateDataToBuilderData } from '@template-repository/store/dcsDraftStore'
+import {
+  getBlocksFromTemplateData,
+  getLayoutFromTemplateData,
+  getSemanticConditionsFromTemplateData,
+} from '@template-repository/store/dcsDraftStore'
+import type { DcsClause, DcsSection, DcsTextBlock, DcsApprovedTemplate } from '@/models/dcs-jsonld'
 
 const props = defineProps<{
   item: EnrichedBlockItem
@@ -154,10 +153,16 @@ const { selectedBlockId } = storeToRefs(uiStore)
 const { semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
 const { isSwapPreviewTarget } = useBlockMovementPreview()
 
-const clauseSegments = computed(() => {
-  const b = block.value
-  if (!b || !isClauseBlock(b)) return []
-  return parseSegments(b.text ?? '', semanticConditions.value)
+const block = computed(() => props.item.block)
+
+const clauseBlock = computed(() => (block.value?.['@type'] === 'dcs:Clause' ? (block.value as DcsClause) : undefined))
+
+const clauseSegments = computed((): Segment[] => {
+  const clause = clauseBlock.value
+  if (!clause) return []
+  const content = clause['dcs:content']
+  if (typeof content === 'string') return []
+  return parseSegmentsFromContent(content['@list'], semanticConditions.value)
 })
 
 function getPlaceholderLabel(seg: Segment): string {
@@ -178,17 +183,23 @@ const toolbarVisibilityClass = computed(() => {
   return 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
 })
 
-const block = computed(() => props.item.block)
+const approvedTemplateBlock = computed(() =>
+  block.value?.['@type'] === 'dcs:ApprovedTemplate' ? (block.value as DcsApprovedTemplate) : undefined,
+)
 
 const approvedTemplate = computed<SubTemplateSnapshot | undefined>(() => {
-  const b = block.value
-  if (!b || !isApprovedTemplateBlock(b)) return undefined
-  return subTemplateSnapshots.value.find((t) => t.did === b.templateId)
+  const b = approvedTemplateBlock.value
+  if (!b) return undefined
+  return subTemplateSnapshots.value.find((t) => t.did === b['dcs:templateDid'])
 })
 
 const approvedTemplateName = computed(() => approvedTemplate.value?.name ?? '')
 const approvedTemplateDescription = computed(() => approvedTemplate.value?.description ?? '')
-const approvedTemplateBuilderData = computed(() => templateDataToBuilderData(approvedTemplate.value?.template_data))
+const approvedTemplateBlocks = computed(() => getBlocksFromTemplateData(approvedTemplate.value?.template_data))
+const approvedTemplateLayout = computed(() => getLayoutFromTemplateData(approvedTemplate.value?.template_data))
+const approvedTemplateSemanticConditions = computed(() =>
+  getSemanticConditionsFromTemplateData(approvedTemplate.value?.template_data),
+)
 const isApprovedPreviewOpen = ref(false)
 
 function toggleApprovedPreview() {
@@ -197,13 +208,13 @@ function toggleApprovedPreview() {
 
 const savedTitle = computed(() => {
   const b = block.value
-  if (b && isSectionBlock(b)) return b.title ?? b.text ?? ''
+  if (b?.['@type'] === 'dcs:Section') return (b as DcsSection)['dcs:title'] ?? ''
   return ''
 })
 const savedText = computed(() => {
   const b = block.value
-  if (b && isTextBlock(b)) return b.text ?? ''
-  if (b && isSectionBlock(b)) return b.text ?? ''
+  if (b?.['@type'] === 'dcs:TextBlock') return (b as DcsTextBlock)['dcs:text'] ?? ''
+  if (b?.['@type'] === 'dcs:Section') return (b as DcsSection)['dcs:title'] ?? ''
   return ''
 })
 
@@ -221,10 +232,10 @@ watch(
 
 const isDirty = computed(() => {
   const b = block.value
-  if (b && isSectionBlock(b)) {
-    return localTitle.value !== savedTitle.value || localText.value !== savedText.value
+  if (b?.['@type'] === 'dcs:Section') {
+    return localTitle.value !== savedTitle.value
   }
-  if (b && isTextBlock(b)) {
+  if (b?.['@type'] === 'dcs:TextBlock') {
     return localText.value !== savedText.value
   }
   return false

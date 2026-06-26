@@ -12,8 +12,8 @@ import { useTemplateDraftStore } from '@template-repository/store/templateDraftS
 import EmptyBlockCreator from '@template-repository/components/builder-editor/EmptyBlockCreator.vue'
 import EditorBlocks from '@template-repository/components/builder-editor/EditorBlocks.vue'
 
-const { documentOutline } = storeToRefs(useTemplateDraftStore())
+const { layout } = storeToRefs(useTemplateDraftStore())
 
-const rootBlock = computed(() => documentOutline.value.find((b) => b.isRoot))
-const hasBlocks = computed(() => (rootBlock.value?.children?.length ?? 0) > 0)
+const rootBlock = computed(() => layout.value.find((n) => n['dcs:isRoot']))
+const hasBlocks = computed(() => (rootBlock.value?.['dcs:children']['@list'].length ?? 0) > 0)
 </script>

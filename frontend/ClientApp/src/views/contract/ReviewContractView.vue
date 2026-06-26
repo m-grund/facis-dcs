@@ -65,13 +65,12 @@ const verificationResult = computed(() => {
     document_number: subTemplate.document_number,
     semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
   }))
-  const result = verifySemanticValue(
+  return verifySemanticValue(
     templateDraftStore.semanticConditions,
     subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
   )
-  return result
 })
 
 const contract: Ref<Contract | null> = ref(null)
@@ -96,7 +95,7 @@ watch(
 
 watch(
   () => [
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
     templateDraftStore.semanticConditions,
     templateDraftStore.subTemplateSnapshots,
   ],
@@ -105,7 +104,7 @@ watch(
       (conditionValue) =>
         !hasConditionParameterForValue(
           conditionValue,
-          templateDraftStore.documentBlocks,
+          templateDraftStore.blocks,
           templateDraftStore.semanticConditions,
           templateDraftStore.subTemplateSnapshots,
         ),
@@ -194,20 +193,20 @@ function applyContractDataToDraft(contractData?: unknown) {
     return
   }
   const cd = preprocessContractData(contractData)
-  templateDraftStore.reset({
-    workflow: 'contract',
-    documentOutline: cd.documentOutline ?? [],
-    documentBlocks: cd.documentBlocks ?? [],
-    semanticConditions: cd.semanticConditions ?? [],
-    subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
-    templateDataVersion: cd.templateDataVersion,
-    templateVariables: cd.templateVariables ?? [],
-    placeholderBindings: cd.placeholderBindings ?? [],
-    semanticRules: cd.semanticRules ?? [],
-    policyBundle: cd.policyBundle ?? null,
-    sla: cd.sla ?? null,
-  })
-  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  if (cd) {
+    templateDraftStore.reset({
+      workflow: 'contract',
+      blocks: cd.blocks,
+      layout: cd.layout,
+      contractData: cd.contractData,
+      policies: cd.policies,
+      subTemplateSnapshots: cd.subTemplateSnapshots,
+    })
+    contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  } else {
+    templateDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+  }
 }
 
 const exportPDF = async () => {
@@ -260,8 +259,8 @@ const exportPDF = async () => {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :document-outline="templateDraftStore.documentOutline"
-                        :document-blocks="templateDraftStore.documentBlocks"
+                        :layout="templateDraftStore.layout"
+                        :blocks="templateDraftStore.blocks"
                         :semantic-conditions="templateDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"

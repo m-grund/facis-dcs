@@ -101,7 +101,6 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 						"@type":             "dcs:RequirementField",
 						"dcs:parameterName": "country",
 						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
-						"dcs:semanticPath":  "company.location.country",
 						"dcs:required":      true,
 					},
 				},

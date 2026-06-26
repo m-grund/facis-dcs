@@ -1,4 +1,4 @@
-import type { ContractTemplateData } from '@/models/contract-template'
+import type { DcsTemplateData } from '@/models/dcs-jsonld'
 
 export interface TemplateResource {
   did: string
@@ -10,7 +10,7 @@ export interface TemplateResource {
   participant_id?: string
   created_at?: string
   updated_at?: string
-  template_data?: ContractTemplateData
+  template_data?: DcsTemplateData
 }
 
 export interface TemplateResourcesItem {

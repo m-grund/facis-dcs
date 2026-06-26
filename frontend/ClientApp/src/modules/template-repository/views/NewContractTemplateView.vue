@@ -23,6 +23,9 @@
             {{ isEditMode ? 'Update' : 'Create' }}
           </button>
         </div>
+        <div v-if="submitError" class="mx-auto max-w-4xl px-6 pb-3">
+          <p class="text-sm text-error">Save failed: {{ submitError }}</p>
+        </div>
       </div>
     </template>
   </div>
@@ -84,6 +87,7 @@ watch(
           ].map((s) => s.toLowerCase())
           templateEditorUiStore.setTemplateEditable(!uneditableStates.includes(template.state.toLowerCase()))
 
+          console.log('[NewContractTemplateView] loaded template policies:', JSON.stringify((template.template_data as Record<string, unknown>)?.['dcs:policies']))
           draftStore.loadDocument(template.template_data, {
             did: template.did,
             name: template.name ?? '',
@@ -109,9 +113,12 @@ watch(
 )
 
 const isSubmitting = ref(false)
+const submitError = ref<string | null>(null)
 
 const submit = async () => {
   isSubmitting.value = true
+  submitError.value = null
+  console.log('[NewContractTemplateView] submit: policies =', JSON.stringify(draftStore.templateDocument['dcs:policies']))
   try {
     if (!draftStore.hasTemplateId) {
       // create a draft template
@@ -135,6 +142,7 @@ const submit = async () => {
     await router.push({ name: ROUTES.TEMPLATES.LIST })
   } catch (error) {
     console.error('Submission failed', error)
+    submitError.value = error instanceof Error ? error.message : String(error)
   } finally {
     isSubmitting.value = false
   }

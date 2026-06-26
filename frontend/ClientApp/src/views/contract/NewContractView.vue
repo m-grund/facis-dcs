@@ -30,11 +30,6 @@ import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
 import { useScrollStore } from '@/core/store/scroll'
-import {
-  FACIS_CONTRACT_POLICY_REFS,
-  FACIS_CONTRACT_VALIDATION_PROFILE,
-  FACIS_SCHEMA_REFS,
-} from '@/modules/template-repository/models/contract-template'
 import { buildContractDocument, getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
 import { useContractsStore } from '@/stores/contracts-store'
 
@@ -85,9 +80,10 @@ function buildCurrentContractData(): ContractData | undefined {
     documentId: contract.value.did,
     name: contract.value.name,
     description: contract.value.description,
-    documentOutline: templateDraftStore.documentOutline,
-    documentBlocks: templateDraftStore.documentBlocks,
-    semanticConditions: templateDraftStore.semanticConditions,
+    blocks: templateDraftStore.blocks,
+    layout: templateDraftStore.layout,
+    contractData: templateDraftStore.contractData,
+    policies: templateDraftStore.policies,
     subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
     sourceTemplate: contract.value.contract_data?.sourceTemplate,
@@ -106,7 +102,7 @@ function verifySemanticValues(): boolean {
     templateDraftStore.semanticConditions,
     subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
   )
   verificationResult.value = result
   if (result.isValid) {
@@ -211,7 +207,7 @@ watch(
 
 watch(
   () => [
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
     templateDraftStore.semanticConditions,
     templateDraftStore.subTemplateSnapshots,
   ],
@@ -220,7 +216,7 @@ watch(
       (conditionValue) =>
         !hasConditionParameterForValue(
           conditionValue,
-          templateDraftStore.documentBlocks,
+          templateDraftStore.blocks,
           templateDraftStore.semanticConditions,
           templateDraftStore.subTemplateSnapshots,
         ),
@@ -251,27 +247,20 @@ function applyContractDataToDraft(contractData?: unknown) {
     return
   }
   const cd = preprocessContractData(contractData)
-  templateDraftStore.reset({
-    workflow: 'contract',
-    documentOutline: cd.documentOutline ?? [],
-    documentBlocks: cd.documentBlocks ?? [],
-    semanticConditions: cd.semanticConditions ?? [],
-    subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
-    templateDataVersion: cd.templateDataVersion,
-    schemaRefs: {
-      documentStructure: cd.schemaRefs?.documentStructure ?? FACIS_SCHEMA_REFS.documentStructure,
-      semanticCondition: cd.schemaRefs?.semanticCondition ?? FACIS_SCHEMA_REFS.semanticCondition,
-      contractData: cd.schemaRefs?.contractData ?? FACIS_SCHEMA_REFS.contractData,
-    },
-    policyRefs: cd.policyRefs ?? FACIS_CONTRACT_POLICY_REFS,
-    validation: cd.validation ?? FACIS_CONTRACT_VALIDATION_PROFILE,
-    templateVariables: cd.templateVariables ?? [],
-    placeholderBindings: cd.placeholderBindings ?? [],
-    semanticRules: cd.semanticRules ?? [],
-    policyBundle: cd.policyBundle ?? null,
-    sla: cd.sla ?? null,
-  })
-  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  if (cd) {
+    templateDraftStore.reset({
+      workflow: 'contract',
+      blocks: cd.blocks,
+      layout: cd.layout,
+      contractData: cd.contractData,
+      policies: cd.policies,
+      subTemplateSnapshots: cd.subTemplateSnapshots,
+    })
+    contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  } else {
+    templateDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+  }
   verificationResult.value = null
 }
 
@@ -341,8 +330,8 @@ onBeforeRouteLeave(() => {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :document-outline="templateDraftStore.documentOutline"
-                        :document-blocks="templateDraftStore.documentBlocks"
+                        :layout="templateDraftStore.layout"
+                        :blocks="templateDraftStore.blocks"
                         :semantic-conditions="templateDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"

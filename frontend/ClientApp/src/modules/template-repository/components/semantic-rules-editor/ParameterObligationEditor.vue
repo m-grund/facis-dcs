@@ -45,6 +45,7 @@
     >
       <label class="label min-h-0 py-0">
         <span class="label-text text-xs text-base-content/60">Values</span>
+        <span v-if="!setConstraintTargets().length" class="label-text-alt text-xs text-warning">Select at least one value</span>
       </label>
       <input
         v-if="valueOptions.length"
