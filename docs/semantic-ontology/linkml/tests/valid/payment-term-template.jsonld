@@ -56,53 +56,56 @@
     "dcs:documentStructure": {
         "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#document-structure",
         "@type": "dcs:DocumentStructure",
-        "dcs:blocks": [
-            {
-                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#block-54222a4d-ecef-4a8e-ab84-d0d8194f9222",
-                "@type": "dcs:Clause",
-                "dcs:content": {
-                    "@list": [
-                        "Payment Amount: ",
-                        {
-                            "@type": "dcs:Placeholder",
-                            "dcs:bindsTo": {
-                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.amount"
+        "dcs:blocks": {
+            "@list": [
+                {
+                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#block-54222a4d-ecef-4a8e-ab84-d0d8194f9222",
+                    "@type": "dcs:Clause",
+                    "dcs:content": {
+                        "@list": [
+                            "Payment Amount: ",
+                            {
+                                "@type": "dcs:Placeholder",
+                                "dcs:bindsTo": {
+                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.amount"
+                                }
+                            },
+                            "\nPayment Currency: ",
+                            {
+                                "@type": "dcs:Placeholder",
+                                "dcs:bindsTo": {
+                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.currency"
+                                }
+                            },
+                            "\nPayment Due Date: ",
+                            {
+                                "@type": "dcs:Placeholder",
+                                "dcs:bindsTo": {
+                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDate"
+                                }
+                            },
+                            "\nPayment Due Days: ",
+                            {
+                                "@type": "dcs:Placeholder",
+                                "dcs:bindsTo": {
+                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDays"
+                                }
                             }
-                        },
-                        "\nPayment Currency: ",
-                        {
-                            "@type": "dcs:Placeholder",
-                            "dcs:bindsTo": {
-                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.currency"
-                            }
-                        },
-                        "\nPayment Due Date: ",
-                        {
-                            "@type": "dcs:Placeholder",
-                            "dcs:bindsTo": {
-                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDate"
-                            }
-                        },
-                        "\nPayment Due Days: ",
-                        {
-                            "@type": "dcs:Placeholder",
-                            "dcs:bindsTo": {
-                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDays"
-                            }
-                        }
-                    ]
+                        ]
+                    },
+                    "dcs:title": "Payment Term"
                 },
-                "dcs:title": "Payment Term"
-            },
-            {
-                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#block-de1e1217-c698-4d85-ae7f-6ebfc3f5dd65",
-                "@type": "dcs:Section",
-                "dcs:title": "test"
-            }
-        ],
+                {
+                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#block-de1e1217-c698-4d85-ae7f-6ebfc3f5dd65",
+                    "@type": "dcs:Section",
+                    "dcs:title": "test"
+                }
+            ]
+        },
         "dcs:layout": [
             {
                 "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#block-ddac34ed-a7ac-4c2e-8810-aa2b33275301",
+                "@type": "dcs:LayoutNode",
                 "dcs:children": {
                     "@list": [
                         {
@@ -117,6 +120,7 @@
             },
             {
                 "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#block-de1e1217-c698-4d85-ae7f-6ebfc3f5dd65",
+                "@type": "dcs:LayoutNode",
                 "dcs:children": {
                     "@list": []
                 }
@@ -148,6 +152,5 @@
                 }
             }
         }
-    ],
-    "http://localhost:8080/ontology/dcs-pdf-core#title": "tete"
+    ]
 }

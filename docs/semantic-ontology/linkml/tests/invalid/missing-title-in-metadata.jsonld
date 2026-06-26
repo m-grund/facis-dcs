@@ -1,0 +1,15 @@
+{
+    "@context": {
+        "dcs": "https://w3id.org/facis/dcs/ontology/v1#"
+    },
+    "@id": "did:web:localhost:template:test-no-title",
+    "@type": "dcs:ContractTemplate",
+    "dcs:metadata": {
+        "@id": "did:web:localhost:template:test-no-title#metadata",
+        "@type": "dcs:TemplateMetadata",
+        "dcs:description": "Metadata exists but title is missing"
+    },
+    "dcs:policies": [
+        { "@id": "did:web:localhost:template:test-no-title#policy-1" }
+    ]
+}

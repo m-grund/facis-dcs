@@ -1,98 +1,299 @@
 id: https://w3id.org/facis/dcs/schema
 name: dcs-schema
-default_range: string
+description: Digital Contracting Service semantic schema
 
 prefixes:
   linkml: "https://w3id.org/linkml/"
-  "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
-  "odrl": "http://www.w3.org/ns/odrl/2/",
-  "xsd": "http://www.w3.org/2001/XMLSchema#",
-  "taxonomy": "https://w3id.org/facis/dcs/taxonomy/v1#"
+  dcs: "https://w3id.org/facis/dcs/ontology/v1#"
+  odrl: "http://www.w3.org/ns/odrl/2/"
+  xsd: "http://www.w3.org/2001/XMLSchema#"
+  taxonomy: "https://w3id.org/facis/dcs/taxonomy/v1#"
+  dcterms: "http://purl.org/dc/terms/"
+  schema: "http://schema.org/"
+
+imports:
+  - linkml:types
 
 default_prefix: dcs
+default_range: string
 
 classes:
-  # Die einzelnen Klassen (@Type) der JSON-LD-Daten werden hier als LinkML-Klassen modelliert
+  
+  ContractTemplate:
+    class_uri: dcs:ContractTemplate
+    close_mappings:
+      - schema:CreativeWork
+    slot_usage:
+      metadata:
+        required: true
+      policies:
+        required: true
+    slots:
+      - documentTitle
+      - contractData
+      - documentStructure
+      - metadata
+      - policies
 
   DataRequirement:
     class_uri: dcs:DataRequirement
+    slot_usage:
+      conditionId:
+        required: true
+      fields:
+        required: true
     slots:
-      - id
       - conditionId
       - fields
       - name
       - schemaVersion
 
   RequirementField:
-    description: >-
-      Ein einzelnes Datenfeld innerhalb einer DataRequirement, das auf ein
-      Taxonomie-Feld in einem externen System verweist.
     class_uri: dcs:RequirementField
+    close_mappings:
+      - schema:PropertyValue
+    slot_usage:
+      parameterName:
+        required: true
     slots:
-      - id
       - domainField
       - parameterName
       - required
-      - semanticPath
+
+  DocumentStructure:
+    class_uri: dcs:DocumentStructure
+    slots:
+      - layout
+
+  Clause:
+    class_uri: dcs:Clause
+    close_mappings:
+      - schema:Article
+    slots:
+      - title
+
+  Section:
+    class_uri: dcs:Section
+    close_mappings:
+      - schema:Article
+    slots:
+      - title
+
+  TextBlock:
+    class_uri: dcs:TextBlock
+    close_mappings:
+      - schema:Text
+    slots:
+      - text
+
+  Placeholder:
+    class_uri: dcs:Placeholder
+    slots:
+      - bindsTo
+      - token
+
+  TemplateMetadata:
+    class_uri: dcs:TemplateMetadata
+    slot_usage:
+      title:
+        required: true
+    slots:
+      - createdAt
+      - createdBy
+      - description
+      - did
+      - name
+      - schemaVersion
+      - sourceSystemType
+      - state
+      - templateType
+      - templateVersion
+      - title
+      - updatedAt
+      - uuid
+
+  LayoutNode:
+    class_uri: dcs:LayoutNode
+    slots:
+      - isRoot
 
 slots:
-  # Hier werden die einzelnen Felder der JSON-LD-Daten als LinkML-Slots modelliert, die dann in den Klassen referenziert werden
 
-  id:
-    slot_uri: "@id"
-    identifier: true
+  documentTitle:
+    slot_uri: dcs:documentTitle
+    range: string
+
+  contractData:
+    slot_uri: dcs:contractData
+    range: DataRequirement
+    multivalued: true
+
+  documentStructure:
+    slot_uri: dcs:documentStructure
+    range: DocumentStructure
+
+  metadata:
+    slot_uri: dcs:metadata
+    range: TemplateMetadata
+
+  policies:
+    slot_uri: dcs:policies
     range: uriorcurie
-    description: >-
-      Eindeutige (DID-)URI des Knotens, entspricht @id in den JSON-LD-Daten.
-      Bei dieser Datenquelle z.B. eine DID-URI mit Fragment, z.B.
-      "did:web:localhost:template:<uuid>#requirement-<uuid>". Falls die
-      Bestandteile (Template-DID, Typ-Praefix, UUID) einzeln benoetigt
-      werden, muessen sie separat aus diesem String geparst werden -- LinkML
-      bildet sie nicht automatisch als eigene Felder ab.
+    multivalued: true
+    close_mappings:
+      - odrl:hasPolicy
 
   conditionId:
     slot_uri: dcs:conditionId
     range: string
-    description: UUID, das die zugehoerige Bedingung referenziert.
-    # TODO: falls immer UUID-Format -> pattern ergaenzen, z.B.:
-    # pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
   fields:
     slot_uri: dcs:fields
     range: RequirementField
     multivalued: true
-    inlined: true
-    inlined_as_list: true
-    description: Liste der Einzelfelder dieser DataRequirement.
+    close_mappings:
+      - schema:property
 
   name:
     slot_uri: dcs:name
     range: string
+    close_mappings:
+      - schema:name
 
   schemaVersion:
     slot_uri: dcs:schemaVersion
     range: string
-    # TODO: falls es nur eine feste Menge von Werten gibt (z.B. "v1", "v2"),
-    # lohnt sich hier ein echtes Enum statt freiem string, z.B.:
-    # range: SchemaVersionEnum
+    close_mappings:
+      - schema:schemaVersion
+
+  blocks:
+    slot_uri: dcs:blocks
+    multivalued: true
+    list_elements_ordered: true
+    close_mappings:
+      - schema:hasPart
+    any_of:
+      - range: Clause
+      - range: Section
+      - range: TextBlock
 
   domainField:
     slot_uri: dcs:domainField
     range: uriorcurie
-    description: >-
-      Reine Referenz (IRI) auf ein Taxonomie-Feld in einem externen System.
-      Wird bewusst NICHT als eigene Klasse modelliert, da die Taxonomie
-      kein Teil dieses Schemas ist.
+    close_mappings:
+      - schema:propertyID
 
   parameterName:
     slot_uri: dcs:parameterName
     range: string
-    description: Dot-Notation-Pfad des Parameters, z.B. "contract.jurisdiction".
 
   required:
     slot_uri: dcs:required
     range: boolean
+    close_mappings:
+      - schema:valueRequired
 
   semanticPath:
     slot_uri: dcs:semanticPath
     range: string
+
+  title:
+    slot_uri: dcs:title
+    range: string
+    exact_mappings:
+      - dcterms:title
+
+  text:
+    slot_uri: dcs:text
+    range: string
+    close_mappings:
+      - schema:text
+
+  token:
+    slot_uri: dcs:token
+    range: string
+
+  templateType:
+    slot_uri: dcs:templateType
+    range: string
+    close_mappings:
+      - dcterms:type
+
+  templateVersion:
+    slot_uri: dcs:templateVersion
+    range: integer
+    close_mappings:
+      - schema:version
+
+  createdAt:
+    slot_uri: dcs:createdAt
+    range: string
+    exact_mappings:
+      - dcterms:created
+
+  createdBy:
+    slot_uri: dcs:createdBy
+    range: string
+    close_mappings:
+      - dcterms:creator
+
+  did:
+    slot_uri: dcs:did
+    range: string
+    close_mappings:
+      - dcterms:identifier
+
+  sourceSystemType:
+    slot_uri: dcs:sourceSystemType
+    range: string
+
+  state:
+    slot_uri: dcs:state
+    range: string
+
+  updatedAt:
+    slot_uri: dcs:updatedAt
+    range: string
+    exact_mappings:
+      - dcterms:modified
+
+  uuid:
+    slot_uri: dcs:uuid
+    range: string
+    close_mappings:
+      - dcterms:identifier
+
+  description:
+    slot_uri: dcs:description
+    range: string
+    exact_mappings:
+      - dcterms:description
+
+  layout:
+    slot_uri: dcs:layout
+    range: LayoutNode
+    multivalued: true
+
+  children:
+    slot_uri: dcs:children
+    range: uriorcurie
+    multivalued: true
+    list_elements_ordered: true
+    close_mappings:
+      - schema:hasPart
+
+  isRoot:
+    slot_uri: dcs:isRoot
+    range: boolean
+
+  content:
+    slot_uri: dcs:content
+    multivalued: true
+    list_elements_ordered: true
+    any_of:
+      - range: string
+      - range: Placeholder
+
+  bindsTo:
+    slot_uri: dcs:bindsTo
+    range: RequirementField

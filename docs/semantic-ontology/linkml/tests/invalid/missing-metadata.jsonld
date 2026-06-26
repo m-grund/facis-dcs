@@ -1,0 +1,10 @@
+{
+    "@context": {
+        "dcs": "https://w3id.org/facis/dcs/ontology/v1#"
+    },
+    "@id": "did:web:localhost:template:test-no-metadata",
+    "@type": "dcs:ContractTemplate",
+    "dcs:policies": [
+        { "@id": "did:web:localhost:template:test-no-metadata#policy-1" }
+    ]
+}
