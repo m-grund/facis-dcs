@@ -54,24 +54,28 @@ json.dump(ctx, open(path, 'w'), indent=3)"
 $(SHAPES_MERGED): $(OUTPUT_PATH)/$(SCHEMA).shacl.ttl $(SHAPES_EXTRA)
 	cat $^ > $@
 
+GREEN := \033[0;32m
+RED   := \033[0;31m
+RESET := \033[0m
+
 validate: setup_venv $(SHAPES_MERGED)
 	@failed=0; \
 	for f in $(VALID_TESTS); do \
 	    out=$$($(PYSHACL) -s $(SHAPES_MERGED) -df json-ld $$f 2>&1); \
 	    if echo "$$out" | grep -q "Conforms: True"; then \
-	        echo "PASS  $$f"; \
+	        printf "$(GREEN)PASS$(RESET)  $$f\n"; \
 	    else \
-	        echo "FAIL  $$f  (expected valid)"; \
+	        printf "$(RED)FAIL$(RESET)  $$f  (expected valid)\n"; \
 	        echo "$$out"; failed=1; \
 	    fi; \
 	done; \
 	for f in $(INVALID_TESTS); do \
 	    out=$$($(PYSHACL) -s $(SHAPES_MERGED) -df json-ld $$f 2>&1); \
 	    if ! echo "$$out" | grep -q "Conforms: True"; then \
-	        echo "PASS  $$f  (correctly rejected)"; \
+	        printf "$(GREEN)PASS$(RESET)  $$f  (correctly rejected)\n"; \
 	        echo "$$out" | grep -E "Constraint Violation|Message:|Result Path:" | sed 's/^/      /'; \
 	    else \
-	        echo "FAIL  $$f  (expected rejection)"; failed=1; \
+	        printf "$(RED)FAIL$(RESET)  $$f  (expected rejection)\n"; failed=1; \
 	    fi; \
 	done; \
 	exit $$failed
