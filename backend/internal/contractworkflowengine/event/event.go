@@ -1,7 +1,10 @@
 package event
 
 import (
+	"encoding/json"
 	"time"
+
+	"digital-contracting-service/internal/contractworkflowengine/db"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
 
@@ -12,6 +15,41 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 )
+
+// SyncingRequestEvent is emitted when a new contract is created.
+type SyncingRequestEvent struct {
+	RequesterDID string    `json:"requester_did"`
+	DID          string    `json:"did"`
+	OccurredAt   time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e SyncingRequestEvent) EventType() string {
+	return eventtype.SyncingRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e SyncingRequestEvent) GetDID() string {
+	return e.DID
+}
+
+// SyncingRequestRespond is emitted when a new contract is created.
+type SyncingRequestRespond struct {
+	ResponderDID string          `json:"responder_did"`
+	DID          string          `json:"did"`
+	OccurredAt   time.Time       `json:"occurred_at"`
+	Payload      json.RawMessage `json:"payload"`
+}
+
+// EventType implements the Event interface.
+func (e SyncingRequestRespond) EventType() string {
+	return eventtype.SyncingResponse.String()
+}
+
+// GetDID implements the Event interface.
+func (e SyncingRequestRespond) GetDID() string {
+	return e.DID
+}
 
 // CreateEvent is emitted when a new contract is created.
 type CreateEvent struct {
@@ -24,6 +62,7 @@ type CreateEvent struct {
 	ContractData *datatype.JSON     `json:"contract_data"`
 	OccurredAt   time.Time          `json:"occurred_at"`
 	UserRoles    userrole.UserRoles `json:"user_roles"`
+	Responsible  *db.Responsible    `json:"responsible,omitempty"`
 }
 
 // EventType implements the Event interface.
@@ -33,6 +72,38 @@ func (e CreateEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e CreateEvent) GetDID() string {
+	return e.DID
+}
+
+// CreateEvent is emitted when a new contract is created.
+type RemoteCreateEvent struct {
+	DID             string                             `json:"did"`
+	TemplateDID     string                             `json:"template_did"`
+	CreatedBy       string                             `json:"created_by"`
+	Name            *string                            `json:"name"`
+	Description     *string                            `json:"description"`
+	ContractData    *datatype.JSON                     `json:"contract_data"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	Responsible     *db.Responsible                    `json:"responsible"`
+	ContractVersion int                                `json:"contract_version"`
+	State           contractstate.ContractState        `json:"state"`
+	CreatedAt       time.Time                          `json:"created_at"`
+	UpdatedAt       time.Time                          `json:"updated_at"`
+	TemplateVersion int                                `json:"template_version"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	ExpDate         *time.Time                         `json:"exp_date"`
+	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
+	StartDate       *time.Time                         `json:"start_date"`
+	Origin          string                             `json:"origin"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteCreateEvent) EventType() string {
+	return eventtype.RemoteCreate.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteCreateEvent) GetDID() string {
 	return e.DID
 }
 
@@ -69,6 +140,38 @@ func (e UpdateEvent) GetDID() string {
 	return e.DID
 }
 
+// UpdateEvent is emitted when contract data is updated.
+type RemoteUpdateEvent struct {
+	DID             string                             `json:"did"`
+	TemplateDID     string                             `json:"template_did"`
+	CreatedBy       string                             `json:"created_by"`
+	Name            *string                            `json:"name"`
+	Description     *string                            `json:"description"`
+	ContractData    *datatype.JSON                     `json:"contract_data"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	Responsible     *db.Responsible                    `json:"responsible"`
+	ContractVersion int                                `json:"contract_version"`
+	State           contractstate.ContractState        `json:"contract_state"`
+	CreatedAt       time.Time                          `json:"created_at"`
+	UpdatedAt       time.Time                          `json:"updated_at"`
+	TemplateVersion int                                `json:"template_version"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	ExpDate         *time.Time                         `json:"exp_date"`
+	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
+	StartDate       *time.Time                         `json:"start_date"`
+	Origin          string                             `json:"origin"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteUpdateEvent) EventType() string {
+	return eventtype.Update.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteUpdateEvent) GetDID() string {
+	return e.DID
+}
+
 // SubmitEvent is emitted when a contract is submitted
 type SubmitEvent struct {
 	DID             string                 `json:"did"`
@@ -80,7 +183,6 @@ type SubmitEvent struct {
 	ContractVersion int                    `json:"contract_version"`
 	ActionFlag      *actionflag.ActionFlag `json:"action_flag,omitempty"`
 	Comments        []string               `json:"comments"`
-	Responsible     *any                   `json:"responsible,omitempty"`
 	UserRoles       userrole.UserRoles     `json:"user_roles"`
 }
 

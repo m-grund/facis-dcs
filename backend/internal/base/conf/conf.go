@@ -1,9 +1,15 @@
 package conf
 
-import "time"
+import (
+	"time"
+)
 
 func TransactionTimeout() time.Duration {
-	return 5 * time.Minute
+	return 30 * time.Second
+}
+
+func HTTPClientTimeout() time.Duration {
+	return 10 * time.Second
 }
 
 func OutboxProcessorTimeOut() time.Duration {

@@ -28,6 +28,7 @@ type signatureManagementsrvc struct {
 	ATrailReader base.AuditTrailReader
 	DSSClient    dss.Client
 	IPFSClient   *ipfs.APIClient
+	DIDDocument  base.DIDDocument
 	auth.JWTAuthenticator
 }
 

@@ -1,6 +1,6 @@
 /** Assignee IDs must match JWT sub. */
 
-export interface SubmitContractAssignees {
+export interface ParticipantSelection {
   reviewers: string[]
   approvers: string[]
   negotiators: string[]

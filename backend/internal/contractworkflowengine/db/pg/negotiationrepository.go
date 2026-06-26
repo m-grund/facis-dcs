@@ -188,3 +188,18 @@ func (r PostgresNegotiationRepo) Delete(ctx context.Context, tx *sqlx.Tx, did st
 	_, err := tx.ExecContext(ctx, statement, did)
 	return err
 }
+
+func (r PostgresNegotiationRepo) ReadAllNegotiationDecisionsByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.NegotiationDecisionData, error) {
+	query := `
+        SELECT cnd.id, negotiation_id, negotiator, decision, rejection_reason
+        FROM contract_negotiations cn
+            JOIN contract_negotiation_decisions cnd ON cnd.negotiation_id = cn.id
+            WHERE cn.did = $1
+    `
+	var decisions []db.NegotiationDecisionData
+	err := tx.SelectContext(ctx, &decisions, query, did)
+	if err != nil {
+		return nil, err
+	}
+	return decisions, nil
+}

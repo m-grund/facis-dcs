@@ -15,18 +15,17 @@ type ContractTemplateQueryResult struct {
 }
 
 type ContractTemplateMetadata struct {
-	DID            string       `db:"did"`
-	DocumentNumber *string      `db:"document_number"`
-	Version        int          `db:"version"`
-	State          string       `db:"state"`
-	TemplateType   string       `db:"template_type"`
-	Name           *string      `db:"name"`
-	Description    *string      `db:"description"`
-	CreatedBy      string       `db:"created_by"`
-	CreatedAt      time.Time    `db:"created_at"`
-	Responsible    *Responsible `db:"responsible"`
-	UpdatedAt      time.Time    `db:"updated_at"`
-	BaseTemplate   *string      `db:"base_template"`
+	DID            string    `db:"did"`
+	DocumentNumber *string   `db:"document_number"`
+	Version        int       `db:"version"`
+	State          string    `db:"state"`
+	TemplateType   string    `db:"template_type"`
+	Name           *string   `db:"name"`
+	Description    *string   `db:"description"`
+	CreatedBy      string    `db:"created_by"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+	BaseTemplate   *string   `db:"base_template"`
 }
 
 type ContractTemplateRepo interface {

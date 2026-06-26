@@ -1,0 +1,39 @@
+stateDiagram-v2
+    direction TB
+
+    [*] --> Draft : Creator: POST /template/create
+
+    Draft --> Draft : Creator: PUT /template/update
+    Draft --> Submitted : Creator: POST /template/submit
+    Draft --> Deleted : Manager: POST /template/archive
+
+    Rejected --> Submitted : Creator: POST /template/submit (reopen tasks)
+    Rejected --> Deleted : Manager: POST /template/archive
+
+    Submitted --> Submitted : Reviewer: POST /template/verify
+    Submitted --> Reviewed : "Reviewer: POST /template/submit [all approved]"
+    Submitted --> Rejected : "Reviewer: POST /template/submit [one rejected]"
+    Submitted --> Deleted : Manager: POST /template/archive
+
+    Reviewed --> Submitted : Approver: POST /template/submit (reopen)
+    Reviewed --> Approved : "Approver: POST /template/approved"
+    Reviewed --> Rejected : Approver: POST /template/reject
+    Reviewed --> Deleted : Manager: POST /template/archive
+
+    Approved --> Registered : Manager: POST /catalogue/template/register
+    Approved --> Deleted : Manager: POST /template/archive
+
+    Registered --> Published : Manager: POST /template/publish
+    Registered --> Deprecated : Manager: POST /template/archive
+
+    Published --> Deprecated : Manager: POST /template/archive
+
+    classDef inProgress fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    classDef approved    fill:#dcfce7,stroke:#22c55e,color:#14532d
+    classDef rejected    fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef terminal    fill:#f3f4f6,stroke:#6b7280,color:#374151
+
+    class Draft,Submitted,Reviewed inProgress
+    class Approved,Registered,Published approved
+    class Rejected rejected
+    class Deleted,Deprecated terminal

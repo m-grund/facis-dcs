@@ -53,20 +53,6 @@ func (r *PostgresNegotiationTaskRepo) ReopenTasks(ctx context.Context, tx *sqlx.
 	return err
 }
 
-func (r *PostgresNegotiationTaskRepo) ReadAll(ctx context.Context, tx *sqlx.Tx, did string) ([]db.NegotiationTaskData, error) {
-	query := `
-        SELECT id, did, state, negotiator,
-               created_by, created_at
-        FROM contract_negotiation_task WHERE did = $1
-    `
-	var negotiationTasks []db.NegotiationTaskData
-	err := tx.SelectContext(ctx, &negotiationTasks, query, did)
-	if err != nil {
-		return nil, err
-	}
-	return negotiationTasks, nil
-}
-
 func (r *PostgresNegotiationTaskRepo) ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.NegotiationTaskData, error) {
 	query := `
         SELECT id, did, state, negotiator,

@@ -104,7 +104,6 @@ watch(
             version: template.version ?? null,
             document_number: template.document_number ?? null,
             updated_at: template.updated_at ?? null,
-            responsible: template.responsible ?? null,
           })
         })
         .catch((error: unknown) => {

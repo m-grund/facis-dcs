@@ -105,7 +105,6 @@ func (h *GetAllApprovedTemplateHandler) Handle(ctx context.Context, query GetAll
 			CreatedBy:      data.CreatedBy,
 			CreatedAt:      data.CreatedAt,
 			UpdatedAt:      data.UpdatedAt,
-			Responsible:    data.Responsible,
 		}
 		contractTemplatesItems = append(contractTemplatesItems, metadata)
 	}

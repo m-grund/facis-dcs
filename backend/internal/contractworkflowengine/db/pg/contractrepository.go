@@ -22,15 +22,15 @@ type PostgresContractRepo struct {
 func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) (*time.Time, error) {
 	statement := `
         INSERT INTO contracts (
-            did, created_by, state, name,
-            description, contract_data, template_did, template_version
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            did, origin, created_by, state, name,
+            description, contract_data, template_did, template_version, responsible
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING created_at
     `
 	var createdAt time.Time
 	err := tx.GetContext(ctx, &createdAt, statement,
-		data.DID, data.CreatedBy, data.State, data.Name,
-		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion)
+		data.DID, data.Origin, data.CreatedBy, data.State, data.Name,
+		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion, data.Responsible)
 	if err != nil {
 		return nil, err
 	}
@@ -40,11 +40,11 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
 func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         INSERT INTO contract_history 
-            (did, state, name, description, created_by, created_at, updated_at, 
+            (did, origin, state, name, description, created_by, created_at, updated_at, 
              contract_version, contract_data, start_date, exp_date, exp_policy, 
              exp_notice_period, responsible, template_did, template_version)
         SELECT 
-            did, state, name, description, created_by, created_at, updated_at, 
+            did, origin, state, name, description, created_by, created_at, updated_at, 
             contract_version, contract_data, start_date, exp_date, exp_policy, 
             exp_notice_period, responsible, template_did, template_version
         FROM contracts_effective 
@@ -56,7 +56,7 @@ func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx 
 
 func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractHistory, error) {
 	query := `
-        SELECT did, state, name, description,
+        SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contract_history
@@ -77,7 +77,7 @@ func (r *PostgresContractRepo) ReadLastHistoryEntryByDID(ctx context.Context, tx
 
 func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractHistory, error) {
 	query := `
-        SELECT did, state, name, description,
+        SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contract_history
@@ -96,7 +96,7 @@ func (r *PostgresContractRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx
 
 func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
-        SELECT did, state, name, description,
+        SELECT did, origin, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contracts_effective
@@ -116,7 +116,7 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
 		SELECT
-			cem.did, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
+			cem.did, cem.origin, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
 			cem.contract_version, cem.start_date, cem.exp_date, cem.exp_policy, cem.exp_notice_period, cem.responsible,
 			cem.template_did, cem.template_version,
 			cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
@@ -152,7 +152,7 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 
 func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
-        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
+        SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
                exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
         FROM contracts_effective_metadata
     `
@@ -182,7 +182,7 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 
 func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
-        SELECT did, state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
+        SELECT did, origin,  state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
         FROM contracts_effective_process_data WHERE did = $1
     `
 	var processData db.ContractProcessData
@@ -198,7 +198,7 @@ func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sql
 
 func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
+    SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
            exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
     FROM contracts
     WHERE exp_date IS NOT NULL
@@ -244,6 +244,15 @@ func (r *PostgresContractRepo) UpdatePDFState(ctx context.Context, tx *sqlx.Tx, 
 
 func (r *PostgresContractRepo) Update(ctx context.Context, tx *sqlx.Tx, data db.ContractUpdateData) error {
 	query, params, err := createQuery(data)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, *query, params...)
+	return err
+}
+
+func (r *PostgresContractRepo) RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data db.RemoteContractUpdateData) error {
+	query, params, err := createRemoteQuery(data)
 	if err != nil {
 		return err
 	}
@@ -334,6 +343,64 @@ func createQuery(data db.ContractUpdateData) (*string, []interface{}, error) {
 	if data.Responsible != nil {
 		addParam("responsible", data.Responsible)
 	}
+	if len(columns) == 0 {
+		return nil, nil, errors.New("no fields to update")
+	}
+
+	fullQuery := queryBase + strings.Join(columns, ", ")
+	nextIdx := len(params) + 1
+	fullQuery += fmt.Sprintf(" WHERE did = $%d;",
+		nextIdx)
+	params = append(params, data.DID)
+
+	return &fullQuery, params, nil
+}
+
+func createRemoteQuery(data db.RemoteContractUpdateData) (*string, []interface{}, error) {
+	queryBase := `UPDATE contracts SET `
+	var columns []string
+	var params []interface{}
+
+	addParam := func(columnName string, value interface{}) {
+		columns = append(columns, fmt.Sprintf("%s = $%d", columnName, len(params)+1))
+		params = append(params, value)
+	}
+
+	if data.ContractVersion > 0 {
+		addParam("contract_version", data.ContractVersion)
+	}
+	if len(data.State) > 0 {
+		addParam("state", data.State)
+	}
+	if data.Name != nil {
+		addParam("name", data.Name)
+	}
+	if data.Description != nil {
+		addParam("description", data.Description)
+	}
+	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
+		addParam("contract_data", data.ContractData)
+	}
+	if data.StartDate != nil {
+		addParam("start_date", data.StartDate)
+	}
+	if data.ExpDate != nil {
+		addParam("exp_date", data.ExpDate)
+	}
+	if data.ExpPolicy != nil {
+		addParam("exp_policy", data.ExpPolicy)
+	}
+	if data.ExpNoticePeriod != nil {
+		addParam("exp_notice_period", data.ExpNoticePeriod)
+	}
+
+	addParam("template_did", data.TemplateDID)
+	addParam("template_version", data.TemplateVersion)
+	addParam("created_at", data.CreatedAt)
+	addParam("created_by", data.CreatedBy)
+	addParam("updated_at", data.UpdatedAt)
+	addParam("origin", data.Origin)
+
 	if len(columns) == 0 {
 		return nil, nil, errors.New("no fields to update")
 	}

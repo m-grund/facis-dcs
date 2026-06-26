@@ -1,11 +1,11 @@
 <template>
-  <button type="button" v-bind="$attrs" @click="openModal">Submit</button>
+  <button type="button" v-bind="$attrs" @click="openModal">Create</button>
   <Teleport to="body">
     <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
-        <h3 class="text-lg font-bold">Assignees for Contract Submission</h3>
+        <h3 class="text-lg font-bold">Contract Participants</h3>
 
-        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalIssuers">Add local Issuer</button>
+        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
         <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
 
         <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
@@ -122,18 +122,16 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/auth-store'
-import { isDuplicateInList, mergeDraftIntoList } from '@/utils/submit-selection'
-import type { SubmitContractAssignees } from '@/utils/submit-selection'
+import { getLocalDIDFile } from '@/services/did-service'
+import { isDuplicateInList, mergeDraftIntoList } from '@/utils/participant-selection'
+import type { ParticipantSelection } from '@/utils/participant-selection'
 import { nextTick, ref, type Ref } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
 const emit = defineEmits<{
-  submit: [value: SubmitContractAssignees]
+  submit: [value: ParticipantSelection]
 }>()
-
-const authStore = useAuthStore()
 
 const assigneeModal = ref<HTMLDialogElement | null>(null)
 
@@ -149,26 +147,31 @@ const reviewerError = ref('')
 const approverError = ref('')
 const negotiatorError = ref('')
 
-function addLocalIssuers() {
+async function addLocalDID() {
   error.value = ''
 
-  const issuer = authStore.user?.issuer ?? ''
+  try {
+    const didDocument = await getLocalDIDFile()
+    const did = didDocument?.id
 
-  if (issuer === '') {
-    error.value = 'No valid value for local issuer found'
-    return
-  }
+    if (did === '') {
+      error.value = 'No valid value for local did found'
+      return
+    }
 
-  if (!isDuplicateInList(issuer, negotiators.value)) {
-    negotiators.value.push(issuer)
-  }
+    if (!isDuplicateInList(did, negotiators.value)) {
+      negotiators.value.push(did)
+    }
 
-  if (!isDuplicateInList(issuer, reviewers.value)) {
-    reviewers.value.push(issuer)
-  }
+    if (!isDuplicateInList(did, reviewers.value)) {
+      reviewers.value.push(did)
+    }
 
-  if (!isDuplicateInList(issuer, approvers.value)) {
-    approvers.value.push(issuer)
+    if (!isDuplicateInList(did, approvers.value)) {
+      approvers.value.push(did)
+    }
+  } catch {
+    error.value = 'Could not read local did'
   }
 }
 
@@ -250,7 +253,7 @@ function removeNegotiator(did: string) {
   removeFromList(negotiators, did)
 }
 
-function collectAssignees(): SubmitContractAssignees {
+function collectAssignees(): ParticipantSelection {
   return {
     reviewers: mergeDraftIntoList(reviewers.value, reviewerDraft.value),
     approvers: mergeDraftIntoList(approvers.value, approverDraft.value),

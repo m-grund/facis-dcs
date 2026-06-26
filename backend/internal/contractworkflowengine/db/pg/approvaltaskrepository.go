@@ -42,7 +42,7 @@ func (r *PostgresApprovalTaskRepo) ReopenTasks(ctx context.Context, tx *sqlx.Tx,
 	return err
 }
 
-func (r *PostgresApprovalTaskRepo) ReadAll(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ApprovalTaskData, error) {
+func (r *PostgresApprovalTaskRepo) ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ApprovalTaskData, error) {
 	query := `
         SELECT id, did, state, approver,
                created_by, created_at

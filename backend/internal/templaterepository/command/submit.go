@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -22,6 +24,7 @@ import (
 
 type SubmitCmd struct {
 	DID         string
+	DIDDocument base.DIDDocument
 	UpdatedAt   time.Time
 	SubmittedBy string
 	ActionFlag  *actionflag.ActionFlag
@@ -91,23 +94,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 		if !cmd.UserRoles.HasRoles(userrole.TemplateCreator, userrole.TemplateManager) {
 			return errors.New("invalid user permission")
-		}
-
-		resp := db.Responsible{
-			Creator:   processData.CreatedBy,
-			Reviewers: []string{cmd.SubmittedBy},
-			Approver:  cmd.SubmittedBy,
-		}
-		anyResp := any(resp)
-		responsible = &anyResp
-
-		updateData := db.ContractTemplateUpdateData{
-			DID:         cmd.DID,
-			Responsible: &resp,
-		}
-		err := h.CTRepo.Update(ctx, tx, updateData)
-		if err != nil {
-			return fmt.Errorf("could not update contract template: %w", err)
 		}
 
 		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, cmd)

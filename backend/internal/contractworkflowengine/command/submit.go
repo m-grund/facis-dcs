@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -27,13 +29,11 @@ type SubmitCmd struct {
 	DID         string
 	UpdatedAt   time.Time
 	SubmittedBy string
-	Reviewers   []string
-	Approvers   []string
-	Negotiators []string
 	ActionFlag  *actionflag.ActionFlag
 	Comments    []string
 	HolderDID   string
 	UserRoles   userrole.UserRoles
+	DIDDocument base.DIDDocument
 }
 
 type Submitter struct {
@@ -43,49 +43,6 @@ type Submitter struct {
 	ATRepo db.ApprovalTaskRepo
 	NRepo  db.NegotiationRepo
 	NTRepo db.NegotiationTaskRepo
-}
-
-func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, cmd SubmitCmd) error {
-	for _, reviewer := range cmd.Reviewers {
-		reviewTask := db.ReviewTaskData{
-			DID:       cmd.DID,
-			Reviewer:  reviewer,
-			State:     reviewtaskstate.Open.String(),
-			CreatedBy: cmd.SubmittedBy,
-		}
-		_, err := rtRepo.Create(ctx, tx, reviewTask)
-		if err != nil {
-			return fmt.Errorf("could not create review task: %w", err)
-		}
-	}
-
-	for _, negotiator := range cmd.Negotiators {
-		negotiationTask := db.NegotiationTaskData{
-			DID:        cmd.DID,
-			Negotiator: negotiator,
-			State:      reviewtaskstate.Open.String(),
-			CreatedBy:  cmd.SubmittedBy,
-		}
-		_, err := ntRepo.Create(ctx, tx, negotiationTask)
-		if err != nil {
-			return fmt.Errorf("could not create negotiation task: %w", err)
-		}
-	}
-
-	for _, approver := range cmd.Approvers {
-		data := db.ApprovalTaskData{
-			DID:       cmd.DID,
-			CreatedBy: cmd.SubmittedBy,
-			Approver:  approver,
-			State:     reviewtaskstate.Open.String(),
-		}
-		_, err := atRepo.Create(ctx, tx, data)
-		if err != nil {
-			return fmt.Errorf("could not create approval task: %w", err)
-		}
-	}
-
-	return nil
 }
 
 func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
@@ -109,49 +66,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	var responsible *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
 		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
 			return errors.New("invalid user permission")
-		}
-
-		// This avoids that state changes on different DCS are possible
-		if cmd.SubmittedBy != processData.CreatedBy {
-			return errors.New("invalid participant")
-		}
-
-		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewers provided")
-		}
-
-		if len(cmd.Negotiators) == 0 {
-			return errors.New("no negotiators provided")
-		}
-
-		if len(cmd.Approvers) == 0 {
-			return errors.New("no approvers provided")
-		}
-
-		resp := db.Responsible{
-			Creator:     processData.CreatedBy,
-			Reviewers:   cmd.Reviewers,
-			Approvers:   cmd.Approvers,
-			Negotiators: cmd.Negotiators,
-		}
-		updateData := db.ContractUpdateData{
-			DID:         cmd.DID,
-			Responsible: &resp,
-		}
-		err := h.CRepo.Update(ctx, tx, updateData)
-		if err != nil {
-			return fmt.Errorf("could not update contract: %w", err)
-		}
-
-		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
-		if err != nil {
-			return err
 		}
 
 		nextState = contractstate.Negotiation
@@ -357,7 +276,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			ActionFlag:      cmd.ActionFlag,
 			Comments:        cmd.Comments,
 			OccurredAt:      time.Now().UTC(),
-			Responsible:     responsible,
 			HolderDID:       cmd.HolderDID,
 			UserRoles:       cmd.UserRoles,
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -11,6 +12,10 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"digital-contracting-service/internal/signingmanagement/dss"
+
+	didservice "digital-contracting-service/gen/did_service"
 
 	genauth "digital-contracting-service/gen/auth"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
@@ -40,7 +45,6 @@ import (
 	"digital-contracting-service/internal/semantic/mapper"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
-	"digital-contracting-service/internal/signingmanagement/dss"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	tplrepo "digital-contracting-service/internal/templaterepository/db/pg"
 	"digital-contracting-service/internal/webhookplatform"
@@ -55,12 +59,19 @@ import (
 	"digital-contracting-service/internal/base/tsa"
 )
 
-func main() {
-	if err := loadDotenvIfPresent(); err != nil {
-		fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
-		os.Exit(1)
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
 	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	// anderer Fehler (z. B. Permission denied) – bewusst nicht als "existiert nicht" werten
+	return false
+}
 
+func main() {
 	// Define command line flags, add any other flag required to configure the
 	// service.
 	var (
@@ -69,8 +80,27 @@ func main() {
 		httpPortF = flag.String("http-port", "", "HTTP port (overrides host HTTP port specified in service design)")
 		secureF   = flag.Bool("secure", false, "Use secure scheme (https or grpcs)")
 		dbgF      = flag.Bool("debug", false, "Log request and response bodies")
+		envF      = flag.String("env", "", "Set environment file for the service")
 	)
 	flag.Parse()
+
+	if envF != nil && *envF != "" {
+		if err := loadDotenvFile(*envF); err != nil {
+			_, err := fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
+			if err != nil {
+				return
+			}
+			os.Exit(1)
+		}
+	} else {
+		if err := loadDotenvIfPresent(); err != nil {
+			_, err := fmt.Fprintf(os.Stderr, "startup configuration error: %v\n", err)
+			if err != nil {
+				return
+			}
+			os.Exit(1)
+		}
+	}
 
 	// Setup logger. Replace logger with your own log package of choice.
 	format := log.FormatJSON
@@ -103,30 +133,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if os.Getenv("DCS_ISSUER") == "" {
-		log.Printf(ctx, "DCS_ISSUER configuration missing: DCS_ISSUER will be set to localhost as issuer")
-	} else {
-		if strings.Contains(os.Getenv("DCS_ISSUER"), ":") {
-			log.Fatalf(ctx, nil, "DCS_ISSUER must not contain service port")
-		}
+	didFilePath := os.Getenv("DCS_DID")
+	if didFilePath == "" || !fileExists(didFilePath) {
+		log.Printf(ctx, "DCS_DID configuration or file is missing")
 	}
+	didFileContent, err := os.ReadFile(didFilePath)
 
-	// Connect to NATS (use NATS_URL env var or default)
-	natsURL := os.Getenv("NATS_URL")
-	if natsURL == "" {
-		natsURL = nats.DefaultURL
-	}
-
-	cepPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(), natsURL)
+	didDocument, err := base.NewDIDDocument(didFileContent)
 	if err != nil {
-		log.Fatalf(ctx, err, "Could not connect to events publisher")
+		log.Fatalf(ctx, err, "Could not read did document")
 	}
-	defer func(cepPubClient *event.CloudEventPubClient) {
-		err := cepPubClient.Close()
-		if err != nil {
-			log.Errorf(ctx, err, "Could not close cloud event publisher")
-		}
-	}(cepPubClient)
 
 	// Initialize OIDC validator and JWT authenticator.
 	authCfg, err := loadAuthConfig(ctx)
@@ -178,16 +194,53 @@ func main() {
 		log.Fatalf(ctx, err, "failed to initialize TSA client")
 	}
 
-	outboxProcessor := event.OutboxProcessor{
-		DB:         db,
-		PubClient:  cepPubClient,
-		IPFSClient: ipfsAPIClient,
-		ARepo:      &aRepo,
-		TSAClient:  tsaClient,
+	// Connect to NATS (use NATS_URL env var or default)
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = nats.DefaultURL
 	}
-	err = outboxProcessor.Start(ctx)
+
+	cepPubClient, err := event.NewNatsPubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not connect to events bus")
+	}
+	defer func(client *event.CloudEventPubClient) {
+		err := client.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close cloud event bus client")
+		}
+	}(cepPubClient)
+
+	did, err := didDocument.GetID()
+	if err != nil {
+		log.Fatalf(ctx, err, "could not read DID")
+	}
+
+	outboxProcessor := event.OutboxProcessor{
+		DB:           db,
+		CEPPubClient: cepPubClient,
+		IPFSClient:   ipfsAPIClient,
+		ARepo:        &aRepo,
+		TSAClient:    tsaClient,
+	}
+	err = outboxProcessor.Start(ctx, did)
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to start outbox processor")
+	}
+
+	if os.Getenv("DCS_DEBUG_EVENTING") == "true" {
+		cepSubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+		if err != nil {
+			log.Fatalf(ctx, err, "Could not connect to events bus")
+		}
+		defer func(client *event.CloudEventSubClient) {
+			err := client.Close()
+			if err != nil {
+				log.Errorf(ctx, err, "Could not close cloud event bus client")
+			}
+		}(cepSubClient)
+
+		event.StartEventLogger(ctx, cepSubClient)
 	}
 
 	auditTrailReader := base.AuditTrailReader{
@@ -313,6 +366,11 @@ func main() {
 		PDFCore:    pdfCoreClient,
 	}
 
+	didService, err := service.NewDIDService(*didDocument)
+	if err != nil {
+		log.Fatalf(ctx, err, "failed to create did service")
+	}
+
 	// Initialize the service.
 	var (
 		authSvc                         genauth.Service
@@ -324,6 +382,7 @@ func main() {
 		signatureManagementSvc          signaturemanagement.Service
 		templateCatalogueIntegrationSvc templatecatalogueintegration.Service
 		templateRepositorySvc           templaterepository.Service
+		didSrv                          didservice.Service
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
@@ -331,14 +390,15 @@ func main() {
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
-		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader)
-		dcsToDcsSvc = service.NewDcsToDcs(jwtAuth)
+		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth, *didDocument)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, *didDocument)
+		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, *didDocument)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
-		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
+		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, *didDocument)
+		didSrv = didService
 	}
 
 	// Channel used by background workers and signal handler to notify main to exit.
@@ -384,6 +444,7 @@ func main() {
 		signatureManagementEndpoints          *signaturemanagement.Endpoints
 		templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints
 		templateRepositoryEndpoints           *templaterepository.Endpoints
+		didEntpoints                          *didservice.Endpoints
 	)
 	{
 		authEndpoints = genauth.NewEndpoints(authSvc)
@@ -413,6 +474,9 @@ func main() {
 		templateRepositoryEndpoints = templaterepository.NewEndpoints(templateRepositorySvc)
 		templateRepositoryEndpoints.Use(debug.LogPayloads())
 		templateRepositoryEndpoints.Use(log.Endpoint)
+		didEntpoints = didservice.NewEndpoints(didSrv)
+		didEntpoints.Use(debug.LogPayloads())
+		didEntpoints.Use(log.Endpoint)
 	}
 
 	// Setup interrupt handler. This optional step configures the process so
@@ -426,11 +490,16 @@ func main() {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(ctx)
 
+	address := "http://0.0.0.0:8991"
+	if os.Getenv("DCS_BACKEND_PORT") != "" {
+		address = fmt.Sprintf("http://0.0.0.0:%s", os.Getenv("DCS_BACKEND_PORT"))
+	}
+
 	// Start the servers and send errors (if any) to the error channel.
 	switch *hostF {
 	case "local":
 		{
-			addr := "http://0.0.0.0:8991"
+			addr := address
 			u, err := url.Parse(addr)
 			if err != nil {
 				log.Fatalf(ctx, err, "invalid URL %#v\n", addr)
@@ -450,7 +519,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:

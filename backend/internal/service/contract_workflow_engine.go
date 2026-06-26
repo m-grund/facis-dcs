@@ -4,8 +4,15 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net/http"
+	"os"
 	"slices"
 	"time"
+
+	"digital-contracting-service/internal/contractworkflowengine/query"
+
+	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
+	dcstodcsc "digital-contracting-service/gen/http/dcs_to_dcs/client"
 
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
@@ -28,6 +35,7 @@ import (
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 
 	"github.com/jmoiron/sqlx"
+	goahttp "goa.design/goa/v3/http"
 )
 
 type contractWorkflowEnginesrvc struct {
@@ -39,13 +47,47 @@ type contractWorkflowEnginesrvc struct {
 	NRepo        db.NegotiationRepo
 	CTRepo       db.ContractTemplateRepo
 	FCClient     *fcclient.FederatedCatalogueClient
+	DIDDocument  base.DIDDocument
 	ATrailReader base.AuditTrailReader
 	auth.JWTAuthenticator
 }
 
+type prefixDoer struct {
+	prefix string
+	inner  goahttp.Doer
+}
+
+func (d *prefixDoer) Do(req *http.Request) (*http.Response, error) {
+	req.URL.Path = d.prefix + req.URL.Path
+	return d.inner.Do(req)
+}
+
+func NewDCSToDCSHttpClient(host string) *dcstodcs.Client {
+	apiPath := os.Getenv("DCS_API_PATH")
+	if apiPath == "" {
+		apiPath = "/"
+	}
+	httpClient := &http.Client{Timeout: conf.HTTPClientTimeout()}
+	doer := &prefixDoer{prefix: apiPath, inner: httpClient}
+
+	c := dcstodcsc.NewClient(
+		"http",
+		host,
+		doer,
+		goahttp.RequestEncoder,
+		goahttp.ResponseDecoder,
+		false,
+	)
+	createEndpoint := c.Create()
+	updateEndpoint := c.Update()
+	statusEndpoint := c.Status()
+	return dcstodcs.NewClient(createEndpoint, updateEndpoint, statusEndpoint)
+}
+
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader) contractworkflowengine.Service {
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
+	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument base.DIDDocument) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -57,8 +99,131 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		NRepo:            nRepo,
 		CTRepo:           ctRepo,
 		FCClient:         fcClient,
+		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
 	}
+}
+
+type queryTaskDataResult struct {
+	approvalTasks        []*dcstodcs.DCSToDCSContractApprovalTaskItem
+	reviewTasks          []*dcstodcs.DCSToDCSContractReviewTaskItem
+	negotiationTasks     []*dcstodcs.DCSToDCSContractNegotiationTaskItem
+	negotiations         []*dcstodcs.DCSToDCSContractNegotiationItem
+	negotiationDecisions []*dcstodcs.DCSToDCSContractNegotiationDecisionItem
+}
+
+func (s *contractWorkflowEnginesrvc) readAllTasksData(ctx context.Context, did *string) (*queryTaskDataResult, error) {
+	rtQry := query.GetAllReviewTasksForDIDQry{
+		DID:         *did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+	}
+	rtHandler := query.GetAllReviewTasksForDIDHandler{
+		DB:     s.DB,
+		RTRepo: s.RTRepo,
+	}
+	rtResult, err := rtHandler.Handle(ctx, rtQry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	var reviewTasks []*dcstodcs.DCSToDCSContractReviewTaskItem
+	for _, rt := range rtResult {
+		reviewTasks = append(reviewTasks, &dcstodcs.DCSToDCSContractReviewTaskItem{
+			ID:              rt.ID,
+			Did:             rt.DID,
+			ContractVersion: rt.ContractVersion,
+			State:           rt.State.String(),
+			Reviewer:        rt.Reviewer,
+			CreatedBy:       rt.CreatedBy,
+			CreatedAt:       rt.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	atQry := query.GetAllApprovalTasksForDIDQry{
+		DID:         *did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+	}
+	atHandler := query.GetAllApprovalTasksForDIDHandler{
+		DB:     s.DB,
+		ATRepo: s.ATRepo,
+	}
+	atResult, err := atHandler.Handle(ctx, atQry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	var approvalTasks []*dcstodcs.DCSToDCSContractApprovalTaskItem
+	for _, at := range atResult {
+		approvalTasks = append(approvalTasks, &dcstodcs.DCSToDCSContractApprovalTaskItem{
+			ID:              at.ID,
+			Did:             at.DID,
+			ContractVersion: at.ContractVersion,
+			State:           at.State.String(),
+			Approver:        at.Approver,
+			CreatedBy:       at.CreatedBy,
+			CreatedAt:       at.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	nQry := query.GetAllNegotiationsForDIDQry{
+		DID:         *did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+	}
+	nHandler := query.GetAllNegotiationsForDIDHandler{
+		DB:     s.DB,
+		NRepo:  s.NRepo,
+		NTRepo: s.NTRepo,
+	}
+	negotiationData, err := nHandler.Handle(ctx, nQry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	var negotiationTasks []*dcstodcs.DCSToDCSContractNegotiationTaskItem
+	for _, task := range negotiationData.NegotiationTasks {
+		negotiationTasks = append(negotiationTasks, &dcstodcs.DCSToDCSContractNegotiationTaskItem{
+			ID:         task.ID,
+			Did:        task.DID,
+			State:      task.State.String(),
+			CreatedBy:  task.CreatedBy,
+			CreatedAt:  task.CreatedAt.Format(time.RFC3339),
+			Negotiator: task.Negotiator,
+		})
+	}
+
+	var negotiations []*dcstodcs.DCSToDCSContractNegotiationItem
+	for _, negotiation := range negotiationData.Negotiations {
+		negotiations = append(negotiations, &dcstodcs.DCSToDCSContractNegotiationItem{
+			ID:              negotiation.ID,
+			Did:             negotiation.DID,
+			ContractVersion: negotiation.ContractVersion,
+			CreatedBy:       negotiation.CreatedBy,
+			CreatedAt:       negotiation.CreatedAd.Format(time.RFC3339),
+		})
+	}
+
+	var negotiationDecisions []*dcstodcs.DCSToDCSContractNegotiationDecisionItem
+	for _, negotiationDecision := range negotiationData.NegotiationDecisions {
+
+		var decision *string
+		if negotiationDecision.Decision != nil {
+			tmpDecision := negotiationDecision.Decision.String()
+			decision = &tmpDecision
+		}
+
+		negotiationDecisions = append(negotiationDecisions, &dcstodcs.DCSToDCSContractNegotiationDecisionItem{
+			ID:       negotiationDecision.ID,
+			Decision: decision,
+		})
+	}
+
+	return &queryTaskDataResult{
+		reviewTasks:          reviewTasks,
+		approvalTasks:        approvalTasks,
+		negotiationTasks:     negotiationTasks,
+		negotiations:         negotiations,
+		negotiationDecisions: negotiationDecisions,
+	}, nil
 }
 
 func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractworkflowengine.ContractCreateRequest) (res *contractworkflowengine.ContractCreateResponse, err error) {
@@ -66,26 +231,123 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	did, err := base.GetDID(datatype.ContractResourceType)
+	did, err := base.GenerateID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
 	cmd := command.CreateCmd{
 		DID:         *did,
-		TemplateDID: req.Did,
+		DIDDocument: s.DIDDocument,
+		TemplateDID: req.TemplateDid,
 		CreatedBy:   middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
+		Reviewers:   req.Reviewers,
+		Approvers:   req.Approvers,
+		Negotiators: req.Negotiators,
 	}
 	createHandler := command.Creator{
 		DB:     s.DB,
-		CRepo:  s.CRepo,
 		CTRepo: s.CTRepo,
+		CRepo:  s.CRepo,
+		RTRepo: s.RTRepo,
+		ATRepo: s.ATRepo,
+		NTRepo: s.NTRepo,
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	qry := contract.GetByIDQry{
+		DID:         *did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	qryHandler := contract.GetByIDHandler{
+		Ctx:   ctx,
+		DB:    s.DB,
+		CRepo: s.CRepo,
+		NRepo: s.NRepo,
+	}
+	contractResult, err := qryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	var startDate *string
+	if contractResult.StartDate != nil {
+		s := contractResult.StartDate.Format(time.RFC3339)
+		startDate = &s
+	}
+
+	var expDate *string
+	if contractResult.ExpDate != nil {
+		s := contractResult.ExpDate.Format(time.RFC3339)
+		expDate = &s
+	}
+
+	var expPolicy *string
+	if contractResult.ExpPolicy != nil {
+		s := contractResult.ExpPolicy.String()
+		expPolicy = &s
+	}
+
+	contractItem := dcstodcs.DCSToDCSContractItem{
+		Did:             contractResult.DID,
+		ContractVersion: contractResult.ContractVersion,
+		State:           contractResult.State.String(),
+		Name:            contractResult.Name,
+		Description:     contractResult.Description,
+		CreatedBy:       contractResult.CreatedBy,
+		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       contractResult.UpdatedAt.Format(time.RFC3339),
+		ContractData:    contractResult.ContractData,
+		TemplateDid:     contractResult.TemplateDID,
+		TemplateVersion: contractResult.TemplateVersion,
+		StartDate:       startDate,
+		ExpDate:         expDate,
+		ExpPolicy:       expPolicy,
+		ExpNoticePeriod: contractResult.ExpNoticePeriod,
+		Responsible:     contractResult.Responsible,
+		Origin:          contractResult.Origin,
+	}
+
+	result, err := s.readAllTasksData(ctx, did)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	origin, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
+	for _, responsible := range responsibleList {
+		if responsible == origin {
+			continue
+		}
+
+		hostname, err := base.DIDWebToHostname(responsible)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+
+		client := NewDCSToDCSHttpClient(hostname)
+		_, err = client.Create(ctx, &dcstodcs.DCSToDCSContractCreateRequest{
+			Contract:             &contractItem,
+			ReviewTasks:          result.reviewTasks,
+			ApprovalTasks:        result.approvalTasks,
+			NegotiationTasks:     result.negotiationTasks,
+			NegotiationItems:     result.negotiations,
+			NegotiationDecisions: result.negotiationDecisions,
+		})
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
 	}
 
 	return &contractworkflowengine.ContractCreateResponse{
@@ -103,7 +365,7 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	metaData, err := datatype.NewJSON(req.ContractData)
+	contractData, err := datatype.NewJSON(req.ContractData)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -145,7 +407,7 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		UserRoles:       middleware.GetUserRoles(ctx),
 		Name:            req.Name,
 		Description:     req.Description,
-		ContractData:    &metaData,
+		ContractData:    &contractData,
 		StartDate:       startDate,
 		ExpDate:         expDate,
 		ExpPolicy:       expPolicy,
@@ -158,6 +420,78 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	qry := contract.GetByIDQry{
+		DID:         cmd.DID,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	}
+	qryHandler := contract.GetByIDHandler{
+		Ctx:   ctx,
+		DB:    s.DB,
+		CRepo: s.CRepo,
+		NRepo: s.NRepo,
+	}
+	contractResult, err := qryHandler.Handle(ctx, qry)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	contractItem := dcstodcs.DCSToDCSContractItem{
+		Did:             contractResult.DID,
+		ContractVersion: contractResult.ContractVersion,
+		State:           contractResult.State.String(),
+		Name:            contractResult.Name,
+		Description:     contractResult.Description,
+		CreatedBy:       contractResult.CreatedBy,
+		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       contractResult.UpdatedAt.Format(time.RFC3339),
+		ContractData:    contractResult.ContractData,
+		TemplateDid:     contractResult.TemplateDID,
+		TemplateVersion: contractResult.TemplateVersion,
+		StartDate:       req.StartDate,
+		ExpDate:         req.ExpDate,
+		ExpPolicy:       req.ExpPolicy,
+		ExpNoticePeriod: contractResult.ExpNoticePeriod,
+		Responsible:     contractResult.Responsible,
+		Origin:          contractResult.Origin,
+	}
+
+	result, err := s.readAllTasksData(ctx, &contractResult.DID)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	origin, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
+	for _, responsible := range responsibleList {
+		if responsible == origin {
+			continue
+		}
+
+		hostname, err := base.DIDWebToHostname(responsible)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+
+		client := NewDCSToDCSHttpClient(hostname)
+		_, err = client.Update(ctx, &dcstodcs.DCSToDCSContractUpdateRequest{
+			Contract:             &contractItem,
+			ReviewTasks:          result.reviewTasks,
+			ApprovalTasks:        result.approvalTasks,
+			NegotiationTasks:     result.negotiationTasks,
+			NegotiationItems:     result.negotiations,
+			NegotiationDecisions: result.negotiationDecisions,
+		})
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
 	}
 
 	return &contractworkflowengine.ContractUpdateResponse{
@@ -186,15 +520,13 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
+		DIDDocument: s.DIDDocument,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
-		Reviewers:   req.Reviewers,
-		Approvers:   req.Approvers,
-		Negotiators: req.Negotiators,
 	}
 	handler := command.Submitter{
 		DB:     s.DB,

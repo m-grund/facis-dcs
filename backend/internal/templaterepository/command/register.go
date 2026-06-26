@@ -33,9 +33,10 @@ type RegisterCmd struct {
 }
 
 type Registrar struct {
-	DB       *sqlx.DB
-	CTRepo   db.ContractTemplateRepo
-	FCClient *fcclient.FederatedCatalogueClient
+	DB          *sqlx.DB
+	CTRepo      db.ContractTemplateRepo
+	FCClient    *fcclient.FederatedCatalogueClient
+	DIDDocument base.DIDDocument
 }
 
 func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error) {
@@ -119,7 +120,7 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error
 			return nil, fcclient.ErrFederatedCatalogueNotConfigured
 		}
 
-		newDID, err := base.GetDID(datatype.TemplateResourceType)
+		newDID, err := base.GenerateID()
 		if err != nil {
 			return nil, fmt.Errorf("could not get new DID for contract template: %w", err)
 		}

@@ -38,7 +38,6 @@ type GetByIDResult struct {
 	CreatedBy      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	Responsible    *db.Responsible
 	TemplateData   *datatype.JSON
 }
 
@@ -104,7 +103,6 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		CreatedBy:      data.CreatedBy,
 		CreatedAt:      data.CreatedAt,
 		UpdatedAt:      data.UpdatedAt,
-		Responsible:    data.Responsible,
 		TemplateData:   data.TemplateData,
 	}, nil
 }

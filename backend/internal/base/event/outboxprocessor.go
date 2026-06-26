@@ -19,23 +19,19 @@ import (
 )
 
 type OutboxProcessor struct {
-	DB         *sqlx.DB
-	PubClient  *CloudEventPubClient
-	IPFSClient *ipfs.APIClient
-	TSAClient  *tsa.APIClient
-	ARepo      db.AuditTrailRepository
+	DB           *sqlx.DB
+	IPFSClient   *ipfs.APIClient
+	TSAClient    *tsa.APIClient
+	ARepo        db.AuditTrailRepository
+	CEPPubClient *CloudEventPubClient
 }
 
-func (j OutboxProcessor) Start(ctx context.Context) error {
-	go j.startProcessingJob(ctx, conf.OutboxProcessorTimeOut())
+func (j OutboxProcessor) Start(ctx context.Context, origin string) error {
+	go j.startProcessingJob(ctx, conf.OutboxProcessorTimeOut(), origin)
 	return nil
 }
 
-func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.Duration) {
-	if j.PubClient == nil {
-		return
-	}
-
+func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.Duration, origin string) {
 	schedulerLogic := func() error {
 		tx, err := j.DB.BeginTxx(ctx, nil)
 		if err != nil {
@@ -86,7 +82,7 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 		}
 
 		for _, event := range events {
-			if err := j.processEvent(ctx, event); err != nil {
+			if err := j.processEvent(ctx, event, origin); err != nil {
 				log.Printf("could not process event %d: %v", event.ID, err)
 				return err
 			}
@@ -103,7 +99,7 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 	}
 }
 
-func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.OutboxEvent) error {
+func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.OutboxEvent, origin string) error {
 	tx, err := j.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -113,10 +109,6 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 			log.Printf("could not rollback transaction: %v", err)
 		}
 	}(tx)
-
-	if err := j.PubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
-		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-	}
 
 	globalLogPredCID, err := j.ARepo.ReadLogCID(ctx, tx, conf.GlobalAuditTrailName(), conf.GlobalAuditTrailName())
 	if err != nil {
@@ -139,7 +131,7 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 				return fmt.Errorf("could not read log CID: %w", err)
 			}
 		}
-	case componenttype.Authentication.String():
+	case componenttype.System.String():
 		if event.DID != nil && len(*event.DID) > 1 {
 			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
 			if err != nil {
@@ -195,7 +187,7 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 				return fmt.Errorf("could not update log CID: %w", err)
 			}
 		}
-	case componenttype.Authentication.String():
+	case componenttype.System.String():
 		if event.DID != nil && len(*event.DID) > 1 {
 			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
 				return fmt.Errorf("could not update log CID: %w", err)
@@ -210,6 +202,10 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	err = db.UpdateOutboxEvent(ctx, tx, event.ID)
 	if err != nil {
 		return fmt.Errorf("could not update outbox event: %w", err)
+	}
+
+	if err := j.CEPPubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
+		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
 	}
 
 	return tx.Commit()

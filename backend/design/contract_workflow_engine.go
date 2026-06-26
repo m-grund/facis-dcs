@@ -9,9 +9,13 @@ var ContractCreateRequest = Type("ContractCreateRequest", func() {
 
 	Token("token", String, "JWT token")
 
-	Attribute("did", String, "The did of the contract template, that is to use to create a new contract")
+	Attribute("template_did", String, "The did of the contract template, that is to use to create a new contract")
 
-	Required("did")
+	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
+	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
+	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
+
+	Required("template_did")
 })
 
 var ContractCreateResponse = Type("ContractCreateResponse", func() {
@@ -62,10 +66,6 @@ var ContractSubmitRequest = Type("ContractSubmitRequest", func() {
 
 	Attribute("forward_to", String, "Action flag: approval | reject")
 	Attribute("comments", ArrayOf(String), "Optional comments")
-
-	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
-	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
-	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
 
 	Required("did", "updated_at")
 })
@@ -176,11 +176,8 @@ var ContractRetrieveResponse = Type("ContractRetrieveResponse", func() {
 	Description("Result for retrieving a contract by id")
 
 	Attribute("contracts", ArrayOf(ContractItem), "A list of contracts")
-
 	Attribute("review_tasks", ArrayOf(ContractReviewTaskItem), "A list of review tasks")
-
 	Attribute("approval_tasks", ArrayOf(ContractApprovalTaskItem), "A list of approval tasks")
-
 	Attribute("negotiation_tasks", ArrayOf(ContractNegotiationTaskItem), "A list of negotiation tasks")
 
 	Required("contracts", "review_tasks", "approval_tasks", "negotiation_tasks")

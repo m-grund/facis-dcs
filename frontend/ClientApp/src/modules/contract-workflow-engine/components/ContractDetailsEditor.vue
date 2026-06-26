@@ -90,7 +90,7 @@
           disabled
         />
       </fieldset>
-      <fieldset v-if="showResponsiblities" class="fieldset border-none p-0">
+      <fieldset class="fieldset border-none p-0">
         <div class="collapse-arrow collapse [&>input~.collapse-title::after]:scale-75">
           <input type="checkbox" name="responsibles" />
           <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Participants</legend>
@@ -130,8 +130,7 @@
 
 <script setup lang="ts">
 import type { Contract } from '@/models/contract/contract'
-import { ContractState } from '@/types/contract-state'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 
 defineProps<{
   disabled?: boolean
@@ -159,7 +158,4 @@ interface ContractDetailData {
 
 const originalContract = ref(Object.assign({}, contract.value))
 
-const showResponsiblities = computed(
-  () => !([ContractState.draft, ContractState.terminated] as ContractState[]).includes(contract.value.state),
-)
 </script>

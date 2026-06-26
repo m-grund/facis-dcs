@@ -16,6 +16,12 @@ K8S_NAMESPACE ?= default
 HELM_RELEASE ?= dcs
 DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
+<<<<<<< HEAD
+=======
+LOCAL_FORWARD_PORT ?= 18991
+SERVICE_PORT ?= 8991
+DCS_DID ?= localhost
+>>>>>>> development
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 BDD_INGRESS_PORT ?= 18080
 BDD_PUBLIC_ORIGIN ?= http://localhost:$(BDD_INGRESS_PORT)
@@ -99,6 +105,11 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
 		BDD_DCS_BASE_URL="$(BDD_DCS_BASE_URL)" \
 		BDD_PUBLIC_ORIGIN="$(BDD_PUBLIC_ORIGIN)" \
+		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
+		DCS_SERVICE="$(DCS_SERVICE)" \
+		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
+		SERVICE_PORT="$(SERVICE_PORT)" \
+		DCS_DID="$(DCS_DID)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
 		ARG_BDD="$(ARG_BDD)" \

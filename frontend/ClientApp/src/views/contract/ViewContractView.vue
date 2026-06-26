@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
-import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
 import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
-import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -26,7 +24,6 @@ import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -41,8 +38,6 @@ const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 
 const errorStore = useErrorStore()
-
-const { isCreator } = useContractPermissions()
 
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
@@ -104,26 +99,6 @@ watch(
   },
   { deep: true },
 )
-
-const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContractAssignees) => {
-  if (!contract.value) return
-  const isSemanticValueValid = verifySemanticValues()
-  if (!isSemanticValueValid) return
-  try {
-    const response = await contractWorkflowService.submit({
-      did: contract.value.did,
-      updated_at: contract.value.updated_at,
-      reviewers,
-      approvers,
-      negotiators,
-    })
-    if (response.did) {
-      await navStore.goToPreviousRoute()
-    }
-  } catch (error) {
-    console.error('Contract Submission failed', error)
-  }
-}
 
 const submitRejectedTemplate = async () => {
   if (!contract.value) return
@@ -288,13 +263,7 @@ const exportPDF = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
-        <SubmitSelectionDialog
-          v-if="contract?.state === ContractState.draft && isCreator"
-          class="btn flex-1 btn-primary"
-          @submit="submitContract"
-        />
         <button
-          v-else-if="contract?.state === ContractState.rejected && isCreator"
           class="btn flex-1 btn-primary"
           @click="submitRejectedTemplate"
         >

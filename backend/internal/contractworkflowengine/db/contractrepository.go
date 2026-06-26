@@ -19,7 +19,25 @@ type Responsible struct {
 	Negotiators []string `json:"negotiators"`
 }
 
-func (r Responsible) Value() (driver.Value, error) {
+func ToResponsible(raw any) (*Responsible, error) {
+	if raw == nil {
+		return nil, nil
+	}
+
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("marshal responsible: %w", err)
+	}
+
+	var r Responsible
+	if err := json.Unmarshal(data, &r); err != nil {
+		return nil, fmt.Errorf("unmarshal responsible: %w", err)
+	}
+
+	return &r, nil
+}
+
+func (r *Responsible) Value() (driver.Value, error) {
 	return json.Marshal(r)
 }
 
@@ -39,8 +57,56 @@ func (r *Responsible) Scan(src any) error {
 	return json.Unmarshal(b, r)
 }
 
+func (r *Responsible) GetResponsibleSet() map[string]struct{} {
+	set := make(map[string]struct{}, 1+len(r.Approvers)+len(r.Reviewers)+len(r.Negotiators))
+
+	if r.Creator != "" {
+		set[r.Creator] = struct{}{}
+	}
+	for _, did := range r.Approvers {
+		set[did] = struct{}{}
+	}
+	for _, did := range r.Reviewers {
+		set[did] = struct{}{}
+	}
+	for _, did := range r.Negotiators {
+		set[did] = struct{}{}
+	}
+
+	return set
+}
+
+func (r *Responsible) GetUniqueResponsibleList() []string {
+	set := make(map[string]struct{})
+	var result []string
+
+	add := func(did string) {
+		if did == "" {
+			return
+		}
+		if _, exists := set[did]; !exists {
+			set[did] = struct{}{}
+			result = append(result, did)
+		}
+	}
+
+	add(r.Creator)
+	for _, did := range r.Approvers {
+		add(did)
+	}
+	for _, did := range r.Reviewers {
+		add(did)
+	}
+	for _, did := range r.Negotiators {
+		add(did)
+	}
+
+	return result
+}
+
 type Contract struct {
 	DID             string         `db:"did"`
+	Origin          string         `db:"origin"`
 	ContractVersion int            `db:"contract_version"`
 	State           string         `db:"state"`
 	CreatedBy       string         `db:"created_by"`
@@ -60,6 +126,7 @@ type Contract struct {
 
 type ContractMetadata struct {
 	DID                  string       `db:"did"`
+	Origin               string       `db:"origin"`
 	ContractVersion      int          `db:"contract_version"`
 	State                string       `db:"state"`
 	CreatedBy            string       `db:"created_by"`
@@ -81,6 +148,7 @@ type ContractMetadata struct {
 
 type ContractProcessData struct {
 	DID             string     `db:"did"`
+	Origin          string     `db:"origin"`
 	ContractVersion int        `db:"contract_version"`
 	State           string     `db:"state"`
 	CreatedBy       string     `db:"created_by"`
@@ -105,8 +173,29 @@ type ContractUpdateData struct {
 	Responsible     *Responsible   `db:"responsible"`
 }
 
+type RemoteContractUpdateData struct {
+	DID             string         `db:"did"`
+	Origin          string         `db:"origin"`
+	ContractVersion int            `db:"contract_version"`
+	State           string         `db:"state"`
+	CreatedBy       string         `db:"created_by"`
+	CreatedAt       time.Time      `db:"created_at"`
+	UpdatedAt       time.Time      `db:"updated_at"`
+	StartDate       *time.Time     `db:"start_date"`
+	ExpDate         *time.Time     `db:"exp_date"`
+	ExpPolicy       *string        `db:"exp_policy"`
+	ExpNoticePeriod *int           `db:"exp_notice_period"`
+	Name            *string        `db:"name"`
+	Description     *string        `db:"description"`
+	Responsible     *Responsible   `db:"responsible"`
+	ContractData    *datatype.JSON `db:"contract_data"`
+	TemplateDID     string         `db:"template_did"`
+	TemplateVersion int            `db:"template_version"`
+}
+
 type ContractHistory struct {
 	ID              string         `db:"id"`
+	Origin          string         `db:"origin"`
 	DID             string         `db:"did"`
 	ContractVersion int            `db:"contract_version"`
 	State           string         `db:"state"`
@@ -151,6 +240,7 @@ type ContractRepo interface {
 	ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractUpdateData) error
+	RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data RemoteContractUpdateData) error
 	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractPDFState, error)
 	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractPDFState) error
 }

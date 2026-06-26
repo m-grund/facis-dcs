@@ -36,12 +36,14 @@ type templateRepositorysrvc struct {
 	ATRepo       db.ApprovalTaskRepo
 	FCClient     *fcclient.FederatedCatalogueClient
 	ATrailReader base.AuditTrailReader
+	DIDDocument  base.DIDDocument
 	auth.JWTAuthenticator
 }
 
 // NewTemplateRepository returns the TemplateRepository service implementation.
 func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db.ContractTemplateRepo,
-	RTRepo db.ReviewTaskRepo, ATRepo db.ApprovalTaskRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader) templaterepository.Service {
+	RTRepo db.ReviewTaskRepo, ATRepo db.ApprovalTaskRepo, fcClient *fcclient.FederatedCatalogueClient,
+	auditTrailReader base.AuditTrailReader, didDocument base.DIDDocument) templaterepository.Service {
 	return &templateRepositorysrvc{
 		DB:               db,
 		JWTAuthenticator: jwtAuth,
@@ -49,6 +51,7 @@ func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db
 		RTRepo:           RTRepo,
 		ATRepo:           ATRepo,
 		FCClient:         fcClient,
+		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
 	}
 }
@@ -69,7 +72,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
-	did, err := base.GetDID(datatype.TemplateResourceType)
+	did, err := base.GenerateID()
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
@@ -105,7 +108,7 @@ func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templatereposito
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	did, err := base.GetDID(datatype.TemplateResourceType)
+	did, err := base.GenerateID()
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
@@ -154,6 +157,7 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
+		DIDDocument: s.DIDDocument,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
@@ -348,7 +352,6 @@ func (s *templateRepositorysrvc) Search(ctx context.Context, req *templatereposi
 			Description:    item.Description,
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
-			Responsible:    item.Responsible,
 		})
 	}
 
@@ -388,7 +391,6 @@ func (s *templateRepositorysrvc) RetrieveHistoryByID(ctx context.Context, req *t
 			CreatedBy:      item.CreatedBy,
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
-			Responsible:    item.Responsible,
 			TemplateData:   item.TemplateData,
 			TemplateType:   item.TemplateType.String(),
 		})
@@ -438,7 +440,6 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 			CreatedBy:      item.CreatedBy,
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
-			Responsible:    item.Responsible,
 			LatestDid:      item.LatestDID,
 		})
 	}
@@ -507,7 +508,6 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 		CreatedAt:      contractTemplate.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      contractTemplate.UpdatedAt.Format(time.RFC3339),
 		TemplateData:   contractTemplate.TemplateData,
-		Responsible:    contractTemplate.Responsible,
 	}, nil
 }
 
