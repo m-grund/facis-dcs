@@ -26,8 +26,6 @@ classes:
     slot_usage:
       metadata:
         required: true
-      policies:
-        required: true
     slots:
       - documentTitle
       - contractData
