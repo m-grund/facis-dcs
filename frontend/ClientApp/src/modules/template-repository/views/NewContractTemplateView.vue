@@ -87,7 +87,6 @@ watch(
           ].map((s) => s.toLowerCase())
           templateEditorUiStore.setTemplateEditable(!uneditableStates.includes(template.state.toLowerCase()))
 
-          console.log('[NewContractTemplateView] loaded template policies:', JSON.stringify((template.template_data as Record<string, unknown>)?.['dcs:policies']))
           draftStore.loadDocument(template.template_data, {
             did: template.did,
             name: template.name ?? '',
@@ -118,7 +117,6 @@ const submitError = ref<string | null>(null)
 const submit = async () => {
   isSubmitting.value = true
   submitError.value = null
-  console.log('[NewContractTemplateView] submit: policies =', JSON.stringify(draftStore.templateDocument['dcs:policies']))
   try {
     if (!draftStore.hasTemplateId) {
       // create a draft template
