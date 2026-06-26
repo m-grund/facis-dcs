@@ -45,7 +45,7 @@
     >
       <label class="label min-h-0 py-0">
         <span class="label-text text-xs text-base-content/60">Values</span>
-        <span v-if="!setConstraintTargets().length" class="label-text-alt text-xs text-warning">Select at least one value</span>
+        <span v-if="!activeSetTargets.length" class="label-text-alt text-xs text-warning">Select at least one value</span>
       </label>
       <input
         v-if="valueOptions.length"
@@ -125,6 +125,7 @@ const usesSetConstraintEditor = computed(() => {
   const supportsSetConstraints = props.parameter.type === 'string' || props.parameter.type === 'enum'
   return supportsSetConstraints && !!constraint && (valueOptions.value.length > 0 || isTokenValueConstraint(constraint))
 })
+const activeSetTargets = computed(() => setConstraintTargets())
 const operatorOptions = computed(() =>
   usesSetConstraintEditor.value ? setOperatorOptions() : operatorOptionsForType(props.parameter.type),
 )

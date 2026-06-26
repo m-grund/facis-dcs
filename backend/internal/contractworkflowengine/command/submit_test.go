@@ -97,7 +97,7 @@ func minimalCanonicalContractData(t *testing.T, id string) datatype.JSON {
 		"dcs:documentStructure": map[string]any{
 			"@id":   id + "#document-structure",
 			"@type": "dcs:DocumentStructure",
-			"dcs:blocks": []any{
+			"dcs:blocks": map[string]any{"@list": []any{
 				map[string]any{
 					"@id":   id + "#clause-1",
 					"@type": "dcs:Clause",
@@ -105,7 +105,7 @@ func minimalCanonicalContractData(t *testing.T, id string) datatype.JSON {
 						"@list": []any{"Contract content."},
 					},
 				},
-			},
+			}},
 			"dcs:layout": []any{
 				map[string]any{
 					"@id":        id + "#root",

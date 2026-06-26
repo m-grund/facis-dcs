@@ -64,7 +64,7 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type": "dcs:DocumentStructure",
-			"dcs:blocks": []any{
+			"dcs:blocks": map[string]any{"@list": []any{
 				map[string]any{
 					"@id":   "urn:uuid:block-clause-1",
 					"@type": "dcs:Clause",
@@ -77,7 +77,7 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 						},
 					}},
 				},
-			},
+			}},
 			"dcs:layout": []any{
 				map[string]any{
 					"@id":          "urn:uuid:block-root",
@@ -296,7 +296,7 @@ func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 	require.Equal(t, "did:web:facis.example:template:1", data["@id"])
 	require.NotContains(t, data, "did")
 	structure := data["dcs:documentStructure"].(map[string]any)
-	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:1#block-clause-1", block["@id"])
 	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", placeholder["dcs:bindsTo"].(map[string]any)["@id"])
@@ -314,7 +314,7 @@ func TestNormalizeTemplateDataForPersistenceRebasesCopiedTemplateIDs(t *testing.
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*copied, &data))
 	structure := data["dcs:documentStructure"].(map[string]any)
-	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:copy#block-clause-1", block["@id"])
 	policy := data["dcs:policies"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
@@ -326,7 +326,7 @@ func TestNormalizeTemplateDataRejectsMissingPlaceholderField(t *testing.T) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
 	structure := data["dcs:documentStructure"].(map[string]any)
-	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
 	placeholder["dcs:bindsTo"] = map[string]any{"@id": "urn:uuid:field-missing"}
 	invalid, err := datatype.NewJSON(data)
@@ -355,7 +355,8 @@ func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
 	structure := data["dcs:documentStructure"].(map[string]any)
-	structure["dcs:blocks"] = append(structure["dcs:blocks"].([]any), map[string]any{
+	blocksWrapper := structure["dcs:blocks"].(map[string]any)
+	blocksWrapper["@list"] = append(blocksWrapper["@list"].([]any), map[string]any{
 		"@id":      "urn:uuid:block-unreferenced",
 		"@type":    "dcs:TextBlock",
 		"dcs:text": "unused",

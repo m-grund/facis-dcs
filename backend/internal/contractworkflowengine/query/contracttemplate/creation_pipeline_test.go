@@ -93,7 +93,7 @@ func creationPipelineTemplate() map[string]any {
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type":      "dcs:DocumentStructure",
-			"dcs:blocks": creationPipelineBlocks(),
+			"dcs:blocks": map[string]any{"@list": creationPipelineBlocks()},
 			"dcs:layout": creationPipelineLayout(),
 		},
 		"dcs:contractData": creationPipelineRequirements(),

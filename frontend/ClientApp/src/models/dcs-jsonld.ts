@@ -70,6 +70,7 @@ export type DcsBlock = DcsSection | DcsTextBlock | DcsClause | DcsApprovedTempla
 
 export interface DcsLayoutNode {
   '@id': string
+  '@type'?: 'dcs:LayoutNode'
   'dcs:isRoot'?: boolean
   'dcs:children': { '@list': JsonLdReference[] }
 }
@@ -77,7 +78,7 @@ export interface DcsLayoutNode {
 export interface DcsDocumentStructure {
   '@id'?: string
   '@type': 'dcs:DocumentStructure'
-  'dcs:blocks': DcsBlock[]
+  'dcs:blocks': { '@list': DcsBlock[] }
   'dcs:layout': DcsLayoutNode[]
 }
 

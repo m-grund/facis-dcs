@@ -374,7 +374,10 @@ func validateCanonicalEnvelope(data documentData) error {
 }
 
 func validateCanonicalReferences(data documentData, documentStructure map[string]any) error {
-	blocks, ok := documentStructure["dcs:blocks"].([]any)
+	blocks, ok := jsonLDList(documentStructure["dcs:blocks"])
+	if !ok {
+		blocks, ok = documentStructure["dcs:blocks"].([]any)
+	}
 	if !ok {
 		return errors.New("documentStructure.dcs:blocks must be an array")
 	}
