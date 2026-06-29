@@ -75,6 +75,22 @@
         />
       </template>
     </ConditionalWrapper>
+    <!-- Merged approved template block (preprocessed contract view) — content already merged into main layout/blocks -->
+    <template v-else-if="block && isDcsMergedApprovedTemplate(block)">
+      <template v-for="childId in childrenIds" :key="childId">
+        <TemplatePreview
+          :block-id="childId"
+          :section-level="sectionLevel"
+          :layout="layout"
+          :blocks="blocks"
+          :semantic-conditions="semanticConditions"
+          :sub-template-snapshots="subTemplateSnapshots"
+          :semantic-condition-values="semanticConditionValues"
+          :verification-result="verificationResult"
+          :set-semantic-condition-value="setSemanticConditionValue"
+        />
+      </template>
+    </template>
   </template>
 </template>
 

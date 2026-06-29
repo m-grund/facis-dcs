@@ -329,7 +329,7 @@ onBeforeRouteLeave(() => {
         </template>
       </ViewContractTemplateView>
     </div>
-    <div v-else-if="!!contract">
+    <div v-else-if="!!contract" class="flex flex-1 flex-col">
       <div class="flex flex-1 flex-col">
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
