@@ -2,16 +2,19 @@ package dcstodcssynchronizer
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
+
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 
-	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
-	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query"
@@ -24,12 +27,12 @@ import (
 	"goa.design/clue/log"
 )
 
-type queryTaskDataResult struct {
-	approvalTasks        []*dcstodcs.DCSToDCSContractApprovalTaskItem
-	reviewTasks          []*dcstodcs.DCSToDCSContractReviewTaskItem
-	negotiationTasks     []*dcstodcs.DCSToDCSContractNegotiationTaskItem
-	negotiations         []*dcstodcs.DCSToDCSContractNegotiationItem
-	negotiationDecisions []*dcstodcs.DCSToDCSContractNegotiationDecisionItem
+type QueryTaskDataResult struct {
+	ApprovalTasks        []*dcstodcs.DCSToDCSContractApprovalTaskItem
+	ReviewTasks          []*dcstodcs.DCSToDCSContractReviewTaskItem
+	NegotiationTasks     []*dcstodcs.DCSToDCSContractNegotiationTaskItem
+	Negotiations         []*dcstodcs.DCSToDCSContractNegotiationItem
+	NegotiationDecisions []*dcstodcs.DCSToDCSContractNegotiationDecisionItem
 }
 
 type DCSToDCSSynchronizer struct {
@@ -39,10 +42,11 @@ type DCSToDCSSynchronizer struct {
 	ATRepo      db.ApprovalTaskRepo
 	NTRepo      db.NegotiationTaskRepo
 	NRepo       db.NegotiationRepo
+	SRepo       db2.SyncRepository
 	DIDDocument base.DIDDocument
 }
 
-func (s *DCSToDCSSynchronizer) StartSynchronizing(ctx context.Context, client *event.CloudEventSubClient) {
+func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client *event.CloudEventSubClient) {
 	eventHandler := func(evt cloudevent.Event) {
 
 		source, err := componenttype.NewComponentType(evt.Source())
@@ -59,11 +63,11 @@ func (s *DCSToDCSSynchronizer) StartSynchronizing(ctx context.Context, client *e
 
 		switch source {
 		case componenttype.ContractWorkflowEngine:
-			if evtType == eventtype.RemoteSync {
+			if evtType == eventtype.RetrieveAll || evtType == eventtype.RetrieveByID || evtType == eventtype.RetrieveHistoryByDID {
 				return
 			}
 
-			if evtType == eventtype.RetrieveAll || evtType == eventtype.RetrieveByID || evtType == eventtype.RetrieveHistoryByDID {
+			if evtType == eventtype.RemoteUpdateRequest || evtType == eventtype.RemoteSyncRequest {
 				return
 			}
 
@@ -97,18 +101,25 @@ func (s *DCSToDCSSynchronizer) StartSynchronizing(ctx context.Context, client *e
 	}()
 }
 
-func (s *DCSToDCSSynchronizer) readAllTasksData(ctx context.Context, did *string) (*queryTaskDataResult, error) {
+func ReadAllTasksData(ctx context.Context, db *sqlx.DB,
+	cRepo db.ContractRepo,
+	rtRepo db.ReviewTaskRepo,
+	atRepo db.ApprovalTaskRepo,
+	ntRepo db.NegotiationTaskRepo,
+	nRepo db.NegotiationRepo,
+	sRepo db2.SyncRepository, did *string) (*QueryTaskDataResult, error) {
+
 	rtQry := query.GetAllReviewTasksForDIDQry{
 		DID:         *did,
 		RetrievedBy: middleware.GetParticipantID(ctx),
 	}
 	rtHandler := query.GetAllReviewTasksForDIDHandler{
-		DB:     s.DB,
-		RTRepo: s.RTRepo,
+		DB:     db,
+		RTRepo: rtRepo,
 	}
 	rtResult, err := rtHandler.Handle(ctx, rtQry)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, err
 	}
 
 	var reviewTasks []*dcstodcs.DCSToDCSContractReviewTaskItem
@@ -128,12 +139,12 @@ func (s *DCSToDCSSynchronizer) readAllTasksData(ctx context.Context, did *string
 		RetrievedBy: middleware.GetParticipantID(ctx),
 	}
 	atHandler := query.GetAllApprovalTasksForDIDHandler{
-		DB:     s.DB,
-		ATRepo: s.ATRepo,
+		DB:     db,
+		ATRepo: atRepo,
 	}
 	atResult, err := atHandler.Handle(ctx, atQry)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, err
 	}
 
 	var approvalTasks []*dcstodcs.DCSToDCSContractApprovalTaskItem
@@ -153,13 +164,13 @@ func (s *DCSToDCSSynchronizer) readAllTasksData(ctx context.Context, did *string
 		RetrievedBy: middleware.GetParticipantID(ctx),
 	}
 	nHandler := remotesync.GetAllNegotiationsForDIDHandler{
-		DB:     s.DB,
-		NRepo:  s.NRepo,
-		NTRepo: s.NTRepo,
+		DB:     db,
+		NRepo:  nRepo,
+		NTRepo: ntRepo,
 	}
 	negotiationData, err := nHandler.Handle(ctx, nQry)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, err
 	}
 
 	var negotiationTasks []*dcstodcs.DCSToDCSContractNegotiationTaskItem
@@ -182,6 +193,7 @@ func (s *DCSToDCSSynchronizer) readAllTasksData(ctx context.Context, did *string
 			ContractVersion: negotiation.ContractVersion,
 			CreatedBy:       negotiation.CreatedBy,
 			CreatedAt:       negotiation.CreatedAt.Format(time.RFC3339),
+			ChangeRequest:   negotiation.ChangeRequest,
 		})
 	}
 
@@ -195,17 +207,20 @@ func (s *DCSToDCSSynchronizer) readAllTasksData(ctx context.Context, did *string
 		}
 
 		negotiationDecisions = append(negotiationDecisions, &dcstodcs.DCSToDCSContractNegotiationDecisionItem{
-			ID:       negotiationDecision.ID,
-			Decision: decision,
+			ID:              negotiationDecision.ID,
+			Decision:        decision,
+			Negotiator:      negotiationDecision.Negotiator,
+			NegotiationID:   negotiationDecision.NegotiationID,
+			RejectionReason: negotiationDecision.RejectionReason,
 		})
 	}
 
-	return &queryTaskDataResult{
-		reviewTasks:          reviewTasks,
-		approvalTasks:        approvalTasks,
-		negotiationTasks:     negotiationTasks,
-		negotiations:         negotiations,
-		negotiationDecisions: negotiationDecisions,
+	return &QueryTaskDataResult{
+		ReviewTasks:          reviewTasks,
+		ApprovalTasks:        approvalTasks,
+		NegotiationTasks:     negotiationTasks,
+		Negotiations:         negotiations,
+		NegotiationDecisions: negotiationDecisions,
 	}, nil
 }
 
@@ -224,7 +239,8 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 	}
 	contractResult, err := qryHandler.Handle(ctx, qry)
 	if err != nil {
-		templaterepository.MakeInternalError(err)
+
+		return err
 	}
 
 	var startDate *string
@@ -265,14 +281,14 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 		Origin:          contractResult.Origin,
 	}
 
-	result, err := s.readAllTasksData(ctx, &contractResult.DID)
+	result, err := ReadAllTasksData(ctx, s.DB, s.CRepo, s.RTRepo, s.ATRepo, s.NTRepo, s.NRepo, s.SRepo, &contractResult.DID)
 	if err != nil {
-		return templaterepository.MakeInternalError(err)
+		return err
 	}
 
 	origin, err := s.DIDDocument.GetID()
 	if err != nil {
-		return contractworkflowengine.MakeInternalError(err)
+		return err
 	}
 
 	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
@@ -283,22 +299,66 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 
 		hostname, err := base.DIDWebToHostname(responsible)
 		if err != nil {
-			return contractworkflowengine.MakeInternalError(err)
+			return err
 		}
 
-		client := newDCSToDCSHttpClient(hostname)
+		client := NewDCSToDCSHttpClient(hostname)
 		_, err = client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
 			OriginDid:            origin,
 			Contract:             &contractItem,
-			ReviewTasks:          result.reviewTasks,
-			ApprovalTasks:        result.approvalTasks,
-			NegotiationTasks:     result.negotiationTasks,
-			NegotiationItems:     result.negotiations,
-			NegotiationDecisions: result.negotiationDecisions,
+			ReviewTasks:          result.ReviewTasks,
+			ApprovalTasks:        result.ApprovalTasks,
+			NegotiationTasks:     result.NegotiationTasks,
+			NegotiationItems:     result.Negotiations,
+			NegotiationDecisions: result.NegotiationDecisions,
 		})
+
 		if err != nil {
-			return contractworkflowengine.MakeInternalError(err)
+
+			tx, err2 := s.DB.BeginTxx(ctx, nil)
+			if err2 != nil {
+				return fmt.Errorf("could not start transaction: %w", err)
+			}
+			defer func(tx *sqlx.Tx) {
+				if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+					log.Printf(ctx, "could not rollback transaction: %v", err)
+				}
+			}(tx)
+
+			err2 = s.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, responsible)
+			if err2 != nil {
+				return fmt.Errorf("could not create or update sync fail entry: %w", err2)
+			}
+
+			err2 = tx.Commit()
+			if err2 != nil {
+				return fmt.Errorf("could not commit transaction: %w", err)
+			}
+
+		} else {
+
+			tx, err2 := s.DB.BeginTxx(ctx, nil)
+			if err2 != nil {
+				return fmt.Errorf("could not start transaction: %w", err)
+			}
+			defer func(tx *sqlx.Tx) {
+				if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+					log.Printf(ctx, "could not rollback transaction: %v", err)
+				}
+			}(tx)
+
+			err2 = s.SRepo.DeleteSyncFailEntry(ctx, tx, responsible)
+			if err2 != nil {
+				return fmt.Errorf("could not create or update sync fail entry: %w", err2)
+			}
+
+			err2 = tx.Commit()
+			if err2 != nil {
+				return fmt.Errorf("could not commit transaction: %w", err)
+			}
+
 		}
+
 	}
 
 	return nil

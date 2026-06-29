@@ -59,6 +59,7 @@ type RemoteSyncEvent struct {
 	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
 	StartDate       *time.Time                         `json:"start_date"`
 	Origin          string                             `json:"origin"`
+	OriginPeer      string                             `json:"origin_peer"`
 }
 
 // EventType implements the Event interface.
@@ -68,6 +69,72 @@ func (e RemoteSyncEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e RemoteSyncEvent) GetDID() string {
+	return e.DID
+}
+
+// RemoteSyncRequestEvent is emitted when a new contract is created.
+type RemoteSyncRequestEvent struct {
+	DID             string                             `json:"did"`
+	TemplateDID     string                             `json:"template_did"`
+	CreatedBy       string                             `json:"created_by"`
+	Name            *string                            `json:"name"`
+	Description     *string                            `json:"description"`
+	ContractData    *datatype.JSON                     `json:"contract_data"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	Responsible     *db.Responsible                    `json:"responsible"`
+	ContractVersion int                                `json:"contract_version"`
+	State           contractstate.ContractState        `json:"state"`
+	CreatedAt       time.Time                          `json:"created_at"`
+	UpdatedAt       time.Time                          `json:"updated_at"`
+	TemplateVersion int                                `json:"template_version"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	ExpDate         *time.Time                         `json:"exp_date"`
+	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
+	StartDate       *time.Time                         `json:"start_date"`
+	Origin          string                             `json:"origin"`
+	OriginPeer      string                             `json:"origin_peer"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteSyncRequestEvent) EventType() string {
+	return eventtype.RemoteSyncRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteSyncRequestEvent) GetDID() string {
+	return e.DID
+}
+
+// RemoteUpdateRequestEvent is emitted when a contract update on main peer was requested
+type RemoteUpdateRequestEvent struct {
+	DID                string                             `json:"did"`
+	HolderDID          string                             `json:"holder_did"`
+	UpdatedBy          string                             `json:"updated_by"`
+	OldName            *string                            `json:"old_name,omitempty"`
+	NewName            *string                            `json:"new_name,omitempty"`
+	OldDescription     *string                            `json:"old_description,omitempty"`
+	NewDescription     *string                            `json:"new_description,omitempty"`
+	OldContractData    *datatype.JSON                     `json:"old_contract_data,omitempty"`
+	NewContractData    *datatype.JSON                     `json:"new_contract_data,omitempty"`
+	OccurredAt         time.Time                          `json:"occurred_at"`
+	OldExpDate         *time.Time                         `json:"old_exp_date,omitempty"`
+	NewExpDate         *time.Time                         `json:"new_exp_date,omitempty"`
+	OldExpPolicy       *expirationpolicy.ExpirationPolicy `json:"old_exp_policy,omitempty"`
+	NewExpPolicy       *expirationpolicy.ExpirationPolicy `json:"new_exp_policy,omitempty"`
+	OldExpNoticePeriod *int                               `json:"old_exp_notice_period,omitempty"`
+	NewExpNoticePeriod *int                               `json:"new_exp_notice_period,omitempty"`
+	OldStartDate       *time.Time                         `json:"old_start_date,omitempty"`
+	NewStartDate       *time.Time                         `json:"new_start_date,omitempty"`
+	UserRoles          userrole.UserRoles                 `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteUpdateRequestEvent) EventType() string {
+	return eventtype.RemoteUpdateRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteUpdateRequestEvent) GetDID() string {
 	return e.DID
 }
 

@@ -108,7 +108,7 @@ func (h *GetAllNegotiationsForDIDHandler) Handle(ctx context.Context, query GetA
 
 		resultNegotiationDecisions = append(resultNegotiationDecisions, NegotiationDecisionData{
 			ID:              negotiationDecision.ID,
-			NegotiationID:   negotiationDecision.Negotiator,
+			NegotiationID:   negotiationDecision.NegotiationID,
 			Negotiator:      negotiationDecision.Negotiator,
 			RejectionReason: negotiationDecision.RejectionReason,
 			Decision:        decision,

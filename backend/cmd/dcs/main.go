@@ -13,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 
+	pq2 "digital-contracting-service/internal/dcstodcssynchronizer/db/pg"
+
 	"digital-contracting-service/internal/dcstodcssynchronizer"
 
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -241,6 +243,7 @@ func main() {
 		}
 	}(cepSubClient)
 
+	syncRepo := pq2.PostgresSyncRepository{}
 	dcsToDcsSynchronizer := dcstodcssynchronizer.DCSToDCSSynchronizer{
 		DB:          db,
 		CRepo:       &cweRepo,
@@ -248,9 +251,10 @@ func main() {
 		NTRepo:      &cweNTRepo,
 		RTRepo:      &cweRTRepo,
 		ATRepo:      &cweATRepo,
+		SRepo:       &syncRepo,
 		DIDDocument: *didDocument,
 	}
-	dcsToDcsSynchronizer.StartSynchronizing(ctx, cepSubClient)
+	dcsToDcsSynchronizer.StartSynchronizerJob(ctx, cepSubClient)
 
 	if os.Getenv("DCS_DEBUG_EVENTING") == "true" {
 		event.StartEventLogger(ctx, cepSubClient)
@@ -404,8 +408,8 @@ func main() {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth, *didDocument)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, templateCatalogueClient, auditTrailReader, *didDocument)
-		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, *didDocument)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, templateCatalogueClient, auditTrailReader, *didDocument)
+		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, *didDocument)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)

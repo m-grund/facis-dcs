@@ -7,6 +7,10 @@ import (
 	"slices"
 	"time"
 
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+
+	"digital-contracting-service/internal/dcstodcssynchronizer"
+
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -31,22 +35,25 @@ import (
 )
 
 type contractWorkflowEnginesrvc struct {
-	DB           *sqlx.DB
-	CRepo        db.ContractRepo
-	RTRepo       db.ReviewTaskRepo
-	ATRepo       db.ApprovalTaskRepo
-	NTRepo       db.NegotiationTaskRepo
-	NRepo        db.NegotiationRepo
-	CTRepo       db.ContractTemplateRepo
-	FCClient     *fcclient.FederatedCatalogueClient
-	DIDDocument  base.DIDDocument
-	ATrailReader base.AuditTrailReader
+	DB                   *sqlx.DB
+	CRepo                db.ContractRepo
+	RTRepo               db.ReviewTaskRepo
+	ATRepo               db.ApprovalTaskRepo
+	NTRepo               db.NegotiationTaskRepo
+	NRepo                db.NegotiationRepo
+	SRepo                db2.SyncRepository
+	CTRepo               db.ContractTemplateRepo
+	FCClient             *fcclient.FederatedCatalogueClient
+	DIDDocument          base.DIDDocument
+	ATrailReader         base.AuditTrailReader
+	DCSToDCSSynchronizer dcstodcssynchronizer.DCSToDCSSynchronizer
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
+	sRepo db2.SyncRepository,
 	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument base.DIDDocument) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
@@ -57,6 +64,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		ATRepo:           atRepo,
 		NTRepo:           ntRepo,
 		NRepo:            nRepo,
+		SRepo:            sRepo,
 		CTRepo:           ctRepo,
 		FCClient:         fcClient,
 		DIDDocument:      didDocument,
@@ -160,10 +168,16 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		ExpDate:         expDate,
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: req.ExpNoticePeriod,
+		DIDDocument:     s.DIDDocument,
 	}
 	handler := command.Updater{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:     s.DB,
+		CRepo:  s.CRepo,
+		RTRepo: s.RTRepo,
+		ATRepo: s.ATRepo,
+		NTRepo: s.NTRepo,
+		NRepo:  s.NRepo,
+		SRepo:  s.SRepo,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

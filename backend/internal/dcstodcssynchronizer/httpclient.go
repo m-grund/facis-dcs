@@ -21,7 +21,7 @@ func (d *prefixDoer) Do(req *http.Request) (*http.Response, error) {
 	return d.inner.Do(req)
 }
 
-func newDCSToDCSHttpClient(host string) *dcstodcs.Client {
+func NewDCSToDCSHttpClient(host string) *dcstodcs.Client {
 	apiPath := os.Getenv("DCS_API_PATH")
 	if apiPath == "" {
 		apiPath = "/"

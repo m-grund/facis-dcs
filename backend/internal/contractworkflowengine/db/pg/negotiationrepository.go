@@ -204,21 +204,28 @@ func (r PostgresNegotiationRepo) ReadAllNegotiationDecisionsByContractDID(ctx co
 	return decisions, nil
 }
 
-func (r PostgresNegotiationRepo) RemoteCreateNegotiation(ctx context.Context, tx *sqlx.Tx, data db.NegotiationData) error {
+func (r PostgresNegotiationRepo) RemoteCreateOrUpdateNegotiation(ctx context.Context, tx *sqlx.Tx, data db.NegotiationData) error {
 	statement := `
         INSERT INTO contract_negotiations (
             id, did, contract_version, change_request, created_by, created_at
         ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+            contract_version = EXCLUDED.contract_version,
+            change_request = EXCLUDED.change_request
     `
 	_, err := tx.ExecContext(ctx, statement,
-		data.DID, data.DID, data.ContractVersion, data.ChangeRequest, data.CreatedBy, data.CreatedAt)
+		data.ID, data.DID, data.ContractVersion, data.ChangeRequest, data.CreatedBy, data.CreatedAt)
 	return err
 }
-func (r PostgresNegotiationRepo) RemoteCreateNegotiationDecision(ctx context.Context, tx *sqlx.Tx, data db.NegotiationDecisionData) error {
+
+func (r PostgresNegotiationRepo) RemoteCreateOrUpdateNegotiationDecision(ctx context.Context, tx *sqlx.Tx, data db.NegotiationDecisionData) error {
 	statement := `
         INSERT INTO contract_negotiation_decisions (
             id, negotiation_id, negotiator, decision, rejection_reason
         ) VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE SET
+            decision = EXCLUDED.decision,
+            rejection_reason = EXCLUDED.rejection_reason
     `
 	_, err := tx.ExecContext(ctx, statement,
 		data.ID, data.NegotiationID, data.Negotiator, data.Decision, data.RejectionReason)

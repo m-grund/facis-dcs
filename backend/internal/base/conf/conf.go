@@ -5,11 +5,11 @@ import (
 )
 
 func TransactionTimeout() time.Duration {
-	return 30 * time.Second
+	return 1 * time.Minute
 }
 
 func HTTPClientTimeout() time.Duration {
-	return 10 * time.Second
+	return 1 * time.Minute
 }
 
 func OutboxProcessorTimeOut() time.Duration {

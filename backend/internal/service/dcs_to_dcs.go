@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
+
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync"
 
@@ -34,13 +37,14 @@ type dcsToDcssrvc struct {
 	NTRepo      db.NegotiationTaskRepo
 	NRepo       db.NegotiationRepo
 	CTRepo      db.ContractTemplateRepo
+	SRepo       db2.SyncRepository
 	DIDDocument base.DIDDocument
 	auth.JWTAuthenticator
 }
 
 func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, syncRepo db2.SyncRepository,
 	didDocument base.DIDDocument) dcstodcs.Service {
 	return &dcsToDcssrvc{
 		JWTAuthenticator: jwtAuth,
@@ -51,6 +55,7 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		NTRepo:           ntRepo,
 		NRepo:            nRepo,
 		CTRepo:           ctRepo,
+		SRepo:            syncRepo,
 		DIDDocument:      didDocument,
 	}
 }
@@ -170,12 +175,16 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 	}
 
 	cmd := remotesync.PeerSyncCmd{
+		Origin:               req.OriginDid,
+		LocalOrigin:          origin,
+		ContractOrigin:       remoteContractData.Origin,
 		Contract:             remoteContractData,
 		ReviewTasks:          reviewTasks,
 		ApprovalTasks:        approvalTasks,
 		NegotiationTasks:     negotiationTasks,
 		Negotiations:         negotiations,
 		NegotiationDecisions: negotiationDecision,
+		DIDDocument:          s.DIDDocument,
 	}
 	handler := remotesync.PeerSynchronizer{
 		DB:     s.DB,
@@ -188,6 +197,7 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
+		log.Println(err)
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 

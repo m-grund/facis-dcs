@@ -9,7 +9,8 @@ type EventType string
 
 const (
 	Create                  EventType = "CREATE_CONTRACT"
-	RemoteSync              EventType = "REMOTE_CONTRACT_SYNC"
+	RemoteSync              EventType = "REMOTE_SYNC"
+	RemoteSyncRequest       EventType = "REMOTE_SYNC_REQUEST"
 	Submit                  EventType = "SUBMIT_CONTRACT"
 	Negotiation             EventType = "NEGOTIATE_CONTRACT"
 	AcceptRespond           EventType = "ACCEPT_RESPOND_CONTRACT"
@@ -19,6 +20,7 @@ const (
 	Reject                  EventType = "REJECT_CONTRACT"
 	Verify                  EventType = "VERIFY_CONTRACT"
 	Update                  EventType = "UPDATE_CONTRACT"
+	RemoteUpdateRequest     EventType = "REMOTE_UPDATE_REQUEST"
 	RetrieveAll             EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveByID            EventType = "RETRIEVE_CONTRACT_BY_ID"
 	RetrieveHistoryByDID    EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
@@ -52,6 +54,8 @@ var validStates = map[EventType]bool{
 	RecordEvidence:          true,
 	ContractExpired:         true,
 	RemoteSync:              true,
+	RemoteUpdateRequest:     true,
+	RemoteSyncRequest:       true,
 }
 
 func NewEventType(s string) (EventType, error) {

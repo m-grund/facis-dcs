@@ -8,21 +8,28 @@ import (
 	"log"
 	"time"
 
-	"github.com/jmoiron/sqlx"
+	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
+
+	"github.com/jmoiron/sqlx"
+
 	"digital-contracting-service/internal/contractworkflowengine/db"
-	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 )
 
 type PeerSyncCmd struct {
+	Origin               string
+	LocalOrigin          string
 	Contract             ContractData
 	ReviewTasks          []ReviewTaskData
 	ApprovalTasks        []ApprovalTaskData
 	NegotiationTasks     []NegotiationTaskData
 	Negotiations         []NegotiationData
 	NegotiationDecisions []NegotiationDecisionData
+	DIDDocument          base.DIDDocument
+	ContractOrigin       string
 }
 
 type PeerSynchronizer struct {
@@ -36,6 +43,7 @@ type PeerSynchronizer struct {
 }
 
 func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
+
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -78,7 +86,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 	}
 
 	if exists {
-		err := h.CRepo.RemoteUpdate(ctx, tx, data)
+		err = h.CRepo.RemoteUpdate(ctx, tx, data)
 		if err != nil {
 			return fmt.Errorf("could not update contract: %w", err)
 		}
@@ -106,23 +114,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 				return fmt.Errorf("could not update negotiation task: %w", err)
 			}
 		}
-		/*
-			negotiations := toNegotiationData(cmd.Negotiations)
-			for _, negotiation := range negotiations {
-				err := h.NRepo.RemoteCreateNegotiation(ctx, tx, negotiation)
-				if err != nil {
-					return fmt.Errorf("could not create remote negotiation data: %w", err)
-				}
-			}
 
-			negotiationDecisions := toNegotiationDecisionData(cmd.NegotiationDecisions)
-			for _, decision := range negotiationDecisions {
-				err := h.NRepo.RemoteCreateNegotiationDecision(ctx, tx, decision)
-				if err != nil {
-					return fmt.Errorf("could not create remote negotiation decision: %w", err)
-				}
-			}
-		*/
 	} else {
 		err := h.CRepo.Create(ctx, tx, data)
 		if err != nil {
@@ -152,47 +144,76 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 				return fmt.Errorf("could not create negotiation task: %w", err)
 			}
 		}
+	}
 
-		negotiations := toNegotiationData(cmd.Negotiations)
-		for _, negotiation := range negotiations {
-			err := h.NRepo.RemoteCreateNegotiation(ctx, tx, negotiation)
-			if err != nil {
-				return fmt.Errorf("could not create negotiation data: %w", err)
-			}
-		}
-
-		negotiationDecisions := toNegotiationDecisionData(cmd.NegotiationDecisions)
-		for _, decision := range negotiationDecisions {
-			err := h.NRepo.RemoteCreateNegotiationDecision(ctx, tx, decision)
-			if err != nil {
-				return fmt.Errorf("could not create negotiation decision: %w", err)
-			}
+	negotiations := toNegotiationData(cmd.Negotiations)
+	for _, negotiation := range negotiations {
+		err := h.NRepo.RemoteCreateOrUpdateNegotiation(ctx, tx, negotiation)
+		if err != nil {
+			return fmt.Errorf("could not create negotiation data: %w", err)
 		}
 	}
 
-	evt := contractevents.RemoteSyncEvent{
-		DID:             cmd.Contract.DID,
-		TemplateDID:     cmd.Contract.TemplateDID,
-		CreatedBy:       cmd.Contract.CreatedBy,
-		ContractData:    cmd.Contract.ContractData,
-		OccurredAt:      time.Now().UTC(),
-		Responsible:     cmd.Contract.Responsible,
-		Name:            cmd.Contract.Name,
-		Description:     cmd.Contract.Description,
-		StartDate:       cmd.Contract.StartDate,
-		ExpDate:         cmd.Contract.ExpDate,
-		ExpPolicy:       cmd.Contract.ExpPolicy,
-		Origin:          cmd.Contract.Origin,
-		CreatedAt:       cmd.Contract.CreatedAt,
-		UpdatedAt:       cmd.Contract.UpdatedAt,
-		ExpNoticePeriod: cmd.Contract.ExpPolicy,
-		TemplateVersion: cmd.Contract.TemplateVersion,
-		ContractVersion: cmd.Contract.ContractVersion,
-		State:           cmd.Contract.State,
+	negotiationDecisions := toNegotiationDecisionData(cmd.NegotiationDecisions)
+	for _, decision := range negotiationDecisions {
+		err := h.NRepo.RemoteCreateOrUpdateNegotiationDecision(ctx, tx, decision)
+		if err != nil {
+			return fmt.Errorf("could not create negotiation decision: %w", err)
+		}
 	}
-	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-	if err != nil {
-		return fmt.Errorf("could not create event: %w", err)
+
+	if cmd.Origin == cmd.LocalOrigin || cmd.ContractOrigin == cmd.LocalOrigin {
+		evt := contractevents.RemoteSyncEvent{
+			OriginPeer:      cmd.Origin,
+			DID:             cmd.Contract.DID,
+			TemplateDID:     cmd.Contract.TemplateDID,
+			CreatedBy:       cmd.Contract.CreatedBy,
+			ContractData:    cmd.Contract.ContractData,
+			OccurredAt:      time.Now().UTC(),
+			Responsible:     cmd.Contract.Responsible,
+			Name:            cmd.Contract.Name,
+			Description:     cmd.Contract.Description,
+			StartDate:       cmd.Contract.StartDate,
+			ExpDate:         cmd.Contract.ExpDate,
+			ExpPolicy:       cmd.Contract.ExpPolicy,
+			Origin:          cmd.Contract.Origin,
+			CreatedAt:       cmd.Contract.CreatedAt,
+			UpdatedAt:       cmd.Contract.UpdatedAt,
+			ExpNoticePeriod: cmd.Contract.ExpPolicy,
+			TemplateVersion: cmd.Contract.TemplateVersion,
+			ContractVersion: cmd.Contract.ContractVersion,
+			State:           cmd.Contract.State,
+		}
+		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+		if err != nil {
+			return fmt.Errorf("could not create event: %w", err)
+		}
+	} else {
+		evt := contractevents.RemoteSyncRequestEvent{
+			OriginPeer:      cmd.Origin,
+			DID:             cmd.Contract.DID,
+			TemplateDID:     cmd.Contract.TemplateDID,
+			CreatedBy:       cmd.Contract.CreatedBy,
+			ContractData:    cmd.Contract.ContractData,
+			OccurredAt:      time.Now().UTC(),
+			Responsible:     cmd.Contract.Responsible,
+			Name:            cmd.Contract.Name,
+			Description:     cmd.Contract.Description,
+			StartDate:       cmd.Contract.StartDate,
+			ExpDate:         cmd.Contract.ExpDate,
+			ExpPolicy:       cmd.Contract.ExpPolicy,
+			Origin:          cmd.Contract.Origin,
+			CreatedAt:       cmd.Contract.CreatedAt,
+			UpdatedAt:       cmd.Contract.UpdatedAt,
+			ExpNoticePeriod: cmd.Contract.ExpPolicy,
+			TemplateVersion: cmd.Contract.TemplateVersion,
+			ContractVersion: cmd.Contract.ContractVersion,
+			State:           cmd.Contract.State,
+		}
+		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+		if err != nil {
+			return fmt.Errorf("could not create event: %w", err)
+		}
 	}
 
 	return tx.Commit()
