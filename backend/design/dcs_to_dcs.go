@@ -86,7 +86,7 @@ var DCSToDCSContractNegotiationDecisionItem = Type("DCSToDCSContractNegotiationD
 var DCSToDCSContractSyncRequest = Type("DCSToDCSContractSyncRequest", func() {
 	Description("Contract sync request")
 
-	Attribute("origin_did", String, "The origin did of this message")
+	Attribute("from_peer_did", String, "The did of the peer where the message comes from")
 
 	Attribute("contract", DCSToDCSContractItem, "The contract")
 	Attribute("review_tasks", ArrayOf(DCSToDCSContractReviewTaskItem), "The review tasks for that contract")
@@ -95,11 +95,29 @@ var DCSToDCSContractSyncRequest = Type("DCSToDCSContractSyncRequest", func() {
 	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
 	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
 
-	Required("origin_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks")
+	Required("from_peer_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks")
 })
 
 var DCSToDCSContractSyncResponse = Type("DCSToDCSContractSyncResponse", func() {
 	Description("Result for syncing the contract")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Required("did")
+})
+
+var DCSToDCSContractActionRequest = Type("DCSToDCSContractActionRequest", func() {
+	Description("Contract action request")
+
+	Attribute("from_peer_did", String, "The did of the peer where the message comes from")
+	Attribute("payload", Any, "Action request payload")
+	Attribute("action", String, "The action to perform")
+
+	Required("action", "from_peer_did", "payload")
+})
+
+var DCSToDCSContractActionResponse = Type("DCSToDCSContractActionResponse", func() {
+	Description("Result for action request")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 
@@ -118,7 +136,23 @@ var _ = Service("DcsToDcs", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			GET("/peer/sync")
+			POST("/peer/sync")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("action", func() {
+
+		Payload(DCSToDCSContractActionRequest)
+		Result(DCSToDCSContractActionResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/peer/action")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

@@ -219,6 +219,22 @@ func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sql
 	return &processData, nil
 }
 
+func (r *PostgresContractRepo) ReadProcessDataByDIDOrNil(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
+	query := `
+        SELECT did, origin,  state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
+        FROM contracts_effective_process_data WHERE did = $1
+    `
+	var processData db.ContractProcessData
+	err := tx.GetContext(ctx, &processData, query, did)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &processData, nil
+}
+
 func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
     SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,

@@ -40,7 +40,7 @@ type Approver struct {
 
 func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 
-	origin, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -68,7 +68,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid contract state")
 	}
 
-	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, origin)
+	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, localPeer)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid user")
 	}
 
-	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, origin, approvaltaskstate.Approved.String())
+	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, localPeer, approvaltaskstate.Approved.String())
 	if err != nil {
 		return fmt.Errorf("could not update approval task state: %w", err)
 	}

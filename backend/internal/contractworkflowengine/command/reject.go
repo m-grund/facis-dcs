@@ -40,7 +40,7 @@ type Rejecter struct {
 
 func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 
-	origin, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -68,7 +68,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		return errors.New("invalid contract state")
 	}
 
-	exist, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, origin)
+	exist, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, localPeer)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		return errors.New("invalid user")
 	}
 
-	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, origin, approvaltaskstate.Rejected.String())
+	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, localPeer, approvaltaskstate.Rejected.String())
 	if err != nil {
 		return fmt.Errorf("could not update approval task state: %w", err)
 	}

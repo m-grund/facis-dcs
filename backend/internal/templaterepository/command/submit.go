@@ -8,8 +8,6 @@ import (
 	"log"
 	"time"
 
-	"digital-contracting-service/internal/base"
-
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -24,7 +22,6 @@ import (
 
 type SubmitCmd struct {
 	DID         string
-	DIDDocument base.DIDDocument
 	UpdatedAt   time.Time
 	SubmittedBy string
 	ActionFlag  *actionflag.ActionFlag

@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS trusted_peers
 CREATE TABLE IF NOT EXISTS sync_fails
 (
     id         BIGSERIAL PRIMARY KEY,
-    peer_did   VARCHAR(255) NOT NULL UNIQUE REFERENCES trusted_peers (peer_did),
+    did        VARCHAR(255) NOT NULL UNIQUE,
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

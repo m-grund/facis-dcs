@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
@@ -59,18 +60,27 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	}
 }
 
+func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContractActionRequest) (res *dcstodcs.DCSToDCSContractActionResponse, err error) {
+
+	fmt.Println(req.Action)
+
+	return &dcstodcs.DCSToDCSContractActionResponse{
+		Did: "",
+	}, nil
+}
+
 func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractSyncRequest) (res *dcstodcs.DCSToDCSContractSyncResponse, err error) {
 
-	origin, err := s.DIDDocument.GetID()
+	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	if req.OriginDid == "" {
+	if req.FromPeerDid == "" {
 		return nil, contractworkflowengine.MakeInternalError(errors.New("origin did is empty"))
 	}
 
-	if req.OriginDid == origin {
+	if req.FromPeerDid == localPeer {
 		return nil, errors.New("syncing contract to same peer is not allowed")
 	}
 
@@ -174,8 +184,8 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 	}
 
 	cmd := remotesync.PeerSyncCmd{
-		Origin:               req.OriginDid,
-		LocalOrigin:          origin,
+		FromPeerDID:          req.FromPeerDid,
+		LocalPeer:            localPeer,
 		ContractOrigin:       remoteContractData.Origin,
 		Contract:             remoteContractData,
 		ReviewTasks:          reviewTasks,

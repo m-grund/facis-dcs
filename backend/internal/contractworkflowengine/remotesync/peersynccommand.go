@@ -20,8 +20,8 @@ import (
 )
 
 type PeerSyncCmd struct {
-	Origin               string
-	LocalOrigin          string
+	FromPeerDID          string
+	LocalPeer            string
 	Contract             ContractData
 	ReviewTasks          []ReviewTaskData
 	ApprovalTasks        []ApprovalTaskData
@@ -54,7 +54,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 	}(tx)
 
-	oldData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.Contract.DID)
+	oldData, err := h.CRepo.ReadProcessDataByDIDOrNil(ctx, tx, cmd.Contract.DID)
 	if err != nil {
 		return fmt.Errorf("could not check if contract exists: %w", err)
 	}
@@ -64,7 +64,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 
 			evt := contractevents.OutdatedPeerEvent{
 				DID:             cmd.Contract.DID,
-				OutdatedPeerDID: cmd.Origin,
+				OutdatedPeerDID: cmd.FromPeerDID,
 				OccurredAt:      time.Now().UTC(),
 			}
 			err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
@@ -77,7 +77,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 				return fmt.Errorf("could not commit transaction: %w", err)
 			}
 
-			return fmt.Errorf("contract data is outdated. start synchronization")
+			return fmt.Errorf("contract data is outdated. start synchronization. please reload")
 		}
 	}
 
@@ -184,9 +184,10 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 	}
 
-	if cmd.Origin == cmd.LocalOrigin || cmd.ContractOrigin == cmd.LocalOrigin {
+	if cmd.FromPeerDID == cmd.LocalPeer || cmd.ContractOrigin == cmd.LocalPeer {
 		evt := contractevents.RemoteSyncEvent{
-			OriginPeer:      cmd.Origin,
+			FromPeerDID:     cmd.FromPeerDID,
+			LocalPeerDID:    cmd.LocalPeer,
 			DID:             cmd.Contract.DID,
 			TemplateDID:     cmd.Contract.TemplateDID,
 			CreatedBy:       cmd.Contract.CreatedBy,
@@ -212,7 +213,8 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 	} else {
 		evt := contractevents.RemoteSyncRequestEvent{
-			OriginPeer:      cmd.Origin,
+			FromPeerDID:     cmd.FromPeerDID,
+			LocalPeerDID:    cmd.LocalPeer,
 			DID:             cmd.Contract.DID,
 			TemplateDID:     cmd.Contract.TemplateDID,
 			CreatedBy:       cmd.Contract.CreatedBy,

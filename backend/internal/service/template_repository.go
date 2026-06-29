@@ -36,14 +36,13 @@ type templateRepositorysrvc struct {
 	ATRepo       db.ApprovalTaskRepo
 	FCClient     *fcclient.FederatedCatalogueClient
 	ATrailReader base.AuditTrailReader
-	DIDDocument  base.DIDDocument
 	auth.JWTAuthenticator
 }
 
 // NewTemplateRepository returns the TemplateRepository service implementation.
 func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db.ContractTemplateRepo,
 	RTRepo db.ReviewTaskRepo, ATRepo db.ApprovalTaskRepo, fcClient *fcclient.FederatedCatalogueClient,
-	auditTrailReader base.AuditTrailReader, didDocument base.DIDDocument) templaterepository.Service {
+	auditTrailReader base.AuditTrailReader) templaterepository.Service {
 	return &templateRepositorysrvc{
 		DB:               db,
 		JWTAuthenticator: jwtAuth,
@@ -51,7 +50,6 @@ func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db
 		RTRepo:           RTRepo,
 		ATRepo:           ATRepo,
 		FCClient:         fcClient,
-		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
 	}
 }
@@ -157,7 +155,6 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
-		DIDDocument: s.DIDDocument,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),

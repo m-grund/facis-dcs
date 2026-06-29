@@ -8,56 +8,58 @@ import (
 type EventType string
 
 const (
-	Create                  EventType = "CREATE_CONTRACT"
-	RemoteSync              EventType = "REMOTE_SYNC"
-	RemoteSyncRequest       EventType = "REMOTE_SYNC_REQUEST"
-	Submit                  EventType = "SUBMIT_CONTRACT"
-	Negotiation             EventType = "NEGOTIATE_CONTRACT"
-	AcceptRespond           EventType = "ACCEPT_RESPOND_CONTRACT"
-	RejectRespond           EventType = "REJECT_RESPOND_CONTRACT"
-	IncreaseContractVersion EventType = "INCREASE_CONTRACT_VERSION"
-	Approve                 EventType = "APPROVE_CONTRACT"
-	Reject                  EventType = "REJECT_CONTRACT"
-	Verify                  EventType = "VERIFY_CONTRACT"
-	Update                  EventType = "UPDATE_CONTRACT"
-	RemoteUpdateRequest     EventType = "REMOTE_UPDATE_REQUEST"
-	OutdatedPeer            EventType = "OUTDATED_PEER"
-	RetrieveAll             EventType = "RETRIEVE_ALL_CONTRACTS"
-	RetrieveByID            EventType = "RETRIEVE_CONTRACT_BY_ID"
-	RetrieveHistoryByDID    EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
-	Search                  EventType = "SEARCH_CONTRACT"
-	Review                  EventType = "REVIEW_CONTRACT"
-	Audit                   EventType = "AUDIT_CONTRACT"
-	Terminate               EventType = "TERMINATE_CONTRACT"
-	RecordEvidence          EventType = "RECORD_EVIDENCE"
-	ContractExpired         EventType = "CONTRACT_EXPIRED"
-	RetrieveAllTemplates    EventType = "RETRIEVE_ALL_TEMPLATES"
+	Create                   EventType = "CREATE_CONTRACT"
+	RemoteSync               EventType = "REMOTE_SYNC"
+	RemoteSyncRequest        EventType = "REMOTE_SYNC_REQUEST"
+	Submit                   EventType = "SUBMIT_CONTRACT"
+	Negotiation              EventType = "NEGOTIATE_CONTRACT"
+	AcceptRespond            EventType = "ACCEPT_RESPOND_CONTRACT"
+	RejectRespond            EventType = "REJECT_RESPOND_CONTRACT"
+	IncreaseContractVersion  EventType = "INCREASE_CONTRACT_VERSION"
+	Approve                  EventType = "APPROVE_CONTRACT"
+	Reject                   EventType = "REJECT_CONTRACT"
+	Verify                   EventType = "VERIFY_CONTRACT"
+	Update                   EventType = "UPDATE_CONTRACT"
+	RemoteUpdateRequest      EventType = "REMOTE_UPDATE_REQUEST"
+	OutdatedPeer             EventType = "OUTDATED_PEER"
+	RetrieveAll              EventType = "RETRIEVE_ALL_CONTRACTS"
+	RetrieveByID             EventType = "RETRIEVE_CONTRACT_BY_ID"
+	RetrieveHistoryByDID     EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
+	Search                   EventType = "SEARCH_CONTRACT"
+	Review                   EventType = "REVIEW_CONTRACT"
+	Audit                    EventType = "AUDIT_CONTRACT"
+	Terminate                EventType = "TERMINATE_CONTRACT"
+	RecordEvidence           EventType = "RECORD_EVIDENCE"
+	ContractExpired          EventType = "CONTRACT_EXPIRED"
+	RetrieveAllTemplates     EventType = "RETRIEVE_ALL_TEMPLATES"
+	RemoteActionRequestEvent EventType = "REMOTE_ACTION_REQUEST"
 )
 
 var validStates = map[EventType]bool{
-	Create:                  true,
-	Submit:                  true,
-	Negotiation:             true,
-	AcceptRespond:           true,
-	RejectRespond:           true,
-	IncreaseContractVersion: true,
-	Approve:                 true,
-	Reject:                  true,
-	Verify:                  true,
-	Update:                  true,
-	RetrieveAll:             true,
-	RetrieveByID:            true,
-	RetrieveHistoryByDID:    true,
-	Search:                  true,
-	Review:                  true,
-	Audit:                   true,
-	Terminate:               true,
-	RecordEvidence:          true,
-	ContractExpired:         true,
-	RemoteSync:              true,
-	RemoteUpdateRequest:     true,
-	RemoteSyncRequest:       true,
-	OutdatedPeer:            true,
+	Create:                   true,
+	Submit:                   true,
+	Negotiation:              true,
+	AcceptRespond:            true,
+	RejectRespond:            true,
+	IncreaseContractVersion:  true,
+	Approve:                  true,
+	Reject:                   true,
+	Verify:                   true,
+	Update:                   true,
+	RetrieveAll:              true,
+	RetrieveByID:             true,
+	RetrieveHistoryByDID:     true,
+	Search:                   true,
+	Review:                   true,
+	Audit:                    true,
+	Terminate:                true,
+	RecordEvidence:           true,
+	ContractExpired:          true,
+	RemoteSync:               true,
+	RemoteUpdateRequest:      true,
+	RemoteSyncRequest:        true,
+	OutdatedPeer:             true,
+	RemoteActionRequestEvent: true,
 }
 
 func NewEventType(s string) (EventType, error) {

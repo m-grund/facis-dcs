@@ -57,7 +57,7 @@ type Updater struct {
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 
-	origin, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -128,7 +128,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		expPolicy = &s
 	}
 
-	if oldData.Origin == origin {
+	if oldData.Origin == localPeer {
 		newData := db.ContractUpdateData{
 			DID:             cmd.DID,
 			Name:            cmd.Name,
@@ -170,145 +170,128 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 			return fmt.Errorf("could not create event: %w", err)
 		}
 
-		err = tx.Commit()
+		return tx.Commit()
+	}
+
+	contract, err := h.CRepo.ReadDataByDID(ctx, tx, oldData.DID)
+	if err != nil {
+		return fmt.Errorf("could not get contract data: %w", err)
+	}
+
+	trusted, err := h.SRepo.IsTrustedPeer(ctx, tx, oldData.Origin)
+	if err != nil {
+		return fmt.Errorf("could not check trusted peer: %w", err)
+	}
+
+	if !trusted {
+		return fmt.Errorf("contract origin peer is not in trusted peer list")
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("could not commit transaction: %w", err)
+	}
+
+	var startDate *string
+	if contract.StartDate != nil {
+		s := contract.StartDate.Format(time.RFC3339)
+		startDate = &s
+	}
+
+	var expDate *string
+	if contract.ExpDate != nil {
+		s := contract.ExpDate.Format(time.RFC3339)
+		expDate = &s
+	}
+
+	var contractExpPolicy *string
+	if contract.ExpPolicy != nil {
+		s := contract.ExpPolicy
+		contractExpPolicy = s
+	}
+
+	contractItem := dcstodcs.DCSToDCSContractItem{
+		Did:             contract.DID,
+		ContractVersion: contract.ContractVersion,
+		State:           contract.State,
+		Name:            cmd.Name,
+		Description:     cmd.Description,
+		CreatedBy:       contract.CreatedBy,
+		CreatedAt:       contract.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       cmd.UpdatedAt.Format(time.RFC3339),
+		ContractData:    cmd.ContractData,
+		TemplateDid:     contract.TemplateDID,
+		TemplateVersion: contract.TemplateVersion,
+		StartDate:       startDate,
+		ExpDate:         expDate,
+		ExpPolicy:       contractExpPolicy,
+		ExpNoticePeriod: cmd.ExpNoticePeriod,
+		Responsible:     contract.Responsible,
+		Origin:          contract.Origin,
+	}
+
+	result, err := dcstodcssynchronizer.ReadAllTasksData(ctx, h.DB, h.RTRepo, h.ATRepo, h.NTRepo, h.NRepo, &contract.DID)
+	if err != nil {
+		return err
+	}
+
+	hostname, err := base.DIDWebToHostname(oldData.Origin)
+	if err != nil {
+		return err
+	}
+
+	client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
+	_, remoteSyncErr := client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
+		FromPeerDid:          localPeer,
+		Contract:             &contractItem,
+		ReviewTasks:          result.ReviewTasks,
+		ApprovalTasks:        result.ApprovalTasks,
+		NegotiationTasks:     result.NegotiationTasks,
+		NegotiationItems:     result.Negotiations,
+		NegotiationDecisions: result.NegotiationDecisions,
+	})
+
+	tx, err = h.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	evt := contractevents.RemoteUpdateRequestEvent{
+		DID:                cmd.DID,
+		OldName:            oldData.Name,
+		NewName:            cmd.Name,
+		OldDescription:     oldData.Description,
+		NewDescription:     cmd.Description,
+		OldContractData:    oldData.ContractData,
+		NewContractData:    cmd.ContractData,
+		OldStartDate:       oldData.StartDate,
+		NewStartDate:       cmd.StartDate,
+		OldExpDate:         oldData.ExpDate,
+		NewExpDate:         cmd.ExpDate,
+		OldExpPolicy:       oldExpPolicy,
+		NewExpPolicy:       cmd.ExpPolicy,
+		OldExpNoticePeriod: oldData.ExpNoticePeriod,
+		NewExpNoticePeriod: cmd.ExpNoticePeriod,
+		UpdatedBy:          cmd.UpdatedBy,
+		OccurredAt:         time.Now().UTC(),
+		HolderDID:          cmd.HolderDID,
+		UserRoles:          cmd.UserRoles,
+	}
+	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+	if err != nil {
+		return fmt.Errorf("could not create event: %w", err)
+	}
+
+	if remoteSyncErr != nil {
+
+		err = h.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, oldData.DID)
 		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-	} else {
-
-		contract, err := h.CRepo.ReadDataByDID(ctx, tx, oldData.DID)
-		if err != nil {
-			return fmt.Errorf("could not get contract data: %w", err)
-		}
-
-		trusted, err := h.SRepo.IsTrustedPeer(ctx, tx, oldData.Origin)
-		if err != nil {
-			return fmt.Errorf("could not check trusted peer: %w", err)
-		}
-
-		if !trusted {
-			return fmt.Errorf("contract origin peer is not trusted peer list")
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		var startDate *string
-		if cmd.StartDate != nil {
-			s := contract.StartDate.Format(time.RFC3339)
-			startDate = &s
-		}
-
-		var expDate *string
-		if cmd.ExpDate != nil {
-			s := contract.ExpDate.Format(time.RFC3339)
-			expDate = &s
-		}
-
-		var expPolicy *string
-		if cmd.ExpPolicy != nil {
-			s := contract.ExpPolicy
-			expPolicy = s
-		}
-
-		contractItem := dcstodcs.DCSToDCSContractItem{
-			Did:             contract.DID,
-			ContractVersion: contract.ContractVersion,
-			State:           contract.State,
-			Name:            cmd.Name,
-			Description:     cmd.Description,
-			CreatedBy:       contract.CreatedBy,
-			CreatedAt:       contract.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       cmd.UpdatedAt.Format(time.RFC3339),
-			ContractData:    cmd.ContractData,
-			TemplateDid:     contract.TemplateDID,
-			TemplateVersion: contract.TemplateVersion,
-			StartDate:       startDate,
-			ExpDate:         expDate,
-			ExpPolicy:       expPolicy,
-			ExpNoticePeriod: cmd.ExpNoticePeriod,
-			Responsible:     contract.Responsible,
-			Origin:          contract.Origin,
-		}
-
-		result, err := dcstodcssynchronizer.ReadAllTasksData(ctx, h.DB, h.CRepo, h.RTRepo, h.ATRepo, h.NTRepo, h.NRepo, &contract.DID)
-		if err != nil {
-			return err
-		}
-
-		origin, err := cmd.DIDDocument.GetID()
-		if err != nil {
-			return err
-		}
-
-		hostname, err := base.DIDWebToHostname(oldData.Origin)
-		if err != nil {
-			return err
-		}
-
-		client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
-		_, remoteSyncErr := client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
-			OriginDid:            origin,
-			Contract:             &contractItem,
-			ReviewTasks:          result.ReviewTasks,
-			ApprovalTasks:        result.ApprovalTasks,
-			NegotiationTasks:     result.NegotiationTasks,
-			NegotiationItems:     result.Negotiations,
-			NegotiationDecisions: result.NegotiationDecisions,
-		})
-
-		tx, err := h.DB.BeginTxx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("could not start transaction: %w", err)
-		}
-		defer func(tx *sqlx.Tx) {
-			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-				log.Printf("could not rollback transaction: %v", err)
-			}
-		}(tx)
-
-		if remoteSyncErr != nil {
-
-			err = h.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, oldData.Origin)
-			if err != nil {
-				return fmt.Errorf("could not create or update sync fail entry: %w", err)
-			}
-
-		} else {
-
-			err = h.SRepo.DeleteSyncFailEntry(ctx, tx, oldData.Origin)
-			if err != nil {
-				return fmt.Errorf("could not create or update sync fail entry: %w", err)
-			}
-		}
-
-		evt := contractevents.RemoteUpdateRequestEvent{
-			DID:                cmd.DID,
-			OldName:            oldData.Name,
-			NewName:            cmd.Name,
-			OldDescription:     oldData.Description,
-			NewDescription:     cmd.Description,
-			OldContractData:    oldData.ContractData,
-			NewContractData:    cmd.ContractData,
-			OldStartDate:       oldData.StartDate,
-			NewStartDate:       cmd.StartDate,
-			OldExpDate:         oldData.ExpDate,
-			NewExpDate:         cmd.ExpDate,
-			OldExpPolicy:       oldExpPolicy,
-			NewExpPolicy:       cmd.ExpPolicy,
-			OldExpNoticePeriod: oldData.ExpNoticePeriod,
-			NewExpNoticePeriod: cmd.ExpNoticePeriod,
-			UpdatedBy:          cmd.UpdatedBy,
-			OccurredAt:         time.Now().UTC(),
-			HolderDID:          cmd.HolderDID,
-			UserRoles:          cmd.UserRoles,
-		}
-		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-		if err != nil {
-			return fmt.Errorf("could not create event: %w", err)
+			return fmt.Errorf("could not create or update sync fail entry: %w", err)
 		}
 
 		err = tx.Commit()
@@ -317,7 +300,14 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		}
 
 		return remoteSyncErr
+
+	} else {
+
+		err = h.SRepo.DeleteSyncFailEntry(ctx, tx, oldData.DID)
+		if err != nil {
+			return fmt.Errorf("could not create or update sync fail entry: %w", err)
+		}
 	}
 
-	return nil
+	return tx.Commit()
 }

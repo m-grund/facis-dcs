@@ -66,21 +66,6 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 		return fmt.Errorf("could not update contract state: %w", err)
 	}
 
-	err = h.NTRepo.Delete(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not delete notification task: %w", err)
-	}
-
-	err = h.RTRepo.Delete(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not delete receive task: %w", err)
-	}
-
-	err = h.ATRepo.Delete(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not delete approval task: %w", err)
-	}
-
 	evt := contractevents.TerminateEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,

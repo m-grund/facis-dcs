@@ -28,5 +28,4 @@ type ApprovalTaskRepo interface {
 	IsValidApprover(ctx context.Context, tx *sqlx.Tx, did string, approver string) (bool, error)
 	TaskExistsInState(ctx context.Context, tx *sqlx.Tx, did string, approver string, state string) (bool, error)
 	TaskExists(ctx context.Context, tx *sqlx.Tx, did string) (bool, error)
-	Delete(ctx context.Context, tx *sqlx.Tx, did string) error
 }

@@ -42,7 +42,7 @@ type Negotiator struct {
 
 func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 
-	origin, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -73,7 +73,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, localPeer)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}

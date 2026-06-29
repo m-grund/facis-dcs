@@ -37,6 +37,7 @@ func NewDCSToDCSHttpClient(host string) *dcstodcs.Client {
 		goahttp.ResponseDecoder,
 		false,
 	)
-	createEndpoint := c.Sync()
-	return dcstodcs.NewClient(createEndpoint)
+	postSync := c.Sync()
+	postAction := c.Action()
+	return dcstodcs.NewClient(postSync, postAction)
 }

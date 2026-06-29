@@ -40,7 +40,7 @@ type NegotiationRejector struct {
 
 func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationCmd) error {
 
-	origin, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -64,7 +64,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, localPeer)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
@@ -73,7 +73,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return errors.New("invalid user")
 	}
 
-	err = h.NRepo.Reject(ctx, tx, cmd.ID, origin, cmd.RejectionReason)
+	err = h.NRepo.Reject(ctx, tx, cmd.ID, localPeer, cmd.RejectionReason)
 	if err != nil {
 		return fmt.Errorf("could not reject negotiation %w", err)
 	}

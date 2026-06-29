@@ -8,6 +8,10 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+
 	"digital-contracting-service/internal/base"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -43,11 +47,12 @@ type Submitter struct {
 	ATRepo db.ApprovalTaskRepo
 	NRepo  db.NegotiationRepo
 	NTRepo db.NegotiationTaskRepo
+	SRepo  db2.SyncRepository
 }
 
 func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
-	origin, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -67,6 +72,20 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	if localPeer != processData.Origin {
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.CallRemoteAction(ctx, h.DB, h.SRepo, "submit", localPeer, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return fmt.Errorf("could not call remote action: %w", err)
+		}
+
+		return nil
+	}
+
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
@@ -84,11 +103,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
 			return errors.New("invalid user permission")
-		}
-
-		// This avoids that state changes on different DCS are possible
-		if cmd.SubmittedBy != processData.CreatedBy {
-			return errors.New("invalid participant")
 		}
 
 		err := h.RTRepo.ReopenTasks(ctx, tx, cmd.DID)
@@ -114,7 +128,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, origin)
+		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, localPeer)
 		if err != nil {
 			return fmt.Errorf("could not validate negotiator: %w", err)
 		}
@@ -123,7 +137,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("this peer is not a valid negotiator")
 		}
 
-		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, origin)
+		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, localPeer)
 		if err != nil {
 			return fmt.Errorf("could not check open negotiations: %w", err)
 		}
@@ -132,7 +146,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("not all negotiations are processed")
 		}
 
-		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, origin, negotiationtaskstate.Accepted.String())
+		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, localPeer, negotiationtaskstate.Accepted.String())
 		if err != nil {
 			return fmt.Errorf("could not update negotiation task: %w", err)
 		}
@@ -192,7 +206,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, origin)
+		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, localPeer)
 		if err != nil {
 			return err
 		}
@@ -204,7 +218,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		if cmd.ActionFlag != nil {
 			switch *cmd.ActionFlag {
 			case actionflag.Approval:
-				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, origin, contractstate.Approved.String())
+				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, localPeer, contractstate.Approved.String())
 				if err != nil {
 					return fmt.Errorf("could not update approval task: %w", err)
 				}
@@ -241,7 +255,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, origin)
+		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, localPeer)
 		if err != nil {
 			return err
 		}

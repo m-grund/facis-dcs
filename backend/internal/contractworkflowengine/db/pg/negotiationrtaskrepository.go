@@ -188,12 +188,3 @@ func (r *PostgresNegotiationTaskRepo) TaskExist(ctx context.Context, tx *sqlx.Tx
 	}
 	return count > 0, nil
 }
-
-func (r *PostgresNegotiationTaskRepo) Delete(ctx context.Context, tx *sqlx.Tx, did string) error {
-	statement := `
-        DELETE FROM contract_negotiation_task
-        WHERE did = $1
-    `
-	_, err := tx.ExecContext(ctx, statement, did)
-	return err
-}

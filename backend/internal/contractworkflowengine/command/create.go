@@ -121,13 +121,13 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
 
-	did, err := cmd.DIDDocument.GetID()
+	localPeer, err := cmd.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
 
 	resp := db.Responsible{
-		Creator:     did,
+		Creator:     localPeer,
 		Reviewers:   cmd.Reviewers,
 		Approvers:   cmd.Approvers,
 		Negotiators: cmd.Negotiators,
@@ -135,7 +135,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 
 	data := db.Contract{
 		DID:             cmd.DID,
-		Origin:          did,
+		Origin:          localPeer,
 		CreatedBy:       cmd.CreatedBy,
 		State:           contractstate.Draft.String(),
 		ContractData:    normalizedContractData,

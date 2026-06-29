@@ -15,6 +15,25 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 )
 
+// RemoteActionRequestEvent is emitted when a action on main peer ist triggered
+type RemoteActionRequestEvent struct {
+	DID         string    `json:"did"`
+	OccurredAt  time.Time `json:"occurred_at"`
+	Action      string    `json:"action"`
+	FromPeerDID string    `json:"from_peer_did"`
+	MainPeerDID string    `json:"main_peer_did"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteActionRequestEvent) EventType() string {
+	return eventtype.RemoteActionRequestEvent.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteActionRequestEvent) GetDID() string {
+	return e.DID
+}
+
 // CreateEvent is emitted when a new contract is created.
 type CreateEvent struct {
 	DID          string             `json:"did"`
@@ -59,7 +78,8 @@ type RemoteSyncEvent struct {
 	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
 	StartDate       *time.Time                         `json:"start_date"`
 	Origin          string                             `json:"origin"`
-	OriginPeer      string                             `json:"origin_peer"`
+	FromPeerDID     string                             `json:"from_peer_did"`
+	LocalPeerDID    string                             `json:"local_peer_did"`
 }
 
 // EventType implements the Event interface.
@@ -92,7 +112,8 @@ type RemoteSyncRequestEvent struct {
 	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
 	StartDate       *time.Time                         `json:"start_date"`
 	Origin          string                             `json:"origin"`
-	OriginPeer      string                             `json:"origin_peer"`
+	FromPeerDID     string                             `json:"from_peer_did"`
+	LocalPeerDID    string                             `json:"local_peer_did"`
 }
 
 // EventType implements the Event interface.
@@ -138,11 +159,28 @@ func (e RemoteUpdateRequestEvent) GetDID() string {
 	return e.DID
 }
 
+// RecoverOutdatedPeerEvent is emitted when sync fails are handled
+type RecoverOutdatedPeerEvent struct {
+	DID        string    `json:"did"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e RecoverOutdatedPeerEvent) EventType() string {
+	return eventtype.OutdatedPeer.String()
+}
+
+// GetDID implements the Event interface.
+func (e RecoverOutdatedPeerEvent) GetDID() string {
+	return e.DID
+}
+
 // OutdatedPeerEvent is emitted when remote contract data is outdated
 type OutdatedPeerEvent struct {
 	DID             string    `json:"did"`
 	OutdatedPeerDID string    `json:"outdated_peer_did"`
 	OccurredAt      time.Time `json:"occurred_at"`
+	Origin          string    `json:"origin"`
 }
 
 // EventType implements the Event interface.

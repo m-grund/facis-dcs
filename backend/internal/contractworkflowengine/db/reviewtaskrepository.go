@@ -30,5 +30,4 @@ type ReviewTaskRepo interface {
 	AnyTasksInState(ctx context.Context, tx *sqlx.Tx, did string, states ...string) (bool, error)
 	TaskExistsInState(ctx context.Context, tx *sqlx.Tx, did string, reviewer string, state string) (bool, error)
 	TaskExist(ctx context.Context, tx *sqlx.Tx, did string) (bool, error)
-	Delete(ctx context.Context, tx *sqlx.Tx, did string) error
 }
