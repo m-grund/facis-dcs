@@ -13,9 +13,6 @@ import (
 	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
 
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
-	"digital-contracting-service/internal/contractworkflowengine/query/contract"
-	"digital-contracting-service/internal/middleware"
-
 	"digital-contracting-service/internal/base"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -90,11 +87,6 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 
 	if cmd.UpdatedAt.Unix() < oldData.UpdatedAt.Unix() {
 		return errors.New("contract was updated elsewhere, please reload")
-	}
-
-	// This avoids that updates on different DCS are possible
-	if oldData.CreatedBy != cmd.UpdatedBy {
-		return errors.New("invalid participant")
 	}
 
 	if oldData.State != contracttemplatestate.Draft.String() {
@@ -177,11 +169,111 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not create event: %w", err)
 		}
+
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
 	} else {
 
-		err = h.remoteUpdate(ctx, tx, cmd, oldData.Origin, oldData.DID)
+		contract, err := h.CRepo.ReadDataByDID(ctx, tx, oldData.DID)
 		if err != nil {
-			return fmt.Errorf("could not synchronize update request: %w", err)
+			return fmt.Errorf("could not get contract data: %w", err)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		var startDate *string
+		if cmd.StartDate != nil {
+			s := contract.StartDate.Format(time.RFC3339)
+			startDate = &s
+		}
+
+		var expDate *string
+		if cmd.ExpDate != nil {
+			s := contract.ExpDate.Format(time.RFC3339)
+			expDate = &s
+		}
+
+		var expPolicy *string
+		if cmd.ExpPolicy != nil {
+			s := contract.ExpPolicy
+			expPolicy = s
+		}
+
+		contractItem := dcstodcs.DCSToDCSContractItem{
+			Did:             contract.DID,
+			ContractVersion: contract.ContractVersion,
+			State:           contract.State,
+			Name:            cmd.Name,
+			Description:     cmd.Description,
+			CreatedBy:       contract.CreatedBy,
+			CreatedAt:       contract.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       cmd.UpdatedAt.Format(time.RFC3339),
+			ContractData:    cmd.ContractData,
+			TemplateDid:     contract.TemplateDID,
+			TemplateVersion: contract.TemplateVersion,
+			StartDate:       startDate,
+			ExpDate:         expDate,
+			ExpPolicy:       expPolicy,
+			ExpNoticePeriod: cmd.ExpNoticePeriod,
+			Responsible:     contract.Responsible,
+			Origin:          contract.Origin,
+		}
+
+		result, err := dcstodcssynchronizer.ReadAllTasksData(ctx, h.DB, h.CRepo, h.RTRepo, h.ATRepo, h.NTRepo, h.NRepo, h.SRepo, &contract.DID)
+		if err != nil {
+			return err
+		}
+
+		origin, err := cmd.DIDDocument.GetID()
+		if err != nil {
+			return err
+		}
+
+		hostname, err := base.DIDWebToHostname(oldData.Origin)
+		if err != nil {
+			return err
+		}
+
+		client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
+		_, err = client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
+			OriginDid:            origin,
+			Contract:             &contractItem,
+			ReviewTasks:          result.ReviewTasks,
+			ApprovalTasks:        result.ApprovalTasks,
+			NegotiationTasks:     result.NegotiationTasks,
+			NegotiationItems:     result.Negotiations,
+			NegotiationDecisions: result.NegotiationDecisions,
+		})
+
+		tx, err := h.DB.BeginTxx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("could not start transaction: %w", err)
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
+			}
+		}(tx)
+
+		if err != nil {
+
+			err = h.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, oldData.Origin)
+			if err != nil {
+				return fmt.Errorf("could not create or update sync fail entry: %w", err)
+			}
+
+		} else {
+
+			err = h.SRepo.DeleteSyncFailEntry(ctx, tx, oldData.Origin)
+			if err != nil {
+				return fmt.Errorf("could not create or update sync fail entry: %w", err)
+			}
 		}
 
 		evt := contractevents.RemoteUpdateRequestEvent{
@@ -209,106 +301,10 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not create event: %w", err)
 		}
-	}
 
-	return tx.Commit()
-}
-
-func (h *Updater) remoteUpdate(ctx context.Context, tx *sqlx.Tx, cmd UpdateCmd, mainPeer string, did string) error {
-	qry := contract.GetByIDQry{
-		DID:         did,
-		RetrievedBy: middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-	}
-	qryHandler := contract.GetByIDHandler{
-		Ctx:   ctx,
-		DB:    h.DB,
-		CRepo: h.CRepo,
-		NRepo: h.NRepo,
-	}
-	contractResult, err := qryHandler.Handle(ctx, qry)
-	if err != nil {
-
-		return err
-	}
-
-	var startDate *string
-	if cmd.StartDate != nil {
-		s := contractResult.StartDate.Format(time.RFC3339)
-		startDate = &s
-	}
-
-	var expDate *string
-	if cmd.ExpDate != nil {
-		s := contractResult.ExpDate.Format(time.RFC3339)
-		expDate = &s
-	}
-
-	var expPolicy *string
-	if cmd.ExpPolicy != nil {
-		s := contractResult.ExpPolicy.String()
-		expPolicy = &s
-	}
-
-	contractItem := dcstodcs.DCSToDCSContractItem{
-		Did:             contractResult.DID,
-		ContractVersion: contractResult.ContractVersion,
-		State:           contractResult.State.String(),
-		Name:            cmd.Name,
-		Description:     cmd.Description,
-		CreatedBy:       contractResult.CreatedBy,
-		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       cmd.UpdatedAt.Format(time.RFC3339),
-		ContractData:    cmd.ContractData,
-		TemplateDid:     contractResult.TemplateDID,
-		TemplateVersion: contractResult.TemplateVersion,
-		StartDate:       startDate,
-		ExpDate:         expDate,
-		ExpPolicy:       expPolicy,
-		ExpNoticePeriod: cmd.ExpNoticePeriod,
-		Responsible:     contractResult.Responsible,
-		Origin:          contractResult.Origin,
-	}
-
-	result, err := dcstodcssynchronizer.ReadAllTasksData(ctx, h.DB, h.CRepo, h.RTRepo, h.ATRepo, h.NTRepo, h.NRepo, h.SRepo, &contractResult.DID)
-	if err != nil {
-		return err
-	}
-
-	origin, err := cmd.DIDDocument.GetID()
-	if err != nil {
-		return err
-	}
-
-	hostname, err := base.DIDWebToHostname(mainPeer)
-	if err != nil {
-		return err
-	}
-
-	client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
-	_, err = client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
-		OriginDid:            origin,
-		Contract:             &contractItem,
-		ReviewTasks:          result.ReviewTasks,
-		ApprovalTasks:        result.ApprovalTasks,
-		NegotiationTasks:     result.NegotiationTasks,
-		NegotiationItems:     result.Negotiations,
-		NegotiationDecisions: result.NegotiationDecisions,
-	})
-
-	if err != nil {
-
-		err = h.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, mainPeer)
+		err = tx.Commit()
 		if err != nil {
-			return fmt.Errorf("could not create or update sync fail entry: %w", err)
-		}
-
-	} else {
-
-		err = h.SRepo.DeleteSyncFailEntry(ctx, tx, mainPeer)
-		if err != nil {
-			return fmt.Errorf("could not create or update sync fail entry: %w", err)
+			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 	}
 
