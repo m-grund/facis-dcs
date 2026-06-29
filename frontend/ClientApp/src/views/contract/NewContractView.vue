@@ -293,7 +293,7 @@ onBeforeRouteLeave(() => {
 </script>
 
 <template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
+  <div class="flex h-full flex-col">
     <div v-if="!isEditMode" class="flex flex-1 flex-col">
       <div v-if="!selectedTemplate" class="flex flex-1 items-center justify-center px-6 py-20">
         <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedTemplates">
