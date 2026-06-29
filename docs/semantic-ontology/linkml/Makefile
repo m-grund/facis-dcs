@@ -5,9 +5,9 @@ SCHEMA      ?= linkml.yaml
 
 VENV_PYTHON := $(VENV_PATH)/bin/python
 VENV_PIP    := $(VENV_PATH)/bin/pip
-GEN_OWL            := gen-owl
-GEN_SHACL          := gen-shacl
-GEN_JSONLD_CONTEXT := gen-jsonld-context
+GEN_OWL            := $(VENV_PATH)/bin/gen-owl
+GEN_SHACL          := $(VENV_PATH)/bin/gen-shacl
+GEN_JSONLD_CONTEXT := $(VENV_PATH)/bin/gen-jsonld-context
 PYSHACL            := $(VENV_PATH)/bin/pyshacl
 
 SHAPES_EXTRA  ?= shapes-content.ttl
