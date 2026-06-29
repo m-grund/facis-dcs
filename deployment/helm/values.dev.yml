@@ -95,7 +95,7 @@ hydra:
   config:
     dsn: "postgres://dcs:dcs@dcs-postgresql:5432/hydra?sslmode=disable"
     dev: true
-    selfIssuerURL: "http://localhost:5173"
+    selfIssuerURL: "http://localhost:30444"
     loginURL: "http://localhost:5173/ui/"
     consentURL: "http://localhost:5173/api/auth/consent"
     logoutURL: "http://localhost:5173/api/auth/logout-complete"

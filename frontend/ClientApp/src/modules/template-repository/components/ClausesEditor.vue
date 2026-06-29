@@ -66,7 +66,7 @@ const clauseBlocks = computed((): DcsClause[] => {
     if (!subBlocks || typeof subBlocks !== 'object') return []
     const doc = subBlocks as import('@/models/dcs-jsonld').DcsDocumentData
     if (!doc['dcs:documentStructure']) return []
-    return doc['dcs:documentStructure']['dcs:blocks'].filter((b): b is DcsClause => b['@type'] === 'dcs:Clause')
+    return doc['dcs:documentStructure']['dcs:blocks']['@list'].filter((b): b is DcsClause => b['@type'] === 'dcs:Clause')
   })
   return [...mainClauses, ...subTemplateClauses]
 })

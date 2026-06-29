@@ -1,6 +1,10 @@
 <template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <TemplateEditors title="View Template" />
+  <div :class="embedded ? 'flex flex-1 flex-col' : '-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8'">
+    <TemplateEditors title="Contract">
+      <template v-if="$slots['before-tabs']" #before-tabs>
+        <slot name="before-tabs" />
+      </template>
+    </TemplateEditors>
 
     <!-- Pinned Footer -->
     <div v-if="$route.params.did === did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
@@ -46,6 +50,7 @@ import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
 const props = defineProps<{
   did: string
+  embedded?: boolean
 }>()
 
 const navStore = useNavStore()

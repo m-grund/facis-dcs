@@ -53,8 +53,13 @@ const isEditMode = computed(() => !!route.params.did || !!did.value)
 const isSubmitting = ref(false)
 const selectedTemplate: Ref<PartialContractTemplate | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
+const selectedParentContractDid = ref<string | null>(null)
 
 const contract: Ref<Contract | null> = ref(null)
+
+const draftContracts = computed(() =>
+  contractStore.contracts.filter((c) => c.state === ContractState.draft),
+)
 
 const canSubmit = computed(
   () => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null),
@@ -86,6 +91,7 @@ function buildCurrentContractData(): ContractData | undefined {
     policies: templateDraftStore.policies,
     subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
+    parentContractDid: selectedParentContractDid.value ?? undefined,
     sourceTemplate: contract.value.contract_data?.sourceTemplate,
     derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
   })
@@ -190,6 +196,7 @@ watch(
         if (id && !Array.isArray(id)) {
           contract.value = await contractWorkflowService.retrieveById({ did: id })
           applyContractDataToDraft(contract.value?.contract_data)
+          selectedParentContractDid.value = contract.value?.contract_data?.['dcs:parentContract']?.['@id'] ?? null
           const uneditableStates = [ContractState.approved, ContractState.terminated].map((s) => s.toLowerCase())
           templateEditorUiStore.setTemplateEditable(
             !uneditableStates.includes(contract.value?.state.toLowerCase() ?? ''),
@@ -204,6 +211,12 @@ watch(
   },
   { immediate: true },
 )
+
+onMounted(async () => {
+  if (!contractStore.hasContracts) {
+    await contractStore.loadContracts()
+  }
+})
 
 watch(
   () => [
@@ -281,20 +294,40 @@ onBeforeRouteLeave(() => {
 
 <template>
   <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <div v-if="!isEditMode" class="px-6 py-12">
-      <div class="flex justify-center">
+    <div v-if="!isEditMode" class="flex flex-1 flex-col">
+      <div v-if="!selectedTemplate" class="flex flex-1 items-center justify-center px-6 py-20">
         <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedTemplates">
           <option :value="null" disabled selected>
             {{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
           <option v-for="template in approvedTemplates" :key="template.did" :value="template">
-            Version {{template.version}} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
+            Version {{ template.version }} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>
       </div>
-      <div v-if="selectedTemplate" class="pt-20">
-        <ViewContractTemplateView :did="selectedTemplate.did" />
-      </div>
+      <ViewContractTemplateView v-else :did="selectedTemplate.did" :embedded="true">
+        <template #before-tabs>
+          <div class="flex items-end gap-4">
+            <div class="flex-1">
+              <p class="mb-1 text-xs font-semibold text-base-content/60">Template</p>
+              <select v-model="selectedTemplate" class="select select-sm w-full">
+                <option v-for="template in approvedTemplates" :key="template.did" :value="template">
+                  Version {{ template.version }} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
+                </option>
+              </select>
+            </div>
+            <div v-if="draftContracts.length > 0" class="flex-1">
+              <p class="mb-1 text-xs font-semibold text-base-content/60">Add to existing contract (optional)</p>
+              <select v-model="selectedParentContractDid" class="select select-sm w-full">
+                <option :value="null">— none —</option>
+                <option v-for="c in draftContracts" :key="c.did" :value="c.did">
+                  {{ c.name ?? c.did }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </template>
+      </ViewContractTemplateView>
     </div>
     <div v-else-if="!!contract">
       <div class="flex flex-1 flex-col">

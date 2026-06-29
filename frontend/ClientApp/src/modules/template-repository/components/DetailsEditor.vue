@@ -12,8 +12,8 @@
           :class="templateType === TemplateType.frameContract ? 'border-primary bg-primary/5' : 'border-base-300'"
         >
           <div class="card-body gap-1 p-4">
-            <span class="card-title text-sm">Frame Contract</span>
-            <p class="text-xs font-normal text-base-content/60">Top-level agreement that groups subcontracts</p>
+            <span class="card-title text-sm">Contract</span>
+            <p class="text-xs font-normal text-base-content/60">Top-level contract template that can serve as parent</p>
           </div>
         </div>
         <div
@@ -21,8 +21,8 @@
           :class="templateType === TemplateType.subContract ? 'border-primary bg-primary/5' : 'border-base-300'"
         >
           <div class="card-body gap-1 p-4">
-            <span class="card-title text-sm">Subcontract</span>
-            <p class="text-xs font-normal text-base-content/60">Scoped agreement under a frame contract</p>
+            <span class="card-title text-sm">Component</span>
+            <p class="text-xs font-normal text-base-content/60">Reusable partial contract, embeddable in other templates</p>
           </div>
         </div>
       </div>
@@ -80,13 +80,13 @@
       ></textarea>
     </fieldset>
 
-    <!-- Subcontracts (only for frame contracts) -->
+    <!-- Component templates (only for Contract type) -->
     <fieldset v-if="templateType === TemplateType.frameContract" class="fieldset border-none p-0">
       <legend
         class="fieldset-legend inline-flex cursor-pointer items-center gap-1.5 select-none"
         @click="showSubcontractPicker = !showSubcontractPicker"
       >
-        Subcontract Templates
+        Component Templates
         <svg
           xmlns="http://www.w3.org/2000/svg"
           class="h-3 w-3 opacity-60 transition-transform duration-200"
@@ -110,7 +110,7 @@
         <ul class="menu mt-1 max-h-48 w-full flex-nowrap overflow-y-auto menu-sm rounded-box bg-base-200">
           <li v-if="!filteredSubcontractTemplates.length">
             <span class="pointer-events-none text-xs text-base-content/40 italic">
-              {{ subcontractSearchQuery ? 'No results' : 'All templates already  ed' }}
+              {{ subcontractSearchQuery ? 'No results' : 'All component templates already added' }}
             </span>
           </li>
           <li v-for="t in filteredSubcontractTemplates" :key="`${t.did}-${t.version}-${t.document_number}`">
@@ -145,7 +145,7 @@
           </button>
         </div>
       </div>
-      <p v-else class="mt-2 fieldset-label">No subcontract templates selected yet.</p>
+      <p v-else class="mt-2 fieldset-label">No component templates selected yet.</p>
     </fieldset>
   </div>
 </template>

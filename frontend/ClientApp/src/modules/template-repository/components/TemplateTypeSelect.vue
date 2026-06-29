@@ -10,9 +10,9 @@
       "
       @click="emit('update:modelValue', TemplateType.frameContract)"
     >
-      <h3 class="mb-3 text-xl font-bold text-base-content">Frame Contract</h3>
+      <h3 class="mb-3 text-xl font-bold text-base-content">Contract</h3>
       <p class="text-sm leading-relaxed text-base-content/70">
-        All contracts are created from a frame contract. A frame contract is composed of one or more sub contracts.
+        A contract template composed of one or more components. Contracts created from this template can serve as the parent for other contracts.
       </p>
     </button>
     <button
@@ -25,9 +25,9 @@
       "
       @click="emit('update:modelValue', TemplateType.subContract)"
     >
-      <h3 class="mb-3 text-xl font-bold text-base-content">Sub Contract</h3>
+      <h3 class="mb-3 text-xl font-bold text-base-content">Component</h3>
       <p class="text-sm leading-relaxed text-base-content/70">
-        Used by frame contracts. Define the reusable partial contracts that frame contracts can reference and compose.
+        A reusable partial contract template. Components can be embedded in other contract templates.
       </p>
     </button>
   </div>

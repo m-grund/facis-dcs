@@ -447,6 +447,7 @@ interface CanonicalDocumentInput {
   customMetaData?: MetaData[]
   subTemplateSnapshots?: SubTemplateSnapshot[]
   semanticConditionValues?: SemanticConditionValue[]
+  parentContractDid?: string
   sourceTemplate?: DcsContractData['sourceTemplate']
   derivedFromTemplate?: string
 }
@@ -491,6 +492,9 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
     ...(input.documentType === 'dcs:Contract'
       ? {
           semanticConditionValues: input.semanticConditionValues ?? [],
+          ...(input.parentContractDid
+            ? { 'dcs:parentContract': { '@id': input.parentContractDid } }
+            : {}),
           ...(input.sourceTemplate ? { sourceTemplate: input.sourceTemplate } : {}),
           ...(input.derivedFromTemplate ? { derivedFromTemplate: input.derivedFromTemplate } : {}),
         }
@@ -510,6 +514,7 @@ export interface ContractDocumentInput {
   policies: OdrlRule[]
   subTemplateSnapshots: SubTemplateSnapshot[]
   semanticConditionValues: SemanticConditionValue[]
+  parentContractDid?: string
   sourceTemplate?: DcsContractData['sourceTemplate']
   derivedFromTemplate?: string
 }
