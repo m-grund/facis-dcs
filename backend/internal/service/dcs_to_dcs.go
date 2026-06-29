@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"log"
 	"time"
 
 	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
@@ -197,7 +196,6 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		log.Println(err)
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 

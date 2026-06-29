@@ -124,23 +124,4 @@ var _ = Service("DcsToDcs", func() {
 			Response("internal_error", StatusInternalServerError)
 		})
 	})
-	/*
-		Method("status", func() {
-			Description("Offer a policy-gated, read-only contract information endpoint between a DCS instance and a counterparty DCS")
-			Meta("dcs:requirements", "DCS-IR-SI-06")
-
-			Payload(DCSToDCSContractStatusRequest)
-			Result(DCSToDCSContractStatusResponse)
-
-			Error("bad_request", ErrorResult, "Bad request")
-			Error("internal_error", ErrorResult, "Internal server error")
-
-			HTTP(func() {
-				GET("/peer/status")
-				Response(StatusOK)
-				Response("bad_request", StatusBadRequest)
-				Response("internal_error", StatusInternalServerError)
-			})
-		})
-	*/
 })

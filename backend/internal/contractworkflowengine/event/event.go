@@ -138,6 +138,23 @@ func (e RemoteUpdateRequestEvent) GetDID() string {
 	return e.DID
 }
 
+// OutdatedPeerEvent is emitted when remote contract data is outdated
+type OutdatedPeerEvent struct {
+	DID             string    `json:"did"`
+	OutdatedPeerDID string    `json:"outdated_peer_did"`
+	OccurredAt      time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e OutdatedPeerEvent) EventType() string {
+	return eventtype.OutdatedPeer.String()
+}
+
+// GetDID implements the Event interface.
+func (e OutdatedPeerEvent) GetDID() string {
+	return e.DID
+}
+
 // UpdateEvent is emitted when contract data is updated.
 type UpdateEvent struct {
 	DID                string                             `json:"did"`

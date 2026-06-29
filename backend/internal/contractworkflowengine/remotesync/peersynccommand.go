@@ -54,9 +54,31 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 	}(tx)
 
-	exists, err := h.CRepo.ExistsByDID(ctx, tx, cmd.Contract.DID)
+	oldData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.Contract.DID)
 	if err != nil {
 		return fmt.Errorf("could not check if contract exists: %w", err)
+	}
+
+	if oldData != nil {
+		if cmd.Contract.UpdatedAt.Unix() < oldData.UpdatedAt.Unix() {
+
+			evt := contractevents.OutdatedPeerEvent{
+				DID:             cmd.Contract.DID,
+				OutdatedPeerDID: cmd.Origin,
+				OccurredAt:      time.Now().UTC(),
+			}
+			err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+			if err != nil {
+				return fmt.Errorf("could not create event: %w", err)
+			}
+
+			err = tx.Commit()
+			if err != nil {
+				return fmt.Errorf("could not commit transaction: %w", err)
+			}
+
+			return fmt.Errorf("contract data is outdated. start synchronization")
+		}
 	}
 
 	var expPolicy *string
@@ -85,7 +107,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		ContractVersion: cmd.Contract.ContractVersion,
 	}
 
-	if exists {
+	if oldData != nil {
 		err = h.CRepo.RemoteUpdate(ctx, tx, data)
 		if err != nil {
 			return fmt.Errorf("could not update contract: %w", err)

@@ -316,8 +316,6 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 
 		client := NewDCSToDCSHttpClient(hostname)
 
-		time.Sleep(time.Second * 3)
-
 		_, remoteSyncErr := client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
 			OriginDid:            origin,
 			Contract:             &contractItem,

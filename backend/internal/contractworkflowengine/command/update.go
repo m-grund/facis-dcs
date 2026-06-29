@@ -315,6 +315,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
+
+		return remoteSyncErr
 	}
 
 	return nil

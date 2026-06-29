@@ -21,6 +21,7 @@ const (
 	Verify                  EventType = "VERIFY_CONTRACT"
 	Update                  EventType = "UPDATE_CONTRACT"
 	RemoteUpdateRequest     EventType = "REMOTE_UPDATE_REQUEST"
+	OutdatedPeer            EventType = "OUTDATED_PEER"
 	RetrieveAll             EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveByID            EventType = "RETRIEVE_CONTRACT_BY_ID"
 	RetrieveHistoryByDID    EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
@@ -56,6 +57,7 @@ var validStates = map[EventType]bool{
 	RemoteSync:              true,
 	RemoteUpdateRequest:     true,
 	RemoteSyncRequest:       true,
+	OutdatedPeer:            true,
 }
 
 func NewEventType(s string) (EventType, error) {
