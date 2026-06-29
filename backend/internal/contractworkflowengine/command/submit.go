@@ -30,29 +30,29 @@ import (
 )
 
 type SubmitCmd struct {
-	DID         string
-	UpdatedAt   time.Time
-	SubmittedBy string
-	ActionFlag  *actionflag.ActionFlag
-	Comments    []string
-	HolderDID   string
-	UserRoles   userrole.UserRoles
-	DIDDocument base.DIDDocument
+	DID         string                 `json:"did"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	SubmittedBy string                 `json:"submitted_by"`
+	ActionFlag  *actionflag.ActionFlag `json:"action_flag"`
+	Comments    []string               `json:"comments"`
+	HolderDID   string                 `json:"holder_did"`
+	UserRoles   userrole.UserRoles     `json:"user_roles"`
 }
 
 type Submitter struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
-	SRepo  db2.SyncRepository
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument base.DIDDocument
 }
 
 func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
-	localPeer, err := cmd.DIDDocument.GetID()
+	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}

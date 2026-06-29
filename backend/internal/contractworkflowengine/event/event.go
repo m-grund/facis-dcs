@@ -126,39 +126,6 @@ func (e RemoteSyncRequestEvent) GetDID() string {
 	return e.DID
 }
 
-// RemoteUpdateRequestEvent is emitted when a contract update on main peer was requested
-type RemoteUpdateRequestEvent struct {
-	DID                string                             `json:"did"`
-	HolderDID          string                             `json:"holder_did"`
-	UpdatedBy          string                             `json:"updated_by"`
-	OldName            *string                            `json:"old_name,omitempty"`
-	NewName            *string                            `json:"new_name,omitempty"`
-	OldDescription     *string                            `json:"old_description,omitempty"`
-	NewDescription     *string                            `json:"new_description,omitempty"`
-	OldContractData    *datatype.JSON                     `json:"old_contract_data,omitempty"`
-	NewContractData    *datatype.JSON                     `json:"new_contract_data,omitempty"`
-	OccurredAt         time.Time                          `json:"occurred_at"`
-	OldExpDate         *time.Time                         `json:"old_exp_date,omitempty"`
-	NewExpDate         *time.Time                         `json:"new_exp_date,omitempty"`
-	OldExpPolicy       *expirationpolicy.ExpirationPolicy `json:"old_exp_policy,omitempty"`
-	NewExpPolicy       *expirationpolicy.ExpirationPolicy `json:"new_exp_policy,omitempty"`
-	OldExpNoticePeriod *int                               `json:"old_exp_notice_period,omitempty"`
-	NewExpNoticePeriod *int                               `json:"new_exp_notice_period,omitempty"`
-	OldStartDate       *time.Time                         `json:"old_start_date,omitempty"`
-	NewStartDate       *time.Time                         `json:"new_start_date,omitempty"`
-	UserRoles          userrole.UserRoles                 `json:"user_roles"`
-}
-
-// EventType implements the Event interface.
-func (e RemoteUpdateRequestEvent) EventType() string {
-	return eventtype.RemoteUpdateRequest.String()
-}
-
-// GetDID implements the Event interface.
-func (e RemoteUpdateRequestEvent) GetDID() string {
-	return e.DID
-}
-
 // RecoverOutdatedPeerEvent is emitted when sync fails are handled
 type RecoverOutdatedPeerEvent struct {
 	DID        string    `json:"did"`
@@ -567,5 +534,23 @@ func (e RetrieveAllTemplatesEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e RetrieveAllTemplatesEvent) GetDID() string {
+	return "*"
+}
+
+// SearchEvent is emitted when contract data is searched.
+type SearchEvent struct {
+	RetrievedBy string             `json:"retrieved_by"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	HolderDID   string             `json:"holder_did"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e SearchEvent) EventType() string {
+	return eventtype.Search.String()
+}
+
+// GetDID implements the Event interface.
+func (e SearchEvent) GetDID() string {
 	return "*"
 }

@@ -24,24 +24,24 @@ import (
 )
 
 type CreateCmd struct {
-	DID         string
-	TemplateDID string
-	CreatedBy   string
-	HolderDID   string
-	Reviewers   []string
-	Approvers   []string
-	Negotiators []string
-	UserRoles   userrole.UserRoles
-	DIDDocument base.DIDDocument
+	DID         string             `json:"did"`
+	TemplateDID string             `json:"template_did"`
+	CreatedBy   string             `json:"created_by"`
+	HolderDID   string             `json:"holder_did"`
+	Reviewers   []string           `json:"reviewers"`
+	Approvers   []string           `json:"approvers"`
+	Negotiators []string           `json:"negotiators"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
 type Creator struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	CTRepo db.ContractTemplateRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NTRepo db.NegotiationTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	CTRepo      db.ContractTemplateRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NTRepo      db.NegotiationTaskRepo
+	DIDDocument base.DIDDocument
 }
 
 func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, cmd CreateCmd) error {
@@ -121,7 +121,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
 
-	localPeer, err := cmd.DIDDocument.GetID()
+	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}

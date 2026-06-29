@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	event2 "digital-contracting-service/internal/contractworkflowengine/event"
+
 	"github.com/jmoiron/sqlx"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -18,7 +20,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
-	templateevents "digital-contracting-service/internal/templaterepository/event"
 )
 
 type GetAllMetadataByFilterQry struct {
@@ -86,7 +87,7 @@ func (h *GetAllMetaDataByFilterHandler) Handle(ctx context.Context, query GetAll
 		return nil, fmt.Errorf("could not read all contract: %w", err)
 	}
 
-	evt := templateevents.SearchEvent{
+	evt := event2.SearchEvent{
 		RetrievedBy: query.RetrievedBy,
 		OccurredAt:  time.Now().UTC(),
 		HolderDID:   query.HolderDID,

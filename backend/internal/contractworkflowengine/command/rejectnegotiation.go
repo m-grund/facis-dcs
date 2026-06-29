@@ -8,6 +8,9 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+
 	"digital-contracting-service/internal/base"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -22,25 +25,26 @@ import (
 )
 
 type RejectNegotiationCmd struct {
-	ID              string
-	DID             string
-	RejectedBy      string
-	RejectionReason *string
-	HolderDID       string
-	UserRoles       userrole.UserRoles
-	DIDDocument     base.DIDDocument
+	ID              string             `json:"id"`
+	DID             string             `json:"did"`
+	RejectedBy      string             `json:"rejected_by"`
+	RejectionReason *string            `json:"rejection_reason"`
+	HolderDID       string             `json:"holder_did"`
+	UserRoles       userrole.UserRoles `json:"user_roles"`
 }
 
 type NegotiationRejector struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument base.DIDDocument
 }
 
 func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationCmd) error {
 
-	localPeer, err := cmd.DIDDocument.GetID()
+	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -58,6 +62,20 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
+	}
+
+	if localPeer != processData.Origin {
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.CallRemoteAction(ctx, h.DB, h.SRepo, "rejectnegotiation", localPeer, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return fmt.Errorf("could not call remote action: %w", err)
+		}
+
+		return nil
 	}
 
 	if processData.State != contractstate.Negotiation.String() || processData.State == contractstate.Terminated.String() {

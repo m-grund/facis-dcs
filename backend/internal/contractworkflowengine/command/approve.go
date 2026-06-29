@@ -8,6 +8,9 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+
 	"digital-contracting-service/internal/base"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -23,24 +26,25 @@ import (
 )
 
 type ApproveCmd struct {
-	DID           string
-	UpdatedAt     time.Time
-	ApprovedBy    string
-	DecisionNotes []string
-	HolderDID     string
-	UserRoles     userrole.UserRoles
-	DIDDocument   base.DIDDocument
+	DID           string             `json:"did"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	ApprovedBy    string             `json:"approved_by"`
+	DecisionNotes []string           `json:"decision_notes"`
+	HolderDID     string             `json:"holder_did"`
+	UserRoles     userrole.UserRoles `json:"user_roles"`
 }
 
 type Approver struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	ATRepo db.ApprovalTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	ATRepo      db.ApprovalTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument base.DIDDocument
 }
 
 func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 
-	localPeer, err := cmd.DIDDocument.GetID()
+	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
@@ -58,6 +62,20 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
+	}
+
+	if localPeer != processData.Origin {
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.CallRemoteAction(ctx, h.DB, h.SRepo, "approve", localPeer, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return fmt.Errorf("could not call remote action: %w", err)
+		}
+
+		return nil
 	}
 
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {

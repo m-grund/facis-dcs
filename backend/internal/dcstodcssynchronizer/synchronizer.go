@@ -73,7 +73,7 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 			}
 
 			// This is really important to avoid synchronization loops
-			if evtType == eventtype.RemoteUpdateRequest || evtType == eventtype.RemoteSyncRequest || evtType == eventtype.RemoteActionRequestEvent {
+			if evtType == eventtype.RemoteSyncRequest || evtType == eventtype.RemoteActionRequestEvent {
 				return
 			}
 

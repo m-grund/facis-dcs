@@ -3,6 +3,7 @@ package remoteaction
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -20,6 +21,21 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+func ConvertAny[T any](raw any) (*T, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	var out T
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+	return &out, nil
+}
+
 func CallRemoteAction(ctx context.Context, db *sqlx.DB, sRepo db.SyncRepository, action string, localPeer string, mainPeer string, contractDid string, payload any) error {
 	hostname, err := base.DIDWebToHostname(mainPeer)
 	if err != nil {
@@ -27,11 +43,15 @@ func CallRemoteAction(ctx context.Context, db *sqlx.DB, sRepo db.SyncRepository,
 	}
 
 	client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
-	_, remoteSyncErr := client.Action(ctx, &dcstodcs.DCSToDCSContractActionRequest{
+	_, err = client.Action(ctx, &dcstodcs.DCSToDCSContractActionRequest{
 		FromPeerDid: localPeer,
 		Payload:     payload,
 		Action:      action,
 	})
+
+	if err != nil {
+		return err
+	}
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -54,28 +74,5 @@ func CallRemoteAction(ctx context.Context, db *sqlx.DB, sRepo db.SyncRepository,
 	if err != nil {
 		return fmt.Errorf("could not create event: %w", err)
 	}
-
-	if remoteSyncErr != nil {
-
-		err = sRepo.CreateOrUpdateSyncFailEntry(ctx, tx, contractDid)
-		if err != nil {
-			return fmt.Errorf("could not create or update sync fail entry: %w", err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		return remoteSyncErr
-
-	} else {
-
-		err = sRepo.DeleteSyncFailEntry(ctx, tx, contractDid)
-		if err != nil {
-			return fmt.Errorf("could not create or update sync fail entry: %w", err)
-		}
-	}
-
 	return tx.Commit()
 }

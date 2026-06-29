@@ -19,10 +19,10 @@ import (
 )
 
 type ReviewCmd struct {
-	DID        string
-	ReviewedBy string
-	HolderDID  string
-	UserRoles  userrole.UserRoles
+	DID        string             `json:"did"`
+	ReviewedBy string             `json:"reviewed_by"`
+	HolderDID  string             `json:"holder_did"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
 }
 
 type Reviewer struct {

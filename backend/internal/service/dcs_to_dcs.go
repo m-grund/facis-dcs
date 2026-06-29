@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
+
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+
+	"digital-contracting-service/internal/contractworkflowengine/command"
 
 	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
 
@@ -27,6 +30,7 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 
 	"github.com/jmoiron/sqlx"
+	"goa.design/clue/log"
 )
 
 type dcsToDcssrvc struct {
@@ -62,7 +66,52 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 
 func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContractActionRequest) (res *dcstodcs.DCSToDCSContractActionResponse, err error) {
 
-	fmt.Println(req.Action)
+	switch req.Action {
+	case "update":
+		cmd, err := remoteaction.ConvertAny[command.UpdateCmd](req.Payload)
+		handler := command.Updater{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			RTRepo:      s.RTRepo,
+			ATRepo:      s.ATRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case "submit":
+		cmd, err := remoteaction.ConvertAny[command.SubmitCmd](req.Payload)
+		handler := command.Submitter{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			RTRepo:      s.RTRepo,
+			ATRepo:      s.ATRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	default:
+		log.Printf(ctx, "unknown action: %s", req.Action)
+	}
 
 	return &dcstodcs.DCSToDCSContractActionResponse{
 		Did: "",

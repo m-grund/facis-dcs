@@ -84,7 +84,6 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 
 	cmd := command.CreateCmd{
 		DID:         *did,
-		DIDDocument: s.DIDDocument,
 		TemplateDID: req.TemplateDid,
 		CreatedBy:   middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
@@ -94,12 +93,13 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		Negotiators: req.Negotiators,
 	}
 	createHandler := command.Creator{
-		DB:     s.DB,
-		CTRepo: s.CTRepo,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
-		NTRepo: s.NTRepo,
+		DB:          s.DB,
+		CTRepo:      s.CTRepo,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NTRepo:      s.NTRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
@@ -168,16 +168,16 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		ExpDate:         expDate,
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: req.ExpNoticePeriod,
-		DIDDocument:     s.DIDDocument,
 	}
 	handler := command.Updater{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
-		NTRepo: s.NTRepo,
-		NRepo:  s.NRepo,
-		SRepo:  s.SRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NTRepo:      s.NTRepo,
+		NRepo:       s.NRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -210,7 +210,6 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
-		DIDDocument: s.DIDDocument,
 		UpdatedAt:   updatedAt,
 		SubmittedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
@@ -219,13 +218,14 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		Comments:    req.Comments,
 	}
 	handler := command.Submitter{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
-		NRepo:  s.NRepo,
-		NTRepo: s.NTRepo,
-		SRepo:  s.SRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NRepo:       s.NRepo,
+		NTRepo:      s.NTRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -534,14 +534,15 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 		HolderDID:     middleware.GetHolderDID(ctx),
 		ChangeRequest: &changeRequest,
 		UserRoles:     middleware.GetUserRoles(ctx),
-		DIDDocument:   s.DIDDocument,
 	}
 	handler := command.Negotiator{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		NRepo:  s.NRepo,
-		RTRepo: s.RTRepo,
-		NTRepo: s.NTRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		NRepo:       s.NRepo,
+		RTRepo:      s.RTRepo,
+		NTRepo:      s.NTRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -566,17 +567,17 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 	switch actionFlag {
 	case negotiationactionflag.Accepting:
 		cmd := command.AcceptNegotiationCmd{
-			ID:          req.ID,
-			DID:         req.Did,
-			AcceptedBy:  middleware.GetParticipantID(ctx),
-			UserRoles:   middleware.GetUserRoles(ctx),
-			DIDDocument: s.DIDDocument,
+			ID:         req.ID,
+			DID:        req.Did,
+			AcceptedBy: middleware.GetParticipantID(ctx),
+			UserRoles:  middleware.GetUserRoles(ctx),
 		}
 		handler := command.NegotiationAcceptor{
-			DB:     s.DB,
-			CRepo:  s.CRepo,
-			NRepo:  s.NRepo,
-			NTRepo: s.NTRepo,
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			NRepo:       s.NRepo,
+			NTRepo:      s.NTRepo,
+			DIDDocument: s.DIDDocument,
 		}
 		err = handler.Handle(ctx, cmd)
 		if err != nil {
@@ -589,13 +590,14 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 			RejectedBy:      middleware.GetParticipantID(ctx),
 			UserRoles:       middleware.GetUserRoles(ctx),
 			RejectionReason: req.RejectionReason,
-			DIDDocument:     s.DIDDocument,
 		}
 		handler := command.NegotiationRejector{
-			DB:     s.DB,
-			CRepo:  s.CRepo,
-			NRepo:  s.NRepo,
-			NTRepo: s.NTRepo,
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			NRepo:       s.NRepo,
+			NTRepo:      s.NTRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
 		}
 		err = handler.Handle(ctx, cmd)
 		if err != nil {
@@ -718,17 +720,18 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 	}
 
 	cmd := command.ApproveCmd{
-		DID:         req.Did,
-		UpdatedAt:   updatedAt,
-		ApprovedBy:  middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-		DIDDocument: s.DIDDocument,
+		DID:        req.Did,
+		UpdatedAt:  updatedAt,
+		ApprovedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
 	}
 	handler := command.Approver{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		ATRepo: s.ATRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		ATRepo:      s.ATRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -751,19 +754,20 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 	}
 
 	cmd := command.RejectCmd{
-		DID:         req.Did,
-		UpdatedAt:   updatedAt,
-		RejectedBy:  middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-		Reason:      req.Reason,
-		DIDDocument: s.DIDDocument,
+		DID:        req.Did,
+		UpdatedAt:  updatedAt,
+		RejectedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
+		Reason:     req.Reason,
 	}
 	handler := command.Rejecter{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -825,12 +829,14 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 		Reason:       req.Reason,
 	}
 	handler := command.Terminator{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		NRepo:  s.NRepo,
-		NTRepo: s.NTRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		NRepo:       s.NRepo,
+		NTRepo:      s.NTRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

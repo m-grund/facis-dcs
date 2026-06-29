@@ -8,6 +8,10 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -19,19 +23,26 @@ import (
 )
 
 type RecordEvidenceCmd struct {
-	DID        string
-	RecordedBy string
-	UpdatedAt  time.Time
-	HolderDID  string
-	UserRoles  userrole.UserRoles
+	DID        string             `json:"did"`
+	RecordedBy string             `json:"recorded_by"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+	HolderDID  string             `json:"holder_did"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
 }
 
 type EvidenceRecorder struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	SRepo       db2.SyncRepository
+	DIDDocument base.DIDDocument
 }
 
 func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) error {
+
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -46,6 +57,20 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
+	}
+
+	if localPeer != processData.Origin {
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.CallRemoteAction(ctx, h.DB, h.SRepo, "recordevidence", localPeer, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return fmt.Errorf("could not call remote action: %w", err)
+		}
+
+		return nil
 	}
 
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {

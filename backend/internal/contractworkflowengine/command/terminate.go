@@ -8,6 +8,10 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -19,24 +23,32 @@ import (
 )
 
 type TerminateCmd struct {
-	DID          string
-	TerminatedBy string
-	Reason       string
-	UpdatedAt    time.Time
-	HolderDID    string
-	UserRoles    userrole.UserRoles
+	DID          string             `json:"did"`
+	TerminatedBy string             `json:"terminated_by"`
+	Reason       string             `json:"reason"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+	HolderDID    string             `json:"holder_did"`
+	UserRoles    userrole.UserRoles `json:"user_roles"`
+	DIDDocument  base.DIDDocument
 }
 
 type Terminator struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument base.DIDDocument
 }
 
 func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
+
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -51,6 +63,20 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
+	}
+
+	if localPeer != processData.Origin {
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.CallRemoteAction(ctx, h.DB, h.SRepo, "terminate", localPeer, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return fmt.Errorf("could not call remote action: %w", err)
+		}
+
+		return nil
 	}
 
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {

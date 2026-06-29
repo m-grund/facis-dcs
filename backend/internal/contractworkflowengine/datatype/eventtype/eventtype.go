@@ -20,7 +20,6 @@ const (
 	Reject                   EventType = "REJECT_CONTRACT"
 	Verify                   EventType = "VERIFY_CONTRACT"
 	Update                   EventType = "UPDATE_CONTRACT"
-	RemoteUpdateRequest      EventType = "REMOTE_UPDATE_REQUEST"
 	OutdatedPeer             EventType = "OUTDATED_PEER"
 	RetrieveAll              EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveByID             EventType = "RETRIEVE_CONTRACT_BY_ID"
@@ -56,7 +55,6 @@ var validStates = map[EventType]bool{
 	RecordEvidence:           true,
 	ContractExpired:          true,
 	RemoteSync:               true,
-	RemoteUpdateRequest:      true,
 	RemoteSyncRequest:        true,
 	OutdatedPeer:             true,
 	RemoteActionRequestEvent: true,
