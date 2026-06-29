@@ -10,6 +10,7 @@ import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-e
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
@@ -26,6 +27,8 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const navStore = useNavStore()
 const authStore = useAuthStore()
+
+const { isReviewer } = useContractPermissions()
 
 const errorStore = useErrorStore()
 
@@ -62,13 +65,12 @@ const verificationResult = computed(() => {
     document_number: subTemplate.document_number,
     semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
   }))
-  const result = verifySemanticValue(
+  return verifySemanticValue(
     templateDraftStore.semanticConditions,
     subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
   )
-  return result
 })
 
 const contract: Ref<Contract | null> = ref(null)
@@ -93,7 +95,7 @@ watch(
 
 watch(
   () => [
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
     templateDraftStore.semanticConditions,
     templateDraftStore.subTemplateSnapshots,
   ],
@@ -102,7 +104,7 @@ watch(
       (conditionValue) =>
         !hasConditionParameterForValue(
           conditionValue,
-          templateDraftStore.documentBlocks,
+          templateDraftStore.blocks,
           templateDraftStore.semanticConditions,
           templateDraftStore.subTemplateSnapshots,
         ),
@@ -191,20 +193,34 @@ function applyContractDataToDraft(contractData?: unknown) {
     return
   }
   const cd = preprocessContractData(contractData)
-  templateDraftStore.reset({
-    workflow: 'contract',
-    documentOutline: cd.documentOutline ?? [],
-    documentBlocks: cd.documentBlocks ?? [],
-    semanticConditions: cd.semanticConditions ?? [],
-    subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
-    templateDataVersion: cd.templateDataVersion,
-    templateVariables: cd.templateVariables ?? [],
-    placeholderBindings: cd.placeholderBindings ?? [],
-    semanticRules: cd.semanticRules ?? [],
-    policyBundle: cd.policyBundle ?? null,
-    sla: cd.sla ?? null,
-  })
-  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  if (cd) {
+    templateDraftStore.reset({
+      workflow: 'contract',
+      blocks: cd.blocks,
+      layout: cd.layout,
+      contractData: cd.contractData,
+      policies: cd.policies,
+      subTemplateSnapshots: cd.subTemplateSnapshots,
+    })
+    contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  } else {
+    templateDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+  }
+}
+
+const exportPDF = async () => {
+  if (contract?.value?.did === null || contract?.value?.did === undefined) {
+    return
+  }
+
+  const blob = await contractWorkflowService.exportPdf(contract?.value?.did)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `contract-${contract?.value?.did}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -243,8 +259,8 @@ function applyContractDataToDraft(contractData?: unknown) {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :document-outline="templateDraftStore.documentOutline"
-                        :document-blocks="templateDraftStore.documentBlocks"
+                        :layout="templateDraftStore.layout"
+                        :blocks="templateDraftStore.blocks"
                         :semantic-conditions="templateDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
@@ -273,11 +289,12 @@ function applyContractDataToDraft(contractData?: unknown) {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.submitted"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting"
+          :disabled="!isReviewer || isSubmitting"
           @click="verifyContract"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
@@ -286,7 +303,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <button
           v-if="contract?.state === ContractState.submitted"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting"
+          :disabled="!isReviewer || isSubmitting"
           @click="returnToNegotiation"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
@@ -295,7 +312,7 @@ function applyContractDataToDraft(contractData?: unknown) {
         <button
           v-if="contract?.state === ContractState.submitted"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting || !verificationResult.isValid"
+          :disabled="!isReviewer || isSubmitting || !verificationResult.isValid"
           @click="forwardToApproval"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>

@@ -97,7 +97,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
-import { isApprovedTemplateBlock, isSectionBlock } from '@/modules/template-repository/models/contract-template'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import IconInsertAbove from './icons/IconInsertAbove.vue'
 import IconInsertBelow from './icons/IconInsertBelow.vue'
@@ -132,7 +131,9 @@ const emit = defineEmits<{
 }>()
 
 const canInsertNest = computed(
-  () => !!props.item.block && (isSectionBlock(props.item.block) || isApprovedTemplateBlock(props.item.block)),
+  () =>
+    !!props.item.block &&
+    (props.item.block['@type'] === 'dcs:Section' || props.item.block['@type'] === 'dcs:ApprovedTemplate'),
 )
 const canMoveUp = computed(() => props.item.siblingIndex > 0)
 const canMoveDown = computed(() => props.item.siblingIndex < props.item.siblingCount - 1)

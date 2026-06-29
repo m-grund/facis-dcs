@@ -28,6 +28,9 @@ KIND_WAIT ?= 120s
 DOCKER_IMAGE_REPOSITORY ?= digital-contracting-service
 DOCKER_IMAGE_TAG ?= bdd
 DOCKER_IMAGE ?= $(DOCKER_IMAGE_REPOSITORY):$(DOCKER_IMAGE_TAG)
+PDF_CORE_IMAGE_REPOSITORY ?= pdf-core
+PDF_CORE_IMAGE_TAG ?= bdd
+PDF_CORE_IMAGE ?= $(PDF_CORE_IMAGE_REPOSITORY):$(PDF_CORE_IMAGE_TAG)
 KIND_NAMESPACE ?= dcs-bdd
 KIND_HELM_VALUES ?=
 KIND_HELM_SET ?=
@@ -36,7 +39,7 @@ KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
 
-.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
+.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image build_pdf_core_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
 	@echo "make setup_dev    # Create venv and install bdd-executor"
@@ -123,6 +126,9 @@ run_bdd_helm_all: setup_dev ensure_k8s_tools
 build_dcs_image:
 	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
+build_pdf_core_image:
+	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../../pdf-core
+
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
 
@@ -160,21 +166,49 @@ kind_load_image: kind_create
 	@docker image inspect "$(DOCKER_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(DOCKER_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(DOCKER_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
-kind_deploy: kind_load_image
+CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
+
+kind_load_pdf_core_image: kind_create
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "docker is required to load $(PDF_CORE_IMAGE) into kind"; \
+		exit 1; \
+	fi
+	@docker image inspect "$(PDF_CORE_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(PDF_CORE_IMAGE). Build it first." && exit 1)
+	@"$(KIND_BIN)" load docker-image "$(PDF_CORE_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
+
+kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+	@"$(HELM_BIN)" repo add hashicorp https://helm.releases.hashicorp.com --force-update
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
-	@if ! "$(HELM_BIN)" upgrade --install "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
+	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
+	@# ready, but DCS can't become ready until the devCertChain post-install hook has
+	@# created its Secret — a deadlock. We break the cycle by letting helm return as
+	@# soon as resources are applied, then waiting for the secret and DCS separately.
+	@"$(HELM_BIN)" upgrade --install "$(HELM_RELEASE)" "$(HELM_CHART_PATH)" \
 		--namespace "$(KIND_NAMESPACE)" \
 		--create-namespace \
-		--wait \
 		--timeout "$(HELM_TIMEOUT)" \
 		--values "$(HELM_CHART_PATH)/values.bdd.yml" \
 		--set image.repository="$(DOCKER_IMAGE_REPOSITORY)" \
 		--set image.tag="$(DOCKER_IMAGE_TAG)" \
 		$(KIND_HELM_VALUES) \
-		$(KIND_HELM_SET); then \
+		$(KIND_HELM_SET)
+	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
+	@deadline=$$(( $$(date +%s) + 1200 )); \
+	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
+		if [ $$(date +%s) -gt $$deadline ]; then \
+			echo "Timed out waiting for $(CERT_CHAIN_SECRET)"; \
+			"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -o wide || true; \
+			"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
+			exit 1; \
+		fi; \
+		sleep 5; \
+	done
+	@echo "Waiting for DCS deployment to become available..."
+	@if ! "$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout status \
+		deployment/"$(DCS_DEPLOYMENT)" --timeout "$(HELM_TIMEOUT)"; then \
 		echo "=== PODS ==="; \
 		"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -o wide || true; \
 		echo "=== DEPLOYMENTS ==="; \
@@ -182,7 +216,7 @@ kind_deploy: kind_load_image
 		echo "=== EVENTS ==="; \
 		"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
 		echo "=== DCS LOGS ==="; \
-		"$(KUBECTL_BIN)" logs deployment/$(DCS_DEPLOYMENT) -n "$(KIND_NAMESPACE)" --tail=200 || true; \
+		"$(KUBECTL_BIN)" logs deployment/"$(DCS_DEPLOYMENT)" -n "$(KIND_NAMESPACE)" --tail=200 || true; \
 		exit 1; \
 	fi
 
@@ -199,14 +233,14 @@ run_bdd_kind_all: kind_deploy
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
 
-run_bdd_kind_ci: build_dcs_image run_bdd_kind_dev
+run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind_dev
 
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
 
 # Nur Deployment hochfahren (ohne Tests)
-kind_up: build_dcs_image kind_deploy
+kind_up: build_dcs_image build_pdf_core_image kind_deploy
 
 # Nur Tests ausführen gegen ein bereits laufendes Deployment
 run_bdd_kind_once: setup_dev ensure_k8s_tools

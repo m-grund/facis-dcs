@@ -150,17 +150,10 @@ watch(
         return
       }
 
-      draftStore.reset({
-        workflow: 'template',
+      draftStore.loadDocument(templateData, {
         did: data.did,
         name: data.name ?? '',
         description: data.description ?? '',
-        templateDataVersion: templateData.templateDataVersion ?? 1,
-        documentOutline: templateData.documentOutline ?? [],
-        documentBlocks: templateData.documentBlocks ?? [],
-        semanticConditions: templateData.semanticConditions ?? [],
-        customMetaData: templateData.customMetaData ?? [],
-        subTemplateSnapshots: templateData.subTemplateSnapshots ?? [],
         templateType: toTemplateType(data.template_type),
         state: TemplateState.draft,
         document_number: data.document_number ?? null,

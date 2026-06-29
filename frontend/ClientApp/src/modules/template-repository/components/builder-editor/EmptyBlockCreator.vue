@@ -18,13 +18,13 @@ import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 
-const { documentOutline } = storeToRefs(useTemplateDraftStore())
+const { layout } = storeToRefs(useTemplateDraftStore())
 const uiStore = useTemplateEditorUiStore()
 
-const rootBlock = computed(() => documentOutline.value.find((b) => b.isRoot))
+const rootBlock = computed(() => layout.value.find((n) => n['dcs:isRoot']))
 
 function openAddBlockAtRoot() {
   const root = rootBlock.value
-  if (root) uiStore.openAddBlockModal(root.blockId, 0)
+  if (root) uiStore.openAddBlockModal(root['@id'], 0)
 }
 </script>

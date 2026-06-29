@@ -34,7 +34,6 @@ export interface DcsContractMetadata {
 
 export interface DcsPlaceholder {
   '@type': 'dcs:Placeholder'
-  'dcs:token': string
   'dcs:bindsTo': JsonLdReference
 }
 
@@ -71,6 +70,7 @@ export type DcsBlock = DcsSection | DcsTextBlock | DcsClause | DcsApprovedTempla
 
 export interface DcsLayoutNode {
   '@id': string
+  '@type'?: 'dcs:LayoutNode'
   'dcs:isRoot'?: boolean
   'dcs:children': { '@list': JsonLdReference[] }
 }
@@ -78,7 +78,7 @@ export interface DcsLayoutNode {
 export interface DcsDocumentStructure {
   '@id'?: string
   '@type': 'dcs:DocumentStructure'
-  'dcs:blocks': DcsBlock[]
+  'dcs:blocks': { '@list': DcsBlock[] }
   'dcs:layout': DcsLayoutNode[]
 }
 
@@ -87,7 +87,6 @@ export interface DcsRequirementField {
   '@type': 'dcs:RequirementField'
   'dcs:parameterName': string
   'dcs:domainField': JsonLdReference
-  'dcs:semanticPath': string
   'dcs:required': boolean
 }
 
@@ -164,6 +163,26 @@ export interface DcsContractData extends DcsDocumentData {
     document_number?: string
   }
   derivedFromTemplate?: string
+}
+
+export function isDcsSection(block: DcsBlock): block is DcsSection {
+  return block['@type'] === 'dcs:Section'
+}
+
+export function isDcsTextBlock(block: DcsBlock): block is DcsTextBlock {
+  return block['@type'] === 'dcs:TextBlock'
+}
+
+export function isDcsClause(block: DcsBlock): block is DcsClause {
+  return block['@type'] === 'dcs:Clause'
+}
+
+export function isDcsApprovedTemplate(block: DcsBlock): block is DcsApprovedTemplate {
+  return block['@type'] === 'dcs:ApprovedTemplate'
+}
+
+export function isDcsPlaceholder(seg: DcsContentSegment): seg is DcsPlaceholder {
+  return typeof seg !== 'string'
 }
 
 export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {

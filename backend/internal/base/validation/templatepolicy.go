@@ -188,7 +188,10 @@ func auditRequiredPolicyRefs(policySet *templatePolicySet, rule templatePolicyRu
 func auditFinishedTemplateHasClauseSemantics(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
 	if isCanonicalEnvelope(data) {
 		structure, _ := topLevelValue(data, "documentStructure").(map[string]any)
-		blocks, _ := structure["dcs:blocks"].([]any)
+		blocks, ok := jsonLDList(structure["dcs:blocks"])
+		if !ok {
+			blocks, _ = structure["dcs:blocks"].([]any)
+		}
 		contractData, _ := topLevelValue(data, "contractData").([]any)
 		for _, rawBlock := range blocks {
 			block, ok := rawBlock.(map[string]any)
@@ -316,8 +319,10 @@ func forEachSemanticParameter(data documentData, visit func(conditionID string, 
 				if !ok {
 					continue
 				}
+				domainField, _ := field["dcs:domainField"].(map[string]any)
+				domainFieldID, _ := domainField["@id"].(string)
 				visit(conditionID, index, map[string]any{
-					"semanticPath": field["dcs:semanticPath"],
+					"semanticPath": domainFieldID,
 				})
 			}
 		}

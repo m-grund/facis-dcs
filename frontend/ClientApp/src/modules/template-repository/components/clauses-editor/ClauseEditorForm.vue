@@ -1,5 +1,4 @@
 <template>
-  <!-- <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm"> -->
   <h3 class="mb-4 text-sm font-semibold text-base-content/80">
     {{ heading }}
   </h3>
@@ -17,9 +16,9 @@
         <RequiredIndicator />
       </label>
       <ClauseTextEditor
-        :model-value="localText"
+        :model-value="localContent"
         :semantic-conditions="semanticConditions"
-        @update:model-value="localText = $event"
+        @update:model-value="localContent = $event"
       />
     </div>
     <div class="flex items-center justify-between">
@@ -35,7 +34,6 @@
       </button>
     </div>
   </div>
-  <!-- </section> -->
 </template>
 
 <script setup lang="ts">
@@ -43,24 +41,34 @@ import { computed, ref, watch } from 'vue'
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import ClauseTextEditor from '@template-repository/components/clauses-editor/ClauseTextEditor.vue'
-import { conditionIdsInText, isPlaceholder, parseSegments } from '@template-repository/composables/useClauseTextChips'
+import {
+  conditionIdsInContent,
+  usedPlaceholderKeysInContent,
+} from '@template-repository/composables/useClauseTextChips'
+import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import { stringToContent } from '@template-repository/composables/useClauseTextChips'
 
 const props = defineProps<{
   mode: 'create' | 'edit'
   initialTitle: string
-  initialText: string
+  /** Initial content as DcsContentSegment[] or a plain string (converted on mount). */
+  initialContent?: DcsContentSegment[]
+  /** Legacy plain-text init — converted to DcsContentSegment[] via stringToContent. */
+  initialText?: string
   semanticConditions: SemanticCondition[]
   sourceRequirementName?: string
   showCancel?: boolean
 }>()
 
 const emit = defineEmits<{
-  submit: [payload: { title: string; text: string }]
+  submit: [payload: { title: string; content: DcsContentSegment[] }]
   cancel: []
 }>()
 
 const localTitle = ref(props.initialTitle)
-const localText = ref(props.initialText)
+const localContent = ref<DcsContentSegment[]>(
+  props.initialContent ?? stringToContent(props.initialText ?? '', props.semanticConditions),
+)
 
 const heading = computed(() => {
   if (props.mode === 'edit') return 'Edit clause'
@@ -68,43 +76,38 @@ const heading = computed(() => {
 })
 
 watch(
-  () => [props.initialTitle, props.initialText] as const,
-  ([title, text]) => {
+  () => [props.initialTitle, props.initialContent, props.initialText] as const,
+  ([title, content, text]) => {
     localTitle.value = title
-    localText.value = text
+    localContent.value = content ?? stringToContent(text ?? '', props.semanticConditions)
   },
 )
 
-// Check if there is any required parameter in used rule panel that is not used in the text
 const hasRequiredUnusedParamInUsedRules = computed(() => {
-  const usedConditionIds = conditionIdsInText(localText.value)
+  const usedConditionIds = conditionIdsInContent(localContent.value, props.semanticConditions)
   if (!usedConditionIds.size) return false
-
-  const usedParams = new Set<string>()
-  parseSegments(localText.value, props.semanticConditions)
-    .filter((segment) => isPlaceholder(segment))
-    .forEach((segment) => {
-      usedParams.add(`${segment.conditionId}.${segment.parameterName}`)
-    })
-
+  const usedKeys = usedPlaceholderKeysInContent(localContent.value, props.semanticConditions)
   return props.semanticConditions
     .filter((c) => usedConditionIds.has(c.conditionId))
-    .some((c) => c.parameters.some((p) => p.isRequired && !usedParams.has(`${c.conditionId}.${p.parameterName}`)))
+    .some((c) => c.parameters.some((p) => p.isRequired && !usedKeys.has(`${c.conditionId}.${p.parameterName}`)))
 })
 
 const canSubmit = computed(
-  () => !!localTitle.value.trim() && !!localText.value.trim() && !hasRequiredUnusedParamInUsedRules.value,
+  () =>
+    !!localTitle.value.trim() &&
+    localContent.value.some((seg) => (typeof seg === 'string' ? seg.trim() : true)) &&
+    !hasRequiredUnusedParamInUsedRules.value,
 )
 
 function handleSubmit() {
   if (!canSubmit.value) return
   emit('submit', {
     title: localTitle.value.trim(),
-    text: localText.value,
+    content: localContent.value,
   })
   if (props.mode === 'create') {
     localTitle.value = ''
-    localText.value = ''
+    localContent.value = []
   }
 }
 </script>

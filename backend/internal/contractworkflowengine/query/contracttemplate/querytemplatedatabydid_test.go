@@ -24,7 +24,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type": "dcs:DocumentStructure",
-			"dcs:blocks": []any{
+			"dcs:blocks": map[string]any{"@list": []any{
 				map[string]any{
 					"@id":   "did:web:facis.example:template:1#block-clause-1",
 					"@type": "dcs:Clause",
@@ -37,7 +37,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 						},
 					}},
 				},
-			},
+			}},
 			"dcs:layout": []any{
 				map[string]any{
 					"@id":          "did:web:facis.example:template:1#block-root",
@@ -58,9 +58,8 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 						"@id":               "did:web:facis.example:template:1#field-cond-1-percent",
 						"@type":             "dcs:RequirementField",
 						"dcs:parameterName": "percent",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability"},
-						"dcs:semanticPath":  "service.sla.availability",
-						"dcs:required":      true,
+						"dcs:domainField": map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability"},
+						"dcs:required":    true,
 					},
 				},
 			},
@@ -91,19 +90,20 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	require.Equal(t, float64(7), data["sourceTemplate"].(map[string]any)["version"])
 	require.Empty(t, data["semanticConditionValues"])
 	structure := data["dcs:documentStructure"].(map[string]any)
-	require.Len(t, structure["dcs:blocks"], 1)
+	require.Len(t, structure["dcs:blocks"].(map[string]any)["@list"], 1)
 	require.Len(t, data["dcs:contractData"], 1)
 
 	persisted, err := validation.NormalizeContractDataForPersistence(
 		converted,
 		"did:web:facis.example:contract:1",
+		nil,
 		false,
 	)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(*persisted, &data))
 	require.Equal(t, "did:web:facis.example:contract:1", data["@id"])
 	structure = data["dcs:documentStructure"].(map[string]any)
-	block := structure["dcs:blocks"].([]any)[0].(map[string]any)
+	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	require.Equal(t, "did:web:facis.example:contract:1#block-clause-1", block["@id"])
 	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
 	require.Equal(

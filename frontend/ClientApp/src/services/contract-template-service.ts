@@ -12,6 +12,7 @@ import type {
   ContractTemplateSearchRequest,
   ContractTemplateSubmitRequest,
   ContractTemplateUpdateRequest,
+  ContractTemplateUpdateManageRequest,
   ContractTemplateVerifyRequest,
   ContractTemplatePublishRequest,
 } from '@/models/requests/template-request'
@@ -28,6 +29,7 @@ import type {
   ContractTemplateSearchResponse,
   ContractTemplateSubmitResponse,
   ContractTemplateUpdateResponse,
+  ContractTemplateUpdateManageResponse,
   ContractTemplateVerifyResponse,
   ContractTemplatePublishResponse,
 } from '@/models/responses/template-response'
@@ -67,6 +69,16 @@ export const contractTemplateService: ContractTemplateService = {
   async update(request: ContractTemplateUpdateRequest) {
     return http
       .put<ContractTemplateUpdateResponse>('/template/update', request)
+      .then((res) => res.data)
+      .catch((err: unknown) => {
+        console.error('Update Error:', err)
+        throw err
+      })
+  },
+
+  async updateManage(request: ContractTemplateUpdateManageRequest) {
+    return http
+      .post<ContractTemplateUpdateManageResponse>('/template/update_manage', request)
       .then((res) => res.data)
       .catch((err: unknown) => {
         console.error('Update Error:', err)

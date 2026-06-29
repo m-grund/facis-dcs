@@ -37,18 +37,18 @@ func (r AuditTrailReader) ReadAuditLogEntriesByComponentAndDID(ctx context.Conte
 		if err != nil {
 			return nil, fmt.Errorf("read body: %w", err)
 		}
-		var logEntry datatype.AuditLogEntry
-		if err := json.Unmarshal(result.Data, &logEntry); err != nil {
+		var signedAuditLogEntry datatype.SignedAuditLogEntry
+		if err := json.Unmarshal(result.Data, &signedAuditLogEntry); err != nil {
 			return nil, fmt.Errorf("decode response: %w", err)
 		}
 
-		logEntries = append(logEntries, logEntry)
+		logEntries = append(logEntries, signedAuditLogEntry.AuditLogEntry)
 
-		if logEntry.ResLogPredCID == nil {
+		if signedAuditLogEntry.AuditLogEntry.ResLogPredCID == nil {
 			break
 		}
 
-		currentCID = *logEntry.ResLogPredCID
+		currentCID = *signedAuditLogEntry.AuditLogEntry.ResLogPredCID
 	}
 
 	return logEntries, nil

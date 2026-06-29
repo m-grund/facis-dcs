@@ -6,39 +6,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
-	contract := map[string]any{
-		"@id": "urn:facis:dcs:contract:example-001",
-		"provider": map[string]any{
-			"company": map[string]any{
-				"location": map[string]any{
-					"country": "RUS",
+func odrlContract(fieldID, conditionID, parameterName string, policies []any, actualValue any) map[string]any {
+	return map[string]any{
+		"dcs:contractData": []any{
+			map[string]any{
+				"@id":             "urn:dcs:req:test",
+				"@type":           "dcs:DataRequirement",
+				"dcs:conditionId": conditionID,
+				"dcs:fields": []any{
+					map[string]any{
+						"@id":               fieldID,
+						"@type":             "dcs:RequirementField",
+						"dcs:parameterName": parameterName,
+					},
 				},
 			},
 		},
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-		},
-		"signature": map[string]any{
-			"requiredLevel": "AES",
-		},
+		"dcs:policies":            policies,
+		"semanticConditionValues": []any{map[string]any{"conditionId": conditionID, "parameterName": parameterName, "parameterValue": actualValue}},
 	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.content.static",
-		"version":     "test",
-		"rules": []any{
-			map[string]any{
-				"id":           "FACIS-CONTRACT-STATIC-001",
-				"title":        "Provider country must not be blacklisted",
-				"builtin":      "value_not_in",
-				"semanticPath": "provider.company.location.country",
-				"values":       []any{"RUS"},
-				"ontologyTerm": "dcs:CountryCode",
-			},
-		},
-	}
+}
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+func odrlDuty(id, fieldID, operator string, rightOperand any) map[string]any {
+	return map[string]any{
+		"@id":   id,
+		"@type": "odrl:Duty",
+		"odrl:constraint": map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": fieldID},
+			"odrl:operator":     map[string]any{"@id": operator},
+			"odrl:rightOperand": rightOperand,
+		},
+	}
+}
+
+func emptyPolicy() map[string]any {
+	return map[string]any{"policySetId": "facis.dcs.contract.content.static", "version": "test"}
+}
+
+func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
+	fieldID := "urn:dcs:field:provider-country"
+	contract := odrlContract(fieldID, "provider", "country",
+		[]any{odrlDuty("FACIS-CONTRACT-STATIC-001", fieldID, "odrl:isNoneOf", []any{"RUS"})},
+		"RUS",
+	)
+
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.Contains(t, policyFindingRuleIDs(findings), "FACIS-CONTRACT-STATIC-001")
@@ -46,44 +59,40 @@ func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
 }
 
 func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
+	countryFieldID := "urn:dcs:field:company-country"
+	lawFieldID := "urn:dcs:field:contract-law"
+	paymentFieldID := "urn:dcs:field:payment-amount"
+
 	contract := map[string]any{
-		"@context":        []any{"https://w3id.org/facis/sla/ontology"},
-		"@id":             "urn:facis:dcs:contract:sla:example-001",
-		"@type":           []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
-		"contractVersion": 1,
-		"state":           "APPROVED",
-		"parties": []any{
-			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier", "legalName": "Supplier GmbH"},
-			map[string]any{"@type": "dcs:CompanyParty", "role": "customer", "legalName": "Customer AG"},
-		},
-		"company": map[string]any{
-			"location": map[string]any{
-				"country": "DEU",
+		"@context": []any{"https://w3id.org/facis/sla/ontology"},
+		"@id":      "urn:facis:dcs:contract:sla:example-001",
+		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
+		"dcs:contractData": []any{
+			map[string]any{
+				"@id": "urn:dcs:req:company", "@type": "dcs:DataRequirement", "dcs:conditionId": "company",
+				"dcs:fields": []any{map[string]any{"@id": countryFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "country"}},
+			},
+			map[string]any{
+				"@id": "urn:dcs:req:contract", "@type": "dcs:DataRequirement", "dcs:conditionId": "contract",
+				"dcs:fields": []any{
+					map[string]any{"@id": lawFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "governingLaw"},
+					map[string]any{"@id": paymentFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "amount"},
+				},
 			},
 		},
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-			"governingLaw": "DE",
-			"payment": map[string]any{
-				"amount": 9500,
-			},
+		"dcs:policies": []any{
+			odrlDuty("FACIS-CONTRACT-STATIC-001", countryFieldID, "odrl:isNoneOf", []any{"RUS"}),
+			odrlDuty("FACIS-CONTRACT-STATIC-002", lawFieldID, "odrl:isAnyOf", []any{"DE", "AT", "CH"}),
+			odrlDuty("FACIS-CONTRACT-STATIC-003", paymentFieldID, "odrl:lteq", float64(10000)),
 		},
-		"signature": map[string]any{
-			"requiredLevel": "QES",
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.content.static",
-		"version":     "test",
-		"rules": []any{
-			map[string]any{"id": "FACIS-CONTRACT-STATIC-001", "title": "Company country must not be blacklisted", "builtin": "value_not_in", "semanticPath": "company.location.country", "values": []any{"RUS"}, "ontologyTerm": "dcs:CountryCode"},
-			map[string]any{"id": "FACIS-CONTRACT-STATIC-002", "title": "Governing law must be allowed", "builtin": "value_in", "semanticPath": "contract.governingLaw", "values": []any{"DE", "AT", "CH"}, "ontologyTerm": "dcs:Contract"},
-			map[string]any{"id": "FACIS-CONTRACT-STATIC-003", "title": "Payment amount must satisfy policy maximum", "builtin": "max_number", "semanticPath": "contract.payment.amount", "max": 10000, "ontologyTerm": "dcs:PaymentTerm"},
-			map[string]any{"id": "FACIS-CONTRACT-STATIC-004", "title": "Signature level must satisfy policy", "builtin": "signature_level_at_least", "semanticPath": "signature.requiredLevel", "required": "AES", "ontologyTerm": "dcs:SignatureLevelCode"},
+		"semanticConditionValues": []any{
+			map[string]any{"conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
+			map[string]any{"conditionId": "contract", "parameterName": "governingLaw", "parameterValue": "DE"},
+			map[string]any{"conditionId": "contract", "parameterName": "amount", "parameterValue": float64(9500)},
 		},
 	}
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	for _, finding := range findings {
@@ -91,91 +100,40 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 	}
 }
 
-func TestAuditContractContentReadsJSONLDSemanticPathThresholds(t *testing.T) {
-	contract := map[string]any{
-		"company": map[string]any{
-			"location": map[string]any{
-				"country": "DEU",
-			},
-		},
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-		},
-		"semanticValues": []any{
-			map[string]any{
-				"semanticPath": "contract.liability.capAmount",
-				"hasThreshold": map[string]any{
-					"hasTargetValue": 150000,
-				},
-			},
-		},
-		"signature": map[string]any{
-			"requiredLevel": "AES",
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.content.static",
-		"version":     "test",
-		"rules": []any{
-			map[string]any{"id": "FACIS-CONTRACT-STATIC-003", "title": "Liability cap must satisfy policy maximum", "builtin": "max_number", "semanticPath": "contract.liability.capAmount", "max": 100000, "ontologyTerm": "dcs:LiabilityTerms"},
-		},
-	}
+func TestAuditContractContentFlagsExceededMaximum(t *testing.T) {
+	fieldID := "urn:dcs:field:liability-cap"
+	contract := odrlContract(fieldID, "liability", "capAmount",
+		[]any{odrlDuty("FACIS-CONTRACT-STATIC-003", fieldID, "odrl:lteq", float64(100000))},
+		float64(150000),
+	)
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-003", "error"))
 }
 
-func TestAuditContractContentResolvesAllowedValuesRef(t *testing.T) {
-	contract := map[string]any{
-		"contract": map[string]any{
-			"jurisdiction": "ZZZ",
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.content.static",
-		"version":     "test",
-		"rules": []any{
-			map[string]any{
-				"id":           "FACIS-CONTRACT-STATIC-COUNTRY",
-				"title":        "Contract jurisdiction must use an allowed ISO country code",
-				"builtin":      "value_in",
-				"semanticPath": "contract.jurisdiction",
-				"valuesRef":    "ISO 3166-1 alpha-3",
-				"ontologyTerm": "dcs:CountryCode",
-			},
-		},
-	}
+func TestAuditContractContentFlagsInvalidJurisdiction(t *testing.T) {
+	fieldID := "urn:dcs:field:jurisdiction"
+	contract := odrlContract(fieldID, "contract", "jurisdiction",
+		[]any{odrlDuty("FACIS-CONTRACT-STATIC-COUNTRY", fieldID, "odrl:isAnyOf", []any{"DEU", "AUT", "CHE"})},
+		"ZZZ",
+	)
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "error"))
 }
 
-func TestAuditContractContentAcceptsAllowedValuesRef(t *testing.T) {
-	contract := map[string]any{
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.content.static",
-		"version":     "test",
-		"rules": []any{
-			map[string]any{
-				"id":           "FACIS-CONTRACT-STATIC-COUNTRY",
-				"title":        "Contract jurisdiction must use an allowed ISO country code",
-				"builtin":      "value_in",
-				"semanticPath": "contract.jurisdiction",
-				"valuesRef":    "ISO 3166-1 alpha-3",
-				"ontologyTerm": "dcs:CountryCode",
-			},
-		},
-	}
+func TestAuditContractContentAcceptsValidJurisdiction(t *testing.T) {
+	fieldID := "urn:dcs:field:jurisdiction"
+	contract := odrlContract(fieldID, "contract", "jurisdiction",
+		[]any{odrlDuty("FACIS-CONTRACT-STATIC-COUNTRY", fieldID, "odrl:isAnyOf", []any{"DEU", "AUT", "CHE"})},
+		"DEU",
+	)
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "info"))
@@ -285,6 +243,24 @@ func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "error"))
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
+}
+
+func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
+	fieldID := "urn:dcs:field:provider-country"
+	contract := odrlContract(fieldID, "provider", "country", nil, "RUS")
+
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.content.static",
+		"version":     "test",
+		"dcs:policies": []any{
+			odrlDuty("FACIS-EXT-001", fieldID, "odrl:isNoneOf", []any{"RUS"}),
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-EXT-001", "error"))
 }
 
 func hasFindingSeverity(findings []PolicyFinding, ruleID string, severity string) bool {

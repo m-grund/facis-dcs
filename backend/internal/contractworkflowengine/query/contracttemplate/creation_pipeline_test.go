@@ -24,7 +24,7 @@ const (
 // pass-through: it returns the stored JSON-LD unchanged.
 func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	templateData := newCreationPipelineJSON(t, creationPipelineTemplate())
-	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID)
+	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID, nil)
 	require.NoError(t, err)
 
 	contractDraft, err := convertTemplateDataToContractData(persistedTemplate, creationTemplateDID)
@@ -36,6 +36,7 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	persistedContract, err := validation.NormalizeContractDataForPersistence(
 		newCreationPipelineJSON(t, contractData),
 		creationContractDID,
+		nil,
 		true,
 	)
 	require.NoError(t, err)
@@ -92,7 +93,7 @@ func creationPipelineTemplate() map[string]any {
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type":      "dcs:DocumentStructure",
-			"dcs:blocks": creationPipelineBlocks(),
+			"dcs:blocks": map[string]any{"@list": creationPipelineBlocks()},
 			"dcs:layout": creationPipelineLayout(),
 		},
 		"dcs:contractData": creationPipelineRequirements(),
@@ -332,8 +333,7 @@ func creationPipelineField(conditionID string, parameterName string, semanticPat
 		"dcs:domainField": map[string]any{
 			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(semanticPath),
 		},
-		"dcs:semanticPath": semanticPath,
-		"dcs:required":     true,
+		"dcs:required": true,
 	}
 }
 

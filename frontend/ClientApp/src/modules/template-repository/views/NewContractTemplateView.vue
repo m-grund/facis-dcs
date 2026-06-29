@@ -5,7 +5,7 @@
       <h1 class="text-2xl font-bold text-base-content">Choose contract type</h1>
       <TemplateTypeSelect :model-value="templateType" @update:model-value="onTemplateTypeChosen($event)" />
       <div class="flex justify-end pt-4">
-        <button type="button" class="btn btn-outline" @click="router.back()">Cancel</button>
+        <button type="button" class="btn btn-outline" @click="router.back()">Back</button>
       </div>
     </div>
     <template v-else>
@@ -18,11 +18,13 @@
       >
         <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
           <button class="btn btn-outline md:w-32" @click="router.back()">Cancel</button>
-          <CopyTemplateButton v-if="isEditMode && (isCreator || isManager)" class="btn flex-1 btn-primary" />
           <button class="btn flex-1 btn-primary" :disabled="isSubmitting" @click="submit">
             <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
             {{ isEditMode ? 'Update' : 'Create' }}
           </button>
+        </div>
+        <div v-if="submitError" class="mx-auto max-w-4xl px-6 pb-3">
+          <p class="text-sm text-error">Save failed: {{ submitError }}</p>
         </div>
       </div>
     </template>
@@ -41,7 +43,6 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -55,7 +56,7 @@ const hasChosenType = ref(false)
 const showTypeSelectionOnly = computed(() => !isEditMode.value && !hasChosenType.value)
 const title = computed(() => (isEditMode.value ? 'Update Template' : 'Create Template'))
 
-const { isCreator, isManager } = useTemplatePermissions()
+const { isManager } = useTemplatePermissions()
 
 function onTemplateTypeChosen(value: typeof templateType.value) {
   draftStore.reset({ templateType: value })
@@ -79,9 +80,8 @@ watch(
             return
           }
           const uneditableStates = [
-            TemplateState.approved,
-            TemplateState.deleted,
             TemplateState.deprecated,
+            TemplateState.registered,
             TemplateState.published,
             TemplateState.registered,
           ].map((s) => s.toLowerCase())
@@ -112,24 +112,35 @@ watch(
 )
 
 const isSubmitting = ref(false)
+const submitError = ref<string | null>(null)
 
 const submit = async () => {
   isSubmitting.value = true
+  submitError.value = null
   try {
     if (!draftStore.hasTemplateId) {
       // create a draft template
       const data = draftStore.templateCreateRequestData
       await contractTemplateService.create(data)
     } else {
-      // update existing template
-      const data = draftStore.templateUpdateRequestData
-      if (data) {
-        await contractTemplateService.update(data)
+      if (isManager.value) {
+        // update existing template
+        const data = draftStore.templateUpdateManageRequestData
+        if (data) {
+          await contractTemplateService.updateManage(data)
+        }
+      } else {
+        // update existing template
+        const data = draftStore.templateUpdateRequestData
+        if (data) {
+          await contractTemplateService.update(data)
+        }
       }
     }
     await router.push({ name: ROUTES.TEMPLATES.LIST })
   } catch (error) {
     console.error('Submission failed', error)
+    submitError.value = error instanceof Error ? error.message : String(error)
   } finally {
     isSubmitting.value = false
   }

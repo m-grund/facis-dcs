@@ -20,28 +20,54 @@ type PostgresContractTemplateRepo struct {
 }
 
 func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx.Tx, did string, copyDID string) (int, error) {
+	var exists bool
+	if err := tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM contract_templates WHERE did = $1)`, did); err != nil {
+		return 0, err
+	}
+	if !exists {
+		return 0, fmt.Errorf("template with did %s not found", did)
+	}
+
 	statement := `
-        INSERT INTO contract_templates 
-            (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible, template_data)
-        SELECT 
-            $1,
-            document_number,
-            CASE 
-                WHEN state IN ('APPROVED', 'PUBLISHED') THEN version + 1
-                ELSE 1
-            END,
-            'DRAFT', template_type, name, description, created_by, NOW(), NOW(), 
-            responsible, template_data
-        FROM contract_templates 
-        WHERE did = $2
-        RETURNING version
-    `
+		WITH source AS (
+			SELECT
+				did, document_number, template_type, name, description, created_by, responsible, template_data,
+				CASE
+					WHEN state IN ('REGISTERED', 'PUBLISHED') THEN version + 1
+					ELSE 1
+				END AS new_version,
+				CASE
+					WHEN state NOT IN ('REGISTERED', 'PUBLISHED') THEN $1
+					ELSE base_template
+				END AS new_base_template
+			FROM contract_templates
+			WHERE did = $2
+		)
+		INSERT INTO contract_templates
+			(did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at,
+			 responsible, template_data, base_template)
+		SELECT
+			$1,
+			source.document_number,
+			source.new_version,
+			'DRAFT', source.template_type, source.name, source.description, source.created_by, NOW(), NOW(),
+			source.responsible, source.template_data, source.new_base_template
+		FROM source
+		WHERE source.new_base_template IS NULL
+		   OR NOT EXISTS (
+			   SELECT 1
+			   FROM contract_templates ct
+			   WHERE ct.base_template = source.new_base_template
+				 AND ct.version = source.new_version
+				 AND ct.state IN ('REGISTERED', 'PUBLISHED')
+		   )
+		RETURNING version
+	`
 	var newVersion int
 	err := tx.QueryRowContext(ctx, statement, copyDID, did).Scan(&newVersion)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, fmt.Errorf("template with did %s not found", did)
+			return 0, fmt.Errorf("could not create new version for did %s: a template with the same version already exists in state REGISTERED or PUBLISHED", did)
 		}
 		return 0, err
 	}
@@ -52,10 +78,10 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 	statement := `
         INSERT INTO contract_templates_history 
             (did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-             responsible, template_data)
+             responsible, template_data, base_template)
         SELECT 
             did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, 
-            responsible, template_data
+            responsible, template_data, base_template
         FROM contract_templates 
         WHERE did = $1
     `
@@ -66,7 +92,7 @@ func (r *PostgresContractTemplateRepo) CreateHistoryEntryForDID(ctx context.Cont
 func (r *PostgresContractTemplateRepo) ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ContractTemplateHistory, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible
+               created_by, created_at, updated_at, template_data, template_type, responsible, base_template
         FROM contract_templates_history WHERE did = $1
     `
 	var ct []db.ContractTemplateHistory
@@ -84,14 +110,14 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 	statement := `
         INSERT INTO contract_templates (
             did, document_number, created_by, state, name,
-            description, template_data, template_type
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            description, template_data, template_type, base_template
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING created_at
     `
 	var createdAt time.Time
 	err := tx.GetContext(ctx, &createdAt, statement,
 		data.DID, data.DocumentNumber, data.CreatedBy, data.State, data.Name,
-		data.Description, data.TemplateData, data.TemplateType,
+		data.Description, data.TemplateData, data.TemplateType, data.DID,
 	)
 	if err != nil {
 		return nil, err
@@ -102,7 +128,8 @@ func (r *PostgresContractTemplateRepo) Create(ctx context.Context, tx *sqlx.Tx, 
 func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplate, error) {
 	query := `
         SELECT did, document_number, version, state, name, description,
-               created_by, created_at, updated_at, template_data, template_type, responsible
+               created_by, created_at, updated_at, template_data, template_type, responsible,
+               base_template
         FROM contract_templates WHERE did = $1
     `
 	var ct db.ContractTemplate
@@ -118,9 +145,30 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, template_type, name, description, created_by, created_at, updated_at, responsible
-        FROM contract_templates
-    `
+		WITH latest AS (
+			SELECT DISTINCT ON (base_template)
+				base_template,
+				did     AS latest_did,
+				version AS latest_version
+			FROM contract_templates
+			WHERE state IN ('REGISTERED', 'PUBLISHED')
+			ORDER BY base_template, version DESC
+		)
+		SELECT
+			t.did, t.document_number, t.version, t.state, t.template_type, t.name,
+			t.description, t.created_by, t.created_at, t.updated_at, t.responsible,
+			t.base_template,
+			CASE
+				WHEN t.state NOT IN ('REGISTERED', 'PUBLISHED') THEN FALSE
+				ELSE t.version <> l.latest_version
+			END AS outdated,
+			CASE
+				WHEN t.did != l.latest_did AND t.state IN ('REGISTERED', 'PUBLISHED') THEN l.latest_did
+				ELSE NULL
+			END AS latest_did
+		FROM contract_templates t
+		LEFT JOIN latest l ON l.base_template = t.base_template
+	`
 
 	var params []any
 	if pagination.Limit > 0 {
@@ -139,7 +187,8 @@ func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *
 
 func (r *PostgresContractTemplateRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
-        SELECT did, document_number, version, state, name, template_type, description, created_by, created_at, updated_at, responsible
+        SELECT did, document_number, version, state, name, template_type, description,
+               created_by, created_at, updated_at, responsible, base_template
         FROM contract_templates
     `
 
@@ -193,10 +242,51 @@ func (r *PostgresContractTemplateRepo) UpdateStateForAllTasks(ctx context.Contex
 
 func (r *PostgresContractTemplateRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
-        UPDATE contract_templates SET state = $2
+        UPDATE contract_templates ct
+        SET state = $2::contract_template_state
         WHERE did = $1
+          AND (
+              $2::contract_template_state NOT IN ('REGISTERED', 'PUBLISHED')
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM contract_templates other
+                  WHERE other.version = ct.version
+                    AND other.base_template = ct.base_template
+                    AND other.state IN ('REGISTERED', 'PUBLISHED')
+                    AND other.did <> ct.did
+              )
+          )
     `
-	_, err := tx.ExecContext(ctx, statement, did, state)
+	result, err := tx.ExecContext(ctx, statement, did, state)
+	if err != nil {
+		return fmt.Errorf("could not update registered state: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("could not update state for DID %q: not found or conflicting version already active", did)
+	}
+	return nil
+}
+
+func (r *PostgresContractTemplateRepo) ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplatePDFState, error) {
+	var state db.ContractTemplatePDFState
+	err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_renderer_version,''), COALESCE(pdf_c2pa_state,'') FROM contract_templates WHERE did=$1`, did,
+	).Scan(&state.IPFSCID, &state.RendererVersion, &state.C2PAState)
+	if err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (r *PostgresContractTemplateRepo) UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data db.ContractTemplatePDFState) error {
+	_, err := tx.ExecContext(ctx,
+		`UPDATE contract_templates SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3 WHERE did=$4`,
+		data.IPFSCID, data.RendererVersion, data.C2PAState, did,
+	)
 	return err
 }
 
@@ -306,19 +396,10 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 	// Invalidate the cached PDF only when rendered content changes.
 	// Pure state transitions (submit, approve, etc.) must NOT clear pdf_ipfs_cid
 	// because the C2PA chain logic relies on the prior CID to append the next manifest.
-	//
-	// When content does change, carry the latest manifest hash forward into
-	// prev_manifest_hash before clearing pdf_manifest_hash.  The next
-	// appendAndCache call reads prev_manifest_hash as a fallback when the
-	// freshly-built PDF has no embedded manifest, preserving the C2PA chain
-	// across content edits (DCS-OR-C2PA-001 Gap E).
 	if contentChanged {
 		columns = append(columns,
 			"pdf_ipfs_cid = NULL",
-			"pdf_manifest_ipfs_cid = NULL",
 			"pdf_renderer_version = NULL",
-			"prev_manifest_hash = pdf_manifest_hash",
-			"pdf_manifest_hash = NULL",
 		)
 	}
 

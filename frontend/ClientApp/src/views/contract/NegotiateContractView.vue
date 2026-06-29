@@ -14,6 +14,7 @@ import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-e
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
@@ -46,6 +47,8 @@ const scrollStore = useScrollStore()
 
 const isSubmitting = ref(false)
 
+const { isCreator, isReviewer } = useContractPermissions()
+
 const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
   return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
@@ -71,7 +74,7 @@ const verificationResult = computed(() => {
     templateDraftStore.semanticConditions,
     subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
   )
 })
 
@@ -136,7 +139,7 @@ watch(
 
 watch(
   () => [
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
     templateDraftStore.semanticConditions,
     templateDraftStore.subTemplateSnapshots,
   ],
@@ -145,7 +148,7 @@ watch(
       (conditionValue) =>
         !hasConditionParameterForValue(
           conditionValue,
-          templateDraftStore.documentBlocks,
+          templateDraftStore.blocks,
           templateDraftStore.semanticConditions,
           templateDraftStore.subTemplateSnapshots,
         ),
@@ -241,20 +244,20 @@ function applyContractDataToDraft(contractData?: unknown) {
     return
   }
   const cd = preprocessContractData(contractData)
-  templateDraftStore.reset({
-    workflow: 'contract',
-    documentOutline: cd.documentOutline ?? [],
-    documentBlocks: cd.documentBlocks ?? [],
-    semanticConditions: cd.semanticConditions ?? [],
-    subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
-    templateDataVersion: cd.templateDataVersion,
-    templateVariables: cd.templateVariables ?? [],
-    placeholderBindings: cd.placeholderBindings ?? [],
-    semanticRules: cd.semanticRules ?? [],
-    policyBundle: cd.policyBundle ?? null,
-    sla: cd.sla ?? null,
-  })
-  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  if (cd) {
+    templateDraftStore.reset({
+      workflow: 'contract',
+      blocks: cd.blocks,
+      layout: cd.layout,
+      contractData: cd.contractData,
+      policies: cd.policies,
+      subTemplateSnapshots: cd.subTemplateSnapshots,
+    })
+    contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  } else {
+    templateDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+  }
 }
 
 const templatePreviewContent = useTemplateRef<HTMLElement>('template-preview-content')
@@ -371,13 +374,16 @@ const hasActiveNegotiations = computed(() => {
   )
 })
 
-const exportPdf = async () => {
-  const did = route.params.did as string
-  const blob = await contractWorkflowService.exportPdf(did)
+const exportPDF = async () => {
+  if (contract?.value?.did === null || contract?.value?.did === undefined) {
+    return
+  }
+
+  const blob = await contractWorkflowService.exportPdf(contract?.value?.did)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `contract-${did}.pdf`
+  a.download = `contract-${contract?.value?.did}.pdf`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -426,8 +432,8 @@ const exportPdf = async () => {
                   <div class="card-body gap-5">
                     <div ref="template-preview-content">
                       <TemplatePreview
-                        :document-outline="templateDraftStore.documentOutline"
-                        :document-blocks="templateDraftStore.documentBlocks"
+                        :layout="templateDraftStore.layout"
+                        :blocks="templateDraftStore.blocks"
                         :semantic-conditions="templateDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
@@ -472,8 +478,8 @@ const exportPdf = async () => {
     </div>
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="$router.back()">Cancel</button>
-        <button class="btn btn-outline md:w-32" @click="exportPdf">Export PDF</button>
+        <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn flex-1 btn-primary"
@@ -486,7 +492,9 @@ const exportPdf = async () => {
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn flex-1 btn-primary"
-          :disabled="isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData"
+          :disabled="
+            (!isCreator && !isReviewer) || isSubmitting || hasChangeRequest || hasOpenDecisions || !!compareChangesData
+          "
           @click="submitContract"
         >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>

@@ -37,20 +37,17 @@
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { isClauseBlock, type ClauseBlock } from '@/modules/template-repository/models/contract-template'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import {
-  getDocumentBlocksFromTemplateData,
-  getSemanticConditionsFromTemplateData,
-} from '@template-repository/store/dcsDraftStore'
+import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const {
-  documentBlocks,
-  documentOutline,
+  blocks,
+  layout,
   semanticConditions: mainSemanticConditions,
   subTemplateSnapshots,
 } = storeToRefs(store)
@@ -59,29 +56,18 @@ const { pendingClauseDraft } = storeToRefs(uiStore)
 const editingBlockId = ref<string | null>(null)
 const newClauseTitle = ref('')
 const newClauseText = ref('')
-const rootBlock = computed(() => documentOutline.value.find((block) => block.isRoot))
 
-/** Extract conditionIds from clause text placeholders {{conditionId.parameterName}}. */
-function conditionIdsFromText(text: string): string[] {
-  const set = new Set<string>()
-  const re = /\{\{([^}]+)\}\}/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    const inner = m[1] ?? ''
-    const dot = inner.indexOf('.')
-    const conditionId = dot >= 0 ? inner.slice(0, dot) : inner
-    if (conditionId) set.add(conditionId)
-  }
-  return [...set]
-}
+const rootBlock = computed(() => layout.value.find((n) => n['dcs:isRoot']))
 
-const clauseBlocks = computed((): ClauseBlock[] => {
-  const mainClauses = documentBlocks.value.filter((b): b is ClauseBlock => isClauseBlock(b))
-  const subTemplateClauses = subTemplateSnapshots.value.flatMap((subTemplate) =>
-    getDocumentBlocksFromTemplateData(subTemplate.template_data).filter((block): block is ClauseBlock =>
-      isClauseBlock(block),
-    ),
-  )
+const clauseBlocks = computed((): DcsClause[] => {
+  const mainClauses = blocks.value.filter((b): b is DcsClause => b['@type'] === 'dcs:Clause')
+  const subTemplateClauses = subTemplateSnapshots.value.flatMap((subTemplate) => {
+    const subBlocks = subTemplate.template_data
+    if (!subBlocks || typeof subBlocks !== 'object') return []
+    const doc = subBlocks as import('@/models/dcs-jsonld').DcsDocumentData
+    if (!doc['dcs:documentStructure']) return []
+    return doc['dcs:documentStructure']['dcs:blocks'].filter((b): b is DcsClause => b['@type'] === 'dcs:Clause')
+  })
   return [...mainClauses, ...subTemplateClauses]
 })
 
@@ -96,14 +82,12 @@ const newClauseSemanticConditions = computed(() => semanticConditions.value)
 const draftTitle = computed(() => pendingClauseDraft.value?.title ?? newClauseTitle.value)
 const draftText = computed(() => pendingClauseDraft.value?.text ?? newClauseText.value)
 
-function addClause(payload: { title: string; text: string }) {
-  const text = payload.text
-  if (!text.trim()) return
-  const conditionIds = conditionIdsFromText(text)
+function addClause(payload: { title: string; content: DcsContentSegment[] }) {
+  const content = payload.content
+  if (!content.length) return
   store.addClause({
     title: payload.title.trim(),
-    text,
-    conditionIds,
+    content,
   })
   newClauseTitle.value = ''
   newClauseText.value = ''
@@ -124,14 +108,12 @@ function cancelEdit() {
   editingBlockId.value = null
 }
 
-function saveEditedClause(payload: { blockId: string; title: string; text: string }) {
-  const text = payload.text
+function saveEditedClause(payload: { blockId: string; title: string; content: DcsContentSegment[] }) {
   const title = payload.title.trim()
-  if (!text.trim()) return
+  if (!payload.content.length) return
   store.updateClause(payload.blockId, {
     title,
-    text,
-    conditionIds: conditionIdsFromText(text),
+    content: payload.content,
   })
   if (editingBlockId.value === payload.blockId) cancelEdit()
 }
@@ -145,6 +127,6 @@ function placeClause(blockId: string) {
   const root = rootBlock.value
   if (!root) return
   uiStore.startClausePlacement(blockId)
-  uiStore.openAddBlockModal(root.blockId, root.children.length)
+  uiStore.openAddBlockModal(root['@id'], root['dcs:children']['@list'].length)
 }
 </script>

@@ -54,22 +54,29 @@ type Contract struct {
 	Description     *string        `db:"description"`
 	Responsible     *Responsible   `db:"responsible"`
 	ContractData    *datatype.JSON `db:"contract_data"`
+	TemplateDID     string         `db:"template_did"`
+	TemplateVersion int            `db:"template_version"`
 }
 
 type ContractMetadata struct {
-	DID             string       `db:"did"`
-	ContractVersion int          `db:"contract_version"`
-	State           string       `db:"state"`
-	CreatedBy       string       `db:"created_by"`
-	CreatedAt       time.Time    `db:"created_at"`
-	UpdatedAt       time.Time    `db:"updated_at"`
-	StartDate       *time.Time   `db:"start_date"`
-	ExpDate         *time.Time   `db:"exp_date"`
-	ExpPolicy       *string      `db:"exp_policy"`
-	ExpNoticePeriod *int         `db:"exp_notice_period"`
-	Name            *string      `db:"name"`
-	Responsible     *Responsible `db:"responsible"`
-	Description     *string      `db:"description"`
+	DID                  string       `db:"did"`
+	ContractVersion      int          `db:"contract_version"`
+	State                string       `db:"state"`
+	CreatedBy            string       `db:"created_by"`
+	CreatedAt            time.Time    `db:"created_at"`
+	UpdatedAt            time.Time    `db:"updated_at"`
+	StartDate            *time.Time   `db:"start_date"`
+	ExpDate              *time.Time   `db:"exp_date"`
+	ExpPolicy            *string      `db:"exp_policy"`
+	ExpNoticePeriod      *int         `db:"exp_notice_period"`
+	Name                 *string      `db:"name"`
+	Responsible          *Responsible `db:"responsible"`
+	Description          *string      `db:"description"`
+	TemplateDID          string       `db:"template_did"`
+	TemplateVersion      int          `db:"template_version"`
+	Outdated             *bool        `db:"outdated"`
+	LatestTemplateDID    *string      `db:"latest_template_did"`
+	TemplateIsDeprecated *bool        `db:"template_is_deprecated"`
 }
 
 type ContractProcessData struct {
@@ -114,6 +121,8 @@ type ContractHistory struct {
 	Description     *string        `db:"description"`
 	Responsible     *Responsible   `db:"responsible"`
 	ContractData    *datatype.JSON `db:"contract_data"`
+	TemplateDID     string         `db:"template_did"`
+	TemplateVersion int            `db:"template_version"`
 }
 
 type ContractArchiveEntry struct {
@@ -145,6 +154,12 @@ type SearchValues struct {
 	ContractData    string
 }
 
+type ContractPDFState struct {
+	IPFSCID         string `db:"pdf_ipfs_cid"`
+	RendererVersion string `db:"pdf_renderer_version"`
+	C2PAState       string `db:"pdf_c2pa_state"`
+}
+
 type ContractRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data Contract) (*time.Time, error)
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
@@ -160,4 +175,6 @@ type ContractRepo interface {
 	ReadAllMetaDataByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues, pagination datatype.Pagination) ([]ContractMetadata, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractUpdateData) error
+	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractPDFState, error)
+	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractPDFState) error
 }

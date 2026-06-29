@@ -1,0 +1,17 @@
+stateDiagram-v2
+    direction TB
+
+    [*] --> Draft : Creator: POST /contract/create
+    Draft --> Negotiation : Creator: POST /contract/submit
+    Draft --> Draft : Creator: PUT /contract/update
+
+    Negotiation --> Submitted : Creator: POST /contract/approve
+    Negotiation --> Negotiation : Creator: PUT /contract/negotiate
+    Negotiation --> Terminated : Manager: POST /contract/terminate
+
+    Reviewed --> Approved : Approver: POST /contract/approve
+    Reviewed --> Rejected : Approver: POST /contract/reject
+    Reviewed --> Submitted : Approver: POST /contract/submit
+
+    Submitted --> Reviewed : Reviewer: POST /contract/submit
+    Submitted --> Rejected : Reviewer: POST /contract/submit

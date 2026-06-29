@@ -76,14 +76,15 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	}
 
 	cmd := command.CreateCmd{
-		DID:          *did,
-		CreatedBy:    middleware.GetParticipantID(ctx),
-		HolderDID:    middleware.GetHolderDID(ctx),
-		TemplateType: templateType,
-		Name:         req.Name,
-		Description:  req.Description,
-		TemplateData: &templateData,
-		UserRoles:    middleware.GetUserRoles(ctx),
+		DID:            *did,
+		CreatedBy:      middleware.GetParticipantID(ctx),
+		HolderDID:      middleware.GetHolderDID(ctx),
+		TemplateType:   templateType,
+		Name:           req.Name,
+		Description:    req.Description,
+		DocumentNumber: req.DocumentNumber,
+		TemplateData:   &templateData,
+		UserRoles:      middleware.GetUserRoles(ctx),
 	}
 	createHandler := command.Creator{
 		DB:     s.DB,
@@ -439,6 +440,7 @@ func (s *templateRepositorysrvc) Retrieve(ctx context.Context, req *templaterepo
 			CreatedAt:      item.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:      item.UpdatedAt.Format(time.RFC3339),
 			Responsible:    item.Responsible,
+			LatestDid:      item.LatestDID,
 		})
 	}
 
@@ -632,15 +634,9 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	newDID, err := base.GetDID(datatype.TemplateResourceType)
-	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
-	}
-
 	cmd := command.RegisterCmd{
 		DID:          req.Did,
-		NewDID:       *newDID,
-		Version:      req.Version,
+		Version:      base.DerefInt(req.Version),
 		RegisteredBy: middleware.GetParticipantID(ctx),
 		HolderDID:    middleware.GetHolderDID(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
@@ -650,13 +646,13 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 		CTRepo:   s.CTRepo,
 		FCClient: s.FCClient,
 	}
-	err = handler.Handle(ctx, cmd)
+	did, err := handler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
 	return &templaterepository.ContractTemplateRegisterResponse{
-		Did: *newDID,
+		Did: *did,
 	}, nil
 }
 

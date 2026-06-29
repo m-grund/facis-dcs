@@ -11,7 +11,7 @@ onMounted(async () => {
   const result = await authenticationService.refresh()
   // Redirect to templates list on success
   if (result) {
-    await router.replace({ name: ROUTES.TEMPLATES.LIST })
+    await router.replace({ name: ROUTES.FRONT_PAGE })
   } else {
     await router.replace({ name: ROUTES.HOME })
   }

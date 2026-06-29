@@ -24,6 +24,8 @@ export interface ContractSubmitRequest {
   updated_at: string
   forward_to?: ContractActionFlag
   comments?: string[]
+  /** Optional updated contract data to persist atomically before submit validation */
+  contract_data?: ContractData
   reviewers?: string[]
   approvers?: string[]
   negotiators?: string[]
