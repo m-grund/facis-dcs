@@ -182,6 +182,15 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 			return fmt.Errorf("could not get contract data: %w", err)
 		}
 
+		trusted, err := h.SRepo.IsTrustedPeer(ctx, tx, oldData.Origin)
+		if err != nil {
+			return fmt.Errorf("could not check trusted peer: %w", err)
+		}
+
+		if !trusted {
+			return fmt.Errorf("contract origin peer is not trusted peer list")
+		}
+
 		err = tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
@@ -225,7 +234,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 			Origin:          contract.Origin,
 		}
 
-		result, err := dcstodcssynchronizer.ReadAllTasksData(ctx, h.DB, h.CRepo, h.RTRepo, h.ATRepo, h.NTRepo, h.NRepo, h.SRepo, &contract.DID)
+		result, err := dcstodcssynchronizer.ReadAllTasksData(ctx, h.DB, h.CRepo, h.RTRepo, h.ATRepo, h.NTRepo, h.NRepo, &contract.DID)
 		if err != nil {
 			return err
 		}
@@ -241,7 +250,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		}
 
 		client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
-		_, err = client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
+		_, remoteSyncErr := client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
 			OriginDid:            origin,
 			Contract:             &contractItem,
 			ReviewTasks:          result.ReviewTasks,
@@ -261,7 +270,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 			}
 		}(tx)
 
-		if err != nil {
+		if remoteSyncErr != nil {
 
 			err = h.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, oldData.Origin)
 			if err != nil {

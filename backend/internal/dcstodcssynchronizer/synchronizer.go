@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
@@ -107,7 +108,7 @@ func ReadAllTasksData(ctx context.Context, db *sqlx.DB,
 	atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo,
 	nRepo db.NegotiationRepo,
-	sRepo db2.SyncRepository, did *string) (*QueryTaskDataResult, error) {
+	did *string) (*QueryTaskDataResult, error) {
 
 	rtQry := query.GetAllReviewTasksForDIDQry{
 		DID:         *did,
@@ -281,7 +282,7 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 		Origin:          contractResult.Origin,
 	}
 
-	result, err := ReadAllTasksData(ctx, s.DB, s.CRepo, s.RTRepo, s.ATRepo, s.NTRepo, s.NRepo, s.SRepo, &contractResult.DID)
+	result, err := ReadAllTasksData(ctx, s.DB, s.CRepo, s.RTRepo, s.ATRepo, s.NTRepo, s.NRepo, &contractResult.DID)
 	if err != nil {
 		return err
 	}
@@ -292,8 +293,19 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 	}
 
 	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
+
+	untrustedPeers, err := s.checkForUntrustedPeers(ctx, origin, responsibleList)
+	if err != nil {
+		return err
+	}
+
 	for _, responsible := range responsibleList {
 		if responsible == origin {
+			continue
+		}
+
+		if slices.Contains(untrustedPeers, responsible) {
+			log.Printf(ctx, "synchronization to untrusted peer %s is not allowed", responsible)
 			continue
 		}
 
@@ -303,7 +315,10 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 		}
 
 		client := NewDCSToDCSHttpClient(hostname)
-		_, err = client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
+
+		time.Sleep(time.Second * 3)
+
+		_, remoteSyncErr := client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
 			OriginDid:            origin,
 			Contract:             &contractItem,
 			ReviewTasks:          result.ReviewTasks,
@@ -313,53 +328,72 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 			NegotiationDecisions: result.NegotiationDecisions,
 		})
 
+		tx, err := s.DB.BeginTxx(ctx, nil)
 		if err != nil {
-
-			tx, err2 := s.DB.BeginTxx(ctx, nil)
-			if err2 != nil {
-				return fmt.Errorf("could not start transaction: %w", err)
+			return fmt.Errorf("could not start transaction: %w", err)
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf(ctx, "could not rollback transaction: %v", err)
 			}
-			defer func(tx *sqlx.Tx) {
-				if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-					log.Printf(ctx, "could not rollback transaction: %v", err)
-				}
-			}(tx)
+		}(tx)
 
-			err2 = s.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, responsible)
-			if err2 != nil {
-				return fmt.Errorf("could not create or update sync fail entry: %w", err2)
-			}
+		if remoteSyncErr != nil {
 
-			err2 = tx.Commit()
-			if err2 != nil {
-				return fmt.Errorf("could not commit transaction: %w", err)
+			err = s.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, responsible)
+			if err != nil {
+				return fmt.Errorf("could not create or update sync fail entry: %w", err)
 			}
 
 		} else {
 
-			tx, err2 := s.DB.BeginTxx(ctx, nil)
-			if err2 != nil {
-				return fmt.Errorf("could not start transaction: %w", err)
-			}
-			defer func(tx *sqlx.Tx) {
-				if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-					log.Printf(ctx, "could not rollback transaction: %v", err)
-				}
-			}(tx)
-
-			err2 = s.SRepo.DeleteSyncFailEntry(ctx, tx, responsible)
-			if err2 != nil {
-				return fmt.Errorf("could not create or update sync fail entry: %w", err2)
-			}
-
-			err2 = tx.Commit()
-			if err2 != nil {
-				return fmt.Errorf("could not commit transaction: %w", err)
+			err = s.SRepo.DeleteSyncFailEntry(ctx, tx, responsible)
+			if err != nil {
+				return fmt.Errorf("could not create or update sync fail entry: %w", err)
 			}
 
 		}
 
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func (s *DCSToDCSSynchronizer) checkForUntrustedPeers(ctx context.Context, origin string, responsible []string) ([]string, error) {
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf(ctx, "could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	var untrustedPeers []string
+	for _, peer := range responsible {
+		if peer == origin {
+			continue
+		}
+
+		trusted, err := s.SRepo.IsTrustedPeer(ctx, tx, peer)
+		if err != nil {
+			return nil, fmt.Errorf("could not check trusted peer: %w", err)
+		}
+
+		if !trusted {
+			untrustedPeers = append(untrustedPeers, peer)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("could not commit transaction: %w", err)
+	}
+
+	return untrustedPeers, nil
 }

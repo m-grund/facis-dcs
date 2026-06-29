@@ -116,7 +116,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 
 	} else {
-		err := h.CRepo.Create(ctx, tx, data)
+		err := h.CRepo.RemoteCreate(ctx, tx, data)
 		if err != nil {
 			return fmt.Errorf("could not create contract: %w", err)
 		}

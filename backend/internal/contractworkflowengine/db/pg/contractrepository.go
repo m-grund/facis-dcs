@@ -21,10 +21,6 @@ type PostgresContractRepo struct {
 
 func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.Contract) error {
 
-	if data.CreatedAt.IsZero() {
-		data.CreatedAt = time.Now()
-	}
-
 	statement := `
         INSERT INTO contracts (
             did, origin, created_by, state, name,
@@ -33,6 +29,24 @@ func (r *PostgresContractRepo) Create(ctx context.Context, tx *sqlx.Tx, data db.
     `
 	_, err := tx.ExecContext(ctx, statement,
 		data.DID, data.Origin, data.CreatedBy, data.State, data.Name,
+		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion, data.Responsible)
+	return err
+}
+
+func (r *PostgresContractRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.Contract) error {
+
+	if data.CreatedAt.IsZero() {
+		data.CreatedAt = time.Now()
+	}
+
+	statement := `
+        INSERT INTO contracts (
+            did, origin, created_at, created_by, updated_at, state, name,
+            description, contract_data, template_did, template_version, responsible
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID, data.Origin, data.CreatedAt, data.CreatedBy, data.UpdatedAt, data.State, data.Name,
 		data.Description, data.ContractData, data.TemplateDID, data.TemplateVersion, data.Responsible)
 	return err
 }

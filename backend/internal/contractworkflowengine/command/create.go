@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 
@@ -143,7 +142,6 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		TemplateDID:     cmd.TemplateDID,
 		TemplateVersion: contractTemplate.TemplateVersion,
 		Responsible:     &resp,
-		CreatedAt:       time.Now().UTC(),
 	}
 	err = h.CRepo.Create(ctx, tx, data)
 	if err != nil {

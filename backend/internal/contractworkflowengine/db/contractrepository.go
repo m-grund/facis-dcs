@@ -211,6 +211,7 @@ type ContractPDFState struct {
 
 type ContractRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data Contract) error
+	RemoteCreate(ctx context.Context, tx *sqlx.Tx, data Contract) error
 	CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractHistory, error)
 	ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*Contract, error)
