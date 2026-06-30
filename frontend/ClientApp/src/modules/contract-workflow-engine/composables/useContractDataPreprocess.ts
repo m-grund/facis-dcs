@@ -26,7 +26,7 @@ export function useContractDataPreprocess() {
     if (!isDcsDocumentData(cd)) return null
 
     const contractData = cd as DcsContractData
-    const rawBlocks: DcsBlock[] = deepClone(contractData['dcs:documentStructure']['dcs:blocks'])
+    const rawBlocks: DcsBlock[] = deepClone(contractData['dcs:documentStructure']['dcs:blocks']['@list'])
     const rawLayout: DcsLayoutNode[] = deepClone(contractData['dcs:documentStructure']['dcs:layout'])
     const subTemplateSnapshots = deserializeSubTemplates(contractData)
     const blocks: (DcsBlock | MergedApprovedTemplateBlock)[] = [...rawBlocks]

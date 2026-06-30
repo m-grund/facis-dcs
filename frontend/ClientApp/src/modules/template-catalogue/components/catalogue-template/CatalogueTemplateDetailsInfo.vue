@@ -17,8 +17,8 @@
               :class="templateType === TemplateType.frameContract ? 'border-primary bg-primary/5' : 'border-base-300'"
             >
               <div class="card-body gap-1 p-4">
-                <span class="card-title text-sm">Frame Contract</span>
-                <p class="text-xs font-normal text-base-content/60">Top-level agreement that groups subcontracts</p>
+                <span class="card-title text-sm">Contract</span>
+                <p class="text-xs font-normal text-base-content/60">Top-level contract template that can serve as parent</p>
               </div>
             </div>
             <div
@@ -26,8 +26,8 @@
               :class="templateType === TemplateType.subContract ? 'border-primary bg-primary/5' : 'border-base-300'"
             >
               <div class="card-body gap-1 p-4">
-                <span class="card-title text-sm">Subcontract</span>
-                <p class="text-xs font-normal text-base-content/60">Scoped agreement under a frame contract</p>
+                <span class="card-title text-sm">Component</span>
+                <p class="text-xs font-normal text-base-content/60">Reusable partial contract, embeddable in other templates</p>
               </div>
             </div>
           </div>

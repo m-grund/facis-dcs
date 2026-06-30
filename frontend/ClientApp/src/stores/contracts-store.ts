@@ -27,15 +27,13 @@ export const useContractsStore = defineStore('contracts', () => {
   const hasApprovedTemplates = computed(() =>
     contractTemplates.value.some(
       (template) =>
-        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
-        template.template_type === TemplateType.frameContract,
+        template.state === TemplateState.registered || template.state === TemplateState.published,
     ),
   )
   const approvedTemplates = computed(() =>
     contractTemplates.value.filter(
       (template) =>
-        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
-        template.template_type === TemplateType.frameContract,
+        template.state === TemplateState.registered || template.state === TemplateState.published,
     ),
   )
 

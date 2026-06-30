@@ -23,6 +23,7 @@
   <div class="mt-5 grow">
     <div class="mx-auto max-w-5xl p-6">
       <div class="grid grid-cols-1 gap-4">
+        <slot name="before-tabs" />
         <!-- DETAILS TAB -->
         <div v-show="activeTab === 'details'">
           <div class="card border border-base-300 bg-base-100 shadow-sm">

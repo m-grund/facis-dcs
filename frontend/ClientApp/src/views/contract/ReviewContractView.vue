@@ -225,8 +225,8 @@ const exportPDF = async () => {
 </script>
 
 <template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <div v-if="!!contract">
+  <div class="flex h-full flex-col">
+    <div v-if="!!contract" class="flex flex-1 flex-col">
       <div class="flex flex-1 flex-col">
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">

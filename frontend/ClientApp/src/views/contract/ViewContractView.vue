@@ -12,6 +12,8 @@ import { useTemplateDraftStore } from '@/modules/template-repository/store/templ
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { useContractsStore } from '@/stores/contracts-store'
+import { ROUTES } from '@/router/router'
 import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
@@ -21,6 +23,8 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 
 const authStore = useAuthStore()
+const contractsStore = useContractsStore()
+const { contracts } = storeToRefs(contractsStore)
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
@@ -63,8 +67,21 @@ watch(
   { immediate: true },
 )
 
+const parentContract = computed(() => {
+  const parentDid = contract.value?.contract_data?.['dcs:parentContract']?.['@id']
+  if (!parentDid) return null
+  return contracts.value.find((c) => c.did === parentDid) ?? { did: parentDid, name: parentDid } as Contract
+})
+
+const childContracts = computed(() =>
+  contracts.value.filter(
+    (c) => c.contract_data?.['dcs:parentContract']?.['@id'] === contract.value?.did,
+  ),
+)
+
 onMounted(() => {
   templateEditorUiStore.reset({ workflow: 'contract', isTemplateEditable: false })
+  if (contracts.value.length === 0) contractsStore.loadContracts()
 })
 
 onUnmounted(() => {
@@ -117,8 +134,8 @@ const exportPDF = async () => {
 </script>
 
 <template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <div v-if="!!contract">
+  <div class="flex h-full flex-col">
+    <div v-if="!!contract" class="flex flex-1 flex-col">
       <div class="flex flex-1 flex-col">
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
@@ -144,6 +161,36 @@ const exportPDF = async () => {
             <div class="grid grid-cols-1 gap-4">
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" disabled />
+
+                <!-- Parent contract -->
+                <div v-if="parentContract" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-2">
+                    <h2 class="card-title text-sm">Part of Contract</h2>
+                    <RouterLink
+                      :to="{ name: ROUTES.CONTRACTS.VIEW, params: { did: parentContract.did } }"
+                      class="badge badge-outline badge-primary"
+                    >
+                      {{ parentContract.name ?? parentContract.did }}
+                    </RouterLink>
+                  </div>
+                </div>
+
+                <!-- Child contracts -->
+                <div v-if="childContracts.length > 0" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-3">
+                    <h2 class="card-title text-sm">Component Contracts</h2>
+                    <div class="flex flex-wrap gap-2">
+                      <RouterLink
+                        v-for="child in childContracts"
+                        :key="child.did"
+                        :to="{ name: ROUTES.CONTRACTS.VIEW, params: { did: child.did } }"
+                        class="badge badge-outline badge-secondary"
+                      >
+                        {{ child.name ?? child.did }}
+                      </RouterLink>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div v-show="activeTab === 'content'">
