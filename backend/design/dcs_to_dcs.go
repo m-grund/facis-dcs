@@ -83,8 +83,8 @@ var DCSToDCSContractNegotiationDecisionItem = Type("DCSToDCSContractNegotiationD
 	Required("id", "negotiation_id", "negotiator")
 })
 
-var DCSToDCSContractSyncRequest = Type("DCSToDCSContractSyncRequest", func() {
-	Description("Contract sync request")
+var DCSToDCSContractPostSyncRequest = Type("DCSToDCSContractPostSyncRequest", func() {
+	Description("To update the contract data on a peer")
 
 	Attribute("from_peer_did", String, "The did of the peer where the message comes from")
 
@@ -98,12 +98,30 @@ var DCSToDCSContractSyncRequest = Type("DCSToDCSContractSyncRequest", func() {
 	Required("from_peer_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks")
 })
 
-var DCSToDCSContractSyncResponse = Type("DCSToDCSContractSyncResponse", func() {
+var DCSToDCSContractPostSyncResponse = Type("DCSToDCSContractPostSyncResponse", func() {
 	Description("Result for syncing the contract")
 
-	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("from_peer_did", String, "Decentralized Identifier of the peer")
+
+	Required("from_peer_did")
+})
+
+var DCSToDCSContractGetSyncRequest = Type("DCSToDCSContractGetSyncRequest", func() {
+	Description("To request a peer update from the main peer")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "DID for contract that should be synced")
 
 	Required("did")
+})
+
+var DCSToDCSContractGetSyncResponse = Type("DCSToDCSContractGetSyncResponse", func() {
+	Description("Result of the peer update request")
+
+	Attribute("from_peer_did", String, "Decentralized Identifier of the peer")
+
+	Required("from_peer_did")
 })
 
 var DCSToDCSContractActionRequest = Type("DCSToDCSContractActionRequest", func() {
@@ -112,31 +130,63 @@ var DCSToDCSContractActionRequest = Type("DCSToDCSContractActionRequest", func()
 	Attribute("from_peer_did", String, "The did of the peer where the message comes from")
 	Attribute("payload", Any, "Action request payload")
 	Attribute("action", String, "The action to perform")
+	Attribute("component", String, "The component where action is executed")
 
-	Required("action", "from_peer_did", "payload")
+	Required("action", "from_peer_did", "payload", "component")
 })
 
 var DCSToDCSContractActionResponse = Type("DCSToDCSContractActionResponse", func() {
 	Description("Result for action request")
 
-	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("from_peer_did", String, "Decentralized Identifier of the peer")
 
-	Required("did")
+	Required("from_peer_did")
 })
 
 var _ = Service("DcsToDcs", func() {
 	Description("DCS supports direct interoperability between two or more DCS instances, enabling automated contract lifecycle operations across organizational boundaries.")
 
-	Method("sync", func() {
+	Method("post_sync", func() {
 
-		Payload(DCSToDCSContractSyncRequest)
-		Result(DCSToDCSContractSyncResponse)
+		Payload(DCSToDCSContractPostSyncRequest)
+		Result(DCSToDCSContractPostSyncResponse)
 
 		Error("bad_request", ErrorResult, "Bad request")
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			POST("/peer/sync")
+			POST("/peer/contracts/")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("get_sync", func() {
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+		})
+
+		Payload(DCSToDCSContractGetSyncRequest)
+		Result(DCSToDCSContractGetSyncResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/peer/contracts/sync")
+			Param("did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -152,7 +202,7 @@ var _ = Service("DcsToDcs", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
-			POST("/peer/action")
+			POST("/peer/contracts/action")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

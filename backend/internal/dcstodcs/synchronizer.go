@@ -1,4 +1,4 @@
-package dcstodcssynchronizer
+package dcstodcs
 
 import (
 	"context"
@@ -9,11 +9,9 @@ import (
 	"slices"
 	"time"
 
-	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
+	"digital-contracting-service/internal/base/conf"
 
-	"digital-contracting-service/internal/contractworkflowengine/conf"
-
-	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
@@ -95,7 +93,7 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 				return
 			}
 
-			err = s.doPeerSync(ctx, didString)
+			err = s.doContractPeerSync(ctx, didString)
 			if err != nil {
 				log.Errorf(ctx, err, "failed to do peer sync, %s", evt.Data())
 			}
@@ -123,7 +121,7 @@ func (s *DCSToDCSSynchronizer) startSyncFailScheduler(ctx context.Context, inter
 			}
 		}(tx)
 
-		attempts, err := s.SRepo.ReadAllSyncFailEntries(ctx, tx)
+		attempts, err := s.SRepo.GetPendingSyncFails(ctx, tx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read sync fail entries: %w", err)
 		}
@@ -148,19 +146,9 @@ func (s *DCSToDCSSynchronizer) startSyncFailScheduler(ctx context.Context, inter
 			}
 		}(tx)
 
-		processData, err := s.CRepo.ReadProcessDataByDID(ctx, tx, attempt.DID)
+		err = s.doContractPeerSync(ctx, attempt.DID)
 		if err != nil {
-			return fmt.Errorf("could not read contract: %w", err)
-		}
-
-		evt := contractevents.OutdatedPeerEvent{
-			DID:        attempt.DID,
-			OccurredAt: time.Now().UTC(),
-			Origin:     processData.Origin,
-		}
-		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-		if err != nil {
-			return fmt.Errorf("could not create event: %w", err)
+			return err
 		}
 
 		return tx.Commit()
@@ -174,50 +162,21 @@ func (s *DCSToDCSSynchronizer) startSyncFailScheduler(ctx context.Context, inter
 
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
-
 		syncFails, err := readSyncFails()
 		if err != nil {
 			log.Printf(ctx, "could not read sync fails: %v", err)
 			continue
 		}
 
-		var successful []string
 		for _, syncFail := range syncFails {
-			err = syncFailHandler(syncFail, peerDID)
-			if err != nil {
+			if err := syncFailHandler(syncFail, peerDID); err != nil {
 				log.Printf(ctx, "synchronization was not successful: %v", err)
-				continue
 			}
-
-			successful = append(successful, syncFail.DID)
-		}
-
-		tx, err := s.DB.BeginTxx(ctx, nil)
-		if err != nil {
-			log.Printf(ctx, "could not start transaction: %v", err)
-			continue
-		}
-		defer func(tx *sqlx.Tx) {
-			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-				log.Printf(ctx, "could not rollback transaction: %v", err)
-			}
-		}(tx)
-
-		for _, entry := range successful {
-			err := s.SRepo.DeleteSyncFailEntry(ctx, tx, entry)
-			if err != nil {
-				log.Printf(ctx, "could not delete sync fail entry: %v", err)
-			}
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			log.Printf(ctx, "could not commit transaction: %v", err)
 		}
 	}
 }
 
-func ReadAllTasksData(ctx context.Context, db *sqlx.DB,
+func ReadAllContractTasksData(ctx context.Context, db *sqlx.DB,
 	rtRepo db.ReviewTaskRepo,
 	atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo,
@@ -339,7 +298,7 @@ func ReadAllTasksData(ctx context.Context, db *sqlx.DB,
 	}, nil
 }
 
-func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error {
+func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did string) error {
 	qry := contract.GetByIDQry{
 		DID:         did,
 		RetrievedBy: middleware.GetParticipantID(ctx),
@@ -396,7 +355,7 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 		Origin:          contractResult.Origin,
 	}
 
-	result, err := ReadAllTasksData(ctx, s.DB, s.RTRepo, s.ATRepo, s.NTRepo, s.NRepo, &contractResult.DID)
+	result, err := ReadAllContractTasksData(ctx, s.DB, s.RTRepo, s.ATRepo, s.NTRepo, s.NRepo, &contractResult.DID)
 	if err != nil {
 		return err
 	}
@@ -407,68 +366,63 @@ func (s *DCSToDCSSynchronizer) doPeerSync(ctx context.Context, did string) error
 	}
 
 	responsibleList := contractResult.Responsible.GetUniqueResponsibleList()
-	untrustedPeers, err := remotesync.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, responsibleList)
+	untrustedPeers, err := CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, responsibleList)
 	if err != nil {
 		return err
 	}
 
-	for _, responsible := range responsibleList {
-		if responsible == localPeer {
-			continue
-		}
-
-		if slices.Contains(untrustedPeers, responsible) {
-			log.Printf(ctx, "synchronization to untrusted peer %s is not allowed", responsible)
-			continue
-		}
-
-		hostname, err := base.DIDWebToHostname(responsible)
-		if err != nil {
-			return err
-		}
-
-		client := NewDCSToDCSHttpClient(hostname)
-
-		_, remoteSyncErr := client.Sync(ctx, &dcstodcs.DCSToDCSContractSyncRequest{
-			FromPeerDid:          localPeer,
-			Contract:             &contractItem,
-			ReviewTasks:          result.ReviewTasks,
-			ApprovalTasks:        result.ApprovalTasks,
-			NegotiationTasks:     result.NegotiationTasks,
-			NegotiationItems:     result.Negotiations,
-			NegotiationDecisions: result.NegotiationDecisions,
-		})
-
-		tx, err := s.DB.BeginTxx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("could not start transaction: %w", err)
-		}
-		defer func(tx *sqlx.Tx) {
-			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-				log.Printf(ctx, "could not rollback transaction: %v", err)
+	handleSync := func() error {
+		for _, responsible := range responsibleList {
+			if responsible == localPeer {
+				continue
 			}
-		}(tx)
+			if slices.Contains(untrustedPeers, responsible) {
+				return fmt.Errorf("synchronization to untrusted peer %s is not allowed", responsible)
+			}
 
-		if remoteSyncErr != nil {
-
-			err = s.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, contractItem.Did)
+			hostname, err := base.DIDWebToHostname(responsible)
 			if err != nil {
-				return fmt.Errorf("could not create or update sync fail entry: %w", err)
+				return err
 			}
 
-		} else {
-
-			err = s.SRepo.DeleteSyncFailEntry(ctx, tx, contractItem.Did)
+			client := NewDCSToDCSHttpClient(hostname)
+			_, err = client.PostSync(ctx, &dcstodcs.DCSToDCSContractPostSyncRequest{
+				FromPeerDid:          localPeer,
+				Contract:             &contractItem,
+				ReviewTasks:          result.ReviewTasks,
+				ApprovalTasks:        result.ApprovalTasks,
+				NegotiationTasks:     result.NegotiationTasks,
+				NegotiationItems:     result.Negotiations,
+				NegotiationDecisions: result.NegotiationDecisions,
+			})
 			if err != nil {
-				return fmt.Errorf("could not create or update sync fail entry: %w", err)
+				return err
 			}
 		}
+		return nil
+	}
 
-		err = tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
+	syncError := handleSync()
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf(ctx, "could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	if syncError != nil {
+		if err := s.SRepo.CreateOrUpdateSyncFailEntry(ctx, tx, contractItem.Did); err != nil {
+			return fmt.Errorf("could not create or update sync fail entry: %w", err)
+		}
+	} else {
+		if err := s.SRepo.DeleteSyncFailEntry(ctx, tx, contractItem.Did); err != nil {
+			return fmt.Errorf("could not delete sync fail entry: %w", err)
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }

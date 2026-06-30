@@ -7,9 +7,8 @@ import (
 	"slices"
 	"time"
 
-	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
-
-	"digital-contracting-service/internal/dcstodcssynchronizer"
+	"digital-contracting-service/internal/dcstodcs"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
@@ -46,7 +45,7 @@ type contractWorkflowEnginesrvc struct {
 	FCClient             *fcclient.FederatedCatalogueClient
 	DIDDocument          base.DIDDocument
 	ATrailReader         base.AuditTrailReader
-	DCSToDCSSynchronizer dcstodcssynchronizer.DCSToDCSSynchronizer
+	DCSToDCSSynchronizer dcstodcs.DCSToDCSSynchronizer
 	auth.JWTAuthenticator
 }
 

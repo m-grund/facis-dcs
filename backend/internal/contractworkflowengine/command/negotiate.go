@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
-	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/base"
 
@@ -75,9 +75,9 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.CallRemoteAction(ctx, h.DB, h.SRepo, "submit", localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.Negotiate.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
 		if err != nil {
-			return fmt.Errorf("could not call remote action: %w", err)
+			return err
 		}
 
 		return nil

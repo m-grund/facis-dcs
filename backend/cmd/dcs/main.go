@@ -13,9 +13,8 @@ import (
 	"sync"
 	"syscall"
 
-	pq2 "digital-contracting-service/internal/dcstodcssynchronizer/db/pg"
-
-	"digital-contracting-service/internal/dcstodcssynchronizer"
+	dcstodcs2 "digital-contracting-service/internal/dcstodcs"
+	pq2 "digital-contracting-service/internal/dcstodcs/db/pg"
 
 	"digital-contracting-service/internal/signingmanagement/dss"
 
@@ -244,7 +243,7 @@ func main() {
 	}(cepSubClient)
 
 	syncRepo := pq2.PostgresSyncRepository{}
-	dcsToDcsSynchronizer := dcstodcssynchronizer.DCSToDCSSynchronizer{
+	dcsToDcsSynchronizer := dcstodcs2.DCSToDCSSynchronizer{
 		DB:          db,
 		CRepo:       &cweRepo,
 		NRepo:       cweNRepo,

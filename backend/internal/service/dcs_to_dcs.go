@@ -3,13 +3,18 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
+
+	command2 "digital-contracting-service/internal/contractworkflowengine/remotesync/command"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 
+	"digital-contracting-service/internal/base/datatype/componenttype"
+
 	"digital-contracting-service/internal/contractworkflowengine/command"
 
-	db2 "digital-contracting-service/internal/dcstodcssynchronizer/db"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync"
 
@@ -64,32 +69,152 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	}
 }
 
+func (s *dcsToDcssrvc) GetSync(ctx context.Context, req *dcstodcs.DCSToDCSContractGetSyncRequest) (res *dcstodcs.DCSToDCSContractGetSyncResponse, err error) {
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	cmd := command2.PeerUpdateRequestCmd{
+		ContractDID: req.Did,
+		FromPeerDID: localPeer,
+	}
+	handler := command2.PeerUpdateRequester{
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		DIDDocument: s.DIDDocument,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, dcstodcs.MakeInternalError(err)
+	}
+
+	return &dcstodcs.DCSToDCSContractGetSyncResponse{
+		FromPeerDid: localPeer,
+	}, nil
+}
+
 func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContractActionRequest) (res *dcstodcs.DCSToDCSContractActionResponse, err error) {
 
-	switch req.Action {
-	case "update":
-		cmd, err := remoteaction.ConvertAny[command.UpdateCmd](req.Payload)
-		handler := command.Updater{
-			DB:          s.DB,
-			CRepo:       s.CRepo,
-			RTRepo:      s.RTRepo,
-			ATRepo:      s.ATRepo,
-			NTRepo:      s.NTRepo,
-			NRepo:       s.NRepo,
-			SRepo:       s.SRepo,
-			DIDDocument: s.DIDDocument,
-		}
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	component, err := componenttype.NewComponentType(req.Component)
+	if err != nil {
+		return nil, dcstodcs.MakeInternalError(err)
+	}
+
+	if component != componenttype.ContractWorkflowEngine {
+		err := fmt.Errorf("unsupported component type for remote action: %s", component)
+		return nil, dcstodcs.MakeInternalError(err)
+	}
+
+	action, err := remoteaction.NewRemoteAction(req.Action)
+	if err != nil {
+		return nil, dcstodcs.MakeInternalError(err)
+	}
+
+	switch action {
+	case remoteaction.PeerUpdate:
+		cmd, err := base.ConvertAny[command2.PeerUpdateRequestCmd](req.Payload)
 		if err != nil {
 			return nil, dcstodcs.MakeInternalError(err)
 		}
 
+		handler := command2.PeerUpdateRequester{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			DIDDocument: s.DIDDocument,
+		}
 		err = handler.Handle(ctx, *cmd)
 		if err != nil {
 			return nil, dcstodcs.MakeInternalError(err)
 		}
 
-	case "submit":
-		cmd, err := remoteaction.ConvertAny[command.SubmitCmd](req.Payload)
+	case remoteaction.AcceptNegotiation:
+		cmd, err := base.ConvertAny[command.AcceptNegotiationCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.NegotiationAcceptor{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case remoteaction.Approve:
+		cmd, err := base.ConvertAny[command.ApproveCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Approver{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			ATRepo:      s.ATRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case remoteaction.Reject:
+		cmd, err := base.ConvertAny[command.RejectCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Rejecter{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			RTRepo:      s.RTRepo,
+			ATRepo:      s.ATRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case remoteaction.RejectNegotiation:
+		cmd, err := base.ConvertAny[command.RejectNegotiationCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.NegotiationRejector{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case remoteaction.Submit:
+		cmd, err := base.ConvertAny[command.SubmitCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
 		handler := command.Submitter{
 			DB:          s.DB,
 			CRepo:       s.CRepo,
@@ -100,25 +225,63 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 			SRepo:       s.SRepo,
 			DIDDocument: s.DIDDocument,
 		}
+		err = handler.Handle(ctx, *cmd)
 		if err != nil {
 			return nil, dcstodcs.MakeInternalError(err)
 		}
 
+	case remoteaction.Terminate:
+		cmd, err := base.ConvertAny[command.TerminateCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Terminator{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			RTRepo:      s.RTRepo,
+			ATRepo:      s.ATRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case remoteaction.Update:
+		cmd, err := base.ConvertAny[command.UpdateCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Updater{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			RTRepo:      s.RTRepo,
+			ATRepo:      s.ATRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
 		err = handler.Handle(ctx, *cmd)
 		if err != nil {
 			return nil, dcstodcs.MakeInternalError(err)
 		}
 
 	default:
-		log.Printf(ctx, "unknown action: %s", req.Action)
+		log.Printf(ctx, "unsupported remote action: %s", req.Action)
 	}
 
 	return &dcstodcs.DCSToDCSContractActionResponse{
-		Did: "",
+		FromPeerDid: localPeer,
 	}, nil
 }
 
-func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractSyncRequest) (res *dcstodcs.DCSToDCSContractSyncResponse, err error) {
+func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContractPostSyncRequest) (res *dcstodcs.DCSToDCSContractPostSyncResponse, err error) {
 
 	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
@@ -232,7 +395,7 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	cmd := remotesync.PeerSyncCmd{
+	cmd := command2.LocalPeerUpdateCmd{
 		FromPeerDID:          req.FromPeerDid,
 		LocalPeer:            localPeer,
 		ContractOrigin:       remoteContractData.Origin,
@@ -244,7 +407,7 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 		NegotiationDecisions: negotiationDecision,
 		DIDDocument:          s.DIDDocument,
 	}
-	handler := remotesync.PeerSynchronizer{
+	handler := command2.LocalPeerUpdater{
 		DB:     s.DB,
 		CTRepo: s.CTRepo,
 		CRepo:  s.CRepo,
@@ -258,8 +421,8 @@ func (s *dcsToDcssrvc) Sync(ctx context.Context, req *dcstodcs.DCSToDCSContractS
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	return &dcstodcs.DCSToDCSContractSyncResponse{
-		Did: req.Contract.Did,
+	return &dcstodcs.DCSToDCSContractPostSyncResponse{
+		FromPeerDid: localPeer,
 	}, nil
 }
 

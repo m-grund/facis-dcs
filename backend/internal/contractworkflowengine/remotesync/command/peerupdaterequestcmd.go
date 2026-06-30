@@ -8,36 +8,32 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/db"
+
 	"digital-contracting-service/internal/base"
+
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
-	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
-	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 
 	"github.com/jmoiron/sqlx"
 )
 
-type RecordEvidenceCmd struct {
-	DID        string             `json:"did"`
-	RecordedBy string             `json:"recorded_by"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	HolderDID  string             `json:"holder_did"`
-	UserRoles  userrole.UserRoles `json:"user_roles"`
+type PeerUpdateRequestCmd struct {
+	FromPeerDID string
+	ContractDID string
+	UpdatedAt   time.Time
 }
 
-type EvidenceRecorder struct {
+type PeerUpdateRequester struct {
 	DB          *sqlx.DB
 	CRepo       db.ContractRepo
-	SRepo       db2.SyncRepository
 	DIDDocument base.DIDDocument
 }
 
-func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) error {
+func (h *PeerUpdateRequester) Handle(ctx context.Context, cmd PeerUpdateRequestCmd) error {
 
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
@@ -54,7 +50,7 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		}
 	}(tx)
 
-	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
+	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.ContractDID)
 	if err != nil {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
@@ -65,7 +61,7 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.RecordEvidence.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.PeerUpdate.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}
@@ -73,21 +69,10 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		return nil
 	}
 
-	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
-		return errors.New("contract was updated elsewhere, please reload")
-	}
-
-	if processData.State == contractstate.Terminated.String() {
-		return errors.New("current contract state is invalid")
-	}
-
-	evt := contractevents.RecordEvidenceEvent{
-		DID:             cmd.DID,
-		ContractVersion: processData.ContractVersion,
-		RecordedBy:      cmd.RecordedBy,
+	evt := contractevents.OutdatedPeerEvent{
+		DID:             cmd.ContractDID,
+		OutdatedPeerDID: cmd.FromPeerDID,
 		OccurredAt:      time.Now().UTC(),
-		HolderDID:       cmd.HolderDID,
-		UserRoles:       cmd.UserRoles,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

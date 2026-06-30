@@ -1,4 +1,4 @@
-package dcstodcssynchronizer
+package dcstodcs
 
 import (
 	"net/http"
@@ -37,7 +37,8 @@ func NewDCSToDCSHttpClient(host string) *dcstodcs.Client {
 		goahttp.ResponseDecoder,
 		false,
 	)
-	postSync := c.Sync()
+	postSync := c.PostSync()
+	getSync := c.GetSync()
 	postAction := c.Action()
-	return dcstodcs.NewClient(postSync, postAction)
+	return dcstodcs.NewClient(postSync, getSync, postAction)
 }

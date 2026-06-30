@@ -3,7 +3,7 @@ package pq
 import (
 	"context"
 
-	"digital-contracting-service/internal/dcstodcssynchronizer/db"
+	"digital-contracting-service/internal/dcstodcs/db"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -21,10 +21,11 @@ func (r PostgresSyncRepository) IsTrustedPeer(ctx context.Context, tx *sqlx.Tx, 
 
 func (r PostgresSyncRepository) CreateOrUpdateSyncFailEntry(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
-        INSERT INTO sync_fails (did, created_at)
-        VALUES ($1, CURRENT_TIMESTAMP)
+        INSERT INTO sync_fails (did, retry_count, created_at, last_tried_at)
+        VALUES ($1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (did) DO UPDATE SET
-            created_at = CURRENT_TIMESTAMP
+            retry_count   = sync_fails.retry_count + 1,
+            last_tried_at = CURRENT_TIMESTAMP
     `
 	_, err := tx.ExecContext(ctx, statement, did)
 	return err
@@ -38,7 +39,7 @@ func (r PostgresSyncRepository) DeleteSyncFailEntry(ctx context.Context, tx *sql
 	return err
 }
 
-func (r PostgresSyncRepository) ReadAllSyncFailEntries(ctx context.Context, tx *sqlx.Tx) ([]db.SyncFail, error) {
+func (r PostgresSyncRepository) GetPendingSyncFails(ctx context.Context, tx *sqlx.Tx) ([]db.SyncFail, error) {
 	query := `
         SELECT *
         FROM sync_fails

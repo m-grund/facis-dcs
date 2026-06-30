@@ -2,6 +2,7 @@
 import type { Contract } from '@/models/contract/contract'
 import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
+import { requestContractSync } from '@/services/dcs-to-dcs-service'
 import { useContractsStore } from '@/stores/contracts-store'
 import { ContractState } from '@/types/contract-state'
 import { computed } from 'vue'
@@ -107,6 +108,16 @@ function isTemplateVersionErrorVisible(contract: Contract) {
   }
   return contract.template_is_deprecated
 }
+
+async function onRequestSync(contract: Contract) {
+  try {
+    const resp = await requestContractSync(contract.did)
+    console.log(resp)
+  } catch (err) {
+    console.error(err)
+  }
+}
+
 </script>
 
 <template>
@@ -140,6 +151,11 @@ function isTemplateVersionErrorVisible(contract: Contract) {
             {{ contract.description }}
           </div>
           <div class="card-actions justify-end">
+            <button class="btn btn-sm btn-ghost" title="Sync" @click="onRequestSync(contract)">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
             <RouterLink
               :to="{ name: resolveViewRouteName, params: { did: contract.did } }"
               class="btn btn-sm btn-primary"

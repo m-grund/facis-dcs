@@ -75,7 +75,7 @@ type ReviewTaskData struct {
 	CreatedAt time.Time
 }
 
-func toReviewTaskData(tasks []ReviewTaskData) []db.ReviewTaskData {
+func ToReviewTaskData(tasks []ReviewTaskData) []db.ReviewTaskData {
 	var reviewTasks []db.ReviewTaskData
 	for _, task := range tasks {
 		reviewTasks = append(reviewTasks, db.ReviewTaskData{
@@ -90,7 +90,7 @@ func toReviewTaskData(tasks []ReviewTaskData) []db.ReviewTaskData {
 	return reviewTasks
 }
 
-func toApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
+func ToApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
 	var approvalTasks []db.ApprovalTaskData
 	for _, task := range tasks {
 		approvalTasks = append(approvalTasks, db.ApprovalTaskData{
@@ -105,7 +105,7 @@ func toApprovalTaskData(tasks []ApprovalTaskData) []db.ApprovalTaskData {
 	return approvalTasks
 }
 
-func toNegotiationTaskData(tasks []NegotiationTaskData) []db.NegotiationTaskData {
+func ToNegotiationTaskData(tasks []NegotiationTaskData) []db.NegotiationTaskData {
 	var negotiationTasks []db.NegotiationTaskData
 	for _, task := range tasks {
 		negotiationTasks = append(negotiationTasks, db.NegotiationTaskData{
@@ -120,7 +120,7 @@ func toNegotiationTaskData(tasks []NegotiationTaskData) []db.NegotiationTaskData
 	return negotiationTasks
 }
 
-func toNegotiationData(tasks []NegotiationData) []db.NegotiationData {
+func ToNegotiationData(tasks []NegotiationData) []db.NegotiationData {
 	var negotiations []db.NegotiationData
 	for _, task := range tasks {
 		negotiations = append(negotiations, db.NegotiationData{
@@ -135,7 +135,7 @@ func toNegotiationData(tasks []NegotiationData) []db.NegotiationData {
 	return negotiations
 }
 
-func toNegotiationDecisionData(tasks []NegotiationDecisionData) []db.NegotiationDecisionData {
+func ToNegotiationDecisionData(tasks []NegotiationDecisionData) []db.NegotiationDecisionData {
 	var negotiationDecisions []db.NegotiationDecisionData
 	for _, task := range tasks {
 

@@ -1,4 +1,4 @@
-package remotesync
+package dcstodcs
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"digital-contracting-service/internal/dcstodcssynchronizer/db"
+	"digital-contracting-service/internal/dcstodcs/db"
 
 	"github.com/jmoiron/sqlx"
 )

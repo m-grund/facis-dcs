@@ -22,6 +22,7 @@ type RemoteActionRequestEvent struct {
 	Action      string    `json:"action"`
 	FromPeerDID string    `json:"from_peer_did"`
 	MainPeerDID string    `json:"main_peer_did"`
+	Component   string    `json:"component"`
 }
 
 // EventType implements the Event interface.

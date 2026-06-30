@@ -1,4 +1,4 @@
-package remotesync
+package command
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"digital-contracting-service/internal/contractworkflowengine/remotesync"
 
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 
@@ -19,20 +21,20 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
-type PeerSyncCmd struct {
+type LocalPeerUpdateCmd struct {
 	FromPeerDID          string
 	LocalPeer            string
-	Contract             ContractData
-	ReviewTasks          []ReviewTaskData
-	ApprovalTasks        []ApprovalTaskData
-	NegotiationTasks     []NegotiationTaskData
-	Negotiations         []NegotiationData
-	NegotiationDecisions []NegotiationDecisionData
+	Contract             remotesync.ContractData
+	ReviewTasks          []remotesync.ReviewTaskData
+	ApprovalTasks        []remotesync.ApprovalTaskData
+	NegotiationTasks     []remotesync.NegotiationTaskData
+	Negotiations         []remotesync.NegotiationData
+	NegotiationDecisions []remotesync.NegotiationDecisionData
 	DIDDocument          base.DIDDocument
 	ContractOrigin       string
 }
 
-type PeerSynchronizer struct {
+type LocalPeerUpdater struct {
 	DB     *sqlx.DB
 	CRepo  db.ContractRepo
 	CTRepo db.ContractTemplateRepo
@@ -42,7 +44,7 @@ type PeerSynchronizer struct {
 	NRepo  db.NegotiationRepo
 }
 
-func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
+func (h *LocalPeerUpdater) Handle(ctx context.Context, cmd LocalPeerUpdateCmd) error {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -113,7 +115,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 			return fmt.Errorf("could not update contract: %w", err)
 		}
 
-		reviewTasks := toReviewTaskData(cmd.ReviewTasks)
+		reviewTasks := remotesync.ToReviewTaskData(cmd.ReviewTasks)
 		for _, task := range reviewTasks {
 			err := h.RTRepo.RemoteUpdate(ctx, tx, task)
 			if err != nil {
@@ -121,7 +123,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 			}
 		}
 
-		approvalTasks := toApprovalTaskData(cmd.ApprovalTasks)
+		approvalTasks := remotesync.ToApprovalTaskData(cmd.ApprovalTasks)
 		for _, task := range approvalTasks {
 			err := h.ATRepo.RemoteUpdate(ctx, tx, task)
 			if err != nil {
@@ -129,7 +131,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 			}
 		}
 
-		negotiationTasks := toNegotiationTaskData(cmd.NegotiationTasks)
+		negotiationTasks := remotesync.ToNegotiationTaskData(cmd.NegotiationTasks)
 		for _, task := range negotiationTasks {
 			err := h.NTRepo.RemoteUpdate(ctx, tx, task)
 			if err != nil {
@@ -143,7 +145,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 			return fmt.Errorf("could not create contract: %w", err)
 		}
 
-		reviewTasks := toReviewTaskData(cmd.ReviewTasks)
+		reviewTasks := remotesync.ToReviewTaskData(cmd.ReviewTasks)
 		for _, task := range reviewTasks {
 			err := h.RTRepo.RemoteCreate(ctx, tx, task)
 			if err != nil {
@@ -151,7 +153,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 			}
 		}
 
-		approvalTasks := toApprovalTaskData(cmd.ApprovalTasks)
+		approvalTasks := remotesync.ToApprovalTaskData(cmd.ApprovalTasks)
 		for _, task := range approvalTasks {
 			err := h.ATRepo.RemoteCreate(ctx, tx, task)
 			if err != nil {
@@ -159,7 +161,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 			}
 		}
 
-		negotiationTasks := toNegotiationTaskData(cmd.NegotiationTasks)
+		negotiationTasks := remotesync.ToNegotiationTaskData(cmd.NegotiationTasks)
 		for _, task := range negotiationTasks {
 			err := h.NTRepo.RemoteCreate(ctx, tx, task)
 			if err != nil {
@@ -168,7 +170,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 	}
 
-	negotiations := toNegotiationData(cmd.Negotiations)
+	negotiations := remotesync.ToNegotiationData(cmd.Negotiations)
 	for _, negotiation := range negotiations {
 		err := h.NRepo.RemoteCreateOrUpdateNegotiation(ctx, tx, negotiation)
 		if err != nil {
@@ -176,7 +178,7 @@ func (h *PeerSynchronizer) Handle(ctx context.Context, cmd PeerSyncCmd) error {
 		}
 	}
 
-	negotiationDecisions := toNegotiationDecisionData(cmd.NegotiationDecisions)
+	negotiationDecisions := remotesync.ToNegotiationDecisionData(cmd.NegotiationDecisions)
 	for _, decision := range negotiationDecisions {
 		err := h.NRepo.RemoteCreateOrUpdateNegotiationDecision(ctx, tx, decision)
 		if err != nil {

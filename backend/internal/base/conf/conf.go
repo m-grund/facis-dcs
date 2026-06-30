@@ -31,3 +31,7 @@ func LoginAttemptsThresholdInDuration() int {
 func LoginLockoutDuration() time.Duration {
 	return 15 * time.Minute
 }
+
+func SyncFailCronJobTimeOut() time.Duration {
+	return 60 * time.Minute
+}

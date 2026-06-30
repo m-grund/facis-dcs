@@ -3,50 +3,81 @@ package remoteaction
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
-	"digital-contracting-service/internal/dcstodcssynchronizer/db"
+	dcstodcs2 "digital-contracting-service/internal/dcstodcs"
 
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"digital-contracting-service/internal/dcstodcssynchronizer"
 
 	"github.com/jmoiron/sqlx"
 )
 
-func ConvertAny[T any](raw any) (*T, error) {
-	if raw == nil {
-		return nil, nil
-	}
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
-	}
-	var out T
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
-	}
-	return &out, nil
+type RemoteAction string
+
+const (
+	PeerUpdate        RemoteAction = "PEER_UPDATE"
+	AcceptNegotiation RemoteAction = "ACCEPT_NEGOTIATION"
+	Approve           RemoteAction = "APPROVE"
+	Negotiate         RemoteAction = "NEGOTIATE"
+	RecordEvidence    RemoteAction = "RECORD_EVIDENCE"
+	Reject            RemoteAction = "REJECT"
+	RejectNegotiation RemoteAction = "REJECT_NEGOTIATION"
+	Submit            RemoteAction = "SUBMIT"
+	Terminate         RemoteAction = "TERMINATE"
+	Update            RemoteAction = "UPDATE"
+)
+
+var validAction = map[RemoteAction]bool{
+	PeerUpdate:        true,
+	AcceptNegotiation: true,
+	Approve:           true,
+	Negotiate:         true,
+	RecordEvidence:    true,
+	Reject:            true,
+	RejectNegotiation: true,
+	Update:            true,
+	Submit:            true,
 }
 
-func CallRemoteAction(ctx context.Context, db *sqlx.DB, sRepo db.SyncRepository, action string, localPeer string, mainPeer string, contractDid string, payload any) error {
+func NewRemoteAction(s string) (RemoteAction, error) {
+	flag := RemoteAction(strings.ToUpper(s))
+	if !flag.IsValid() {
+		return "", fmt.Errorf("invalid remote action value: %s", s)
+	}
+	return flag, nil
+}
+
+// IsValid checks if the RemoteAction is a valid role
+func (a RemoteAction) IsValid() bool {
+	upper := RemoteAction(strings.ToUpper(string(a)))
+	return validAction[upper]
+}
+
+// String returns the string representation of the RemoteAction
+func (a RemoteAction) String() string {
+	return string(a)
+}
+
+func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, localPeer string, mainPeer string, contractDid string, payload any) error {
 	hostname, err := base.DIDWebToHostname(mainPeer)
 	if err != nil {
 		return err
 	}
 
-	client := dcstodcssynchronizer.NewDCSToDCSHttpClient(hostname)
+	client := dcstodcs2.NewDCSToDCSHttpClient(hostname)
 	_, err = client.Action(ctx, &dcstodcs.DCSToDCSContractActionRequest{
 		FromPeerDid: localPeer,
 		Payload:     payload,
-		Action:      action,
+		Action:      a.String(),
+		Component:   componenttype.ContractWorkflowEngine.String(),
 	})
 
 	if err != nil {
@@ -65,10 +96,11 @@ func CallRemoteAction(ctx context.Context, db *sqlx.DB, sRepo db.SyncRepository,
 
 	evt := contractevents.RemoteActionRequestEvent{
 		DID:         contractDid,
-		Action:      action,
+		Action:      a.String(),
 		FromPeerDID: localPeer,
 		MainPeerDID: mainPeer,
 		OccurredAt:  time.Now().UTC(),
+		Component:   componenttype.ContractWorkflowEngine.String(),
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {
