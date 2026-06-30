@@ -182,10 +182,10 @@ const createContract = async ({ reviewers, approvers, negotiators }: Participant
     if (!!selectedTemplate.value) {
       const response = await contractWorkflowService.create({
         template_did: selectedTemplate.value.did,
-      reviewers,
-      approvers,
-      negotiators
-    })
+        reviewers,
+        approvers,
+        negotiators,
+      })
       did.value = response.did
       errorStore.add('Contract created.', 'info')
     }
@@ -242,7 +242,6 @@ const updateContract = async () => {
     isSubmitting.value = false
   }
 }
-
 </script>
 
 <template>
@@ -356,14 +355,12 @@ const updateContract = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <ParticipantSelectionDialog
-        v-if="!isEditMode"
-        :disabled="isSubmitting || !canSubmit"
-        class="btn flex-1 btn-primary"
+          v-if="!isEditMode"
+          :disabled="isSubmitting || !canSubmit"
+          class="btn flex-1 btn-primary"
           @submit="createContract"
         />
-        <button v-else class="btn flex-1 btn-primary" @click="updateContract">
-          Update
-        </button>
+        <button v-else class="btn flex-1 btn-primary" @click="updateContract">Update</button>
       </div>
     </div>
   </div>

@@ -75,7 +75,7 @@ func (e CreateEvent) GetDID() string {
 	return e.DID
 }
 
-// CreateEvent is emitted when a new contract is created.
+// RemoteCreateEvent is emitted when a new contract is created.
 type RemoteCreateEvent struct {
 	DID             string                             `json:"did"`
 	TemplateDID     string                             `json:"template_did"`
@@ -140,7 +140,7 @@ func (e UpdateEvent) GetDID() string {
 	return e.DID
 }
 
-// UpdateEvent is emitted when contract data is updated.
+// RemoteUpdateEvent is emitted when contract data is updated.
 type RemoteUpdateEvent struct {
 	DID             string                             `json:"did"`
 	TemplateDID     string                             `json:"template_did"`
