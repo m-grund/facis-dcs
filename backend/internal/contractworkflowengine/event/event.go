@@ -59,7 +59,7 @@ func (e CreateEvent) GetDID() string {
 	return e.DID
 }
 
-// CreateEvent is emitted when a new contract is created.
+// RemoteSyncEvent is emitted when a new contract is created.
 type RemoteSyncEvent struct {
 	DID             string                             `json:"did"`
 	TemplateDID     string                             `json:"template_did"`

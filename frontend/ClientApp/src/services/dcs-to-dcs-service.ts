@@ -1,7 +1,7 @@
 import http from '@/api/http'
 
 export interface ContractSyncRequestResponse {
-    from_peer_did: string
+  from_peer_did: string
 }
 
 export async function requestContractSync(did: string): Promise<ContractSyncRequestResponse> {

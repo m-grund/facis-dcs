@@ -28,7 +28,6 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const navStore = useNavStore()
 
-
 const authStore = useAuthStore()
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
@@ -268,13 +267,7 @@ const exportPDF = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
-        <button
-          :disabled="isDisabled"
-          class="btn flex-1 btn-primary"
-          @click="submitRejectedTemplate"
-        >
-          Submit
-        </button>
+        <button :disabled="isDisabled" class="btn flex-1 btn-primary" @click="submitRejectedTemplate">Submit</button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>
