@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -42,7 +41,7 @@ func (s *authSvc) LoginRenew(ctx context.Context, p *genauth.LoginRenewPayload) 
 		return nil, goa.PermanentError("bad_request", "presentation state cannot be renewed")
 	}
 
-	ttl := oid4vpStateTTL()
+	ttl := s.oid4vpStateTTL
 	expiresAt := time.Now().UTC().Add(ttl)
 
 	if err := s.presentations.RenewPending(ctx, state, expiresAt); err != nil {
@@ -71,7 +70,7 @@ func loginResultToRenew(in *genauth.LoginResult) *genauth.LoginRenewResult {
 }
 
 func (s *authSvc) Login(ctx context.Context) (*genauth.LoginResult, error) {
-	ttl := oid4vpStateTTL()
+	ttl := s.oid4vpStateTTL
 	presentationState, err := newOAuthState()
 
 	if err != nil {
@@ -172,11 +171,6 @@ func (s *authSvc) PresentationRequest(ctx context.Context, p *genauth.Presentati
 	if err != nil {
 		return nil, err
 	}
-	dcql, err := oid4vp.LoadDCQLQuery()
-
-	if err != nil {
-		return nil, err
-	}
 
 	responseURI := strings.TrimRight(s.publicAPIBase, "/") + "/auth/presentation/callback"
 	jwt, err := oid4vprequest.BuildJWT(s.requestSigner, oid4vprequest.Params{
@@ -185,7 +179,7 @@ func (s *authSvc) PresentationRequest(ctx context.Context, p *genauth.Presentati
 		State:       attempt.PresentationState,
 		Nonce:       attempt.Nonce,
 		ExpiresAt:   attempt.ExpiresAt,
-		DCQLQuery:   dcql,
+		DCQLQuery:   s.dcqlQuery,
 	})
 
 	if err != nil {
@@ -215,18 +209,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		vpToken = *p.VpToken
 	}
 
-	cfg, err := oid4vp.LoadTrustConfigFromEnv()
-	if err != nil {
-		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, err.Error())
-		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
-			PresentationState: attempt.PresentationState,
-			Success:           false,
-			ErrorMessage:      err.Error(),
-		})
-		return nil, goa.PermanentError("unauthorized", "trust config: %v", err)
-	}
-
-	verified, err := oid4vp.NewVerifier(cfg).Verify(vpToken, oid4vp.PresentationContext{
+	verified, err := oid4vp.NewVerifier(s.trust).Verify(vpToken, oid4vp.PresentationContext{
 		Nonce:    attempt.Nonce,
 		ClientID: s.hydra.ClientID(),
 	})
@@ -390,22 +373,4 @@ func buildOpenID4VPPresentationURI(clientID, httpsRequestURI string) string {
 	q.Set("request_uri_method", "post")
 
 	return "openid4vp://?" + q.Encode()
-}
-
-func oid4vpStateTTL() time.Duration {
-	if v := strings.TrimSpace(os.Getenv("OID4VP_STATE_TTL_SECONDS")); v != "" {
-		var secs int
-		if _, err := fmt.Sscanf(v, "%d", &secs); err == nil && secs > 0 {
-			return time.Duration(secs) * time.Second
-		}
-	}
-
-	return defaultOID4VPStateTTL
-}
-
-func publicAPIBaseURL() (string, error) {
-	if v := strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")); v != "" {
-		return strings.TrimRight(v, "/"), nil
-	}
-	return "", fmt.Errorf("DCS_PUBLIC_BASE_URL is required")
 }

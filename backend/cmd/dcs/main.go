@@ -141,6 +141,9 @@ func main() {
 		log.Printf(ctx, "DCS_DID configuration or file is missing")
 	}
 	didFileContent, err := os.ReadFile(didFilePath)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not read did file content")
+	}
 
 	didDocument, err := base.NewDIDDocument(didFileContent)
 	if err != nil {
@@ -148,17 +151,17 @@ func main() {
 	}
 
 	// Initialize OIDC validator and JWT authenticator.
-	hydraIssuerURL := os.Getenv("HYDRA_ISSUER_URL")
-	hydraClientID := os.Getenv("HYDRA_CLIENT_ID")
-	if hydraIssuerURL == "" || hydraClientID == "" {
-		log.Fatalf(ctx, nil, "Hydra configuration missing: HYDRA_ISSUER_URL and HYDRA_CLIENT_ID must be set")
+	authCfg, err := loadAuthConfig(ctx)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load auth config")
 	}
 	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
-		IssuerURL: hydraIssuerURL,
-		ClientID:  hydraClientID,
+		PublicIssuerURL:   authCfg.Hydra.PublicIssuerURL(),
+		InternalIssuerURL: authCfg.Hydra.InternalIssuerURL(),
+		ClientID:          authCfg.Hydra.ClientID(),
 	})
 	if err != nil {
-		log.Fatalf(ctx, err, "failed to initialize Hydra JWT validator")
+		log.Fatalf(ctx, err, "Failed to initialize Hydra JWT validator")
 	}
 
 	// Initialize IPFS client
@@ -402,7 +405,7 @@ func main() {
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
-		authSvc, err = service.NewAuth(db, presentationRepo)
+		authSvc, err = service.NewAuth(db, presentationRepo, authCfg)
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}

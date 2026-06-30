@@ -50,11 +50,6 @@ func LoadTrustConfig(path string) (*TrustConfig, error) {
 	return &cfg, nil
 }
 
-// LoadTrustConfigFromEnv loads trust data from OID4VP_TRUST_DATA_PATH.
-func LoadTrustConfigFromEnv() (*TrustConfig, error) {
-	return LoadTrustConfig(os.Getenv("OID4VP_TRUST_DATA_PATH"))
-}
-
 func (c *TrustConfig) IssuerTrusted(iss string) bool {
 	if c == nil {
 		return false

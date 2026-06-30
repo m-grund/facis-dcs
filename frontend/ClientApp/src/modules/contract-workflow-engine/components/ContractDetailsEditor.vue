@@ -157,5 +157,4 @@ interface ContractDetailData {
 }
 
 const originalContract = ref(Object.assign({}, contract.value))
-
 </script>

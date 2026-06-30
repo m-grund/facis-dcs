@@ -16,8 +16,8 @@ import (
 
 // HydraJWTConfig holds OIDC provider configuration.
 type HydraJWTConfig struct {
-	// Example: http://localhost:30444
-	IssuerURL string
+	PublicIssuerURL   string
+	InternalIssuerURL string
 	// Example: "dcs-client". Hydra JWT access tokens use the client_id claim (RFC 9068).
 	ClientID string
 }
@@ -42,7 +42,18 @@ const (
 
 // NewHydraJWTValidator connects to the OIDC provider to get public keys.
 func NewHydraJWTValidator(ctx context.Context, config HydraJWTConfig) (*HydraJWTValidator, error) {
-	provider, err := oidc.NewProvider(ctx, config.IssuerURL)
+	publicIssuer := strings.TrimRight(strings.TrimSpace(config.PublicIssuerURL), "/")
+	if publicIssuer == "" {
+		return nil, fmt.Errorf("HydraJWTConfig.PublicIssuerURL is required")
+	}
+
+	discoveryURL := strings.TrimRight(strings.TrimSpace(config.InternalIssuerURL), "/")
+	if discoveryURL == "" {
+		discoveryURL = publicIssuer
+	}
+
+	ctx = oidc.InsecureIssuerURLContext(ctx, publicIssuer)
+	provider, err := oidc.NewProvider(ctx, discoveryURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover OIDC provider: %w", err)
 	}
