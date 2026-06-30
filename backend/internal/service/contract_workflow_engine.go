@@ -154,6 +154,11 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		expPolicy = &policy
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
 		UpdatedAt:       updatedAt,
@@ -167,6 +172,7 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		ExpDate:         expDate,
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: req.ExpNoticePeriod,
+		CauserDID:       localPeer,
 	}
 	handler := command.Updater{
 		DB:          s.DB,
@@ -207,6 +213,11 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		actionFlag = &flag
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.SubmitCmd{
 		DID:         req.Did,
 		UpdatedAt:   updatedAt,
@@ -215,6 +226,7 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		UserRoles:   middleware.GetUserRoles(ctx),
 		ActionFlag:  actionFlag,
 		Comments:    req.Comments,
+		CauserDID:   localPeer,
 	}
 	handler := command.Submitter{
 		DB:          s.DB,
@@ -526,6 +538,11 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.NegotiationCmd{
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
@@ -533,6 +550,7 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 		HolderDID:     middleware.GetHolderDID(ctx),
 		ChangeRequest: &changeRequest,
 		UserRoles:     middleware.GetUserRoles(ctx),
+		CauserDID:     localPeer,
 	}
 	handler := command.Negotiator{
 		DB:          s.DB,
@@ -563,6 +581,11 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		return nil, contractworkflowengine.MakeInternalError(fmt.Errorf("unknown action flag: %s", req.ActionFlag))
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	switch actionFlag {
 	case negotiationactionflag.Accepting:
 		cmd := command.AcceptNegotiationCmd{
@@ -570,6 +593,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 			DID:        req.Did,
 			AcceptedBy: middleware.GetParticipantID(ctx),
 			UserRoles:  middleware.GetUserRoles(ctx),
+			CauserDID:  localPeer,
 		}
 		handler := command.NegotiationAcceptor{
 			DB:          s.DB,
@@ -589,6 +613,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 			RejectedBy:      middleware.GetParticipantID(ctx),
 			UserRoles:       middleware.GetUserRoles(ctx),
 			RejectionReason: req.RejectionReason,
+			CauserDID:       localPeer,
 		}
 		handler := command.NegotiationRejector{
 			DB:          s.DB,
@@ -718,12 +743,18 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.ApproveCmd{
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
 		ApprovedBy: middleware.GetParticipantID(ctx),
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
+		CauserDID:  localPeer,
 	}
 	handler := command.Approver{
 		DB:          s.DB,
@@ -752,6 +783,11 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 		return nil, templaterepository.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.RejectCmd{
 		DID:        req.Did,
 		UpdatedAt:  updatedAt,
@@ -759,6 +795,7 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		Reason:     req.Reason,
+		CauserDID:  localPeer,
 	}
 	handler := command.Rejecter{
 		DB:          s.DB,
@@ -788,12 +825,18 @@ func (s *contractWorkflowEnginesrvc) Store(ctx context.Context, req *contractwor
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.RecordEvidenceCmd{
 		DID:        req.Did,
 		RecordedBy: middleware.GetParticipantID(ctx),
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		UpdatedAt:  updatedAt,
+		CauserDID:  localPeer,
 	}
 	handler := command.EvidenceRecorder{
 		DB:    s.DB,
@@ -819,6 +862,11 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.TerminateCmd{
 		DID:          req.Did,
 		UpdatedAt:    updatedAt,
@@ -826,6 +874,7 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 		HolderDID:    middleware.GetHolderDID(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
 		Reason:       req.Reason,
+		CauserDID:    localPeer,
 	}
 	handler := command.Terminator{
 		DB:          s.DB,

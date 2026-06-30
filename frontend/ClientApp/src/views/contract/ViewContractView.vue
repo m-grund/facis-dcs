@@ -48,6 +48,10 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
     contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
 })
 
+const isDisabled = computed(() => {
+  return contract.value?.state === ContractState.terminated
+})
+
 const isAuditingAuthorized = computed(
   () =>
     (['AUDITOR', 'COMPLIANCE_OFFICER', 'SYSTEM_ADMINISTRATOR'] as UserRole[]).some((role) =>

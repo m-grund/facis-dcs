@@ -41,6 +41,7 @@ type UpdateCmd struct {
 	ContractData    *datatype.JSON                     `json:"contract_data"`
 	HolderDID       string                             `json:"holder_did"`
 	UserRoles       userrole.UserRoles                 `json:"user_roles"`
+	CauserDID       string                             `json:"causer_did"`
 }
 
 type Updater struct {
@@ -55,11 +56,6 @@ type Updater struct {
 }
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
 		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, nil, true)
@@ -84,13 +80,13 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return fmt.Errorf("could not read contract data: %w", err)
 	}
 
-	if localPeer != oldData.Origin {
+	if cmd.CauserDID != oldData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Update.Execute(ctx, h.DB, localPeer, oldData.Origin, oldData.DID, cmd)
+		err = remoteaction.Update.Execute(ctx, h.DB, cmd.CauserDID, oldData.Origin, oldData.DID, cmd)
 		if err != nil {
 			return err
 		}

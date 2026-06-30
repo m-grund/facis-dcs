@@ -31,6 +31,7 @@ type RejectNegotiationCmd struct {
 	RejectionReason *string            `json:"rejection_reason"`
 	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`
+	CauserDID       string             `json:"causer_did"`
 }
 
 type NegotiationRejector struct {
@@ -43,11 +44,6 @@ type NegotiationRejector struct {
 }
 
 func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -64,13 +60,13 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return fmt.Errorf("could not process core data: %w", err)
 	}
 
-	if localPeer != processData.Origin {
+	if cmd.CauserDID != processData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.RejectNegotiation.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.RejectNegotiation.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}
@@ -82,7 +78,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, localPeer)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
@@ -91,7 +87,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return errors.New("invalid user")
 	}
 
-	err = h.NRepo.Reject(ctx, tx, cmd.ID, localPeer, cmd.RejectionReason)
+	err = h.NRepo.Reject(ctx, tx, cmd.ID, cmd.CauserDID, cmd.RejectionReason)
 	if err != nil {
 		return fmt.Errorf("could not reject negotiation %w", err)
 	}

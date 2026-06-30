@@ -29,7 +29,7 @@ type TerminateCmd struct {
 	UpdatedAt    time.Time          `json:"updated_at"`
 	HolderDID    string             `json:"holder_did"`
 	UserRoles    userrole.UserRoles `json:"user_roles"`
-	DIDDocument  base.DIDDocument
+	CauserDID    string             `json:"causer_did"`
 }
 
 type Terminator struct {
@@ -44,11 +44,6 @@ type Terminator struct {
 }
 
 func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -65,13 +60,13 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	if localPeer != processData.Origin {
+	if cmd.CauserDID != processData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Terminate.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.Terminate.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}

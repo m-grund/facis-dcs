@@ -28,6 +28,7 @@ type RecordEvidenceCmd struct {
 	UpdatedAt  time.Time          `json:"updated_at"`
 	HolderDID  string             `json:"holder_did"`
 	UserRoles  userrole.UserRoles `json:"user_roles"`
+	CauserDID  string             `json:"causer_did"`
 }
 
 type EvidenceRecorder struct {
@@ -38,11 +39,6 @@ type EvidenceRecorder struct {
 }
 
 func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -59,13 +55,13 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	if localPeer != processData.Origin {
+	if cmd.CauserDID != processData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.RecordEvidence.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.RecordEvidence.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}

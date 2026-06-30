@@ -32,6 +32,7 @@ type ApproveCmd struct {
 	DecisionNotes []string           `json:"decision_notes"`
 	HolderDID     string             `json:"holder_did"`
 	UserRoles     userrole.UserRoles `json:"user_roles"`
+	CauserDID     string             `json:"causer_did"`
 }
 
 type Approver struct {
@@ -43,11 +44,6 @@ type Approver struct {
 }
 
 func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -64,13 +60,13 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	if localPeer != processData.Origin {
+	if cmd.CauserDID != processData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Approve.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.Approve.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}
@@ -86,7 +82,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid contract state")
 	}
 
-	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, localPeer)
+	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return err
 	}
@@ -95,7 +91,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid user")
 	}
 
-	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, localPeer, approvaltaskstate.Approved.String())
+	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.CauserDID, approvaltaskstate.Approved.String())
 	if err != nil {
 		return fmt.Errorf("could not update approval task state: %w", err)
 	}

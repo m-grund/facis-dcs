@@ -32,6 +32,7 @@ type NegotiationCmd struct {
 	UpdatedAt     time.Time          `json:"updated_at"`
 	HolderDID     string             `json:"holder_did"`
 	UserRoles     userrole.UserRoles `json:"user_roles"`
+	CauserDID     string             `json:"causer_did"`
 }
 
 type Negotiator struct {
@@ -45,11 +46,6 @@ type Negotiator struct {
 }
 
 func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -69,13 +65,13 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
 
-	if localPeer != processData.Origin {
+	if cmd.CauserDID != processData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Negotiate.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.Negotiate.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}
@@ -91,7 +87,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, localPeer)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}

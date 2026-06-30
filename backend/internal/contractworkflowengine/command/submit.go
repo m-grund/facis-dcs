@@ -37,6 +37,7 @@ type SubmitCmd struct {
 	Comments    []string               `json:"comments"`
 	HolderDID   string                 `json:"holder_did"`
 	UserRoles   userrole.UserRoles     `json:"user_roles"`
+	CauserDID   string                 `json:"causer_did"`
 }
 
 type Submitter struct {
@@ -51,11 +52,6 @@ type Submitter struct {
 }
 
 func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return fmt.Errorf("could not get DID: %w", err)
-	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -72,13 +68,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	if localPeer != processData.Origin {
+	if cmd.CauserDID != processData.Origin {
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Submit.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.Submit.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}
@@ -128,7 +124,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, localPeer)
+		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
 		if err != nil {
 			return fmt.Errorf("could not validate negotiator: %w", err)
 		}
@@ -137,7 +133,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("this peer is not a valid negotiator")
 		}
 
-		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, localPeer)
+		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, cmd.CauserDID)
 		if err != nil {
 			return fmt.Errorf("could not check open negotiations: %w", err)
 		}
@@ -146,7 +142,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("not all negotiations are processed")
 		}
 
-		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, localPeer, negotiationtaskstate.Accepted.String())
+		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, cmd.CauserDID, negotiationtaskstate.Accepted.String())
 		if err != nil {
 			return fmt.Errorf("could not update negotiation task: %w", err)
 		}
@@ -206,7 +202,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, localPeer)
+		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.CauserDID)
 		if err != nil {
 			return err
 		}
@@ -218,7 +214,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		if cmd.ActionFlag != nil {
 			switch *cmd.ActionFlag {
 			case actionflag.Approval:
-				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, localPeer, contractstate.Approved.String())
+				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.CauserDID, contractstate.Approved.String())
 				if err != nil {
 					return fmt.Errorf("could not update approval task: %w", err)
 				}
@@ -255,7 +251,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, localPeer)
+		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.CauserDID)
 		if err != nil {
 			return err
 		}
