@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -32,29 +31,24 @@ type VaultTransitSigner struct {
 	client *http.Client
 }
 
-// LoadSignerFromEnv returns a Vault transit signer from VAULT_* env vars.
-func LoadSignerFromEnv() (Signer, error) {
-	return NewVaultTransitSignerFromEnv()
-}
-
-// NewVaultTransitSignerFromEnv builds a signer from VAULT_* and OID4VP_VERIFIER_SIGNING_VAULT_* env vars.
-func NewVaultTransitSignerFromEnv() (*VaultTransitSigner, error) {
-	addr := strings.TrimRight(strings.TrimSpace(os.Getenv("VAULT_ADDR")), "/")
+// NewVaultTransitSigner builds a signer for the given Vault transit mount/key.
+func NewVaultTransitSigner(addr, token, mount, key string) (*VaultTransitSigner, error) {
+	addr = strings.TrimRight(strings.TrimSpace(addr), "/")
 	if addr == "" {
 		return nil, fmt.Errorf("VAULT_ADDR is required for OID4VP request signing")
 	}
 
-	token := strings.TrimSpace(os.Getenv("VAULT_TOKEN"))
+	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, fmt.Errorf("VAULT_TOKEN is required for OID4VP request signing")
 	}
 
-	mount := strings.TrimSpace(os.Getenv("OID4VP_VERIFIER_SIGNING_VAULT_MOUNT"))
+	mount = strings.TrimSpace(mount)
 	if mount == "" {
 		mount = defaultVerifierTransitMount
 	}
 
-	key := strings.TrimSpace(os.Getenv("OID4VP_VERIFIER_SIGNING_VAULT_KEY"))
+	key = strings.TrimSpace(key)
 	if key == "" {
 		key = defaultVerifierTransitKey
 	}

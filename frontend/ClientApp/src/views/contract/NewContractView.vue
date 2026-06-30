@@ -35,7 +35,6 @@ import {
 } from '@/modules/template-repository/models/contract-template'
 import { buildSemanticTemplateExtension } from '@/models/semantic/facis-dcs-semantic'
 import { useContractsStore } from '@/stores/contracts-store'
-import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
 import type { ParticipantSelection } from '@/utils/participant-selection'
 

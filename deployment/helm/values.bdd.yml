@@ -3,6 +3,27 @@
 #
 # Image is loaded into kind via 'kind load docker-image' before helm deploy,
 # so Never prevents spurious registry pulls.
+traefik:
+  enabled: true
+  fullnameOverride: traefik
+  namespaceOverride: kube-system
+  ingressClass:
+    enabled: true
+    isDefaultClass: true
+  providers:
+    kubernetesIngress:
+      enabled: true
+      allowEmptyServices: true
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  ports:
+    web:
+      port: 18080
+      exposedPort: 18080
+      hostPort: 18080
+
 image:
   pullPolicy: Never
 
@@ -16,6 +37,12 @@ pdfCore:
 extraEnv:
   - name: JWT_ALG_NONE_SUPPORTED
     value: "true"
+  - name: AUTH_INSECURE_COOKIES
+    value: "true"
+
+oid4vp:
+  trust:
+    statusListSkipJWSVerify: true
 
 postgresql:
   enabled: true
@@ -55,15 +82,21 @@ neo4j:
   persistence:
     enabled: false
 
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: localhost
+
 hydra:
   enabled: true
   config:
     dsn: "postgres://dcs:dcs@dcs-postgresql:5432/hydra?sslmode=disable"
     dev: true
-    selfIssuerURL: "http://dcs-hydra:4444"
-    loginURL: "http://127.0.0.1/digital-contracting-service/ui/"
-    consentURL: "http://127.0.0.1/digital-contracting-service/api/auth/consent"
-    logoutURL: "http://127.0.0.1/digital-contracting-service/api/auth/logout-complete"
+    selfIssuerURL: "http://localhost:18080"
+    loginURL: "http://localhost:18080/digital-contracting-service/ui/"
+    consentURL: "http://localhost:18080/digital-contracting-service/api/auth/consent"
+    logoutURL: "http://localhost:18080/digital-contracting-service/api/auth/logout-complete"
   secrets:
     system: "bdd-hydra-system-secret-change-me"
   clients:
@@ -72,8 +105,8 @@ hydra:
       grant_types: ["authorization_code", "refresh_token"]
       response_types: ["code"]
       scope: "openid offline_access"
-      redirect_uris: ["http://127.0.0.1/digital-contracting-service/api/auth/callback"]
-      post_logout_redirect_uris: ["http://127.0.0.1/digital-contracting-service/api/auth/logout-complete"]
+      redirect_uris: ["http://localhost:18080/digital-contracting-service/api/auth/callback"]
+      post_logout_redirect_uris: ["http://localhost:18080/digital-contracting-service/api/auth/logout-complete"]
       token_endpoint_auth_method: client_secret_post
       skip_consent: true
 
@@ -116,6 +149,16 @@ cryptoProvider:
 # XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
 statuslistService:
   enabled: true
+  tenantID: c2pa
+  ingress:
+    enabled: true
+    className: traefik
+    stripPrefix: /statuslist
+    hosts:
+      - host: localhost
+        paths:
+          - path: /statuslist
+            pathType: Prefix
   database:
     enabled: true
     host: "dcs-postgresql"
@@ -126,6 +169,16 @@ statuslistService:
     sslMode: "disable"
   nats:
     url: "nats://dcs-nats:4222"
+  bddListInit:
+    enabled: true
+    tenantIDs:
+      - credential
+      - c2pa
+
+statusListLocalhostProxy:
+  enabled: true
+  upstream: "http://traefik.kube-system.svc.cluster.local:18080"
+  ingressHost: localhost
 
 # IPFS: required — IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL are fatal on startup.
 ipfs:
@@ -156,6 +209,7 @@ signing:
 
 route:
   basePath: "/digital-contracting-service"
+  publicBaseURL: "http://localhost:18080/digital-contracting-service/api"
 
 # Monitoring disabled: default storageClassName 'local-path' is not available in kind,
 # causing Prometheus/Alertmanager PVCs to stay Pending and helm --wait to time out.

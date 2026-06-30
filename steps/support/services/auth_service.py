@@ -14,7 +14,6 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
-from http.cookiejar import Cookie
 
 REQUEST_URI_MARKER = "/auth/presentation/request/"
 
@@ -56,6 +55,7 @@ class AuthService:
     """Handle auth headers and role-based OID4VP token exchange."""
 
     CLIENT_ID = "dcs-client"
+    DEFAULT_ORGANIZATION = "Acme Corp"
 
     # ------------------------------------------------------------------
     # Step 1 — resolve roles / organization
@@ -67,9 +67,12 @@ class AuthService:
         normalized_roles = [role.strip() for role in roles if role and role.strip()]
         if not normalized_roles:
             raise ValueError("roles must contain at least one non-empty role")
+        org = (organization or AuthService.DEFAULT_ORGANIZATION).strip()
+        if not org:
+            org = AuthService.DEFAULT_ORGANIZATION
         return AuthCredentials(
             roles=normalized_roles,
-            organization=(organization or "").strip(),
+            organization=org,
         )
 
     # ------------------------------------------------------------------
@@ -143,14 +146,23 @@ class AuthService:
             attach_key_binding,
             issue_stored_credential,
         )
+        from dcs_wallet.status_list import BDD_CREDENTIAL_TENANT
 
         issuer_did = os.getenv("BDD_ISSUER_DID", DEFAULT_ISSUER_DID)
+        statuslist_base = os.getenv("STATUSLIST_SERVICE_URL", "").strip()
+        if not statuslist_base:
+            raise RuntimeError(
+                "STATUSLIST_SERVICE_URL is required for BDD OID4VP credentials "
+                "(set by run_bdd_helm.sh; dev uses credentials/*.jwt with localhost:30821)"
+            )
         stored_sd_jwt = issue_stored_credential(
             organization=credentials.organization,
             roles=credentials.roles,
             issuer_private=wallet_keys.issuer_private,
             wallet_private=wallet_keys.wallet_private,
             issuer_did=issuer_did,
+            statuslist_service_base=statuslist_base,
+            statuslist_tenant=BDD_CREDENTIAL_TENANT,
         )
         return attach_key_binding(
             issued_sd_jwt=stored_sd_jwt,
@@ -277,33 +289,6 @@ class AuthService:
         return str(redirect_uri)
 
     @staticmethod
-    def relax_secure_cookies_for_local_http(session: requests.Session) -> None:
-        """Re-store Secure cookies so requests sends them on http://127.0.0.1 (dev-stack)."""
-        for cookie in list(session.cookies):
-            if cookie.secure and cookie.domain in {"127.0.0.1", "localhost"}:
-                session.cookies.set_cookie(
-                    Cookie(
-                        version=0,
-                        name=cookie.name,
-                        value=cookie.value,
-                        port=None,
-                        port_specified=False,
-                        domain=cookie.domain,
-                        domain_specified=True,
-                        domain_initial_dot=False,
-                        path=cookie.path,
-                        path_specified=True,
-                        secure=False,
-                        expires=cookie.expires,
-                        discard=True,
-                        comment=None,
-                        comment_url=None,
-                        rest={},
-                        rfc2109=False,
-                    )
-                )
-
-    @staticmethod
     def resolve_oauth_callback_url(
         session: requests.Session,
         redirect_uri: str,
@@ -369,14 +354,12 @@ class AuthService:
             api_base,
             timeout=timeout,
         )
-        AuthService.relax_secure_cookies_for_local_http(session)
         callback_response = session.get(callback_url, allow_redirects=False, timeout=timeout)
         if callback_response.status_code != 302:
             raise RuntimeError(
                 f"/auth/callback failed ({callback_response.status_code}): {callback_response.text[:300]}"
             )
 
-        AuthService.relax_secure_cookies_for_local_http(session)
         refresh_response = session.post(f"{api_base.rstrip('/')}/auth/refresh", timeout=timeout)
         refresh_response.raise_for_status()
         access_token = refresh_response.json().get("access_token")
@@ -401,7 +384,6 @@ class AuthService:
         })
 
         initiation = AuthService.initiate_login(session, api_base, timeout=timeout)
-        AuthService.relax_secure_cookies_for_local_http(session)
         AuthService.bind_hydra_login_challenge(
             session,
             api_base,

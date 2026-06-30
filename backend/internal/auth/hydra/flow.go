@@ -44,6 +44,7 @@ func (c *Client) AuthorizeURL(ctx context.Context, oidcState string) (string, er
 	if err != nil {
 		return "", err
 	}
+
 	params := url.Values{}
 	params.Set("client_id", c.cfg.ClientID)
 	params.Set("redirect_uri", c.cfg.RedirectURI)

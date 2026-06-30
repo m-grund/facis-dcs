@@ -4,7 +4,7 @@
 KB-JWT with aud/nonce is added at presentation time (demo_wallet, issue_vp_jwt).
 
 Entry point:
-  python3 testWallet/scripts/issue_credentials.py --all
+  python3 testWallet/scripts/issue_credentials.py
   python3 testWallet/scripts/issue_credentials.py --credential test
   python3 testWallet/scripts/issue_credentials.py --name test --organization "Acme Corp" --roles "Contract Manager,Contract Signer"
 """
@@ -21,7 +21,6 @@ sys.path.insert(0, str(WALLET_ROOT))
 from dcs_wallet.issuer import (
     DEFAULT_ISSUER_DID,
     CREDENTIAL_EXT,
-    issue_all_template_files,
     issue_credential_file,
     issue_stored_credential,
 )
@@ -89,12 +88,18 @@ def main() -> int:
             for name in args.credential
         ]
     else:
-        paths = issue_all_template_files(
-            credentials_dir=args.credentials_dir,
-            issuer_private=issuer_private,
-            wallet_private=wallet_private,
-            issuer_did=args.issuer_did,
-        )
+        paths = []
+        for template_path in sorted(args.credentials_dir.glob("*.template.json")):
+            stem = template_path.name.replace(".template.json", "")
+            paths.append(
+                issue_credential_file(
+                    credentials_dir=args.credentials_dir,
+                    credential_name=stem,
+                    issuer_private=issuer_private,
+                    wallet_private=wallet_private,
+                    issuer_did=args.issuer_did,
+                )
+            )
 
     if not paths:
         raise FileNotFoundError(f"no *.template.json files found in {args.credentials_dir}")

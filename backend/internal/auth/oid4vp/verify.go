@@ -91,7 +91,7 @@ func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustC
 	// Holder binding: cnf.jwk is the verification key; sub must match did:jwk from cnf.
 	cnfJWK, err := sdjwt.CNFJWKFromClaims(issuerClaims)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("credential cnf.jwk: %w", err)
 	}
 
 	sub, _ := issuerClaims["sub"].(string)
@@ -137,25 +137,6 @@ func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustC
 		Roles:          roles,
 		RawClaims:      raw,
 	}, nil
-}
-
-// checkStatusList validates the credential against the W3C Bitstring Status List.
-// TODO: resolve and evaluate W3C Bitstring Status List v1.0; reject revoked credentials.
-func checkStatusList(rawClaims json.RawMessage) error {
-	var claims map[string]any
-	if len(rawClaims) == 0 {
-		return nil
-	}
-
-	err := json.Unmarshal(rawClaims, &claims)
-	if err != nil {
-		return fmt.Errorf("parse credential claims for status list check: %w", err)
-	}
-
-	_, hasStatus := claims["credentialStatus"]
-	_ = hasStatus
-
-	return nil
 }
 
 // evaluateLoginRoles applies login authorization policy to disclosed roles.
