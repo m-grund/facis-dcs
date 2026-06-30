@@ -20,12 +20,6 @@ dependencies:
 - name: federated-catalogue
   repository: file://charts/federated-catalogue
   version: 0.1.0
-- name: custom-policy-agent
-  repository: file://charts/custom-policy-agent
-  version: 0.1.0
-- name: mongodb
-  repository: file://charts/mongodb
-  version: 0.1.0
 - name: ipfs
   repository: file://charts/ipfs
   version: 0.1.0
@@ -41,5 +35,5 @@ dependencies:
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 85.2.0
-digest: sha256:2bcb990dd742342d6474a6725599442347627edca3b6ecb54629861f2198264b
-generated: "2026-06-11T15:09:21.854063+02:00"
+digest: sha256:210019e88ecb8ff44a39255a57869646da969fd64f11bf50513fb7d89f94a51f
+generated: "2026-06-30T11:11:27.756237657+02:00"

@@ -24,8 +24,6 @@
 #   Crypto Provider  : localhost:30808  (XFSC signer HTTP API)
 #   Vault API        : localhost:30820  (dev mode, root token = "root")
 #   Status List Service : localhost:30821  (XFSC status list management)
-#   Policy Agent: localhost:30380
-#   MongoDB     : intern (kein NodePort nötig)
 #   IPFS Gateway: localhost:30480
 #   IPFS API    : localhost:30501
 #
@@ -227,27 +225,6 @@ archiveNotary:
   notaryPath: "/archive/notary"
   auditLogPath: "/archive-audit-events.jsonl"
   auditLogBearerToken: "dev-archive-audit-token"
-
-mongodb:
-  enabled: true
-  persistence:
-    enabled: false
-
-customPolicyAgent:
-  enabled: true
-  service:
-    type: NodePort
-    nodePort: 30380
-  nats:
-    addr: "nats://dcs-nats:4222"
-  mongo:
-    addr: "mongodb://dcs-mongodb-0.dcs-mongodb-headless.default.svc.cluster.local:27017/?replicaSet=rs0"
-    user: "policy"
-    pass: "policy"
-  externalServices:
-    ocmAddr: "http://localhost:9999"
-  logging:
-    level: "DEBUG"
 
 ipfs:
   enabled: true
