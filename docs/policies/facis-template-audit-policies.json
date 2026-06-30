@@ -6,17 +6,24 @@
   "rules": [
     {
       "id": "FACIS-TPL-STRUCT-001",
-      "title": "Template uses FACIS schema references",
+      "title": "Template uses canonical JSON-LD document structure",
       "severity": "error",
-      "builtin": "required_schema_refs",
-      "ontologyTerm": "dcst:validation-template-v1"
+      "builtin": "canonical_document_structure",
+      "ontologyTerm": "dcs:DocumentStructure"
+    },
+    {
+      "id": "FACIS-TPL-DATA-001",
+      "title": "Template declares contract data requirements",
+      "severity": "error",
+      "builtin": "canonical_contract_data",
+      "ontologyTerm": "dcs:DataRequirement"
     },
     {
       "id": "FACIS-TPL-POLICY-001",
-      "title": "Template declares required policy references",
+      "title": "Template policies reference declared contract data fields",
       "severity": "error",
-      "builtin": "required_policy_refs",
-      "ontologyTerm": "dcst:policy-template-structure-v1"
+      "builtin": "canonical_policy_operands",
+      "ontologyTerm": "odrl:Constraint"
     },
     {
       "id": "FACIS-TPL-LIFECYCLE-001",
@@ -33,10 +40,10 @@
     },
     {
       "id": "FACIS-TPL-CLAUSE-001",
-      "title": "Finished template contains at least one clause with semantic rules",
+      "title": "Finished template contains at least one clause bound to contract data",
       "severity": "error",
       "builtin": "finished_template_has_clause_semantics",
-      "ontologyTerm": "dcs:ClauseBlock"
+      "ontologyTerm": "dcs:Clause"
     },
     {
       "id": "FACIS-TPL-DOMAIN-001",

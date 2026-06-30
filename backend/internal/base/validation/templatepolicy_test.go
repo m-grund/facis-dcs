@@ -22,6 +22,62 @@ func TestAuditTemplatePoliciesReturnsWarningsForMissingFinishedTemplateFields(t 
 	require.NotContains(t, policyFindingRuleIDs(findings), "FACIS-TPL-PARTY-001")
 }
 
+func TestAuditTemplatePoliciesAcceptsCanonicalTemplateWithoutErrors(t *testing.T) {
+	findings, err := AuditTemplatePolicies(canonicalTemplateData(t), TemplatePolicyAuditMetadata{
+		DID:          "did:example:template",
+		TemplateType: "subContract",
+		State:        "APPROVED",
+	})
+	require.NoError(t, err)
+
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+}
+
+func TestAuditTemplatePoliciesFlagsCanonicalClauseWithoutContractDataBinding(t *testing.T) {
+	data := canonicalTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	structure := decoded["dcs:documentStructure"].(map[string]any)
+	blocks := structure["dcs:blocks"].(map[string]any)["@list"].([]any)
+	clause := blocks[0].(map[string]any)
+	content := clause["dcs:content"].(map[string]any)["@list"].([]any)
+	placeholder := content[1].(map[string]any)
+	placeholder["dcs:bindsTo"] = map[string]any{"@id": "urn:uuid:missing-field"}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
+		DID:          "did:example:template",
+		TemplateType: "subContract",
+		State:        "APPROVED",
+	})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-TPL-CLAUSE-001", "error"))
+}
+
+func TestAuditTemplatePoliciesFlagsPolicyOperandOutsideContractData(t *testing.T) {
+	data := canonicalTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	policy := decoded["dcs:policies"].([]any)[0].(map[string]any)
+	constraint := policy["odrl:constraint"].(map[string]any)
+	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
+		DID:          "did:example:template",
+		TemplateType: "subContract",
+		State:        "APPROVED",
+	})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-TPL-POLICY-001", "error"))
+}
+
 func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	data := canonicalTemplateData(t)
 	var decoded map[string]any

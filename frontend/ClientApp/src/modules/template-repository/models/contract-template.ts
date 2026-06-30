@@ -1,11 +1,6 @@
 import type {
   DcsOperator,
   ParameterType,
-  SemanticRule,
-  SLAAgreement,
-  TemplateVariable,
-  PlaceholderBinding,
-  PolicyBundle,
   UiMetadata,
 } from '@/models/semantic/facis-dcs-semantic'
 

@@ -55,15 +55,15 @@ export function hasConditionParameterForValue(
   const block = blocks.find((b) => b['@id'] === conditionValue.blockId)
   if (!block || block['@type'] !== 'dcs:Clause') return false
   const clause = block as DcsClause
-  const condIds = clauseConditionIds(clause, semanticConditions)
-  if (!condIds.includes(conditionValue.conditionId)) return false
-
   const availableConditions = getConditionsByBlockId(
     conditionValue.blockId,
     blocks,
     semanticConditions,
     subTemplateSnapshots,
   )
+  const condIds = clauseConditionIds(clause, availableConditions)
+  if (!condIds.includes(conditionValue.conditionId)) return false
+
   const matchedCondition = availableConditions.find((condition) => condition.conditionId === conditionValue.conditionId)
   if (!matchedCondition) return false
   return matchedCondition.parameters.some((parameter) => parameter.parameterName === conditionValue.parameterName)

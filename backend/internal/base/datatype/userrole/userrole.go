@@ -12,12 +12,13 @@ const (
 	TemplateApprover UserRole = "Template Approver"
 	TemplateManager  UserRole = "Template Manager"
 
-	ContractCreator  UserRole = "Contract Creator"
-	ContractReviewer UserRole = "Contract Reviewer"
-	ContractApprover UserRole = "Contract Approver"
-	ContractManager  UserRole = "Contract Manager"
-	ContractSigner   UserRole = "Contract Signer"
-	ContractObserver UserRole = "Contract Observer"
+	ContractCreator    UserRole = "Contract Creator"
+	ContractReviewer   UserRole = "Contract Reviewer"
+	ContractApprover   UserRole = "Contract Approver"
+	ContractManager    UserRole = "Contract Manager"
+	ContractNegotiator UserRole = "Contract Negotiator"
+	ContractSigner     UserRole = "Contract Signer"
+	ContractObserver   UserRole = "Contract Observer"
 
 	ArchiveManager      UserRole = "Archive Manager"
 	Auditor             UserRole = "Auditor"
@@ -49,7 +50,7 @@ func (r UserRole) IsValid() bool {
 	switch r {
 	case TemplateCreator, TemplateReviewer, TemplateApprover, TemplateManager,
 		ContractCreator, ContractReviewer, ContractApprover, ContractManager,
-		ContractSigner, ContractObserver,
+		ContractNegotiator, ContractSigner, ContractObserver,
 		ArchiveManager, Auditor, SystemAdministrator, ComplianceOfficer, IntegrationManager,
 		ProcessOrchestrator, Validator,
 		SystemContractCreator, SystemContractReviewer, SystemContractApprover,

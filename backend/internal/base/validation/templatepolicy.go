@@ -49,25 +49,9 @@ type templatePolicyRule struct {
 }
 
 func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetadata) ([]PolicyFinding, error) {
-	normalized, err := NormalizeTemplateData(raw)
+	data, err := decodeDocumentData(raw)
 	if err != nil {
-		return []PolicyFinding{
-			{
-				PolicySetID:   "facis.dcs.template.audit",
-				PolicyVersion: "v1",
-				RuleID:        "FACIS-TPL-STRUCT-000",
-				Title:         "Template data must be structurally valid",
-				Severity:      "error",
-				Message:       err.Error(),
-				Path:          "template_data",
-				OntologyTerm:  "dcs:DocumentStructure",
-			},
-		}, nil
-	}
-
-	data, err := decodeDocumentData(normalized)
-	if err != nil {
-		return nil, err
+		return []PolicyFinding{templateStructureDecodeFinding(err)}, nil
 	}
 	policySet, err := loadTemplatePolicySet()
 	if err != nil {
@@ -75,6 +59,9 @@ func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetad
 	}
 
 	findings := []PolicyFinding{}
+	if !isCanonicalEnvelope(data) {
+		findings = append(findings, templateStructureFinding(policySet, "template data must use the canonical dcs:documentStructure envelope"))
+	}
 	for _, rule := range policySet.Rules {
 		findings = append(findings, evaluateTemplatePolicyRule(policySet, rule, data, metadata)...)
 	}
@@ -121,10 +108,12 @@ func resolveTemplatePolicyFile() (string, error) {
 
 func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolicyRule, data documentData, metadata TemplatePolicyAuditMetadata) []PolicyFinding {
 	switch rule.Builtin {
-	case "required_schema_refs":
-		return auditRequiredSchemaRefs(policySet, rule, data)
-	case "required_policy_refs":
-		return auditRequiredPolicyRefs(policySet, rule, data)
+	case "canonical_document_structure":
+		return auditCanonicalDocumentStructure(policySet, rule, data)
+	case "canonical_contract_data":
+		return auditCanonicalContractData(policySet, rule, data)
+	case "canonical_policy_operands":
+		return auditCanonicalPolicyOperands(policySet, rule, data)
 	case "finished_template_has_clause_semantics":
 		return auditFinishedTemplateHasClauseSemantics(policySet, rule, data)
 	case "finished_template_state":
@@ -142,85 +131,168 @@ func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolic
 	}
 }
 
-func auditRequiredSchemaRefs(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
-	if isCanonicalEnvelope(data) {
-		return nil
-	}
-	refs, _ := data["schemaRefs"].(map[string]any)
-	required := map[string]string{
-		"documentStructure": SchemaDocumentStructureV1,
-		"semanticCondition": SchemaSemanticConditionV1,
-		"templateData":      SchemaTemplateDataV1,
-	}
+func auditCanonicalDocumentStructure(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
 	findings := []PolicyFinding{}
-	for key, expected := range required {
-		if refs[key] != expected {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("schemaRefs.%s must be %q", key, expected), "schemaRefs."+key, ""))
+	structure, ok := topLevelValue(data, "documentStructure").(map[string]any)
+	if !ok {
+		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:documentStructure must be an object", "dcs:documentStructure", "")}
+	}
+	blocks, ok := canonicalBlocks(structure)
+	if !ok || len(blocks) == 0 {
+		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:blocks must contain at least one block", "dcs:documentStructure.dcs:blocks", ""))
+	}
+	layout, ok := structure["dcs:layout"].([]any)
+	if !ok || len(layout) == 0 {
+		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:layout must contain at least one layout node", "dcs:documentStructure.dcs:layout", ""))
+	}
+	blockIDs := map[string]bool{}
+	for index, rawBlock := range blocks {
+		block, ok := rawBlock.(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:blocks item %d must be an object", index), "dcs:documentStructure.dcs:blocks", ""))
+			continue
 		}
+		blockID, _ := block["@id"].(string)
+		if strings.TrimSpace(blockID) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:blocks item %d requires @id", index), "dcs:documentStructure.dcs:blocks", ""))
+			continue
+		}
+		blockIDs[blockID] = true
+		if strings.TrimSpace(stringMapValue(block, "@type")) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("document block %q requires @type", blockID), blockID, ""))
+		}
+	}
+	rootCount := 0
+	for index, rawNode := range layout {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:layout item %d must be an object", index), "dcs:documentStructure.dcs:layout", ""))
+			continue
+		}
+		nodeID, _ := node["@id"].(string)
+		if isTrueValue(node["dcs:isRoot"]) {
+			rootCount++
+		} else if strings.TrimSpace(nodeID) != "" && !blockIDs[nodeID] {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("layout node %q references no declared block", nodeID), "dcs:documentStructure.dcs:layout", ""))
+		}
+		children, ok := jsonLDList(node["dcs:children"])
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("layout node %q must declare dcs:children as @list", nodeID), "dcs:documentStructure.dcs:layout.dcs:children", ""))
+			continue
+		}
+		for _, rawChild := range children {
+			child, _ := rawChild.(map[string]any)
+			childID, _ := child["@id"].(string)
+			if !blockIDs[childID] {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("layout references nonexistent block %q", childID), "dcs:documentStructure.dcs:layout.dcs:children", ""))
+			}
+		}
+	}
+	if rootCount != 1 {
+		findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:layout must contain exactly one root node, got %d", rootCount), "dcs:documentStructure.dcs:layout", ""))
 	}
 	return findings
 }
 
-func auditRequiredPolicyRefs(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
-	if isCanonicalEnvelope(data) {
-		return nil
-	}
-	policies, _ := asArray(data["policyRefs"])
-	seen := map[string]bool{}
-	for _, item := range policies {
-		policy, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		policyID, _ := policy["policyId"].(string)
-		seen[policyID] = true
+func auditCanonicalContractData(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	requirements, ok := topLevelValue(data, "contractData").([]any)
+	if !ok || len(requirements) == 0 {
+		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:contractData must contain at least one dcs:DataRequirement", "dcs:contractData", "")}
 	}
 	findings := []PolicyFinding{}
-	required := []string{PolicyTemplateStructureV1, PolicyTemplateSemanticConditionsV1}
-	for _, policyID := range required {
-		if !seen[policyID] {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("required policy %q is missing", policyID), "policyRefs", ""))
+	fieldIDs := map[string]bool{}
+	for reqIndex, rawRequirement := range requirements {
+		requirement, ok := rawRequirement.(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:contractData item %d must be an object", reqIndex), "dcs:contractData", ""))
+			continue
+		}
+		conditionID, _ := requirement["dcs:conditionId"].(string)
+		if strings.TrimSpace(conditionID) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:contractData item %d requires dcs:conditionId", reqIndex), "dcs:contractData.dcs:conditionId", ""))
+		}
+		fields, ok := requirement["dcs:fields"].([]any)
+		if !ok || len(fields) == 0 {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("data requirement %q must contain at least one dcs:RequirementField", conditionID), "dcs:contractData.dcs:fields", ""))
+			continue
+		}
+		for fieldIndex, rawField := range fields {
+			field, ok := rawField.(map[string]any)
+			if !ok {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %d in requirement %q must be an object", fieldIndex, conditionID), "dcs:contractData.dcs:fields", ""))
+				continue
+			}
+			fieldID, _ := field["@id"].(string)
+			if strings.TrimSpace(fieldID) == "" {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %d in requirement %q requires @id", fieldIndex, conditionID), "dcs:contractData.dcs:fields.@id", ""))
+			} else {
+				fieldIDs[fieldID] = true
+			}
+			if strings.TrimSpace(stringMapValue(field, "dcs:parameterName")) == "" {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %q requires dcs:parameterName", fieldID), "dcs:contractData.dcs:fields.dcs:parameterName", ""))
+			}
+			domainField, ok := field["dcs:domainField"].(map[string]any)
+			domainFieldID, _ := domainField["@id"].(string)
+			if !ok || strings.TrimSpace(domainFieldID) == "" {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %q requires dcs:domainField @id", fieldID), "dcs:contractData.dcs:fields.dcs:domainField", ""))
+			}
+		}
+	}
+	if len(fieldIDs) == 0 {
+		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:contractData must declare at least one requirement field @id", "dcs:contractData.dcs:fields", ""))
+	}
+	return findings
+}
+
+func auditCanonicalPolicyOperands(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	fieldIDs := canonicalContractDataFieldIDs(data)
+	policies, ok := topLevelValue(data, "policies").([]any)
+	if !ok {
+		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:policies must be an array", "dcs:policies", "")}
+	}
+	findings := []PolicyFinding{}
+	for index, rawPolicy := range policies {
+		policy, ok := rawPolicy.(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:policies item %d must be an object", index), "dcs:policies", ""))
+			continue
+		}
+		policyID, _ := policy["@id"].(string)
+		constraint, ok := policy["odrl:constraint"].(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:constraint", policyID), "dcs:policies.odrl:constraint", ""))
+			continue
+		}
+		leftOperand, ok := constraint["odrl:leftOperand"].(map[string]any)
+		fieldID, _ := leftOperand["@id"].(string)
+		if !ok || strings.TrimSpace(fieldID) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:leftOperand @id", policyID), "dcs:policies.odrl:leftOperand", ""))
+			continue
+		}
+		if !fieldIDs[fieldID] {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q references nonexistent contract data field %q", policyID, fieldID), fieldID, fieldID))
+		}
+		if _, ok := constraint["odrl:operator"].(map[string]any); !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:operator @id", policyID), "dcs:policies.odrl:operator", ""))
 		}
 	}
 	return findings
 }
 
 func auditFinishedTemplateHasClauseSemantics(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
-	if isCanonicalEnvelope(data) {
-		structure, _ := topLevelValue(data, "documentStructure").(map[string]any)
-		blocks, ok := jsonLDList(structure["dcs:blocks"])
-		if !ok {
-			blocks, _ = structure["dcs:blocks"].([]any)
-		}
-		contractData, _ := topLevelValue(data, "contractData").([]any)
-		for _, rawBlock := range blocks {
-			block, ok := rawBlock.(map[string]any)
-			if ok && block["@type"] == "dcs:Clause" {
-				if content, valid := jsonLDList(block["dcs:content"]); valid && len(content) > 0 && len(contractData) > 0 {
-					return nil
-				}
-			}
-		}
-		return []PolicyFinding{newPolicyFinding(policySet, rule, "finished templates should contain at least one clause linked to contract data", "dcs:documentStructure", "")}
-	}
-	blocks, _ := asArray(data["documentBlocks"])
-	conditions, _ := asArray(data["semanticConditions"])
-	clauseWithCondition := false
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok || block["type"] != "CLAUSE" {
+	structure, _ := topLevelValue(data, "documentStructure").(map[string]any)
+	blocks, _ := canonicalBlocks(structure)
+	fieldIDs := canonicalContractDataFieldIDs(data)
+	for _, rawBlock := range blocks {
+		block, ok := rawBlock.(map[string]any)
+		if !ok || block["@type"] != "dcs:Clause" {
 			continue
 		}
-		refs, _ := asArray(block["conditionIds"])
-		if len(refs) > 0 {
-			clauseWithCondition = true
-			break
+		if clauseHasContractDataBinding(block, fieldIDs) {
+			return nil
 		}
 	}
-	if clauseWithCondition && len(conditions) > 0 {
-		return nil
-	}
-	return []PolicyFinding{newPolicyFinding(policySet, rule, "finished templates should contain at least one clause linked to a semantic condition", "documentBlocks", "")}
+	return []PolicyFinding{newPolicyFinding(policySet, rule, "finished templates should contain at least one dcs:Clause with a placeholder bound to dcs:contractData", "dcs:documentStructure.dcs:blocks", "")}
 }
 
 func auditFinishedTemplateState(policySet *templatePolicySet, rule templatePolicyRule, metadata TemplatePolicyAuditMetadata) []PolicyFinding {
@@ -243,9 +315,6 @@ func auditCanonicalDomainFields(policySet *templatePolicySet, rule templatePolic
 }
 
 func auditConstrainedParameters(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
-	if isCanonicalEnvelope(data) {
-		return nil
-	}
 	findings := []PolicyFinding{}
 	forEachSemanticParameter(data, func(conditionID string, index int, param map[string]any) {
 		semanticPath, _ := param["semanticPath"].(string)
@@ -287,62 +356,126 @@ func auditMetadataComplete(policySet *templatePolicySet, rule templatePolicyRule
 	if strings.TrimSpace(metadata.State) == "" {
 		findings = append(findings, newPolicyFinding(policySet, rule, "template state is missing", "state", ""))
 	}
-	if isCanonicalEnvelope(data) {
-		if _, ok := topLevelValue(data, "metadata").(map[string]any); !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, "template metadata is missing", "dcs:metadata", ""))
-		}
-		return findings
-	}
-	if _, ok := data["validation"].(map[string]any); !ok {
-		findings = append(findings, newPolicyFinding(policySet, rule, "validation profile metadata is missing", "validation", ""))
-	}
-	if _, ok := data["policyRefs"].([]any); !ok {
-		if _, ok := asArray(data["policyRefs"]); !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, "policyRefs metadata is missing", "policyRefs", ""))
-		}
+	if _, ok := topLevelValue(data, "metadata").(map[string]any); !ok {
+		findings = append(findings, newPolicyFinding(policySet, rule, "template metadata is missing", "dcs:metadata", ""))
 	}
 	return findings
 }
 
 func forEachSemanticParameter(data documentData, visit func(conditionID string, index int, param map[string]any)) {
-	if isCanonicalEnvelope(data) {
-		requirements, _ := topLevelValue(data, "contractData").([]any)
-		for _, rawRequirement := range requirements {
-			requirement, ok := rawRequirement.(map[string]any)
-			if !ok {
-				continue
-			}
-			conditionID, _ := requirement["dcs:conditionId"].(string)
-			fields, _ := requirement["dcs:fields"].([]any)
-			for index, rawField := range fields {
-				field, ok := rawField.(map[string]any)
-				if !ok {
-					continue
-				}
-				domainField, _ := field["dcs:domainField"].(map[string]any)
-				domainFieldID, _ := domainField["@id"].(string)
-				visit(conditionID, index, map[string]any{
-					"semanticPath": domainFieldID,
-				})
-			}
-		}
-		return
-	}
-	conditions, _ := asArray(data["semanticConditions"])
-	for _, item := range conditions {
-		condition, ok := item.(map[string]any)
+	requirements, _ := topLevelValue(data, "contractData").([]any)
+	for _, rawRequirement := range requirements {
+		requirement, ok := rawRequirement.(map[string]any)
 		if !ok {
 			continue
 		}
-		conditionID, _ := condition["conditionId"].(string)
-		parameters, _ := asArray(condition["parameters"])
-		for i, rawParam := range parameters {
-			param, ok := rawParam.(map[string]any)
+		conditionID, _ := requirement["dcs:conditionId"].(string)
+		fields, _ := requirement["dcs:fields"].([]any)
+		for index, rawField := range fields {
+			field, ok := rawField.(map[string]any)
 			if !ok {
 				continue
 			}
-			visit(conditionID, i, param)
+			domainField, _ := field["dcs:domainField"].(map[string]any)
+			domainFieldID, _ := domainField["@id"].(string)
+			visit(conditionID, index, map[string]any{
+				"semanticPath":    domainFieldID,
+				"valueConstraint": domainFieldValueConstraint(domainFieldID),
+			})
 		}
+	}
+}
+
+func canonicalBlocks(structure map[string]any) ([]any, bool) {
+	blocks, ok := jsonLDList(structure["dcs:blocks"])
+	if !ok {
+		blocks, ok = structure["dcs:blocks"].([]any)
+	}
+	return blocks, ok
+}
+
+func canonicalContractDataFieldIDs(data documentData) map[string]bool {
+	fieldIDs := map[string]bool{}
+	requirements, _ := topLevelValue(data, "contractData").([]any)
+	for _, rawRequirement := range requirements {
+		requirement, ok := rawRequirement.(map[string]any)
+		if !ok {
+			continue
+		}
+		fields, _ := requirement["dcs:fields"].([]any)
+		for _, rawField := range fields {
+			field, ok := rawField.(map[string]any)
+			if !ok {
+				continue
+			}
+			fieldID, _ := field["@id"].(string)
+			if strings.TrimSpace(fieldID) != "" {
+				fieldIDs[fieldID] = true
+			}
+		}
+	}
+	return fieldIDs
+}
+
+func clauseHasContractDataBinding(block map[string]any, fieldIDs map[string]bool) bool {
+	content, ok := jsonLDList(block["dcs:content"])
+	if !ok {
+		return false
+	}
+	for _, rawSegment := range content {
+		segment, ok := rawSegment.(map[string]any)
+		if !ok || segment["@type"] != "dcs:Placeholder" {
+			continue
+		}
+		bindsTo, _ := segment["dcs:bindsTo"].(map[string]any)
+		fieldID, _ := bindsTo["@id"].(string)
+		if fieldIDs[fieldID] {
+			return true
+		}
+	}
+	return false
+}
+
+func domainFieldValueConstraint(domainFieldID string) map[string]any {
+	field, ok := ontologyDomainFieldIndex[domainFieldID]
+	if !ok || field.Constraint == nil {
+		return nil
+	}
+	return field.Constraint.asMap()
+}
+
+func stringMapValue(values map[string]any, key string) string {
+	value, ok := values[key]
+	if !ok || value == nil {
+		return ""
+	}
+	text, _ := value.(string)
+	return text
+}
+
+func templateStructureDecodeFinding(err error) PolicyFinding {
+	return PolicyFinding{
+		PolicySetID:   "facis.dcs.template.audit",
+		PolicyVersion: "v1",
+		RuleID:        "FACIS-TPL-STRUCT-000",
+		Title:         "Template data must be valid JSON",
+		Severity:      "error",
+		Message:       err.Error(),
+		Path:          "template_data",
+		OntologyTerm:  "dcs:DocumentStructure",
+	}
+}
+
+func templateStructureFinding(policySet *templatePolicySet, message string) PolicyFinding {
+	return PolicyFinding{
+		PolicySetID:   policySet.PolicySetID,
+		PolicyVersion: policySet.Version,
+		RuleID:        "FACIS-TPL-STRUCT-000",
+		Title:         "Template data must use canonical JSON-LD",
+		Severity:      "error",
+		Message:       message,
+		Path:          "template_data",
+		OntologyTerm:  "dcs:DocumentStructure",
 	}
 }
 

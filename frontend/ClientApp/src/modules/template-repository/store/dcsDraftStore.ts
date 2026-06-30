@@ -26,7 +26,7 @@ import type {
   ContractTemplateUpdateRequest,
 } from '@/models/requests/template-request'
 import type { DcsOperator } from '@/models/semantic/facis-dcs-semantic'
-import { isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
+import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import {
   isDcsDocumentData,
   isDcsTemplateData,
@@ -36,6 +36,7 @@ import {
   type DcsDocumentData,
   type DcsTemplateData,
   type DcsBlock,
+  type DcsApprovedTemplate,
   type DcsDocumentStructure,
   type DcsClause,
   type DcsSection,
@@ -453,10 +454,8 @@ interface CanonicalDocumentInput {
 }
 
 function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentData {
-  // Filter out virtual merged blocks — they have no JSON-LD equivalent
-  const canonicalBlocks = input.blocks.filter(
-    (b): b is DcsBlock => !isDcsMergedApprovedTemplate(b),
-  )
+  const canonicalBlocks = canonicalizeBlocks(input.blocks)
+  const canonicalLayout = canonicalizeLayout(input.layout)
   const commonMetadata = {
     ...(input.documentId ? { '@id': `${input.documentId}#metadata` } : {}),
     ...(input.name ? { 'dcs:title': input.name } : {}),
@@ -485,7 +484,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       '@type': 'dcs:DocumentStructure',
       ...(input.documentId ? { '@id': `${input.documentId}#document-structure` } : {}),
       'dcs:blocks': { '@list': canonicalBlocks },
-      'dcs:layout': input.layout,
+      'dcs:layout': canonicalLayout,
     },
     'dcs:contractData': input.contractData,
     'dcs:policies': input.policies,
@@ -500,6 +499,41 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
         }
       : {}),
   }
+}
+
+function canonicalizeBlocks(blocks: (DcsBlock | MergedApprovedTemplateBlock)[]): DcsBlock[] {
+  return blocks.flatMap((block): DcsBlock[] => {
+    if (isDcsMergedApprovedTemplate(block)) {
+      const approvedTemplate: DcsApprovedTemplate = {
+        '@type': 'dcs:ApprovedTemplate',
+        '@id': block['@id'],
+        'dcs:templateDid': block['dcs:templateDid'],
+        'dcs:version': block['dcs:version'],
+        ...(block['dcs:documentNumber'] ? { 'dcs:documentNumber': block['dcs:documentNumber'] } : {}),
+      }
+      return [approvedTemplate]
+    }
+    if (isMergedBlockId(block['@id'])) {
+      return []
+    }
+    return [block]
+  })
+}
+
+function canonicalizeLayout(layout: DcsLayoutNode[]): DcsLayoutNode[] {
+  return layout.flatMap((node): DcsLayoutNode[] => {
+    if (isMergedBlockId(node['@id'])) {
+      return []
+    }
+    return [
+      {
+        ...node,
+        'dcs:children': {
+          '@list': node['dcs:children']['@list'].filter((ref) => !isMergedBlockId(ref['@id'])),
+        },
+      },
+    ]
+  })
 }
 
 // ---- buildContractDocument (public API for contract workflow) ----
@@ -541,7 +575,7 @@ export function getLayoutFromTemplateData(
 }
 
 export function getSemanticConditionsFromTemplateData(
-  td: SubTemplateSnapshot['template_data'],
+  td: DcsDocumentData | SubTemplateSnapshot['template_data'],
 ): SemanticCondition[] {
   if (!isDcsDocumentData(td)) return []
   return contractDataToSemanticConditions(td['dcs:contractData'], td['dcs:policies'])

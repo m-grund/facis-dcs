@@ -263,6 +263,263 @@ func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
 	require.True(t, hasFindingSeverity(findings, "FACIS-EXT-001", "error"))
 }
 
+func TestAuditContractContentAcceptsCanonicalContractODRLValues(t *testing.T) {
+	contract := canonicalAuditContract()
+
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "info"))
+	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-postal-code", "info"))
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+}
+
+func TestAuditContractContentFlagsCanonicalContractODRLViolation(t *testing.T) {
+	contract := canonicalAuditContract()
+	values := contract["semanticConditionValues"].([]any)
+	values[0].(map[string]any)["parameterValue"] = "USA"
+
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
+}
+
+func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testing.T) {
+	contract := canonicalAuditContract()
+	contract["semanticConditionValues"] = []any{}
+
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
+	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-postal-code", "error"))
+}
+
+func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) {
+	contract := canonicalAuditContract()
+	policy := contract["dcs:policies"].([]any)[0].(map[string]any)
+	constraint := policy["odrl:constraint"].(map[string]any)
+	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
+
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
+}
+
+func TestAuditContractContentMapsCanonicalSemanticValuesToPartyShape(t *testing.T) {
+	contract := canonicalAuditContractWithTemplateParties()
+	minCount := 2
+	maxCount := 2
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.structure-semantics",
+		"version":     "test",
+		"shacl": map[string]any{
+			"shapes": []any{
+				map[string]any{
+					"id":          "dcs:ContractShape",
+					"title":       "Contract shape",
+					"targetClass": "dcs:Contract",
+					"property": []any{
+						map[string]any{
+							"id":       "dcs:ContractShape-PARTY",
+							"path":     "dcs:party",
+							"minCount": minCount,
+							"maxCount": maxCount,
+							"class":    "dcs:CompanyParty",
+							"node":     "dcs:CompanyPartyShape",
+						},
+					},
+				},
+				map[string]any{
+					"id":          "dcs:CompanyPartyShape",
+					"title":       "Company party shape",
+					"targetClass": "dcs:CompanyParty",
+					"property": []any{
+						map[string]any{"id": "dcs:CompanyPartyShape-ROLE", "path": "dcs:role", "minCount": 1, "maxCount": 1, "datatype": "xsd:string", "in": []any{"provider", "customer"}},
+						map[string]any{"id": "dcs:CompanyPartyShape-LEGAL", "path": "dcs:legalName", "minCount": 1, "maxCount": 1, "datatype": "xsd:string"},
+					},
+				},
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+	require.True(t, hasFindingSeverity(findings, "dcs:ContractShape-PARTY", "info"))
+}
+
+func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testing.T) {
+	contract := canonicalAuditContractWithTemplateParties()
+	findings := auditContractValidationProfile(contract, ValidationProfile{
+		ID:      "runtime-values",
+		Version: "test",
+		Rules: []ValidationRule{
+			{
+				ID:       "jurisdiction-allowed",
+				Type:     ValidationRuleValueIn,
+				Severity: "error",
+				Target:   "contract.jurisdiction",
+				Values:   []string{"DEU", "AUT", "CHE"},
+			},
+			{
+				ID:       "availability-minimum",
+				Type:     ValidationRuleComparison,
+				Severity: "error",
+				Target:   "service.sla.availability",
+				Operator: "gte",
+				Value:    99.5,
+			},
+		},
+	})
+
+	require.True(t, hasFindingSeverity(findings, "jurisdiction-allowed", "info"))
+	require.True(t, hasFindingSeverity(findings, "availability-minimum", "info"))
+}
+
+func canonicalAuditContract() map[string]any {
+	countryFieldID := "urn:uuid:field-company-country"
+	postalCodeFieldID := "urn:uuid:field-company-postal-code"
+	return map[string]any{
+		"@context": map[string]any{
+			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
+			"odrl": "http://www.w3.org/ns/odrl/2/",
+			"xsd":  "http://www.w3.org/2001/XMLSchema#",
+		},
+		"@id":   "did:example:contract",
+		"@type": "dcs:Contract",
+		"dcs:metadata": map[string]any{
+			"@type":       "dcs:ContractMetadata",
+			"dcs:title":   "Canonical audit contract",
+			"dcs:version": 1,
+		},
+		"dcs:documentStructure": map[string]any{
+			"@type": "dcs:DocumentStructure",
+			"dcs:blocks": map[string]any{"@list": []any{
+				map[string]any{
+					"@id":   "urn:uuid:block-clause-1",
+					"@type": "dcs:Clause",
+					"dcs:content": map[string]any{"@list": []any{
+						"Company country: ",
+						map[string]any{"@type": "dcs:Placeholder", "dcs:bindsTo": map[string]any{"@id": countryFieldID}},
+					}},
+				},
+			}},
+			"dcs:layout": []any{
+				map[string]any{
+					"@id":          "urn:uuid:block-root",
+					"dcs:isRoot":   true,
+					"dcs:children": map[string]any{"@list": []any{map[string]any{"@id": "urn:uuid:block-clause-1"}}},
+				},
+			},
+		},
+		"dcs:contractData": []any{
+			map[string]any{
+				"@id":               "urn:uuid:req-company",
+				"@type":             "dcs:DataRequirement",
+				"dcs:conditionId":   "company",
+				"dcs:name":          "Company",
+				"dcs:schemaVersion": "v1",
+				"dcs:fields": []any{
+					map[string]any{
+						"@id":               countryFieldID,
+						"@type":             "dcs:RequirementField",
+						"dcs:parameterName": "country",
+						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
+						"dcs:required":      true,
+					},
+					map[string]any{
+						"@id":               postalCodeFieldID,
+						"@type":             "dcs:RequirementField",
+						"dcs:parameterName": "postalCode",
+						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-postalCode"},
+						"dcs:required":      true,
+					},
+				},
+			},
+		},
+		"dcs:policies": []any{
+			odrlDuty("urn:uuid:policy-country", countryFieldID, "odrl:isAnyOf", []any{
+				map[string]any{"@type": "xsd:string", "@value": "DEU"},
+				map[string]any{"@type": "xsd:string", "@value": "AUT"},
+				map[string]any{"@type": "xsd:string", "@value": "CHE"},
+			}),
+			odrlDuty("urn:uuid:policy-postal-code", postalCodeFieldID, "odrl:eq", map[string]any{"@type": "xsd:string", "@value": "91448"}),
+		},
+		"semanticConditionValues": []any{
+			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
+			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "postalCode", "parameterValue": "91448"},
+		},
+	}
+}
+
+func canonicalAuditContractWithTemplateParties() map[string]any {
+	contract := canonicalAuditContract()
+	contract["dcs:contractData"] = []any{}
+	contract["dcs:policies"] = []any{}
+	contract["dcs:metadata"] = map[string]any{
+		"@type":     "dcs:ContractMetadata",
+		"dcs:title": "Canonical audit contract",
+		"dcs:subTemplates": []any{
+			map[string]any{
+				"@id":         "did:example:template",
+				"dcs:version": 1,
+				"dcs:template": map[string]any{
+					"@type": "dcs:ContractTemplate",
+					"dcs:contractData": []any{
+						companyPartyRequirement("condition-customer", "customer"),
+						companyPartyRequirement("condition-provider", "provider"),
+					},
+				},
+			},
+		},
+	}
+	contract["semanticConditionValues"] = []any{
+		map[string]any{"conditionId": "condition-customer", "parameterName": "company.legalName", "parameterValue": "Firma A"},
+		map[string]any{"conditionId": "condition-customer", "parameterName": "company.location.country", "parameterValue": "DEU"},
+		map[string]any{"conditionId": "condition-provider", "parameterName": "company.legalName", "parameterValue": "Firma B"},
+		map[string]any{"conditionId": "condition-provider", "parameterName": "company.location.country", "parameterValue": "DEU"},
+		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.availability", "parameterValue": 99.5},
+		map[string]any{"conditionId": "condition-legal", "parameterName": "contract.jurisdiction", "parameterValue": "DEU"},
+	}
+	return contract
+}
+
+func companyPartyRequirement(conditionID string, role string) map[string]any {
+	return map[string]any{
+		"@id":               "urn:uuid:req-" + conditionID,
+		"@type":             "dcs:DataRequirement",
+		"dcs:conditionId":   conditionID,
+		"dcs:name":          role + " party",
+		"dcs:schemaVersion": "v1",
+		"dcs:entityType":    "CompanyParty",
+		"dcs:entityRole":    role,
+		"dcs:fields": []any{
+			map[string]any{
+				"@id":               "urn:uuid:field-" + conditionID + "-legal-name",
+				"@type":             "dcs:RequirementField",
+				"dcs:parameterName": "company.legalName",
+				"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-legalName"},
+				"dcs:required":      true,
+			},
+			map[string]any{
+				"@id":               "urn:uuid:field-" + conditionID + "-country",
+				"@type":             "dcs:RequirementField",
+				"dcs:parameterName": "company.location.country",
+				"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
+				"dcs:required":      true,
+			},
+		},
+	}
+}
+
 func hasFindingSeverity(findings []PolicyFinding, ruleID string, severity string) bool {
 	for _, finding := range findings {
 		if finding.RuleID == ruleID && finding.Severity == severity {

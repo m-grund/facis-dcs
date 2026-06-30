@@ -204,7 +204,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Negotiation Tasks',
       order: 3.3,
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER'],
+      roles: ['CONTRACT_CREATOR', 'CONTRACT_NEGOTIATOR', 'CONTRACT_REVIEWER'],
     },
   },
   {
@@ -247,19 +247,6 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: '/audit',
-    name: ROUTES.AUDIT.LIST,
-    component: AuditView,
-    meta: {
-      name: 'Audit',
-      icon: ClipboardDocumentListIcon,
-      requiresAuth: true,
-      title: 'DCS - Audit',
-      order: 5,
-      roles: ['AUDITOR'],
-    },
-  },
-  {
     path: '/contracts',
     name: ROUTES.CONTRACTS.LIST,
     component: ContractListView,
@@ -269,7 +256,14 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Contracts',
       order: 2,
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+      roles: [
+        'CONTRACT_CREATOR',
+        'CONTRACT_NEGOTIATOR',
+        'CONTRACT_REVIEWER',
+        'CONTRACT_APPROVER',
+        'CONTRACT_MANAGER',
+        'CONTRACT_OBSERVER',
+      ],
     },
   },
   {
@@ -305,7 +299,14 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - View Contract',
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+      roles: [
+        'CONTRACT_CREATOR',
+        'CONTRACT_NEGOTIATOR',
+        'CONTRACT_REVIEWER',
+        'CONTRACT_APPROVER',
+        'CONTRACT_MANAGER',
+        'CONTRACT_OBSERVER',
+      ],
     },
   },
   {
@@ -317,7 +318,14 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Negotiate Contract',
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+      roles: [
+        'CONTRACT_CREATOR',
+        'CONTRACT_NEGOTIATOR',
+        'CONTRACT_REVIEWER',
+        'CONTRACT_APPROVER',
+        'CONTRACT_MANAGER',
+        'CONTRACT_OBSERVER',
+      ],
     },
   },
   {
@@ -329,7 +337,14 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Review Contract',
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+      roles: [
+        'CONTRACT_CREATOR',
+        'CONTRACT_NEGOTIATOR',
+        'CONTRACT_REVIEWER',
+        'CONTRACT_APPROVER',
+        'CONTRACT_MANAGER',
+        'CONTRACT_OBSERVER',
+      ],
     },
   },
   {
@@ -341,7 +356,14 @@ const routes: RouteRecordRaw[] = [
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS - Approve Contract',
-      roles: ['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+      roles: [
+        'CONTRACT_CREATOR',
+        'CONTRACT_NEGOTIATOR',
+        'CONTRACT_REVIEWER',
+        'CONTRACT_APPROVER',
+        'CONTRACT_MANAGER',
+        'CONTRACT_OBSERVER',
+      ],
     },
   },
   {

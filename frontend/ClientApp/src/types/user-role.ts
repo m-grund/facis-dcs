@@ -7,6 +7,7 @@ export type UserRole =
   | 'CONTRACT_REVIEWER'
   | 'CONTRACT_APPROVER'
   | 'CONTRACT_MANAGER'
+  | 'CONTRACT_NEGOTIATOR'
   | 'CONTRACT_SIGNER'
   | 'CONTRACT_OBSERVER'
   | 'ARCHIVE_MANAGER'
@@ -27,6 +28,7 @@ const ROLE_LABEL_TO_USER_ROLE: Record<string, UserRole> = {
   'Contract Reviewer': 'CONTRACT_REVIEWER',
   'Contract Approver': 'CONTRACT_APPROVER',
   'Contract Manager': 'CONTRACT_MANAGER',
+  'Contract Negotiator': 'CONTRACT_NEGOTIATOR',
   'Contract Signer': 'CONTRACT_SIGNER',
   'Contract Observer': 'CONTRACT_OBSERVER',
   'Archive Manager': 'ARCHIVE_MANAGER',

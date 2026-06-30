@@ -17,7 +17,7 @@ import TemplatePreview from '@/modules/template-repository/components/builder-ed
 import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
-import { getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
+import { buildContractDocument, getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
@@ -100,19 +100,41 @@ const changeExpNoticePeriod = computed(
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
   const storedValues = contractContentValuesStore.semanticConditionValues
-  const contractValues = contract.value?.contract_data?.semanticConditionValues
+  const contractValues = contract.value?.contract_data?.semanticConditionValues ?? []
 
-  if (!storedValues?.length || !contractValues?.length) return false
-
-  return !arrayEqual(
-    storedValues.map((v) => v.parameterValue),
-    contractValues.map((v) => v.parameterValue),
-  )
+  return !semanticConditionValuesEqual(storedValues, contractValues)
 })
 
-const arrayEqual = (a: unknown[], b: unknown[]) => {
+const semanticConditionValuesEqual = (a: SemanticConditionValue[], b: SemanticConditionValue[]) => {
   if (a.length !== b.length) return false
-  return a.every((value, i) => value === b[i])
+  const bValues = new Map(
+    b.map((value) => [
+      `${value.blockId}|${value.conditionId}|${value.parameterName}`,
+      value.parameterValue,
+    ]),
+  )
+  return a.every((value) => {
+    const key = `${value.blockId}|${value.conditionId}|${value.parameterName}`
+    return bValues.get(key) === value.parameterValue
+  })
+}
+
+function buildCurrentContractData(): ContractData | undefined {
+  if (!contract.value) return undefined
+  return buildContractDocument({
+    documentId: contract.value.did,
+    name: editedContract.value?.name ?? contract.value.name,
+    description: editedContract.value?.description ?? contract.value.description,
+    blocks: templateDraftStore.blocks,
+    layout: templateDraftStore.layout,
+    contractData: templateDraftStore.contractData,
+    policies: templateDraftStore.policies,
+    subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
+    semanticConditionValues: contractContentValuesStore.semanticConditionValues,
+    sourceTemplate: contract.value.contract_data?.sourceTemplate,
+    derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
+    parentContractDid: contract.value.contract_data?.['dcs:parentContract']?.['@id'],
+  })
 }
 
 const loadContract = async () => {
@@ -176,7 +198,7 @@ const negotiateContractChange = async () => {
       changeRequest.exp_policy = editedContract.value.exp_policy
     }
     if (changedContractData.value) {
-      changeRequest.contract_data = { semanticConditionValues: contractContentValuesStore.semanticConditionValues }
+      changeRequest.contract_data = buildCurrentContractData()
     }
     const response = await contractWorkflowService.negotiate({
       did: contract.value?.did,
@@ -356,14 +378,7 @@ const shownData = computed(() => {
 })
 
 const currentContractData = computed<ContractData | undefined>(() => {
-  const data = contract.value?.contract_data
-  if (!data) return undefined
-  const preprocessedContractData = preprocessContractData(data)
-
-  return {
-    ...preprocessedContractData,
-    semanticConditionValues: [...contractContentValuesStore.semanticConditionValues],
-  }
+  return buildCurrentContractData()
 })
 
 const hasActiveNegotiations = computed(() => {

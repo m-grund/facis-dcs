@@ -222,19 +222,24 @@ type errorResponse struct {
 
 func (e *errorResponse) StatusCode() int { return e.statusCode }
 
-// errorFormatter maps named ServiceErrors ("unauthorized", "forbidden") to the
-// correct HTTP status codes. All other errors fall through to the default Goa
-// heuristic.
+// errorFormatter maps named ServiceErrors to the correct HTTP status codes.
+// All other errors fall through to the default Goa heuristic.
 func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
 	resp := goahttp.NewErrorResponse(ctx, err)
 
 	var gerr *goa.ServiceError
 	if errors.As(err, &gerr) {
 		switch gerr.Name {
+		case "bad_request":
+			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusBadRequest}
 		case "unauthorized":
 			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusUnauthorized}
 		case "forbidden":
 			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusForbidden}
+		case "not_found":
+			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusNotFound}
+		case "service_unavailable":
+			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusServiceUnavailable}
 		}
 	}
 

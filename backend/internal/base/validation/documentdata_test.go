@@ -368,6 +368,25 @@ func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
 	require.ErrorContains(t, err, "is not referenced by layout")
 }
 
+func TestNormalizeTemplateDataAcceptsUnreferencedClause(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	structure := data["dcs:documentStructure"].(map[string]any)
+	blocksWrapper := structure["dcs:blocks"].(map[string]any)
+	blocksWrapper["@list"] = append(blocksWrapper["@list"].([]any), map[string]any{
+		"@id":         "urn:uuid:block-clause-pool",
+		"@type":       "dcs:Clause",
+		"dcs:title":   "Reusable clause",
+		"dcs:content": map[string]any{"@list": []any{"Reusable content"}},
+	})
+	contract, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&contract)
+	require.NoError(t, err)
+}
+
 func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 	normalized, err := NormalizeContractDataForPersistence(validTemplateData(t), "did:web:facis.example:contract:1", nil, false)
 	require.NoError(t, err)

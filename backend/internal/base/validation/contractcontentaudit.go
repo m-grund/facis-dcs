@@ -359,7 +359,6 @@ func ontologyInt(statement string, predicate string) *int {
 	return nil
 }
 
-
 func auditContractValidationProfile(contract map[string]any, profile ValidationProfile) []PolicyFinding {
 	findings := []PolicyFinding{}
 	statementRules := []ValidationRule{}
@@ -632,7 +631,6 @@ func shaclPropertyFinding(policy ContractContentPolicy, shape ContractSHACLShape
 	return finding
 }
 
-
 func extractContractODRLPolicies(contract map[string]any) []map[string]any {
 	raw := topLevelValue(documentData(contract), "policies")
 	items, ok := asArray(raw)
@@ -768,7 +766,7 @@ func auditODRLPolicy(contract map[string]any, policy map[string]any, fieldIndex 
 
 	fieldInfo, ok := fieldIndex[fieldID]
 	if !ok {
-		return nil
+		return []PolicyFinding{contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, fieldID, "dcs:RequirementField")}
 	}
 	actualValue, hasValue := lookupSemanticConditionValue(contract, fieldInfo.conditionID, fieldInfo.parameterName)
 
@@ -797,6 +795,8 @@ func auditODRLPolicy(contract map[string]any, policy map[string]any, fieldIndex 
 
 func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) bool {
 	op := compactTerm(operator)
+	actualValue = compactJSONLDValue(actualValue)
+	rightOperand = compactJSONLDValue(rightOperand)
 	switch op {
 	case "eq":
 		return odrlValuesEqual(actualValue, rightOperand)
@@ -847,13 +847,15 @@ func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) 
 		if !ok {
 			return false
 		}
-		return strings.Contains(str, fmt.Sprint(rightOperand))
+		return strings.Contains(str, fmt.Sprint(compactJSONLDValue(rightOperand)))
 	default:
 		return false
 	}
 }
 
 func odrlValuesEqual(a, b any) bool {
+	a = compactJSONLDValue(a)
+	b = compactJSONLDValue(b)
 	sa, saOk := a.(string)
 	sb, sbOk := b.(string)
 	if saOk && sbOk {
@@ -920,6 +922,9 @@ func contractValue(contract map[string]any, semanticPath string) (any, bool) {
 	if value, ok := nestedValue(contract, strings.Split(semanticPath, ".")); ok {
 		return compactJSONLDValue(value), true
 	}
+	if value, ok := semanticConditionValuesByParameterName(contract, semanticPath); ok {
+		return compactJSONLDValue(value), true
+	}
 	if value, ok := recursiveExactKeyValue(contract, semanticPath); ok {
 		return compactJSONLDValue(value), true
 	}
@@ -934,7 +939,10 @@ func contractSHACLAliasValue(contract map[string]any, semanticPath string) (any,
 	case "did":
 		return firstExistingValue(contract, "@id", "did", "dcs:did")
 	case "party":
-		return firstExistingValue(contract, "party", "dcs:party", "parties")
+		if value, ok := firstExistingValue(contract, "party", "dcs:party", "parties"); ok {
+			return value, true
+		}
+		return companyPartiesFromSemanticValues(contract)
 	}
 	return nil, false
 }
@@ -946,6 +954,139 @@ func firstExistingValue(contract map[string]any, keys ...string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+func semanticConditionValuesByParameterName(contract map[string]any, semanticPath string) (any, bool) {
+	values, ok := asArray(contract["semanticConditionValues"])
+	if !ok {
+		return nil, false
+	}
+	matches := []any{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		parameterName, _ := value["parameterName"].(string)
+		if !equivalentSemanticPath(parameterName, semanticPath) {
+			continue
+		}
+		parameterValue, exists := value["parameterValue"]
+		if exists && !isEmptyAuditValue(parameterValue) {
+			matches = append(matches, parameterValue)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, false
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+	return matches, true
+}
+
+func companyPartiesFromSemanticValues(contract map[string]any) ([]any, bool) {
+	values, ok := asArray(contract["semanticConditionValues"])
+	if !ok {
+		return nil, false
+	}
+	requirements := contractDataRequirementsByConditionID(contract)
+	partiesByCondition := map[string]map[string]any{}
+	order := []string{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		conditionID, _ := value["conditionId"].(string)
+		parameterName, _ := value["parameterName"].(string)
+		if !strings.HasPrefix(parameterName, "company.") {
+			continue
+		}
+		requirement := requirements[conditionID]
+		if !isCompanyPartyRequirement(requirement) && parameterName != "company.role" {
+			continue
+		}
+		party := partiesByCondition[conditionID]
+		if party == nil {
+			party = map[string]any{
+				"@type": "dcs:CompanyParty",
+			}
+			if role := companyPartyRole(requirement); role != "" {
+				party["role"] = role
+			}
+			partiesByCondition[conditionID] = party
+			order = append(order, conditionID)
+		}
+		parameterValue := compactJSONLDValue(value["parameterValue"])
+		switch parameterName {
+		case "company.legalName":
+			party["legalName"] = parameterValue
+			party["dcs:legalName"] = parameterValue
+		case "company.role":
+			if text, ok := parameterValue.(string); ok {
+				party["role"] = compactEntityRole(text)
+			}
+		}
+	}
+	if len(order) == 0 {
+		return nil, false
+	}
+	parties := make([]any, 0, len(order))
+	for _, conditionID := range order {
+		parties = append(parties, partiesByCondition[conditionID])
+	}
+	return parties, true
+}
+
+func contractDataRequirementsByConditionID(contract map[string]any) map[string]map[string]any {
+	requirements := map[string]map[string]any{}
+	collectContractDataRequirements(contract, requirements)
+	return requirements
+}
+
+func collectContractDataRequirements(current any, requirements map[string]map[string]any) {
+	switch value := current.(type) {
+	case map[string]any:
+		if rawRequirements, ok := topLevelValue(documentData(value), "contractData").([]any); ok {
+			for _, rawRequirement := range rawRequirements {
+				requirement, ok := rawRequirement.(map[string]any)
+				if !ok {
+					continue
+				}
+				conditionID, _ := requirement["dcs:conditionId"].(string)
+				if conditionID == "" {
+					conditionID, _ = requirement["conditionId"].(string)
+				}
+				if conditionID != "" {
+					requirements[conditionID] = requirement
+				}
+			}
+		}
+		for _, nested := range value {
+			collectContractDataRequirements(nested, requirements)
+		}
+	case []any:
+		for _, nested := range value {
+			collectContractDataRequirements(nested, requirements)
+		}
+	}
+}
+
+func isCompanyPartyRequirement(requirement map[string]any) bool {
+	entityType, _ := requirement["dcs:entityType"].(string)
+	if entityType == "" {
+		entityType, _ = requirement["entityType"].(string)
+	}
+	return compactTerm(entityType) == "CompanyParty"
+}
+
+func companyPartyRole(requirement map[string]any) string {
+	role, _ := requirement["dcs:entityRole"].(string)
+	if role == "" {
+		role, _ = requirement["entityRole"].(string)
+	}
+	return compactEntityRole(role)
 }
 
 func valuesAtPath(contract map[string]any, semanticPath string) []any {
@@ -974,7 +1115,6 @@ func contractString(contract map[string]any, semanticPath string) (string, bool)
 	}
 	return text, true
 }
-
 
 func nestedValue(current any, parts []string) (any, bool) {
 	if len(parts) == 0 {

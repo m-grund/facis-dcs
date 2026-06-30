@@ -387,6 +387,7 @@ func validateCanonicalReferences(data documentData, documentStructure map[string
 	}
 
 	blockIDs := map[string]bool{}
+	blockTypes := map[string]string{}
 	for index, rawBlock := range blocks {
 		block, ok := rawBlock.(map[string]any)
 		if !ok {
@@ -400,6 +401,7 @@ func validateCanonicalReferences(data documentData, documentStructure map[string
 			return fmt.Errorf("duplicate document block @id %q", id)
 		}
 		blockIDs[id] = true
+		blockTypes[id], _ = block["@type"].(string)
 	}
 
 	referencedBlocks := map[string]bool{}
@@ -436,6 +438,9 @@ func validateCanonicalReferences(data documentData, documentStructure map[string
 	}
 	for blockID := range blockIDs {
 		if !referencedBlocks[blockID] {
+			if blockTypes[blockID] == "dcs:Clause" {
+				continue
+			}
 			return fmt.Errorf("document block %q is not referenced by layout", blockID)
 		}
 	}
