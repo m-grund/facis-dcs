@@ -290,7 +290,7 @@ func buildOutlineObjects(pages []pageLayout, startID int) (rootID int, objects [
 		if i < len(items)-1 {
 			nextRef = fmt.Sprintf(" /Next %d 0 R", itemIDs[i+1])
 		}
-		dest := fmt.Sprintf("[%d 0 R /XYZ 0 %.2f 0]", itm.pageID, itm.destY)
+		dest := fmt.Sprintf("[%d 0 R /XYZ 54.00 %.2f 0]", itm.pageID, itm.destY)
 		objects = append(objects, pdfObject{ID: itemIDs[i], Data: []byte(fmt.Sprintf(
 			"<< /Title (%s) /Parent %d 0 R /Dest %s%s%s /Count 0 >>",
 			escapePDFString(itm.title), rootID, dest, prevRef, nextRef,

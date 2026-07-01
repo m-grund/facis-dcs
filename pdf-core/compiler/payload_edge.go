@@ -3,8 +3,6 @@ package compiler
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -23,6 +21,14 @@ func (e *PayloadSHACLValidationError) Error() string {
 		return "payload failed SHACL validation"
 	}
 	return "payload failed SHACL validation: " + report
+}
+
+var shaclShapes []byte
+
+// SetSHACLBytes stores the SHACL shapes graph used by ValidatePayloadSHACL.
+// Must be called before any validation is attempted.
+func SetSHACLBytes(b []byte) {
+	shaclShapes = b
 }
 
 // CanonicalizePayload disambiguates JSON-LD at the application edge by running
@@ -58,11 +64,11 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 		}
 	}
 	stableCtx := map[string]any{
-		"@vocab":       dcsCoreIRI,
-		"dcs-pdf-core": dcsCoreIRI,
-		"dcterms":      "http://purl.org/dc/terms/",
-		"schema":       "https://schema.org/",
-		"prov":         "http://www.w3.org/ns/prov#",
+		"@vocab":  dcsOntologyIRI,
+		"dcs":     dcsOntologyIRI,
+		"dcterms": "http://purl.org/dc/terms/",
+		"schema":  "https://schema.org/",
+		"prov":    "http://www.w3.org/ns/prov#",
 	}
 	for k, v := range stableCtx {
 		compactCtx[k] = v
@@ -70,9 +76,6 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 	compacted, err := proc.Compact(expanded, compactCtx, ld.NewJsonLdOptions(""))
 	if err != nil {
 		return nil, fmt.Errorf("JSON-LD compaction failed: %w", err)
-	}
-	if _, hasType := compacted["@type"]; !hasType {
-		compacted["@type"] = "dcs-pdf-core:Document"
 	}
 
 	b, err := json.Marshal(compacted)
@@ -85,17 +88,17 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 // ValidatePayloadSHACL validates JSON-LD against LinkML-generated SHACL using
 // a backend Go SHACL library.
 func ValidatePayloadSHACL(raw []byte) error {
+	if len(shaclShapes) == 0 {
+		return fmt.Errorf("SHACL shapes not initialised; call compiler.SetSHACLBytes before validating")
+	}
+
 	// First ensure the payload is valid JSON-LD and can be expanded.
 	_, _, err := NormalizePayload(raw)
 	if err != nil {
 		return err
 	}
 
-	shapePath := filepath.Join("ontology", "generated", "dcs-pdf-core.shacl.ttl")
-	if _, statErr := os.Stat(shapePath); statErr != nil {
-		return fmt.Errorf("SHACL shapes not found at %s: %w", shapePath, statErr)
-	}
-	shapesGraph, err := shacl.LoadTurtleFile(shapePath)
+	shapesGraph, err := shacl.LoadTurtleString(string(shaclShapes), "")
 	if err != nil {
 		return fmt.Errorf("load SHACL shapes: %w", err)
 	}

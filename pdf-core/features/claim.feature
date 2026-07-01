@@ -11,21 +11,44 @@ Feature: External JSON-LD claim binding
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:claim-stripped",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Claim Test Document",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Terms",
-            "clauses": [
-              "This clause was rendered deterministically and its origin is being claimed."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Claim Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Claim Test Document"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:claim-stripped#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:claim-stripped#s1",
+              "children": ["urn:doc:claim-stripped#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:claim-stripped#s1",
+              "title": "1. Terms"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:claim-stripped#c1",
+              "content": ["This clause was rendered deterministically and its origin is being claimed."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -42,21 +65,44 @@ Feature: External JSON-LD claim binding
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:claim-full",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Claim Test With Metadata",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Terms",
-            "clauses": [
-              "This clause is in a PDF that still has its embedded JSON-LD present."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Claim Test With Metadata",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Claim Test With Metadata"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:claim-full#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:claim-full#s1",
+              "children": ["urn:doc:claim-full#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:claim-full#s1",
+              "title": "1. Terms"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:claim-full#c1",
+              "content": ["This clause is in a PDF that still has its embedded JSON-LD present."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -71,15 +117,44 @@ Feature: External JSON-LD claim binding
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:claim-mismatch",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Mismatch Source",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Original", "clauses": ["Original clause content."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Mismatch Source",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Mismatch Source"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:claim-mismatch#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:claim-mismatch#s1",
+              "children": ["urn:doc:claim-mismatch#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:claim-mismatch#s1",
+              "title": "1. Original"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:claim-mismatch#c1",
+              "content": ["Original clause content."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -87,15 +162,44 @@ Feature: External JSON-LD claim binding
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:claim-mismatch",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Mismatch Source",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Original", "clauses": ["Completely different clause that renders differently."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Mismatch Source",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Mismatch Source"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:claim-mismatch#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:claim-mismatch#s1",
+              "children": ["urn:doc:claim-mismatch#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:claim-mismatch#s1",
+              "title": "1. Original"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:claim-mismatch#c1",
+              "content": ["Completely different clause that renders differently."]
+            }
+          ]
+        }
       }
       """
     When I claim the compiled PDF with the amended payload through /claim

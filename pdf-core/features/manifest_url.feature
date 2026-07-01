@@ -11,15 +11,44 @@ Feature: Remote manifest URL embedding (DCS-OR-C2PA-008)
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:manifest-url-absent",
-        "@type": "dcs-pdf-core:Document",
-        "title": "No Remote Manifest",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Provenance", "clauses": ["Base document."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "No Remote Manifest",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "No Remote Manifest"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:manifest-url-absent#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:manifest-url-absent#s1",
+              "children": ["urn:doc:manifest-url-absent#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:manifest-url-absent#s1",
+              "title": "1. Provenance"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:manifest-url-absent#c1",
+              "content": ["Base document."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -27,15 +56,49 @@ Feature: Remote manifest URL embedding (DCS-OR-C2PA-008)
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:manifest-url-absent",
-        "@type": "dcs-pdf-core:Document",
-        "title": "No Remote Manifest",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Provenance", "clauses": ["Base document.", "Amendment one."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "No Remote Manifest",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "No Remote Manifest"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:manifest-url-absent#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:manifest-url-absent#s1",
+              "children": ["urn:doc:manifest-url-absent#c1", "urn:doc:manifest-url-absent#c2"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:manifest-url-absent#s1",
+              "title": "1. Provenance"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:manifest-url-absent#c1",
+              "content": ["Base document."]
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:manifest-url-absent#c2",
+              "content": ["Amendment one."]
+            }
+          ]
+        }
       }
       """
     Then the response status is 200
@@ -47,15 +110,44 @@ Feature: Remote manifest URL embedding (DCS-OR-C2PA-008)
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:manifest-extract",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Manifest Extract Test",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Content", "clauses": ["Extract the manifest."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Manifest Extract Test",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Manifest Extract Test"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:manifest-extract#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:manifest-extract#s1",
+              "children": ["urn:doc:manifest-extract#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:manifest-extract#s1",
+              "title": "1. Content"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:manifest-extract#c1",
+              "content": ["Extract the manifest."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download

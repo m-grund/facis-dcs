@@ -17,21 +17,44 @@ Feature: Network runtime
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:network-runtime",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Hosted Ontology",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Runtime",
-            "clauses": [
-              "The runtime serves its own structural ontology and patch metadata."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Hosted Ontology",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Hosted Ontology"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:network-runtime#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:network-runtime#s1",
+              "children": ["urn:doc:network-runtime#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:network-runtime#s1",
+              "title": "1. Runtime"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:network-runtime#c1",
+              "content": ["The runtime serves its own structural ontology and patch metadata."]
+            }
+          ]
+        }
       }
       """
     When I fetch "/index.html"
@@ -44,8 +67,8 @@ Feature: Network runtime
     And the response body contains "@context"
     When I fetch "/ontology/dcs-pdf-core.owl"
     Then the response status is 200
-    And the response content type starts with "application/ld+json"
-    And the response body contains "@id"
+    And the response content type starts with "text/turtle"
+    And the response body contains "@prefix"
 
   Scenario: The service rejects invalid content types
     Given the compiler service is running
