@@ -33,5 +33,5 @@ func LoginLockoutDuration() time.Duration {
 }
 
 func SyncFailCronJobTimeOut() time.Duration {
-	return 60 * time.Minute
+	return 24 * time.Hour
 }

@@ -163,6 +163,8 @@ func (s *DCSToDCSSynchronizer) startSyncFailScheduler(ctx context.Context, inter
 
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
+		log.Printf(ctx, "start retrying failed sync attempts")
+
 		syncFails, err := readSyncFails()
 		if err != nil {
 			log.Printf(ctx, "could not read sync fails: %v", err)
