@@ -29,6 +29,9 @@ func NormalizePayload(raw []byte) (nquads []byte, err error) {
 	normalizeOpts := ld.NewJsonLdOptions("")
 	normalizeOpts.Algorithm = "URDNA2015"
 	normalizeOpts.Format = "application/n-quads"
+	if _, loader, loaderErr := canonicalContextArgs(); loaderErr == nil {
+		normalizeOpts.DocumentLoader = loader
+	}
 	normResult, err := proc.Normalize(doc, normalizeOpts)
 	if err != nil {
 		return nil, fmt.Errorf("URDNA2015 normalization failed: %w", err)

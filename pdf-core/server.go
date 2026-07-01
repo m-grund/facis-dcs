@@ -29,6 +29,11 @@ var openAPI3YAML []byte
 
 func newServer() http.Handler {
 	compiler.SetSHACLBytes(ontologySHACL)
+	ontologyBaseURL := os.Getenv("DCS_PDF_CORE_ONTOLOGY_BASE_URL")
+	if ontologyBaseURL == "" {
+		panic("DCS_PDF_CORE_ONTOLOGY_BASE_URL must be set")
+	}
+	compiler.SetContextDocument(ontologyBaseURL+"/ontology/dcs-pdf-core", ontologyContext)
 	svc := &service{}
 	mux := http.NewServeMux()
 

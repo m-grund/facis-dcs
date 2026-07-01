@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -72,6 +73,54 @@ func TestCompilePDF_ExplicitAtListSyntax(t *testing.T) {
 	}
 	if !bytes.Contains(pdf, []byte("(1. Obligations) Tj")) {
 		t.Error("section heading not rendered from explicit @list blocks")
+	}
+}
+
+// TestCanonicalizePayload_ContextURLResolution verifies that a payload whose
+// @context is a URL served by our in-process document loader is expanded and
+// compacted correctly — i.e. SetContextDocument wires the loader so json-gold
+// never attempts an HTTP fetch for the registered IRI.
+func TestCanonicalizePayload_ContextURLResolution(t *testing.T) {
+	const testCtxIRI = "http://test.example/ontology/dcs-pdf-core"
+	ctxBytes, err := os.ReadFile("../docs/semantic-ontology/linkml/output/linkml.yaml.context.jsonld")
+	if err != nil {
+		t.Fatalf("read context: %v", err)
+	}
+	SetContextDocument(testCtxIRI, ctxBytes)
+	t.Cleanup(func() {
+		// restore the test-suite default registered by TestMain
+		b, _ := os.ReadFile("../docs/semantic-ontology/linkml/output/linkml.yaml.context.jsonld")
+		SetContextDocument("http://localhost:8080/ontology/dcs-pdf-core", b)
+	})
+
+	payload := []byte(`{
+		"@context": "` + testCtxIRI + `",
+		"@type": "ContractTemplate",
+		"@id": "urn:test:ctx-url",
+		"metadata": {"@type": "TemplateMetadata", "title": "URL Context Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:test:ctx-url#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:test:ctx-url#s1", "children": ["urn:test:ctx-url#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:test:ctx-url#s1", "title": "Section"},
+				{"@type": "Clause", "@id": "urn:test:ctx-url#c1", "content": ["Content."]}
+			]
+		}
+	}`)
+
+	canonical, err := CanonicalizePayload(payload)
+	if err != nil {
+		t.Fatalf("CanonicalizePayload with context URL: %v", err)
+	}
+	doc, err := extractDocumentModelFromCanonical(canonical, strings.Repeat("0", 64))
+	if err != nil {
+		t.Fatalf("extractDocumentModelFromCanonical: %v", err)
+	}
+	if doc.Title != "URL Context Test" {
+		t.Errorf("title: got %q, want %q", doc.Title, "URL Context Test")
 	}
 }
 

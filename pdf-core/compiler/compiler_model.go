@@ -9,8 +9,8 @@ import (
 
 const dcsOntologyIRI = "https://w3id.org/facis/dcs/ontology/v1#"
 
-// canonicalNamespaceMap returns the prefix→namespace map for the stableCtx
-// prefixes used by CanonicalizePayload.
+// canonicalNamespaceMap returns the display prefix→namespace map used to compact
+// IRIs in the rendered PDF (glossary terms, ontology links).
 func canonicalNamespaceMap() map[string]string {
 	return map[string]string{
 		"dcterms": "http://purl.org/dc/terms/",
@@ -19,10 +19,10 @@ func canonicalNamespaceMap() map[string]string {
 	}
 }
 
-// expandCanonicalIRI resolves a compact IRI from the canonical compaction
-// context back to its full absolute IRI. Handles the prefixes declared in
-// stableCtx (prov:, schema:, dcterms:) plus bare short-names expanded via
-// @vocab. Full IRIs (http/https/urn) are returned unchanged.
+// expandCanonicalIRI resolves a compact IRI from the canonical compact form back
+// to its full absolute IRI. Handles the prefixes declared in the canonical
+// context (prov:, schema:, dcterms:, xsd:) plus bare names expanded via @vocab.
+// Full IRIs (http/https/urn) are returned unchanged.
 func expandCanonicalIRI(compact string) string {
 	switch {
 	case strings.HasPrefix(compact, "prov:"):
@@ -31,6 +31,8 @@ func expandCanonicalIRI(compact string) string {
 		return "https://schema.org/" + compact[7:]
 	case strings.HasPrefix(compact, "dcterms:"):
 		return "http://purl.org/dc/terms/" + compact[8:]
+	case strings.HasPrefix(compact, "xsd:"):
+		return "http://www.w3.org/2001/XMLSchema#" + compact[4:]
 	case strings.HasPrefix(compact, "http://"), strings.HasPrefix(compact, "https://"), strings.HasPrefix(compact, "urn:"):
 		return compact
 	}
@@ -47,7 +49,7 @@ func parseCanonicalSegment(item ContentItem) clauseSegment {
 	// Value objects: typed literal or plain string.
 	if item.Value != "" {
 		if item.Datatype != "" {
-			return clauseSegment{Type: "typed-value", Value: item.Value, Datatype: item.Datatype}
+			return clauseSegment{Type: "typed-value", Value: item.Value, Datatype: expandCanonicalIRI(item.Datatype)}
 		}
 		return clauseSegment{Type: "prose", Text: item.Value}
 	}
