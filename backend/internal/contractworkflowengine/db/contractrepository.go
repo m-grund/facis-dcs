@@ -77,6 +77,7 @@ type ContractMetadata struct {
 	Outdated             *bool        `db:"outdated"`
 	LatestTemplateDID    *string      `db:"latest_template_did"`
 	TemplateIsDeprecated *bool        `db:"template_is_deprecated"`
+	ParentContractDID    *string      `db:"parent_contract_did"`
 }
 
 type ContractProcessData struct {

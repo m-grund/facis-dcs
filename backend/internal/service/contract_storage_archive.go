@@ -69,14 +69,14 @@ func (s *contractStorageArchivesrvc) Retrieve(ctx context.Context, p *contractst
 
 		var expPolicy *string
 		if item.ExpPolicy != nil {
-			s := item.ExpPolicy.String()
+			s := *item.ExpPolicy
 			expPolicy = &s
 		}
 
 		contracts = append(contracts, &contractstoragearchive.ContractItem{
 			Did:             item.DID,
 			ContractVersion: item.ContractVersion,
-			State:           item.State.String(),
+			State:           item.State,
 			Name:            item.Name,
 			Description:     item.Description,
 			CreatedBy:       item.CreatedBy,
@@ -151,7 +151,7 @@ func (s *contractStorageArchivesrvc) Audit(ctx context.Context, p *contractstora
 	return
 }
 
-func toArchiveContractItem(item contract.MetadataItem) *contractstoragearchive.ContractItem {
+func toArchiveContractItem(item db.ContractMetadata) *contractstoragearchive.ContractItem {
 	var startDate *string
 	if item.StartDate != nil {
 		s := item.StartDate.Format(time.RFC3339)
@@ -166,14 +166,14 @@ func toArchiveContractItem(item contract.MetadataItem) *contractstoragearchive.C
 
 	var expPolicy *string
 	if item.ExpPolicy != nil {
-		s := item.ExpPolicy.String()
+		s := *item.ExpPolicy
 		expPolicy = &s
 	}
 
 	return &contractstoragearchive.ContractItem{
 		Did:             item.DID,
 		ContractVersion: item.ContractVersion,
-		State:           item.State.String(),
+		State:           item.State,
 		Name:            item.Name,
 		Description:     item.Description,
 		CreatedBy:       item.CreatedBy,
