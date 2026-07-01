@@ -1,0 +1,29 @@
+{
+    "@context": {
+        "dcs": "https://w3id.org/facis/dcs/ontology/v1#"
+    },
+    "@id": "did:web:localhost:template:test-field-no-name",
+    "@type": "dcs:ContractTemplate",
+    "dcs:metadata": {
+        "@id": "did:web:localhost:template:test-field-no-name#metadata",
+        "@type": "dcs:TemplateMetadata",
+        "dcs:title": "Test"
+    },
+    "dcs:policies": [
+        { "@id": "did:web:localhost:template:test-field-no-name#policy-1" }
+    ],
+    "dcs:contractData": [
+        {
+            "@id": "did:web:localhost:template:test-field-no-name#req-1",
+            "@type": "dcs:DataRequirement",
+            "dcs:conditionId": "abc-123",
+            "dcs:fields": [
+                {
+                    "@id": "did:web:localhost:template:test-field-no-name#field-1",
+                    "@type": "dcs:RequirementField",
+                    "dcs:domainField": { "@id": "https://w3id.org/facis/dcs/taxonomy/v1#some-field" }
+                }
+            ]
+        }
+    ]
+}

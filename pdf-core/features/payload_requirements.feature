@@ -1,132 +1,103 @@
 Feature: Payload ontology requirements
-  Scenario: Missing document title is rejected
+  Scenario: Missing metadata is rejected
     Given the compiler service is running
     And a semantic payload:
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "schema": "https://schema.org/",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
-        "@id": "urn:doc:req-missing-title",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Intro",
-            "clauses": [
-              {"@type": "dcs-pdf-core:Clause", "content": ["Clause text"]}
-            ]
-          }
-        ]
+        "@id": "urn:doc:req-missing-metadata",
+        "@type": "ContractTemplate",
+        "documentTitle": "Missing Metadata",
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:req-missing-metadata#s1"]},
+            {"@type": "LayoutNode", "@id": "urn:doc:req-missing-metadata#s1", "children": ["urn:doc:req-missing-metadata#c1"]}
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:req-missing-metadata#s1", "title": "1. Intro"},
+            {"@type": "Clause", "@id": "urn:doc:req-missing-metadata#c1", "content": ["Clause text."]}
+          ]
+        }
       }
       """
     When I compile the payload through /download
     Then the response status is 400
     And the response body contains "payload failed SHACL validation"
-    And the response body contains "dcs-pdf-core#title"
+    And the response body contains "ontology/v1#metadata"
 
-  Scenario: Multiple document titles are rejected
+  Scenario: Missing metadata title is rejected
     Given the compiler service is running
     And a semantic payload:
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "schema": "https://schema.org/",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
-        "@id": "urn:doc:req-multi-title",
-        "title": ["Version A", "Version B"],
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Intro",
-            "clauses": [
-              {"@type": "dcs-pdf-core:Clause", "content": ["Clause text"]}
-            ]
-          }
-        ]
+        "@id": "urn:doc:req-missing-title",
+        "@type": "ContractTemplate",
+        "documentTitle": "Has Metadata But No Title",
+        "metadata": {
+          "@type": "TemplateMetadata"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:req-missing-title#s1"]},
+            {"@type": "LayoutNode", "@id": "urn:doc:req-missing-title#s1", "children": ["urn:doc:req-missing-title#c1"]}
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:req-missing-title#s1", "title": "1. Intro"},
+            {"@type": "Clause", "@id": "urn:doc:req-missing-title#c1", "content": ["Clause text."]}
+          ]
+        }
       }
       """
     When I compile the payload through /download
     Then the response status is 400
-    And the response body contains "dcs-pdf-core#title"
+    And the response body contains "payload failed SHACL validation"
+    And the response body contains "ontology/v1#title"
+
+  Scenario: Multiple metadata objects are rejected
+    Given the compiler service is running
+    And a semantic payload:
+      """
+      {
+        "@context": {
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
+        },
+        "@id": "urn:doc:req-multi-metadata",
+        "@type": "ContractTemplate",
+        "documentTitle": "Multiple Metadata",
+        "metadata": [
+          {"@type": "TemplateMetadata", "title": "Version A"},
+          {"@type": "TemplateMetadata", "title": "Version B"}
+        ],
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:req-multi-metadata#s1"]},
+            {"@type": "LayoutNode", "@id": "urn:doc:req-multi-metadata#s1", "children": ["urn:doc:req-multi-metadata#c1"]}
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:req-multi-metadata#s1", "title": "1. Intro"},
+            {"@type": "Clause", "@id": "urn:doc:req-multi-metadata#c1", "content": ["Clause text."]}
+          ]
+        }
+      }
+      """
+    When I compile the payload through /download
+    Then the response status is 400
+    And the response body contains "ontology/v1#metadata"
     And the response body contains "MaxCountConstraintComponent"
-
-  Scenario: Section heading is required
-    Given the compiler service is running
-    And a semantic payload:
-      """
-      {
-        "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-        },
-        "@id": "urn:doc:req-no-heading",
-        "title": "Missing Heading",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "clauses": [
-              {"@type": "dcs-pdf-core:Clause", "content": ["Clause text"]}
-            ]
-          }
-        ]
-      }
-      """
-    When I compile the payload through /download
-    Then the response status is 400
-    And the response body contains "dcs-pdf-core#heading"
-
-  Scenario: Section clauses are required
-    Given the compiler service is running
-    And a semantic payload:
-      """
-      {
-        "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-        },
-        "@id": "urn:doc:req-no-clauses",
-        "title": "Missing Clauses",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Intro"
-          }
-        ]
-      }
-      """
-    When I compile the payload through /download
-    Then the response status is 400
-    And the response body contains "dcs-pdf-core#clauses"
-
-  Scenario: Clause object content is required
-    Given the compiler service is running
-    And a semantic payload:
-      """
-      {
-        "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-        },
-        "@id": "urn:doc:req-no-content",
-        "title": "Missing Clause Content",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Intro",
-            "clauses": [
-              {"@type": "dcs-pdf-core:Clause"}
-            ]
-          }
-        ]
-      }
-      """
-    When I compile the payload through /download
-    Then the response status is 400
-    And the response body contains "dcs-pdf-core#content"
 
   Scenario: Equivalent JSON-LD flavors compile to identical output
     Given the compiler service is running
@@ -134,59 +105,55 @@ Feature: Payload ontology requirements
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "schema": "https://schema.org/",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:req-flavors",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Flavor Equivalence",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Terms",
-            "clauses": [
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "Reference ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:Entity"},
-                  " remains equivalent across JSON-LD flavors."
-                ]
-              }
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Flavor Equivalence",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Flavor Equivalence"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:req-flavors#s1"]},
+            {"@type": "LayoutNode", "@id": "urn:doc:req-flavors#s1", "children": ["urn:doc:req-flavors#c1"]}
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:req-flavors#s1", "title": "1. Terms"},
+            {"@type": "Clause", "@id": "urn:doc:req-flavors#c1", "content": ["Reference to dcs:Clause remains equivalent across JSON-LD flavors."]}
+          ]
+        }
       }
       """
     And an equivalent semantic payload flavor:
       """
       {
         "@context": {
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "schema": "https://schema.org/",
-          "prov": "http://www.w3.org/ns/prov#"
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:req-flavors",
-        "@type": "dcs-pdf-core:Document",
-        "dcs-pdf-core:title": "Flavor Equivalence",
-        "dcs-pdf-core:sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "dcs-pdf-core:heading": "1. Terms",
-            "dcs-pdf-core:clauses": [
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "dcs-pdf-core:content": [
-                  "Reference ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:Entity"},
-                  " remains equivalent across JSON-LD flavors."
-                ]
-              }
-            ]
-          }
-        ]
+        "@type": "dcs:ContractTemplate",
+        "dcs:documentTitle": "Flavor Equivalence",
+        "dcs:metadata": {
+          "@type": "dcs:TemplateMetadata",
+          "dcs:title": "Flavor Equivalence"
+        },
+        "dcs:documentStructure": {
+          "@type": "dcs:DocumentStructure",
+          "dcs:layout": [
+            {"@type": "dcs:LayoutNode", "dcs:isRoot": true, "dcs:children": ["urn:doc:req-flavors#s1"]},
+            {"@type": "dcs:LayoutNode", "@id": "urn:doc:req-flavors#s1", "dcs:children": ["urn:doc:req-flavors#c1"]}
+          ],
+          "dcs:blocks": [
+            {"@type": "dcs:Section", "@id": "urn:doc:req-flavors#s1", "dcs:title": "1. Terms"},
+            {"@type": "dcs:Clause", "@id": "urn:doc:req-flavors#c1", "dcs:content": ["Reference to dcs:Clause remains equivalent across JSON-LD flavors."]}
+          ]
+        }
       }
       """
     When I compile both payload flavors through /download

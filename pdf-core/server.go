@@ -11,21 +11,24 @@ import (
 	_ "embed"
 
 	"gopkg.in/yaml.v3"
+
+	"example.com/m/V2/compiler"
 )
 
-//go:embed ontology/generated/dcs-pdf-core-context.jsonld
+//go:embed docs/semantic-ontology/linkml/output/linkml.yaml.context.jsonld
 var ontologyContext []byte
 
-//go:embed ontology/generated/dcs-pdf-core.owl.jsonld
+//go:embed docs/semantic-ontology/linkml/output/linkml.yaml.owl.ttl
 var ontologyOWL []byte
 
-//go:embed ontology/generated/dcs-pdf-core.shacl.ttl
+//go:embed docs/semantic-ontology/linkml/output/linkml.yaml.shacl.merged.ttl
 var ontologySHACL []byte
 
 //go:embed api/openapi3.yaml
 var openAPI3YAML []byte
 
 func newServer() http.Handler {
+	compiler.SetSHACLBytes(ontologySHACL)
 	svc := &service{}
 	mux := http.NewServeMux()
 

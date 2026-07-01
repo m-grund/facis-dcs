@@ -2,18 +2,35 @@ package compiler
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 )
 
-// extractDocumentModel builds a documentModel from the JSON-LD expanded form
-// (where every property name is a full IRI) and the raw @context map.
-//
-// Using the expanded form rather than the raw JSON means property lookup is
-// IRI-based: dcterms:title, dcs-pdf-core:sections, and schema:name are all
-// resolved to their full IRIs before extraction, so the compiler is not
-// sensitive to the compact key spellings in the submitted payload.
+const dcsOntologyIRI = "https://w3id.org/facis/dcs/ontology/v1#"
+
+const (
+	dcsMetadataIRI        = dcsOntologyIRI + "metadata"
+	dcsTitleIRI           = dcsOntologyIRI + "title"
+	dcsDocStructIRI       = dcsOntologyIRI + "documentStructure"
+	dcsBlocksIRI          = dcsOntologyIRI + "blocks"
+	dcsLayoutIRI          = dcsOntologyIRI + "layout"
+	dcsIsRootIRI          = dcsOntologyIRI + "isRoot"
+	dcsChildrenIRI        = dcsOntologyIRI + "children"
+	dcsContentIRI         = dcsOntologyIRI + "content"
+	dcsSectionTypeIRI     = dcsOntologyIRI + "Section"
+	dcsClauseTypeIRI      = dcsOntologyIRI + "Clause"
+	dcsTextBlockTypeIRI   = dcsOntologyIRI + "TextBlock"
+	dcsSignatureFieldsIRI  = dcsOntologyIRI + "signatureFields"
+	dcsSignatoryNameIRI    = dcsOntologyIRI + "signatoryName"
+)
+
+var (
+	modelUnitCodeIRIs    = []string{"https://schema.org/unitCode", "http://schema.org/unitCode"}
+	modelLinkNameIRIs    = []string{"https://schema.org/name", "http://schema.org/name"}
+	modelExternalURLIRIs = []string{"https://schema.org/url", "http://schema.org/url"}
+)
+
+// extractDocumentModel builds a documentModel from the JSON-LD expanded form.
 func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, canonical []byte, hashHex string) (documentModel, error) {
 	model := documentModel{
 		Sections:        []sectionData{},
@@ -26,7 +43,6 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 		ContractID:      rootID,
 	}
 
-	// Build namespace map from raw @context (for ontology fetching and compact display).
 	for prefix, uri := range rawCtx {
 		if uriStr, ok := uri.(string); ok && !strings.HasPrefix(prefix, "@") {
 			model.NamespaceMap[prefix] = uriStr
@@ -34,64 +50,102 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	}
 
 	if len(expanded) == 0 {
-		return model, fmt.Errorf("dcs-pdf-core:title is required but the payload expanded to an empty graph")
+		return model, fmt.Errorf("metadata.title is required but the payload expanded to an empty graph")
 	}
 	root, ok := findExpandedRootNode(expanded, rootID)
 	if !ok {
-		return model, fmt.Errorf("dcs-pdf-core:title is required but no root node was found in the payload")
+		return model, fmt.Errorf("metadata.title is required but no root node was found in the payload")
 	}
 
-	// Title — only disambiguated title IRIs are considered. Missing title is an error.
-	t := ldFirstString(root, modelTitleIRIs...)
-	if t == "" {
-		return model, fmt.Errorf("dcs-pdf-core:title is required but was not found in the payload")
+	metaItems := ldGet(root, dcsMetadataIRI)
+	if len(metaItems) == 0 {
+		return model, fmt.Errorf("metadata is required but was not found in the payload")
 	}
-	model.Title = t
-
-	for _, item := range ldGetAny(root, modelSectionsIRIs...) {
-		node, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		if _, isVal := node["@value"]; isVal {
-			continue
-		}
-		model.Sections = append(model.Sections, parseExpandedSection(node))
+	metaNode, ok := metaItems[0].(map[string]any)
+	if !ok {
+		return model, fmt.Errorf("metadata must be an object")
 	}
+	title := ldFirstString(metaNode, dcsTitleIRI)
+	if title == "" {
+		return model, fmt.Errorf("metadata.title is required but was not found in the payload")
+	}
+	model.Title = title
 
-	// Top-level clauses (single unnamed section).
-	if len(model.Sections) == 0 {
-		if clauseItems := ldGetAny(root, modelClausesIRIs...); len(clauseItems) > 0 {
-			sec := sectionData{}
-			for _, item := range clauseItems {
-				sec.Clauses = append(sec.Clauses, parseExpandedClause(item))
+	dsItems := ldGet(root, dcsDocStructIRI)
+	if len(dsItems) > 0 {
+		if dsNode, ok := dsItems[0].(map[string]any); ok {
+			blockByID := make(map[string]map[string]any)
+			for _, item := range ldGet(dsNode, dcsBlocksIRI) {
+				node, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				if id, ok := node["@id"].(string); ok && id != "" {
+					blockByID[id] = node
+				}
 			}
-			model.Sections = append(model.Sections, sec)
+
+			layoutByID := make(map[string]map[string]any)
+			var rootLayout map[string]any
+			for _, item := range ldGet(dsNode, dcsLayoutIRI) {
+				node, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				if nodeIsRoot(node) {
+					rootLayout = node
+				} else if id, ok := node["@id"].(string); ok && id != "" {
+					layoutByID[id] = node
+				}
+			}
+
+			// After an expand→compact→expand cycle, shared-@id nodes (appearing
+			// in both blocks and layout) may be compacted to a bare {"@id": "..."}
+			// reference at one of the two positions while the full merged node
+			// stays at the other. Resolve bare references in each map from the other.
+			for id, block := range blockByID {
+				if len(ldGet(block, "@type")) == 0 {
+					if lb, ok := layoutByID[id]; ok && len(ldGet(lb, "@type")) > 0 {
+						blockByID[id] = lb
+					}
+				}
+			}
+			for id, ln := range layoutByID {
+				if len(ldGet(ln, "@type")) == 0 {
+					if blk, ok := blockByID[id]; ok && len(ldGet(blk, "@type")) > 0 {
+						layoutByID[id] = blk
+					}
+				}
+			}
+
+			if rootLayout != nil {
+				model.Sections = walkSections(rootLayout, layoutByID, blockByID)
+			}
 		}
 	}
 
-	// Signature fields.
-	for _, item := range ldGetAny(root, modelSignatureFieldsIRIs...) {
+	for _, item := range ldGet(root, dcsSignatureFieldsIRI) {
 		node, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		// A plain string in the array expands to {"@value": "..."}.
 		if val, ok := node["@value"].(string); ok {
 			if name := strings.TrimSpace(val); name != "" {
 				model.SignatureFields = append(model.SignatureFields, sigFieldDef{Name: name, Label: name})
 			}
 			continue
 		}
-		sig := parseExpandedSignatureField(node)
-		if sig.Name != "" {
-			model.SignatureFields = append(model.SignatureFields, sig)
+		sigName := strings.TrimSpace(ldFirstString(node, dcsSignatoryNameIRI))
+		if sigName == "" {
+			continue
 		}
+		label := strings.TrimSpace(ldFirstString(node, dcsTitleIRI))
+		if label == "" {
+			label = sigName
+		}
+		model.SignatureFields = append(model.SignatureFields, sigFieldDef{Name: sigName, Label: label})
 	}
 
-	// Compact ontology-link segment text that still holds the raw full IRI
-	// (i.e. no explicit schema:name was supplied in the payload). Do this after
-	// the namespace map is built so compactIRI has the prefix bindings available.
 	var compactSectionLinks func(sections []sectionData)
 	compactSectionLinks = func(sections []sectionData) {
 		for si := range sections {
@@ -108,7 +162,6 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	}
 	compactSectionLinks(model.Sections)
 
-	// Glossary: collect ontology-link IRIs from section content in depth-first encounter order.
 	seen := make(map[string]struct{})
 	var collectSectionRefs func(sections []sectionData)
 	collectSectionRefs = func(sections []sectionData) {
@@ -134,6 +187,96 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	return model, nil
 }
 
+// walkSections builds top-level sectionData from a root layout node's children.
+func walkSections(rootLayout map[string]any, layoutByID map[string]map[string]any, blockByID map[string]map[string]any) []sectionData {
+	var sections []sectionData
+	for _, v := range ldGet(rootLayout, dcsChildrenIRI) {
+		childID := ldStringVal(v)
+		if childID == "" {
+			continue
+		}
+		block := blockByID[childID]
+		if block == nil {
+			continue
+		}
+		if nodeHasType(block, dcsSectionTypeIRI) {
+			sec := sectionData{
+				Heading: strings.TrimSpace(ldFirstString(block, dcsTitleIRI)),
+				Clauses: []clauseData{},
+			}
+			if secLayout, ok := layoutByID[childID]; ok {
+				sec = walkSectionNode(sec, secLayout, layoutByID, blockByID)
+			}
+			sections = append(sections, sec)
+		}
+	}
+	return sections
+}
+
+// walkSectionNode populates a sectionData's Clauses and Subsections from a layout node's children.
+func walkSectionNode(sec sectionData, ln map[string]any, layoutByID map[string]map[string]any, blockByID map[string]map[string]any) sectionData {
+	for _, v := range ldGet(ln, dcsChildrenIRI) {
+		childID := ldStringVal(v)
+		if childID == "" {
+			continue
+		}
+		block := blockByID[childID]
+		if block == nil {
+			continue
+		}
+		switch {
+		case nodeHasType(block, dcsClauseTypeIRI) || nodeHasType(block, dcsTextBlockTypeIRI):
+			sec.Clauses = append(sec.Clauses, parseNewClause(block))
+		case nodeHasType(block, dcsSectionTypeIRI):
+			sub := sectionData{
+				Heading: strings.TrimSpace(ldFirstString(block, dcsTitleIRI)),
+				Clauses: []clauseData{},
+			}
+			if subLayout, ok := layoutByID[childID]; ok {
+				sub = walkSectionNode(sub, subLayout, layoutByID, blockByID)
+			}
+			sec.Subsections = append(sec.Subsections, sub)
+		}
+	}
+	return sec
+}
+
+// parseNewClause extracts a clauseData from an expanded Clause node.
+func parseNewClause(node map[string]any) clauseData {
+	clause := clauseData{Segments: []clauseSegment{}}
+	for _, c := range ldGet(node, dcsContentIRI) {
+		clause.Segments = append(clause.Segments, parseExpandedSegment(c))
+	}
+	return clause
+}
+
+// nodeHasType reports whether the expanded node has the given RDF type IRI.
+func nodeHasType(node map[string]any, typeIRI string) bool {
+	if node == nil {
+		return false
+	}
+	for _, t := range ldGet(node, "@type") {
+		if s, ok := t.(string); ok && s == typeIRI {
+			return true
+		}
+	}
+	return false
+}
+
+// nodeIsRoot reports whether the expanded LayoutNode has isRoot: true.
+func nodeIsRoot(node map[string]any) bool {
+	for _, v := range ldGet(node, dcsIsRootIRI) {
+		m, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		if b, ok := m["@value"].(bool); ok && b {
+			return true
+		}
+	}
+	return false
+}
+
 func findExpandedRootNode(expanded []any, rootID string) (map[string]any, bool) {
 	for _, item := range expanded {
 		node, ok := item.(map[string]any)
@@ -151,9 +294,7 @@ func findExpandedRootNode(expanded []any, rootID string) (map[string]any, bool) 
 		if !ok {
 			continue
 		}
-		if len(ldGetAny(node, modelSectionsIRIs...)) > 0 ||
-			len(ldGetAny(node, modelSignatureFieldsIRIs...)) > 0 ||
-			len(ldGetAny(node, modelTitleIRIs...)) > 0 {
+		if nodeHasType(node, dcsOntologyIRI+"ContractTemplate") {
 			return node, true
 		}
 	}
@@ -166,57 +307,14 @@ func findExpandedRootNode(expanded []any, rootID string) (map[string]any, bool) 
 	return nil, false
 }
 
-// parseExpandedSection extracts a sectionData from an expanded JSON-LD node,
-// recursing into subsections to arbitrary depth.
-func parseExpandedSection(node map[string]any) sectionData {
-	sec := sectionData{}
-	sec.Heading = strings.TrimSpace(ldFirstString(node, modelHeadingIRIs...))
-	for _, item := range ldGetAny(node, modelClausesIRIs...) {
-		sec.Clauses = append(sec.Clauses, parseExpandedClause(item))
-	}
-	for _, item := range ldGetAny(node, modelSubsectionsIRIs...) {
-		subNode, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		if _, isVal := subNode["@value"]; isVal {
-			continue
-		}
-		sec.Subsections = append(sec.Subsections, parseExpandedSection(subNode))
-	}
-	return sec
-}
-
-// parseExpandedClause extracts a clauseData from a single expanded clause item,
-// which may be a plain string value object or a node with a "content" array.
-func parseExpandedClause(item any) clauseData {
-	clause := clauseData{Segments: []clauseSegment{}}
-	node, ok := item.(map[string]any)
-	if !ok {
-		return clause
-	}
-	// Value object: plain string clause.
-	if val, ok := node["@value"].(string); ok {
-		clause.Segments = append(clause.Segments, clauseSegment{Type: "prose", Text: val})
-		return clause
-	}
-	// Node with a content array of mixed prose/link/value segments.
-	for _, c := range ldGetAny(node, modelContentIRIs...) {
-		clause.Segments = append(clause.Segments, parseExpandedSegment(c))
-	}
-	return clause
-}
-
 // parseExpandedSegment dispatches an expanded JSON-LD segment item to the
-// appropriate clauseSegment type: prose (plain string), typed-value (@value+@type),
-// ontology-link (@id node), or external-link (schema:url node).
+// appropriate clauseSegment type.
 func parseExpandedSegment(item any) clauseSegment {
 	node, ok := item.(map[string]any)
 	if !ok {
 		return clauseSegment{Type: "prose"}
 	}
 
-	// Value object: {"@value": "...", "@type": "..."} or plain {"@value": "..."}.
 	if val, ok := node["@value"].(string); ok {
 		if typ, ok := node["@type"].(string); ok && typ != "" {
 			seg := clauseSegment{Type: "typed-value", Value: val, Datatype: typ}
@@ -228,7 +326,6 @@ func parseExpandedSegment(item any) clauseSegment {
 		return clauseSegment{Type: "prose", Text: val}
 	}
 
-	// Node with @id: ontology link.
 	if id, ok := node["@id"].(string); ok {
 		text := id
 		if n := ldFirstString(node, modelLinkNameIRIs...); n != "" {
@@ -237,7 +334,6 @@ func parseExpandedSegment(item any) clauseSegment {
 		return clauseSegment{Type: "ontology-link", Text: text, Ref: id}
 	}
 
-	// Node with a disambiguated URL IRI: external link.
 	urlArr := ldGetAny(node, modelExternalURLIRIs...)
 	if len(urlArr) > 0 {
 		href := ""
@@ -258,29 +354,13 @@ func parseExpandedSegment(item any) clauseSegment {
 	return clauseSegment{Type: "prose"}
 }
 
-// parseExpandedSignatureField extracts a sigFieldDef from an expanded JSON-LD node.
-func parseExpandedSignatureField(node map[string]any) sigFieldDef {
-	sig := sigFieldDef{}
-	name := ldFirstString(node, modelSigNameIRIs...)
-	sig.Name = strings.TrimSpace(name)
-	label := ldFirstString(node, modelSigLabelIRIs...)
-	sig.Label = strings.TrimSpace(label)
-	if sig.Label == "" {
-		sig.Label = sig.Name
-	}
-	return sig
-}
-
 // ---- JSON-LD expanded-form navigation helpers --------------------------------
 
-// ldGet returns the value array of a property given its full IRI.
-// In expanded JSON-LD all property values are arrays.
 func ldGet(node map[string]any, iri string) []any {
 	arr, _ := node[iri].([]any)
 	return arr
 }
 
-// ldGetAny returns the first non-empty array for the provided candidate IRIs.
 func ldGetAny(node map[string]any, iris ...string) []any {
 	for _, iri := range iris {
 		if iri == "" {
@@ -293,7 +373,6 @@ func ldGetAny(node map[string]any, iris ...string) []any {
 	return nil
 }
 
-// ldStringVal extracts the plain string value from an expanded value node.
 func ldStringVal(v any) string {
 	m, ok := v.(map[string]any)
 	if !ok {
@@ -303,7 +382,6 @@ func ldStringVal(v any) string {
 	return s
 }
 
-// ldFirstString tries each full IRI in order and returns the first string value.
 func ldFirstString(node map[string]any, iris ...string) string {
 	for _, iri := range iris {
 		if iri == "" {
@@ -318,57 +396,6 @@ func ldFirstString(node map[string]any, iris ...string) string {
 	return ""
 }
 
-var dcsCoreIRI string
-
-var (
-	modelTitleIRIs           []string
-	modelSectionsIRIs        []string
-	modelHeadingIRIs         []string
-	modelClausesIRIs         []string
-	modelContentIRIs         []string
-	modelSubsectionsIRIs     []string
-	modelSignatureFieldsIRIs []string
-	modelSigNameIRIs         []string
-	modelSigLabelIRIs        []string
-
-	modelUnitCodeIRIs    = []string{"https://schema.org/unitCode", "http://schema.org/unitCode"}
-	modelLinkNameIRIs    = []string{"https://schema.org/name", "http://schema.org/name"}
-	modelExternalURLIRIs = []string{"https://schema.org/url", "http://schema.org/url"}
-)
-
-func init() {
-	initOntologyIRI(os.Getenv(envOntologyBaseURL))
-}
-
-// InitOntologyIRI sets dcsCoreIRI and all derived model IRI slices from baseURL.
-// An empty baseURL defaults to http://127.0.0.1:8080.
-// Call this from main() after loading .env so the runtime URL overrides the
-// value set by init().
-func InitOntologyIRI(baseURL string) {
-	initOntologyIRI(baseURL)
-}
-
-func initOntologyIRI(baseURL string) {
-	if baseURL == "" {
-		baseURL = "http://127.0.0.1:8080"
-	}
-	baseURL = strings.TrimRight(baseURL, "/")
-	dcsCoreIRI = baseURL + "/ontology/dcs-pdf-core#"
-	modelTitleIRIs = []string{dcsCoreIRI + "title"}
-	modelSectionsIRIs = []string{dcsCoreIRI + "sections"}
-	modelHeadingIRIs = []string{dcsCoreIRI + "heading"}
-	modelClausesIRIs = []string{dcsCoreIRI + "clauses"}
-	modelContentIRIs = []string{dcsCoreIRI + "content"}
-	modelSubsectionsIRIs = []string{dcsCoreIRI + "subsections"}
-	modelSignatureFieldsIRIs = []string{dcsCoreIRI + "signatureFields"}
-	modelSigNameIRIs = []string{dcsCoreIRI + "name", "https://schema.org/name", "http://schema.org/name"}
-	modelSigLabelIRIs = []string{dcsCoreIRI + "label", "https://schema.org/name", "http://schema.org/name"}
-}
-
-// compactIRI converts a full IRI to a prefix:localName form using the namespace map,
-// or returns the IRI itself when no matching prefix is registered.
-// Prefixes are checked in sorted order to guarantee deterministic output when
-// multiple prefixes map to the same base URI.
 func compactIRI(iri string, nsMap map[string]string) string {
 	prefixes := make([]string, 0, len(nsMap))
 	for p := range nsMap {

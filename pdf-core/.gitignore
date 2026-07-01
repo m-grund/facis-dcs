@@ -1,4 +1,6 @@
 .env
+
+docs
 # Go
 /pdfun
 *.test
@@ -24,3 +26,5 @@ __pycache__/
 *.swo
 .DS_Store
 Thumbs.db
+
+.venv

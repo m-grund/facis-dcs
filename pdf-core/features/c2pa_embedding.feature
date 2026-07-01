@@ -5,30 +5,48 @@ Feature: C2PA embedding
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "schema": "https://schema.org/",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:c2pa-coverage",
-        "@type": "dcs-pdf-core:Document",
-        "title": "C2PA Coverage Ledger",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Provenance",
-            "clauses": [
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "This document records provenance through ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:Entity"},
-                  " relationships."
-                ]
-              }
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "C2PA Coverage Ledger",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "C2PA Coverage Ledger"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:c2pa-coverage#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:c2pa-coverage#s1",
+              "children": ["urn:doc:c2pa-coverage#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:c2pa-coverage#s1",
+              "title": "1. Provenance"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:c2pa-coverage#c1",
+              "content": [
+                "This document records provenance through ",
+                "prov:Entity",
+                " relationships."
+              ]
+            }
+          ]
+        }
       }
       """
     When I compile the payload through /download
