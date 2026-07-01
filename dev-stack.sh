@@ -62,7 +62,7 @@ echo "✓ Cert-chain ready at $CERT_FILE"
 # Copy .dev.env → .env so pdf-core main.go picks it up at startup.
 cp "$PDF_CORE_DEV_ENV" "$PDF_CORE_ENV"
 
-(cd "$PDF_CORE_DIR" && air) &> /tmp/pdf-core-live.log &
+(cd "$PDF_CORE_DIR" && make start-pdf) &> /tmp/pdf-core-live.log &
 PDF_CORE_PID=$!
 echo "✓ pdf-core started (PID $PDF_CORE_PID) — log: /tmp/pdf-core-live.log"
 
