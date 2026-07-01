@@ -35,7 +35,7 @@
         class="input-bordered select w-full"
         type="text"
         required
-        :disabled="!uiStore.isTemplateEditable"
+        :disabled="!uiStore.isTemplateEditable || isCreationMode"
       >
         <option>DRAFT</option>
         <option>REJECTED</option>
@@ -160,12 +160,16 @@ import { useTemplateList } from '@/views/contract-template-list/ContractTemplate
 import { TemplateState } from '@/types/contract-template-state'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
+import { useRoute } from 'vue-router'
 
 interface SubcontractKey {
   did: string
   version: number
   document_number?: string
 }
+
+const route = useRoute()
+const isCreationMode = computed(() => !route.params.did)
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
