@@ -6,11 +6,11 @@
    },
    "@context": {
       "xsd": "http://www.w3.org/2001/XMLSchema#",
-      "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
       "dcterms": "http://purl.org/dc/terms/",
       "linkml": "https://w3id.org/linkml/",
       "odrl": "http://www.w3.org/ns/odrl/2/",
-      "schema": "http://schema.org/",
+      "prov": "http://www.w3.org/ns/prov#",
+      "schema": "https://schema.org/",
       "taxonomy": "https://w3id.org/facis/dcs/taxonomy/v1#",
       "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
       "bindsTo": {
@@ -23,9 +23,9 @@
          "@container": "@list"
       },
       "children": {
-         "@type": "xsd:anyURI",
+         "@type": "@id",
          "@id": "children",
-         "@container": "@list"
+         "@container": "@set"
       },
       "conditionId": {
          "@id": "conditionId"
@@ -66,13 +66,12 @@
          "@id": "fields"
       },
       "isRoot": {
-         "@type": "xsd:boolean",
          "@id": "isRoot"
       },
       "layout": {
          "@type": "@id",
          "@id": "layout",
-         "@container": "@list"
+         "@container": "@set"
       },
       "metadata": {
          "@type": "@id",
@@ -89,7 +88,6 @@
          "@id": "policies"
       },
       "required": {
-         "@type": "xsd:boolean",
          "@id": "required"
       },
       "schemaVersion": {
@@ -103,7 +101,8 @@
       },
       "signatureFields": {
          "@type": "@id",
-         "@id": "signatureFields"
+         "@id": "signatureFields",
+         "@container": "@set"
       },
       "sourceSystemType": {
          "@id": "sourceSystemType"
@@ -115,7 +114,6 @@
          "@id": "templateType"
       },
       "templateVersion": {
-         "@type": "xsd:integer",
          "@id": "templateVersion"
       },
       "text": {
