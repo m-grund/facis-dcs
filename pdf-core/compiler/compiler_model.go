@@ -75,7 +75,7 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 	if len(dsItems) > 0 {
 		if dsNode, ok := dsItems[0].(map[string]any); ok {
 			blockByID := make(map[string]map[string]any)
-			for _, item := range ldGet(dsNode, dcsBlocksIRI) {
+			for _, item := range ldGetList(dsNode, dcsBlocksIRI) {
 				node, ok := item.(map[string]any)
 				if !ok {
 					continue
@@ -87,7 +87,7 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 
 			layoutByID := make(map[string]map[string]any)
 			var rootLayout map[string]any
-			for _, item := range ldGet(dsNode, dcsLayoutIRI) {
+			for _, item := range ldGetList(dsNode, dcsLayoutIRI) {
 				node, ok := item.(map[string]any)
 				if !ok {
 					continue
@@ -190,7 +190,7 @@ func extractDocumentModel(expanded []any, rootID string, rawCtx map[string]any, 
 // walkSections builds top-level sectionData from a root layout node's children.
 func walkSections(rootLayout map[string]any, layoutByID map[string]map[string]any, blockByID map[string]map[string]any) []sectionData {
 	var sections []sectionData
-	for _, v := range ldGet(rootLayout, dcsChildrenIRI) {
+	for _, v := range ldGetList(rootLayout, dcsChildrenIRI) {
 		childID := ldStringVal(v)
 		if childID == "" {
 			continue
@@ -215,7 +215,7 @@ func walkSections(rootLayout map[string]any, layoutByID map[string]map[string]an
 
 // walkSectionNode populates a sectionData's Clauses and Subsections from a layout node's children.
 func walkSectionNode(sec sectionData, ln map[string]any, layoutByID map[string]map[string]any, blockByID map[string]map[string]any) sectionData {
-	for _, v := range ldGet(ln, dcsChildrenIRI) {
+	for _, v := range ldGetList(ln, dcsChildrenIRI) {
 		childID := ldStringVal(v)
 		if childID == "" {
 			continue
@@ -244,7 +244,7 @@ func walkSectionNode(sec sectionData, ln map[string]any, layoutByID map[string]m
 // parseNewClause extracts a clauseData from an expanded Clause node.
 func parseNewClause(node map[string]any) clauseData {
 	clause := clauseData{Segments: []clauseSegment{}}
-	for _, c := range ldGet(node, dcsContentIRI) {
+	for _, c := range ldGetList(node, dcsContentIRI) {
 		clause.Segments = append(clause.Segments, parseExpandedSegment(c))
 	}
 	return clause
@@ -358,6 +358,23 @@ func parseExpandedSegment(item any) clauseSegment {
 
 func ldGet(node map[string]any, iri string) []any {
 	arr, _ := node[iri].([]any)
+	return arr
+}
+
+// ldGetList is like ldGet but also unwraps a JSON-LD @list envelope.
+// When a property is declared with @container:@list in the context, or when
+// the payload uses explicit {"@list":[...]} syntax, JSON-LD expansion wraps
+// the items in a single {"@list":[...]} map. ldGetList unwraps that so callers
+// always receive the actual item slice regardless of which notation was used.
+func ldGetList(node map[string]any, iri string) []any {
+	arr := ldGet(node, iri)
+	if len(arr) == 1 {
+		if m, ok := arr[0].(map[string]any); ok {
+			if list, ok := m["@list"].([]any); ok {
+				return list
+			}
+		}
+	}
 	return arr
 }
 
