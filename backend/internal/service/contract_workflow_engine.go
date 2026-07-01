@@ -81,6 +81,32 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedReviewers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Reviewers)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedAprovers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Approvers)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedNegotiators, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Negotiators)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedPeers := base.Unique(untrustedReviewers, untrustedAprovers, untrustedNegotiators)
+	if len(untrustedPeers) > 0 {
+		err := fmt.Errorf("untrusted peers are not allowed: %v", untrustedPeers)
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	cmd := command.CreateCmd{
 		DID:         *did,
 		TemplateDID: req.TemplateDid,

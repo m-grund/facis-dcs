@@ -33,3 +33,17 @@ func ConvertAny[T any](raw any) (*T, error) {
 	}
 	return &out, nil
 }
+
+func Unique(lists ...[]string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, list := range lists {
+		for _, s := range list {
+			if _, ok := seen[s]; !ok {
+				seen[s] = struct{}{}
+				result = append(result, s)
+			}
+		}
+	}
+	return result
+}

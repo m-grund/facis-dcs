@@ -17,7 +17,7 @@ func OutboxProcessorTimeOut() time.Duration {
 }
 
 func EventBusTopic() string {
-	return "digital-contracting-service"
+	return "dcs"
 }
 
 func GlobalAuditTrailName() string {

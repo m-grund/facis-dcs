@@ -50,6 +50,7 @@ type DCSToDCSSynchronizer struct {
 }
 
 func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client *event.CloudEventSubClient) {
+
 	syncHandler := func(evt cloudevent.Event) {
 
 		source, err := componenttype.NewComponentType(evt.Source())
@@ -299,11 +300,17 @@ func ReadAllContractTasksData(ctx context.Context, db *sqlx.DB,
 }
 
 func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did string) error {
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
 	qry := contract.GetByIDQry{
 		DID:         did,
-		RetrievedBy: middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
+		RetrievedBy: "System",
+		HolderDID:   localPeer,
+		UserRoles:   nil,
 	}
 	qryHandler := contract.GetByIDHandler{
 		Ctx:   ctx,
@@ -356,11 +363,6 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 	}
 
 	result, err := ReadAllContractTasksData(ctx, s.DB, s.RTRepo, s.ATRepo, s.NTRepo, s.NRepo, &contractResult.DID)
-	if err != nil {
-		return err
-	}
-
-	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return err
 	}
