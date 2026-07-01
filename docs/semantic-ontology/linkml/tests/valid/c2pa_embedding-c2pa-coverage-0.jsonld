@@ -4,9 +4,13 @@
     "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
     "xsd": "http://www.w3.org/2001/XMLSchema#"
   },
-  "@id": "urn:doc:req-missing-metadata",
+  "@id": "urn:doc:c2pa-coverage",
   "@type": "ContractTemplate",
-  "documentTitle": "Missing Metadata",
+  "documentTitle": "C2PA Coverage Ledger",
+  "metadata": {
+    "@type": "TemplateMetadata",
+    "title": "C2PA Coverage Ledger"
+  },
   "documentStructure": {
     "@type": "DocumentStructure",
     "layout": [
@@ -14,28 +18,30 @@
         "@type": "LayoutNode",
         "isRoot": true,
         "children": [
-          "urn:doc:req-missing-metadata#s1"
+          "urn:doc:c2pa-coverage#s1"
         ]
       },
       {
         "@type": "LayoutNode",
-        "@id": "urn:doc:req-missing-metadata#s1",
+        "@id": "urn:doc:c2pa-coverage#s1",
         "children": [
-          "urn:doc:req-missing-metadata#c1"
+          "urn:doc:c2pa-coverage#c1"
         ]
       }
     ],
     "blocks": [
       {
         "@type": "Section",
-        "@id": "urn:doc:req-missing-metadata#s1",
-        "title": "1. Intro"
+        "@id": "urn:doc:c2pa-coverage#s1",
+        "title": "1. Provenance"
       },
       {
         "@type": "Clause",
-        "@id": "urn:doc:req-missing-metadata#c1",
+        "@id": "urn:doc:c2pa-coverage#c1",
         "content": [
-          "Clause text."
+          "This document records provenance through ",
+          "prov:Entity",
+          " relationships."
         ]
       }
     ]

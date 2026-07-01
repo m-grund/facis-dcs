@@ -4,11 +4,12 @@
     "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
     "xsd": "http://www.w3.org/2001/XMLSchema#"
   },
-  "@id": "urn:doc:req-missing-title",
+  "@id": "urn:doc:manifest-url-absent",
   "@type": "ContractTemplate",
-  "documentTitle": "Has Metadata But No Title",
+  "documentTitle": "No Remote Manifest",
   "metadata": {
-    "@type": "TemplateMetadata"
+    "@type": "TemplateMetadata",
+    "title": "No Remote Manifest"
   },
   "documentStructure": {
     "@type": "DocumentStructure",
@@ -17,28 +18,36 @@
         "@type": "LayoutNode",
         "isRoot": true,
         "children": [
-          "urn:doc:req-missing-title#s1"
+          "urn:doc:manifest-url-absent#s1"
         ]
       },
       {
         "@type": "LayoutNode",
-        "@id": "urn:doc:req-missing-title#s1",
+        "@id": "urn:doc:manifest-url-absent#s1",
         "children": [
-          "urn:doc:req-missing-title#c1"
+          "urn:doc:manifest-url-absent#c1",
+          "urn:doc:manifest-url-absent#c2"
         ]
       }
     ],
     "blocks": [
       {
         "@type": "Section",
-        "@id": "urn:doc:req-missing-title#s1",
-        "title": "1. Intro"
+        "@id": "urn:doc:manifest-url-absent#s1",
+        "title": "1. Provenance"
       },
       {
         "@type": "Clause",
-        "@id": "urn:doc:req-missing-title#c1",
+        "@id": "urn:doc:manifest-url-absent#c1",
         "content": [
-          "Clause text."
+          "Base document."
+        ]
+      },
+      {
+        "@type": "Clause",
+        "@id": "urn:doc:manifest-url-absent#c2",
+        "content": [
+          "Amendment one."
         ]
       }
     ]

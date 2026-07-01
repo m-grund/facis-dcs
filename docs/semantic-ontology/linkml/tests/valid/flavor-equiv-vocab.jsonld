@@ -4,9 +4,13 @@
     "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
     "xsd": "http://www.w3.org/2001/XMLSchema#"
   },
-  "@id": "urn:doc:req-missing-metadata",
+  "@id": "urn:doc:req-flavors",
   "@type": "ContractTemplate",
-  "documentTitle": "Missing Metadata",
+  "documentTitle": "Flavor Equivalence",
+  "metadata": {
+    "@type": "TemplateMetadata",
+    "title": "Flavor Equivalence"
+  },
   "documentStructure": {
     "@type": "DocumentStructure",
     "layout": [
@@ -14,28 +18,28 @@
         "@type": "LayoutNode",
         "isRoot": true,
         "children": [
-          "urn:doc:req-missing-metadata#s1"
+          "urn:doc:req-flavors#s1"
         ]
       },
       {
         "@type": "LayoutNode",
-        "@id": "urn:doc:req-missing-metadata#s1",
+        "@id": "urn:doc:req-flavors#s1",
         "children": [
-          "urn:doc:req-missing-metadata#c1"
+          "urn:doc:req-flavors#c1"
         ]
       }
     ],
     "blocks": [
       {
         "@type": "Section",
-        "@id": "urn:doc:req-missing-metadata#s1",
-        "title": "1. Intro"
+        "@id": "urn:doc:req-flavors#s1",
+        "title": "1. Terms"
       },
       {
         "@type": "Clause",
-        "@id": "urn:doc:req-missing-metadata#c1",
+        "@id": "urn:doc:req-flavors#c1",
         "content": [
-          "Clause text."
+          "Reference to dcs:Clause remains equivalent across JSON-LD flavors."
         ]
       }
     ]

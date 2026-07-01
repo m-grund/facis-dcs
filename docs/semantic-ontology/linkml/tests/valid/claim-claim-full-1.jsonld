@@ -4,9 +4,13 @@
     "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
     "xsd": "http://www.w3.org/2001/XMLSchema#"
   },
-  "@id": "urn:doc:req-missing-metadata",
+  "@id": "urn:doc:claim-full",
   "@type": "ContractTemplate",
-  "documentTitle": "Missing Metadata",
+  "documentTitle": "Claim Test With Metadata",
+  "metadata": {
+    "@type": "TemplateMetadata",
+    "title": "Claim Test With Metadata"
+  },
   "documentStructure": {
     "@type": "DocumentStructure",
     "layout": [
@@ -14,28 +18,28 @@
         "@type": "LayoutNode",
         "isRoot": true,
         "children": [
-          "urn:doc:req-missing-metadata#s1"
+          "urn:doc:claim-full#s1"
         ]
       },
       {
         "@type": "LayoutNode",
-        "@id": "urn:doc:req-missing-metadata#s1",
+        "@id": "urn:doc:claim-full#s1",
         "children": [
-          "urn:doc:req-missing-metadata#c1"
+          "urn:doc:claim-full#c1"
         ]
       }
     ],
     "blocks": [
       {
         "@type": "Section",
-        "@id": "urn:doc:req-missing-metadata#s1",
-        "title": "1. Intro"
+        "@id": "urn:doc:claim-full#s1",
+        "title": "1. Terms"
       },
       {
         "@type": "Clause",
-        "@id": "urn:doc:req-missing-metadata#c1",
+        "@id": "urn:doc:claim-full#c1",
         "content": [
-          "Clause text."
+          "This clause is in a PDF that still has its embedded JSON-LD present."
         ]
       }
     ]

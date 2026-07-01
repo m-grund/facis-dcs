@@ -32,6 +32,16 @@ classes:
       - documentStructure
       - metadata
       - policies
+      - signatureFields
+
+  SignatureField:
+    class_uri: dcs:SignatureField
+    slot_usage:
+      signatoryName:
+        required: true
+    slots:
+      - signatoryName
+      - title
 
   DataRequirement:
     class_uri: dcs:DataRequirement
@@ -140,6 +150,16 @@ slots:
     multivalued: true
     close_mappings:
       - odrl:hasPolicy
+
+  signatureFields:
+    slot_uri: dcs:signatureFields
+    range: SignatureField
+    multivalued: true
+
+  signatoryName:
+    slot_uri: dcs:signatoryName
+    range: string
+    description: Machine-readable identifier for the signatory role; used as the AcroForm /T field name.
 
   conditionId:
     slot_uri: dcs:conditionId

@@ -32,3 +32,5 @@ dcs:LayoutNode sh:property [
     sh:path ( dcs:children [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ;
     sh:nodeKind sh:IRI
 ] .
+
+dcs:SignatureField sh:nodeKind sh:IRI .
