@@ -60,7 +60,16 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return fmt.Errorf("could not process core data: %w", err)
 	}
 
-	if cmd.CauserDID != processData.Origin {
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)

@@ -80,7 +80,16 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return fmt.Errorf("could not read contract data: %w", err)
 	}
 
-	if cmd.CauserDID != oldData.Origin {
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if oldData.Origin != localPeer && cmd.CauserDID != oldData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
 		err := tx.Commit()
 		if err != nil {
 			return fmt.Errorf("could not commit transaction: %w", err)

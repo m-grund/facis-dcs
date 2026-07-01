@@ -272,6 +272,26 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 			return nil, dcstodcs.MakeInternalError(err)
 		}
 
+	case remoteaction.Negotiate:
+		cmd, err := base.ConvertAny[command.NegotiationCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Negotiator{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			RTRepo:      s.RTRepo,
+			NTRepo:      s.NTRepo,
+			NRepo:       s.NRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
 	default:
 		log.Printf(ctx, "unsupported remote action: %s", req.Action)
 	}

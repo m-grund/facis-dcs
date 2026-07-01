@@ -157,7 +157,6 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		if err != nil {
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
-
 		startDate = &startD
 	}
 
@@ -167,7 +166,6 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		if err != nil {
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
-
 		expDate = &expD
 	}
 
