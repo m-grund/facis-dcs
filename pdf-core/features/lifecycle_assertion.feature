@@ -6,15 +6,44 @@ Feature: DCS lifecycle assertion in C2PA manifest (DCS-OR-C2PA-003)
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:lifecycle-assertion-test",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Lifecycle Assertion Test",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Terms", "clauses": ["Testing lifecycle assertion embedding."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Lifecycle Assertion Test",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Lifecycle Assertion Test"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:lifecycle-assertion-test#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:lifecycle-assertion-test#s1",
+              "children": ["urn:doc:lifecycle-assertion-test#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:lifecycle-assertion-test#s1",
+              "title": "1. Terms"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:lifecycle-assertion-test#c1",
+              "content": ["Testing lifecycle assertion embedding."]
+            }
+          ]
+        }
       }
       """
     When I compile the payload through /download
@@ -35,15 +64,44 @@ Feature: DCS lifecycle assertion in C2PA manifest (DCS-OR-C2PA-003)
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:lifecycle-update-test",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Lifecycle Update Test",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Original", "clauses": ["Original clause."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Lifecycle Update Test",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Lifecycle Update Test"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:lifecycle-update-test#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:lifecycle-update-test#s1",
+              "children": ["urn:doc:lifecycle-update-test#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:lifecycle-update-test#s1",
+              "title": "1. Original"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:lifecycle-update-test#c1",
+              "content": ["Original clause."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -51,15 +109,49 @@ Feature: DCS lifecycle assertion in C2PA manifest (DCS-OR-C2PA-003)
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:lifecycle-update-test",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Lifecycle Update Test",
-        "sections": [
-          {"@type": "dcs-pdf-core:Section", "heading": "1. Original", "clauses": ["Original clause.", "Amended clause."]}
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Lifecycle Update Test",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Lifecycle Update Test"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:lifecycle-update-test#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:lifecycle-update-test#s1",
+              "children": ["urn:doc:lifecycle-update-test#c1", "urn:doc:lifecycle-update-test#c2"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:lifecycle-update-test#s1",
+              "title": "1. Original"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:lifecycle-update-test#c1",
+              "content": ["Original clause."]
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:lifecycle-update-test#c2",
+              "content": ["Amended clause."]
+            }
+          ]
+        }
       }
       """
     Then the response status is 200

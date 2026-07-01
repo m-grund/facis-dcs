@@ -73,31 +73,80 @@ func TestRenderPDFUsesCborContentBoxForSignature(t *testing.T) {
 func TestExtractDocumentModelParsesSignatureFields(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-			"schema": "https://schema.org/"
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+			"dcs": "https://w3id.org/facis/dcs/ontology/v1#"
 		},
 		"@id": "urn:doc:sig-fields-test",
-		"title": "Sig Fields Test",
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Sig Fields Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:sig-fields-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:sig-fields-test#s1", "children": ["urn:doc:sig-fields-test#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:sig-fields-test#s1", "title": "1. Terms"},
+				{"@type": "Clause", "@id": "urn:doc:sig-fields-test#c1", "content": ["Clause."]}
+			]
+		},
 		"signatureFields": [
-			{"schema:name": "SignerOne", "label": "Primary Signer"},
-			{"name": "SignerTwo"},
-			"SignerThree"
+			{"@type": "SignatureField", "@id": "urn:doc:sig-fields-test#SignerOne", "signatoryName": "SignerOne"},
+			{"@type": "SignatureField", "@id": "urn:doc:sig-fields-test#SignerTwo", "signatoryName": "SignerTwo"}
 		]
 	}`)
 
 	model := mustExtractFromPayload(t, payload)
 
-	if len(model.SignatureFields) != 3 {
-		t.Fatalf("signature field count = %d, want 3", len(model.SignatureFields))
+	if len(model.SignatureFields) != 2 {
+		t.Fatalf("signature field count = %d, want 2", len(model.SignatureFields))
 	}
-	if model.SignatureFields[0].Name != "SignerOne" || model.SignatureFields[0].Label != "Primary Signer" {
+	if model.SignatureFields[0].Name != "SignerOne" || model.SignatureFields[0].Label != "SignerOne" {
 		t.Fatalf("first signature field = %#v", model.SignatureFields[0])
 	}
 	if model.SignatureFields[1].Name != "SignerTwo" || model.SignatureFields[1].Label != "SignerTwo" {
 		t.Fatalf("second signature field = %#v", model.SignatureFields[1])
 	}
-	if model.SignatureFields[2].Name != "SignerThree" || model.SignatureFields[2].Label != "SignerThree" {
-		t.Fatalf("third signature field = %#v", model.SignatureFields[2])
+}
+
+// TestExtractDocumentModelParsesSignatureFieldWithTitle verifies that when
+// dcs:title is present alongside dcs:signatoryName, the title is used as the
+// human-readable display label while signatoryName remains the AcroForm /T value.
+func TestExtractDocumentModelParsesSignatureFieldWithTitle(t *testing.T) {
+	payload := []byte(`{
+		"@context": {
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+			"dcs": "https://w3id.org/facis/dcs/ontology/v1#"
+		},
+		"@id": "urn:doc:sig-with-title",
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Sig With Title"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:sig-with-title#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:sig-with-title#s1", "children": ["urn:doc:sig-with-title#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:sig-with-title#s1", "title": "1. Terms"},
+				{"@type": "Clause", "@id": "urn:doc:sig-with-title#c1", "content": ["Clause."]}
+			]
+		},
+		"signatureFields": [
+			{"@type": "SignatureField", "@id": "urn:doc:sig-with-title#sig-provider", "signatoryName": "sig-provider", "title": "Service Provider"}
+		]
+	}`)
+
+	model := mustExtractFromPayload(t, payload)
+
+	if len(model.SignatureFields) != 1 {
+		t.Fatalf("signature field count = %d, want 1", len(model.SignatureFields))
+	}
+	if model.SignatureFields[0].Name != "sig-provider" {
+		t.Errorf("Name = %q, want %q", model.SignatureFields[0].Name, "sig-provider")
+	}
+	if model.SignatureFields[0].Label != "Service Provider" {
+		t.Errorf("Label = %q, want %q", model.SignatureFields[0].Label, "Service Provider")
 	}
 }
 
@@ -133,6 +182,22 @@ func TestRenderPDFIncludesAcroFormAndSigWidgets(t *testing.T) {
 		if !bytes.Contains(pdf, marker) {
 			t.Fatalf("PDF missing marker %q", string(marker))
 		}
+	}
+}
+
+// TestOutlineDestinationUsesLeftMarginX verifies that PDF outline entries use
+// the left margin X coordinate (54.00) in their /XYZ destination, not 0.
+func TestOutlineDestinationUsesLeftMarginX(t *testing.T) {
+	doc := sectionDoc([]sectionData{{
+		Heading: "1. Test",
+		Clauses: []clauseData{{Segments: []clauseSegment{{Type: "prose", Text: "Clause."}}}},
+	}})
+	pdf, err := renderPDF(context.Background(), doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(pdf, []byte("/XYZ 54.00")) {
+		t.Error("PDF outline destination must use /XYZ 54.00 (left margin), not /XYZ 0")
 	}
 }
 

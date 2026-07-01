@@ -8,17 +8,40 @@ import (
 )
 
 const minimalPayloadBase = `{
-  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
+  "@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#", "dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
   "@id": "urn:doc:update-test",
-  "title": "Update Test",
-  "clauses": ["Original clause text."]
+  "@type": "ContractTemplate",
+  "metadata": {"@type": "TemplateMetadata", "title": "Update Test"},
+  "documentStructure": {
+    "@type": "DocumentStructure",
+    "layout": [
+      {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:update-test#s1"]},
+      {"@type": "LayoutNode", "@id": "urn:doc:update-test#s1", "children": ["urn:doc:update-test#c1"]}
+    ],
+    "blocks": [
+      {"@type": "Section", "@id": "urn:doc:update-test#s1", "title": "1. Terms"},
+      {"@type": "Clause", "@id": "urn:doc:update-test#c1", "content": ["Original clause text."]}
+    ]
+  }
 }`
 
 const minimalPayloadAmended = `{
-  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
+  "@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#", "dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
   "@id": "urn:doc:update-test",
-  "title": "Update Test",
-  "clauses": ["Original clause text.", "Newly added clause text."]
+  "@type": "ContractTemplate",
+  "metadata": {"@type": "TemplateMetadata", "title": "Update Test"},
+  "documentStructure": {
+    "@type": "DocumentStructure",
+    "layout": [
+      {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:update-test#s1"]},
+      {"@type": "LayoutNode", "@id": "urn:doc:update-test#s1", "children": ["urn:doc:update-test#c1", "urn:doc:update-test#c2"]}
+    ],
+    "blocks": [
+      {"@type": "Section", "@id": "urn:doc:update-test#s1", "title": "1. Terms"},
+      {"@type": "Clause", "@id": "urn:doc:update-test#c1", "content": ["Original clause text."]},
+      {"@type": "Clause", "@id": "urn:doc:update-test#c2", "content": ["Newly added clause text."]}
+    ]
+  }
 }`
 
 // TestUpdatePDFProducesIncrementalReplace verifies that UpdatePDF appends a
@@ -64,16 +87,38 @@ func TestUpdatePDFProducesIncrementalReplace(t *testing.T) {
 // (for provenance) while the incremental section contains only the new text.
 func TestUpdatePDFModifiedClause(t *testing.T) {
 	base := []byte(`{
-  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
+  "@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
   "@id": "urn:doc:mod-test",
-  "title": "Mod Test",
-  "clauses": ["The original wording of clause one."]
+  "@type": "ContractTemplate",
+  "metadata": {"@type": "TemplateMetadata", "title": "Mod Test"},
+  "documentStructure": {
+    "@type": "DocumentStructure",
+    "layout": [
+      {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:mod-test#s1"]},
+      {"@type": "LayoutNode", "@id": "urn:doc:mod-test#s1", "children": ["urn:doc:mod-test#c1"]}
+    ],
+    "blocks": [
+      {"@type": "Section", "@id": "urn:doc:mod-test#s1", "title": "1. Terms"},
+      {"@type": "Clause", "@id": "urn:doc:mod-test#c1", "content": ["The original wording of clause one."]}
+    ]
+  }
 }`)
 	modified := []byte(`{
-  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
+  "@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
   "@id": "urn:doc:mod-test",
-  "title": "Mod Test",
-  "clauses": ["The revised wording of clause one."]
+  "@type": "ContractTemplate",
+  "metadata": {"@type": "TemplateMetadata", "title": "Mod Test"},
+  "documentStructure": {
+    "@type": "DocumentStructure",
+    "layout": [
+      {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:mod-test#s1"]},
+      {"@type": "LayoutNode", "@id": "urn:doc:mod-test#s1", "children": ["urn:doc:mod-test#c1"]}
+    ],
+    "blocks": [
+      {"@type": "Section", "@id": "urn:doc:mod-test#s1", "title": "1. Terms"},
+      {"@type": "Clause", "@id": "urn:doc:mod-test#c1", "content": ["The revised wording of clause one."]}
+    ]
+  }
 }`)
 
 	original, err := CompilePDF(context.Background(), base, time.Now())
@@ -151,22 +196,40 @@ func TestUpdatePDFIdenticalPayloadIsRejected(t *testing.T) {
 //   - The updated /AcroForm must reference valid (non-zero) object IDs.
 func TestUpdatePDFPreservesSigFieldWidgets(t *testing.T) {
 	basePayload := []byte(`{
-	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-	},
-  "@id": "urn:doc:sig-field-test",
-	"title": "Sig Field Update Test",
-  "signatureFields": [{"name": "Signer1"}],
-  "clauses": ["Original text."]
+	"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
+	"@id": "urn:doc:sig-field-test",
+	"@type": "ContractTemplate",
+	"metadata": {"@type": "TemplateMetadata", "title": "Sig Field Update Test"},
+	"signatureFields": [{"@type": "SignatureField", "@id": "urn:doc:sig-field-test#Signer1", "signatoryName": "Signer1"}],
+	"documentStructure": {
+		"@type": "DocumentStructure",
+		"layout": [
+			{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:sig-field-test#s1"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:sig-field-test#s1", "children": ["urn:doc:sig-field-test#c1"]}
+		],
+		"blocks": [
+			{"@type": "Section", "@id": "urn:doc:sig-field-test#s1", "title": "1. Terms"},
+			{"@type": "Clause", "@id": "urn:doc:sig-field-test#c1", "content": ["Original text."]}
+		]
+	}
 }`)
 	amendedPayload := []byte(`{
-	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-	},
-  "@id": "urn:doc:sig-field-test",
-	"title": "Sig Field Update Test",
-  "signatureFields": [{"name": "Signer1"}],
-  "clauses": ["Amended text."]
+	"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
+	"@id": "urn:doc:sig-field-test",
+	"@type": "ContractTemplate",
+	"metadata": {"@type": "TemplateMetadata", "title": "Sig Field Update Test"},
+	"signatureFields": [{"@type": "SignatureField", "@id": "urn:doc:sig-field-test#Signer1", "signatoryName": "Signer1"}],
+	"documentStructure": {
+		"@type": "DocumentStructure",
+		"layout": [
+			{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:sig-field-test#s1"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:sig-field-test#s1", "children": ["urn:doc:sig-field-test#c1"]}
+		],
+		"blocks": [
+			{"@type": "Section", "@id": "urn:doc:sig-field-test#s1", "title": "1. Terms"},
+			{"@type": "Clause", "@id": "urn:doc:sig-field-test#c1", "content": ["Amended text."]}
+		]
+	}
 }`)
 
 	base, err := CompilePDF(context.Background(), basePayload, time.Now())

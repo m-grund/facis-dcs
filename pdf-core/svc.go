@@ -11,8 +11,6 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"strings"
 
 	compiler "example.com/m/V2/compiler"
 
@@ -395,24 +393,12 @@ func (s *service) extractManifest(w http.ResponseWriter, r *http.Request) {
 
 func (s *service) ontologyContext(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/ld+json")
-	_, _ = w.Write(substituteBaseURL(ontologyContext))
+	_, _ = w.Write(ontologyContext)
 }
 
 func (s *service) ontologyOwl(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/ld+json")
-	_, _ = w.Write(substituteBaseURL(ontologyOWL))
-}
-
-// substituteBaseURL replaces the hardcoded default base URL in embedded ontology
-// bytes with the configured DCS_PDF_CORE_ONTOLOGY_BASE_URL, if set. This allows
-// deployments behind a public hostname to serve a usable JSON-LD context.
-func substituteBaseURL(raw []byte) []byte {
-	base := os.Getenv("DCS_PDF_CORE_ONTOLOGY_BASE_URL")
-	if base == "" {
-		return raw
-	}
-	base = strings.TrimRight(base, "/")
-	return bytes.ReplaceAll(raw, []byte("http://127.0.0.1:8080"), []byte(base))
+	w.Header().Set("Content-Type", "text/turtle; charset=utf-8")
+	_, _ = w.Write(ontologyOWL)
 }
 
 // readMultipartParts reads all parts from a multipart body into a map keyed by form field name.

@@ -5,52 +5,80 @@ Feature: Structural markers
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "sosa": "http://www.w3.org/ns/sosa/",
-          "ssn": "http://www.w3.org/ns/ssn/",
-          "schema": "https://schema.org/",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:markers",
-        "@type": ["dcs-pdf-core:Document", "sosa:ObservationCollection"],
-        "title": "Semantic Marker Ledger",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Observations",
-            "clauses": [
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "Each ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "sosa:Observation"},
-                  " in this collection was produced by a calibrated ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "sosa:Sensor"},
-                  "."
-                ]
-              },
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "The ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "sosa:ObservableProperty"},
-                  " is linked to the originating ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "sosa:Sensor"},
-                  " via the ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "ssn:implements"},
-                  " relation."
-                ]
-              }
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Provenance",
-            "clauses": [
-              "A semantic glossary is appended after the body clauses by resolving the SOSA ontology at runtime."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Semantic Marker Ledger",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Semantic Marker Ledger"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:markers#s1", "urn:doc:markers#s2"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:markers#s1",
+              "children": ["urn:doc:markers#c1", "urn:doc:markers#c2"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:markers#s2",
+              "children": ["urn:doc:markers#c3"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:markers#s1",
+              "title": "1. Observations"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:markers#c1",
+              "content": [
+                "Each ",
+                "sosa:Observation",
+                " in this collection was produced by a calibrated ",
+                "sosa:Sensor",
+                "."
+              ]
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:markers#c2",
+              "content": [
+                "The ",
+                "sosa:ObservableProperty",
+                " is linked to the originating ",
+                "sosa:Sensor",
+                " via the ",
+                "ssn:implements",
+                " relation."
+              ]
+            },
+            {
+              "@type": "Section",
+              "@id": "urn:doc:markers#s2",
+              "title": "2. Provenance"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:markers#c3",
+              "content": [
+                "A semantic glossary is appended after the body clauses by resolving the SOSA ontology at runtime."
+              ]
+            }
+          ]
+        }
       }
       """
     When I compile the payload through /download

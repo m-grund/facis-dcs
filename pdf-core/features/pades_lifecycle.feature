@@ -6,26 +6,40 @@ Feature: PAdES signature lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:pades-lifecycle",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "PAdES Lifecycle Test Document",
+        "@type": "ContractTemplate",
+        "documentTitle": "PAdES Lifecycle Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "PAdES Lifecycle Test Document"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerOne"},
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerTwo"}
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerOne", "signatoryName": "SignerOne"},
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerTwo", "signatoryName": "SignerTwo"}
         ],
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Original Terms",
-            "clauses": [
-              "This is the original clause at version one."
-            ]
-          }
-        ]
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:pades-lifecycle#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s1",
+              "children": ["urn:doc:pades-lifecycle#c1"]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s1", "title": "1. Original Terms"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c1", "content": ["This is the original clause at version one."]}
+          ]
+        }
       }
       """
 
@@ -53,33 +67,50 @@ Feature: PAdES signature lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:pades-lifecycle",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "PAdES Lifecycle Test Document",
+        "@type": "ContractTemplate",
+        "documentTitle": "PAdES Lifecycle Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "PAdES Lifecycle Test Document"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerOne"},
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerTwo"}
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerOne", "signatoryName": "SignerOne"},
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerTwo", "signatoryName": "SignerTwo"}
         ],
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Original Terms",
-            "clauses": [
-              "This is the original clause at version one."
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Amendment",
-            "clauses": [
-              "Second clause added in amendment round one."
-            ]
-          }
-        ]
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": [
+                "urn:doc:pades-lifecycle#s1",
+                "urn:doc:pades-lifecycle#s2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s1",
+              "children": ["urn:doc:pades-lifecycle#c1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s2",
+              "children": ["urn:doc:pades-lifecycle#c2"]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s1", "title": "1. Original Terms"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c1", "content": ["This is the original clause at version one."]},
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s2", "title": "2. Amendment"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c2", "content": ["Second clause added in amendment round one."]}
+          ]
+        }
       }
       """
     When I update the signed PDF with the amended payload through /update
@@ -110,26 +141,40 @@ Feature: PAdES signature lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:pades-lifecycle",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "PAdES Lifecycle Test Document",
+        "@type": "ContractTemplate",
+        "documentTitle": "PAdES Lifecycle Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "PAdES Lifecycle Test Document"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerOne"},
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerTwo"}
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerOne", "signatoryName": "SignerOne"},
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerTwo", "signatoryName": "SignerTwo"}
         ],
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Terms",
-            "clauses": [
-              "Clause one revised in first amendment."
-            ]
-          }
-        ]
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:pades-lifecycle#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s1",
+              "children": ["urn:doc:pades-lifecycle#c1"]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s1", "title": "1. Terms"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c1", "content": ["Clause one revised in first amendment."]}
+          ]
+        }
       }
       """
     When I update the compiled PDF with the amended payload through /update
@@ -137,26 +182,40 @@ Feature: PAdES signature lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:pades-lifecycle",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "PAdES Lifecycle Test Document",
+        "@type": "ContractTemplate",
+        "documentTitle": "PAdES Lifecycle Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "PAdES Lifecycle Test Document"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerOne"},
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerTwo"}
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerOne", "signatoryName": "SignerOne"},
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerTwo", "signatoryName": "SignerTwo"}
         ],
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Terms",
-            "clauses": [
-              "Clause one revised in second amendment."
-            ]
-          }
-        ]
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:pades-lifecycle#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s1",
+              "children": ["urn:doc:pades-lifecycle#c1"]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s1", "title": "1. Terms"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c1", "content": ["Clause one revised in second amendment."]}
+          ]
+        }
       }
       """
     When I update the amended PDF with the second amended payload through /update
@@ -182,33 +241,50 @@ Feature: PAdES signature lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:pades-lifecycle",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "PAdES Lifecycle Test Document",
+        "@type": "ContractTemplate",
+        "documentTitle": "PAdES Lifecycle Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "PAdES Lifecycle Test Document"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerOne"},
-          {"@type": "dcs-pdf-core:SignatureField", "name": "SignerTwo"}
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerOne", "signatoryName": "SignerOne"},
+          {"@type": "SignatureField", "@id": "urn:doc:pades-lifecycle#SignerTwo", "signatoryName": "SignerTwo"}
         ],
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Original Terms",
-            "clauses": [
-              "This is the original clause at version one."
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Amendment",
-            "clauses": [
-              "Clause added after SignerOne signed."
-            ]
-          }
-        ]
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": [
+                "urn:doc:pades-lifecycle#s1",
+                "urn:doc:pades-lifecycle#s2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s1",
+              "children": ["urn:doc:pades-lifecycle#c1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:pades-lifecycle#s2",
+              "children": ["urn:doc:pades-lifecycle#c2"]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s1", "title": "1. Original Terms"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c1", "content": ["This is the original clause at version one."]},
+            {"@type": "Section", "@id": "urn:doc:pades-lifecycle#s2", "title": "2. Amendment"},
+            {"@type": "Clause", "@id": "urn:doc:pades-lifecycle#c2", "content": ["Clause added after SignerOne signed."]}
+          ]
+        }
       }
       """
     When I update the signed PDF with the amended payload through /update
