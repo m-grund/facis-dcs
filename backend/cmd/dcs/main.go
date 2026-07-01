@@ -140,12 +140,13 @@ func main() {
 	if didFilePath == "" || !fileExists(didFilePath) {
 		log.Printf(ctx, "DCS_DID configuration or file is missing")
 	}
-	didFileContent, err := os.ReadFile(didFilePath)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not read did file content")
+
+	privateKeyPath := os.Getenv("DCS_PRIVATE_KEY")
+	if privateKeyPath == "" || !fileExists(privateKeyPath) {
+		log.Printf(ctx, "DCS_PRIVATE_KEY configuration or file is missing")
 	}
 
-	didDocument, err := base.NewDIDDocument(didFileContent)
+	didDocument, err := base.NewDIDDocument(didFilePath, privateKeyPath)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not read did document")
 	}
