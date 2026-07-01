@@ -291,6 +291,7 @@ slots:
     slot_uri: dcs:layout
     range: LayoutNode
     multivalued: true
+    list_elements_ordered: true
 
   children:
     slot_uri: dcs:children

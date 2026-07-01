@@ -31,6 +31,26 @@ func SetSHACLBytes(b []byte) {
 	shaclShapes = b
 }
 
+// dcsListProperties are the DCS ontology properties whose SHACL shapes use
+// RDF list path traversal (sh:path (prop rdf:rest* rdf:first)). Their values
+// must be RDF lists so SHACL member-type/class constraints fire on each element.
+//
+// Exclusions:
+//   - dcs:layout: SHACL uses sh:path dcs:layout + sh:class dcs:LayoutNode
+//     (plain triple). Wrapping as RDF list makes the list HEAD the triple object,
+//     failing the class constraint.
+//   - dcs:children: values are string literals (not IRI nodes) in practice;
+//     wrapping as RDF list exposes them to sh:nodeKind sh:IRI via the list path,
+//     which would fail. Plain-triple path is vacuously valid for literals.
+//   - dcs:signatureFields: no list-path SHACL shape.
+//
+// json-gold does not propagate ExpandContext annotations to compact-IRI
+// properties (e.g. dcs:blocks), so we normalise the expanded form explicitly.
+var dcsListProperties = map[string]bool{
+	dcsOntologyIRI + "blocks":  true,
+	dcsOntologyIRI + "content": true,
+}
+
 // CanonicalizePayload disambiguates JSON-LD at the application edge by running
 // an expand+compact pass with a stable context so semantically equivalent
 // payload flavors serialize to the same canonical JSON representation.
@@ -49,31 +69,35 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("JSON-LD expansion failed: %w", err)
 	}
 
-	// Build the compaction context: start from any prefix bindings in the
-	// original payload (so user-declared namespaces like odrl are preserved in
-	// the canonical form), then overlay the stable bindings so core vocabulary
-	// terms are always normalised regardless of what the submitter called them.
-	var rawDoc map[string]any
-	json.Unmarshal(raw, &rawDoc) //nolint:errcheck // already validated above
-	compactCtx := map[string]any{}
-	if rawCtx, ok := rawDoc["@context"].(map[string]any); ok {
-		for k, v := range rawCtx {
-			if _, isStr := v.(string); isStr && !strings.HasPrefix(k, "@") {
-				compactCtx[k] = v
-			}
-		}
-	}
+	// Normalise list properties to RDF list form. json-gold matches
+	// @container:@list during compaction only against {"@list":[...]} values,
+	// so we must ensure all list-typed properties carry that structure after
+	// expansion regardless of whether the submitter used prefix notation or
+	// @list syntax.
+	normalizeExpandedListProps(expanded)
+
+	// stableCtx is the authoritative compaction context for canonical payloads.
+	// - No dcs: prefix: when both a prefix and a term map to the same IRI,
+	//   json-gold prefers the prefix during compaction. Omitting the prefix
+	//   forces the short term name to win.
+	// - @container:@list: preserves RDF list structure in the canonical form so
+	//   SHACL member-type constraints remain effective on round-tripped payloads.
+	// - Full absolute IRI for @id: compact IRI (dcs:X) is ambiguous when the
+	//   prefix is absent from the context.
 	stableCtx := map[string]any{
-		"@vocab":  dcsOntologyIRI,
-		"dcs":     dcsOntologyIRI,
-		"dcterms": "http://purl.org/dc/terms/",
-		"schema":  "https://schema.org/",
-		"prov":    "http://www.w3.org/ns/prov#",
+		"@vocab":          dcsOntologyIRI,
+		"dcterms":         "http://purl.org/dc/terms/",
+		"schema":          "https://schema.org/",
+		"prov":            "http://www.w3.org/ns/prov#",
+		// @container:@list — SHACL traverses members via rdf:rest*/rdf:first
+		"blocks":  map[string]any{"@id": dcsOntologyIRI + "blocks",  "@container": "@list"},
+		"content": map[string]any{"@id": dcsOntologyIRI + "content", "@container": "@list"},
+		// @container:@set — plain-triple SHACL shapes; @list would break class/nodeKind constraints
+		"children":        map[string]any{"@id": dcsOntologyIRI + "children",        "@container": "@set"},
+		"layout":          map[string]any{"@id": dcsOntologyIRI + "layout",          "@container": "@set"},
+		"signatureFields": map[string]any{"@id": dcsOntologyIRI + "signatureFields", "@container": "@set"},
 	}
-	for k, v := range stableCtx {
-		compactCtx[k] = v
-	}
-	compacted, err := proc.Compact(expanded, compactCtx, ld.NewJsonLdOptions(""))
+	compacted, err := proc.Compact(expanded, stableCtx, ld.NewJsonLdOptions(""))
 	if err != nil {
 		return nil, fmt.Errorf("JSON-LD compaction failed: %w", err)
 	}
@@ -93,7 +117,7 @@ func ValidatePayloadSHACL(raw []byte) error {
 	}
 
 	// First ensure the payload is valid JSON-LD and can be expanded.
-	_, _, err := NormalizePayload(raw)
+	_, err := NormalizePayload(raw)
 	if err != nil {
 		return err
 	}
@@ -154,4 +178,71 @@ func flattenValidationResults(results []shacl.ValidationResult) []shacl.Validati
 		walk(r)
 	}
 	return flat
+}
+
+// normalizeExpandedListProps brings the expanded form into a consistent shape
+// before compaction:
+//
+//   - dcsListProperties (blocks, content): plain arrays are wrapped as
+//     {"@list":[...]} so the @container:@list compaction term matches and
+//     SHACL list-path constraints (rdf:rest*/rdf:first) can fire.
+//   - All other array properties: explicit {"@list":[...]} wrappers are stripped
+//     to plain arrays so @container:@set compaction produces clean JSON arrays
+//     regardless of whether the submitter used @list syntax or not.
+func normalizeExpandedListProps(expanded []any) {
+	for _, node := range expanded {
+		if m, ok := node.(map[string]any); ok {
+			normalizeNodeListProps(m)
+		}
+	}
+}
+
+func normalizeNodeListProps(node map[string]any) {
+	for k, v := range node {
+		arr, ok := v.([]any)
+		if !ok {
+			continue
+		}
+		if dcsListProperties[k] {
+			// Already an RDF list — recurse into inner items and leave wrapper
+			if len(arr) == 1 {
+				if listObj, ok := arr[0].(map[string]any); ok {
+					if inner, has := listObj["@list"]; has {
+						if innerArr, ok := inner.([]any); ok {
+							for _, item := range innerArr {
+								if m, ok := item.(map[string]any); ok {
+									normalizeNodeListProps(m)
+								}
+							}
+						}
+						continue
+					}
+				}
+			}
+			// Plain array — recurse into items then wrap
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					normalizeNodeListProps(m)
+				}
+			}
+			node[k] = []any{map[string]any{"@list": arr}}
+		} else {
+			// Non-list property: strip any @list wrapper to a plain array
+			if len(arr) == 1 {
+				if listObj, ok := arr[0].(map[string]any); ok {
+					if inner, has := listObj["@list"]; has {
+						if innerArr, ok := inner.([]any); ok {
+							arr = innerArr
+							node[k] = arr
+						}
+					}
+				}
+			}
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					normalizeNodeListProps(m)
+				}
+			}
+		}
+	}
 }

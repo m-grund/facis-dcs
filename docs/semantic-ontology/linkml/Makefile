@@ -13,7 +13,7 @@ PYSHACL            := $(VENV_PATH)/bin/pyshacl
 SHAPES_EXTRA  ?= shapes-content.ttl
 SHAPES_MERGED := $(OUTPUT_PATH)/$(SCHEMA).shacl.merged.ttl
 
-ORDERED_LIST_PROPS := blocks content children
+ORDERED_LIST_PROPS := blocks content children layout
 
 VALID_TESTS   := $(wildcard tests/valid/*.jsonld)
 INVALID_TESTS := $(wildcard tests/invalid/*.jsonld)

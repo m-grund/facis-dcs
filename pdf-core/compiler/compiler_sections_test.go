@@ -1,34 +1,27 @@
 package compiler
 
 import (
-	"context"
 	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
-// mustExtractFromPayload runs a raw JSON-LD payload through NormalizePayload
-// and extractDocumentModel, failing the test on any error.
-// This helper ensures tests exercise the full IRI-based extraction pipeline
-// rather than bypassing it by constructing raw Go maps.
+// mustExtractFromPayload canonicalizes a raw JSON-LD payload and extracts the
+// document model via extractDocumentModelFromCanonical, failing the test on any
+// error. Canonicalization ensures all input flavors (prefixed, @vocab, expanded)
+// are normalized before extraction.
 func mustExtractFromPayload(t *testing.T, payload []byte) documentModel {
 	t.Helper()
-	_, expanded, err := NormalizePayload(payload)
+	canonical, err := CanonicalizePayload(payload)
 	if err != nil {
-		t.Fatalf("NormalizePayload: %v", err)
+		t.Fatalf("CanonicalizePayload: %v", err)
 	}
-	var rawRoot map[string]any
-	if err := json.Unmarshal(payload, &rawRoot); err != nil {
-		t.Fatalf("json.Unmarshal: %v", err)
-	}
-	rawCtx, _ := rawRoot["@context"].(map[string]any)
-	rootID, _ := rawRoot["@id"].(string)
-	doc, err := extractDocumentModel(expanded, rootID, rawCtx, payload, strings.Repeat("0", 64))
+	doc, err := extractDocumentModelFromCanonical(canonical, strings.Repeat("0", 64))
 	if err != nil {
-		t.Fatalf("extractDocumentModel: %v", err)
+		t.Fatalf("extractDocumentModelFromCanonical: %v", err)
 	}
 	return doc
 }
