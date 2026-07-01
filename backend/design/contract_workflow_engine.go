@@ -139,6 +139,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("latest_template_did", String, "The DID of the latest template for this contract")
 	Attribute("template_is_deprecated", Boolean, "Whether the template is deprecated")
+	Attribute("parent_contract_did", String, "The DID of the parent contract, if this is a sub-contract")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })

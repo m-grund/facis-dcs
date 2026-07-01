@@ -10,18 +10,16 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
-	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	events "digital-contracting-service/internal/contractworkflowengine/event"
 )
 
 type GetArchivedContractsResult struct {
-	Contracts []MetadataItem
+	Contracts []db.ContractMetadata
 }
 
 type GetArchivedContractsHandler struct {
@@ -78,13 +76,8 @@ func (h *GetArchivedContractsHandler) Handle(ctx context.Context, query GetArchi
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
 
-	contractItems, err := toMetadataItems(archivedContractsMetadata)
-	if err != nil {
-		return nil, err
-	}
-
 	return &GetArchivedContractsResult{
-		Contracts: contractItems,
+		Contracts: archivedContractsMetadata,
 	}, nil
 }
 
@@ -137,51 +130,7 @@ func (h *GetArchivedContractsHandler) Search(ctx context.Context, query SearchAr
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
 
-	contractItems, err := toMetadataItems(archivedContractsMetadata)
-	if err != nil {
-		return nil, err
-	}
-
 	return &GetArchivedContractsResult{
-		Contracts: contractItems,
+		Contracts: archivedContractsMetadata,
 	}, nil
-}
-
-func toMetadataItems(contractsMetadata []db.ContractMetadata) ([]MetadataItem, error) {
-	var contractItems []MetadataItem
-	for _, data := range contractsMetadata {
-
-		state, err := contractstate.NewContractState(data.State)
-		if err != nil {
-			return nil, fmt.Errorf("could not create contract state: %w", err)
-		}
-
-		var expPolicy *expirationpolicy.ExpirationPolicy
-		if data.ExpPolicy != nil {
-			policy, err := expirationpolicy.NewExpirationPolicy(*data.ExpPolicy)
-			if err != nil {
-				return nil, contractworkflowengine.MakeInternalError(err)
-			}
-			expPolicy = &policy
-		}
-
-		metadata := MetadataItem{
-			DID:             data.DID,
-			ContractVersion: data.ContractVersion,
-			State:           state,
-			Name:            data.Name,
-			Description:     data.Description,
-			CreatedBy:       data.CreatedBy,
-			CreatedAt:       data.CreatedAt,
-			UpdatedAt:       data.UpdatedAt,
-			StartDate:       data.StartDate,
-			ExpDate:         data.ExpDate,
-			ExpPolicy:       expPolicy,
-			ExpNoticePeriod: data.ExpNoticePeriod,
-			Responsible:     data.Responsible,
-		}
-		contractItems = append(contractItems, metadata)
-	}
-
-	return contractItems, nil
 }
