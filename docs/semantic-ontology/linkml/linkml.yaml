@@ -88,7 +88,6 @@ classes:
     class_uri: dcs:DocumentStructure
     slots:
       - layout
-      - blocks
 
   Clause:
     class_uri: dcs:Clause
@@ -141,7 +140,6 @@ classes:
     class_uri: dcs:LayoutNode
     slots:
       - isRoot
-      - children
 
 slots:
 
@@ -314,7 +312,7 @@ slots:
   children:
     slot_uri: dcs:children
     multivalued: true
-    list_elements_ordered: false
+    list_elements_ordered: true
     close_mappings:
       - schema:hasPart
     any_of:

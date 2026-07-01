@@ -84,21 +84,22 @@ func (l *inProcessLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
 	return ld.NewDefaultDocumentLoader(nil).LoadDocument(u)
 }
 
-// dcsListProperties are the DCS ontology properties that must be RDF list form
-// in the canonical expansion so SHACL list-path constraints can fire.
-// layout/children/signatureFields use plain-triple (@set) paths in SHACL.
-// json-gold does not apply @container:@list from the context when the property
-// is written with a compact-IRI prefix; normalizeExpandedProps enforces it.
+// dcsListProperties are DCS properties whose values form ordered RDF lists
+// (@container:@list in the context). json-gold does not apply @container:@list
+// from the context when the property is written with a compact-IRI prefix;
+// normalizeExpandedProps enforces the {"@list":[...]} wrapper.
 var dcsListProperties = map[string]bool{
 	dcsOntologyIRI + "blocks":  true,
 	dcsOntologyIRI + "content": true,
 }
 
-// dcsIRIProperties are DCS properties whose values are IRI references (@type:@id
-// in the context). When inputs use compact-IRI prefix notation (dcs:children),
-// json-gold expands values as plain string literals rather than IRI nodes.
-// normalizeExpandedProps coerces them to {"@id":...} so compaction succeeds.
-var dcsIRIProperties = map[string]bool{
+// dcsListIRIProperties are DCS properties that are both ordered RDF lists
+// (@container:@list) and carry IRI references as values (@type:@id). Both
+// constraints are enforced by normalizeExpandedProps: the list wrapper is added
+// or preserved, and plain string value objects {"@value":"iri"} are coerced to
+// IRI node objects {"@id":"iri"} because json-gold does not apply @type:@id from
+// the context when the input uses compact-IRI prefix notation.
+var dcsListIRIProperties = map[string]bool{
 	dcsOntologyIRI + "children": true,
 }
 
@@ -259,10 +260,10 @@ func flattenValidationResults(results []shacl.ValidationResult) []shacl.Validati
 //   - dcsListProperties (blocks, content): ensure values are wrapped as
 //     {"@list":[...]} so @container:@list compaction matches and SHACL list-path
 //     constraints (rdf:rest*/rdf:first) can fire.
-//   - dcsIRIProperties (children): coerce plain string value objects
-//     {"@value":"iri"} to IRI node objects {"@id":"iri"} so @type:@id compaction
-//     succeeds. Required because json-gold does not apply @type:@id from the
-//     context when the input uses compact-IRI prefix notation.
+//   - dcsListIRIProperties (children): same as list properties, but also coerces
+//     plain string value objects {"@value":"iri"} to IRI node objects {"@id":"iri"}
+//     so @type:@id compaction succeeds. Required because json-gold does not apply
+//     @type:@id from the context when the input uses compact-IRI prefix notation.
 //   - All other array properties: strip any explicit {"@list":[...]} wrappers
 //     to plain arrays so @container:@set compaction produces clean JSON arrays.
 func normalizeExpandedProps(expanded []any) {
@@ -280,12 +281,16 @@ func normalizeNodeProps(node map[string]any) {
 			continue
 		}
 		switch {
-		case dcsListProperties[k]:
-			// Already wrapped as an RDF list — recurse into items, keep wrapper.
+		case dcsListProperties[k], dcsListIRIProperties[k]:
+			iriCoerce := dcsListIRIProperties[k]
+			// Already wrapped as an RDF list — handle items, keep wrapper.
 			if len(arr) == 1 {
 				if listObj, ok := arr[0].(map[string]any); ok {
 					if inner, has := listObj["@list"]; has {
 						if innerArr, ok := inner.([]any); ok {
+							if iriCoerce {
+								coerceIRIItems(innerArr)
+							}
 							for _, item := range innerArr {
 								if m, ok := item.(map[string]any); ok {
 									normalizeNodeProps(m)
@@ -296,36 +301,16 @@ func normalizeNodeProps(node map[string]any) {
 					}
 				}
 			}
-			// Plain array — recurse into items then wrap.
+			// Plain array — coerce IRIs if needed, recurse into items, then wrap.
+			if iriCoerce {
+				coerceIRIItems(arr)
+			}
 			for _, item := range arr {
 				if m, ok := item.(map[string]any); ok {
 					normalizeNodeProps(m)
 				}
 			}
 			node[k] = []any{map[string]any{"@list": arr}}
-		case dcsIRIProperties[k]:
-			// children is @container:@set so any @list wrapper from explicit
-			// {"@list":[...]} input syntax must be stripped first.
-			if len(arr) == 1 {
-				if listObj, ok := arr[0].(map[string]any); ok {
-					if inner, has := listObj["@list"]; has {
-						if innerArr, ok := inner.([]any); ok {
-							arr = innerArr
-							node[k] = arr
-						}
-					}
-				}
-			}
-			// Coerce string literals that look like IRIs to IRI node objects.
-			for i, item := range arr {
-				if vm, ok := item.(map[string]any); ok {
-					if sv, hasVal := vm["@value"].(string); hasVal && len(vm) == 1 && looksLikeIRI(sv) {
-						arr[i] = map[string]any{"@id": sv}
-					} else {
-						normalizeNodeProps(vm)
-					}
-				}
-			}
 		default:
 			// Strip any @list wrapper to a plain array, then recurse.
 			if len(arr) == 1 {
@@ -342,6 +327,19 @@ func normalizeNodeProps(node map[string]any) {
 				if m, ok := item.(map[string]any); ok {
 					normalizeNodeProps(m)
 				}
+			}
+		}
+	}
+}
+
+// coerceIRIItems replaces plain string value objects {"@value":"iri"} in arr with
+// IRI node objects {"@id":"iri"} for items that look like IRIs. Items that are
+// already IRI nodes or non-IRI values are left unchanged.
+func coerceIRIItems(arr []any) {
+	for i, item := range arr {
+		if vm, ok := item.(map[string]any); ok {
+			if sv, hasVal := vm["@value"].(string); hasVal && len(vm) == 1 && looksLikeIRI(sv) {
+				arr[i] = map[string]any{"@id": sv}
 			}
 		}
 	}

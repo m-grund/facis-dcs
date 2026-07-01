@@ -25,7 +25,7 @@
       "children": {
          "@type": "@id",
          "@id": "children",
-         "@container": "@set"
+         "@container": "@list"
       },
       "conditionId": {
          "@id": "conditionId"
