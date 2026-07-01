@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
+import ContractStructureTree from '@/modules/contract-workflow-engine/components/ContractStructureTree.vue'
 import type { Contract } from '@/models/contract/contract'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
@@ -67,21 +68,32 @@ watch(
   { immediate: true },
 )
 
-const parentContract = computed(() => {
-  const parentDid = contract.value?.contract_data?.['dcs:parentContract']?.['@id']
-  if (!parentDid) return null
-  return contracts.value.find((c) => c.did === parentDid) ?? { did: parentDid, name: parentDid } as Contract
+const parentContract = computed(() => ancestors.value.at(-1) ?? null)
+
+const ancestors = computed(() => {
+  const chain: Contract[] = []
+  let currentDid = contract.value?.contract_data?.['dcs:parentContract']?.['@id']
+  while (currentDid) {
+    const parent = contracts.value.find((c) => c.did === currentDid)
+    if (!parent) {
+      chain.unshift({ did: currentDid, name: currentDid } as Contract)
+      break
+    }
+    chain.unshift(parent)
+    currentDid = parent.parent_contract_did ?? undefined
+  }
+  return chain
 })
 
-const childContracts = computed(() =>
-  contracts.value.filter(
-    (c) => c.contract_data?.['dcs:parentContract']?.['@id'] === contract.value?.did,
-  ),
+const childContracts = computed(() => contracts.value.filter((c) => c.parent_contract_did === contract.value?.did))
+
+const contractTitle = computed(
+  () => contract.value?.name ?? contract.value?.contract_data?.['dcs:metadata']?.['dcs:title'] ?? contract.value?.did,
 )
 
 onMounted(() => {
   templateEditorUiStore.reset({ workflow: 'contract', isTemplateEditable: false })
-  if (contracts.value.length === 0) contractsStore.loadContracts()
+  if (contracts.value.length === 0) void contractsStore.loadContracts()
 })
 
 onUnmounted(() => {
@@ -220,6 +232,55 @@ const exportPDF = async () => {
                   </div>
                 </div>
               </template>
+
+              <div v-show="activeTab === 'structure'">
+                <div class="card border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-4">
+                    <!-- Ancestor chain -->
+                    <div v-if="ancestors.length > 0" class="space-y-1">
+                      <div
+                        v-for="(ancestor, i) in ancestors"
+                        :key="ancestor.did"
+                        class="flex items-center gap-2 text-sm text-base-content/60"
+                        :style="{ paddingLeft: `${i * 1}rem` }"
+                      >
+                        <span class="shrink-0 text-xs">↑</span>
+                        <RouterLink
+                          :to="{ name: ROUTES.CONTRACTS.VIEW, params: { did: ancestor.did } }"
+                          class="link font-medium text-base-content link-hover"
+                          target="_blank"
+                        >
+                          {{ ancestor.name ?? ancestor.did }}
+                        </RouterLink>
+                        <span class="badge badge-ghost badge-xs">{{ ancestor.state }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Current contract -->
+                    <div
+                      class="flex items-center gap-2"
+                      :style="ancestors.length > 0 ? { paddingLeft: `${ancestors.length}rem` } : {}"
+                    >
+                      <span class="h-2 w-2 shrink-0 rounded-full bg-primary"></span>
+                      <span class="text-sm font-semibold">{{ contractTitle }}</span>
+                      <span class="badge badge-xs badge-primary">{{ contract.state }}</span>
+                    </div>
+
+                    <!-- Children -->
+                    <div
+                      v-if="childContracts.length > 0"
+                      :style="{ paddingLeft: `${ancestors.length + 1}rem` }"
+                      class="border-l border-base-300 pl-4"
+                    >
+                      <ContractStructureTree :root-did="contract.did" :contracts="contracts" />
+                    </div>
+
+                    <p v-else-if="ancestors.length === 0" class="text-sm text-base-content/40">
+                      This contract has no parent or child contracts.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
