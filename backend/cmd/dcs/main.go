@@ -71,7 +71,6 @@ func fileExists(path string) bool {
 	if errors.Is(err, os.ErrNotExist) {
 		return false
 	}
-	// anderer Fehler (z. B. Permission denied) – bewusst nicht als "existiert nicht" werten
 	return false
 }
 
