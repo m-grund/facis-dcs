@@ -14,22 +14,17 @@
     </RouterLink>
     <div v-else></div>
   </div>
-  <div>
-    <div v-if="loading" class="pl-4">Loading Templates...</div>
-    <div v-else-if="error" class="pl-4">{{ error }}</div>
-    <div v-else>
-      <TemplateList :templates="templates" :has-review-task="hasReviewTask" :has-approval-task="hasApprovalTask" />
-    </div>
-  </div>
+
+  <TemplateList />
 </template>
 
 <script setup lang="ts">
 import TemplateList from '@/components/lists/template/TemplateList.vue'
 import { ROUTES } from '@/router/router'
+import { useAuthStore } from '@/stores/auth-store'
 import { computed } from 'vue'
-import { useTemplateList } from './ContractTemplateListController'
 
-const { templates, roles, loading, error, hasReviewTask, hasApprovalTask } = useTemplateList()
+const authStore = useAuthStore()
 
-const isTemplateCreator = computed(() => roles.value.includes('TEMPLATE_CREATOR'))
+const isTemplateCreator = computed(() => authStore.user?.roles?.includes('TEMPLATE_CREATOR') ?? false)
 </script>

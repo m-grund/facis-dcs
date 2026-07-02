@@ -126,7 +126,6 @@ const forwardToApproval = async () => {
     console.error('Missing did or updated_at for submission')
     return
   }
-  isSubmitting.value = true
   try {
     const commentResult = await commentDialog.value?.reveal({
       message: 'Add comment?',
@@ -137,6 +136,7 @@ const forwardToApproval = async () => {
     } else if (commentResult?.data) {
       comment.value = commentResult.data
     }
+    isSubmitting.value = true
 
     await contractTemplateService.submit({
       did,
@@ -161,7 +161,6 @@ const returnToDraft = async () => {
     console.error('Missing did or updated_at for rejection')
     return
   }
-  isSubmitting.value = true
   try {
     const commentResult = await commentDialog.value?.reveal({
       message: 'Add comment?',
@@ -172,6 +171,7 @@ const returnToDraft = async () => {
     } else if (commentResult?.data) {
       comment.value = commentResult.data
     }
+    isSubmitting.value = true
     await contractTemplateService.submit({
       did,
       updated_at: updatedAt,

@@ -7,6 +7,7 @@ import { ref, type Ref } from 'vue'
 
 export const useContractTemplatesStore = defineStore('contractTemplates', () => {
   const contractTemplates: Ref<PartialContractTemplate[]> = ref([])
+  const paginatedTemplates: Ref<PartialContractTemplate[]> = ref([])
   const reviewTasks: Ref<ContractTemplateReviewTask[]> = ref([])
   const approvalTasks: Ref<ContractTemplateApprovalTask[]> = ref([])
 
@@ -15,11 +16,14 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
 
   const findTemplateByDid = (did: string) => contractTemplates.value.find((template) => template.did === did)
 
+  const fetchTemplates = async (limit?: number, offset?: number) =>
+    await contractTemplateService.retrieve({ limit, offset })
+
   async function loadTemplates() {
     loading.value = true
     error.value = null
     try {
-      const data = await contractTemplateService.retrieve()
+      const data = await fetchTemplates()
       contractTemplates.value = data.contract_templates
       reviewTasks.value = data.review_tasks.map((task) => ({ ...task, type: 'template' }))
       approvalTasks.value = data.approval_tasks.map((task) => ({ ...task, type: 'template' }))
@@ -30,12 +34,29 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
     }
   }
 
+  async function loadPaginatedTemplates(currentPage: number, limit: number) {
+    loading.value = true
+    error.value = null
+    try {
+      const offset = currentPage
+      const paginatedResult = await fetchTemplates(limit, offset)
+      paginatedTemplates.value = paginatedResult.contract_templates
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Error loading templates'
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     contractTemplates,
     reviewTasks,
     approvalTasks,
+    paginatedTemplates,
     findTemplateByDid,
+    fetchTemplates,
     loadTemplates,
+    loadPaginatedTemplates,
     loading,
     error,
   }
