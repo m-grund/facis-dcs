@@ -102,12 +102,17 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	senderPublicKey, err := base.FetchPublicKeyFromHostname(senderHostname)
+	remoteDIDDocument, err := base.FetchDIDDocumentFromHostname(senderHostname)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	err = base.Verify([]byte(req.SecretValue), req.SecretHash, senderPublicKey)
+	err = remoteDIDDocument.VerifyEIDASCertificate()
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
+	err = remoteDIDDocument.Verify([]byte(req.SecretValue), req.SecretHash)
 	if err != nil {
 		return nil, contractworkflowengine.MakeBadRequest(err)
 	}
@@ -323,12 +328,17 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	senderPublicKey, err := base.FetchPublicKeyFromHostname(senderHostname)
+	remoteDIDDocument, err := base.FetchDIDDocumentFromHostname(senderHostname)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	err = base.Verify([]byte(req.SecretValue), req.SecretHash, senderPublicKey)
+	err = remoteDIDDocument.VerifyEIDASCertificate()
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
+	err = remoteDIDDocument.Verify([]byte(req.SecretValue), req.SecretHash)
 	if err != nil {
 		return nil, contractworkflowengine.MakeBadRequest(err)
 	}

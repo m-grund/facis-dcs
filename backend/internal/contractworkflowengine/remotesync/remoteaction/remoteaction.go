@@ -81,7 +81,7 @@ func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, didDocument base
 	}
 
 	secretValue := rand.Text()
-	secretHash, err := base.Sign([]byte(secretValue), didDocument)
+	secretHash, err := didDocument.Sign([]byte(secretValue))
 	if err != nil {
 		return err
 	}

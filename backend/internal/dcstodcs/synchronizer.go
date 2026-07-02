@@ -391,7 +391,7 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 			}
 
 			secretValue := rand.Text()
-			secretHash, err := base.Sign([]byte(secretValue), s.DIDDocument)
+			secretHash, err := s.DIDDocument.Sign([]byte(secretValue))
 			if err != nil {
 				return err
 			}
