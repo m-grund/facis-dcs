@@ -61,7 +61,7 @@ func (h *PeerUpdateRequester) Handle(ctx context.Context, cmd PeerUpdateRequestC
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.PeerUpdate.Execute(ctx, h.DB, localPeer, processData.Origin, processData.DID, cmd)
+		err = remoteaction.PeerUpdate.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}

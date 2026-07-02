@@ -70,7 +70,7 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.RecordEvidence.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
+		err = remoteaction.RecordEvidence.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}

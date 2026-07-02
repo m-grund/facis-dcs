@@ -95,7 +95,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Update.Execute(ctx, h.DB, cmd.CauserDID, oldData.Origin, oldData.DID, cmd)
+		err = remoteaction.Update.Execute(ctx, h.DB, h.DIDDocument, oldData.Origin, oldData.DID, cmd)
 		if err != nil {
 			return err
 		}

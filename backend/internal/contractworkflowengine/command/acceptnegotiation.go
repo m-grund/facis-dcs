@@ -73,7 +73,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.AcceptNegotiation.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
+		err = remoteaction.AcceptNegotiation.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}

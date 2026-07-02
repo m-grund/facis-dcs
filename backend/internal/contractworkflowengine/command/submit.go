@@ -83,7 +83,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return fmt.Errorf("could not commit transaction: %w", err)
 		}
 
-		err = remoteaction.Submit.Execute(ctx, h.DB, cmd.CauserDID, processData.Origin, processData.DID, cmd)
+		err = remoteaction.Submit.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
 		if err != nil {
 			return err
 		}

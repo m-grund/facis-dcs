@@ -2,6 +2,7 @@ package remoteaction
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -67,23 +68,23 @@ func (a RemoteAction) String() string {
 	return string(a)
 }
 
-func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, localPeer string, mainPeer string, contractDid string, payload any) error {
+func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, didDocument base.DIDDocument, mainPeer string, contractDid string, payload any) error {
 
-	//localPeer, err := didDocument.GetID()
-	//if err != nil {
-	//	return err
-	//}
+	localPeer, err := didDocument.GetID()
+	if err != nil {
+		return err
+	}
 
 	hostname, err := base.DIDWebToHostname(mainPeer)
 	if err != nil {
 		return err
 	}
 
-	//secretValue := rand.Text()
-	//secretHash, err := base.Sign([]byte(secretValue), s.DIDDocument)
-	//if err != nil {
-	//	return err
-	//}
+	secretValue := rand.Text()
+	secretHash, err := base.Sign([]byte(secretValue), didDocument)
+	if err != nil {
+		return err
+	}
 
 	client := dcstodcs2.NewDCSToDCSHttpClient(hostname)
 	_, err = client.Action(ctx, &dcstodcs.DCSToDCSContractActionRequest{
@@ -91,8 +92,8 @@ func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, localPeer string
 		Payload:     payload,
 		Action:      a.String(),
 		Component:   componenttype.ContractWorkflowEngine.String(),
-		//	SecretHash:  secretHash,
-		//	SecretValue: secretValue,
+		SecretHash:  secretHash,
+		SecretValue: secretValue,
 	})
 
 	if err != nil {
