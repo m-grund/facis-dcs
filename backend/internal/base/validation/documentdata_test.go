@@ -13,7 +13,6 @@ import (
 
 func TestMain(m *testing.M) {
 	SetJSONLDContextIRI(SchemaJSONLDContextV1)
-	SetVocabIRI(SchemaJSONLDContextV1 + "#")
 	os.Exit(m.Run())
 }
 
@@ -288,7 +287,7 @@ func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {
 }
 
 func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
-	normalized, err := NormalizeTemplateDataForPersistence(canonicalTemplateData(t), "did:web:facis.example:template:1", nil)
+	normalized, err := NormalizeTemplateDataForPersistence(canonicalTemplateData(t), "did:web:facis.example:template:1")
 	require.NoError(t, err)
 
 	var data map[string]any
@@ -306,9 +305,9 @@ func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 }
 
 func TestNormalizeTemplateDataForPersistenceRebasesCopiedTemplateIDs(t *testing.T) {
-	first, err := NormalizeTemplateDataForPersistence(canonicalTemplateData(t), "did:web:facis.example:template:source", nil)
+	first, err := NormalizeTemplateDataForPersistence(canonicalTemplateData(t), "did:web:facis.example:template:source")
 	require.NoError(t, err)
-	copied, err := NormalizeTemplateDataForPersistence(first, "did:web:facis.example:template:copy", nil)
+	copied, err := NormalizeTemplateDataForPersistence(first, "did:web:facis.example:template:copy")
 	require.NoError(t, err)
 
 	var data map[string]any
@@ -369,7 +368,7 @@ func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
 }
 
 func TestNormalizeContractDataForPersistenceAddsDocumentIdentity(t *testing.T) {
-	normalized, err := NormalizeContractDataForPersistence(validTemplateData(t), "did:web:facis.example:contract:1", nil, false)
+	normalized, err := NormalizeContractDataForPersistence(validTemplateData(t), "did:web:facis.example:contract:1", false)
 	require.NoError(t, err)
 
 	var data map[string]any

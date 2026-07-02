@@ -9,7 +9,23 @@ prefixes:
   xsd: "http://www.w3.org/2001/XMLSchema#"
   taxonomy: "https://w3id.org/facis/dcs/taxonomy/v1#"
   dcterms: "http://purl.org/dc/terms/"
-  schema: "http://schema.org/"
+  prov: "http://www.w3.org/ns/prov#"
+
+# emit_prefixes controls which prefixes appear as explicit entries in the
+# generated JSON-LD context. dcs is intentionally excluded: it is the
+# default_prefix and is therefore emitted as @vocab; having it also as an
+# explicit named prefix would cause json-gold to prefer the dcs:-prefixed form
+# over bare term names during compaction. schema is omitted here because
+# linkml:types already defines it as https://schema.org/; re-declaring it
+# causes a prefix-mismatch error in the generator.
+emit_prefixes:
+  - xsd
+  - dcterms
+  - linkml
+  - odrl
+  - prov
+  - schema
+  - taxonomy
 
 imports:
   - linkml:types
@@ -291,14 +307,19 @@ slots:
     slot_uri: dcs:layout
     range: LayoutNode
     multivalued: true
+    list_elements_ordered: false
 
   children:
     slot_uri: dcs:children
-    range: uriorcurie
     multivalued: true
     list_elements_ordered: true
     close_mappings:
       - schema:hasPart
+    any_of:
+      - range: LayoutNode
+      - range: Section
+      - range: Clause
+      - range: TextBlock
 
   isRoot:
     slot_uri: dcs:isRoot

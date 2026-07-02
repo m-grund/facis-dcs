@@ -214,12 +214,12 @@ func TestDeterministicClauseOrder(t *testing.T) {
 // hash is the payload's canonical identity and must be stable.
 func TestDeterministicPayloadHashStable(t *testing.T) {
 	payload := []byte(referencePayload)
-	nquads0, _, err := NormalizePayload(payload)
+	nquads0, err := NormalizePayload(payload)
 	if err != nil {
 		t.Fatalf("NormalizePayload: %v", err)
 	}
 	for i := 2; i <= 10; i++ {
-		nquads, _, err := NormalizePayload(payload)
+		nquads, err := NormalizePayload(payload)
 		if err != nil {
 			t.Fatalf("iteration %d: NormalizePayload: %v", i, err)
 		}

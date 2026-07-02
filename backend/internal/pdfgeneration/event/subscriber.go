@@ -20,7 +20,6 @@ import (
 	"digital-contracting-service/internal/base/ipfs"
 	cweeventtype "digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
-	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tplevttype "digital-contracting-service/internal/templaterepository/datatype/eventtype"
@@ -134,11 +133,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 
 	var jsonldBytes []byte
 	if contract.ContractData != nil {
-		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData))
-		if err != nil {
-			return fmt.Errorf("marshal contract JSON-LD for %s: %w", cweEvt.DID, err)
-		}
+		jsonldBytes = []byte(*contract.ContractData)
 	}
 
 	state := cweEvt.NewState
@@ -224,11 +219,7 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
-		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
-		if err != nil {
-			return fmt.Errorf("marshal template JSON-LD for %s: %w", tplEvt.DID, err)
-		}
+		jsonldBytes = []byte(*tpl.TemplateData)
 	}
 
 	state := tplEvt.NewState

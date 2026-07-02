@@ -210,3 +210,72 @@ func TestCompilePDF_NonStablePrefixRenderedCompact(t *testing.T) {
 		t.Errorf("odrl:Policy must not be expanded to full IRI in PDF content streams; CanonicalizePayload must preserve compact names")
 	}
 }
+
+func TestCompilePDF_RendersTextBlocks(t *testing.T) {
+	payload := []byte(`{
+		"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
+		"@id": "urn:doc:text-block-test",
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Text Block Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:text-block-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:text-block-test#s1", "children": ["urn:doc:text-block-test#t1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:text-block-test#s1", "title": "1. Terms"},
+				{"@type": "TextBlock", "@id": "urn:doc:text-block-test#t1", "text": "Rendered text block."}
+			]
+		}
+	}`)
+
+	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	if err != nil {
+		t.Fatalf("CompilePDF: %v", err)
+	}
+	if !bytes.Contains(pdf, []byte("(Rendered text block.) Tj")) {
+		t.Fatalf("text block content was not rendered into the PDF content stream")
+	}
+}
+
+func TestCompilePDF_RendersRootLevelClauseAndTextBlock(t *testing.T) {
+	payload := []byte(`{
+		"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
+		"@id": "urn:doc:root-body-test",
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Root Body Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:root-body-test#s1", "urn:doc:root-body-test#c1", "urn:doc:root-body-test#t1", "urn:doc:root-body-test#s2"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:root-body-test#s1", "children": []},
+				{"@type": "LayoutNode", "@id": "urn:doc:root-body-test#s2", "children": []}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:root-body-test#s1", "title": "1. First"},
+				{"@type": "Clause", "@id": "urn:doc:root-body-test#c1", "content": ["Root-level clause body."]},
+				{"@type": "TextBlock", "@id": "urn:doc:root-body-test#t1", "text": "Root-level text block."},
+				{"@type": "Section", "@id": "urn:doc:root-body-test#s2", "title": "2. Second"}
+			]
+		}
+	}`)
+
+	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	if err != nil {
+		t.Fatalf("CompilePDF: %v", err)
+	}
+	if !bytes.Contains(pdf, []byte("(Root-level clause body.) Tj")) {
+		t.Fatalf("root-level clause content was not rendered")
+	}
+	if !bytes.Contains(pdf, []byte("(Root-level text block.) Tj")) {
+		t.Fatalf("root-level text block content was not rendered")
+	}
+	first := bytes.Index(pdf, []byte("(1. First) Tj"))
+	clause := bytes.Index(pdf, []byte("(Root-level clause body.) Tj"))
+	textBlock := bytes.Index(pdf, []byte("(Root-level text block.) Tj"))
+	second := bytes.Index(pdf, []byte("(2. Second) Tj"))
+	if !(first >= 0 && clause > first && textBlock > clause && second > textBlock) {
+		t.Fatalf("root-level body nodes were not preserved in layout order")
+	}
+}

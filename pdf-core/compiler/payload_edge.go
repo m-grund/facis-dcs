@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/piprate/json-gold/ld"
 	"github.com/tggo/goRDFlib/shacl"
@@ -31,9 +32,81 @@ func SetSHACLBytes(b []byte) {
 	shaclShapes = b
 }
 
+var (
+	canonicalCtxMu  sync.RWMutex
+	canonicalCtxIRI string
+	canonicalCtxDoc []byte
+)
+
+// SetContextDocument registers the JSON-LD context document served at contextIRI
+// for in-process resolution. CanonicalizePayload uses this IRI as the compaction
+// context and installs a document loader so json-gold never attempts an HTTP fetch
+// for it. Must be called before any CanonicalizePayload invocation (alongside
+// SetSHACLBytes at server startup / TestMain).
+func SetContextDocument(contextIRI string, contextDoc []byte) {
+	canonicalCtxMu.Lock()
+	defer canonicalCtxMu.Unlock()
+	canonicalCtxIRI = contextIRI
+	canonicalCtxDoc = contextDoc
+}
+
+// canonicalContextArgs returns the configured context IRI and a document loader
+// that serves the registered context bytes for that IRI (delegating all other
+// URLs to json-gold's default HTTP loader). Returns an error if SetContextDocument
+// has not been called.
+func canonicalContextArgs() (iri string, loader ld.DocumentLoader, err error) {
+	canonicalCtxMu.RLock()
+	iri = canonicalCtxIRI
+	doc := canonicalCtxDoc
+	canonicalCtxMu.RUnlock()
+	if iri == "" || len(doc) == 0 {
+		return "", nil, fmt.Errorf("JSON-LD context not configured; call compiler.SetContextDocument at startup")
+	}
+	return iri, &inProcessLoader{iri: iri, doc: doc}, nil
+}
+
+// inProcessLoader serves the registered context document for its IRI without
+// making any network request, and falls back to json-gold's default HTTP loader
+// for all other URLs.
+type inProcessLoader struct {
+	iri string
+	doc []byte
+}
+
+func (l *inProcessLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
+	if u == l.iri {
+		var parsed any
+		if err := json.Unmarshal(l.doc, &parsed); err != nil {
+			return nil, fmt.Errorf("parse context document: %w", err)
+		}
+		return &ld.RemoteDocument{DocumentURL: u, Document: parsed}, nil
+	}
+	return ld.NewDefaultDocumentLoader(nil).LoadDocument(u)
+}
+
+// dcsListProperties are DCS properties whose values form ordered RDF lists
+// (@container:@list in the context). json-gold does not apply @container:@list
+// from the context when the property is written with a compact-IRI prefix;
+// normalizeExpandedProps enforces the {"@list":[...]} wrapper.
+var dcsListProperties = map[string]bool{
+	dcsOntologyIRI + "blocks":  true,
+	dcsOntologyIRI + "content": true,
+}
+
+// dcsListIRIProperties are DCS properties that are both ordered RDF lists
+// (@container:@list) and carry IRI references as values (@type:@id). Both
+// constraints are enforced by normalizeExpandedProps: the list wrapper is added
+// or preserved, and plain string value objects {"@value":"iri"} are coerced to
+// IRI node objects {"@id":"iri"} because json-gold does not apply @type:@id from
+// the context when the input uses compact-IRI prefix notation.
+var dcsListIRIProperties = map[string]bool{
+	dcsOntologyIRI + "children": true,
+}
+
 // CanonicalizePayload disambiguates JSON-LD at the application edge by running
-// an expand+compact pass with a stable context so semantically equivalent
+// an expand+compact pass with the hosted context so semantically equivalent
 // payload flavors serialize to the same canonical JSON representation.
+// SetContextDocument must be called before invoking this function.
 func CanonicalizePayload(raw []byte) ([]byte, error) {
 	var doc any
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -43,37 +116,28 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("JSON-LD payload must be a JSON object at the root")
 	}
 
+	ctxIRI, loader, err := canonicalContextArgs()
+	if err != nil {
+		return nil, err
+	}
+
 	proc := ld.NewJsonLdProcessor()
-	expanded, err := proc.Expand(doc, ld.NewJsonLdOptions(""))
+	expandOpts := ld.NewJsonLdOptions("")
+	expandOpts.DocumentLoader = loader
+	expanded, err := proc.Expand(doc, expandOpts)
 	if err != nil {
 		return nil, fmt.Errorf("JSON-LD expansion failed: %w", err)
 	}
 
-	// Build the compaction context: start from any prefix bindings in the
-	// original payload (so user-declared namespaces like odrl are preserved in
-	// the canonical form), then overlay the stable bindings so core vocabulary
-	// terms are always normalised regardless of what the submitter called them.
-	var rawDoc map[string]any
-	json.Unmarshal(raw, &rawDoc) //nolint:errcheck // already validated above
-	compactCtx := map[string]any{}
-	if rawCtx, ok := rawDoc["@context"].(map[string]any); ok {
-		for k, v := range rawCtx {
-			if _, isStr := v.(string); isStr && !strings.HasPrefix(k, "@") {
-				compactCtx[k] = v
-			}
-		}
-	}
-	stableCtx := map[string]any{
-		"@vocab":  dcsOntologyIRI,
-		"dcs":     dcsOntologyIRI,
-		"dcterms": "http://purl.org/dc/terms/",
-		"schema":  "https://schema.org/",
-		"prov":    "http://www.w3.org/ns/prov#",
-	}
-	for k, v := range stableCtx {
-		compactCtx[k] = v
-	}
-	compacted, err := proc.Compact(expanded, compactCtx, ld.NewJsonLdOptions(""))
+	// Normalise the expanded graph: enforce @list for list properties and coerce
+	// string literals to IRI nodes for @type:@id properties. Both are required
+	// because json-gold does not apply term annotations from the context when
+	// the input uses compact-IRI prefix notation (e.g. dcs:blocks, dcs:children).
+	normalizeExpandedProps(expanded)
+
+	compactOpts := ld.NewJsonLdOptions("")
+	compactOpts.DocumentLoader = loader
+	compacted, err := proc.Compact(expanded, ctxIRI, compactOpts)
 	if err != nil {
 		return nil, fmt.Errorf("JSON-LD compaction failed: %w", err)
 	}
@@ -85,6 +149,39 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 	return b, nil
 }
 
+// substituteInlineContext replaces a URL @context value in a JSON-LD document
+// with the registered inline context object. This is necessary when handing
+// documents to the SHACL library, which has no access to our in-process
+// document loader and would otherwise make an HTTP fetch for the context URL.
+// Returns the payload unchanged if it does not reference the canonical context.
+func substituteInlineContext(payload []byte) ([]byte, error) {
+	canonicalCtxMu.RLock()
+	iri := canonicalCtxIRI
+	doc := canonicalCtxDoc
+	canonicalCtxMu.RUnlock()
+	if iri == "" || len(doc) == 0 {
+		return payload, nil
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(payload, &obj); err != nil {
+		return payload, nil
+	}
+	ctxVal, ok := obj["@context"].(string)
+	if !ok || ctxVal != iri {
+		return payload, nil // payload uses its own context, nothing to substitute
+	}
+	var ctxDocParsed map[string]any
+	if err := json.Unmarshal(doc, &ctxDocParsed); err != nil {
+		return nil, fmt.Errorf("parse registered context document: %w", err)
+	}
+	ctxObj, ok := ctxDocParsed["@context"]
+	if !ok {
+		return nil, fmt.Errorf("registered context document has no @context key")
+	}
+	obj["@context"] = ctxObj
+	return json.Marshal(obj)
+}
+
 // ValidatePayloadSHACL validates JSON-LD against LinkML-generated SHACL using
 // a backend Go SHACL library.
 func ValidatePayloadSHACL(raw []byte) error {
@@ -92,17 +189,18 @@ func ValidatePayloadSHACL(raw []byte) error {
 		return fmt.Errorf("SHACL shapes not initialised; call compiler.SetSHACLBytes before validating")
 	}
 
-	// First ensure the payload is valid JSON-LD and can be expanded.
-	_, _, err := NormalizePayload(raw)
+	// Replace the URL @context with the inline context object so the SHACL
+	// library can expand the document without making HTTP fetches.
+	inlined, err := substituteInlineContext(raw)
 	if err != nil {
-		return err
+		return fmt.Errorf("substitute inline context: %w", err)
 	}
 
 	shapesGraph, err := shacl.LoadTurtleString(string(shaclShapes), "")
 	if err != nil {
 		return fmt.Errorf("load SHACL shapes: %w", err)
 	}
-	dataGraph, err := shacl.LoadJsonLDString(string(raw), "")
+	dataGraph, err := shacl.LoadJsonLDString(string(inlined), "")
 	if err != nil {
 		return fmt.Errorf("load JSON-LD data graph: %w", err)
 	}
@@ -154,4 +252,102 @@ func flattenValidationResults(results []shacl.ValidationResult) []shacl.Validati
 		walk(r)
 	}
 	return flat
+}
+
+// normalizeExpandedProps brings the expanded graph into a consistent shape before
+// compaction in a single pass:
+//
+//   - dcsListProperties (blocks, content): ensure values are wrapped as
+//     {"@list":[...]} so @container:@list compaction matches and SHACL list-path
+//     constraints (rdf:rest*/rdf:first) can fire.
+//   - dcsListIRIProperties (children): same as list properties, but also coerces
+//     plain string value objects {"@value":"iri"} to IRI node objects {"@id":"iri"}
+//     so @type:@id compaction succeeds. Required because json-gold does not apply
+//     @type:@id from the context when the input uses compact-IRI prefix notation.
+//   - All other array properties: strip any explicit {"@list":[...]} wrappers
+//     to plain arrays so @container:@set compaction produces clean JSON arrays.
+func normalizeExpandedProps(expanded []any) {
+	for _, node := range expanded {
+		if m, ok := node.(map[string]any); ok {
+			normalizeNodeProps(m)
+		}
+	}
+}
+
+func normalizeNodeProps(node map[string]any) {
+	for k, v := range node {
+		arr, ok := v.([]any)
+		if !ok {
+			continue
+		}
+		switch {
+		case dcsListProperties[k], dcsListIRIProperties[k]:
+			iriCoerce := dcsListIRIProperties[k]
+			// Already wrapped as an RDF list — handle items, keep wrapper.
+			if len(arr) == 1 {
+				if listObj, ok := arr[0].(map[string]any); ok {
+					if inner, has := listObj["@list"]; has {
+						if innerArr, ok := inner.([]any); ok {
+							if iriCoerce {
+								coerceIRIItems(innerArr)
+							}
+							for _, item := range innerArr {
+								if m, ok := item.(map[string]any); ok {
+									normalizeNodeProps(m)
+								}
+							}
+						}
+						continue
+					}
+				}
+			}
+			// Plain array — coerce IRIs if needed, recurse into items, then wrap.
+			if iriCoerce {
+				coerceIRIItems(arr)
+			}
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					normalizeNodeProps(m)
+				}
+			}
+			node[k] = []any{map[string]any{"@list": arr}}
+		default:
+			// Strip any @list wrapper to a plain array, then recurse.
+			if len(arr) == 1 {
+				if listObj, ok := arr[0].(map[string]any); ok {
+					if inner, has := listObj["@list"]; has {
+						if innerArr, ok := inner.([]any); ok {
+							arr = innerArr
+							node[k] = arr
+						}
+					}
+				}
+			}
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					normalizeNodeProps(m)
+				}
+			}
+		}
+	}
+}
+
+// coerceIRIItems replaces plain string value objects {"@value":"iri"} in arr with
+// IRI node objects {"@id":"iri"} for items that look like IRIs. Items that are
+// already IRI nodes or non-IRI values are left unchanged.
+func coerceIRIItems(arr []any) {
+	for i, item := range arr {
+		if vm, ok := item.(map[string]any); ok {
+			if sv, hasVal := vm["@value"].(string); hasVal && len(vm) == 1 && looksLikeIRI(sv) {
+				arr[i] = map[string]any{"@id": sv}
+			}
+		}
+	}
+}
+
+func looksLikeIRI(s string) bool {
+	return strings.HasPrefix(s, "http://") ||
+		strings.HasPrefix(s, "https://") ||
+		strings.HasPrefix(s, "urn:") ||
+		strings.HasPrefix(s, "did:")
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/ipfs"
-	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tpldb "digital-contracting-service/internal/templaterepository/db"
@@ -49,10 +48,7 @@ func (h *ExportTemplatePdfHandler) Handle(ctx context.Context, qry ExportTemplat
 
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
-		if err != nil {
-			return nil, fmt.Errorf("marshal template JSON-LD: %w", err)
-		}
+		jsonldBytes = []byte(*tpl.TemplateData)
 	}
 
 	pdfState, err := h.TRepo.ReadPDFState(ctx, tx, qry.DID)

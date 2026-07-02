@@ -13,7 +13,12 @@ PYSHACL            := $(VENV_PATH)/bin/pyshacl
 SHAPES_EXTRA  ?= shapes-content.ttl
 SHAPES_MERGED := $(OUTPUT_PATH)/$(SCHEMA).shacl.merged.ttl
 
-ORDERED_LIST_PROPS := blocks content children
+# Properties that form ordered RDF lists of embedded objects (@container: @list).
+LIST_PROPS := blocks content
+# Properties that are ordered RDF lists of IRI references (@type: @id, @container: @list).
+IRI_LIST_PROPS := children
+# Properties that are unordered IRI-reference sets (@type: @id, @container: @set).
+IRI_SET_PROPS := layout signatureFields
 
 VALID_TESTS   := $(wildcard tests/valid/*.jsonld)
 INVALID_TESTS := $(wildcard tests/invalid/*.jsonld)
@@ -47,9 +52,16 @@ $(OUTPUT_PATH)/$(SCHEMA).context.jsonld: setup_venv $(OUTPUT_PATH)
 	$(VENV_PYTHON) -c "\
 import json; \
 path = '$(OUTPUT_PATH)/$(SCHEMA).context.jsonld'; \
-ctx = json.load(open(path)); \
-[ctx['@context'][p].update({'@container': '@list'}) for p in '$(ORDERED_LIST_PROPS)'.split() if p in ctx['@context']]; \
-json.dump(ctx, open(path, 'w'), indent=3)"
+doc = json.load(open(path)); \
+ctx = doc['@context']; \
+ctx.pop('dcs', None); \
+list(map(lambda p: ctx.setdefault(p, {}).__setitem__('@container', '@list'), '$(LIST_PROPS)'.split())); \
+list(map(lambda p: ctx.setdefault(p, {}).update({'@type': '@id', '@container': '@list'}), '$(IRI_LIST_PROPS)'.split())); \
+list(map(lambda p: ctx.setdefault(p, {}).update({'@type': '@id', '@container': '@set'}), '$(IRI_SET_PROPS)'.split())); \
+list(map(lambda p: ctx.get(p, {}).pop('@type', None), ('isRoot', 'required'))); \
+ctx.get('templateVersion', {}).pop('@type', None); \
+(ctx.__setitem__('schema', 'https://schema.org/') if ctx.get('schema') == 'http://schema.org/' else None); \
+json.dump(doc, open(path, 'w'), indent=3)"
 
 $(SHAPES_MERGED): $(OUTPUT_PATH)/$(SCHEMA).shacl.ttl $(SHAPES_EXTRA)
 	cat $^ > $@
