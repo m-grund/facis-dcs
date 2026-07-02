@@ -30,7 +30,10 @@ import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
 import { useScrollStore } from '@/core/store/scroll'
-import { buildContractDocument, getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
+import {
+  buildContractDocument,
+  getSemanticConditionsFromTemplateData,
+} from '@/modules/template-repository/store/dcsDraftStore'
 import { useContractsStore } from '@/stores/contracts-store'
 
 const route = useRoute()
@@ -57,13 +60,9 @@ const selectedParentContractDid = ref<string | null>(null)
 
 const contract: Ref<Contract | null> = ref(null)
 
-const draftContracts = computed(() =>
-  contractStore.contracts.filter((c) => c.state === ContractState.draft),
-)
+const draftContracts = computed(() => contractStore.contracts.filter((c) => c.state === ContractState.draft))
 
-const canSubmit = computed(
-  () => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null),
-)
+const canSubmit = computed(() => isEditMode.value || (hasApprovedTemplates.value && selectedTemplate.value !== null))
 const canSubmitContract = computed(
   () =>
     isEditMode.value &&
@@ -125,6 +124,17 @@ const submit = async () => {
     if (!isEditMode.value && !!selectedTemplate.value) {
       const response = await contractWorkflowService.create({ did: selectedTemplate.value.did })
       did.value = response.did
+      if (selectedParentContractDid.value) {
+        const newContract = await contractWorkflowService.retrieveById({ did: response.did })
+        await contractWorkflowService.update({
+          did: newContract.did,
+          updated_at: newContract.updated_at,
+          contract_data: {
+            ...newContract.contract_data,
+            'dcs:parentContract': { '@id': selectedParentContractDid.value },
+          },
+        })
+      }
       errorStore.add('Contract created.', 'info')
     } else if (contract.value) {
       const contractData = buildCurrentContractData()
@@ -219,11 +229,7 @@ onMounted(async () => {
 })
 
 watch(
-  () => [
-    templateDraftStore.blocks,
-    templateDraftStore.semanticConditions,
-    templateDraftStore.subTemplateSnapshots,
-  ],
+  () => [templateDraftStore.blocks, templateDraftStore.semanticConditions, templateDraftStore.subTemplateSnapshots],
   () => {
     const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
       (conditionValue) =>
@@ -301,7 +307,8 @@ onBeforeRouteLeave(() => {
             {{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
           <option v-for="template in approvedTemplates" :key="template.did" :value="template">
-            Version {{ template.version }} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
+            Version {{ template.version }} - {{ template.name?.slice(0, 80)
+            }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
           </option>
         </select>
       </div>
@@ -310,15 +317,16 @@ onBeforeRouteLeave(() => {
           <div class="flex items-end gap-4">
             <div class="flex-1">
               <p class="mb-1 text-xs font-semibold text-base-content/60">Template</p>
-              <select v-model="selectedTemplate" class="select select-sm w-full">
+              <select v-model="selectedTemplate" class="select w-full select-sm">
                 <option v-for="template in approvedTemplates" :key="template.did" :value="template">
-                  Version {{ template.version }} - {{ template.name?.slice(0, 80) }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
+                  Version {{ template.version }} - {{ template.name?.slice(0, 80)
+                  }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
                 </option>
               </select>
             </div>
             <div v-if="draftContracts.length > 0" class="flex-1">
               <p class="mb-1 text-xs font-semibold text-base-content/60">Add to existing contract (optional)</p>
-              <select v-model="selectedParentContractDid" class="select select-sm w-full">
+              <select v-model="selectedParentContractDid" class="select w-full select-sm">
                 <option :value="null">— none —</option>
                 <option v-for="c in draftContracts" :key="c.did" :value="c.did">
                   {{ c.name ?? c.did }}

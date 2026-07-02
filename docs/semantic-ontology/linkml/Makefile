@@ -55,21 +55,12 @@ path = '$(OUTPUT_PATH)/$(SCHEMA).context.jsonld'; \
 doc = json.load(open(path)); \
 ctx = doc['@context']; \
 ctx.pop('dcs', None); \
-for p in '$(LIST_PROPS)'.split(): \
-    ctx.setdefault(p, {})['@container'] = '@list'; \
-for p in '$(IRI_LIST_PROPS)'.split(): \
-    e = ctx.setdefault(p, {}); \
-    e['@type'] = '@id'; \
-    e['@container'] = '@list'; \
-for p in '$(IRI_SET_PROPS)'.split(): \
-    e = ctx.setdefault(p, {}); \
-    e['@type'] = '@id'; \
-    e['@container'] = '@set'; \
-for p in ('isRoot', 'required'): \
-    ctx.get(p, {}).pop('@type', None); \
+list(map(lambda p: ctx.setdefault(p, {}).__setitem__('@container', '@list'), '$(LIST_PROPS)'.split())); \
+list(map(lambda p: ctx.setdefault(p, {}).update({'@type': '@id', '@container': '@list'}), '$(IRI_LIST_PROPS)'.split())); \
+list(map(lambda p: ctx.setdefault(p, {}).update({'@type': '@id', '@container': '@set'}), '$(IRI_SET_PROPS)'.split())); \
+list(map(lambda p: ctx.get(p, {}).pop('@type', None), ('isRoot', 'required'))); \
 ctx.get('templateVersion', {}).pop('@type', None); \
-if 'schema' in ctx and ctx['schema'] == 'http://schema.org/': \
-    ctx['schema'] = 'https://schema.org/'; \
+(ctx.__setitem__('schema', 'https://schema.org/') if ctx.get('schema') == 'http://schema.org/' else None); \
 json.dump(doc, open(path, 'w'), indent=3)"
 
 $(SHAPES_MERGED): $(OUTPUT_PATH)/$(SCHEMA).shacl.ttl $(SHAPES_EXTRA)

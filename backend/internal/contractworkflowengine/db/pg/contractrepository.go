@@ -116,14 +116,17 @@ func (r *PostgresContractRepo) ReadDataByID(ctx context.Context, tx *sqlx.Tx, di
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
 		SELECT
-			cem.did, cem.state, cem.name, cem.description, cem.created_by, cem.created_at, cem.updated_at,
+			cem.did, cem.state, cem.description, cem.created_by, cem.created_at, cem.updated_at,
 			cem.contract_version, cem.start_date, cem.exp_date, cem.exp_policy, cem.exp_notice_period, cem.responsible,
 			cem.template_did, cem.template_version,
 			cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
 			AND COALESCE(latest.version > cem.template_version, FALSE) AS outdated,
 			latest.did AS latest_template_did,
-			COALESCE(tpl.state = 'DEPRECATED', FALSE) AS template_is_deprecated
+			COALESCE(tpl.state = 'DEPRECATED', FALSE) AS template_is_deprecated,
+			ce.contract_data->'dcs:parentContract'->>'@id' AS parent_contract_did,
+			COALESCE(cem.name, ce.contract_data->'dcs:metadata'->>'dcs:title') AS name
 		FROM contracts_effective_metadata cem
+		LEFT JOIN contracts_effective ce ON ce.did = cem.did
 		LEFT JOIN contract_templates tpl
 			ON tpl.did = cem.template_did
 		LEFT JOIN LATERAL (

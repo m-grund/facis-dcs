@@ -16,7 +16,12 @@ dcs:Clause a sh:NodeShape ;
 dcs:ContractTemplate a sh:NodeShape ;
     sh:closed false ;
     sh:ignoredProperties ( rdf:type ) ;
-    sh:property [ sh:class dcs:TemplateMetadata ;
+    sh:property [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 0 ;
+            sh:path dcs:documentTitle ],
+        [ sh:class dcs:TemplateMetadata ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:BlankNodeOrIRI ;
@@ -30,11 +35,6 @@ dcs:ContractTemplate a sh:NodeShape ;
             sh:nodeKind sh:BlankNodeOrIRI ;
             sh:order 1 ;
             sh:path dcs:contractData ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 0 ;
-            sh:path dcs:documentTitle ],
         [ sh:nodeKind sh:IRI ;
             sh:order 4 ;
             sh:path dcs:policies ],
@@ -83,27 +83,27 @@ dcs:TextBlock a sh:NodeShape ;
 dcs:DataRequirement a sh:NodeShape ;
     sh:closed false ;
     sh:ignoredProperties ( rdf:type ) ;
-    sh:property [ sh:datatype xsd:string ;
+    sh:property [ sh:class dcs:RequirementField ;
+            sh:minCount 1 ;
+            sh:nodeKind sh:BlankNodeOrIRI ;
+            sh:order 1 ;
+            sh:path dcs:fields ],
+        [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 2 ;
             sh:path dcs:name ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 3 ;
-            sh:path dcs:schemaVersion ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
             sh:path dcs:conditionId ],
-        [ sh:class dcs:RequirementField ;
-            sh:minCount 1 ;
-            sh:nodeKind sh:BlankNodeOrIRI ;
-            sh:order 1 ;
-            sh:path dcs:fields ] ;
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 3 ;
+            sh:path dcs:schemaVersion ] ;
     sh:targetClass dcs:DataRequirement .
 
 dcs:DocumentStructure a sh:NodeShape ;
@@ -129,17 +129,17 @@ dcs:SignatureField a sh:NodeShape ;
     sh:closed false ;
     sh:ignoredProperties ( rdf:type ) ;
     sh:property [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 1 ;
+            sh:path dcs:title ],
+        [ sh:datatype xsd:string ;
             sh:description "Machine-readable identifier for the signatory role; used as the AcroForm /T field name." ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 0 ;
-            sh:path dcs:signatoryName ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 1 ;
-            sh:path dcs:title ] ;
+            sh:path dcs:signatoryName ] ;
     sh:targetClass dcs:SignatureField .
 
 dcs:TemplateMetadata a sh:NodeShape ;
@@ -148,38 +148,13 @@ dcs:TemplateMetadata a sh:NodeShape ;
     sh:property [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
-            sh:order 3 ;
-            sh:path dcs:did ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 2 ;
-            sh:path dcs:description ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 4 ;
-            sh:path dcs:name ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 12 ;
-            sh:path dcs:uuid ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
             sh:order 0 ;
             sh:path dcs:createdAt ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
-            sh:order 5 ;
-            sh:path dcs:schemaVersion ],
-        [ sh:datatype xsd:string ;
-            sh:maxCount 1 ;
-            sh:nodeKind sh:Literal ;
-            sh:order 1 ;
-            sh:path dcs:createdBy ],
+            sh:order 7 ;
+            sh:path dcs:state ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
@@ -188,13 +163,13 @@ dcs:TemplateMetadata a sh:NodeShape ;
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
-            sh:order 7 ;
-            sh:path dcs:state ],
-        [ sh:datatype xsd:integer ;
+            sh:order 12 ;
+            sh:path dcs:uuid ],
+        [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
-            sh:order 9 ;
-            sh:path dcs:templateVersion ],
+            sh:order 1 ;
+            sh:path dcs:createdBy ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
@@ -210,7 +185,32 @@ dcs:TemplateMetadata a sh:NodeShape ;
             sh:maxCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 6 ;
-            sh:path dcs:sourceSystemType ] ;
+            sh:path dcs:sourceSystemType ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 5 ;
+            sh:path dcs:schemaVersion ],
+        [ sh:datatype xsd:integer ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 9 ;
+            sh:path dcs:templateVersion ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 3 ;
+            sh:path dcs:did ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 2 ;
+            sh:path dcs:description ],
+        [ sh:datatype xsd:string ;
+            sh:maxCount 1 ;
+            sh:nodeKind sh:Literal ;
+            sh:order 4 ;
+            sh:path dcs:name ] ;
     sh:targetClass dcs:TemplateMetadata .
 
 dcs:RequirementField a sh:NodeShape ;
@@ -221,16 +221,16 @@ dcs:RequirementField a sh:NodeShape ;
             sh:nodeKind sh:Literal ;
             sh:order 2 ;
             sh:path dcs:required ],
-        [ sh:maxCount 1 ;
-            sh:nodeKind sh:IRI ;
-            sh:order 0 ;
-            sh:path dcs:domainField ],
         [ sh:datatype xsd:string ;
             sh:maxCount 1 ;
             sh:minCount 1 ;
             sh:nodeKind sh:Literal ;
             sh:order 1 ;
-            sh:path dcs:parameterName ] ;
+            sh:path dcs:parameterName ],
+        [ sh:maxCount 1 ;
+            sh:nodeKind sh:IRI ;
+            sh:order 0 ;
+            sh:path dcs:domainField ] ;
     sh:targetClass dcs:RequirementField .
 
 

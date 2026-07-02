@@ -277,7 +277,6 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 
 	var contracts []*contractworkflowengine.ContractItem
 	for _, item := range result.Contracts {
-
 		var startDate *string
 		if item.StartDate != nil {
 			s := item.StartDate.Format(time.RFC3339)
@@ -292,14 +291,23 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 
 		var expPolicy *string
 		if item.ExpPolicy != nil {
-			s := item.ExpPolicy.String()
+			p, err := expirationpolicy.NewExpirationPolicy(*item.ExpPolicy)
+			if err != nil {
+				return nil, contractworkflowengine.MakeInternalError(err)
+			}
+			s := p.String()
 			expPolicy = &s
+		}
+
+		state, err := contractstate.NewContractState(item.State)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
 		}
 
 		contracts = append(contracts, &contractworkflowengine.ContractItem{
 			Did:                  item.DID,
 			ContractVersion:      item.ContractVersion,
-			State:                item.State.String(),
+			State:                state.String(),
 			Name:                 item.Name,
 			Description:          item.Description,
 			CreatedBy:            item.CreatedBy,
@@ -314,6 +322,7 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 			Responsible:          item.Responsible,
 			LatestTemplateDid:    item.LatestTemplateDID,
 			TemplateIsDeprecated: item.TemplateIsDeprecated,
+			ParentContractDid:    item.ParentContractDID,
 		})
 	}
 
