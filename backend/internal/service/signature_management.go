@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/ipfs"
 
@@ -28,7 +30,7 @@ type signatureManagementsrvc struct {
 	ATrailReader base.AuditTrailReader
 	DSSClient    dss.Client
 	IPFSClient   *ipfs.APIClient
-	DIDDocument  base.DIDDocument
+	DIDDocument  identity.DIDDocument
 	auth.JWTAuthenticator
 }
 

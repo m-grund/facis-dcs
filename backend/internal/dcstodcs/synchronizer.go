@@ -10,6 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	"digital-contracting-service/internal/base/conf"
 
 	db2 "digital-contracting-service/internal/dcstodcs/db"
@@ -19,7 +21,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
-	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
@@ -47,7 +48,7 @@ type DCSToDCSSynchronizer struct {
 	NTRepo      db.NegotiationTaskRepo
 	NRepo       db.NegotiationRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client *event.CloudEventSubClient) {
@@ -385,7 +386,7 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 				return fmt.Errorf("synchronization to untrusted peer %s is not allowed", responsible)
 			}
 
-			hostname, err := base.DIDWebToHostname(responsible)
+			hostname, err := identity.DIDWebToHostname(responsible)
 			if err != nil {
 				return err
 			}

@@ -8,7 +8,8 @@ import (
 	"log"
 	"time"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/identity"
+
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
 
@@ -35,7 +36,7 @@ type EvidenceRecorder struct {
 	DB          *sqlx.DB
 	CRepo       db.ContractRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) error {

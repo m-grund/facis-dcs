@@ -8,10 +8,10 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
-
-	"digital-contracting-service/internal/base"
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
@@ -42,7 +42,7 @@ type Negotiator struct {
 	NRepo       db.NegotiationRepo
 	NTRepo      db.NegotiationTaskRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {

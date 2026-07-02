@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/identity"
 
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	"digital-contracting-service/internal/auth"
@@ -13,12 +13,12 @@ import (
 
 // ContractStorageArchive service implementation.
 type contractStorageArchivesrvc struct {
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 	auth.JWTAuthenticator
 }
 
 // NewContractStorageArchive returns the ContractStorageArchive service implementation.
-func NewContractStorageArchive(jwtAuth auth.JWTAuthenticator, didDocument base.DIDDocument) contractstoragearchive.Service {
+func NewContractStorageArchive(jwtAuth auth.JWTAuthenticator, didDocument identity.DIDDocument) contractstoragearchive.Service {
 	return &contractStorageArchivesrvc{JWTAuthenticator: jwtAuth, DIDDocument: didDocument}
 }
 

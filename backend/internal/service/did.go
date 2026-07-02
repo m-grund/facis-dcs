@@ -3,15 +3,16 @@ package service
 import (
 	"context"
 
+	"digital-contracting-service/internal/base/identity"
+
 	didservice "digital-contracting-service/gen/did_service"
-	"digital-contracting-service/internal/base"
 )
 
 type DIDSrv struct {
-	DIDocument base.DIDDocument
+	DIDocument identity.DIDDocument
 }
 
-func NewDIDService(didDocument base.DIDDocument) (didservice.Service, error) {
+func NewDIDService(didDocument identity.DIDDocument) (didservice.Service, error) {
 	return &DIDSrv{
 		DIDocument: didDocument,
 	}, nil

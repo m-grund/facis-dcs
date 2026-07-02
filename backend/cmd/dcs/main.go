@@ -35,6 +35,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/validation"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
@@ -146,9 +147,31 @@ func main() {
 		log.Printf(ctx, "DCS_PRIVATE_KEY configuration or file is missing")
 	}
 
-	didDocument, err := base.NewDIDDocument(didFilePath, privateKeyPath)
+	log.Printf(ctx, "Reading did.json")
+	didDocument, err := identity.NewDIDDocument(didFilePath, privateKeyPath)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not read did document")
+	}
+
+	var euTrustPool *identity.EUTrustPool
+	if base.GetEnvOrDefault("DCS_SYNC_EIDAS_CERT_VERIFY", false) {
+		log.Printf(ctx, "Start building EU trust pool")
+		trustPool := identity.NewEUTrustPool()
+		if err := trustPool.Refresh(ctx); err != nil {
+			log.Fatalf(ctx, err, "Building EU trust pool: %w")
+		}
+		count, _, errs := trustPool.Stats()
+		log.Printf(ctx, "EU trust pool ready: %d certificates (%d lists skipped)", count, len(errs))
+
+		// Keep it fresh in the background.
+		go trustPool.StartAutoRefresh(ctx, identity.DefaultRefreshInterval)
+
+		euTrustPool = trustPool
+	}
+
+	err = didDocument.VerifyEIDASCertificate(euTrustPool)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not verify certificate")
 	}
 
 	// Initialize OIDC validator and JWT authenticator.
@@ -411,8 +434,8 @@ func main() {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth, *didDocument)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, templateCatalogueClient, auditTrailReader, *didDocument)
-		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, *didDocument)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument)
+		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)

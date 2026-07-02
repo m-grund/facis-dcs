@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/identity"
 
 	"github.com/jmoiron/sqlx"
 
@@ -32,7 +32,7 @@ type GetAllMetadataQry struct {
 	HolderDID   string
 	Pagination  datatype.Pagination
 	UserRoles   userrole.UserRoles
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 type MetadataItem struct {

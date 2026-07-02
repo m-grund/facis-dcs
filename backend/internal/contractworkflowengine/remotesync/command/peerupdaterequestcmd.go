@@ -8,9 +8,9 @@ import (
 	"log"
 	"time"
 
-	"digital-contracting-service/internal/contractworkflowengine/db"
+	"digital-contracting-service/internal/base/identity"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/contractworkflowengine/db"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 
@@ -30,7 +30,7 @@ type PeerUpdateRequestCmd struct {
 type PeerUpdateRequester struct {
 	DB          *sqlx.DB
 	CRepo       db.ContractRepo
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *PeerUpdateRequester) Handle(ctx context.Context, cmd PeerUpdateRequestCmd) error {

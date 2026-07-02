@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/identity"
 
 	dcstodcs2 "digital-contracting-service/internal/dcstodcs"
 
@@ -68,14 +68,14 @@ func (a RemoteAction) String() string {
 	return string(a)
 }
 
-func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, didDocument base.DIDDocument, mainPeer string, contractDid string, payload any) error {
+func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, didDocument identity.DIDDocument, mainPeer string, contractDid string, payload any) error {
 
 	localPeer, err := didDocument.GetID()
 	if err != nil {
 		return err
 	}
 
-	hostname, err := base.DIDWebToHostname(mainPeer)
+	hostname, err := identity.DIDWebToHostname(mainPeer)
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/identity"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 
@@ -52,7 +52,7 @@ type Updater struct {
 	NTRepo      db.NegotiationTaskRepo
 	NRepo       db.NegotiationRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {

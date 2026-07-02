@@ -8,8 +8,9 @@ import (
 	"log"
 	"time"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/base/identity"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -36,7 +37,7 @@ type Registrar struct {
 	DB          *sqlx.DB
 	CTRepo      db.ContractTemplateRepo
 	FCClient    *fcclient.FederatedCatalogueClient
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error) {

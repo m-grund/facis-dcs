@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	command2 "digital-contracting-service/internal/contractworkflowengine/remotesync/command"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
@@ -47,14 +49,17 @@ type dcsToDcssrvc struct {
 	NRepo       db.NegotiationRepo
 	CTRepo      db.ContractTemplateRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
+	TrustPool   *identity.EUTrustPool
 	auth.JWTAuthenticator
 }
 
 func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, syncRepo db2.SyncRepository,
-	didDocument base.DIDDocument) dcstodcs.Service {
+	trustPool *identity.EUTrustPool,
+	didDocument identity.DIDDocument) dcstodcs.Service {
+
 	return &dcsToDcssrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
@@ -66,6 +71,7 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		CTRepo:           ctRepo,
 		SRepo:            syncRepo,
 		DIDDocument:      didDocument,
+		TrustPool:        trustPool,
 	}
 }
 
@@ -97,17 +103,17 @@ func (s *dcsToDcssrvc) GetSync(ctx context.Context, req *dcstodcs.DCSToDCSContra
 
 func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContractActionRequest) (res *dcstodcs.DCSToDCSContractActionResponse, err error) {
 
-	senderHostname, err := base.DIDWebToHostname(req.FromPeerDid)
+	senderHostname, err := identity.DIDWebToHostname(req.FromPeerDid)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	remoteDIDDocument, err := base.FetchDIDDocumentFromHostname(senderHostname)
+	remoteDIDDocument, err := identity.FetchDIDDocumentFromHostname(senderHostname)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	err = remoteDIDDocument.VerifyEIDASCertificate()
+	err = remoteDIDDocument.VerifyEIDASCertificate(s.TrustPool)
 	if err != nil {
 		return nil, contractworkflowengine.MakeBadRequest(err)
 	}
@@ -323,17 +329,17 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 
 func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContractPostSyncRequest) (res *dcstodcs.DCSToDCSContractPostSyncResponse, err error) {
 
-	senderHostname, err := base.DIDWebToHostname(req.FromPeerDid)
+	senderHostname, err := identity.DIDWebToHostname(req.FromPeerDid)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	remoteDIDDocument, err := base.FetchDIDDocumentFromHostname(senderHostname)
+	remoteDIDDocument, err := identity.FetchDIDDocumentFromHostname(senderHostname)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	err = remoteDIDDocument.VerifyEIDASCertificate()
+	err = remoteDIDDocument.VerifyEIDASCertificate(s.TrustPool)
 	if err != nil {
 		return nil, contractworkflowengine.MakeBadRequest(err)
 	}

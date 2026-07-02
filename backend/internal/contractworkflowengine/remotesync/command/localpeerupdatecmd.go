@@ -8,11 +8,12 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	"digital-contracting-service/internal/contractworkflowengine/remotesync"
 
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 
-	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 
@@ -30,7 +31,7 @@ type LocalPeerUpdateCmd struct {
 	NegotiationTasks     []remotesync.NegotiationTaskData
 	Negotiations         []remotesync.NegotiationData
 	NegotiationDecisions []remotesync.NegotiationDecisionData
-	DIDDocument          base.DIDDocument
+	DIDDocument          identity.DIDDocument
 	ContractOrigin       string
 }
 

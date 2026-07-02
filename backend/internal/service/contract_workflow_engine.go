@@ -19,6 +19,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -43,17 +44,18 @@ type contractWorkflowEnginesrvc struct {
 	SRepo                db2.SyncRepository
 	CTRepo               db.ContractTemplateRepo
 	FCClient             *fcclient.FederatedCatalogueClient
-	DIDDocument          base.DIDDocument
+	DIDDocument          identity.DIDDocument
 	ATrailReader         base.AuditTrailReader
 	DCSToDCSSynchronizer dcstodcs.DCSToDCSSynchronizer
+	TrustPool            *identity.EUTrustPool
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
-	sRepo db2.SyncRepository,
-	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument base.DIDDocument) contractworkflowengine.Service {
+	sRepo db2.SyncRepository, trustPool *identity.EUTrustPool,
+	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument identity.DIDDocument) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -68,6 +70,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		FCClient:         fcClient,
 		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
+		TrustPool:        trustPool,
 	}
 }
 
@@ -137,6 +140,11 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 }
 
 func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractworkflowengine.ContractUpdateRequest) (res *contractworkflowengine.ContractUpdateResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -219,6 +227,11 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 }
 
 func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractworkflowengine.ContractSubmitRequest) (res *contractworkflowengine.ContractSubmitResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -484,6 +497,7 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 }
 
 func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveByIDRequest) (res []*contractworkflowengine.ContractHistoryRetrieveByIDResponse, err error) {
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -549,6 +563,11 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, re
 
 func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contractworkflowengine.ContractNegotiationRequest) (res *contractworkflowengine.ContractNegotiationResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -596,6 +615,11 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 }
 
 func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractworkflowengine.ContractNegotiationRespondRequest) (res *contractworkflowengine.ContractNegotiationRespondResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -759,6 +783,11 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 
 func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractworkflowengine.ContractApproveRequest) (res *contractworkflowengine.ContractApproveResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -798,6 +827,11 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 }
 
 func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractworkflowengine.ContractRejectRequest) (res *contractworkflowengine.ContractRejectResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -877,6 +911,11 @@ func (s *contractWorkflowEnginesrvc) Store(ctx context.Context, req *contractwor
 }
 
 func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contractworkflowengine.ContractTerminateRequest) (res *contractworkflowengine.ContractTerminateResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()

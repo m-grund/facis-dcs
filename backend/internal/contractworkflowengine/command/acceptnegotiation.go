@@ -8,11 +8,11 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
-
-	"digital-contracting-service/internal/base"
 
 	"github.com/jmoiron/sqlx"
 
@@ -39,7 +39,7 @@ type NegotiationAcceptor struct {
 	NRepo       db.NegotiationRepo
 	NTRepo      db.NegotiationTaskRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationCmd) error {

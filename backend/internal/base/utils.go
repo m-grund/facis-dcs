@@ -3,6 +3,8 @@ package base
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 )
 
 func DerefInt(i *int) int {
@@ -46,4 +48,24 @@ func Unique(lists ...[]string) []string {
 		}
 	}
 	return result
+}
+
+func GetEnvOrDefault[T string | bool](key string, def T) T {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return def
+	}
+
+	var result any
+	switch any(def).(type) {
+	case string:
+		result = raw
+	case bool:
+		b, err := strconv.ParseBool(raw)
+		if err != nil {
+			return def // or: log the invalid value
+		}
+		result = b
+	}
+	return result.(T)
 }

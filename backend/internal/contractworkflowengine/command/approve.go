@@ -8,10 +8,10 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
-
-	"digital-contracting-service/internal/base"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
 
@@ -40,7 +40,7 @@ type Approver struct {
 	CRepo       db.ContractRepo
 	ATRepo      db.ApprovalTaskRepo
 	SRepo       db2.SyncRepository
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {

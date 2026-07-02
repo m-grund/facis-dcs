@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log"
 
-	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
+	"digital-contracting-service/internal/base/identity"
 
-	"digital-contracting-service/internal/base"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
 
@@ -41,7 +41,7 @@ type Creator struct {
 	RTRepo      db.ReviewTaskRepo
 	ATRepo      db.ApprovalTaskRepo
 	NTRepo      db.NegotiationTaskRepo
-	DIDDocument base.DIDDocument
+	DIDDocument identity.DIDDocument
 }
 
 func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, cmd CreateCmd) error {
