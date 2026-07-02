@@ -29,7 +29,6 @@ import (
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
-	"digital-contracting-service/internal/base/validation"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
@@ -289,15 +288,6 @@ func main() {
 	}
 	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
 	statusListPublisher := provenance.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
-
-	// Initialize pdf-core context IRI — used as @context in every JSON-LD envelope.
-	// In co-deployment, points at the pdf-core ontology context endpoint.
-	// Swap to a registered w3id IRI in future without any code change.
-	pdfCoreContextIRI := os.Getenv("PDF_CORE_CONTEXT_IRI")
-	if pdfCoreContextIRI == "" {
-		log.Fatalf(ctx, nil, "PDF_CORE_CONTEXT_IRI is required")
-	}
-	validation.SetVocabIRI(pdfCoreContextIRI + "#")
 
 	// Initialize pdf-core client (PDF rendering + C2PA provenance microservice).
 	pdfCoreURL := os.Getenv("PDF_CORE_URL")
