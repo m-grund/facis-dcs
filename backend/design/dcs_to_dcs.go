@@ -86,6 +86,9 @@ var DCSToDCSContractNegotiationDecisionItem = Type("DCSToDCSContractNegotiationD
 var DCSToDCSContractPostSyncRequest = Type("DCSToDCSContractPostSyncRequest", func() {
 	Description("To update the contract data on a peer")
 
+	Attribute("secret_value", String, "Secret value")
+	Attribute("secret_hash", Bytes, "Secret hash")
+
 	Attribute("from_peer_did", String, "The did of the peer where the message comes from")
 
 	Attribute("contract", DCSToDCSContractItem, "The contract")
@@ -95,7 +98,7 @@ var DCSToDCSContractPostSyncRequest = Type("DCSToDCSContractPostSyncRequest", fu
 	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
 	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
 
-	Required("from_peer_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks")
+	Required("from_peer_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks", "secret_value", "secret_hash")
 })
 
 var DCSToDCSContractPostSyncResponse = Type("DCSToDCSContractPostSyncResponse", func() {
@@ -127,12 +130,15 @@ var DCSToDCSContractGetSyncResponse = Type("DCSToDCSContractGetSyncResponse", fu
 var DCSToDCSContractActionRequest = Type("DCSToDCSContractActionRequest", func() {
 	Description("Contract action request")
 
+	Attribute("secret_value", String, "Secret value")
+	Attribute("secret_hash", Bytes, "Secret hash")
+
 	Attribute("from_peer_did", String, "The did of the peer where the message comes from")
 	Attribute("payload", Any, "Action request payload")
 	Attribute("action", String, "The action to perform")
 	Attribute("component", String, "The component where action is executed")
 
-	Required("action", "from_peer_did", "payload", "component")
+	Required("action", "from_peer_did", "payload", "component", "secret_value", "secret_hash")
 })
 
 var DCSToDCSContractActionResponse = Type("DCSToDCSContractActionResponse", func() {

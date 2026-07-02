@@ -18,5 +18,5 @@ func NewDIDService(didDocument base.DIDDocument) (didservice.Service, error) {
 }
 
 func (s DIDSrv) GetServiceDID(ctx context.Context) (res any, err error) {
-	return s.DIDocument, nil
+	return s.DIDocument.GetDIDContent(), nil
 }

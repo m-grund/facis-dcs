@@ -97,6 +97,21 @@ func (s *dcsToDcssrvc) GetSync(ctx context.Context, req *dcstodcs.DCSToDCSContra
 
 func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContractActionRequest) (res *dcstodcs.DCSToDCSContractActionResponse, err error) {
 
+	senderHostname, err := base.DIDWebToHostname(req.FromPeerDid)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	senderPublicKey, err := base.FetchPublicKeyFromHostname(senderHostname)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	err = base.Verify([]byte(req.SecretValue), req.SecretHash, senderPublicKey)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
@@ -302,6 +317,21 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 }
 
 func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContractPostSyncRequest) (res *dcstodcs.DCSToDCSContractPostSyncResponse, err error) {
+
+	senderHostname, err := base.DIDWebToHostname(req.FromPeerDid)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	senderPublicKey, err := base.FetchPublicKeyFromHostname(senderHostname)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	err = base.Verify([]byte(req.SecretValue), req.SecretHash, senderPublicKey)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {

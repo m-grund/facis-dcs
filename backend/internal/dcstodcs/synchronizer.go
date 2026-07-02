@@ -2,6 +2,7 @@ package dcstodcs
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -389,6 +390,12 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 				return err
 			}
 
+			secretValue := rand.Text()
+			secretHash, err := base.Sign([]byte(secretValue), s.DIDDocument)
+			if err != nil {
+				return err
+			}
+
 			client := NewDCSToDCSHttpClient(hostname)
 			_, err = client.PostSync(ctx, &dcstodcs.DCSToDCSContractPostSyncRequest{
 				FromPeerDid:          localPeer,
@@ -398,6 +405,8 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 				NegotiationTasks:     result.NegotiationTasks,
 				NegotiationItems:     result.Negotiations,
 				NegotiationDecisions: result.NegotiationDecisions,
+				SecretHash:           secretHash,
+				SecretValue:          secretValue,
 			})
 			if err != nil {
 				return err

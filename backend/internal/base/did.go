@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -57,7 +58,7 @@ func NewDIDDocument(didFilePath string, privateKeyPath string) (*DIDDocument, er
 		panic(err)
 	}
 
-	privKey, err := privateKeyFromPEM(pemData)
+	privKey, err := PrivateKeyFromPEM(pemData)
 	if err != nil {
 		panic(err)
 	}
@@ -89,6 +90,10 @@ func NewDIDDocument(didFilePath string, privateKeyPath string) (*DIDDocument, er
 	}, nil
 }
 
+func (d DIDDocument) GetDIDContent() map[string]interface{} {
+	return d.didContent
+}
+
 func (d DIDDocument) GetID() (string, error) {
 	raw, ok := d.didContent["id"]
 	if !ok {
@@ -103,10 +108,10 @@ func (d DIDDocument) GetHostname() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return didWebToHostname(id)
+	return DIDWebToHostname(id)
 }
 
-func didWebToHostname(did string) (string, error) {
+func DIDWebToHostname(did string) (string, error) {
 	const prefix = "did:web:"
 	if !strings.HasPrefix(did, prefix) {
 		return "", fmt.Errorf("not a did:web identifier: %q", did)
@@ -114,8 +119,6 @@ func didWebToHostname(did string) (string, error) {
 
 	rest := strings.TrimPrefix(did, prefix)
 
-	// Alles nach dem ersten ":" wären Pfad-Komponenten (did:web:host:path:to:res),
-	// die uns hier nicht interessieren - wir wollen nur den Host-Teil.
 	hostEncoded, _, _ := strings.Cut(rest, ":")
 	if hostEncoded == "" {
 		return "", errors.New("did:web identifier has empty host component")
@@ -131,19 +134,6 @@ func didWebToHostname(did string) (string, error) {
 
 func HostnameToDIDWeb(host string) string {
 	return "did:web:" + strings.ReplaceAll(host, ":", "%3A")
-}
-
-func DIDWebToHostname(did string) (string, error) {
-	const prefix = "did:web:"
-	if !strings.HasPrefix(did, prefix) {
-		return "", fmt.Errorf("not a did:web identifier: %q", did)
-	}
-	rest := strings.TrimPrefix(did, prefix)
-	hostEncoded, _, _ := strings.Cut(rest, ":")
-	if hostEncoded == "" {
-		return "", errors.New("did:web identifier has empty host component")
-	}
-	return strings.ReplaceAll(hostEncoded, "%3A", ":"), nil
 }
 
 func PublicKeyFromDID(didJSON []byte) (*rsa.PublicKey, error) {
@@ -169,7 +159,7 @@ func PublicKeyFromDID(didJSON []byte) (*rsa.PublicKey, error) {
 	return &rsa.PublicKey{N: n, E: e}, nil
 }
 
-func privateKeyFromPEM(pemData []byte) (*rsa.PrivateKey, error) {
+func PrivateKeyFromPEM(pemData []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(pemData)
 	if block == nil {
 		return nil, fmt.Errorf("failed to decode PEM")
@@ -183,6 +173,60 @@ func privateKeyFromPEM(pemData []byte) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("not an RSA key")
 	}
 	return rsaKey, nil
+}
+
+func FetchPublicKeyFromHostname(hostname string) (*rsa.PublicKey, error) {
+	var lastErr error
+	for _, scheme := range []string{"https", "http"} {
+		url := fmt.Sprintf("%s://%s/.well-known/did.json", scheme, hostname)
+		pubKey, err := fetchPublicKeyFromURL(url)
+		if err == nil {
+			return pubKey, nil
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("fetching did.json from %s failed: %w", hostname, lastErr)
+}
+
+func fetchPublicKeyFromURL(url string) (*rsa.PublicKey, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var doc DIDDocument
+	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+		return nil, fmt.Errorf("decoding did.json: %w", err)
+	}
+	if len(doc.VerificationMethod) == 0 {
+		return nil, fmt.Errorf("no verification methods in DID document")
+	}
+
+	jwk := doc.VerificationMethod[0].PublicKeyJWK
+	nBytes, err := base64.RawURLEncoding.DecodeString(jwk.N)
+	if err != nil {
+		return nil, fmt.Errorf("decoding n: %w", err)
+	}
+	eBytes, err := base64.RawURLEncoding.DecodeString(jwk.E)
+	if err != nil {
+		return nil, fmt.Errorf("decoding e: %w", err)
+	}
+
+	return &rsa.PublicKey{
+		N: new(big.Int).SetBytes(nBytes),
+		E: int(new(big.Int).SetBytes(eBytes).Int64()),
+	}, nil
+}
+
+func Sign(content []byte, didDocument DIDDocument) ([]byte, error) {
+	hash := sha256.Sum256(content)
+	return rsa.SignPSS(rand.Reader, didDocument.privateKey, crypto.SHA256, hash[:], nil)
+}
+
+func Verify(content []byte, signature []byte, pubKey *rsa.PublicKey) error {
+	hash := sha256.Sum256(content)
+	return rsa.VerifyPSS(pubKey, crypto.SHA256, hash[:], signature, nil)
 }
 
 // UUID v4

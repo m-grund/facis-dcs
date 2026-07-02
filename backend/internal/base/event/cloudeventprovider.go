@@ -37,7 +37,7 @@ func (c CloudEventPubClient) Publish(eventSource string, eventType string, paylo
 }
 
 func NewNatsPubClient(topic string, natsURL string) (*CloudEventPubClient, error) {
-	log.Println("nats: create publisher client for topic ", topic)
+	log.Println("nats: create publisher client for topic", topic)
 	client, err := cloudeventprovider.New(cloudeventprovider.Config{
 		Protocol: cloudeventprovider.ProtocolTypeNats,
 		Settings: cloudeventprovider.NatsConfig{
@@ -74,7 +74,7 @@ func (c CloudEventSubClient) Subscribe(f func(evt event.Event)) error {
 }
 
 func NewNatsSubClient(topic string, natsURL string) (*CloudEventSubClient, error) {
-	log.Println("nats: create subscriber client for topic ", topic)
+	log.Println("nats: create subscriber client for topic", topic)
 	client, err := cloudeventprovider.New(cloudeventprovider.Config{
 		Protocol: cloudeventprovider.ProtocolTypeNats,
 		Settings: cloudeventprovider.NatsConfig{

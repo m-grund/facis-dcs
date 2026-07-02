@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base"
+
 	dcstodcs2 "digital-contracting-service/internal/dcstodcs"
 
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
-	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
@@ -67,10 +68,22 @@ func (a RemoteAction) String() string {
 }
 
 func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, localPeer string, mainPeer string, contractDid string, payload any) error {
+
+	//localPeer, err := didDocument.GetID()
+	//if err != nil {
+	//	return err
+	//}
+
 	hostname, err := base.DIDWebToHostname(mainPeer)
 	if err != nil {
 		return err
 	}
+
+	//secretValue := rand.Text()
+	//secretHash, err := base.Sign([]byte(secretValue), s.DIDDocument)
+	//if err != nil {
+	//	return err
+	//}
 
 	client := dcstodcs2.NewDCSToDCSHttpClient(hostname)
 	_, err = client.Action(ctx, &dcstodcs.DCSToDCSContractActionRequest{
@@ -78,6 +91,8 @@ func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, localPeer string
 		Payload:     payload,
 		Action:      a.String(),
 		Component:   componenttype.ContractWorkflowEngine.String(),
+		//	SecretHash:  secretHash,
+		//	SecretValue: secretValue,
 	})
 
 	if err != nil {
