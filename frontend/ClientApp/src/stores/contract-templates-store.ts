@@ -41,12 +41,16 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
       const offset = currentPage
       const paginatedResult = await fetchTemplates(limit, offset)
       paginatedTemplates.value = paginatedResult.contract_templates
+      reviewTasks.value = paginatedResult.review_tasks
+      approvalTasks.value = paginatedResult.approval_tasks
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Error loading templates'
     } finally {
       loading.value = false
     }
   }
+
+  const loadTasks = loadTemplates
 
   return {
     contractTemplates,
@@ -57,6 +61,7 @@ export const useContractTemplatesStore = defineStore('contractTemplates', () => 
     fetchTemplates,
     loadTemplates,
     loadPaginatedTemplates,
+    loadTasks,
     loading,
     error,
   }

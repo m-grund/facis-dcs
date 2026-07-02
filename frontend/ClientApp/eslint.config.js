@@ -27,6 +27,13 @@ export default defineConfigWithVueTs(
           ignorePattern: '^_',
         },
       ],
+      'vue/block-order': [
+        'error',
+        {
+          order: ['script', 'template', 'style'],
+        },
+      ],
+      'no-warning-comments': 'warn',
     },
   },
   skipFormattingConfig,

@@ -45,7 +45,7 @@ echo "Initializing statuslist for dev (NATS create when list is empty)..."
 python3 testWallet/scripts/ensure_statuslist_for_dev.py
 
 # Setup backend .env
-cp backend/.env.dev backend/.env
+cp backend/.env.dev1 backend/.env
 echo "✓ .env updated from .env.dev"
 
 # Fetch cert-chain from K8s secret

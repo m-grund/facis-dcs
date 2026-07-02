@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import Pagination from '@/components/Pagination.vue'
 import type { Contract } from '@/models/contract/contract'
+import { useContractsStore } from '@/stores/contracts-store.ts'
 import { useContractStateFilterStore } from '@/stores/state-filter-store'
 import { contractStates } from '@/types/contract-state'
 import { compareValues } from '@/utils/comparison'
+import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
 import ContractListItem from './ContractListItem.vue'
 import ContractListSearch from './ContractListSearch.vue'
-import { useContractsStore } from '@/stores/contracts-store.ts'
-import { storeToRefs } from 'pinia'
-import Pagination from '@/components/Pagination.vue'
 
 const contractsStore = useContractsStore()
 const { loading, error } = storeToRefs(contractsStore)

@@ -10,7 +10,7 @@ defineProps<{
   hasNextPage: boolean
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   previousPage: []
   nextPage: []
 }>()
@@ -23,7 +23,7 @@ const emit = defineEmits<{
       class="btn px-4 btn-outline btn-sm"
       :disabled="currentPage === 1"
       aria-label="Go to previous page"
-      @click="emit('previousPage')"
+      @click="$emit('previousPage')"
     >
       <ChevronLeftIcon class="size-5" />
     </button>
@@ -40,7 +40,7 @@ const emit = defineEmits<{
       class="btn px-4 btn-outline btn-sm"
       :disabled="!hasNextPage"
       aria-label="Go to next page"
-      @click="emit('nextPage')"
+      @click="$emit('nextPage')"
     >
       <ChevronRightIcon class="size-5" />
     </button>

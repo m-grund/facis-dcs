@@ -78,12 +78,17 @@ export const useContractsStore = defineStore('contracts', () => {
       const offset = currentPage
       const paginatedResult = await fetchContracts(limit, offset)
       paginatedContracts.value = paginatedResult.contracts
+      negotiationTasks.value = paginatedResult.negotiation_tasks
+      reviewTasks.value = paginatedResult.review_tasks
+      approvalTasks.value = paginatedResult.approval_tasks
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Error loading contracts'
     } finally {
       loading.value = false
     }
   }
+
+  const loadTasks = loadContracts
 
   function hasNegotiationTask(contract: Contract) {
     return negotiationTasks.value.some((task) => task.did === contract.did)
@@ -107,6 +112,7 @@ export const useContractsStore = defineStore('contracts', () => {
     findContractByDid,
     loadContracts,
     loadPaginatedContracts,
+    loadTasks,
     loading,
     error,
     hasNegotiationTask,
