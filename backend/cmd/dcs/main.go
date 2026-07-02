@@ -153,7 +153,7 @@ func main() {
 	}
 
 	var euTrustPool *identity.EUTrustPool
-	if base.GetEnvOrDefault("DCS_SYNC_EIDAS_CERT_VERIFY", false) {
+	if base.GetEnvOrDefault("DCS_FORCE_EIDAS_CERT", false) {
 		log.Printf(ctx, "Start building EU trust pool")
 		trustPool := identity.NewEUTrustPool()
 		if err := trustPool.Refresh(ctx); err != nil {

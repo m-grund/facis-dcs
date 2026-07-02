@@ -278,22 +278,7 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 		}
 
 	case remoteaction.Update:
-		cmd, err := base.ConvertAny[command.UpdateCmd](req.Payload)
-		if err != nil {
-			return nil, dcstodcs.MakeInternalError(err)
-		}
-
-		handler := command.Updater{
-			DB:          s.DB,
-			CRepo:       s.CRepo,
-			RTRepo:      s.RTRepo,
-			ATRepo:      s.ATRepo,
-			NTRepo:      s.NTRepo,
-			NRepo:       s.NRepo,
-			SRepo:       s.SRepo,
-			DIDDocument: s.DIDDocument,
-		}
-		err = handler.Handle(ctx, *cmd)
+		err := fmt.Errorf("updates are just allowed contract's owner peer")
 		if err != nil {
 			return nil, dcstodcs.MakeInternalError(err)
 		}
