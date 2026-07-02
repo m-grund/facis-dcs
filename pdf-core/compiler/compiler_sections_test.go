@@ -60,6 +60,59 @@ func TestSectionHeadingsAppearInPDF(t *testing.T) {
 	}
 }
 
+func TestLayoutDocumentPreservesExplicitNewlinesInClauses(t *testing.T) {
+	doc := sectionDoc([]sectionData{
+		{Heading: "1. Terms", Clauses: []clauseData{
+			{Segments: []clauseSegment{
+				{Type: "prose", Text: "Dispute Resolution Method: "},
+				{Type: "prose", Text: "_____"},
+				{Type: "prose", Text: "\nDispute Venue: "},
+				{Type: "prose", Text: "_____"},
+				{Type: "prose", Text: "\n\nGoverning Law: _____"},
+			}},
+		}},
+	})
+
+	pages := layoutDocumentPages(doc)
+	var bodyLines []string
+	for _, page := range pages {
+		for _, line := range page.Lines {
+			if line.Kind == "body" {
+				bodyLines = append(bodyLines, line.Text)
+			}
+		}
+	}
+
+	want := []string{
+		"Dispute Resolution Method: _____",
+		"Dispute Venue: _____",
+		"",
+		"Governing Law: _____",
+	}
+	if len(bodyLines) != len(want) {
+		t.Fatalf("body line count = %d, want %d (%q)", len(bodyLines), len(want), bodyLines)
+	}
+	for i := range want {
+		if bodyLines[i] != want[i] {
+			t.Fatalf("body line %d = %q, want %q", i, bodyLines[i], want[i])
+		}
+	}
+}
+
+func TestRenderContentStreamUsesBoldTextModeForSectionHeadings(t *testing.T) {
+	content := renderContentStream(pageLayout{Lines: []positionedLine{
+		{Text: "Section Heading", FontSize: 14, Kind: "section-heading"},
+		{Text: "Body text", FontSize: 11, Kind: "body"},
+	}})
+
+	if !strings.Contains(content, "/F1 14.00 Tf\n0 g\n0 G\n0.35 w\n2 Tr\n") {
+		t.Fatalf("section heading was not rendered with bold text mode:\n%s", content)
+	}
+	if !strings.Contains(content, "/F1 11.00 Tf\n0 g\n0 Tr\n") {
+		t.Fatalf("body line did not reset to normal text mode:\n%s", content)
+	}
+}
+
 // TestPDFHasOutlineWhenSectionsPresent verifies that the catalog includes
 // /Outlines when the document has named sections.
 func TestPDFHasOutlineWhenSectionsPresent(t *testing.T) {

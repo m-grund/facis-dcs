@@ -43,7 +43,18 @@ type clauseData struct {
 type sectionData struct {
 	Heading     string
 	Clauses     []clauseData
-	Subsections []sectionData // recursive; empty for leaf sections
+	Subsections []sectionData  // recursive; empty for leaf sections
+	Order       []sectionChild // document order of this section's direct children
+}
+
+// sectionChild records one entry in a section's document-ordered child list.
+// It references either a clause (IsSection=false) via its index into Clauses,
+// or a subsection (IsSection=true) via its index into Subsections. This mirrors
+// the ordered dcs:children of a LayoutNode, so content blocks and nested
+// sections render in their authored order rather than clauses-then-subsections.
+type sectionChild struct {
+	IsSection bool
+	Index     int
 }
 
 type sigFieldDef struct {

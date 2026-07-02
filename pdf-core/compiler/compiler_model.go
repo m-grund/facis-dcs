@@ -55,6 +55,12 @@ func parseCanonicalSegment(item ContentItem) clauseSegment {
 	}
 
 	// Decode raw JSON for schema: properties (schema:url, schema:name).
+
+	// Placeholder: dcs:Placeholder in content renders as five underscores.
+	if item.Datatype == "Placeholder" || item.Datatype == "dcs:Placeholder" {
+		return clauseSegment{Type: "prose", Text: "_____"}
+	}
+
 	var raw map[string]any
 	if len(item.Raw) > 0 && item.Raw[0] == '{' {
 		json.Unmarshal(item.Raw, &raw) //nolint:errcheck // best-effort parse for segment properties
@@ -96,6 +102,10 @@ func parseCanonicalSegment(item ContentItem) clauseSegment {
 }
 
 func parseCanonicalClause(block *Block) clauseData {
+	if block.Type == "TextBlock" {
+		return clauseData{Segments: []clauseSegment{{Type: "prose", Text: block.Text}}}
+	}
+
 	clause := clauseData{Segments: []clauseSegment{}}
 	for _, rawItem := range block.Content {
 		var item ContentItem
@@ -154,12 +164,26 @@ func walkCanonicalSections(ds *DocumentStructure) []sectionData {
 	}
 
 	var sections []sectionData
+	flushAnonymousSection := func(sec *sectionData) {
+		if sec == nil {
+			return
+		}
+		if strings.TrimSpace(sec.Heading) == "" && len(sec.Clauses) == 0 && len(sec.Subsections) == 0 {
+			return
+		}
+		sections = append(sections, *sec)
+	}
+
+	var anonymous *sectionData
 	for _, childID := range rootLayout.Children {
 		block := blockByID[childID]
 		if block == nil {
 			continue
 		}
-		if block.Type == "Section" {
+		switch block.Type {
+		case "Section":
+			flushAnonymousSection(anonymous)
+			anonymous = nil
 			sec := sectionData{
 				Heading: strings.TrimSpace(block.Title),
 				Clauses: []clauseData{},
@@ -168,8 +192,14 @@ func walkCanonicalSections(ds *DocumentStructure) []sectionData {
 				sec = walkCanonicalSectionNode(sec, secLayout, layoutByID, blockByID)
 			}
 			sections = append(sections, sec)
+		case "Clause", "TextBlock":
+			if anonymous == nil {
+				anonymous = &sectionData{Clauses: []clauseData{}}
+			}
+			anonymous.Clauses = append(anonymous.Clauses, parseCanonicalClause(block))
 		}
 	}
+	flushAnonymousSection(anonymous)
 	return sections
 }
 

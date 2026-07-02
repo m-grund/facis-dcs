@@ -45,6 +45,7 @@ type Block struct {
 	ID      string             `json:"@id,omitempty"`
 	Type    string             `json:"@type"`
 	Title   string             `json:"title,omitempty"`
+	Text    string             `json:"text,omitempty"`
 	Content []json.RawMessage  `json:"content,omitempty"`
 }
 
