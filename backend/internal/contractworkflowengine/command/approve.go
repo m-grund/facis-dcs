@@ -10,6 +10,7 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/validation"
 
 	"github.com/jmoiron/sqlx"
 
@@ -81,6 +82,25 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 
 	if !valid {
 		return errors.New("invalid user")
+	}
+
+	contractForPolicyValidation, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not read contract for policy validation: %w", err)
+	}
+	if contractForPolicyValidation.ContractData == nil {
+		return fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
+	}
+	if err := validation.ValidateContractPolicySatisfaction(
+		*contractForPolicyValidation.ContractData,
+		validation.ContractContentAuditMetadata{
+			ContractDID:     cmd.DID,
+			ContractVersion: fmt.Sprint(processData.ContractVersion),
+			AuditedBy:       cmd.ApprovedBy,
+			HolderDID:       cmd.HolderDID,
+		},
+	); err != nil {
+		return err
 	}
 
 	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.ApprovedBy, approvaltaskstate.Approved.String())

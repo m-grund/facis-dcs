@@ -96,6 +96,32 @@ function buildCurrentContractData(): ContractData | undefined {
   })
 }
 
+function currentExpNoticePeriod(): number | undefined {
+  const value = contract.value?.exp_notice_period as unknown
+  if (value === undefined || value === null || value === '') return undefined
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : undefined
+}
+
+async function saveContractDraftForSubmit(): Promise<Contract> {
+  if (!contract.value) throw new Error('No contract selected')
+
+  await contractWorkflowService.update({
+    did: contract.value.did,
+    updated_at: contract.value.updated_at,
+    exp_notice_period: currentExpNoticePeriod(),
+    exp_policy: contract.value.exp_policy,
+    name: contract.value.name,
+    description: contract.value.description,
+    contract_data: buildCurrentContractData(),
+  })
+
+  const updatedContract = await contractWorkflowService.retrieveById({ did: contract.value.did })
+  if (!updatedContract) throw new Error('Could not reload contract after update')
+  contract.value = updatedContract
+  return updatedContract
+}
+
 function verifySemanticValues(): boolean {
   const subTemplateSemanticConditions = templateDraftStore.subTemplateSnapshots.map((subTemplate) => ({
     templateId: subTemplate.did,
@@ -126,13 +152,17 @@ const submit = async () => {
       did.value = response.did
       if (selectedParentContractDid.value) {
         const newContract = await contractWorkflowService.retrieveById({ did: response.did })
+        if (!newContract?.contract_data) {
+          throw new Error('Could not reload created contract')
+        }
+        const contractData = {
+          ...newContract.contract_data,
+          'dcs:parentContract': { '@id': selectedParentContractDid.value },
+        } as ContractData
         await contractWorkflowService.update({
           did: newContract.did,
           updated_at: newContract.updated_at,
-          contract_data: {
-            ...newContract.contract_data,
-            'dcs:parentContract': { '@id': selectedParentContractDid.value },
-          },
+          contract_data: contractData,
         })
       }
       errorStore.add('Contract created.', 'info')
@@ -141,7 +171,7 @@ const submit = async () => {
       await contractWorkflowService.update({
         did: contract.value.did,
         updated_at: contract.value.updated_at,
-        exp_notice_period: contract.value.exp_notice_period,
+        exp_notice_period: currentExpNoticePeriod(),
         exp_policy: contract.value.exp_policy,
         name: contract.value.name,
         description: contract.value.description,
@@ -160,10 +190,10 @@ const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContr
   if (!contract.value || !verifySemanticValues()) return
   isSubmitting.value = true
   try {
+    const updatedContract = await saveContractDraftForSubmit()
     const response = await contractWorkflowService.submit({
-      did: contract.value.did,
-      updated_at: contract.value.updated_at,
-      contract_data: buildCurrentContractData(),
+      did: updatedContract.did,
+      updated_at: updatedContract.updated_at,
       reviewers,
       approvers,
       negotiators,
@@ -182,10 +212,10 @@ const submitRejectedContract = async () => {
   if (!contract.value || !verifySemanticValues()) return
   isSubmitting.value = true
   try {
+    const updatedContract = await saveContractDraftForSubmit()
     const response = await contractWorkflowService.submit({
-      did: contract.value.did,
-      updated_at: contract.value.updated_at,
-      contract_data: buildCurrentContractData(),
+      did: updatedContract.did,
+      updated_at: updatedContract.updated_at,
     })
     if (response.did) {
       await router.push({ name: ROUTES.CONTRACTS.LIST })

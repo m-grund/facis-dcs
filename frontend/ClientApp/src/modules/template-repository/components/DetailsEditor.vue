@@ -9,7 +9,7 @@
       <div class="mt-1 grid grid-cols-2 gap-3">
         <div
           class="pointer-events-none card border-2 transition-all"
-          :class="templateType === TemplateType.frameContract ? 'border-primary bg-primary/5' : 'border-base-300'"
+          :class="templateType === TemplateType.contractTemplate ? 'border-primary bg-primary/5' : 'border-base-300'"
         >
           <div class="card-body gap-1 p-4">
             <span class="card-title text-sm">Contract</span>
@@ -18,11 +18,13 @@
         </div>
         <div
           class="pointer-events-none card border-2 transition-all"
-          :class="templateType === TemplateType.subContract ? 'border-primary bg-primary/5' : 'border-base-300'"
+          :class="templateType === TemplateType.component ? 'border-primary bg-primary/5' : 'border-base-300'"
         >
           <div class="card-body gap-1 p-4">
             <span class="card-title text-sm">Component</span>
-            <p class="text-xs font-normal text-base-content/60">Reusable partial contract, embeddable in other templates</p>
+            <p class="text-xs font-normal text-base-content/60">
+              Reusable partial contract, embeddable in other templates
+            </p>
           </div>
         </div>
       </div>
@@ -81,16 +83,16 @@
     </fieldset>
 
     <!-- Component templates (only for Contract type) -->
-    <fieldset v-if="templateType === TemplateType.frameContract" class="fieldset border-none p-0">
+    <fieldset v-if="templateType === TemplateType.contractTemplate" class="fieldset border-none p-0">
       <legend
         class="fieldset-legend inline-flex cursor-pointer items-center gap-1.5 select-none"
-        @click="showSubcontractPicker = !showSubcontractPicker"
+        @click="showComponentPicker = !showComponentPicker"
       >
         Component Templates
         <svg
           xmlns="http://www.w3.org/2000/svg"
           class="h-3 w-3 opacity-60 transition-transform duration-200"
-          :class="{ 'rotate-180': showSubcontractPicker }"
+          :class="{ 'rotate-180': showComponentPicker }"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -100,21 +102,21 @@
       </legend>
 
       <!-- Collapsible picker -->
-      <div v-show="showSubcontractPicker" class="mt-1">
+      <div v-show="showComponentPicker" class="mt-1">
         <input
-          v-model="subcontractSearchQuery"
+          v-model="componentSearchQuery"
           class="input-bordered input input-sm w-full"
           placeholder="Search templates…"
         />
 
         <ul class="menu mt-1 max-h-48 w-full flex-nowrap overflow-y-auto menu-sm rounded-box bg-base-200">
-          <li v-if="!filteredSubcontractTemplates.length">
+          <li v-if="!filteredComponentTemplates.length">
             <span class="pointer-events-none text-xs text-base-content/40 italic">
-              {{ subcontractSearchQuery ? 'No results' : 'All component templates already added' }}
+              {{ componentSearchQuery ? 'No results' : 'All component templates already added' }}
             </span>
           </li>
-          <li v-for="t in filteredSubcontractTemplates" :key="`${t.did}-${t.version}-${t.document_number}`">
-            <button type="button" class="group flex flex-col items-start gap-0" @click="addSubcontractTemplate(t)">
+          <li v-for="t in filteredComponentTemplates" :key="`${t.did}-${t.version}-${t.document_number}`">
+            <button type="button" class="group flex flex-col items-start gap-0" @click="addComponentTemplate(t)">
               <span class="text-sm font-medium">{{ t.name }}</span>
               <span
                 class="max-h-0 overflow-hidden text-xs text-base-content/50 italic transition-all duration-200 ease-in-out group-hover:max-h-12"
@@ -127,19 +129,19 @@
       </div>
 
       <!-- Selected templates (always visible) -->
-      <div v-if="selectedSubcontracts.length" class="mt-3 flex flex-wrap gap-2">
+      <div v-if="selectedComponents.length" class="mt-3 flex flex-wrap gap-2">
         <div
-          v-for="item in selectedSubcontracts"
+          v-for="item in selectedComponents"
           :key="`${item.did}-${item.version}-${item.document_number}`"
           class="badge gap-1 badge-outline py-3 badge-primary"
         >
-          <span>{{ getSubcontractTemplateName(item) }}</span>
+          <span>{{ getComponentTemplateName(item) }}</span>
           <button
             type="button"
-            :disabled="isSubcontractReferenced(item) || !uiStore.isTemplateEditable"
-            :title="isSubcontractReferenced(item) ? 'Cannot remove: used in document' : undefined"
+            :disabled="isComponentReferenced(item) || !uiStore.isTemplateEditable"
+            :title="isComponentReferenced(item) ? 'Cannot remove: used in document' : undefined"
             class="text-error transition-opacity hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40"
-            @click="removeSubcontractTemplate(item)"
+            @click="removeComponentTemplate(item)"
           >
             ✕
           </button>
@@ -155,14 +157,13 @@ import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { TemplateType } from '@/modules/template-repository/models/contract-template'
-import type { DcsApprovedTemplate } from '@/models/dcs-jsonld'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { TemplateState } from '@/types/contract-template-state'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
-interface SubcontractKey {
+interface ComponentTemplateKey {
   did: string
   version: number
   document_number?: string
@@ -190,57 +191,54 @@ const description = computed({
   set: (value: string) => store.updateDescription(value),
 })
 
-const selectedSubcontracts = computed<SubcontractKey[]>(() =>
+const selectedComponents = computed<ComponentTemplateKey[]>(() =>
   subTemplateSnapshots.value.map((item) => ({
     did: item.did,
     version: item.version,
     document_number: item.document_number,
   })),
 )
-const showSubcontractPicker = ref(false)
-const subcontractSearchQuery = ref('')
+const showComponentPicker = ref(false)
+const componentSearchQuery = ref('')
 
-const isSameTemplate = (a: SubcontractKey, b: SubcontractKey) =>
+const isSameTemplate = (a: ComponentTemplateKey, b: ComponentTemplateKey) =>
   a.did === b.did && a.version === b.version && a.document_number === b.document_number
-const isSelected = (t: SubcontractKey) => selectedSubcontracts.value.some((s) => isSameTemplate(s, t))
+const isSelected = (t: ComponentTemplateKey) => selectedComponents.value.some((s) => isSameTemplate(s, t))
 
-const filteredSubcontractTemplates = computed(() => {
-  const q = subcontractSearchQuery.value.toLowerCase()
+const filteredComponentTemplates = computed(() => {
+  const q = componentSearchQuery.value.toLowerCase()
   const selectableStates = new Set<string>([TemplateState.approved, TemplateState.published])
   return allTemplates.value.filter(
     (t) =>
       !isSelected(t) &&
       selectableStates.has(t.state) &&
-      t.template_type === TemplateType.subContract &&
+      t.template_type === TemplateType.component &&
       (q === '' || (t.name ?? '').toLowerCase().includes(q) || t.did.toLowerCase().includes(q)),
   )
 })
 
-const getSubcontractTemplateName = (item: SubcontractKey) =>
+const getComponentTemplateName = (item: ComponentTemplateKey) =>
   subTemplateSnapshots.value.find((t) => isSameTemplate(t, item))?.name ??
   allTemplates.value.find((t) => isSameTemplate(t, item))?.name ??
   item.did
 
-const addSubcontractTemplate = async (template: { did: string; version: number; document_number?: string }) => {
+const addComponentTemplate = async (template: { did: string; version: number; document_number?: string }) => {
   if (isSelected(template)) return
   await contractTemplateService.retrieveById(template).then((fullTemplate) => {
     if (fullTemplate) store.addSubTemplateSnapshot(fullTemplate)
   })
-  subcontractSearchQuery.value = ''
+  componentSearchQuery.value = ''
 }
 
-const isSubcontractReferenced = (item: SubcontractKey): boolean => {
+const isComponentReferenced = (item: ComponentTemplateKey): boolean => {
   const inOutline = store.blockIdsInOutline
   return blocks.value.some(
-    (b) =>
-      b['@type'] === 'dcs:ApprovedTemplate' &&
-      inOutline.has(b['@id']) &&
-      (b as DcsApprovedTemplate)['dcs:templateDid'] === item.did,
+    (b) => b['@type'] === 'dcs:ApprovedTemplate' && inOutline.has(b['@id']) && b['dcs:templateDid'] === item.did,
   )
 }
 
-const removeSubcontractTemplate = (item: SubcontractKey) => {
-  if (isSubcontractReferenced(item)) return
+const removeComponentTemplate = (item: ComponentTemplateKey) => {
+  if (isComponentReferenced(item)) return
   store.removeSubTemplateSnapshot(item)
 }
 </script>

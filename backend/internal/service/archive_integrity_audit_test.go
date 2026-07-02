@@ -108,6 +108,34 @@ func TestParseArchiveNotaryChainAllowsDuplicateArchiveEntryIDs(t *testing.T) {
 	}
 }
 
+func TestSelectArchiveNotaryEventComparesEquivalentReceivedAtTimestamps(t *testing.T) {
+	event := archiveNotaryEvent{
+		EventType:       "ARCHIVE_STORED",
+		DID:             "did:example:contract:1",
+		ContractVersion: 1,
+		ArchiveEntryID:  "did:example:contract:1#1",
+		ContentHash:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SnapshotCID:     "bafy-one",
+		StoredBy:        "alice",
+		StoredAt:        "2026-06-30T12:40:20Z",
+		ReceivedAt:      "2026-06-30T12:40:21.770Z",
+	}
+	event.EventHash = hashArchiveNotaryEvent(event)
+
+	selected, err := selectArchiveNotaryEvent(event.ArchiveEntryID, &archiveNotaryReceiptData{
+		ArchiveEntryID: event.ArchiveEntryID,
+		EventHash:      event.EventHash,
+		PreviousHash:   event.PreviousHash,
+		ReceivedAt:     "2026-06-30T12:40:21.77Z",
+	}, []archiveNotaryEvent{event})
+	if err != nil {
+		t.Fatalf("selectArchiveNotaryEvent returned error: %v", err)
+	}
+	if selected.EventHash != event.EventHash {
+		t.Fatalf("selected wrong event")
+	}
+}
+
 func TestParseArchiveNotaryChainRejectsInvalidEventHash(t *testing.T) {
 	event := archiveNotaryEvent{
 		EventType:       "ARCHIVE_STORED",

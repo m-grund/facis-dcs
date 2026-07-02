@@ -114,10 +114,10 @@ const isRegisterDisabled = computed(() => {
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
 function toTemplateType(value: string | undefined): TemplateTypeValue {
-  if (value === TemplateType.frameContract || value === TemplateType.subContract) {
+  if (value === TemplateType.contractTemplate || value === TemplateType.component) {
     return value
   }
-  return TemplateType.subContract
+  return TemplateType.component
 }
 
 watch(

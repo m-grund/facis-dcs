@@ -20,7 +20,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		"@type": "dcs:ContractTemplate",
 		"dcs:metadata": map[string]any{
 			"@type":            "dcs:TemplateMetadata",
-			"dcs:templateType": "dcs:SubContract",
+			"dcs:templateType": "dcs:Component",
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type": "dcs:DocumentStructure",
@@ -58,8 +58,8 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 						"@id":               "did:web:facis.example:template:1#field-cond-1-percent",
 						"@type":             "dcs:RequirementField",
 						"dcs:parameterName": "percent",
-						"dcs:domainField": map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability"},
-						"dcs:required":    true,
+						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability"},
+						"dcs:required":      true,
 					},
 				},
 			},

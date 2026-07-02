@@ -47,7 +47,7 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, int, error) {
-	templateData, version, err := h.getFrameContractTemplateDataFromDB(ctx, qry.DID)
+	templateData, version, err := h.getContractTemplateDataFromDB(ctx, qry.DID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("could not read template data from DB: %w", err)
 	}
@@ -62,7 +62,7 @@ func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry G
 	return templateData, version, nil
 }
 
-func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx context.Context, templateDID string) (*datatype.JSON, int, error) {
+func (h *GetTemplateDataByDIDHandler) getContractTemplateDataFromDB(ctx context.Context, templateDID string) (*datatype.JSON, int, error) {
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("could not create transaction: %w", err)
@@ -73,9 +73,9 @@ func (h *GetTemplateDataByDIDHandler) getFrameContractTemplateDataFromDB(ctx con
 		}
 	}(tx)
 
-	templateData, err := h.CTRepo.ReadFrameContractTemplateDataByID(ctx, tx, templateDID)
+	templateData, err := h.CTRepo.ReadContractTemplateDataByID(ctx, tx, templateDID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("could not read frame contract template data: %w", err)
+		return nil, 0, fmt.Errorf("could not read contract template data: %w", err)
 	}
 
 	err = tx.Commit()

@@ -14,13 +14,13 @@ import (
 type PostgresContractTemplateRepo struct {
 }
 
-func (r *PostgresContractTemplateRepo) ReadFrameContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateQueryResult, error) {
+func (r *PostgresContractTemplateRepo) ReadContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateQueryResult, error) {
 	statement := `
         SELECT template_data, version
         FROM contract_templates
         WHERE
             did = $1
-            AND template_type = 'FRAME_CONTRACT'
+            AND template_type = 'CONTRACT_TEMPLATE'
             AND (state = 'REGISTERED' OR state = 'PUBLISHED')
         ORDER BY version DESC
         LIMIT 1
@@ -29,7 +29,7 @@ func (r *PostgresContractTemplateRepo) ReadFrameContractTemplateDataByID(ctx con
 	err := tx.GetContext(ctx, &result, statement, did)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return nil, fmt.Errorf("could not find frame contract template with DID %q", did)
+		return nil, fmt.Errorf("could not find contract template with DID %q", did)
 	case err != nil:
 		return nil, err
 	}

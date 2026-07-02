@@ -10,6 +10,9 @@ from steps.support.services.auth_service import AuthService
 class TemplateService: 
     """Service class for template-related operations."""
 
+    CONTRACT_TEMPLATE_TYPE = "CONTRACT_TEMPLATE"
+    COMPONENT_TEMPLATE_TYPE = "COMPONENT"
+
     @staticmethod
     def template_env_key(name: str) -> str:
         normalized = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").upper()
@@ -20,8 +23,8 @@ class TemplateService:
     def template_type_for_category(category: str) -> str:
         category_key = category.strip().lower()
         return {
-            "legal": "FRAME_CONTRACT",
-            "procurement": "SUB_CONTRACT",
+            "legal": TemplateService.CONTRACT_TEMPLATE_TYPE,
+            "procurement": TemplateService.COMPONENT_TEMPLATE_TYPE,
         }.get(category_key, category.strip().upper().replace(" ", "_"))
 
 

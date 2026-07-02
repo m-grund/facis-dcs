@@ -1,8 +1,4 @@
-import type {
-  DcsOperator,
-  ParameterType,
-  UiMetadata,
-} from '@/models/semantic/facis-dcs-semantic'
+import type { DcsOperator, ParameterType, UiMetadata } from '@/models/semantic/facis-dcs-semantic'
 
 // ---- SemanticCondition ----
 
@@ -167,8 +163,8 @@ export interface MetaData {
 // ---- TemplateTypeValue ----
 
 export const TemplateType = {
-  subContract: 'SUB_CONTRACT',
-  frameContract: 'FRAME_CONTRACT',
+  component: 'COMPONENT',
+  contractTemplate: 'CONTRACT_TEMPLATE',
 } as const
 
 export type TemplateTypeValue = (typeof TemplateType)[keyof typeof TemplateType]

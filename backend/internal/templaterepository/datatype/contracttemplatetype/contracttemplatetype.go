@@ -8,13 +8,13 @@ import (
 type ContractTemplateType string
 
 const (
-	FrameContract ContractTemplateType = "FRAME_CONTRACT"
-	SubContract   ContractTemplateType = "SUB_CONTRACT"
+	ContractTemplate ContractTemplateType = "CONTRACT_TEMPLATE"
+	Component        ContractTemplateType = "COMPONENT"
 )
 
 var validFlag = map[ContractTemplateType]bool{
-	FrameContract: true,
-	SubContract:   true,
+	ContractTemplate: true,
+	Component:        true,
 }
 
 func NewContractTemplateType(s string) (ContractTemplateType, error) {

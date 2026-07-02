@@ -50,7 +50,7 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 		DID:          creationTemplateDID,
 		Version:      1,
 		State:        "APPROVED",
-		TemplateType: "SUB_CONTRACT",
+		TemplateType: "COMPONENT",
 		Name:         &templateName,
 		CreatedBy:    "test-participant",
 		CreatedAt:    now,
@@ -89,7 +89,7 @@ func creationPipelineTemplate() map[string]any {
 		"dcs:metadata": map[string]any{
 			"@type":            "dcs:TemplateMetadata",
 			"dcs:title":        "DACH Service Agreement",
-			"dcs:templateType": "dcs:SubContract",
+			"dcs:templateType": "dcs:Component",
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type":      "dcs:DocumentStructure",

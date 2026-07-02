@@ -60,7 +60,7 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 		"dcs:metadata": map[string]any{
 			"@type":            "dcs:TemplateMetadata",
 			"dcs:title":        "Provider eligibility",
-			"dcs:templateType": "dcs:SubContract",
+			"dcs:templateType": "dcs:Component",
 		},
 		"dcs:documentStructure": map[string]any{
 			"@type": "dcs:DocumentStructure",

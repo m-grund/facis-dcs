@@ -12,7 +12,7 @@ import (
 func TestAuditTemplatePoliciesReturnsWarningsForMissingFinishedTemplateFields(t *testing.T) {
 	findings, err := AuditTemplatePolicies(canonicalTemplateData(t), TemplatePolicyAuditMetadata{
 		DID:          "did:example:template",
-		TemplateType: "subContract",
+		TemplateType: "CONTRACT_TEMPLATE",
 		State:        "APPROVED",
 	})
 	require.NoError(t, err)
@@ -25,7 +25,7 @@ func TestAuditTemplatePoliciesReturnsWarningsForMissingFinishedTemplateFields(t 
 func TestAuditTemplatePoliciesAcceptsCanonicalTemplateWithoutErrors(t *testing.T) {
 	findings, err := AuditTemplatePolicies(canonicalTemplateData(t), TemplatePolicyAuditMetadata{
 		DID:          "did:example:template",
-		TemplateType: "subContract",
+		TemplateType: "CONTRACT_TEMPLATE",
 		State:        "APPROVED",
 	})
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestAuditTemplatePoliciesFlagsCanonicalClauseWithoutContractDataBinding(t *
 
 	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
 		DID:          "did:example:template",
-		TemplateType: "subContract",
+		TemplateType: "CONTRACT_TEMPLATE",
 		State:        "APPROVED",
 	})
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestAuditTemplatePoliciesFlagsPolicyOperandOutsideContractData(t *testing.T
 
 	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
 		DID:          "did:example:template",
-		TemplateType: "subContract",
+		TemplateType: "CONTRACT_TEMPLATE",
 		State:        "APPROVED",
 	})
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 
 	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
 		DID:          "did:example:template",
-		TemplateType: "subContract",
+		TemplateType: "CONTRACT_TEMPLATE",
 		State:        "APPROVED",
 	})
 	require.NoError(t, err)
@@ -102,6 +102,59 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	require.NotContains(t, ruleIDs, "FACIS-TPL-LEGAL-001")
 	require.NotContains(t, ruleIDs, "FACIS-TPL-PARTY-001")
 	require.NotContains(t, ruleIDs, "FACIS-TPL-SIGN-001")
+}
+
+func TestAuditTemplatePoliciesDoesNotApplyCompletenessRulesToComponents(t *testing.T) {
+	data := canonicalTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	delete(decoded, "dcs:contractData")
+	delete(decoded, "dcs:policies")
+	structure := decoded["dcs:documentStructure"].(map[string]any)
+	delete(structure, "dcs:layout")
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
+		DID:          "did:example:component",
+		TemplateType: "COMPONENT",
+		State:        "DRAFT",
+	})
+	require.NoError(t, err)
+
+	ruleIDs := policyFindingRuleIDs(findings)
+	require.NotContains(t, ruleIDs, "FACIS-TPL-STRUCT-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-DATA-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-POLICY-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-LIFECYCLE-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-CLAUSE-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-LEGAL-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-PARTY-001")
+	require.NotContains(t, ruleIDs, "FACIS-TPL-SIGN-001")
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+}
+
+func TestAuditTemplatePoliciesFlagsComponentInternalPolicyReferences(t *testing.T) {
+	data := canonicalTemplateData(t)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(*data, &decoded))
+	policy := decoded["dcs:policies"].([]any)[0].(map[string]any)
+	constraint := policy["odrl:constraint"].(map[string]any)
+	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
+	raw, err := datatype.NewJSON(decoded)
+	require.NoError(t, err)
+
+	findings, err := AuditTemplatePolicies(&raw, TemplatePolicyAuditMetadata{
+		DID:          "did:example:component",
+		TemplateType: "COMPONENT",
+		State:        "DRAFT",
+	})
+	require.NoError(t, err)
+
+	require.True(t, hasFindingSeverity(findings, "FACIS-COMP-POLICY-001", "error"))
+	require.False(t, hasFindingSeverity(findings, "FACIS-TPL-POLICY-001", "error"))
 }
 
 func canonicalRequirementField(id string) map[string]any {

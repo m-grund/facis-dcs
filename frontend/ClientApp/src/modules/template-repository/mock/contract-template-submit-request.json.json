@@ -5,7 +5,7 @@
   "title": "Apartment Lease (DE) – Standard",
   "description": "Standard lease template for residential apartment in Germany",
   "jurisdiction": {},
-  "type": "subContract",
+  "type": "COMPONENT",
   "documentOutline": [
     {
       "blockId": "root",

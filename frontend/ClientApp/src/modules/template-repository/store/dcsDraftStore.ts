@@ -53,7 +53,7 @@ import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 
-// ---- MergedApprovedTemplateBlock (UI-only virtual block for frame contracts) ----
+// ---- MergedApprovedTemplateBlock (UI-only virtual block for composed contract templates) ----
 
 export interface MergedApprovedTemplateBlock {
   '@type': 'dcs:MergedApprovedTemplate'
@@ -148,20 +148,20 @@ export const useDcsDraftStore = defineStore(storeId, {
   actions: {
     /** Loads the canonical JSON-LD envelope plus DB-level metadata into store state. */
     loadDocument(rawDoc: unknown, meta: LoadDocumentMeta): void {
-      const templateType = meta.templateType ?? TemplateType.subContract
+      const templateType = meta.templateType ?? TemplateType.component
 
       if (isDcsTemplateData(rawDoc)) {
         const metadata = rawDoc['dcs:metadata']
         const jsonLdType = metadata['dcs:templateType']
         const derivedTemplateType: TemplateTypeValue =
-          jsonLdType === 'dcs:FrameContract' ? TemplateType.frameContract : TemplateType.subContract
+          jsonLdType === 'dcs:ContractTemplate' ? TemplateType.contractTemplate : TemplateType.component
         const structure = rawDoc['dcs:documentStructure']
 
         this.reset({
           did: meta.did,
           name: meta.name ? meta.name : (metadata['dcs:title'] ?? ''),
           description: meta.description ? meta.description : (metadata['dcs:description'] ?? ''),
-          templateType: templateType !== TemplateType.subContract ? templateType : derivedTemplateType,
+          templateType: templateType !== TemplateType.component ? templateType : derivedTemplateType,
           state: meta.state ?? undefined,
           version: meta.version ?? null,
           document_number: meta.document_number ?? null,
@@ -194,11 +194,11 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
     addBlock(parentBlockId: string, insertIndex: number, payload: AddBlockPayload, options?: AddBlockOptions): string {
       if (this.workflow === 'template') {
-        if (this.templateType === TemplateType.subContract && payload.blockType === 'dcs:ApprovedTemplate') {
-          throw new Error('subContract template cannot add ApprovedTemplate blocks')
+        if (this.templateType === TemplateType.component && payload.blockType === 'dcs:ApprovedTemplate') {
+          throw new Error('components cannot add ApprovedTemplate blocks')
         }
-        if (this.templateType === TemplateType.frameContract && payload.blockType !== 'dcs:ApprovedTemplate') {
-          throw new Error('frameContract template can only add ApprovedTemplate blocks')
+        if (this.templateType === TemplateType.contractTemplate && payload.blockType !== 'dcs:ApprovedTemplate') {
+          throw new Error('contract templates can only add ApprovedTemplate blocks')
         }
       }
       return addBlock(this.layout, this.blocks, parentBlockId, insertIndex, payload, options, this.did ?? undefined)
@@ -232,9 +232,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       operators: SemanticParameterOperator[],
     ): void {
       const documentId = this.did ?? undefined
-      this.policies = this.policies.filter(
-        (p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId,
-      )
+      this.policies = this.policies.filter((p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId)
       operators.forEach((operator, index) => {
         if (!isStandardOdrlOperator(operator.operate)) return
         const rightOperand = odrlRightOperand(operator, parameterType)
@@ -317,7 +315,12 @@ export const useDcsDraftStore = defineStore(storeId, {
         return !leftOp || !fieldIds.has(leftOp)
       })
     },
-    addClause(payload: { title?: string; content: DcsContentSegment[]; schemaRef?: string; semanticPath?: string }): string {
+    addClause(payload: {
+      title?: string
+      content: DcsContentSegment[]
+      schemaRef?: string
+      semanticPath?: string
+    }): string {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
       const block: import('@/models/dcs-jsonld').DcsClause = {
@@ -471,7 +474,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
           '@type': 'dcs:TemplateMetadata' as const,
           ...commonMetadata,
           'dcs:templateType':
-            input.templateType === TemplateType.frameContract ? 'dcs:FrameContract' : 'dcs:SubContract',
+            input.templateType === TemplateType.contractTemplate ? 'dcs:ContractTemplate' : 'dcs:Component',
         }
       : { '@type': 'dcs:ContractMetadata' as const, ...commonMetadata }
 
@@ -491,9 +494,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
     ...(input.documentType === 'dcs:Contract'
       ? {
           semanticConditionValues: input.semanticConditionValues ?? [],
-          ...(input.parentContractDid
-            ? { 'dcs:parentContract': { '@id': input.parentContractDid } }
-            : {}),
+          ...(input.parentContractDid ? { 'dcs:parentContract': { '@id': input.parentContractDid } } : {}),
           ...(input.sourceTemplate ? { sourceTemplate: input.sourceTemplate } : {}),
           ...(input.derivedFromTemplate ? { derivedFromTemplate: input.derivedFromTemplate } : {}),
         }
@@ -562,15 +563,11 @@ export function buildContractDocument(input: ContractDocumentInput): DcsContract
 
 // ---- Sub-template accessors (replaces templateDataToBuilderData) ----
 
-export function getBlocksFromTemplateData(
-  td: SubTemplateSnapshot['template_data'],
-): DcsBlock[] {
+export function getBlocksFromTemplateData(td: SubTemplateSnapshot['template_data']): DcsBlock[] {
   return isDcsDocumentData(td) ? td['dcs:documentStructure']['dcs:blocks']['@list'] : []
 }
 
-export function getLayoutFromTemplateData(
-  td: SubTemplateSnapshot['template_data'],
-): DcsLayoutNode[] {
+export function getLayoutFromTemplateData(td: SubTemplateSnapshot['template_data']): DcsLayoutNode[] {
   return isDcsDocumentData(td) ? td['dcs:documentStructure']['dcs:layout'] : []
 }
 
@@ -632,7 +629,7 @@ function addBlock(
   if (payload.clauseBlockId) {
     const clauseId = payload.clauseBlockId
     const exists = blocks.find((b) => b['@id'] === clauseId)
-    if (!exists || exists['@type'] !== 'dcs:Clause') {
+    if (exists?.['@type'] !== 'dcs:Clause') {
       throw new Error(`addBlock: clause block not found: ${clauseId}`)
     }
     const inLayout = collectBlockIdsInLayout(layout)
@@ -690,10 +687,12 @@ function createBlock(id: string, payload: AddBlockPayload): DcsBlock | MergedApp
         '@id': id,
         'dcs:templateDid': payload.templateId ?? '',
         'dcs:version': payload.version ?? 1,
-        ...(payload.document_number ? { 'dcs:documentNumber': payload.document_number } : {}),
+        ...(payload.document_number != null && payload.document_number !== ''
+          ? { 'dcs:documentNumber': payload.document_number }
+          : {}),
       }
     default:
-      throw new Error(`Unknown blockType: ${payload.blockType}`)
+      throw new Error('Unknown blockType')
   }
 }
 
@@ -726,7 +725,7 @@ function deleteBlock(
   const parent = layout.find((n) => layoutNodeChildren(n).includes(blockId))
   if (!parent) return
 
-  if (block && block['@type'] === 'dcs:Clause') {
+  if (block?.['@type'] === 'dcs:Clause') {
     const newChildren = layoutNodeChildren(parent).filter((id) => id !== blockId)
     parent['dcs:children'] = { '@list': newChildren.map((id) => ({ '@id': id })) }
     return
@@ -736,7 +735,7 @@ function deleteBlock(
   const toRemove = collectDescendantIds(blockId, nodeById)
   const newChildren = layoutNodeChildren(parent).filter((id) => id !== blockId)
   parent['dcs:children'] = { '@list': newChildren.map((id) => ({ '@id': id })) }
-  const layoutToKeep = layout.filter((n) => n['dcs:isRoot'] || !toRemove.has(n['@id']))
+  const layoutToKeep = layout.filter((n) => (n['dcs:isRoot'] ?? false) || !toRemove.has(n['@id']))
   layout.length = 0
   layout.push(...layoutToKeep)
   const blocksToKeep = blocks.filter((b) => !toRemove.has(b['@id']))
@@ -784,7 +783,7 @@ const defaultState: Readonly<Omit<TemplateDraftState, 'blocks' | 'layout'>> = {
   policyBundle: null,
   sla: null,
   subTemplateSnapshots: [],
-  templateType: TemplateType.subContract,
+  templateType: TemplateType.component,
   state: undefined,
   document_number: null,
   version: null,

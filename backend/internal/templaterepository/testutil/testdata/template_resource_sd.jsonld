@@ -82,7 +82,7 @@
         "dcs-template:documentNumber": "25625b2b-b5e0-46fc-8d69-4fe38d9f036d",
         "dcs-template:version": 1,
         "dcs-template:schemaVersion": 1,
-        "dcs-template:templateType": "SUB_CONTRACT",
+        "dcs-template:templateType": "COMPONENT",
         "dcs-template:description": "",
         "dcs-template:participantId": "did:web:argo.asd-stack.eu:facis:participant:cfc9d0a5-cd79-4807-8eef-e245ab0ffee8",
         "dcs-template:createdAt": {

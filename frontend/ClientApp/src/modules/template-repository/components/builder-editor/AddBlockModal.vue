@@ -13,7 +13,7 @@
         @click.stop
       >
         <h2 id="add-block-title" class="text-lg font-bold">Add block</h2>
-        <template v-if="!isContractWorkflow && isFrameContract">
+        <template v-if="!isContractWorkflow && isContractTemplate">
           <ApprovedSubTemplatePicker
             :templates="subTemplateSnapshots"
             :reference-count-by-did="referenceCountByDid"
@@ -70,7 +70,9 @@
                 class="flex min-h-[44px] cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
                 @click="handleAddClause(clause['@id'])"
               >
-                <span class="text-sm font-medium text-base-content">{{ clause['dcs:title'] || 'Untitled clause' }}</span>
+                <span class="text-sm font-medium text-base-content">
+                  {{ clause['dcs:title'] || 'Untitled clause' }}
+                </span>
                 <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
                   <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
                 </p>
@@ -120,7 +122,7 @@ const paletteBlockTypes: { blockType: NewBlockType; label: string }[] = [
   { blockType: 'dcs:Clause', label: 'Clause' },
 ]
 
-const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
+const isContractTemplate = computed(() => draftStore.templateType === TemplateType.contractTemplate)
 
 const referenceCountByDid = computed(() => {
   const inOutline = draftStore.blockIdsInOutline

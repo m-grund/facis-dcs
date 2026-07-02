@@ -68,7 +68,7 @@ watch(
   { immediate: true },
 )
 
-const parentContract = computed(() => ancestors.value.at(-1) ?? null)
+const parentContract = computed(() => ancestors.value[ancestors.value.length - 1] ?? null)
 
 const ancestors = computed(() => {
   const chain: Contract[] = []

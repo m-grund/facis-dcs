@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
+	baseevent "digital-contracting-service/internal/base/event"
 
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 
@@ -17,6 +19,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
+	pacevent "digital-contracting-service/internal/processauditandcompliance/event"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/jmoiron/sqlx"
@@ -295,6 +298,11 @@ func resolveAuditScope(rawScope string) (auditScopeConfig, error) {
 		return contractAuditScopeConfig(), nil
 	case "archive":
 		return archiveAuditScopeConfig(), nil
+	case "signatures":
+		return auditScopeConfig{
+			scopeName: "signatures",
+			component: componenttype.SignatureManagement,
+		}, nil
 	}
 
 	scope, err := componenttype.NewComponentType(normalizedScope)
@@ -309,6 +317,8 @@ func resolveAuditScope(rawScope string) (auditScopeConfig, error) {
 		return contractAuditScopeConfig(), nil
 	case componenttype.ContractStorageArchive:
 		return archiveAuditScopeConfig(), nil
+	case componenttype.SignatureManagement:
+		return auditScopeConfig{scopeName: "signatures", component: scope}, nil
 	default:
 		return auditScopeConfig{scopeName: scope.String(), component: scope}, nil
 	}
@@ -354,7 +364,102 @@ func (s *processAuditAndCompliancesrvc) validateAuditScopeDependencies(scopeConf
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {
 	log.Printf(ctx, "processAuditAndCompliance.audit_report")
-	return
+	scope := "contracts"
+	if p != nil && p.Scope != nil && strings.TrimSpace(*p.Scope) != "" {
+		scope = strings.TrimSpace(*p.Scope)
+	}
+	format := "json"
+	if p != nil && p.Format != nil && strings.TrimSpace(*p.Format) != "" {
+		format = strings.ToLower(strings.TrimSpace(*p.Format))
+	}
+	did := ""
+	if p != nil && p.Did != nil {
+		did = strings.TrimSpace(*p.Did)
+	}
+	if format != "json" && format != "csv" && format != "pdf" {
+		return nil, fmt.Errorf("unsupported audit report format %q", format)
+	}
+
+	auditResponses, err := s.Audit(ctx, &processauditandcompliance.PACAuditRequest{Scope: scope})
+	if err != nil {
+		return nil, err
+	}
+	generatedAt := time.Now().UTC()
+	generatedBy := middleware.GetParticipantID(ctx)
+	report := buildAuditReport(scope, did, generatedBy, generatedAt, auditResponses)
+	report.Format = format
+
+	var response any
+	var contentHash string
+	switch format {
+	case "json":
+		bytes, err := json.Marshal(report)
+		if err != nil {
+			return nil, err
+		}
+		contentHash = hashBytes(bytes)
+		report.ContentHash = contentHash
+		response = report
+	case "csv":
+		bytes, err := renderAuditReportCSV(report)
+		if err != nil {
+			return nil, err
+		}
+		download := reportDownloadEnvelope(report, format, bytes, "text/csv")
+		contentHash = download.ContentHash
+		response = download
+	case "pdf":
+		bytes := renderAuditReportPDF(report)
+		download := reportDownloadEnvelope(report, format, bytes, "application/pdf")
+		contentHash = download.ContentHash
+		response = download
+	}
+
+	if err := s.persistReportGeneratedEvent(ctx, report, format, contentHash); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (s *processAuditAndCompliancesrvc) persistReportGeneratedEvent(ctx context.Context, report auditReport, format string, contentHash string) error {
+	if s.DB == nil {
+		return nil
+	}
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
+	evt := pacevent.ReportGeneratedEvent{
+		ReportID:    report.ReportID,
+		Scope:       report.Scope,
+		Format:      format,
+		DID:         report.DID,
+		GeneratedBy: report.GeneratedBy,
+		GeneratedAt: time.Now().UTC(),
+		ContentHash: contentHash,
+		Summary: map[string]int{
+			"totalEvents": report.Summary.TotalEvents,
+			"totalChecks": report.Summary.TotalChecks,
+			"passed":      report.Summary.Passed,
+			"failed":      report.Summary.Failed,
+			"warnings":    report.Summary.Warnings,
+			"needsReview": report.Summary.NeedsReview,
+		},
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	}
+	if err := baseevent.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance); err != nil {
+		return fmt.Errorf("could not create report event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("could not commit report event: %w", err)
+	}
+	return nil
 }
 
 func (s *processAuditAndCompliancesrvc) Monitor(ctx context.Context, p *processauditandcompliance.MonitorPayload) (res any, err error) {

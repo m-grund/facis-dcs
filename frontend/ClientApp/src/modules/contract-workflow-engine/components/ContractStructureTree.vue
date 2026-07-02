@@ -19,6 +19,11 @@ const expanded = ref(true)
 const children = computed(() => props.contracts.filter((c) => c.parent_contract_did === props.rootDid))
 
 const hasGrandchildren = (child: Contract) => props.contracts.some((c) => c.parent_contract_did === child.did)
+
+const didSuffix = (did: string) => {
+  const parts = did.split(':')
+  return parts[parts.length - 1] ?? did
+}
 </script>
 
 <template>
@@ -39,7 +44,7 @@ const hasGrandchildren = (child: Contract) => props.contracts.some((c) => c.pare
           class="link text-sm font-medium link-hover"
           target="_blank"
         >
-          {{ child.name ?? child.did.split(':').at(-1) }}
+          {{ child.name ?? didSuffix(child.did) }}
         </RouterLink>
 
         <span class="badge badge-ghost badge-xs">{{ child.state }}</span>

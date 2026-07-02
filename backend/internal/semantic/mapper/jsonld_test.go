@@ -86,7 +86,7 @@ func TestBuildTemplateJSONLDPassesThrough(t *testing.T) {
 		DID:          "did:web:example:template:1",
 		Version:      1,
 		State:        "APPROVED",
-		TemplateType: "SUB_CONTRACT",
+		TemplateType: "COMPONENT",
 		Name:         &name,
 		CreatedBy:    "user-1",
 		CreatedAt:    fixedTime(),

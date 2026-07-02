@@ -140,28 +140,14 @@ func TestAuditContractContentAcceptsValidJurisdiction(t *testing.T) {
 }
 
 func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
-	contract := map[string]any{
-		"@context": []any{"https://w3id.org/facis/sla/ontology"},
-		"@id":      "urn:facis:dcs:contract:sla:example-001",
-		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
-		"parties": []any{
-			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier"},
-			map[string]any{"@type": "dcs:CompanyParty", "role": "customer"},
-		},
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-		},
-		"service": map[string]any{
-			"sla": map[string]any{
-				"availability":   99.95,
-				"responseTime":   10,
-				"resolutionTime": 120,
-			},
-		},
-		"signature": map[string]any{
-			"requiredLevel": "AES",
-		},
-	}
+	contract := canonicalAuditContract()
+	contract["semanticConditionValues"] = append(contract["semanticConditionValues"].([]any),
+		map[string]any{"conditionId": "condition-legal", "parameterName": "contract.jurisdiction", "parameterValue": "DEU"},
+		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.availability", "parameterValue": 99.95},
+		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.responseTime", "parameterValue": 10},
+		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.resolutionTime", "parameterValue": 120},
+		map[string]any{"conditionId": "condition-signature", "parameterName": "signature.requiredLevel", "parameterValue": "AES"},
+	)
 
 	findings, err := AuditContractContent(contract, nil, ContractContentAuditMetadata{})
 	policy, policyErr := normalizeContractContentPolicy(nil, ContractContentAuditMetadata{})
@@ -171,7 +157,7 @@ func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 	require.NotEmpty(t, policy.SHACLFiles)
 	require.NotEmpty(t, policy.SHACLShapes)
 	require.NotEmpty(t, findings)
-	require.Contains(t, policyFindingRuleIDs(findings), "dcs:ContractShape-PROP-002")
+	require.Contains(t, policyFindingRuleIDs(findings), "dcs:CanonicalContractShape-PROP-002")
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-POLICY-003", "info"))
 }
 
@@ -296,6 +282,11 @@ func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testi
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-postal-code", "error"))
+	finding := requirePolicyFinding(t, findings, "urn:uuid:policy-country")
+	require.Equal(t, "in", finding.Operator)
+	require.Equal(t, []any{"DEU", "AUT", "CHE"}, finding.ExpectedValues)
+	require.Empty(t, finding.ActualValue)
+	require.Contains(t, finding.Requirement, "must be one of DEU, AUT, CHE")
 }
 
 func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) {
@@ -308,6 +299,42 @@ func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) 
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
+}
+
+func TestValidateContractPolicySatisfactionAcceptsSatisfiedEmbeddedODRLPolicies(t *testing.T) {
+	contract := canonicalAuditContract()
+
+	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
+
+	require.NoError(t, err)
+}
+
+func TestValidateContractPolicySatisfactionRejectsEmbeddedODRLViolation(t *testing.T) {
+	contract := canonicalAuditContract()
+	values := contract["semanticConditionValues"].([]any)
+	values[0].(map[string]any)["parameterValue"] = "USA"
+
+	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
+
+	var policyErr ContractPolicySatisfactionError
+	require.ErrorAs(t, err, &policyErr)
+	require.Len(t, policyErr.Findings, 1)
+	require.Equal(t, "urn:uuid:policy-country", policyErr.Findings[0].RuleID)
+	require.Equal(t, "error", policyErr.Findings[0].Severity)
+	require.Contains(t, err.Error(), "contract policy validation failed")
+}
+
+func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLValue(t *testing.T) {
+	contract := canonicalAuditContract()
+	contract["semanticConditionValues"] = []any{}
+
+	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
+
+	var policyErr ContractPolicySatisfactionError
+	require.ErrorAs(t, err, &policyErr)
+	require.Len(t, policyErr.Findings, 2)
+	require.Equal(t, "urn:uuid:policy-country", policyErr.Findings[0].RuleID)
+	require.Equal(t, "urn:uuid:policy-postal-code", policyErr.Findings[1].RuleID)
 }
 
 func TestAuditContractContentMapsCanonicalSemanticValuesToPartyShape(t *testing.T) {
@@ -382,6 +409,124 @@ func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testin
 
 	require.True(t, hasFindingSeverity(findings, "jurisdiction-allowed", "info"))
 	require.True(t, hasFindingSeverity(findings, "availability-minimum", "info"))
+	availabilityFinding := requirePolicyFinding(t, findings, "availability-minimum")
+	require.Equal(t, "gte", availabilityFinding.Operator)
+	require.Equal(t, 99.5, availabilityFinding.ActualValue)
+	require.Equal(t, 99.5, availabilityFinding.ExpectedValue)
+	require.Equal(t, "service.sla.availability must be >= 99.5", availabilityFinding.Requirement)
+	jurisdictionFinding := requirePolicyFinding(t, findings, "jurisdiction-allowed")
+	require.Equal(t, "in", jurisdictionFinding.Operator)
+	require.Equal(t, []any{"DEU", "AUT", "CHE"}, jurisdictionFinding.ExpectedValues)
+	require.Equal(t, "DEU", jurisdictionFinding.ActualValue)
+}
+
+func TestAuditContractContentShowsPolicyDetailsForMissingRuntimeValue(t *testing.T) {
+	contract := canonicalAuditContractWithTemplateParties()
+	values := contract["semanticConditionValues"].([]any)
+	contract["semanticConditionValues"] = values[:len(values)-2]
+
+	findings := auditContractValidationProfile(contract, ValidationProfile{
+		ID:      "runtime-values",
+		Version: "test",
+		Rules: []ValidationRule{
+			{
+				ID:       "availability-minimum",
+				Type:     ValidationRuleComparison,
+				Severity: "error",
+				Message:  "Service availability must satisfy policy minimum.",
+				Target:   "service.sla.availability",
+				Operator: "gte",
+				Value:    99.9,
+			},
+		},
+	})
+
+	finding := requirePolicyFinding(t, findings, "availability-minimum")
+	require.Equal(t, "error", finding.Severity)
+	require.Equal(t, "gte", finding.Operator)
+	require.Equal(t, 99.9, finding.ExpectedValue)
+	require.Empty(t, finding.ActualValue)
+	require.Equal(t, "service.sla.availability must be >= 99.9", finding.Requirement)
+}
+
+func TestAuditContractContentShowsPolicyDetailsForLowRuntimeValue(t *testing.T) {
+	contract := canonicalAuditContractWithTemplateParties()
+
+	findings := auditContractValidationProfile(contract, ValidationProfile{
+		ID:      "runtime-values",
+		Version: "test",
+		Rules: []ValidationRule{
+			{
+				ID:       "availability-minimum",
+				Type:     ValidationRuleComparison,
+				Severity: "error",
+				Target:   "service.sla.availability",
+				Operator: "gte",
+				Value:    99.9,
+			},
+		},
+	})
+
+	finding := requirePolicyFinding(t, findings, "availability-minimum")
+	require.Equal(t, "error", finding.Severity)
+	require.Equal(t, "gte", finding.Operator)
+	require.Equal(t, 99.5, finding.ActualValue)
+	require.Equal(t, 99.9, finding.ExpectedValue)
+	require.Equal(t, "service.sla.availability must be >= 99.9", finding.Requirement)
+}
+
+func TestAuditContractContentShowsPolicyDetailsForTypedODRLRightOperand(t *testing.T) {
+	contract := canonicalAuditContract()
+
+	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	finding := requirePolicyFinding(t, findings, "urn:uuid:policy-postal-code")
+	require.Equal(t, "eq", finding.Operator)
+	require.Equal(t, "91448", finding.ActualValue)
+	require.Equal(t, "91448", finding.ExpectedValue)
+	require.Equal(t, "urn:uuid:field-company-postal-code must equal 91448", finding.Requirement)
+}
+
+func TestAuditContractContentShowsPolicyDetailsForSHACLConstraints(t *testing.T) {
+	contract := map[string]any{
+		"@type": "dcs:Contract",
+		"parties": []any{
+			map[string]any{"@type": "dcs:CompanyParty"},
+		},
+		"service": map[string]any{"sla": map[string]any{"availability": 98.5}},
+	}
+	minCount := 2
+	minInclusive := 99.9
+	policy := map[string]any{
+		"policySetId": "facis.dcs.contract.structure-semantics",
+		"version":     "test",
+		"shaclShapes": []any{
+			map[string]any{
+				"id":          "FACIS-CONTRACT-SHACL-SLA",
+				"title":       "SLA contract must satisfy semantic shape",
+				"targetClass": "dcs:Contract",
+				"properties": []any{
+					map[string]any{"id": "party-count", "path": "parties", "minCount": minCount, "name": "Contract parties"},
+					map[string]any{"id": "availability-min", "path": "service.sla.availability", "minInclusive": minInclusive, "name": "Availability"},
+				},
+			},
+		},
+	}
+
+	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	partyFinding := requirePolicyFinding(t, findings, "party-count")
+	require.Equal(t, "minCount", partyFinding.Operator)
+	require.Equal(t, 1, partyFinding.ActualValue)
+	require.Equal(t, minCount, partyFinding.ExpectedValue)
+	require.Equal(t, "parties requires at least 2 value(s)", partyFinding.Requirement)
+	availabilityFinding := requirePolicyFinding(t, findings, "availability-min")
+	require.Equal(t, "gte", availabilityFinding.Operator)
+	require.Equal(t, 98.5, availabilityFinding.ActualValue)
+	require.Equal(t, minInclusive, availabilityFinding.ExpectedValue)
+	require.Equal(t, "service.sla.availability must be >= 99.9", availabilityFinding.Requirement)
 }
 
 func canonicalAuditContract() map[string]any {
@@ -527,4 +672,15 @@ func hasFindingSeverity(findings []PolicyFinding, ruleID string, severity string
 		}
 	}
 	return false
+}
+
+func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string) PolicyFinding {
+	t.Helper()
+	for _, finding := range findings {
+		if finding.RuleID == ruleID {
+			return finding
+		}
+	}
+	require.Failf(t, "finding not found", "ruleID %q not found in %v", ruleID, policyFindingRuleIDs(findings))
+	return PolicyFinding{}
 }

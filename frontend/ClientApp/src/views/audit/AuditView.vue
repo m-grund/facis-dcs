@@ -1,27 +1,32 @@
 <script setup lang="ts">
-import type { AuditScope } from '@/models/requests/auditing-request'
-import type { AuditFinding } from '@/models/responses/auditing-response'
+import type { AuditReportFormat, AuditScope } from '@/models/requests/auditing-request'
+import type {
+  AuditFinding,
+  AuditReport,
+  AuditReportDownload,
+  AuditReportResponse,
+} from '@/models/responses/auditing-response'
 import { auditingService } from '@/services/auditing-service'
 import { computed, ref, watch } from 'vue'
 
 const auditFindingsByScope = ref<Partial<Record<AuditScope, AuditFinding[]>>>({})
-const auditReportsByScope = ref<Partial<Record<AuditScope, unknown>>>({})
+const auditReportsByScope = ref<Partial<Record<AuditScope, AuditReportResponse>>>({})
 const auditErrorsByScope = ref<Partial<Record<AuditScope, string>>>({})
 const executedAuditScopes = ref<Partial<Record<AuditScope, boolean>>>({})
 const selectedFindingId = ref<number | string | null>(null)
 const auditLoadingScope = ref<AuditScope | null>(null)
 const reportLoadingScope = ref<AuditScope | null>(null)
+const reportLoadingFormat = ref<AuditReportFormat | null>(null)
 const selectedScope = ref<AuditScope>('contracts')
 type AuditResult = 'passed' | 'failed' | 'review'
 type AuditTab = 'checks' | 'timeline'
-type TableFilterKey = 'result' | 'category' | 'status' | 'component' | 'did'
+type TableFilterKey = 'result' | 'category' | 'component' | 'did'
 
 const emptyValueLabel = '-'
 const activeAuditTab = ref<AuditTab>('checks')
 const tableFilters = ref<Record<TableFilterKey, Record<string, boolean>>>({
   result: {},
   category: {},
-  status: {},
   component: {},
   did: {},
 })
@@ -29,6 +34,7 @@ const tableFilters = ref<Record<TableFilterKey, Record<string, boolean>>>({
 const scopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'templates', label: 'Templates' },
   { value: 'contracts', label: 'Contracts' },
+  { value: 'signatures', label: 'Signatures' },
   { value: 'archive', label: 'Archive' },
 ]
 
@@ -46,7 +52,6 @@ const filteredFindings = computed(() => {
     return (
       tableFilterEnabled('result', auditResultLabel(finding)) &&
       tableFilterEnabled('category', finding.category) &&
-      tableFilterEnabled('status', finding.status) &&
       tableFilterEnabled('component', finding.component) &&
       tableFilterEnabled('did', finding.did)
     )
@@ -86,6 +91,11 @@ const selectedFindingDetailRows = computed(() => {
     { label: 'Rule ID', value: stringDetail(eventData?.ruleId) },
     { label: 'Policy Set', value: stringDetail(eventData?.policySetId) },
     { label: 'Policy Version', value: stringDetail(eventData?.policyVersion) },
+    { label: 'Requirement', value: detailValue(eventData?.requirement) },
+    { label: 'Actual value', value: detailValue(eventData?.actualValue) },
+    { label: 'Expected value', value: detailValue(eventData?.expectedValue) },
+    { label: 'Expected values', value: detailValue(eventData?.expectedValues) },
+    { label: 'Operator', value: detailValue(eventData?.operator) },
     { label: 'Semantic Path', value: stringDetail(eventData?.semanticPath) },
     { label: 'Path', value: stringDetail(eventData?.path) },
     { label: 'Ontology Term', value: stringDetail(eventData?.ontologyTerm) },
@@ -116,16 +126,14 @@ const auditHasPassed = computed(
   () => hasExecutedAudit.value && !selectedAuditLoading.value && !error.value && checkFindings.value.length === 0,
 )
 const tableFilterGroups: { key: TableFilterKey; label: string }[] = [
-  { key: 'result', label: 'Result' },
+  { key: 'result', label: 'Status' },
   { key: 'category', label: 'Finding' },
-  { key: 'status', label: 'Severity' },
   { key: 'component', label: 'Component' },
   { key: 'did', label: 'DID' },
 ]
 const tableFilterOptions = computed<Record<TableFilterKey, string[]>>(() => ({
   result: uniqueTableValues(checkFindings.value.map((finding) => auditResultLabel(finding))),
   category: uniqueTableValues(checkFindings.value.map((finding) => finding.category)),
-  status: uniqueTableValues(checkFindings.value.map((finding) => finding.status)),
   component: uniqueTableValues(checkFindings.value.map((finding) => finding.component)),
   did: uniqueTableValues(checkFindings.value.map((finding) => finding.did)),
 }))
@@ -172,28 +180,36 @@ const executeAudit = async () => {
   }
 }
 
-const generateReport = async () => {
+const generateReport = async (format: AuditReportFormat) => {
   const scope = selectedScope.value
   reportLoadingScope.value = scope
+  reportLoadingFormat.value = format
   auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: undefined }
   try {
-    const scopeReport = await auditingService.report({ scope })
+    const scopeReport = await auditingService.report({ scope, format })
+    if (isReportDownload(scopeReport)) {
+      downloadReport(scopeReport)
+    } else {
+      downloadJsonReport(scopeReport)
+    }
     auditReportsByScope.value = { ...auditReportsByScope.value, [scope]: scopeReport }
   } catch (err) {
     console.error('Audit Report Error:', err)
     auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: 'Audit report could not be generated.' }
   } finally {
     reportLoadingScope.value = null
+    reportLoadingFormat.value = null
   }
 }
 
 const formatLabel = (value: string) => value.split('_').join(' ')
 
-const reportText = computed(() => {
-  if (!report.value) {
-    return ''
+const reportSummary = computed(() => {
+  if (!report.value || !isObjectRecord(report.value)) {
+    return null
   }
-  return typeof report.value === 'string' ? report.value : JSON.stringify(report.value, null, 2)
+  const summary = report.value.summary
+  return isObjectRecord(summary) ? summary : null
 })
 const selectedFindingRawDetails = computed(() => {
   if (!selectedFinding.value?.details) {
@@ -226,6 +242,37 @@ function setAllTableFilters(key: TableFilterKey, enabled: boolean): void {
   }
 }
 
+function isReportDownload(value: AuditReportResponse): value is AuditReportDownload {
+  return (
+    isObjectRecord(value) && (value.format === 'csv' || value.format === 'pdf') && typeof value.content === 'string'
+  )
+}
+
+function downloadJsonReport(reportData: AuditReport): void {
+  const filename = `${reportData.reportId || `audit-report-${reportData.scope}`}.json`
+  downloadBlob(JSON.stringify(reportData, null, 2), 'application/json', filename)
+}
+
+function downloadReport(reportDownload: AuditReportDownload): void {
+  const bytes =
+    reportDownload.encoding === 'base64'
+      ? Uint8Array.from(atob(reportDownload.content), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(reportDownload.content)
+  downloadBlob(bytes, reportDownload.contentType, reportDownload.filename)
+}
+
+function downloadBlob(content: BlobPart, contentType: string, filename: string): void {
+  const blob = new Blob([content], { type: contentType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function selectFinding(finding: AuditFinding): void {
   selectedFindingId.value = finding.id
 }
@@ -241,6 +288,23 @@ function stringDetail(value: unknown): string {
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value)
+  }
+  return emptyValueLabel
+}
+
+function detailValue(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) {
+    return value
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    const values = value.map((item) => detailValue(item)).filter((item) => item !== emptyValueLabel)
+    return values.length ? values.join(', ') : emptyValueLabel
+  }
+  if (isObjectRecord(value)) {
+    return JSON.stringify(value)
   }
   return emptyValueLabel
 }
@@ -308,13 +372,16 @@ function auditResult(finding: AuditFinding): AuditResult {
   return 'review'
 }
 
-function auditResultLabel(finding: AuditFinding): 'Passed' | 'Failed' | 'Needs review' {
+function auditResultLabel(finding: AuditFinding): 'Passed' | 'Failed' | 'Warning' | 'Needs review' {
   const result = auditResult(finding)
   if (result === 'passed') {
     return 'Passed'
   }
   if (result === 'failed') {
     return 'Failed'
+  }
+  if (isWarningSeverity(finding)) {
+    return 'Warning'
   }
   return 'Needs review'
 }
@@ -327,6 +394,9 @@ function auditResultSummary(finding: AuditFinding): string {
   }
   if (result === 'failed') {
     return assertion ? `Failed: ${assertion}` : 'Check failed'
+  }
+  if (isWarningSeverity(finding)) {
+    return assertion ? `Warning: ${assertion}` : 'Warning'
   }
   return assertion ? `Review: ${assertion}` : 'Review required'
 }
@@ -342,13 +412,26 @@ function checkAssertion(finding: AuditFinding): string {
     .map((line) => line.trim())
     .find(
       (line) =>
-        line && !line.startsWith('Object DID:') && !line.startsWith('Rule:') && !line.startsWith('Semantic path:'),
+        line &&
+        !line.startsWith('Object DID:') &&
+        !line.startsWith('Rule:') &&
+        !line.startsWith('Semantic path:') &&
+        !line.startsWith('Requirement:') &&
+        !line.startsWith('Actual value:') &&
+        !line.startsWith('Expected value:') &&
+        !line.startsWith('Expected values:') &&
+        !line.startsWith('Operator:'),
     )
   return descriptionLine ?? ''
 }
 
 function severityLabel(finding: AuditFinding): string {
   return finding.status?.trim() ?? 'not set'
+}
+
+function isWarningSeverity(finding: AuditFinding): boolean {
+  const severity = finding.status?.trim().toLowerCase()
+  return severity === 'warning' || severity === 'warn'
 }
 
 function severityBadgeClass(finding: AuditFinding): 'badge-success' | 'badge-error' | 'badge-warning' | 'badge-ghost' {
@@ -478,14 +561,41 @@ function formatDateTime(value?: string): string {
           <span v-else>Execute Audit</span>
         </button>
 
-        <button
-          class="btn rounded-box btn-secondary sm:self-end"
-          :disabled="reportLoading || auditLoading || !hasExecutedAudit"
-          @click="generateReport"
-        >
-          <span v-if="selectedReportLoading" class="loading loading-sm loading-spinner"></span>
-          <span v-else>Generate Report</span>
-        </button>
+        <div class="flex flex-wrap gap-2 sm:self-end">
+          <button
+            class="btn rounded-box btn-outline"
+            :disabled="reportLoading || auditLoading || !hasExecutedAudit"
+            @click="generateReport('json')"
+          >
+            <span
+              v-if="selectedReportLoading && reportLoadingFormat === 'json'"
+              class="loading loading-sm loading-spinner"
+            ></span>
+            <span v-else>JSON</span>
+          </button>
+          <button
+            class="btn rounded-box btn-outline"
+            :disabled="reportLoading || auditLoading || !hasExecutedAudit"
+            @click="generateReport('csv')"
+          >
+            <span
+              v-if="selectedReportLoading && reportLoadingFormat === 'csv'"
+              class="loading loading-sm loading-spinner"
+            ></span>
+            <span v-else>CSV</span>
+          </button>
+          <button
+            class="btn rounded-box btn-outline"
+            :disabled="reportLoading || auditLoading || !hasExecutedAudit"
+            @click="generateReport('pdf')"
+          >
+            <span
+              v-if="selectedReportLoading && reportLoadingFormat === 'pdf'"
+              class="loading loading-sm loading-spinner"
+            ></span>
+            <span v-else>PDF</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -562,8 +672,7 @@ function formatDateTime(value?: string): string {
         <table v-if="activeAuditTab === 'checks'" class="table table-zebra">
           <thead>
             <tr>
-              <th>Result</th>
-              <th>Severity</th>
+              <th>Status</th>
               <th>DID</th>
               <th>Details</th>
             </tr>
@@ -585,11 +694,6 @@ function formatDateTime(value?: string): string {
                 </span>
                 <div class="mt-1 text-xs opacity-70">{{ formatLabel(finding.category) }}</div>
               </td>
-              <td>
-                <span class="badge badge-outline" :class="severityBadgeClass(finding)">
-                  {{ severityLabel(finding) }}
-                </span>
-              </td>
               <td>{{ finding.did ?? '-' }}</td>
               <td class="max-w-xl min-w-72">
                 <div class="font-medium">{{ checkAssertion(finding) || finding.title || 'Audit finding' }}</div>
@@ -600,7 +704,7 @@ function formatDateTime(value?: string): string {
               </td>
             </tr>
             <tr v-if="filteredFindings.length === 0">
-              <td colspan="4" class="py-8 text-center opacity-70">
+              <td colspan="3" class="py-8 text-center opacity-70">
                 {{
                   hasExecutedAudit ? 'No checks match the selected filters.' : 'Select a scope and execute an audit.'
                 }}
@@ -632,7 +736,6 @@ function formatDateTime(value?: string): string {
               <td class="whitespace-nowrap">{{ formatDateTime(event.created_at) }}</td>
               <td class="max-w-xl min-w-72">
                 <div class="font-medium">{{ event.title ?? formatLabel(rawEventType(event) ?? 'Audit event') }}</div>
-                <div class="text-xs opacity-70">{{ event.component ?? '-' }}</div>
               </td>
               <td>{{ actorFromEventData(eventDataFromFinding(event)) ?? '-' }}</td>
               <td>{{ event.did ?? '-' }}</td>
@@ -710,8 +813,30 @@ function formatDateTime(value?: string): string {
     </div>
 
     <div v-if="report" class="rounded-box border border-base-content/10 bg-base-200 p-4">
-      <h3 class="mb-3 font-bold">Structured Audit Report</h3>
-      <pre class="text-xs break-words whitespace-pre-wrap">{{ reportText }}</pre>
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 class="font-bold">Structured Audit Report</h3>
+        <div v-if="isObjectRecord(report)" class="text-xs opacity-70">
+          {{ stringDetail(report.reportId) }} · {{ stringDetail(report.contentHash) }}
+        </div>
+      </div>
+      <div v-if="reportSummary" class="stats mb-4 w-full stats-vertical bg-base-100 shadow sm:stats-horizontal">
+        <div class="stat">
+          <div class="stat-title">Events</div>
+          <div class="stat-value text-xl">{{ detailValue(reportSummary.totalEvents) }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Checks</div>
+          <div class="stat-value text-xl">{{ detailValue(reportSummary.totalChecks) }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Failed</div>
+          <div class="stat-value text-xl text-error">{{ detailValue(reportSummary.failed) }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Needs Review</div>
+          <div class="stat-value text-xl text-warning">{{ detailValue(reportSummary.needsReview) }}</div>
+        </div>
+      </div>
     </div>
   </section>
 </template>

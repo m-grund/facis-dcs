@@ -14,6 +14,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
@@ -61,7 +62,19 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	}
 
 	if data.ContractData == nil {
-		return fmt.Errorf("could not read data from contract %s: %w", cmd.DID, err)
+		return fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
+	}
+
+	if err := validation.ValidateContractPolicySatisfaction(
+		*data.ContractData,
+		validation.ContractContentAuditMetadata{
+			ContractDID:     cmd.DID,
+			ContractVersion: fmt.Sprint(data.ContractVersion),
+			AuditedBy:       cmd.AppliedBy,
+			HolderDID:       cmd.HolderDID,
+		},
+	); err != nil {
+		return err
 	}
 
 	// Compute SHA-256 of the JSON-LD as the canonical signing payload.

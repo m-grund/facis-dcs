@@ -19,7 +19,7 @@ export interface PreprocessedContractData {
 /**
  * Preprocesses contract data (DcsContractData) for use in the contract workflow engine:
  * - Injects sub-template blocks as MergedApprovedTemplate virtual blocks into the main layout
- * - Supports frame contracts with multiple sub-template references
+ * - Supports composed contract templates with multiple sub-template references
  */
 export function useContractDataPreprocess() {
   function preprocessContractData(cd: unknown): PreprocessedContractData | null {
@@ -52,10 +52,9 @@ export function useContractDataPreprocess() {
       const mergedBlock: MergedApprovedTemplateBlock = {
         '@type': 'dcs:MergedApprovedTemplate',
         '@id': approvedBlock['@id'],
-        'dcs:templateDid': (approvedBlock as import('@/models/dcs-jsonld').DcsApprovedTemplate)['dcs:templateDid'],
-        'dcs:version': (approvedBlock as import('@/models/dcs-jsonld').DcsApprovedTemplate)['dcs:version'],
-        'dcs:documentNumber':
-          (approvedBlock as import('@/models/dcs-jsonld').DcsApprovedTemplate)['dcs:documentNumber'] ?? '',
+        'dcs:templateDid': approvedBlock['dcs:templateDid'],
+        'dcs:version': approvedBlock['dcs:version'],
+        'dcs:documentNumber': approvedBlock['dcs:documentNumber'] ?? '',
       }
       const idx = blocks.findIndex((b) => b['@id'] === approvedBlock['@id'])
       if (idx >= 0) blocks[idx] = mergedBlock

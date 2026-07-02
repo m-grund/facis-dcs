@@ -189,6 +189,18 @@ func stringPtrsEqual(a, b *string) bool {
 	return *a == *b
 }
 
+func archiveTimestampsEqual(a, b string) bool {
+	aTime, err := time.Parse(time.RFC3339Nano, a)
+	if err != nil {
+		return false
+	}
+	bTime, err := time.Parse(time.RFC3339Nano, b)
+	if err != nil {
+		return false
+	}
+	return aTime.Equal(bTime)
+}
+
 func selectArchiveNotaryEvent(archiveEntryID string, receipt *archiveNotaryReceiptData, events []archiveNotaryEvent) (archiveNotaryEvent, error) {
 	if receipt == nil {
 		return archiveNotaryEvent{}, fmt.Errorf("archive notary receipt is required for %s", archiveEntryID)
@@ -197,7 +209,7 @@ func selectArchiveNotaryEvent(archiveEntryID string, receipt *archiveNotaryRecei
 		if receipt.ArchiveEntryID == archiveEntryID &&
 			receipt.EventHash == event.EventHash &&
 			stringPtrsEqual(receipt.PreviousHash, event.PreviousHash) &&
-			receipt.ReceivedAt == event.ReceivedAt {
+			archiveTimestampsEqual(receipt.ReceivedAt, event.ReceivedAt) {
 			return event, nil
 		}
 	}
@@ -264,7 +276,7 @@ func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	if notaryEvent.EventType != "ARCHIVE_STORED" || notaryEvent.DID != entry.DID || notaryEvent.ContractVersion != entry.ContractVersion {
 		return nil, fmt.Errorf("ORCE archive audit log event identity mismatch for %s", archiveEntryID)
 	}
-	if receipt.ArchiveEntryID != archiveEntryID || receipt.EventHash != notaryEvent.EventHash || !stringPtrsEqual(receipt.PreviousHash, notaryEvent.PreviousHash) || receipt.ReceivedAt != notaryEvent.ReceivedAt {
+	if receipt.ArchiveEntryID != archiveEntryID || receipt.EventHash != notaryEvent.EventHash || !stringPtrsEqual(receipt.PreviousHash, notaryEvent.PreviousHash) || !archiveTimestampsEqual(receipt.ReceivedAt, notaryEvent.ReceivedAt) {
 		return nil, fmt.Errorf("archive notary receipt does not match ORCE audit log for %s", archiveEntryID)
 	}
 

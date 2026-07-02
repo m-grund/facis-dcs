@@ -20,16 +20,20 @@ type TemplatePolicyAuditMetadata struct {
 }
 
 type PolicyFinding struct {
-	PolicySetID   string `json:"policySetId"`
-	PolicyVersion string `json:"policyVersion"`
-	RuleID        string `json:"ruleId"`
-	Title         string `json:"title"`
-	Severity      string `json:"severity"`
-	Message       string `json:"message"`
-	Path          string `json:"path,omitempty"`
-	SemanticPath  string `json:"semanticPath,omitempty"`
-	OntologyTerm  string `json:"ontologyTerm,omitempty"`
-	Requirement   string `json:"requirement,omitempty"`
+	PolicySetID    string `json:"policySetId"`
+	PolicyVersion  string `json:"policyVersion"`
+	RuleID         string `json:"ruleId"`
+	Title          string `json:"title"`
+	Severity       string `json:"severity"`
+	Message        string `json:"message"`
+	Path           string `json:"path,omitempty"`
+	SemanticPath   string `json:"semanticPath,omitempty"`
+	OntologyTerm   string `json:"ontologyTerm,omitempty"`
+	Requirement    string `json:"requirement,omitempty"`
+	ActualValue    any    `json:"actualValue,omitempty"`
+	ExpectedValue  any    `json:"expectedValue,omitempty"`
+	ExpectedValues []any  `json:"expectedValues,omitempty"`
+	Operator       string `json:"operator,omitempty"`
 }
 
 type templatePolicySet struct {
@@ -40,12 +44,13 @@ type templatePolicySet struct {
 }
 
 type templatePolicyRule struct {
-	ID           string         `json:"id"`
-	Title        string         `json:"title"`
-	Severity     string         `json:"severity"`
-	Builtin      string         `json:"builtin"`
-	OntologyTerm string         `json:"ontologyTerm"`
-	Parameters   map[string]any `json:"parameters"`
+	ID                     string         `json:"id"`
+	Title                  string         `json:"title"`
+	Severity               string         `json:"severity"`
+	Builtin                string         `json:"builtin"`
+	OntologyTerm           string         `json:"ontologyTerm"`
+	AppliesToTemplateTypes []string       `json:"appliesToTemplateTypes"`
+	Parameters             map[string]any `json:"parameters"`
 }
 
 func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetadata) ([]PolicyFinding, error) {
@@ -63,6 +68,9 @@ func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetad
 		findings = append(findings, templateStructureFinding(policySet, "template data must use the canonical dcs:documentStructure envelope"))
 	}
 	for _, rule := range policySet.Rules {
+		if !templatePolicyRuleApplies(rule, metadata.TemplateType) {
+			continue
+		}
 		findings = append(findings, evaluateTemplatePolicyRule(policySet, rule, data, metadata)...)
 	}
 	return findings, nil
@@ -114,6 +122,12 @@ func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolic
 		return auditCanonicalContractData(policySet, rule, data)
 	case "canonical_policy_operands":
 		return auditCanonicalPolicyOperands(policySet, rule, data)
+	case "component_document_structure_integrity":
+		return auditComponentDocumentStructureIntegrity(policySet, rule, data)
+	case "component_contract_data_integrity":
+		return auditComponentContractDataIntegrity(policySet, rule, data)
+	case "component_policy_operand_integrity":
+		return auditComponentPolicyOperandIntegrity(policySet, rule, data)
 	case "finished_template_has_clause_semantics":
 		return auditFinishedTemplateHasClauseSemantics(policySet, rule, data)
 	case "finished_template_state":
@@ -129,6 +143,26 @@ func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolic
 	default:
 		return []PolicyFinding{newPolicyFinding(policySet, rule, "Unsupported policy builtin "+rule.Builtin, "rules."+rule.ID, "")}
 	}
+}
+
+func templatePolicyRuleApplies(rule templatePolicyRule, templateType string) bool {
+	if len(rule.AppliesToTemplateTypes) == 0 {
+		return true
+	}
+	normalizedTemplateType := normalizeTemplatePolicyType(templateType)
+	for _, candidate := range rule.AppliesToTemplateTypes {
+		if normalizeTemplatePolicyType(candidate) == normalizedTemplateType {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeTemplatePolicyType(templateType string) string {
+	normalized := strings.ToUpper(strings.TrimSpace(templateType))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	return normalized
 }
 
 func auditCanonicalDocumentStructure(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
@@ -194,9 +228,38 @@ func auditCanonicalDocumentStructure(policySet *templatePolicySet, rule template
 	return findings
 }
 
+func auditComponentDocumentStructureIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	structure, ok := topLevelValue(data, "documentStructure").(map[string]any)
+	if !ok {
+		return nil
+	}
+	return auditDocumentStructureIntegrity(policySet, rule, structure, false)
+}
+
+func auditComponentContractDataIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	if _, exists := topLevelValueExists(data, "contractData"); !exists {
+		return nil
+	}
+	return auditContractDataIntegrity(policySet, rule, data, false)
+}
+
+func auditComponentPolicyOperandIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	if _, exists := topLevelValueExists(data, "policies"); !exists {
+		return nil
+	}
+	return auditPolicyOperandIntegrity(policySet, rule, data, false)
+}
+
 func auditCanonicalContractData(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	return auditContractDataIntegrity(policySet, rule, data, true)
+}
+
+func auditContractDataIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData, requireAtLeastOne bool) []PolicyFinding {
 	requirements, ok := topLevelValue(data, "contractData").([]any)
 	if !ok || len(requirements) == 0 {
+		if !requireAtLeastOne && ok {
+			return nil
+		}
 		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:contractData must contain at least one dcs:DataRequirement", "dcs:contractData", "")}
 	}
 	findings := []PolicyFinding{}
@@ -245,9 +308,16 @@ func auditCanonicalContractData(policySet *templatePolicySet, rule templatePolic
 }
 
 func auditCanonicalPolicyOperands(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+	return auditPolicyOperandIntegrity(policySet, rule, data, true)
+}
+
+func auditPolicyOperandIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData, requirePoliciesArray bool) []PolicyFinding {
 	fieldIDs := canonicalContractDataFieldIDs(data)
 	policies, ok := topLevelValue(data, "policies").([]any)
 	if !ok {
+		if !requirePoliciesArray {
+			return nil
+		}
 		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:policies must be an array", "dcs:policies", "")}
 	}
 	findings := []PolicyFinding{}
@@ -275,6 +345,74 @@ func auditCanonicalPolicyOperands(policySet *templatePolicySet, rule templatePol
 		if _, ok := constraint["odrl:operator"].(map[string]any); !ok {
 			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:operator @id", policyID), "dcs:policies.odrl:operator", ""))
 		}
+	}
+	return findings
+}
+
+func auditDocumentStructureIntegrity(policySet *templatePolicySet, rule templatePolicyRule, structure map[string]any, requireCompleteLayout bool) []PolicyFinding {
+	findings := []PolicyFinding{}
+	blocks, ok := canonicalBlocks(structure)
+	if !ok || len(blocks) == 0 {
+		if requireCompleteLayout {
+			findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:blocks must contain at least one block", "dcs:documentStructure.dcs:blocks", ""))
+		}
+		return findings
+	}
+	blockIDs := map[string]bool{}
+	for index, rawBlock := range blocks {
+		block, ok := rawBlock.(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:blocks item %d must be an object", index), "dcs:documentStructure.dcs:blocks", ""))
+			continue
+		}
+		blockID, _ := block["@id"].(string)
+		if strings.TrimSpace(blockID) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:blocks item %d requires @id", index), "dcs:documentStructure.dcs:blocks", ""))
+			continue
+		}
+		if blockIDs[blockID] {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("duplicate document block @id %q", blockID), "dcs:documentStructure.dcs:blocks.@id", blockID))
+		}
+		blockIDs[blockID] = true
+		if strings.TrimSpace(stringMapValue(block, "@type")) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("document block %q requires @type", blockID), blockID, ""))
+		}
+	}
+	layout, ok := structure["dcs:layout"].([]any)
+	if !ok {
+		if requireCompleteLayout {
+			findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:layout must contain at least one layout node", "dcs:documentStructure.dcs:layout", ""))
+		}
+		return findings
+	}
+	rootCount := 0
+	for index, rawNode := range layout {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:layout item %d must be an object", index), "dcs:documentStructure.dcs:layout", ""))
+			continue
+		}
+		nodeID, _ := node["@id"].(string)
+		if isTrueValue(node["dcs:isRoot"]) {
+			rootCount++
+		} else if strings.TrimSpace(nodeID) != "" && !blockIDs[nodeID] {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("layout node %q references no declared block", nodeID), "dcs:documentStructure.dcs:layout", ""))
+		}
+		children, ok := jsonLDList(node["dcs:children"])
+		if !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("layout node %q must declare dcs:children as @list", nodeID), "dcs:documentStructure.dcs:layout.dcs:children", ""))
+			continue
+		}
+		for _, rawChild := range children {
+			child, _ := rawChild.(map[string]any)
+			childID, _ := child["@id"].(string)
+			if !blockIDs[childID] {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("layout references nonexistent block %q", childID), "dcs:documentStructure.dcs:layout.dcs:children", ""))
+			}
+		}
+	}
+	if requireCompleteLayout && rootCount != 1 {
+		findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:layout must contain exactly one root node, got %d", rootCount), "dcs:documentStructure.dcs:layout", ""))
 	}
 	return findings
 }
@@ -355,6 +493,10 @@ func auditMetadataComplete(policySet *templatePolicySet, rule templatePolicyRule
 	}
 	if strings.TrimSpace(metadata.State) == "" {
 		findings = append(findings, newPolicyFinding(policySet, rule, "template state is missing", "state", ""))
+	}
+	templateType := normalizeTemplatePolicyType(metadata.TemplateType)
+	if templateType != "CONTRACT_TEMPLATE" && templateType != "COMPONENT" {
+		findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("template type %q is not supported for audit", metadata.TemplateType), "template_type", ""))
 	}
 	if _, ok := topLevelValue(data, "metadata").(map[string]any); !ok {
 		findings = append(findings, newPolicyFinding(policySet, rule, "template metadata is missing", "dcs:metadata", ""))

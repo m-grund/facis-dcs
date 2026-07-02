@@ -79,9 +79,15 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")
+			Attribute("scope", String, "Scope that should be reported")
+			Attribute("format", String, "Report format: json, csv, or pdf")
+			Attribute("did", String, "Optional resource DID filter")
 		})
 		HTTP(func() {
 			GET("/pac/report")
+			Param("scope")
+			Param("format")
+			Param("did")
 			Response(StatusOK)
 		})
 		Result(Any)

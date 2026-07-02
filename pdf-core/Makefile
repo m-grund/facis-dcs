@@ -1,4 +1,4 @@
-.PHONY: all build gen test bdd test-all ontology clean start-pdf docker
+.PHONY: all build gen test bdd test-all ontology clean start-pdf start-pdf-binary docker
 
 VENV_PATH := .venv
 VENV_PYTHON        := $(VENV_PATH)/bin/python3
@@ -8,12 +8,15 @@ BEHAVE              := $(VENV_PATH)/bin/behave
 all: docs build
 
 docs: 
-	make -C ../docs/semantic-ontology/linkml/ clean all
+	make -C ../docs/semantic-ontology/linkml/ all
 	cp -r ../docs docs
 
 # Start pdf-core server (for development)
 start-pdf: all
 	air
+
+start-pdf-binary:
+	./pdf-core
 
 # ── Tests ────────────────────────────────────────────────────────────
 # Unit + integration tests (fast, no server required)

@@ -26,12 +26,6 @@ dcs:ContractShape
     sh:minInclusive 1 ;
   ] ;
   sh:property [
-    sh:path dcs:state ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
     sh:path dcs:derivedFromTemplate ;
     sh:nodeKind sh:IRI ;
     sh:maxCount 1 ;
