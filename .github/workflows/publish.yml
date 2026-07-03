@@ -7,7 +7,7 @@ on:
   
 jobs:
   dockerbuild:
-    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@main
+    uses: arnemileswinter/xfsc-dev-ops/.github/workflows/dockerbuild.yml@main
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
@@ -15,7 +15,7 @@ jobs:
       dockerfile: "deployment/docker/Dockerfile"
       harbor_config: "deployment/harbor.config"
   dockerbuild-pdf-core:
-    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@main
+    uses: arnemileswinter/xfsc-dev-ops/.github/workflows/dockerbuild.yml@main
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
@@ -24,9 +24,3 @@ jobs:
       buildContext: "pdf-core"
       service: "pdf-core"
       harbor_config: "deployment/harbor.config"
-  # helm:
-  #   uses: eclipse-xfsc/dev-ops/.github/workflows/helm.yml@main
-  #   secrets: inherit
-  #   with: 
-  #     buildContext:  "deployment/helm"
-  #     harbor_config: "deployment/harbor.config"
