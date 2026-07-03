@@ -7,6 +7,7 @@ on:
   
 jobs:
   dockerbuild:
+    # TODO: can use @main again as soon as dockerbuild.yml accepts secrets input.
     uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@harbor-env-patch
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
@@ -15,6 +16,7 @@ jobs:
       dockerfile: "deployment/docker/Dockerfile"
       harbor_config: "deployment/harbor.config"
   dockerbuild-pdf-core:
+    # TODO: can use @main again as soon as dockerbuild.yml accepts secrets input.
     uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@harbor-env-patch
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
