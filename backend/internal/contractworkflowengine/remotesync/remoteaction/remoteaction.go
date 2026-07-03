@@ -1,3 +1,9 @@
+// Package remoteaction is the outbound half of the single-writer-per-
+// aggregate forwarding used throughout contractworkflowengine/command: when
+// a handler finds it is not running on a contract's Origin peer, it calls
+// RemoteAction.Execute here to forward the exact same command, unmutated,
+// to the Origin over a did:web challenge-response-signed RPC (see
+// dcstodcs.NewDCSToDCSHttpClient and ADR-0004/ADR-0005).
 package remoteaction
 
 import (
@@ -68,6 +74,12 @@ func (a RemoteAction) String() string {
 	return string(a)
 }
 
+// Execute signs a fresh random secret with this node's private key and
+// sends it alongside the forwarded command payload to mainPeer, which
+// resolves this node's public key via did:web and verifies the signature
+// (proof of possession) instead of relying on a shared token — there is no
+// common auth authority across independently operated DCS instances. It
+// then records a RemoteActionRequestEvent locally for audit purposes.
 func (a RemoteAction) Execute(ctx context.Context, db *sqlx.DB, didDocument identity.DIDDocument, mainPeer string, contractDid string, payload any) error {
 
 	localPeer, err := didDocument.GetID()

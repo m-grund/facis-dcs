@@ -153,6 +153,8 @@ var _ = Service("DcsToDcs", func() {
 	Description("DCS supports direct interoperability between two or more DCS instances, enabling automated contract lifecycle operations across organizational boundaries.")
 
 	Method("post_sync", func() {
+		Description("Receive a full state broadcast for a contract (contract data plus all review, approval, and negotiation tasks of every responsible peer). Sent by the origin peer of a contract after a state change, or forwarded here by any peer that is not the origin. Authenticated peer-to-peer via a did:web challenge-response signature (secret_value signed with the sender's private key, verified against its did:web document and eIDAS certificate chain) — not JWT, since there is no shared end-user identity across DCS instances run by different operators.")
+		Meta("dcs:cwe:components", "DCS-to-DCS Synchronization")
 
 		Payload(DCSToDCSContractPostSyncRequest)
 		Result(DCSToDCSContractPostSyncResponse)
@@ -169,6 +171,8 @@ var _ = Service("DcsToDcs", func() {
 	})
 
 	Method("get_sync", func() {
+		Description("Ask the local DCS instance to request a fresh peer-update broadcast for a contract from its origin peer. Called by an authenticated end user (e.g. after a 'contract was updated elsewhere, please force synchronisation and reload' error from a state-mutating endpoint) rather than by a remote peer directly — this is the only DcsToDcs method secured via JWT, since it is triggered by a local user action, not by an incoming peer request.")
+		Meta("dcs:cwe:components", "DCS-to-DCS Synchronization")
 
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
@@ -200,6 +204,8 @@ var _ = Service("DcsToDcs", func() {
 	})
 
 	Method("action", func() {
+		Description("Execute a state-mutating contract command (approve, reject, submit, negotiate, terminate, accept/reject negotiation, or peer update) on behalf of a remote peer that is not the origin for the target contract. The origin peer is the single writer for each of its contracts (see contractworkflowengine); this endpoint runs the exact same command handler that a local call would use, after re-validating peer-scoped task ownership and the optimistic-concurrency timestamp. Authenticated peer-to-peer via a did:web challenge-response signature — not JWT.")
+		Meta("dcs:cwe:components", "DCS-to-DCS Synchronization")
 
 		Payload(DCSToDCSContractActionRequest)
 		Result(DCSToDCSContractActionResponse)

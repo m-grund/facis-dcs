@@ -1,3 +1,6 @@
+// Package reviewtaskstate is the per-reviewer sub-state-machine for a
+// template's review tasks (OPEN -> APPROVED/REJECTED), gating the
+// SUBMITTED -> REVIEWED transition.
 package reviewtaskstate
 
 import (

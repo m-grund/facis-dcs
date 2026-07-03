@@ -8,15 +8,15 @@ import os
 import re
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
+import jwt
 import requests
-
-REQUEST_URI_MARKER = "/auth/presentation/request/"
-
+from jwt.algorithms import ECAlgorithm
 
 @dataclass(frozen=True)
 class AuthCredentials:
@@ -49,6 +49,9 @@ class AuthorizationRequest:
 
     nonce: str
     client_id: str
+    response_uri: str
+    state: str
+    query_id: str
 
 
 class AuthService:
@@ -245,47 +248,118 @@ class AuthService:
         *,
         timeout: float,
     ) -> AuthorizationRequest:
-        """POST request_uri (JAR) and parse nonce + client_id."""
+        """POST request_uri (JAR), verify JWS, and parse request parameters."""
+        wallet_nonce = str(uuid.uuid4())
+        wallet_metadata = {
+            "vp_formats_supported": {
+                "dc+sd-jwt": {
+                    "sd-jwt_alg_values": ["ES256"],
+                    "kb-jwt_alg_values": ["ES256"],
+                }
+            }
+        }
         response = session.post(
             request_uri,
             timeout=timeout,
-            headers={"Accept": "application/oauth-authz-req+jwt, application/jwt"},
+            headers={
+                "Accept": "application/oauth-authz-req+jwt, application/jwt",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data={
+                "wallet_nonce": wallet_nonce,
+                "wallet_metadata": json.dumps(wallet_metadata, separators=(",", ":")),
+            },
         )
         response.raise_for_status()
         jar_token = response.text.strip()
         if not jar_token.startswith("eyJ"):
             raise RuntimeError("authorization request response is not a JWT")
 
-        payload = AuthService.decode_jwt_payload(jar_token)
+        try:
+            header = jwt.get_unverified_header(jar_token)
+        except Exception as exc:
+            raise RuntimeError(f"authorization request JWT header parse failed: {exc}") from exc
+
+        if str(header.get("typ") or "") != "oauth-authz-req+jwt":
+            raise RuntimeError("authorization request JWT typ is invalid")
+        jwk = header.get("jwk")
+        if not isinstance(jwk, dict):
+            raise RuntimeError("authorization request JWT header missing jwk")
+
+        try:
+            payload = jwt.decode(
+                jar_token,
+                ECAlgorithm.from_jwk(json.dumps(jwk)),
+                algorithms=["ES256"],
+                options={"verify_aud": False},
+            )
+        except Exception as exc:
+            raise RuntimeError(f"authorization request JWT verification failed: {exc}") from exc
+
+        if str(payload.get("wallet_nonce") or "") != wallet_nonce:
+            raise RuntimeError("authorization request wallet_nonce echo mismatch")
+
+        exp = int(payload.get("exp") or 0)
+        if exp <= int(time.time()):
+            raise RuntimeError("authorization request JWT expired")
+
         nonce = str(payload.get("nonce") or "")
         client_id = str(payload.get("client_id") or AuthService.CLIENT_ID)
+        state = str(payload.get("state") or "")
+        response_uri = str(payload.get("response_uri") or "")
+        if str(payload.get("response_mode") or "") != "direct_post":
+            raise RuntimeError("unsupported response_mode in authorization request")
+
+        dcql_query = payload.get("dcql_query")
+        if not isinstance(dcql_query, dict):
+            raise RuntimeError("authorization request missing dcql_query object")
+        credentials = dcql_query.get("credentials")
+        if not isinstance(credentials, list) or len(credentials) == 0 or not isinstance(credentials[0], dict):
+            raise RuntimeError("dcql_query.credentials[0] is required")
+        query_id = str(credentials[0].get("id") or "").strip()
+        if not query_id:
+            raise RuntimeError("dcql_query.credentials[0].id is required")
+
         if not nonce:
             raise RuntimeError("authorization request JWT missing nonce")
-        return AuthorizationRequest(nonce=nonce, client_id=client_id)
+        if not state or not response_uri:
+            raise RuntimeError("authorization request JWT missing state or response_uri")
+        return AuthorizationRequest(
+            nonce=nonce,
+            client_id=client_id,
+            response_uri=response_uri,
+            state=state,
+            query_id=query_id,
+        )
 
     @staticmethod
     def submit_presentation(
         session: requests.Session,
-        api_base: str,
         *,
+        response_uri: str,
         state: str,
+        query_id: str,
         vp_token: str,
         timeout: float,
     ) -> str:
-        """POST /auth/presentation/callback and return redirect_uri."""
+        """direct_post vp_token to response_uri and return redirect_uri."""
         response = session.post(
-            f"{api_base.rstrip('/')}/auth/presentation/callback",
-            json={"state": state, "vp_token": vp_token},
+            response_uri,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "state": state,
+                "vp_token": json.dumps({query_id: [vp_token]}, separators=(",", ":")),
+            },
             timeout=timeout,
         )
         if response.status_code != 200:
             raise RuntimeError(
-                f"/auth/presentation/callback failed ({response.status_code}): {response.text[:300]}"
+                f"direct_post failed ({response.status_code}): {response.text[:300]}"
             )
         body = response.json()
         redirect_uri = body.get("redirect_uri")
         if not redirect_uri:
-            raise RuntimeError(f"/auth/presentation/callback missing redirect_uri: {body}")
+            raise RuntimeError(f"direct_post response missing redirect_uri: {body}")
         return str(redirect_uri)
 
     @staticmethod
@@ -403,8 +477,9 @@ class AuthService:
         )
         redirect_uri = AuthService.submit_presentation(
             session,
-            api_base,
-            state=initiation.state,
+            response_uri=auth_request.response_uri,
+            state=auth_request.state,
+            query_id=auth_request.query_id,
             vp_token=vp_token,
             timeout=timeout,
         )

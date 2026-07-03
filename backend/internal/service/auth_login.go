@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/url"
 	"strings"
@@ -171,12 +172,15 @@ func (s *authSvc) PresentationRequest(ctx context.Context, p *genauth.Presentati
 		return nil, err
 	}
 
+	walletNonce := strings.TrimSpace(pointerString(p.WalletNonce))
+
 	responseURI := strings.TrimRight(s.publicAPIBase, "/") + "/auth/presentation/callback"
 	jwt, err := oid4vprequest.BuildJWT(s.requestSigner, oid4vprequest.Params{
 		ClientID:    s.hydra.ClientID(),
 		ResponseURI: responseURI,
 		State:       attempt.PresentationState,
 		Nonce:       attempt.Nonce,
+		WalletNonce: walletNonce,
 		ExpiresAt:   attempt.ExpiresAt,
 		DCQLQuery:   s.dcqlQuery,
 	})
@@ -199,6 +203,23 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		return nil, goa.PermanentError("bad_request", "presentation state is not pending")
 	}
 
+	walletError := strings.TrimSpace(pointerString(p.Error))
+	if walletError != "" {
+		desc := strings.TrimSpace(pointerString(p.ErrorDescription))
+		message := walletError
+		if desc != "" {
+			message += ": " + desc
+		}
+
+		_ = s.presentations.MarkFailed(ctx, attempt.PresentationState, message)
+		oid4vp.RecordPresentationAudit(ctx, oid4vp.PresentationAuditEvent{
+			PresentationState: attempt.PresentationState,
+			Success:           false,
+			ErrorMessage:      message,
+		})
+		return &genauth.PresentationCallbackResult{}, nil
+	}
+
 	if attempt.HydraLoginChallenge == nil || strings.TrimSpace(*attempt.HydraLoginChallenge) == "" {
 		return nil, goa.PermanentError("bad_request", "missing hydra login challenge; complete browser authorize first")
 	}
@@ -208,7 +229,17 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		vpToken = *p.VpToken
 	}
 
-	verified, err := oid4vp.NewVerifier(s.trust).Verify(vpToken, oid4vp.PresentationContext{
+	queryID, err := credentialQueryIDFromDCQL(s.dcqlQuery)
+	if err != nil {
+		return nil, goa.PermanentError("bad_request", "invalid dcql_query: %v", err)
+	}
+
+	presentation, err := extractSinglePresentation(vpToken, queryID)
+	if err != nil {
+		return nil, goa.PermanentError("bad_request", "invalid vp_token: %v", err)
+	}
+
+	verified, err := oid4vp.NewVerifier(s.trust).Verify(presentation, oid4vp.PresentationContext{
 		Nonce:    attempt.Nonce,
 		ClientID: s.hydra.ClientID(),
 	})
@@ -261,7 +292,77 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		Roles:             grantedRoles,
 	})
 
-	return &genauth.PresentationCallbackResult{RedirectURI: continueURL}, nil
+	return &genauth.PresentationCallbackResult{RedirectURI: &continueURL}, nil
+}
+
+func pointerString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func credentialQueryIDFromDCQL(dcqlQuery any) (string, error) {
+	query, ok := dcqlQuery.(map[string]any)
+	if !ok {
+		return oid4vp.PoACredentialQueryID, nil
+	}
+
+	rawCredentials, ok := query["credentials"]
+	if !ok {
+		return "", fmt.Errorf("missing credentials")
+	}
+
+	credentials, ok := rawCredentials.([]any)
+	if !ok || len(credentials) == 0 {
+		return "", fmt.Errorf("credentials must be a non-empty array")
+	}
+
+	first, ok := credentials[0].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("credentials[0] must be an object")
+	}
+
+	id, _ := first["id"].(string)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("credentials[0].id is required")
+	}
+
+	return id, nil
+}
+
+func extractSinglePresentation(rawVPToken, queryID string) (string, error) {
+	rawVPToken = strings.TrimSpace(rawVPToken)
+	if rawVPToken == "" {
+		return "", fmt.Errorf("vp_token is required")
+	}
+
+	var tokenByQuery map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(rawVPToken), &tokenByQuery); err != nil {
+		return "", fmt.Errorf("vp_token must be a JSON object")
+	}
+
+	rawPresentations, ok := tokenByQuery[queryID]
+	if !ok {
+		return "", fmt.Errorf("missing vp_token entry for query id %q", queryID)
+	}
+
+	var presentations []string
+	if err := json.Unmarshal(rawPresentations, &presentations); err != nil {
+		return "", fmt.Errorf("vp_token[%q] must be an array of strings", queryID)
+	}
+
+	if len(presentations) != 1 {
+		return "", fmt.Errorf("vp_token[%q] must contain exactly one presentation", queryID)
+	}
+
+	presentation := strings.TrimSpace(presentations[0])
+	if presentation == "" {
+		return "", fmt.Errorf("vp_token[%q][0] must be a non-empty string", queryID)
+	}
+
+	return presentation, nil
 }
 
 func (s *authSvc) LoginStatus(ctx context.Context, p *genauth.LoginStatusPayload) (*genauth.LoginStatusResult, error) {

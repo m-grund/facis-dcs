@@ -99,6 +99,13 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 	}
 }
 
+// processEvent anchors one outbox event into the tamper-evident audit trail:
+// it chains the entry to the previous CID (both per-resource and globally),
+// has it timestamped by the TSA, verifies that timestamp immediately as a
+// sanity check, writes the signed entry to IPFS, and only then marks the
+// outbox row processed and republishes the event on NATS. Because each
+// entry embeds the hash of its predecessor, retroactively modifying an
+// already-anchored entry breaks the chain and is detectable.
 func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.OutboxEvent, origin string) error {
 	tx, err := j.DB.BeginTxx(ctx, nil)
 	if err != nil {

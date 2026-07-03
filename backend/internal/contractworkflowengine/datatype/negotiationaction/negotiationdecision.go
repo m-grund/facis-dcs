@@ -1,3 +1,10 @@
+// Package negotiationdescision (folder name negotiationaction, package name
+// negotiationdescision — pre-existing naming mismatch/typo, kept for import
+// compatibility) is a single negotiator's decision on one change request,
+// distinct from NegotiationTaskState in the sibling negotiationtaskstate
+// package: this tracks the outcome of one specific change request, while
+// NegotiationTaskState tracks whether that negotiator has responded at all
+// in the current round.
 package negotiationdescision
 
 import (

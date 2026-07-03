@@ -1,3 +1,8 @@
+// Package negotiationtaskstate tracks, per responsible peer, whether that
+// negotiator has responded in the current negotiation round (OPEN ->
+// ACCEPTED). Once every negotiator's task is no longer OPEN, Submit merges
+// all accepted change requests (see negotiationmerging) and bumps
+// contract_version.
 package negotiationtaskstate
 
 import (

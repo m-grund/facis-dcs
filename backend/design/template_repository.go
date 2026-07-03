@@ -467,7 +467,7 @@ var _ = Service("TemplateRepository", func() {
 
 	// POST /template/copy
 	Method("copy", func() {
-		Description("Copy a a template")
+		Description("Copy a template. Behavior depends on the source template's state: if it is not yet REGISTERED/PUBLISHED, the copy starts a new, independent version lineage (version=1, base_template=own new DID); if the source is already REGISTERED/PUBLISHED, the copy becomes the next version of the same lineage (version+1, inherits the source's base_template). A DB guard rejects the copy if a REGISTERED/PUBLISHED template with that version already exists in the lineage.")
 		Meta("dcs:ui", "Template Builder")
 
 		Security(JWTAuth, func() {
@@ -777,7 +777,7 @@ var _ = Service("TemplateRepository", func() {
 
 	// POST /template/register
 	Method("register", func() {
-		Description("register new template into the repository.")
+		Description("Register a template with the Federated Catalogue integration. Two distinct modes depending on whether the given DID already exists locally: if it does, only its state is flipped to REGISTERED; if it does not, the template (identified by did + version) is pulled from the Federated Catalogue and imported as a brand-new local DID in state DRAFT.")
 		Meta("dcs:requirements", "DCS-IR-TR-07")
 		Meta("dcs:tr:components", "Contract Templates Storage & Provenance")
 		Meta("dcs:ui", "Template Management Dashboard")
@@ -855,6 +855,7 @@ var _ = Service("TemplateRepository", func() {
 	// POST /template/publish
 	Method("publish", func() {
 		Description("publish a local approved template to the XFSC Catalogue.")
+		Meta("dcs:tr:components", "Contract Templates Storage & Provenance")
 
 		Security(JWTAuth, func() {
 			Scope("Template Manager")

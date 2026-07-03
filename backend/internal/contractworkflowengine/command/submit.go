@@ -77,7 +77,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Not the Origin peer for this contract: forward unchanged instead of
+			mutating locally (single-writer-per-aggregate, see package doc).
 		*/
 
 		err := tx.Commit()
@@ -93,6 +94,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return nil
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the contract is
+	// older than what's stored (see package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		if localPeer != cmd.CauserDID {
 			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
@@ -104,6 +107,10 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	if hasSubmittedContractData && !canSubmitUpdatedContractData(processData.State) {
 		return errors.New("contract data can only be submitted in draft or rejected state")
 	}
+
+	// Submit is intentionally overloaded: its effect depends entirely on the
+	// contract's current state (state pattern via if/else, not polymorphism).
+	// See docs/backend architecture doc, section "Contract Workflow Engine".
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
@@ -191,7 +198,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 
 	} else if processData.State == contractstate.Negotiation.String() {
 
-		if !cmd.UserRoles.HasRoles(userrole.ContractCreator, userrole.ContractReviewer) {
+		if !cmd.UserRoles.HasRoles(userrole.ContractCreator, userrole.ContractNegotiator, userrole.ContractReviewer) {
 			return errors.New("invalid user permission")
 		}
 
@@ -231,7 +238,11 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			}
 
 			if hasNegotiations {
-
+				// All negotiators have responded and there are accepted change
+				// requests to fold in: snapshot the current row to contract_history,
+				// merge the changes, and bump contract_version. The contract stays in
+				// NEGOTIATION (nextState is left unset) rather than advancing to
+				// SUBMITTED, since the merged result itself starts a new round.
 				err = h.CRepo.CreateHistoryEntryForDID(ctx, tx, processData.DID)
 				if err != nil {
 					return fmt.Errorf("could not create history entry for did %s: %w", cmd.DID, err)

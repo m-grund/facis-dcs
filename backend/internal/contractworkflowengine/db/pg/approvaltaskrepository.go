@@ -1,3 +1,5 @@
+// Package pg is the Postgres implementation of the contract workflow
+// engine's repository interfaces (see db package doc).
 package pg
 
 import (
@@ -141,6 +143,11 @@ func (r *PostgresApprovalTaskRepo) AnyTasksInState(ctx context.Context, tx *sqlx
 	return count > 0, nil
 }
 
+// IsValidApprover checks that approver (a peer DID) is the one recorded on
+// this task — this is the enforcement point for peer-scoped task ownership:
+// a peer may only progress tasks it was assigned, regardless of which local
+// user triggered the request (local per-user permission is checked
+// separately via UserRoles upstream).
 func (r *PostgresApprovalTaskRepo) IsValidApprover(ctx context.Context, tx *sqlx.Tx, did string, approver string) (bool, error) {
 	query := `
         SELECT COUNT(*) FROM contract_approval_task

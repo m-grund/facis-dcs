@@ -67,7 +67,10 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 
 	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Not the Origin peer for this contract: forward unchanged to the peer
+			that is (single-writer-per-aggregate, see package doc / ADR-0005).
+			Note this command carries no UpdatedAt, so it skips the optimistic-
+			concurrency check that most other handlers in this package apply.
 		*/
 
 		err := tx.Commit()

@@ -1,3 +1,5 @@
+// Package pq is the Postgres implementation of the base-level audit-trail
+// repository interface (base/db.AuditTrailRepository).
 package pq
 
 import (
@@ -10,6 +12,11 @@ import (
 
 type PostgresAuditTrailRepository struct{}
 
+// UpdateLogCID stores the IPFS CID of the most recently anchored audit entry
+// for (component, did) — this is the "predecessor CID" the OutboxProcessor
+// reads back on the next event to build the tamper-evident hash chain
+// (per-resource when did is a real DID, and globally when called with
+// conf.GlobalAuditTrailName() for both arguments).
 func (r *PostgresAuditTrailRepository) UpdateLogCID(ctx context.Context, tx *sqlx.Tx, component string, did string, lastLogDID *string) error {
 	statement := `UPDATE audit_trail_log SET last_log_cid = $3 WHERE component = $1 AND did = $2`
 	result, err := tx.ExecContext(ctx, statement, component, did, lastLogDID)

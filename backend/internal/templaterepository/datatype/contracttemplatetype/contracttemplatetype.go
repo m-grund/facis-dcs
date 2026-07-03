@@ -1,3 +1,5 @@
+// Package contracttemplatetype distinguishes frame vs. sub-contract
+// templates for the template repository itself.
 package contracttemplatetype
 
 import (

@@ -1,3 +1,7 @@
+// Package contracttemplatestate mirrors templaterepository's own
+// contracttemplatestate enum, but scoped to how the contract workflow engine
+// reads/references approved templates when creating a contract — see
+// contractworkflowengine/query/contracttemplate.
 package contracttemplatestate
 
 import (

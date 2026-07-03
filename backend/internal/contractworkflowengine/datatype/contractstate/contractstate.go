@@ -1,3 +1,9 @@
+// Package contractstate defines the contract lifecycle enum. There is no
+// explicit transition table: valid transitions are encoded imperatively in
+// contractworkflowengine/command (mainly submit.go's state-dependent
+// branching), not declared here. Terminate is reachable from any non-
+// terminal state; Expired is set out-of-band by the CWE cron job, though
+// readers see it instantly via the contracts_effective DB view.
 package contractstate
 
 import (

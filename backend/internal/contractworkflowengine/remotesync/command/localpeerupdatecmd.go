@@ -1,3 +1,10 @@
+// Package command implements the two commands that back the DCS-to-DCS peer
+// protocol from the receiving side: PeerUpdateRequester (asks/detects the
+// real Origin peer for stale-peer recovery) and LocalPeerUpdater (applies an
+// incoming PostSync full-state broadcast). These are distinct from
+// contractworkflowengine/command, which implements the domain's own
+// user-facing endpoints; both packages happen to be named "command" but are
+// not related by Go visibility.
 package command
 
 import (
@@ -45,6 +52,14 @@ type LocalPeerUpdater struct {
 	NRepo  db.NegotiationRepo
 }
 
+// Handle applies a full state snapshot received via PostSync: the contract
+// plus every review/approval/negotiation task of every responsible peer is
+// upserted locally, regardless of which peer a given task belongs to (full
+// replication — every peer holds a complete copy, but peer-scoped ownership
+// checks still gate who may progress a task). Whether this is recorded as a
+// RemoteSyncEvent or a RemoteSyncRequestEvent below depends on whether the
+// local node is the sender or the origin of the contract, purely for
+// correct audit-trail attribution.
 func (h *LocalPeerUpdater) Handle(ctx context.Context, cmd LocalPeerUpdateCmd) error {
 
 	tx, err := h.DB.BeginTxx(ctx, nil)

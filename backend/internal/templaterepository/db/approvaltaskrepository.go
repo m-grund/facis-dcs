@@ -1,3 +1,6 @@
+// Package db holds the template repository's repository interfaces
+// (Postgres implementations in db/pg), including the copy-on-version
+// template store (base_template lineage, see ContractTemplateRepo.CopyFromDID).
 package db
 
 import (

@@ -1,3 +1,8 @@
+// Package query implements the read-side CQRS use cases for the template
+// repository that operate across tasks/DIDs directly (single-template
+// queries live in the contracttemplate subpackage). As with the command
+// package, most handlers also emit an audit-trail event for the read via
+// base/event.Create.
 package query
 
 import (

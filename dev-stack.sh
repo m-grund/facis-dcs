@@ -41,8 +41,11 @@ kubectl wait --for=condition=ready pod \
   -l "app.kubernetes.io/instance=${HELM_RELEASE},app.kubernetes.io/name=statuslist-service" \
   --timeout=5m
 
+echo "Installing testWallet dependencies..."
+make -C testWallet install
+
 echo "Initializing statuslist for dev (NATS create when list is empty)..."
-python3 testWallet/scripts/ensure_statuslist_for_dev.py
+make -C testWallet ensure-statuslist
 
 # Setup backend .env
 cp backend/.env.dev1 backend/.env

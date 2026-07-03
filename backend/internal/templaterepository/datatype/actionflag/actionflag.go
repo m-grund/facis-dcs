@@ -1,3 +1,7 @@
+// Package actionflag is the "forward_to" decision on Submit while a template
+// is in SUBMITTED (Approval routes to REVIEWED, Draft routes back to DRAFT
+// for rework). Note this is a different value set than
+// contractworkflowengine/datatype/actionflag's Approval/Reject.
 package actionflag
 
 import (

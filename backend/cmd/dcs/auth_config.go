@@ -12,8 +12,6 @@ import (
 	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/pathutil"
 	"digital-contracting-service/internal/service"
-
-	"goa.design/clue/log"
 )
 
 func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
@@ -76,7 +74,7 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 			os.Getenv("OID4VP_VERIFIER_SIGNING_VAULT_KEY"),
 		)
 		if signerErr != nil {
-			log.Printf(ctx, "oid4vp request signer not loaded: %v", signerErr)
+			return service.AuthConfig{}, fmt.Errorf("oid4vp request signer configuration error: %w", signerErr)
 		} else {
 			requestSigner = signer
 		}

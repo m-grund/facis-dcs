@@ -87,7 +87,7 @@ var _ = Service("PDFGeneration", func() {
 
 	// verify_contract_pdf — GET /pdf/verify/contract/{did}
 	Method("verify_contract_pdf", func() {
-		Description("Verify MR/HR hash consistency for a contract: re-generates the base PDF from the embedded JSON-LD and compares SHA-256 hashes. (DCS-FR-CWE-04, DCS-FR-CWE-05)")
+		Description("Verify MR/HR hash consistency for a contract: re-generates the base PDF from the embedded JSON-LD and compares SHA-256 hashes. If the contract's lifecycle state has advanced since the cached PDF was last generated, this transparently regenerates and re-caches a new C2PA-updated PDF (issuing a new provenance VC and re-uploading to IPFS) before comparing — i.e. this read endpoint can trigger a full PDF-generation write path. Requires that export_contract_pdf has been called at least once before; otherwise it errors. (DCS-FR-CWE-04, DCS-FR-CWE-05)")
 		Meta("dcs:requirements", "DCS-FR-CWE-04", "DCS-FR-CWE-05", "DCS-FR-CSA-06")
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")
@@ -110,7 +110,7 @@ var _ = Service("PDFGeneration", func() {
 
 	// verify_template_pdf — GET /pdf/verify/template/{did}
 	Method("verify_template_pdf", func() {
-		Description("Verify MR/HR hash consistency for a contract template.")
+		Description("Verify MR/HR hash consistency for a contract template. Like verify_contract_pdf, this transparently regenerates and re-caches a new C2PA-updated PDF if the template's lifecycle state has advanced since the cached PDF was last generated, and requires that export_template_pdf has been called at least once before.")
 		Meta("dcs:requirements", "DCS-FR-CWE-04", "DCS-FR-CWE-05")
 		Security(JWTAuth, func() {
 			Scope("Template Manager")

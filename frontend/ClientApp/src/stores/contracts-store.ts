@@ -73,9 +73,9 @@ export const useContractsStore = defineStore('contracts', () => {
       const offset = currentPage
       const paginatedResult = await fetchContracts(limit, offset)
       paginatedContracts.value = paginatedResult.contracts
-      negotiationTasks.value = paginatedResult.negotiation_tasks
-      reviewTasks.value = paginatedResult.review_tasks
-      approvalTasks.value = paginatedResult.approval_tasks
+      negotiationTasks.value = paginatedResult.negotiation_tasks.map((task) => ({ ...task, type: 'contract' }))
+      reviewTasks.value = paginatedResult.review_tasks.map((task) => ({ ...task, type: 'contract' }))
+      approvalTasks.value = paginatedResult.approval_tasks.map((task) => ({ ...task, type: 'contract' }))
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Error loading contracts'
     } finally {
