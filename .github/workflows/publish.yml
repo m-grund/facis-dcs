@@ -21,6 +21,6 @@ jobs:
       HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
     with:
       dockerfile: "pdf-core/Dockerfile"
-      buildContext: "pdf-core"
+      buildContext: "."
       service: "pdf-core"
       harbor_config: "deployment/harbor.config"

@@ -1,9 +1,18 @@
+# Stage 1: generate ontology artefacts via the project Makefile
+FROM python:3.12-slim AS docs-builder
+RUN apt-get update && apt-get install -y --no-install-recommends make && rm -rf /var/lib/apt/lists/*
+WORKDIR /repo
+COPY docs/ docs/
+COPY pdf-core/Makefile pdf-core/Makefile
+RUN make -C pdf-core docs
+
+# Stage 2: build the Go binary
 FROM golang:1.25-alpine AS builder
-RUN apk add --no-cache make
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY pdf-core/go.mod pdf-core/go.sum ./
 RUN go mod download
-COPY . .
+COPY pdf-core/ .
+COPY --from=docs-builder /repo/pdf-core/docs/ docs/
 RUN CGO_ENABLED=0 go build -o dcspdfcore .
 
 FROM alpine:3.20
