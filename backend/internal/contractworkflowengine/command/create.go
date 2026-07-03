@@ -49,7 +49,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not read contract template data: %w", err)
 	}
 
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate.TemplateData, cmd.DID, nil, false)
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate.TemplateData, cmd.DID, false)
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}

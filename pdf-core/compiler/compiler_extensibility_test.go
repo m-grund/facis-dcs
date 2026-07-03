@@ -60,8 +60,8 @@ func TestODRLDataPreservedInEmbeddedJSONLD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractEmbeddedJSONLD: %v", err)
 	}
-	// The canonical form will contain the expanded ODRL IRI.
-	if !bytes.Contains(extracted, []byte("w3.org/ns/odrl")) {
+	// The canonical form uses the odrl: prefix defined in the context.
+	if !bytes.Contains(extracted, []byte("odrl:")) {
 		t.Errorf("embedded JSON-LD must contain ODRL data; got:\n%s", extracted[:min(len(extracted), 500)])
 	}
 }

@@ -9,7 +9,20 @@ import (
 
 func TestMain(m *testing.M) {
 	loadDevEnv()
+	setupTestContext()
 	os.Exit(m.Run())
+}
+
+func setupTestContext() {
+	b, err := os.ReadFile("../docs/semantic-ontology/linkml/output/linkml.yaml.context.jsonld")
+	if err != nil {
+		panic("setupTestContext: " + err.Error())
+	}
+	baseURL := os.Getenv("DCS_PDF_CORE_ONTOLOGY_BASE_URL")
+	if baseURL == "" {
+		panic("setupTestContext: DCS_PDF_CORE_ONTOLOGY_BASE_URL must be set (check .dev.env)")
+	}
+	SetContextDocument(baseURL+"/ontology/dcs-pdf-core", b)
 }
 
 func loadDevEnv() {

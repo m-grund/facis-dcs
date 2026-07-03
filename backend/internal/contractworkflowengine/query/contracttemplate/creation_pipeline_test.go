@@ -24,7 +24,7 @@ const (
 // pass-through: it returns the stored JSON-LD unchanged.
 func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	templateData := newCreationPipelineJSON(t, creationPipelineTemplate())
-	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID, nil)
+	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID)
 	require.NoError(t, err)
 
 	contractDraft, err := convertTemplateDataToContractData(persistedTemplate, creationTemplateDID)
@@ -36,7 +36,6 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	persistedContract, err := validation.NormalizeContractDataForPersistence(
 		newCreationPipelineJSON(t, contractData),
 		creationContractDID,
-		nil,
 		true,
 	)
 	require.NoError(t, err)

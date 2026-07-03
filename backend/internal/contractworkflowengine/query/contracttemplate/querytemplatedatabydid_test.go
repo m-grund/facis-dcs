@@ -96,7 +96,6 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	persisted, err := validation.NormalizeContractDataForPersistence(
 		converted,
 		"did:web:facis.example:contract:1",
-		nil,
 		false,
 	)
 	require.NoError(t, err)

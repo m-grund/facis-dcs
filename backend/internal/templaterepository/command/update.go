@@ -43,7 +43,7 @@ type Updater struct {
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 	if cmd.TemplateData != nil && cmd.TemplateData.IsNotNullValue() {
-		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID, cmd.Name)
+		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID)
 		if err != nil {
 			return fmt.Errorf("template data validation failed: %w", err)
 		}

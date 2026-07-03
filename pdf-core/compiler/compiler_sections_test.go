@@ -1,34 +1,27 @@
 package compiler
 
 import (
-	"context"
 	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
-// mustExtractFromPayload runs a raw JSON-LD payload through NormalizePayload
-// and extractDocumentModel, failing the test on any error.
-// This helper ensures tests exercise the full IRI-based extraction pipeline
-// rather than bypassing it by constructing raw Go maps.
+// mustExtractFromPayload canonicalizes a raw JSON-LD payload and extracts the
+// document model via extractDocumentModelFromCanonical, failing the test on any
+// error. Canonicalization ensures all input flavors (prefixed, @vocab, expanded)
+// are normalized before extraction.
 func mustExtractFromPayload(t *testing.T, payload []byte) documentModel {
 	t.Helper()
-	_, expanded, err := NormalizePayload(payload)
+	canonical, err := CanonicalizePayload(payload)
 	if err != nil {
-		t.Fatalf("NormalizePayload: %v", err)
+		t.Fatalf("CanonicalizePayload: %v", err)
 	}
-	var rawRoot map[string]any
-	if err := json.Unmarshal(payload, &rawRoot); err != nil {
-		t.Fatalf("json.Unmarshal: %v", err)
-	}
-	rawCtx, _ := rawRoot["@context"].(map[string]any)
-	rootID, _ := rawRoot["@id"].(string)
-	doc, err := extractDocumentModel(expanded, rootID, rawCtx, payload, strings.Repeat("0", 64))
+	doc, err := extractDocumentModelFromCanonical(canonical, strings.Repeat("0", 64))
 	if err != nil {
-		t.Fatalf("extractDocumentModel: %v", err)
+		t.Fatalf("extractDocumentModelFromCanonical: %v", err)
 	}
 	return doc
 }
@@ -64,6 +57,59 @@ func TestSectionHeadingsAppearInPDF(t *testing.T) {
 		if !bytes.Contains(pdf, []byte(heading)) {
 			t.Errorf("PDF must contain section heading %q", heading)
 		}
+	}
+}
+
+func TestLayoutDocumentPreservesExplicitNewlinesInClauses(t *testing.T) {
+	doc := sectionDoc([]sectionData{
+		{Heading: "1. Terms", Clauses: []clauseData{
+			{Segments: []clauseSegment{
+				{Type: "prose", Text: "Dispute Resolution Method: "},
+				{Type: "prose", Text: "_____"},
+				{Type: "prose", Text: "\nDispute Venue: "},
+				{Type: "prose", Text: "_____"},
+				{Type: "prose", Text: "\n\nGoverning Law: _____"},
+			}},
+		}},
+	})
+
+	pages := layoutDocumentPages(doc)
+	var bodyLines []string
+	for _, page := range pages {
+		for _, line := range page.Lines {
+			if line.Kind == "body" {
+				bodyLines = append(bodyLines, line.Text)
+			}
+		}
+	}
+
+	want := []string{
+		"Dispute Resolution Method: _____",
+		"Dispute Venue: _____",
+		"",
+		"Governing Law: _____",
+	}
+	if len(bodyLines) != len(want) {
+		t.Fatalf("body line count = %d, want %d (%q)", len(bodyLines), len(want), bodyLines)
+	}
+	for i := range want {
+		if bodyLines[i] != want[i] {
+			t.Fatalf("body line %d = %q, want %q", i, bodyLines[i], want[i])
+		}
+	}
+}
+
+func TestRenderContentStreamUsesBoldTextModeForSectionHeadings(t *testing.T) {
+	content := renderContentStream(pageLayout{Lines: []positionedLine{
+		{Text: "Section Heading", FontSize: 14, Kind: "section-heading"},
+		{Text: "Body text", FontSize: 11, Kind: "body"},
+	}})
+
+	if !strings.Contains(content, "/F1 14.00 Tf\n0 g\n0 G\n0.35 w\n2 Tr\n") {
+		t.Fatalf("section heading was not rendered with bold text mode:\n%s", content)
+	}
+	if !strings.Contains(content, "/F1 11.00 Tf\n0 g\n0 Tr\n") {
+		t.Fatalf("body line did not reset to normal text mode:\n%s", content)
 	}
 }
 

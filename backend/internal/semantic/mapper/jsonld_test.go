@@ -15,11 +15,9 @@ import (
 )
 
 const testContextIRI = "https://w3id.org/facis/dcs/context/v1"
-const testVocabIRI = testContextIRI + "#"
 
 func TestMain(m *testing.M) {
 	validation.SetJSONLDContextIRI(testContextIRI)
-	validation.SetVocabIRI(testVocabIRI)
 	os.Exit(m.Run())
 }
 

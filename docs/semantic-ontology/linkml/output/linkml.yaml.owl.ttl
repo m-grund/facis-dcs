@@ -4,20 +4,19 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix schema1: <http://schema.org/> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 dcs:blocks a owl:DatatypeProperty ;
     rdfs:label "blocks" ;
     rdfs:range [ owl:unionOf ( dcs:Clause dcs:Section dcs:TextBlock ) ] ;
-    skos:closeMatch schema1:hasPart ;
+    skos:closeMatch <http://schema.org/hasPart> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:children a owl:DatatypeProperty ;
     rdfs:label "children" ;
-    rdfs:range xsd:anyURI ;
-    skos:closeMatch schema1:hasPart ;
+    rdfs:range [ owl:unionOf ( dcs:LayoutNode dcs:Section dcs:Clause dcs:TextBlock ) ] ;
+    skos:closeMatch <http://schema.org/hasPart> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:content a owl:DatatypeProperty ;
@@ -58,15 +57,15 @@ dcs:signatureFields a owl:ObjectProperty ;
 dcs:ContractTemplate a owl:Class ;
     rdfs:label "ContractTemplate" ;
     rdfs:subClassOf [ a owl:Restriction ;
-            owl:cardinality 1 ;
-            owl:onProperty dcs:metadata ],
-        [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:documentStructure ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:documentTitle ] ;
-    skos:closeMatch schema1:CreativeWork ;
+            owl:onProperty dcs:documentTitle ],
+        [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:metadata ] ;
+    skos:closeMatch <http://schema.org/CreativeWork> ;
     skos:exactMatch dcs:ContractTemplate ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
@@ -117,13 +116,13 @@ dcs:documentTitle a owl:DatatypeProperty ;
 dcs:domainField a owl:DatatypeProperty ;
     rdfs:label "domainField" ;
     rdfs:range xsd:anyURI ;
-    skos:closeMatch schema1:propertyID ;
+    skos:closeMatch <http://schema.org/propertyID> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:fields a owl:ObjectProperty ;
     rdfs:label "fields" ;
     rdfs:range dcs:RequirementField ;
-    skos:closeMatch schema1:property ;
+    skos:closeMatch <http://schema.org/property> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:isRoot a owl:DatatypeProperty ;
@@ -144,7 +143,7 @@ dcs:parameterName a owl:DatatypeProperty ;
 dcs:required a owl:DatatypeProperty ;
     rdfs:label "required" ;
     rdfs:range xsd:boolean ;
-    skos:closeMatch schema1:valueRequired ;
+    skos:closeMatch <http://schema.org/valueRequired> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:signatoryName a owl:DatatypeProperty ;
@@ -172,13 +171,13 @@ dcs:templateType a owl:DatatypeProperty ;
 dcs:templateVersion a owl:DatatypeProperty ;
     rdfs:label "templateVersion" ;
     rdfs:range xsd:integer ;
-    skos:closeMatch schema1:version ;
+    skos:closeMatch <http://schema.org/version> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:text a owl:DatatypeProperty ;
     rdfs:label "text" ;
     rdfs:range xsd:string ;
-    skos:closeMatch schema1:text ;
+    skos:closeMatch <http://schema.org/text> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:token a owl:DatatypeProperty ;
@@ -198,26 +197,17 @@ dcs:uuid a owl:DatatypeProperty ;
     skos:closeMatch dcterms:identifier ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
-dcs:Clause a owl:Class ;
-    rdfs:label "Clause" ;
-    rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:title ] ;
-    skos:closeMatch schema1:Article ;
-    skos:exactMatch dcs:Clause ;
-    skos:inScheme <https://w3id.org/facis/dcs/schema> .
-
 dcs:DataRequirement a owl:Class ;
     rdfs:label "DataRequirement" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:minCardinality 1 ;
             owl:onProperty dcs:fields ],
         [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:name ],
-        [ a owl:Restriction ;
             owl:cardinality 1 ;
             owl:onProperty dcs:conditionId ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:name ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:schemaVersion ] ;
@@ -229,32 +219,15 @@ dcs:DocumentStructure a owl:Class ;
     skos:exactMatch dcs:DocumentStructure ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
-dcs:LayoutNode a owl:Class ;
-    rdfs:label "LayoutNode" ;
-    rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:isRoot ] ;
-    skos:exactMatch dcs:LayoutNode ;
-    skos:inScheme <https://w3id.org/facis/dcs/schema> .
-
 dcs:Placeholder a owl:Class ;
     rdfs:label "Placeholder" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:bindsTo ],
+            owl:onProperty dcs:token ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:token ] ;
+            owl:onProperty dcs:bindsTo ] ;
     skos:exactMatch dcs:Placeholder ;
-    skos:inScheme <https://w3id.org/facis/dcs/schema> .
-
-dcs:Section a owl:Class ;
-    rdfs:label "Section" ;
-    rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:title ] ;
-    skos:closeMatch schema1:Article ;
-    skos:exactMatch dcs:Section ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:SignatureField a owl:Class ;
@@ -272,65 +245,73 @@ dcs:TemplateMetadata a owl:Class ;
     rdfs:label "TemplateMetadata" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:uuid ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:createdAt ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:did ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:templateVersion ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:createdBy ],
-        [ a owl:Restriction ;
-            owl:cardinality 1 ;
-            owl:onProperty dcs:title ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
             owl:onProperty dcs:state ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:updatedAt ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:sourceSystemType ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:templateType ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:name ],
+            owl:onProperty dcs:updatedAt ],
+        [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:title ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:schemaVersion ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:description ] ;
-    skos:exactMatch dcs:TemplateMetadata ;
-    skos:inScheme <https://w3id.org/facis/dcs/schema> .
-
-dcs:TextBlock a owl:Class ;
-    rdfs:label "TextBlock" ;
-    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty dcs:createdAt ],
+        [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:text ] ;
-    skos:closeMatch schema1:Text ;
-    skos:exactMatch dcs:TextBlock ;
+            owl:onProperty dcs:name ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:uuid ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:description ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:templateVersion ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:did ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:sourceSystemType ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:createdBy ] ;
+    skos:exactMatch dcs:TemplateMetadata ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:name a owl:DatatypeProperty ;
     rdfs:label "name" ;
     rdfs:range xsd:string ;
-    skos:closeMatch schema1:name ;
+    skos:closeMatch <http://schema.org/name> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:schemaVersion a owl:DatatypeProperty ;
     rdfs:label "schemaVersion" ;
     rdfs:range xsd:string ;
-    skos:closeMatch schema1:schemaVersion ;
+    skos:closeMatch <http://schema.org/schemaVersion> ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:Clause a owl:Class ;
+    rdfs:label "Clause" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:title ] ;
+    skos:closeMatch <http://schema.org/Article> ;
+    skos:exactMatch dcs:Clause ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:LayoutNode a owl:Class ;
+    rdfs:label "LayoutNode" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:isRoot ] ;
+    skos:exactMatch dcs:LayoutNode ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:RequirementField a owl:Class ;
@@ -344,8 +325,26 @@ dcs:RequirementField a owl:Class ;
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:domainField ] ;
-    skos:closeMatch schema1:PropertyValue ;
+    skos:closeMatch <http://schema.org/PropertyValue> ;
     skos:exactMatch dcs:RequirementField ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:Section a owl:Class ;
+    rdfs:label "Section" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:title ] ;
+    skos:closeMatch <http://schema.org/Article> ;
+    skos:exactMatch dcs:Section ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:TextBlock a owl:Class ;
+    rdfs:label "TextBlock" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:text ] ;
+    skos:closeMatch <http://schema.org/Text> ;
+    skos:exactMatch dcs:TextBlock ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:title a owl:DatatypeProperty ;

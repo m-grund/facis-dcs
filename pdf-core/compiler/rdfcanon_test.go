@@ -31,7 +31,7 @@ func TestNormalizePayload_SectionsAndClausesInNQuads(t *testing.T) {
 			]
 		}
 	}`)
-	nquads, _, err := NormalizePayload(payload)
+	nquads, err := NormalizePayload(payload)
 	if err != nil {
 		t.Fatalf("NormalizePayload: %v", err)
 	}
@@ -82,11 +82,11 @@ func TestNormalizePayload_ClauseChangeProducesDifferentHash(t *testing.T) {
 		}
 	}`)
 
-	nquadsBase, _, err := NormalizePayload(base)
+	nquadsBase, err := NormalizePayload(base)
 	if err != nil {
 		t.Fatalf("NormalizePayload(base): %v", err)
 	}
-	nquadsAmended, _, err := NormalizePayload(amended)
+	nquadsAmended, err := NormalizePayload(amended)
 	if err != nil {
 		t.Fatalf("NormalizePayload(amended): %v", err)
 	}
@@ -120,7 +120,7 @@ func TestNormalizePayload_ExamplePayloadFullyRDFied(t *testing.T) {
 		}
 	}`)
 
-	nquads, _, err := NormalizePayload(payload)
+	nquads, err := NormalizePayload(payload)
 	if err != nil {
 		t.Fatalf("NormalizePayload: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestNormalizePayload_LargeDocumentWithVocab(t *testing.T) {
 			]
 		}
 	}`)
-	nquads, _, err := NormalizePayload(payload)
+	nquads, err := NormalizePayload(payload)
 	if err != nil {
 		t.Fatalf("NormalizePayload failed for large-document payload with @vocab: %v", err)
 	}

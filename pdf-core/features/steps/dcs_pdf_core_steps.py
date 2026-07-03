@@ -791,7 +791,7 @@ def step_c2pa_leaf_cert_is_v3(context):
 
     sign1 = cbor2.loads(signature_cbor)
     tagged = sign1.value if isinstance(sign1, cbor2.CBORTag) else sign1
-    assert isinstance(tagged, list) and len(tagged) == 4, "COSE_Sign1 payload malformed"
+    assert isinstance(tagged, (list, tuple)) and len(tagged) == 4, "COSE_Sign1 payload malformed"
     protected = tagged[0]
     assert isinstance(protected, (bytes, bytearray)), "COSE protected header missing"
 
@@ -813,7 +813,7 @@ def step_c2pa_leaf_cert_has_email_protection_eku(context):
 
     sign1 = cbor2.loads(signature_cbor)
     tagged = sign1.value if isinstance(sign1, cbor2.CBORTag) else sign1
-    assert isinstance(tagged, list) and len(tagged) == 4, "COSE_Sign1 payload malformed"
+    assert isinstance(tagged, (list, tuple)) and len(tagged) == 4, "COSE_Sign1 payload malformed"
     headers = cbor2.loads(tagged[0])
     chain = headers.get(33)
     assert isinstance(chain, list) and chain, "x5chain missing or empty"
@@ -831,7 +831,7 @@ def step_c2pa_signature_has_x5chain_key(context):
     assert signature_cbor is not None, "c2pa.signature CBOR payload not found"
     sign1 = cbor2.loads(signature_cbor)
     tagged = sign1.value if isinstance(sign1, cbor2.CBORTag) else sign1
-    assert isinstance(tagged, list) and len(tagged) == 4, "COSE_Sign1 payload malformed"
+    assert isinstance(tagged, (list, tuple)) and len(tagged) == 4, "COSE_Sign1 payload malformed"
     headers = cbor2.loads(tagged[0])
     assert 33 in headers, "x5chain header key (33) missing"
 
@@ -1267,7 +1267,7 @@ def _assert_cose_sign1_intact(c2pa_bytes):
     assert signature_cbor is not None, "c2pa.signature CBOR payload not found in active manifest"
     sign1 = cbor2.loads(signature_cbor)
     tagged = sign1.value if isinstance(sign1, cbor2.CBORTag) else sign1
-    assert isinstance(tagged, list) and len(tagged) == 4, "COSE_Sign1 must be a 4-element array"
+    assert isinstance(tagged, (list, tuple)) and len(tagged) == 4, "COSE_Sign1 must be a 4-element array"
     protected = tagged[0]
     assert isinstance(protected, (bytes, bytearray)) and len(protected) > 0, "COSE protected header missing"
     headers = cbor2.loads(protected)
