@@ -8,9 +8,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
+	"time"
 )
+
+const defaultHTTPTimeout = 10 * time.Second
 
 // Config holds Hydra issuer and DCS OAuth client settings.
 type Config struct {
@@ -20,11 +24,13 @@ type Config struct {
 	ClientSecret      string
 	RedirectURI       string
 	AdminURL          string
+	HTTPTimeout       time.Duration
 }
 
 // Client talks to Hydra public OIDC endpoints and the admin API.
 type Client struct {
 	cfg        Config
+	httpClient *http.Client
 	metadataMu sync.RWMutex
 	metadata   *ProviderMetadata
 }
@@ -55,9 +61,40 @@ func New(cfg Config) *Client {
 	if cfg.InternalIssuerURL == "" {
 		cfg.InternalIssuerURL = cfg.PublicIssuerURL
 	}
-	cfg.AdminURL = strings.TrimRight(strings.TrimSpace(cfg.AdminURL), "/")
+	cfg.ClientID = strings.TrimSpace(cfg.ClientID)
+	cfg.ClientSecret = strings.TrimSpace(cfg.ClientSecret)
+	cfg.RedirectURI = strings.TrimSpace(cfg.RedirectURI)
+	if cfg.AdminURL == "" {
+		cfg.AdminURL = strings.TrimRight(strings.TrimSpace(os.Getenv("HYDRA_ADMIN_URL")), "/")
+	}
+	if cfg.AdminURL == "" {
+		cfg.AdminURL = "http://localhost:30085"
+	}
+	if cfg.HTTPTimeout <= 0 {
+		cfg.HTTPTimeout = defaultHTTPTimeout
+	}
+	return &Client{
+		cfg:        cfg,
+		httpClient: &http.Client{Timeout: cfg.HTTPTimeout},
+	}
+}
 
-	return &Client{cfg: cfg}
+// NewFromEnv constructs a Client using HYDRA_* environment variables.
+func NewFromEnv() *Client {
+	timeout := defaultHTTPTimeout
+	if raw := strings.TrimSpace(os.Getenv("HYDRA_HTTP_TIMEOUT")); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			timeout = parsed
+		}
+	}
+	return New(Config{
+		PublicIssuerURL:   os.Getenv("HYDRA_PUBLIC_ISSUER_URL"),
+		InternalIssuerURL: os.Getenv("HYDRA_INTERNAL_ISSUER_URL"),
+		ClientID:          os.Getenv("HYDRA_CLIENT_ID"),
+		ClientSecret:      os.Getenv("HYDRA_CLIENT_SECRET"),
+		RedirectURI:       os.Getenv("HYDRA_REDIRECT_URI"),
+		HTTPTimeout:       timeout,
+	})
 }
 
 // IssuerURL returns the public Hydra issuer base URL.
@@ -101,6 +138,10 @@ func (c *Client) RedirectURI() string {
 
 // ProviderMetadata loads and caches OpenID discovery for the Hydra issuer.
 func (c *Client) ProviderMetadata(ctx context.Context) (*ProviderMetadata, error) {
+	if c.cfg.PublicIssuerURL == "" {
+		return nil, fmt.Errorf("HYDRA_PUBLIC_ISSUER_URL is not configured")
+	}
+
 	c.metadataMu.RLock()
 
 	if c.metadata != nil {
@@ -117,8 +158,7 @@ func (c *Client) ProviderMetadata(ctx context.Context) (*ProviderMetadata, error
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +208,10 @@ func (c *Client) EndSessionURL(ctx context.Context) (string, error) {
 
 // ExchangeCode exchanges an authorization code for tokens.
 func (c *Client) ExchangeCode(ctx context.Context, code string) (*TokenResponse, error) {
+	if strings.TrimSpace(c.cfg.ClientID) == "" || strings.TrimSpace(c.cfg.RedirectURI) == "" {
+		return nil, fmt.Errorf("HYDRA_CLIENT_ID and HYDRA_REDIRECT_URI must be configured")
+	}
+
 	metadata, err := c.ProviderMetadata(ctx)
 	if err != nil {
 		return nil, err
@@ -189,6 +233,10 @@ func (c *Client) ExchangeCode(ctx context.Context, code string) (*TokenResponse,
 
 // RefreshAccessToken obtains a new access token from a refresh token.
 func (c *Client) RefreshAccessToken(ctx context.Context, refreshToken string) (*TokenResponse, error) {
+	if strings.TrimSpace(c.cfg.ClientID) == "" {
+		return nil, fmt.Errorf("HYDRA_CLIENT_ID is not configured")
+	}
+
 	metadata, err := c.ProviderMetadata(ctx)
 
 	if err != nil {
@@ -209,6 +257,10 @@ func (c *Client) RefreshAccessToken(ctx context.Context, refreshToken string) (*
 
 // RevokeRefreshToken revokes a refresh token at the provider revocation endpoint.
 func (c *Client) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	if strings.TrimSpace(c.cfg.ClientID) == "" {
+		return fmt.Errorf("HYDRA_CLIENT_ID is not configured")
+	}
+
 	metadata, err := c.ProviderMetadata(ctx)
 	if err != nil || metadata.RevocationEndpoint == "" {
 		return err
@@ -229,9 +281,7 @@ func (c *Client) RevokeRefreshToken(ctx context.Context, refreshToken string) er
 		return err
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
-
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -253,7 +303,7 @@ func (c *Client) postTokenEndpoint(ctx context.Context, tokenEndpoint string, da
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

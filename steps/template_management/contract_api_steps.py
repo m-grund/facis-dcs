@@ -7,6 +7,7 @@ from behave import given, then, when
 
 from core.utils import is_uuid
 from steps.support.services.contract_service import ContractService
+from steps.support.services.template_service import TemplateService
 from steps.support.api_client import (
     contract_approve_url,
     contract_create_url,
@@ -92,7 +93,7 @@ def step_then_contract_unique_id(context):
 # ---------------------------------------------------------------------------
 
 _ENDPOINT_PAYLOADS = {
-    "template_create":        {"template_type": "FRAME_CONTRACT", "name": "bdd-test", "description": "test", "template_data": {}},
+    "template_create":        {"template_type": TemplateService.CONTRACT_TEMPLATE_TYPE, "name": "bdd-test", "description": "test", "template_data": {}},
     "template_submit":        {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},
     "template_update":        {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},
     "template_update_manage": {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},

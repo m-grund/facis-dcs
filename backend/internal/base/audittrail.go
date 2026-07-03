@@ -74,8 +74,8 @@ func (r AuditTrailReader) ReadAuditLogEntriesByComponent(ctx context.Context, tx
 			if err != nil {
 				return nil, fmt.Errorf("read body: %w", err)
 			}
-			var logEntry datatype.AuditLogEntry
-			if err := json.Unmarshal(result.Data, &logEntry); err != nil {
+			logEntry, err := decodeSignedAuditLogEntry(result.Data)
+			if err != nil {
 				return nil, fmt.Errorf("decode response: %w", err)
 			}
 
@@ -112,8 +112,8 @@ func (r AuditTrailReader) ReadAllAuditLogEntries(ctx context.Context, tx *sqlx.T
 		if err != nil {
 			return nil, fmt.Errorf("read body: %w", err)
 		}
-		var logEntry datatype.AuditLogEntry
-		if err := json.Unmarshal(bodyBytes.Data, &logEntry); err != nil {
+		logEntry, err := decodeSignedAuditLogEntry(bodyBytes.Data)
+		if err != nil {
 			return nil, fmt.Errorf("decode response: %w", err)
 		}
 
@@ -127,4 +127,12 @@ func (r AuditTrailReader) ReadAllAuditLogEntries(ctx context.Context, tx *sqlx.T
 	}
 
 	return logEntries, nil
+}
+
+func decodeSignedAuditLogEntry(data []byte) (datatype.AuditLogEntry, error) {
+	var signedAuditLogEntry datatype.SignedAuditLogEntry
+	if err := json.Unmarshal(data, &signedAuditLogEntry); err != nil {
+		return datatype.AuditLogEntry{}, err
+	}
+	return signedAuditLogEntry.AuditLogEntry, nil
 }

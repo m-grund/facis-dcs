@@ -13,8 +13,6 @@ import (
 
 	"digital-contracting-service/internal/processauditandcompliance/datatype/eventtype"
 
-	"digital-contracting-service/internal/base"
-
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
 
@@ -28,11 +26,9 @@ import (
 )
 
 type GetContractContentTrailQry struct {
-	RetrievedBy   string
-	HolderDID     string
-	UserRoles     userrole.UserRoles
-	Policy        any
-	PolicyVersion *string
+	RetrievedBy string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
 }
 
 type ContractContentTrailAuditor struct {
@@ -71,11 +67,10 @@ func (h *ContractContentTrailAuditor) Handle(ctx context.Context, query GetContr
 		auditMetadata := validation.ContractContentAuditMetadata{
 			ContractDID:     contract.DID,
 			ContractVersion: fmt.Sprint(contract.ContractVersion),
-			PolicyVersion:   base.DerefString(query.PolicyVersion),
 			AuditedBy:       middleware.GetParticipantID(ctx),
 			HolderDID:       middleware.GetHolderDID(ctx),
 		}
-		findings, err := validation.AuditContractContent(contract.ContractData, query.Policy, auditMetadata)
+		findings, err := validation.AuditContractContent(contract.ContractData, nil, auditMetadata)
 		if err != nil {
 			return nil, fmt.Errorf("could not audit contract: %w", err)
 		}

@@ -111,12 +111,12 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		}
 	}(tx)
 
-	contractTemplate, err := h.CTRepo.ReadFrameContractTemplateDataByDID(ctx, tx, cmd.TemplateDID)
+	contractTemplate, err := h.CTRepo.ReadContractTemplateDataByID(ctx, tx, cmd.TemplateDID)
 	if err != nil {
-		return fmt.Errorf("could not read frame contract template data: %w", err)
+		return fmt.Errorf("could not read contract template data: %w", err)
 	}
 
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate.TemplateData, cmd.DID, nil, false)
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate.TemplateData, cmd.DID, false)
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}

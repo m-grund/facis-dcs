@@ -260,39 +260,34 @@ func TestSubsectionDepthFirstOrder(t *testing.T) {
 // subsections compiles without error and all headings appear in the PDF.
 func TestSubsectionFromPayload(t *testing.T) {
 	payload := []byte(`{
-		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-			"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-		},
+		"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
 		"@id": "urn:doc:subsection-test",
-		"@type": "dcs-pdf-core:Document",
-		"title": "Subsection Test Document",
-		"sections": [
-			{
-				"@type": "dcs-pdf-core:Section",
-				"heading": "1. Main Section",
-				"clauses": ["Main clause."],
-				"subsections": [
-					{
-						"@type": "dcs-pdf-core:Section",
-						"heading": "1.1 First Sub",
-						"clauses": ["Sub clause one."],
-						"subsections": [
-							{
-								"@type": "dcs-pdf-core:Section",
-								"heading": "1.1.1 Deep Sub",
-								"clauses": ["Deep sub clause."]
-							}
-						]
-					},
-					{
-						"@type": "dcs-pdf-core:Section",
-						"heading": "1.2 Second Sub",
-						"clauses": ["Sub clause two."]
-					}
-				]
-			}
-		]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Subsection Test Document"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:subsection-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:subsection-test#s1",
+					"children": ["urn:doc:subsection-test#c1", "urn:doc:subsection-test#s11", "urn:doc:subsection-test#s12"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:subsection-test#s11",
+					"children": ["urn:doc:subsection-test#c11", "urn:doc:subsection-test#s111"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:subsection-test#s111",
+					"children": ["urn:doc:subsection-test#c111"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:subsection-test#s12",
+					"children": ["urn:doc:subsection-test#c12"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:subsection-test#s1",   "title": "1. Main Section"},
+				{"@type": "Clause", "@id": "urn:doc:subsection-test#c1",   "content": ["Main clause."]},
+				{"@type": "Section", "@id": "urn:doc:subsection-test#s11",  "title": "1.1 First Sub"},
+				{"@type": "Clause", "@id": "urn:doc:subsection-test#c11",  "content": ["Sub clause one."]},
+				{"@type": "Section", "@id": "urn:doc:subsection-test#s111", "title": "1.1.1 Deep Sub"},
+				{"@type": "Clause", "@id": "urn:doc:subsection-test#c111", "content": ["Deep sub clause."]},
+				{"@type": "Section", "@id": "urn:doc:subsection-test#s12",  "title": "1.2 Second Sub"},
+				{"@type": "Clause", "@id": "urn:doc:subsection-test#c12",  "content": ["Sub clause two."]}
+			]
+		}
 	}`)
 	doc := mustExtractFromPayload(t, payload)
 	if len(doc.Sections) == 0 {

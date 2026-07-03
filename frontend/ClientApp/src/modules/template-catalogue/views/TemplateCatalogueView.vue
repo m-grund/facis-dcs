@@ -65,10 +65,10 @@ const isRegisterDisabled = computed(() => {
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
 function toTemplateType(value: string | undefined): TemplateTypeValue {
-  if (value === TemplateType.frameContract || value === TemplateType.subContract) {
+  if (value === TemplateType.contractTemplate || value === TemplateType.component) {
     return value
   }
-  return TemplateType.subContract
+  return TemplateType.component
 }
 
 watch(
@@ -101,17 +101,10 @@ watch(
         return
       }
 
-      draftStore.reset({
-        workflow: 'template',
+      draftStore.loadDocument(templateData, {
         did: data.did,
         name: data.name ?? '',
         description: data.description ?? '',
-        templateDataVersion: templateData.templateDataVersion ?? 1,
-        documentOutline: templateData.documentOutline ?? [],
-        documentBlocks: templateData.documentBlocks ?? [],
-        semanticConditions: templateData.semanticConditions ?? [],
-        customMetaData: templateData.customMetaData ?? [],
-        subTemplateSnapshots: templateData.subTemplateSnapshots ?? [],
         templateType: toTemplateType(data.template_type),
         state: TemplateState.draft,
         document_number: data.document_number ?? null,

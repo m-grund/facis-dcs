@@ -95,15 +95,16 @@ done
 echo ""
 echo "=== Starting Vite dev server ==="
 cd frontend/ClientApp
-npm run dev &
+DCS_API_TARGET=http://localhost:8991 DCS_HYDRA_TARGET=http://localhost:30444 npm run dev &
 VITE_PID=$!
 cd ../..
 
 sleep 2
 
+cd backend
+goa gen digital-contracting-service/design
 echo ""
 echo "=== Starting backend (air) ==="
-cd backend
 air &> /tmp/backend-live.log &
 BACKEND_PID=$!
 

@@ -32,3 +32,30 @@ func (e AuditEvent) GetDID() string {
 	}
 	return e.DID
 }
+
+// ReportGeneratedEvent is emitted when PACM generates an audit report.
+type ReportGeneratedEvent struct {
+	ReportID    string             `json:"report_id"`
+	Scope       string             `json:"scope"`
+	Format      string             `json:"format"`
+	DID         string             `json:"did,omitempty"`
+	GeneratedBy string             `json:"generated_by"`
+	GeneratedAt time.Time          `json:"generated_at"`
+	ContentHash string             `json:"content_hash"`
+	Summary     map[string]int     `json:"summary"`
+	HolderDID   string             `json:"holder_did"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e ReportGeneratedEvent) EventType() string {
+	return "PAC_REPORT_GENERATED"
+}
+
+// GetDID implements the Event interface.
+func (e ReportGeneratedEvent) GetDID() string {
+	if e.DID == "" {
+		return "*"
+	}
+	return e.DID
+}

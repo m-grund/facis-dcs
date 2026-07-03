@@ -8,18 +8,40 @@ import (
 
 // claimBase is a self-contained JSON-LD payload used across claim tests.
 const claimBase = `{
-  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
+  "@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#", "dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
   "@id": "urn:doc:claim-test",
-  "title": "Claim Test",
-  "clauses": ["Original clause for claim verification."]
+  "@type": "ContractTemplate",
+  "metadata": {"@type": "TemplateMetadata", "title": "Claim Test"},
+  "documentStructure": {
+    "@type": "DocumentStructure",
+    "layout": [
+      {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:claim-test#s1"]},
+      {"@type": "LayoutNode", "@id": "urn:doc:claim-test#s1", "children": ["urn:doc:claim-test#c1"]}
+    ],
+    "blocks": [
+      {"@type": "Section", "@id": "urn:doc:claim-test#s1", "title": "1. Terms"},
+      {"@type": "Clause", "@id": "urn:doc:claim-test#c1", "content": ["Original clause for claim verification."]}
+    ]
+  }
 }`
 
 // claimAlternate has different clause text so MatchPageContent must reject it.
 const claimAlternate = `{
-  "@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
+  "@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#", "dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
   "@id": "urn:doc:claim-test",
-  "title": "Claim Test",
-  "clauses": ["Completely different content that renders differently."]
+  "@type": "ContractTemplate",
+  "metadata": {"@type": "TemplateMetadata", "title": "Claim Test"},
+  "documentStructure": {
+    "@type": "DocumentStructure",
+    "layout": [
+      {"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:claim-test#s1"]},
+      {"@type": "LayoutNode", "@id": "urn:doc:claim-test#s1", "children": ["urn:doc:claim-test#c1"]}
+    ],
+    "blocks": [
+      {"@type": "Section", "@id": "urn:doc:claim-test#s1", "title": "1. Terms"},
+      {"@type": "Clause", "@id": "urn:doc:claim-test#c1", "content": ["Completely different content that renders differently."]}
+    ]
+  }
 }`
 
 // TestStripEmbeddedJSONLD_RemovesPayload verifies that StripEmbeddedJSONLD

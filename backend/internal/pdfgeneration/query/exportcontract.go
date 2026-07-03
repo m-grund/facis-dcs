@@ -13,7 +13,6 @@ import (
 
 	"digital-contracting-service/internal/base/ipfs"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
-	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 )
@@ -49,10 +48,7 @@ func (h *ExportContractPdfHandler) Handle(ctx context.Context, qry ExportContrac
 
 	var jsonldBytes []byte
 	if contract.ContractData != nil {
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData))
-		if err != nil {
-			return nil, fmt.Errorf("marshal contract JSON-LD: %w", err)
-		}
+		jsonldBytes = []byte(*contract.ContractData)
 	}
 
 	pdfState, err := h.CRepo.ReadPDFState(ctx, tx, qry.DID)

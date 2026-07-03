@@ -10,12 +10,6 @@ var PACAuditRequest = Type("PACAuditRequest", func() {
 	Token("token", String, "JWT token")
 
 	Attribute("scope", String, "Scope that should be audited")
-	Attribute("audit_mode", String, "Audit mode, for example repository_trail or static_contract")
-	Attribute("contract_document", Any, "Contract document to audit for static contract checks")
-	Attribute("policy", Any, "Policy parameters to use for static contract checks")
-	Attribute("contract_did", String, "Contract DID for static contract checks")
-	Attribute("contract_version", String, "Contract version for static contract checks")
-	Attribute("policy_version", String, "Policy version for static contract checks")
 
 	Required("scope")
 })
@@ -85,9 +79,15 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")
+			Attribute("scope", String, "Scope that should be reported")
+			Attribute("format", String, "Report format: json, csv, or pdf")
+			Attribute("did", String, "Optional resource DID filter")
 		})
 		HTTP(func() {
 			GET("/pac/report")
+			Param("scope")
+			Param("format")
+			Param("did")
 			Response(StatusOK)
 		})
 		Result(Any)

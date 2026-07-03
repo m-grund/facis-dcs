@@ -103,7 +103,7 @@ func (s *authSvc) buildLoginResult(ctx context.Context, presentationState, nonce
 	authorizeURL, err := s.hydra.AuthorizeURL(ctx, presentationState)
 
 	if err != nil {
-		return nil, fmt.Errorf("hydra authorize url: %w", err)
+		return nil, goa.PermanentError("service_unavailable", "hydra authorize url: %v", err)
 	}
 
 	requestURI := strings.TrimRight(s.publicAPIBase, "/") + "/auth/presentation/request/" + url.PathEscape(presentationState)

@@ -1,12 +1,3 @@
-<script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-
-const { documentOutline, documentBlocks, semanticConditions, subTemplateSnapshots } =
-  storeToRefs(useTemplateDraftStore())
-</script>
-
 <template>
   <div class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body">
@@ -18,8 +9,8 @@ const { documentOutline, documentBlocks, semanticConditions, subTemplateSnapshot
       >
         <div class="h-full w-full overflow-auto px-10 py-8">
           <TemplatePreview
-            :document-outline="documentOutline"
-            :document-blocks="documentBlocks"
+            :layout="layout"
+            :blocks="blocks"
             :semantic-conditions="semanticConditions"
             :sub-template-snapshots="subTemplateSnapshots"
           />
@@ -28,3 +19,11 @@ const { documentOutline, documentBlocks, semanticConditions, subTemplateSnapshot
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+
+const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(useTemplateDraftStore())
+</script>

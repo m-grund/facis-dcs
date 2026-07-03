@@ -48,16 +48,10 @@ watch(
         templateEditorUiStore.setTemplateEditable(false)
         contractTemplate.value = template
 
-        draftStore.reset({
+        draftStore.loadDocument(template.template_data, {
           did: template.did,
-          name: template.name,
-          description: template.description,
-          templateDataVersion: template.template_data?.templateDataVersion ?? 1,
-          documentOutline: template.template_data?.documentOutline ?? [],
-          documentBlocks: template.template_data?.documentBlocks ?? [],
-          semanticConditions: template.template_data?.semanticConditions ?? [],
-          customMetaData: template.template_data?.customMetaData ?? [],
-          subTemplateSnapshots: template.template_data?.subTemplateSnapshots ?? [],
+          name: template.name ?? '',
+          description: template.description ?? '',
           templateType: template.template_type,
           state: template.state,
           version: template.version ?? null,

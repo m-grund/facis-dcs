@@ -2,7 +2,6 @@
 @prefix sla: <https://w3id.org/facis/sla/ontology#> .
 @prefix slat: <https://w3id.org/facis/sla/taxonomy#> .
 @prefix dcst: <https://w3id.org/facis/dcs/taxonomy/v1#> .
-@prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -12,10 +11,6 @@
 
 <https://w3id.org/facis/sla/ontology> a owl:Ontology ;
   owl:versionInfo "1.1.0" ;
-  dcterms:created "2026-05-18" ;
-  dcterms:modified "2026-05-29" ;
-  dcterms:license <https://creativecommons.org/licenses/by/4.0/> ;
-  dcterms:isPartOf <https://w3id.org/facis/dcs/ontology/v1> ;
   rdfs:label "FACIS SLA Ontology"@en, "FACIS SLA-Ontologie"@de ;
   rdfs:comment "Turtle ontology for service level agreements in FACIS DCS. It models SLA contracts, objectives, metrics, measurement, monitoring, breach handling, remedies, service credits, support windows, incidents, evidence, reporting, and canonical DCS domain-field mappings."@en, "Turtle-Ontologie fuer Service Level Agreements in FACIS DCS. Sie modelliert SLA-Vertraege, Ziele, Metriken, Messung, Monitoring, Verletzungen, Abhilfen, Service Credits, Supportfenster, Incidents, Nachweise, Reporting und kanonische DCS-Domain-Field-Mappings."@de ;
   rdfs:seeAlso <https://w3id.org/facis/dcs/ontology>, <https://w3id.org/facis/dcs/ontology/v1> .
@@ -484,6 +479,10 @@ dcs:ContractObject a rdfs:Class ;
   rdfs:label "Contract Object"@en ;
   rdfs:comment "A lifecycle-aware digital object containing contract content, metadata, parties, semantic conditions, and evidence."@en .
 
+dcs:ContractField a rdfs:Class ;
+  rdfs:label "Contract Field"@en ;
+  rdfs:comment "A value-free reference and binding node that identifies a property on a contract data object for policies, placeholders, and UI mapping."@en .
+
 dcs:ContractVersion a rdfs:Class ;
   rdfs:label "Contract Version"@en ;
   rdfs:comment "A version of a contract created by generation, adjustment, renewal, or correction."@en .
@@ -646,6 +645,16 @@ dcs:CurrencyCode a rdfs:Class ;
   rdfs:subClassOf dcs:VocabularyTerm ;
   rdfs:label "ISO 4217 Currency Code"@en .
 
+dcs:CountryReference a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Country Taxonomy Reference"@en ;
+  rdfs:comment "A reference to a country concept in the DCS taxonomy."@en .
+
+dcs:CurrencyReference a rdfs:Class ;
+  rdfs:subClassOf dcs:VocabularyTerm ;
+  rdfs:label "Currency Taxonomy Reference"@en ;
+  rdfs:comment "A reference to a currency concept in the DCS taxonomy."@en .
+
 dcs:SignatureLevelCode a rdfs:Class ;
   rdfs:subClassOf dcs:VocabularyTerm ;
   rdfs:label "eIDAS Signature Level Code"@en .
@@ -703,6 +712,12 @@ dcs:BlockCatalogueEntry a rdfs:Class ;
 dcs:PaymentTerm a rdfs:Class ;
   rdfs:label "Payment Term"@en .
 
+dcs:LegalTerms a rdfs:Class ;
+  rdfs:label "Legal Terms"@en .
+
+dcs:SignatureRequirement a rdfs:Class ;
+  rdfs:label "Signature Requirement"@en .
+
 dcs:LiabilityTerms a rdfs:Class ;
   rdfs:label "Liability Terms"@en .
 
@@ -739,6 +754,11 @@ dcs:templateData a rdf:Property ;
 
 dcs:contractData a rdf:Property ;
   rdfs:label "Contract Data"@en .
+
+dcs:contractFields a rdf:Property ;
+  rdfs:label "Contract Fields"@en ;
+  rdfs:domain dcs:Contract ;
+  rdfs:range dcs:ContractField .
 
 dcs:documentOutline a rdf:Property ;
   rdfs:label "Document Outline"@en .
@@ -839,9 +859,6 @@ dcs:boundToCondition a rdf:Property ;
 dcs:boundToParameter a rdf:Property ;
   rdfs:label "Bound To Parameter"@en ;
   rdfs:range xsd:string .
-
-dcs:semanticProfile a rdf:Property ;
-  rdfs:label "Semantic Profile"@en .
 
 dcs:semanticProfileVersion a rdf:Property ;
   rdfs:label "Semantic Profile Version"@en ;
@@ -991,7 +1008,7 @@ dcs:hasConstraint a rdf:Property ;
 
 dcs:hasValueConstraint a rdf:Property ;
   rdfs:label "Has Value Constraint"@en ;
-  rdfs:domain dcs:DomainField ;
+  rdfs:comment "Associates a domain field or ontology property with its value constraint."@en ;
   rdfs:range dcs:ValueConstraint .
 
 dcs:ruleId a rdf:Property ;
@@ -1024,6 +1041,24 @@ dcs:allowedValue a rdf:Property ;
 
 dcs:allowedValuesRef a rdf:Property ;
   rdfs:label "Allowed Values Reference"@en ;
+  rdfs:range xsd:string .
+
+dcs:valueCatalog a rdf:Property ;
+  rdfs:label "Value Catalog"@en ;
+  rdfs:range skos:ConceptScheme .
+
+dcs:valueOption a rdf:Property ;
+  rdfs:label "Value Option"@en .
+
+dcs:value a rdf:Property ;
+  rdfs:label "Value"@en .
+
+dcs:valueLabel a rdf:Property ;
+  rdfs:label "Value Label"@en ;
+  rdfs:range xsd:string .
+
+dcs:valueSymbol a rdf:Property ;
+  rdfs:label "Value Symbol"@en ;
   rdfs:range xsd:string .
 
 dcs:pattern a rdf:Property ;
@@ -1157,6 +1192,14 @@ dcs:path a rdf:Property ;
   rdfs:label "Path"@en ;
   rdfs:range xsd:string .
 
+dcs:sourceObject a rdf:Property ;
+  rdfs:label "Source Object"@en ;
+  rdfs:domain dcs:ContractField .
+
+dcs:dataType a rdf:Property ;
+  rdfs:label "Data Type"@en ;
+  rdfs:domain dcs:ContractField .
+
 dcs:hasApproval a rdf:Property ;
   rdfs:label "Has Approval"@en ;
   rdfs:range dcs:Approval .
@@ -1178,7 +1221,8 @@ dcs:party a rdf:Property ;
 dcs:role a rdf:Property ;
   rdfs:label "Role"@en ;
   rdfs:comment "Contract-scoped function of a party, for example supplier or customer."@en ;
-  rdfs:range xsd:string .
+  rdfs:range dcs:ContractPartyRoleCode ;
+  dcs:hasValueConstraint dcst:constraint-contract-party-role .
 
 dcs:legalName a rdf:Property ;
   rdfs:label "Legal Name"@en ;
@@ -1314,18 +1358,179 @@ dcst:enforcement-contract-update a dcs:PolicyEnforcementPoint ;
   rdfs:label "Contract Update Enforcement Point"@en .
 
 dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
+  dcs:valueType dcs:CountryReference ;
   dcs:format "iso-3166-1-alpha-3" ;
   dcs:pattern "^[A-Z]{3}$" ;
   dcs:allowedValuesRef "ISO 3166-1 alpha-3" ;
-  dcs:allowedValue "DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA" ;
+  dcs:valueCatalog dcst:catalog-iso3166-alpha3-country ;
+  dcs:allowedValue "DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA", "DNK", "SWE", "NOR", "FIN", "IRL", "PRT", "GRC", "CAN", "JPN", "AUS" ;
   rdfs:label "ISO 3166-1 alpha-3 Country Constraint"@en .
 
 dcst:constraint-iso4217-currency a dcs:ValueConstraint ;
+  dcs:valueType dcs:CurrencyReference ;
   dcs:format "iso-4217" ;
   dcs:pattern "^[A-Z]{3}$" ;
   dcs:allowedValuesRef "ISO 4217" ;
+  dcs:valueCatalog dcst:catalog-iso4217-currency ;
   dcs:allowedValue "EUR", "USD", "GBP", "CHF", "PLN", "CZK" ;
   rdfs:label "ISO 4217 Currency Constraint"@en .
+
+dcst:catalog-iso3166-alpha3-country a skos:ConceptScheme ;
+  skos:prefLabel "ISO 3166-1 alpha-3 countries"@en, "ISO 3166-1 Alpha-3 Laender"@de .
+
+dcst:country-DEU a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "DEU" ;
+  skos:prefLabel "Germany"@en, "Deutschland"@de .
+
+dcst:country-AUT a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "AUT" ;
+  skos:prefLabel "Austria"@en, "Oesterreich"@de .
+
+dcst:country-CHE a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "CHE" ;
+  skos:prefLabel "Switzerland"@en, "Schweiz"@de .
+
+dcst:country-FRA a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "FRA" ;
+  skos:prefLabel "France"@en, "Frankreich"@de .
+
+dcst:country-NLD a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "NLD" ;
+  skos:prefLabel "Netherlands"@en, "Niederlande"@de .
+
+dcst:country-BEL a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "BEL" ;
+  skos:prefLabel "Belgium"@en, "Belgien"@de .
+
+dcst:country-LUX a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "LUX" ;
+  skos:prefLabel "Luxembourg"@en, "Luxemburg"@de .
+
+dcst:country-POL a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "POL" ;
+  skos:prefLabel "Poland"@en, "Polen"@de .
+
+dcst:country-CZE a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "CZE" ;
+  skos:prefLabel "Czechia"@en, "Tschechien"@de .
+
+dcst:country-ESP a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "ESP" ;
+  skos:prefLabel "Spain"@en, "Spanien"@de .
+
+dcst:country-ITA a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "ITA" ;
+  skos:prefLabel "Italy"@en, "Italien"@de .
+
+dcst:country-GBR a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "GBR" ;
+  skos:prefLabel "United Kingdom"@en, "Vereinigtes Koenigreich"@de .
+
+dcst:country-USA a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "USA" ;
+  skos:prefLabel "United States"@en, "Vereinigte Staaten"@de .
+
+dcst:country-DNK a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "DNK" ;
+  skos:prefLabel "Denmark"@en, "Daenemark"@de .
+
+dcst:country-SWE a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "SWE" ;
+  skos:prefLabel "Sweden"@en, "Schweden"@de .
+
+dcst:country-NOR a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "NOR" ;
+  skos:prefLabel "Norway"@en, "Norwegen"@de .
+
+dcst:country-FIN a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "FIN" ;
+  skos:prefLabel "Finland"@en, "Finnland"@de .
+
+dcst:country-IRL a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "IRL" ;
+  skos:prefLabel "Ireland"@en, "Irland"@de .
+
+dcst:country-PRT a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "PRT" ;
+  skos:prefLabel "Portugal"@en, "Portugal"@de .
+
+dcst:country-GRC a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "GRC" ;
+  skos:prefLabel "Greece"@en, "Griechenland"@de .
+
+dcst:country-CAN a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "CAN" ;
+  skos:prefLabel "Canada"@en, "Kanada"@de .
+
+dcst:country-JPN a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "JPN" ;
+  skos:prefLabel "Japan"@en, "Japan"@de .
+
+dcst:country-AUS a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
+  skos:notation "AUS" ;
+  skos:prefLabel "Australia"@en, "Australien"@de .
+
+dcst:catalog-iso4217-currency a skos:ConceptScheme ;
+  skos:prefLabel "ISO 4217 currencies"@en, "ISO 4217 Waehrungen"@de .
+
+dcst:currency-EUR a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ;
+  skos:notation "EUR" ;
+  skos:prefLabel "Euro"@en ;
+  dcs:valueSymbol "€" .
+
+dcst:currency-USD a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ;
+  skos:notation "USD" ;
+  skos:prefLabel "US Dollar"@en ;
+  dcs:valueSymbol "$" .
+
+dcst:currency-GBP a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ;
+  skos:notation "GBP" ;
+  skos:prefLabel "Pound Sterling"@en ;
+  dcs:valueSymbol "£" .
+
+dcst:currency-CHF a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ;
+  skos:notation "CHF" ;
+  skos:prefLabel "Swiss Franc"@en ;
+  dcs:valueSymbol "CHF" .
+
+dcst:currency-PLN a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ;
+  skos:notation "PLN" ;
+  skos:prefLabel "Polish Zloty"@en ;
+  dcs:valueSymbol "zł" .
+
+dcst:currency-CZK a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ;
+  skos:notation "CZK" ;
+  skos:prefLabel "Czech Koruna"@en ;
+  dcs:valueSymbol "Kč" .
 
 dcst:constraint-eidas-signature-level a dcs:ValueConstraint ;
   dcs:format "eidas-signature-level" ;
@@ -1388,60 +1593,70 @@ dcst:field-company-legalName a dcs:DomainField ;
 
 dcst:field-company-registrationNumber a dcs:DomainField ;
   dcs:semanticPath "company.registrationNumber" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Registration Number"@en .
 
 dcst:field-company-vatId a dcs:DomainField ;
   dcs:semanticPath "company.vatId" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company VAT ID"@en .
 
 dcst:field-company-representative-name a dcs:DomainField ;
   dcs:semanticPath "company.representative.name" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Representative Name"@en .
 
 dcst:field-company-representative-role a dcs:DomainField ;
   dcs:semanticPath "company.representative.role" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Representative Role"@en .
 
 dcst:field-company-contact-email a dcs:DomainField ;
   dcs:semanticPath "company.contact.email" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Contact Email"@en .
 
 dcst:field-company-contact-phone a dcs:DomainField ;
   dcs:semanticPath "company.contact.phone" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Contact Phone"@en .
 
 dcst:field-company-location-street a dcs:DomainField ;
   dcs:semanticPath "company.location.street" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Street"@en .
 
 dcst:field-company-location-postalCode a dcs:DomainField ;
   dcs:semanticPath "company.location.postalCode" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Postal Code"@en .
 
 dcst:field-company-location-city a dcs:DomainField ;
   dcs:semanticPath "company.location.city" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company City"@en .
 
 dcst:field-company-location-region a dcs:DomainField ;
   dcs:semanticPath "company.location.region" ;
+  dcs:statementType dcs:CompanyParty ;
   dcs:schemaRef "facis.dcs.party.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Company Region"@en .
@@ -1472,6 +1687,7 @@ dcst:field-contract-title a dcs:DomainField ;
 dcst:field-contract-jurisdiction a dcs:DomainField ;
   dcs:semanticPath "contract.jurisdiction" ;
   dcs:statementField "contract.jurisdiction" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country ;
@@ -1479,6 +1695,7 @@ dcst:field-contract-jurisdiction a dcs:DomainField ;
 
 dcst:field-contract-governingLaw a dcs:DomainField ;
   dcs:semanticPath "contract.governingLaw" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-governing-law ;
@@ -1486,6 +1703,7 @@ dcst:field-contract-governingLaw a dcs:DomainField ;
 
 dcst:field-contract-disputeResolution-venue a dcs:DomainField ;
   dcs:semanticPath "contract.disputeResolution.venue" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Dispute Venue"@en .
@@ -1553,6 +1771,7 @@ dcst:field-contract-payment-dueDate a dcs:DomainField ;
 
 dcst:field-contract-payment-dueDays a dcs:DomainField ;
   dcs:semanticPath "contract.payment.dueDays" ;
+  dcs:statementType dcs:PaymentTerm ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "integer" ;
   rdfs:label "Payment Due Days"@en .
@@ -1590,6 +1809,7 @@ dcst:field-contract-dataProtection-role a dcs:DomainField ;
 
 dcst:field-contract-disputeResolution-method a dcs:DomainField ;
   dcs:semanticPath "contract.disputeResolution.method" ;
+  dcs:statementType dcs:LegalTerms ;
   dcs:schemaRef "facis.dcs.contract.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-dispute-method ;
@@ -1651,6 +1871,7 @@ dcst:field-service-sla-availability a dcs:DomainField ;
 
 dcst:field-service-sla-responseTime a dcs:DomainField ;
   dcs:semanticPath "service.sla.responseTime" ;
+  dcs:statementType dcs:SLO ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "integer" ;
   dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative ;
@@ -1658,6 +1879,7 @@ dcst:field-service-sla-responseTime a dcs:DomainField ;
 
 dcst:field-service-sla-resolutionTime a dcs:DomainField ;
   dcs:semanticPath "service.sla.resolutionTime" ;
+  dcs:statementType dcs:SLO ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "integer" ;
   dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative ;
@@ -1665,6 +1887,7 @@ dcst:field-service-sla-resolutionTime a dcs:DomainField ;
 
 dcst:field-service-sla-supportHours a dcs:DomainField ;
   dcs:semanticPath "service.sla.supportHours" ;
+  dcs:statementType dcs:SLO ;
   dcs:schemaRef "facis.dcs.service.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Support Hours"@en .
@@ -1672,6 +1895,7 @@ dcst:field-service-sla-supportHours a dcs:DomainField ;
 dcst:field-signature-requiredLevel a dcs:DomainField ;
   dcs:semanticPath "signature.requiredLevel" ;
   dcs:statementField "signature.requiredLevel" ;
+  dcs:statementType dcs:SignatureRequirement ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
   dcs:hasValueConstraint dcst:constraint-eidas-signature-level ;
@@ -1680,12 +1904,14 @@ dcst:field-signature-requiredLevel a dcs:DomainField ;
 dcst:field-signature-requiredSignerRole a dcs:DomainField ;
   dcs:semanticPath "signature.requiredSignerRole" ;
   dcs:statementField "signature.requiredSignerRole" ;
+  dcs:statementType dcs:SignatureRequirement ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "string" ;
   rdfs:label "Required Signer Role"@en .
 
 dcst:field-signature-deadline a dcs:DomainField ;
   dcs:semanticPath "signature.deadline" ;
+  dcs:statementType dcs:SignatureRequirement ;
   dcs:schemaRef "facis.dcs.signature.v1" ;
   dcs:parameterType "date" ;
   rdfs:label "Signature Deadline"@en .

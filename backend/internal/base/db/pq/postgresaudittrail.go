@@ -18,8 +18,11 @@ type PostgresAuditTrailRepository struct{}
 // (per-resource when did is a real DID, and globally when called with
 // conf.GlobalAuditTrailName() for both arguments).
 func (r *PostgresAuditTrailRepository) UpdateLogCID(ctx context.Context, tx *sqlx.Tx, component string, did string, lastLogDID *string) error {
-	statement := `UPDATE audit_trail_log SET last_log_cid = $2 WHERE did = $1`
-	result, err := tx.ExecContext(ctx, statement, did, lastLogDID)
+	statement := `UPDATE audit_trail_log SET last_log_cid = $3 WHERE component = $1 AND did = $2`
+	result, err := tx.ExecContext(ctx, statement, component, did, lastLogDID)
+	if err != nil {
+		return err
+	}
 	rows, _ := result.RowsAffected()
 
 	if rows == 0 {

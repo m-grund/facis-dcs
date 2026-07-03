@@ -59,7 +59,7 @@ func (h *Copier) Handle(ctx context.Context, cmd CopyCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not read copied contract template: %w", err)
 	}
-	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(copiedTemplate.TemplateData, cmd.NewDID, copiedTemplate.Name)
+	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(copiedTemplate.TemplateData, cmd.NewDID)
 	if err != nil {
 		return fmt.Errorf("copied template data validation failed: %w", err)
 	}

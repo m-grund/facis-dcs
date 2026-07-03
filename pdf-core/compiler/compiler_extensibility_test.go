@@ -8,24 +8,28 @@ import (
 )
 
 // odrlPayload is a JSON-LD document that includes an ODRL policy alongside the
-// standard dcs-pdf-core content. The odrl namespace is unknown to the ontology
+// standard dcs ontology content. The odrl namespace is unknown to the ontology
 // and must be silently passed through to the embedded JSON-LD attachment.
 const odrlPayload = `{
 	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+		"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+		"dcs": "https://w3id.org/facis/dcs/ontology/v1#",
 		"odrl": "http://www.w3.org/ns/odrl/2/"
 	},
 	"@id": "urn:doc:odrl-test",
-	"@type": "dcs-pdf-core:Document",
-	"title": "ODRL Pass-Through Test",
-	"sections": [
-		{
-			"@type": "dcs-pdf-core:Section",
-			"heading": "1. Usage Terms",
-			"clauses": ["This document is subject to usage constraints."]
-		}
-	],
+	"@type": "ContractTemplate",
+	"metadata": {"@type": "TemplateMetadata", "title": "ODRL Pass-Through Test"},
+	"documentStructure": {
+		"@type": "DocumentStructure",
+		"layout": [
+			{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:odrl-test#s1"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:odrl-test#s1", "children": ["urn:doc:odrl-test#c1"]}
+		],
+		"blocks": [
+			{"@type": "Section", "@id": "urn:doc:odrl-test#s1", "title": "1. Usage Terms"},
+			{"@type": "Clause", "@id": "urn:doc:odrl-test#c1", "content": ["This document is subject to usage constraints."]}
+		]
+	},
 	"odrl:hasPolicy": {
 		"@type": "odrl:Policy",
 		"odrl:uid": "http://example.com/policy/1",
@@ -56,8 +60,8 @@ func TestODRLDataPreservedInEmbeddedJSONLD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractEmbeddedJSONLD: %v", err)
 	}
-	// The canonical form will contain the expanded ODRL IRI.
-	if !bytes.Contains(extracted, []byte("w3.org/ns/odrl")) {
+	// The canonical form uses the odrl: prefix defined in the context.
+	if !bytes.Contains(extracted, []byte("odrl:")) {
 		t.Errorf("embedded JSON-LD must contain ODRL data; got:\n%s", extracted[:min(len(extracted), 500)])
 	}
 }

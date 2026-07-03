@@ -206,6 +206,10 @@ func headingTag(kind string, depth int) string {
 	return "/P"
 }
 
+func lineUsesBoldTextMode(kind string) bool {
+	return kind == "section-heading" || kind == "subsection-heading"
+}
+
 func renderContentStream(page pageLayout) string {
 	var builder strings.Builder
 	for _, line := range page.Lines {
@@ -216,6 +220,12 @@ func renderContentStream(page pageLayout) string {
 		builder.WriteString(fmt.Sprintf("%s <</MCID %d>> BDC\n", tag, line.MCID))
 		builder.WriteString("BT\n")
 		builder.WriteString(fmt.Sprintf("/F1 %.2f Tf\n", line.FontSize))
+		builder.WriteString("0 g\n")
+		if lineUsesBoldTextMode(line.Kind) {
+			builder.WriteString("0 G\n0.35 w\n2 Tr\n")
+		} else {
+			builder.WriteString("0 Tr\n")
+		}
 		builder.WriteString(fmt.Sprintf("1 0 0 1 %.2f %.2f Tm\n", line.X, line.Y))
 		builder.WriteString(fmt.Sprintf("(%s) Tj\n", escapePDFString(line.Text)))
 		builder.WriteString("ET\nEMC\n")
@@ -290,7 +300,7 @@ func buildOutlineObjects(pages []pageLayout, startID int) (rootID int, objects [
 		if i < len(items)-1 {
 			nextRef = fmt.Sprintf(" /Next %d 0 R", itemIDs[i+1])
 		}
-		dest := fmt.Sprintf("[%d 0 R /XYZ 0 %.2f 0]", itm.pageID, itm.destY)
+		dest := fmt.Sprintf("[%d 0 R /XYZ 54.00 %.2f 0]", itm.pageID, itm.destY)
 		objects = append(objects, pdfObject{ID: itemIDs[i], Data: []byte(fmt.Sprintf(
 			"<< /Title (%s) /Parent %d 0 R /Dest %s%s%s /Count 0 >>",
 			escapePDFString(itm.title), rootID, dest, prevRef, nextRef,

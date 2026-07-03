@@ -20,28 +20,14 @@ type ContractContentAuditMetadata struct {
 }
 
 type ContractContentPolicy struct {
-	PolicySetID string                      `json:"policySetId"`
-	Version     string                      `json:"version"`
-	Rules       []ContractContentPolicyRule `json:"rules"`
-	SHACLShapes []ContractSHACLShape        `json:"shaclShapes"`
-	SHACLFiles  []string                    `json:"shaclShapeFiles"`
-	Profiles    []string                    `json:"validationProfiles"`
+	PolicySetID string               `json:"policySetId"`
+	Version     string               `json:"version"`
+	Policies    []any                `json:"dcs:policies"`
+	SHACLShapes []ContractSHACLShape `json:"shaclShapes"`
+	SHACLFiles  []string             `json:"shaclShapeFiles"`
+	Profiles    []string             `json:"validationProfiles"`
 	profiles    []ValidationProfile
 	SHACL       *ContractSHACLPolicy `json:"shacl"`
-}
-
-type ContractContentPolicyRule struct {
-	ID           string   `json:"id"`
-	Title        string   `json:"title"`
-	Severity     string   `json:"severity"`
-	Builtin      string   `json:"builtin"`
-	SemanticPath string   `json:"semanticPath"`
-	Values       []string `json:"values"`
-	ValuesRef    string   `json:"valuesRef"`
-	Min          *float64 `json:"min"`
-	Max          *float64 `json:"max"`
-	Required     string   `json:"required"`
-	OntologyTerm string   `json:"ontologyTerm"`
 }
 
 type ContractSHACLPolicy struct {
@@ -99,14 +85,71 @@ func AuditContractContent(contractDocument any, policyDocument any, metadata Con
 	for _, profile := range policy.profiles {
 		findings = append(findings, auditContractValidationProfile(contract, profile)...)
 	}
-	for _, rule := range policy.Rules {
-		findings = append(findings, auditContractContentRule(contract, rule)...)
-	}
+	findings = append(findings, auditContractODRLPolicies(contract, extractContractODRLPolicies(contract))...)
+	findings = append(findings, auditContractODRLPolicies(contract, externalODRLPolicies(policy.Policies))...)
 	for i := range findings {
 		findings[i].PolicySetID = policy.PolicySetID
 		findings[i].PolicyVersion = policy.Version
 	}
 	return findings, nil
+}
+
+type ContractPolicySatisfactionError struct {
+	Findings []PolicyFinding
+}
+
+func (e ContractPolicySatisfactionError) Error() string {
+	if len(e.Findings) == 0 {
+		return "contract policy validation failed"
+	}
+	messages := make([]string, 0, len(e.Findings))
+	for _, finding := range e.Findings {
+		message := strings.TrimSpace(finding.Message)
+		if message == "" {
+			message = strings.TrimSpace(finding.RuleID)
+		}
+		if message != "" {
+			messages = append(messages, message)
+		}
+	}
+	if len(messages) == 0 {
+		return "contract policy validation failed"
+	}
+	return "contract policy validation failed: " + strings.Join(messages, "; ")
+}
+
+// ValidateContractPolicySatisfaction enforces the per-contract ODRL policies
+// embedded as dcs:policies against the submitted semanticConditionValues.
+func ValidateContractPolicySatisfaction(contractDocument any, metadata ContractContentAuditMetadata) error {
+	contract, err := normalizeObject(contractDocument)
+	if err != nil {
+		return fmt.Errorf("decode contract document: %w", err)
+	}
+	findings := auditContractODRLPolicies(contract, extractContractODRLPolicies(contract))
+	blocking := make([]PolicyFinding, 0)
+	for _, finding := range findings {
+		if isBlockingContractPolicyFinding(finding) {
+			finding.PolicySetID = defaultContractPolicySetID
+			finding.PolicyVersion = metadata.PolicyVersion
+			if strings.TrimSpace(finding.PolicyVersion) == "" {
+				finding.PolicyVersion = defaultContractPolicyVersion
+			}
+			blocking = append(blocking, finding)
+		}
+	}
+	if len(blocking) > 0 {
+		return ContractPolicySatisfactionError{Findings: blocking}
+	}
+	return nil
+}
+
+func isBlockingContractPolicyFinding(finding PolicyFinding) bool {
+	switch strings.ToLower(strings.TrimSpace(finding.Severity)) {
+	case "error", "blocking":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeContractContentPolicy(raw any, metadata ContractContentAuditMetadata) (ContractContentPolicy, error) {
@@ -374,26 +417,6 @@ func ontologyInt(statement string, predicate string) *int {
 	return nil
 }
 
-func auditContractContentRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	rule = normalizeContractContentRule(rule)
-	switch rule.Builtin {
-	case "required_field":
-		return auditRequiredFieldRule(contract, rule)
-	case "value_not_in":
-		return auditValueNotInRule(contract, rule)
-	case "value_in":
-		return auditValueInRule(contract, rule)
-	case "min_number":
-		return auditMinNumberRule(contract, rule)
-	case "max_number":
-		return auditMaxNumberRule(contract, rule)
-	case "signature_level_at_least":
-		return auditSignatureLevelRule(contract, rule)
-	default:
-		return []PolicyFinding{ruleFinding(rule, "error", fmt.Sprintf("unsupported static contract content rule builtin %q", rule.Builtin))}
-	}
-}
-
 func auditContractValidationProfile(contract map[string]any, profile ValidationProfile) []PolicyFinding {
 	findings := []PolicyFinding{}
 	statementRules := []ValidationRule{}
@@ -435,28 +458,28 @@ func auditContractValidationRule(contract map[string]any, rule ValidationRule) [
 	case ValidationRuleFieldValue:
 		value, ok := contractValue(contract, rule.Target)
 		if !ok || !compareValues(value, defaultOperator(rule.Operator, "eq"), rule.Value) {
-			return []PolicyFinding{validationRuleFinding(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule))}
+			return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule), optionalActualValue(value, ok), rule.Value, nil, defaultOperator(rule.Operator, "eq"))}
 		}
-		return []PolicyFinding{validationRuleFinding(rule, rule.Target, "info", issueMessage(rule))}
+		return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, "info", issueMessage(rule), value, rule.Value, nil, defaultOperator(rule.Operator, "eq"))}
 	case ValidationRuleComparison:
 		value, ok := contractValue(contract, rule.Target)
 		if !ok || !compareValues(value, rule.Operator, rule.Value) {
-			return []PolicyFinding{validationRuleFinding(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule))}
+			return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule), optionalActualValue(value, ok), rule.Value, nil, rule.Operator)}
 		}
-		return []PolicyFinding{validationRuleFinding(rule, rule.Target, "info", issueMessage(rule))}
+		return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, "info", issueMessage(rule), value, rule.Value, nil, rule.Operator)}
 	case ValidationRuleValueIn:
 		value, ok := contractString(contract, rule.Target)
 		if !ok || !normalizedSet(rule.Values)[strings.ToUpper(strings.TrimSpace(value))] {
-			return []PolicyFinding{validationRuleFinding(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule))}
+			return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule), optionalActualValue(value, ok), nil, anySliceFromStrings(rule.Values), "in")}
 		}
-		return []PolicyFinding{validationRuleFinding(rule, rule.Target, "info", issueMessage(rule))}
+		return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, "info", issueMessage(rule), value, nil, anySliceFromStrings(rule.Values), "in")}
 	case ValidationRuleSignatureLevel:
 		value, ok := contractString(contract, rule.Target)
 		required, _ := rule.Value.(string)
 		if !ok || !signatureLevelSatisfies(value, required) {
-			return []PolicyFinding{validationRuleFinding(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule))}
+			return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, defaultSeverity(rule.Severity), issueMessage(rule), optionalActualValue(value, ok), required, nil, "atLeast")}
 		}
-		return []PolicyFinding{validationRuleFinding(rule, rule.Target, "info", issueMessage(rule))}
+		return []PolicyFinding{validationRuleFindingWithDetails(rule, rule.Target, "info", issueMessage(rule), value, required, nil, "atLeast")}
 	default:
 		return nil
 	}
@@ -494,7 +517,206 @@ func contractStatementsFromDocument(contract map[string]any) []map[string]any {
 }
 
 func validationRuleFinding(rule ValidationRule, path string, severity string, message string) PolicyFinding {
-	return contractFinding(rule.ID, rule.ID, severity, message, path, path, "")
+	return validationRuleFindingWithDetails(rule, path, severity, message, nil, nil, nil, "")
+}
+
+func validationRuleFindingWithDetails(rule ValidationRule, path string, severity string, message string, actualValue any, expectedValue any, expectedValues []any, operator string) PolicyFinding {
+	finding := contractFinding(rule.ID, rule.ID, severity, message, path, path, "")
+	if len(rule.RequiredFields) > 0 && operator == "" {
+		operator = "exists"
+		expectedValues = anySliceFromStrings(rule.RequiredFields)
+	}
+	applyPolicyDetails(&finding, path, operator, actualValue, expectedValue, expectedValues)
+	return finding
+}
+
+func applyODRLPolicyDetails(finding *PolicyFinding, path string, operator string, actualValue any, hasActualValue bool, rightOperand any) {
+	expectedValue, expectedValues := odrlExpectedValues(rightOperand)
+	if !hasActualValue {
+		actualValue = nil
+	}
+	applyPolicyDetails(finding, path, operator, actualValue, expectedValue, expectedValues)
+}
+
+func applyPolicyDetails(finding *PolicyFinding, path string, operator string, actualValue any, expectedValue any, expectedValues []any) {
+	normalizedOperator := normalizePolicyOperator(operator)
+	if normalizedOperator != "" {
+		finding.Operator = normalizedOperator
+	}
+	if actualValue != nil {
+		finding.ActualValue = compactAuditValue(actualValue)
+	}
+	if expectedValue != nil {
+		finding.ExpectedValue = compactAuditValue(expectedValue)
+	}
+	if len(expectedValues) > 0 {
+		finding.ExpectedValues = compactAuditValues(expectedValues)
+	}
+	if strings.TrimSpace(finding.Requirement) == "" {
+		finding.Requirement = policyRequirement(path, normalizedOperator, finding.ExpectedValue, finding.ExpectedValues)
+	}
+}
+
+func odrlExpectedValues(rightOperand any) (any, []any) {
+	value := compactAuditValue(rightOperand)
+	if items, ok := value.([]any); ok {
+		return nil, items
+	}
+	return value, nil
+}
+
+func policyRequirement(path string, operator string, expectedValue any, expectedValues []any) string {
+	path = strings.TrimSpace(path)
+	if path == "" || operator == "" {
+		return ""
+	}
+	switch operator {
+	case "exists":
+		if len(expectedValues) > 0 {
+			return fmt.Sprintf("%s must contain %s", path, formatRequirementValues(expectedValues))
+		}
+		return fmt.Sprintf("%s must be present", path)
+	case "in":
+		return fmt.Sprintf("%s must be one of %s", path, formatRequirementValues(expectedValues))
+	case "notIn":
+		return fmt.Sprintf("%s must be none of %s", path, formatRequirementValues(expectedValues))
+	case "minCount":
+		return fmt.Sprintf("%s requires at least %s value(s)", path, formatRequirementValue(expectedValue))
+	case "maxCount":
+		return fmt.Sprintf("%s allows at most %s value(s)", path, formatRequirementValue(expectedValue))
+	case "datatype":
+		return fmt.Sprintf("%s must use datatype %s", path, formatRequirementValue(expectedValue))
+	case "class":
+		return fmt.Sprintf("%s must reference class %s", path, formatRequirementValue(expectedValue))
+	case "node":
+		return fmt.Sprintf("%s must conform to %s", path, formatRequirementValue(expectedValue))
+	case "atLeast":
+		return fmt.Sprintf("%s must be at least %s", path, formatRequirementValue(expectedValue))
+	case "eq":
+		return fmt.Sprintf("%s must equal %s", path, formatRequirementValue(expectedValue))
+	case "neq":
+		return fmt.Sprintf("%s must not equal %s", path, formatRequirementValue(expectedValue))
+	case "contains":
+		return fmt.Sprintf("%s must contain %s", path, formatRequirementValue(expectedValue))
+	default:
+		if symbol := policyOperatorSymbol(operator); symbol != "" {
+			return fmt.Sprintf("%s must be %s %s", path, symbol, formatRequirementValue(expectedValue))
+		}
+		return fmt.Sprintf("%s must satisfy %s %s", path, operator, formatRequirementValue(expectedValue))
+	}
+}
+
+func normalizePolicyOperator(operator string) string {
+	switch strings.ToLower(strings.TrimSpace(compactTerm(operator))) {
+	case "":
+		return ""
+	case "gte", "gteq", "greaterthanorequal", "greaterthanorequalto", "mininclusive":
+		return "gte"
+	case "lte", "lteq", "lessthanorequal", "lessthanorequalto", "maxinclusive":
+		return "lte"
+	case "gt", "greaterthan":
+		return "gt"
+	case "lt", "lessthan":
+		return "lt"
+	case "eq", "equals", "equalto":
+		return "eq"
+	case "neq", "noteq", "notequals", "notequalto":
+		return "neq"
+	case "isanyof", "in":
+		return "in"
+	case "isnoneof", "notin":
+		return "notIn"
+	case "haspart", "contains":
+		return "contains"
+	case "mincount":
+		return "minCount"
+	case "maxcount":
+		return "maxCount"
+	case "datatype":
+		return "datatype"
+	case "class":
+		return "class"
+	case "node":
+		return "node"
+	case "exists", "required":
+		return "exists"
+	case "atleast":
+		return "atLeast"
+	default:
+		return strings.TrimSpace(compactTerm(operator))
+	}
+}
+
+func policyOperatorSymbol(operator string) string {
+	switch operator {
+	case "gte":
+		return ">="
+	case "lte":
+		return "<="
+	case "gt":
+		return ">"
+	case "lt":
+		return "<"
+	default:
+		return ""
+	}
+}
+
+func formatRequirementValues(values []any) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, formatRequirementValue(value))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatRequirementValue(value any) string {
+	switch typed := compactAuditValue(value).(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case []any:
+		return formatRequirementValues(typed)
+	default:
+		return fmt.Sprint(typed)
+	}
+}
+
+func optionalActualValue(value any, ok bool) any {
+	if !ok {
+		return nil
+	}
+	return value
+}
+
+func anySliceFromStrings(values []string) []any {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	return result
+}
+
+func compactAuditValues(values []any) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		result = append(result, compactAuditValue(value))
+	}
+	return result
+}
+
+func compactAuditValue(value any) any {
+	value = compactJSONLDValue(value)
+	switch typed := value.(type) {
+	case []any:
+		return compactAuditValues(typed)
+	default:
+		return typed
+	}
 }
 
 func contractSHACLShapes(policy ContractContentPolicy) []ContractSHACLShape {
@@ -547,20 +769,21 @@ func auditContractSHACLShape(contract map[string]any, policy ContractContentPoli
 
 func auditContractSHACLProperty(contract map[string]any, policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty, shapeIndex map[string]ContractSHACLShape) []PolicyFinding {
 	values := valuesAtPath(contract, property.Path)
+	nonEmpty := nonEmptyValues(values)
 	findings := []PolicyFinding{}
-	if property.MinCount != nil && len(nonEmptyValues(values)) < *property.MinCount {
-		findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s requires at least %d value(s)", propertyLabel(property), *property.MinCount)))
+	if property.MinCount != nil && len(nonEmpty) < *property.MinCount {
+		findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s requires at least %d value(s)", propertyLabel(property), *property.MinCount), len(nonEmpty), *property.MinCount, nil, "minCount"))
 	}
-	if property.MaxCount != nil && len(nonEmptyValues(values)) > *property.MaxCount {
-		findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s allows at most %d value(s)", propertyLabel(property), *property.MaxCount)))
+	if property.MaxCount != nil && len(nonEmpty) > *property.MaxCount {
+		findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s allows at most %d value(s)", propertyLabel(property), *property.MaxCount), len(nonEmpty), *property.MaxCount, nil, "maxCount"))
 	}
-	if len(nonEmptyValues(values)) == 0 {
+	if len(nonEmpty) == 0 {
 		return findings
 	}
 	if property.Datatype != "" {
 		for _, value := range values {
 			if !valueConformsDatatype(value, property.Datatype) {
-				findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must use datatype %s", propertyLabel(property), property.Datatype)))
+				findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must use datatype %s", propertyLabel(property), property.Datatype), compactJSONLDValue(value), property.Datatype, nil, "datatype"))
 				break
 			}
 		}
@@ -569,7 +792,7 @@ func auditContractSHACLProperty(contract map[string]any, policy ContractContentP
 		for _, value := range values {
 			number, ok := toFloat(value)
 			if !ok || number+floatTolerance < *property.MinInclusive {
-				findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must be at least %.4g", propertyLabel(property), *property.MinInclusive)))
+				findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must be at least %.4g", propertyLabel(property), *property.MinInclusive), compactJSONLDValue(value), *property.MinInclusive, nil, "gte"))
 				break
 			}
 		}
@@ -584,13 +807,13 @@ func auditContractSHACLProperty(contract map[string]any, policy ContractContentP
 			}
 		}
 		if !matched {
-			findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must be one of %s", propertyLabel(property), strings.Join(property.In, ", "))))
+			findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must be one of %s", propertyLabel(property), strings.Join(property.In, ", ")), compactAuditValues(values), nil, anySliceFromStrings(property.In), "in"))
 		}
 	}
 	if property.Class != "" {
 		for _, value := range values {
 			if !valueHasClass(value, property.Class) {
-				findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must reference class %s", propertyLabel(property), property.Class)))
+				findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must reference class %s", propertyLabel(property), property.Class), compactJSONLDValue(value), property.Class, nil, "class"))
 				break
 			}
 		}
@@ -600,7 +823,7 @@ func auditContractSHACLProperty(contract map[string]any, policy ContractContentP
 			for _, value := range values {
 				nested, ok := value.(map[string]any)
 				if !ok {
-					findings = append(findings, shaclPropertyFinding(policy, shape, property, fmt.Sprintf("%s must be an object conforming to %s", propertyLabel(property), property.Node)))
+					findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must be an object conforming to %s", propertyLabel(property), property.Node), compactJSONLDValue(value), property.Node, nil, "node"))
 					break
 				}
 				for _, nestedFinding := range auditContractSHACLShape(nested, policy, nestedShape, shapeIndex) {
@@ -656,6 +879,10 @@ func contractStructureFinding(policy ContractContentPolicy, ruleID, title, sever
 }
 
 func shaclPropertyFinding(policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty, fallbackMessage string) PolicyFinding {
+	return shaclPropertyFindingWithDetails(policy, shape, property, fallbackMessage, nil, nil, nil, "")
+}
+
+func shaclPropertyFindingWithDetails(policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty, fallbackMessage string, actualValue any, expectedValue any, expectedValues []any, operator string) PolicyFinding {
 	message := property.Message
 	if strings.TrimSpace(message) == "" {
 		message = fallbackMessage
@@ -663,100 +890,256 @@ func shaclPropertyFinding(policy ContractContentPolicy, shape ContractSHACLShape
 	finding := contractFinding(property.ID, shape.Title, property.Severity, message, property.Path, property.Path, property.OntologyTerm)
 	finding.PolicySetID = policy.PolicySetID
 	finding.PolicyVersion = policy.Version
+	applyPolicyDetails(&finding, property.Path, operator, actualValue, expectedValue, expectedValues)
 	return finding
 }
 
-func normalizeContractContentRule(rule ContractContentPolicyRule) ContractContentPolicyRule {
-	if strings.TrimSpace(rule.ID) == "" {
-		rule.ID = "FACIS-CONTRACT-POLICY-CUSTOM"
-	}
-	if strings.TrimSpace(rule.Title) == "" {
-		rule.Title = rule.ID
-	}
-	if strings.TrimSpace(rule.Severity) == "" {
-		rule.Severity = "error"
-	}
-	return rule
-}
-
-func auditRequiredFieldRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	if value, ok := contractValue(contract, rule.SemanticPath); ok && !isEmptyAuditValue(value) {
-		return []PolicyFinding{ruleFinding(rule, "info", fmt.Sprintf("required field %q is present", rule.SemanticPath))}
-	}
-	return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("required field %q is missing", rule.SemanticPath))}
-}
-
-func auditValueNotInRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	value, ok := contractString(contract, rule.SemanticPath)
+func extractContractODRLPolicies(contract map[string]any) []map[string]any {
+	raw := topLevelValue(documentData(contract), "policies")
+	items, ok := asArray(raw)
 	if !ok {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s is missing", rule.SemanticPath))}
-	}
-	blocked := normalizedSet(rule.Values)
-	normalized := strings.ToUpper(strings.TrimSpace(value))
-	if blocked[normalized] {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s %q is blocked by current policy", rule.SemanticPath, normalized))}
-	}
-	return []PolicyFinding{ruleFinding(rule, "info", fmt.Sprintf("%s %q is not blocked", rule.SemanticPath, normalized))}
-}
-
-func auditValueInRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	value, ok := contractString(contract, rule.SemanticPath)
-	if !ok {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s is missing", rule.SemanticPath))}
-	}
-	allowedValues := rule.Values
-	if len(allowedValues) == 0 && strings.TrimSpace(rule.ValuesRef) != "" {
-		allowedValues = allowedValuesForConstraint(&valueConstraint{AllowedValuesRef: rule.ValuesRef})
-	}
-	allowed := normalizedSet(allowedValues)
-	normalized := strings.ToUpper(strings.TrimSpace(value))
-	if !allowed[normalized] {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s %q is not allowed by current policy", rule.SemanticPath, normalized))}
-	}
-	return []PolicyFinding{ruleFinding(rule, "info", fmt.Sprintf("%s %q is allowed", rule.SemanticPath, normalized))}
-}
-
-func auditMinNumberRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	if rule.Min == nil {
 		return nil
 	}
-	value, ok := contractFloat(contract, rule.SemanticPath)
-	if !ok {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s is missing or not numeric", rule.SemanticPath))}
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if policy, ok := item.(map[string]any); ok {
+			result = append(result, policy)
+		}
 	}
-	if value+floatTolerance < *rule.Min {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s %.4g is below policy minimum %.4g", rule.SemanticPath, value, *rule.Min))}
-	}
-	return []PolicyFinding{ruleFinding(rule, "info", fmt.Sprintf("%s %.4g satisfies policy minimum %.4g", rule.SemanticPath, value, *rule.Min))}
+	return result
 }
 
-func auditMaxNumberRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	if rule.Max == nil {
+func externalODRLPolicies(raw []any) []map[string]any {
+	result := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		if policy, ok := item.(map[string]any); ok {
+			result = append(result, policy)
+		}
+	}
+	return result
+}
+
+type odrlFieldInfo struct {
+	conditionID   string
+	parameterName string
+}
+
+func buildODRLFieldIndex(contract map[string]any) map[string]odrlFieldInfo {
+	index := map[string]odrlFieldInfo{}
+	requirements, ok := asArray(topLevelValue(documentData(contract), "contractData"))
+	if !ok {
+		return index
+	}
+	for _, rawReq := range requirements {
+		req, ok := rawReq.(map[string]any)
+		if !ok {
+			continue
+		}
+		conditionID, _ := req["dcs:conditionId"].(string)
+		if conditionID == "" {
+			conditionID, _ = req["conditionId"].(string)
+		}
+		rawFields := req["dcs:fields"]
+		if rawFields == nil {
+			rawFields = req["fields"]
+		}
+		fields, ok := asArray(rawFields)
+		if !ok {
+			continue
+		}
+		for _, rawField := range fields {
+			field, ok := rawField.(map[string]any)
+			if !ok {
+				continue
+			}
+			fieldID, _ := field["@id"].(string)
+			paramName, _ := field["dcs:parameterName"].(string)
+			if paramName == "" {
+				paramName, _ = field["parameterName"].(string)
+			}
+			if fieldID != "" {
+				index[fieldID] = odrlFieldInfo{conditionID: conditionID, parameterName: paramName}
+			}
+		}
+	}
+	return index
+}
+
+func lookupSemanticConditionValue(contract map[string]any, conditionID, parameterName string) (any, bool) {
+	values, ok := asArray(contract["semanticConditionValues"])
+	if !ok {
+		return nil, false
+	}
+	for _, rawVal := range values {
+		val, ok := rawVal.(map[string]any)
+		if !ok {
+			continue
+		}
+		if val["conditionId"] == conditionID && val["parameterName"] == parameterName {
+			pv := val["parameterValue"]
+			if pv == nil {
+				return nil, false
+			}
+			return compactJSONLDValue(pv), true
+		}
+	}
+	return nil, false
+}
+
+func auditContractODRLPolicies(contract map[string]any, policies []map[string]any) []PolicyFinding {
+	if len(policies) == 0 {
 		return nil
 	}
-	value, ok := contractFloat(contract, rule.SemanticPath)
-	if !ok {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s is missing or not numeric", rule.SemanticPath))}
+	fieldIndex := buildODRLFieldIndex(contract)
+	findings := []PolicyFinding{}
+	for _, policy := range policies {
+		findings = append(findings, auditODRLPolicy(contract, policy, fieldIndex)...)
 	}
-	if value > *rule.Max+floatTolerance {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s %.4g exceeds policy maximum %.4g", rule.SemanticPath, value, *rule.Max))}
-	}
-	return []PolicyFinding{ruleFinding(rule, "info", fmt.Sprintf("%s %.4g satisfies policy maximum %.4g", rule.SemanticPath, value, *rule.Max))}
+	return findings
 }
 
-func auditSignatureLevelRule(contract map[string]any, rule ContractContentPolicyRule) []PolicyFinding {
-	value, ok := contractString(contract, rule.SemanticPath)
+func auditODRLPolicy(contract map[string]any, policy map[string]any, fieldIndex map[string]odrlFieldInfo) []PolicyFinding {
+	ruleID, _ := policy["@id"].(string)
+	if ruleID == "" {
+		ruleID = "FACIS-CONTRACT-ODRL-POLICY"
+	}
+	policyType, _ := policy["@type"].(string)
+
+	constraint, ok := policy["odrl:constraint"].(map[string]any)
 	if !ok {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s is missing", rule.SemanticPath))}
+		return nil
 	}
-	if !signatureLevelSatisfies(value, rule.Required) {
-		return []PolicyFinding{ruleFinding(rule, rule.Severity, fmt.Sprintf("%s %q does not satisfy required level %q", rule.SemanticPath, value, rule.Required))}
+	leftOperandObj, ok := constraint["odrl:leftOperand"].(map[string]any)
+	if !ok {
+		return nil
 	}
-	return []PolicyFinding{ruleFinding(rule, "info", fmt.Sprintf("%s %q satisfies required level %q", rule.SemanticPath, value, rule.Required))}
+	fieldID, _ := leftOperandObj["@id"].(string)
+	if fieldID == "" {
+		return nil
+	}
+	operatorObj, ok := constraint["odrl:operator"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	operator, _ := operatorObj["@id"].(string)
+	if operator == "" {
+		return nil
+	}
+	rightOperand := constraint["odrl:rightOperand"]
+
+	fieldInfo, ok := fieldIndex[fieldID]
+	if !ok {
+		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, fieldID, "dcs:RequirementField")
+		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
+		return []PolicyFinding{finding}
+	}
+	actualValue, hasValue := lookupSemanticConditionValue(contract, fieldInfo.conditionID, fieldInfo.parameterName)
+
+	isProhibition := compactTerm(policyType) == "Prohibition"
+	isPermission := compactTerm(policyType) == "Permission"
+	severity := "error"
+	if isPermission {
+		severity = "info"
+	}
+
+	if !hasValue {
+		if isProhibition || isPermission {
+			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, fieldID, "")
+			applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
+			return []PolicyFinding{finding}
+		}
+		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, fieldID, "")
+		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
+		return []PolicyFinding{finding}
+	}
+
+	satisfied := evaluateODRLConstraint(operator, actualValue, rightOperand)
+	violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
+
+	if violated {
+		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, compactTerm(operator)), fieldID, fieldID, "")
+		applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
+		return []PolicyFinding{finding}
+	}
+	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, fieldID, "")
+	applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
+	return []PolicyFinding{finding}
 }
 
-func ruleFinding(rule ContractContentPolicyRule, severity string, message string) PolicyFinding {
-	return contractFinding(rule.ID, rule.Title, severity, message, rule.SemanticPath, rule.SemanticPath, rule.OntologyTerm)
+func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) bool {
+	op := compactTerm(operator)
+	actualValue = compactJSONLDValue(actualValue)
+	rightOperand = compactJSONLDValue(rightOperand)
+	switch op {
+	case "eq":
+		return odrlValuesEqual(actualValue, rightOperand)
+	case "neq":
+		return !odrlValuesEqual(actualValue, rightOperand)
+	case "gt":
+		f1, ok1 := toFloat(actualValue)
+		f2, ok2 := toFloat(rightOperand)
+		return ok1 && ok2 && f1 > f2+floatTolerance
+	case "gteq":
+		f1, ok1 := toFloat(actualValue)
+		f2, ok2 := toFloat(rightOperand)
+		return ok1 && ok2 && f1+floatTolerance >= f2
+	case "lt":
+		f1, ok1 := toFloat(actualValue)
+		f2, ok2 := toFloat(rightOperand)
+		return ok1 && ok2 && f1 < f2-floatTolerance
+	case "lteq":
+		f1, ok1 := toFloat(actualValue)
+		f2, ok2 := toFloat(rightOperand)
+		return ok1 && ok2 && f1 <= f2+floatTolerance
+	case "isAnyOf":
+		items, ok := asArray(rightOperand)
+		if !ok {
+			return false
+		}
+		normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
+		for _, item := range items {
+			if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) == normalized {
+				return true
+			}
+		}
+		return false
+	case "isNoneOf":
+		items, ok := asArray(rightOperand)
+		if !ok {
+			return true
+		}
+		normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
+		for _, item := range items {
+			if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) == normalized {
+				return false
+			}
+		}
+		return true
+	case "hasPart":
+		str, ok := actualValue.(string)
+		if !ok {
+			return false
+		}
+		return strings.Contains(str, fmt.Sprint(compactJSONLDValue(rightOperand)))
+	default:
+		return false
+	}
+}
+
+func odrlValuesEqual(a, b any) bool {
+	a = compactJSONLDValue(a)
+	b = compactJSONLDValue(b)
+	sa, saOk := a.(string)
+	sb, sbOk := b.(string)
+	if saOk && sbOk {
+		return strings.EqualFold(sa, sb)
+	}
+	fa, faOk := toFloat(a)
+	fb, fbOk := toFloat(b)
+	if faOk && fbOk {
+		return math.Abs(fa-fb) <= floatTolerance
+	}
+	return fmt.Sprint(a) == fmt.Sprint(b)
 }
 
 func contractFinding(ruleID, title, severity, message, path, semanticPath, ontologyTerm string) PolicyFinding {
@@ -812,6 +1195,9 @@ func contractValue(contract map[string]any, semanticPath string) (any, bool) {
 	if value, ok := nestedValue(contract, strings.Split(semanticPath, ".")); ok {
 		return compactJSONLDValue(value), true
 	}
+	if value, ok := semanticConditionValuesByParameterName(contract, semanticPath); ok {
+		return compactJSONLDValue(value), true
+	}
 	if value, ok := recursiveExactKeyValue(contract, semanticPath); ok {
 		return compactJSONLDValue(value), true
 	}
@@ -826,7 +1212,10 @@ func contractSHACLAliasValue(contract map[string]any, semanticPath string) (any,
 	case "did":
 		return firstExistingValue(contract, "@id", "did", "dcs:did")
 	case "party":
-		return firstExistingValue(contract, "party", "dcs:party", "parties")
+		if value, ok := firstExistingValue(contract, "party", "dcs:party", "parties"); ok {
+			return value, true
+		}
+		return companyPartiesFromSemanticValues(contract)
 	}
 	return nil, false
 }
@@ -838,6 +1227,139 @@ func firstExistingValue(contract map[string]any, keys ...string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+func semanticConditionValuesByParameterName(contract map[string]any, semanticPath string) (any, bool) {
+	values, ok := asArray(contract["semanticConditionValues"])
+	if !ok {
+		return nil, false
+	}
+	matches := []any{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		parameterName, _ := value["parameterName"].(string)
+		if !equivalentSemanticPath(parameterName, semanticPath) {
+			continue
+		}
+		parameterValue, exists := value["parameterValue"]
+		if exists && !isEmptyAuditValue(parameterValue) {
+			matches = append(matches, parameterValue)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, false
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+	return matches, true
+}
+
+func companyPartiesFromSemanticValues(contract map[string]any) ([]any, bool) {
+	values, ok := asArray(contract["semanticConditionValues"])
+	if !ok {
+		return nil, false
+	}
+	requirements := contractDataRequirementsByConditionID(contract)
+	partiesByCondition := map[string]map[string]any{}
+	order := []string{}
+	for _, rawValue := range values {
+		value, ok := rawValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		conditionID, _ := value["conditionId"].(string)
+		parameterName, _ := value["parameterName"].(string)
+		if !strings.HasPrefix(parameterName, "company.") {
+			continue
+		}
+		requirement := requirements[conditionID]
+		if !isCompanyPartyRequirement(requirement) && parameterName != "company.role" {
+			continue
+		}
+		party := partiesByCondition[conditionID]
+		if party == nil {
+			party = map[string]any{
+				"@type": "dcs:CompanyParty",
+			}
+			if role := companyPartyRole(requirement); role != "" {
+				party["role"] = role
+			}
+			partiesByCondition[conditionID] = party
+			order = append(order, conditionID)
+		}
+		parameterValue := compactJSONLDValue(value["parameterValue"])
+		switch parameterName {
+		case "company.legalName":
+			party["legalName"] = parameterValue
+			party["dcs:legalName"] = parameterValue
+		case "company.role":
+			if text, ok := parameterValue.(string); ok {
+				party["role"] = compactEntityRole(text)
+			}
+		}
+	}
+	if len(order) == 0 {
+		return nil, false
+	}
+	parties := make([]any, 0, len(order))
+	for _, conditionID := range order {
+		parties = append(parties, partiesByCondition[conditionID])
+	}
+	return parties, true
+}
+
+func contractDataRequirementsByConditionID(contract map[string]any) map[string]map[string]any {
+	requirements := map[string]map[string]any{}
+	collectContractDataRequirements(contract, requirements)
+	return requirements
+}
+
+func collectContractDataRequirements(current any, requirements map[string]map[string]any) {
+	switch value := current.(type) {
+	case map[string]any:
+		if rawRequirements, ok := topLevelValue(documentData(value), "contractData").([]any); ok {
+			for _, rawRequirement := range rawRequirements {
+				requirement, ok := rawRequirement.(map[string]any)
+				if !ok {
+					continue
+				}
+				conditionID, _ := requirement["dcs:conditionId"].(string)
+				if conditionID == "" {
+					conditionID, _ = requirement["conditionId"].(string)
+				}
+				if conditionID != "" {
+					requirements[conditionID] = requirement
+				}
+			}
+		}
+		for _, nested := range value {
+			collectContractDataRequirements(nested, requirements)
+		}
+	case []any:
+		for _, nested := range value {
+			collectContractDataRequirements(nested, requirements)
+		}
+	}
+}
+
+func isCompanyPartyRequirement(requirement map[string]any) bool {
+	entityType, _ := requirement["dcs:entityType"].(string)
+	if entityType == "" {
+		entityType, _ = requirement["entityType"].(string)
+	}
+	return compactTerm(entityType) == "CompanyParty"
+}
+
+func companyPartyRole(requirement map[string]any) string {
+	role, _ := requirement["dcs:entityRole"].(string)
+	if role == "" {
+		role, _ = requirement["entityRole"].(string)
+	}
+	return compactEntityRole(role)
 }
 
 func valuesAtPath(contract map[string]any, semanticPath string) []any {
@@ -865,14 +1387,6 @@ func contractString(contract map[string]any, semanticPath string) (string, bool)
 		return "", false
 	}
 	return text, true
-}
-
-func contractFloat(contract map[string]any, semanticPath string) (float64, bool) {
-	value, ok := contractValue(contract, semanticPath)
-	if !ok {
-		return 0, false
-	}
-	return toFloat(value)
 }
 
 func nestedValue(current any, parts []string) (any, bool) {

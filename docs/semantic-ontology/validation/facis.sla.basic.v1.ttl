@@ -80,7 +80,17 @@ facisv:ContractJurisdictionAllowedShape a sh:NodeShape ;
   facisv:allowedValue "ESP" ;
   facisv:allowedValue "ITA" ;
   facisv:allowedValue "GBR" ;
-  facisv:allowedValue "USA" .
+  facisv:allowedValue "USA" ;
+  facisv:allowedValue "DNK" ;
+  facisv:allowedValue "SWE" ;
+  facisv:allowedValue "NOR" ;
+  facisv:allowedValue "FIN" ;
+  facisv:allowedValue "IRL" ;
+  facisv:allowedValue "PRT" ;
+  facisv:allowedValue "GRC" ;
+  facisv:allowedValue "CAN" ;
+  facisv:allowedValue "JPN" ;
+  facisv:allowedValue "AUS" .
 
 facisv:ServiceAvailabilityMinimumShape a sh:NodeShape ;
   facisv:profile facisv:SLABasicProfile ;

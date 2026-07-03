@@ -208,7 +208,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, q url.Values, 
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}

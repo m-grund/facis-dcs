@@ -29,6 +29,6 @@ type ContractTemplateMetadata struct {
 }
 
 type ContractTemplateRepo interface {
-	ReadFrameContractTemplateDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplateQueryResult, error)
+	ReadContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplateQueryResult, error)
 	ReadAllMetaData(ctx context.Context, tx *sqlx.Tx) ([]ContractTemplateMetadata, error)
 }

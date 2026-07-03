@@ -1,0 +1,20 @@
+{
+    "@context": {
+        "dcs": "https://w3id.org/facis/dcs/ontology/v1#"
+    },
+    "@id": "did:web:localhost:template:test-domain-field-literal",
+    "@type": "dcs:ContractTemplate",
+    "dcs:contractData": [
+        {
+            "@id": "did:web:localhost:template:test-domain-field-literal#req-1",
+            "@type": "dcs:DataRequirement",
+            "dcs:fields": [
+                {
+                    "@id": "did:web:localhost:template:test-domain-field-literal#field-1",
+                    "@type": "dcs:RequirementField",
+                    "dcs:domainField": "contract.payment.amount"
+                }
+            ]
+        }
+    ]
+}

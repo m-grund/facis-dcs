@@ -66,6 +66,10 @@ var ContractSubmitRequest = Type("ContractSubmitRequest", func() {
 
 	Attribute("forward_to", String, "Action flag: approval | reject")
 	Attribute("comments", ArrayOf(String), "Optional comments")
+	Attribute("contract_data", Any, "Optional updated contract data to persist atomically before submit validation")
+	Attribute("reviewers", ArrayOf(String), "Participants assigned to review the contract")
+	Attribute("approvers", ArrayOf(String), "Participants assigned to approve the contract")
+	Attribute("negotiators", ArrayOf(String), "Participants assigned to negotiate the contract")
 
 	Required("did", "updated_at")
 })
@@ -138,6 +142,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("responsible", Any, "Responsible for this contract, including the creator, approvers, reviewers, and negotiators")
 	Attribute("latest_template_did", String, "The DID of the latest template for this contract")
 	Attribute("template_is_deprecated", Boolean, "Whether the template is deprecated")
+	Attribute("parent_contract_did", String, "The DID of the parent contract, if this is a sub-contract")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })
@@ -538,6 +543,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -567,6 +573,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 		})
@@ -594,6 +601,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 		})
@@ -621,6 +629,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 		})
@@ -650,6 +659,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -686,6 +696,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -719,6 +730,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")
@@ -753,6 +765,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Security(JWTAuth, func() {
 			Scope("Contract Creator")
 			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
 			Scope("Contract Approver")

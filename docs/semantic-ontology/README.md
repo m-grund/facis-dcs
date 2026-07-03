@@ -35,7 +35,7 @@ ContractTemplate.template_data JSONB
   subTemplateSnapshots
   templateDataVersion
        |
-       | JSON-LD context + semantic profile
+       | JSON-LD context
        v
 Contract.contract_data JSONB
   documentOutline
@@ -44,7 +44,6 @@ Contract.contract_data JSONB
   semanticConditionValues
   subTemplateSnapshots
   templateDataVersion
-  semanticProfile
   lifecycle
   parties
   sla
@@ -67,6 +66,21 @@ The architecture follows the SRS:
 | C2PA lifecycle assertions | `c2paManifest`, `statusCredential`, `fileHash`, `previousManifestHash` |
 
 Runtime rule: JSON-LD is the source of record for semantic payloads. RDF export is generated for interoperability and SHACL validation. No OWL inference is required at runtime.
+
+### Contract JSON-LD layer responsibilities
+
+| Layer | Responsibility |
+| --- | --- |
+| `dcs:contractData` | Fachmodell and sole source of truth for concrete contractual values. |
+| `dcs:contractFields` | Value-free reference model for policy operands, placeholder bindings, and UI mapping; resolves through `dcs:sourceObject` plus `dcs:path`. |
+| `dcs:documentStructure` | Presentation model containing hierarchy, text fragments, and placeholders bound to contract fields. |
+| `dcs:policies` | Normative ODRL rule model referencing existing contract fields. |
+| `dcs:metadata` | Administrative lifecycle, provenance, identity, and template-origin information. |
+
+Taxonomy-backed values are IRIs in `contractData`; primitive values are typed
+JSON-LD literals. Renderers resolve document placeholders through
+`contractFields` into `contractData`, so the presentation model does not
+duplicate fachliche values.
 
 Architecture diagram descriptions:
 
@@ -112,7 +126,7 @@ Recommended future implementation modules:
 backend/internal/semantic/
   context/              JSON-LD context loading and version registry
   model/                Go structs mirroring TypeScript interfaces
-  mapper/               template_data <-> semanticProfile mapping
+  mapper/               JSONB <-> JSON-LD mapping
   validation/           fast runtime validators and SHACL adapter boundary
   policy/               policy bundle extraction for target systems
   event/                semantic CloudEvents/NATS event builders
@@ -197,7 +211,7 @@ Semantic mapping:
 | --- | --- | --- |
 | `conditionId` | `dcs:conditionId`, `@id` suffix | Stable local ID, e.g. `urn:uuid:...#sc-uptime`. |
 | `conditionName` | `dcs:name` | Human-readable label. |
-| `schemaVersion` | `dcs:schemaVersion` | Keep `v1`; add `semanticProfile` at envelope level. |
+| `schemaVersion` | `dcs:schemaVersion` | Keep `v1`; the versioned `@context` identifies the semantic vocabulary. |
 | `parameters[]` | `dcs:Parameter` | Runtime parameter definition. |
 | `parameterName` | `dcs:parameterName` | Also used by placeholders. |
 | `type` | `dcs:parameterType` | `string`, `decimal`, `integer`, `boolean`, `date`, `enum`. |
@@ -347,7 +361,7 @@ No breaking endpoint changes are required. Additive integration:
 | `/semantic/ontology/v1` | GET | Serve Turtle ontology. |
 | `/semantic/shapes/v1` | GET | Serve current SHACL shapes. |
 | `/template/verify/{template_id}` | existing | Include `semanticFindings` and `profileVersion`. |
-| `/contract-workflow-engine/create` | existing | Initialize `contract_data.semanticProfile`. |
+| `/contract-workflow-engine/create` | existing | Initialize semantic contract data. |
 | `/contract-workflow-engine/update` | existing | Validate `semanticConditionValues` and clause bindings. |
 | `/contract-workflow-engine/review` | existing | Run missing values/rule syntax checks. |
 | `/contract-workflow-engine/approve` | existing | Run blocking semantic validation. |
@@ -561,9 +575,6 @@ Recommended JSONB indexes:
 CREATE INDEX IF NOT EXISTS idx_contracts_contract_data_gin
   ON contracts USING GIN (contract_data jsonb_path_ops);
 
-CREATE INDEX IF NOT EXISTS idx_contracts_semantic_profile
-  ON contracts ((contract_data #>> '{semanticProfile,version}'));
-
 CREATE INDEX IF NOT EXISTS idx_contracts_valid_until
   ON contracts ((contract_data #>> '{validUntil}'));
 
@@ -615,11 +626,10 @@ WHERE contract_data @? '$.sla.services[*].slos[*] ? (@.sloType == "availability"
 
 1. Store the context, ontology, and shapes in Semantic Hub with version `v1`.
 2. Add backend validation for parameter types, required flags, operators, placeholder references, and clause bindings.
-3. Add `semanticProfile` to newly generated `contract_data`.
-4. Extend template verification responses with semantic validation findings.
-5. Emit semantic NATS/CloudEvents for validation, lifecycle, signing, deployment, and revocation.
-6. Export deployment policy bundles from approved/signed contracts.
-7. Add optional SHACL validation in PACM/CI once RDF expansion is operational.
+3. Extend template verification responses with semantic validation findings.
+4. Emit semantic NATS/CloudEvents for validation, lifecycle, signing, deployment, and revocation.
+5. Export deployment policy bundles from approved/signed contracts.
+6. Add optional SHACL validation in PACM/CI once RDF expansion is operational.
 docs/ontology/
   facis-sla-ontology.ttl
 ```

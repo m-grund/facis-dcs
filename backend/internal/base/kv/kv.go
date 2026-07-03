@@ -49,9 +49,9 @@ func (s *Store) Set(ctx context.Context, key, value string, ttl time.Duration) e
 	}
 	_, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO kv_store (key, value, expires_at, updated_at) 
+		`INSERT INTO kv_store (key, value, expires_at, updated_at)
 		 VALUES ($1, $2, $3, now())
-		 ON CONFLICT (key) DO UPDATE 
+		 ON CONFLICT (key) DO UPDATE
 		 SET value = $2, expires_at = $3, updated_at = now()`,
 		key, value, expiresAt,
 	)

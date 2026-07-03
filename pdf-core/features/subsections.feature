@@ -1,6 +1,6 @@
 Feature: Subsection rendering, accessibility anchoring, and amendment lifecycle
 
-  Sections nest to arbitrary depth via the dcs-pdf-core:subsections property.
+  Sections nest to arbitrary depth via the LayoutNode children hierarchy.
   Each subsection level must:
     - appear in the PDF bookmark outline, nested under its parent
     - be indented further right than its parent
@@ -22,56 +22,90 @@ Feature: Subsection rendering, accessibility anchoring, and amendment lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:subsection-structure",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Nested Obligations Document",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. General Obligations",
-            "clauses": ["The parties shall comply with all applicable regulations."],
-            "subsections": [
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.1 Data Protection",
-                "clauses": ["Each party shall act as an independent data controller."],
-                "subsections": [
-                  {
-                    "@type": "dcs-pdf-core:Section",
-                    "heading": "1.1.1 Breach Notification",
-                    "clauses": [
-                      "A party suffering a data breach shall notify the other within 72 hours.",
-                      "Notification shall include the nature of the breach and remediation steps taken."
-                    ]
-                  }
-                ]
-              },
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.2 Health and Safety",
-                "clauses": ["Each party shall maintain a safe working environment at all times."]
-              }
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Dispute Resolution",
-            "clauses": [
-              "Disputes shall first be referred to a senior representative of each party.",
-              "Unresolved disputes shall be submitted to binding arbitration."
-            ],
-            "subsections": [
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "2.1 Arbitration Rules",
-                "clauses": ["Arbitration shall be conducted under the ICC Rules of Arbitration."]
-              }
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Nested Obligations Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Nested Obligations Document"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": [
+                "urn:doc:subsection-structure#s1",
+                "urn:doc:subsection-structure#s2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-structure#s1",
+              "children": [
+                "urn:doc:subsection-structure#c1",
+                "urn:doc:subsection-structure#s1-1",
+                "urn:doc:subsection-structure#s1-2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-structure#s1-1",
+              "children": [
+                "urn:doc:subsection-structure#c2",
+                "urn:doc:subsection-structure#s1-1-1"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-structure#s1-1-1",
+              "children": [
+                "urn:doc:subsection-structure#c3",
+                "urn:doc:subsection-structure#c4"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-structure#s1-2",
+              "children": ["urn:doc:subsection-structure#c5"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-structure#s2",
+              "children": [
+                "urn:doc:subsection-structure#c6",
+                "urn:doc:subsection-structure#c7",
+                "urn:doc:subsection-structure#s2-1"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-structure#s2-1",
+              "children": ["urn:doc:subsection-structure#c8"]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:subsection-structure#s1", "title": "1. General Obligations"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c1", "content": ["The parties shall comply with all applicable regulations."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-structure#s1-1", "title": "1.1 Data Protection"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c2", "content": ["Each party shall act as an independent data controller."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-structure#s1-1-1", "title": "1.1.1 Breach Notification"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c3", "content": ["A party suffering a data breach shall notify the other within 72 hours."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c4", "content": ["Notification shall include the nature of the breach and remediation steps taken."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-structure#s1-2", "title": "1.2 Health and Safety"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c5", "content": ["Each party shall maintain a safe working environment at all times."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-structure#s2", "title": "2. Dispute Resolution"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c6", "content": ["Disputes shall first be referred to a senior representative of each party."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c7", "content": ["Unresolved disputes shall be submitted to binding arbitration."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-structure#s2-1", "title": "2.1 Arbitration Rules"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-structure#c8", "content": ["Arbitration shall be conducted under the ICC Rules of Arbitration."]}
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -96,46 +130,78 @@ Feature: Subsection rendering, accessibility anchoring, and amendment lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:subsection-rerender",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Environmental Compliance Policy",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Scope",
-            "clauses": ["This policy applies to all operations of the Organisation."],
-            "subsections": [
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.1 Definitions",
-                "clauses": ["\"Operations\" includes manufacturing, logistics, and office activities."]
-              },
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.2 Exclusions",
-                "clauses": ["Research and development activities are governed by a separate policy."]
-              }
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Reporting",
-            "clauses": ["Annual environmental reports shall be submitted to the Board."],
-            "subsections": [
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "2.1 Metrics",
-                "clauses": [
-                  "Reports shall include carbon footprint, water usage, and waste volumes.",
-                  "Metrics shall be independently verified by a registered environmental auditor."
-                ]
-              }
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Environmental Compliance Policy",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Environmental Compliance Policy"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": [
+                "urn:doc:subsection-rerender#s1",
+                "urn:doc:subsection-rerender#s2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-rerender#s1",
+              "children": [
+                "urn:doc:subsection-rerender#c1",
+                "urn:doc:subsection-rerender#s1-1",
+                "urn:doc:subsection-rerender#s1-2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-rerender#s1-1",
+              "children": ["urn:doc:subsection-rerender#c2"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-rerender#s1-2",
+              "children": ["urn:doc:subsection-rerender#c3"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-rerender#s2",
+              "children": [
+                "urn:doc:subsection-rerender#c4",
+                "urn:doc:subsection-rerender#s2-1"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-rerender#s2-1",
+              "children": [
+                "urn:doc:subsection-rerender#c5",
+                "urn:doc:subsection-rerender#c6"
+              ]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:subsection-rerender#s1", "title": "1. Scope"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-rerender#c1", "content": ["This policy applies to all operations of the Organisation."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-rerender#s1-1", "title": "1.1 Definitions"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-rerender#c2", "content": ["\"Operations\" includes manufacturing, logistics, and office activities."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-rerender#s1-2", "title": "1.2 Exclusions"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-rerender#c3", "content": ["Research and development activities are governed by a separate policy."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-rerender#s2", "title": "2. Reporting"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-rerender#c4", "content": ["Annual environmental reports shall be submitted to the Board."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-rerender#s2-1", "title": "2.1 Metrics"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-rerender#c5", "content": ["Reports shall include carbon footprint, water usage, and waste volumes."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-rerender#c6", "content": ["Metrics shall be independently verified by a registered environmental auditor."]}
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -150,45 +216,75 @@ Feature: Subsection rendering, accessibility anchoring, and amendment lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:subsection-amendment",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Procurement Policy v1",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Supplier Selection",
-            "clauses": ["Suppliers shall be assessed against cost, quality, and delivery criteria."],
-            "subsections": [
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.1 Tendering Threshold",
-                "clauses": [
-                  "Contracts exceeding ten thousand (10,000) GBP require a formal tender process.",
-                  "The Procurement Committee shall evaluate all tenders."
-                ]
-              },
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.2 Preferred Suppliers",
-                "clauses": ["The preferred supplier list shall be reviewed annually."]
-              }
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Contract Management",
-            "clauses": [
-              "All contracts shall be managed by a designated Contract Owner.",
-              "Contract renewals require approval from the Finance Director."
-            ]
-          }
-        ],
+        "@type": "ContractTemplate",
+        "documentTitle": "Procurement Policy v1",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Procurement Policy v1"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "sig-cpo", "label": "Chief Procurement Officer"}
-        ]
+          {"@type": "SignatureField", "@id": "urn:doc:subsection-structure#sig-cpo", "signatoryName": "sig-cpo"}
+        ],
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": [
+                "urn:doc:subsection-amendment#s1",
+                "urn:doc:subsection-amendment#s2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1",
+              "children": [
+                "urn:doc:subsection-amendment#c1",
+                "urn:doc:subsection-amendment#s1-1",
+                "urn:doc:subsection-amendment#s1-2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1-1",
+              "children": [
+                "urn:doc:subsection-amendment#c2",
+                "urn:doc:subsection-amendment#c3"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1-2",
+              "children": ["urn:doc:subsection-amendment#c4"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s2",
+              "children": [
+                "urn:doc:subsection-amendment#c5",
+                "urn:doc:subsection-amendment#c6"
+              ]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1", "title": "1. Supplier Selection"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c1", "content": ["Suppliers shall be assessed against cost, quality, and delivery criteria."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1-1", "title": "1.1 Tendering Threshold"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c2", "content": ["Contracts exceeding ten thousand (10,000) GBP require a formal tender process."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c3", "content": ["The Procurement Committee shall evaluate all tenders."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1-2", "title": "1.2 Preferred Suppliers"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c4", "content": ["The preferred supplier list shall be reviewed annually."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s2", "title": "2. Contract Management"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c5", "content": ["All contracts shall be managed by a designated Contract Owner."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c6", "content": ["Contract renewals require approval from the Finance Director."]}
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -209,54 +305,89 @@ Feature: Subsection rendering, accessibility anchoring, and amendment lifecycle
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:subsection-amendment",
-        "@type": "dcs-pdf-core:Document",
-        "title": "Procurement Policy v2 (Amended)",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Supplier Selection",
-            "clauses": ["Suppliers shall be assessed against cost, quality, and delivery criteria."],
-            "subsections": [
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.1 Tendering Threshold",
-                "clauses": [
-                  "Contracts exceeding twenty-five thousand (25,000) GBP require a formal tender process.",
-                  "The Procurement Committee shall evaluate all tenders.",
-                  "Sole-source justification must be documented for single-supplier awards."
-                ]
-              },
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.2 Preferred Suppliers",
-                "clauses": ["The preferred supplier list shall be reviewed annually."]
-              },
-              {
-                "@type": "dcs-pdf-core:Section",
-                "heading": "1.3 Emergency Procurement",
-                "clauses": [
-                  "In circumstances of operational emergency, the CEO may waive tender requirements.",
-                  "Emergency procurement shall be ratified by the Board within thirty (30) days."
-                ]
-              }
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Contract Management",
-            "clauses": [
-              "All contracts shall be managed by a designated Contract Owner.",
-              "Contract renewals require approval from the Finance Director."
-            ]
-          }
-        ],
+        "@type": "ContractTemplate",
+        "documentTitle": "Procurement Policy v2 (Amended)",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Procurement Policy v2 (Amended)"
+        },
         "signatureFields": [
-          {"@type": "dcs-pdf-core:SignatureField", "name": "sig-cpo", "label": "Chief Procurement Officer"}
-        ]
+          {"@type": "SignatureField", "@id": "urn:doc:subsection-structure#sig-cpo", "signatoryName": "sig-cpo"}
+        ],
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": [
+                "urn:doc:subsection-amendment#s1",
+                "urn:doc:subsection-amendment#s2"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1",
+              "children": [
+                "urn:doc:subsection-amendment#c1",
+                "urn:doc:subsection-amendment#s1-1",
+                "urn:doc:subsection-amendment#s1-2",
+                "urn:doc:subsection-amendment#s1-3"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1-1",
+              "children": [
+                "urn:doc:subsection-amendment#c2",
+                "urn:doc:subsection-amendment#c3",
+                "urn:doc:subsection-amendment#c4"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1-2",
+              "children": ["urn:doc:subsection-amendment#c5"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s1-3",
+              "children": [
+                "urn:doc:subsection-amendment#c6",
+                "urn:doc:subsection-amendment#c7"
+              ]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:subsection-amendment#s2",
+              "children": [
+                "urn:doc:subsection-amendment#c8",
+                "urn:doc:subsection-amendment#c9"
+              ]
+            }
+          ],
+          "blocks": [
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1", "title": "1. Supplier Selection"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c1", "content": ["Suppliers shall be assessed against cost, quality, and delivery criteria."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1-1", "title": "1.1 Tendering Threshold"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c2", "content": ["Contracts exceeding twenty-five thousand (25,000) GBP require a formal tender process."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c3", "content": ["The Procurement Committee shall evaluate all tenders."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c4", "content": ["Sole-source justification must be documented for single-supplier awards."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1-2", "title": "1.2 Preferred Suppliers"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c5", "content": ["The preferred supplier list shall be reviewed annually."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s1-3", "title": "1.3 Emergency Procurement"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c6", "content": ["In circumstances of operational emergency, the CEO may waive tender requirements."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c7", "content": ["Emergency procurement shall be ratified by the Board within thirty (30) days."]},
+            {"@type": "Section", "@id": "urn:doc:subsection-amendment#s2", "title": "2. Contract Management"},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c8", "content": ["All contracts shall be managed by a designated Contract Owner."]},
+            {"@type": "Clause", "@id": "urn:doc:subsection-amendment#c9", "content": ["Contract renewals require approval from the Finance Director."]}
+          ]
+        }
       }
       """
     And I update the signed PDF with the amended payload through /update

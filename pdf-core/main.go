@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	compiler "example.com/m/V2/compiler"
 )
 
 // loadEnvFile reads KEY=VALUE pairs from path and sets them in the environment.
@@ -44,18 +43,10 @@ func loadEnvFile(path string) error {
 	return scanner.Err()
 }
 
-// applyEnvToCompiler re-initialises the compiler's ontology IRI after .env
-// has been loaded, so DCS_PDF_CORE_ONTOLOGY_BASE_URL set in .env takes effect
-// even though the compiler's init() runs before main() loads the file.
-func applyEnvToCompiler() {
-	compiler.InitOntologyIRI(os.Getenv("DCS_PDF_CORE_ONTOLOGY_BASE_URL"))
-}
-
 func main() {
 	if err := loadEnvFile(".env"); err != nil {
 		log.Fatalf("load .env: %v", err)
 	}
-	applyEnvToCompiler()
 
 	addr := os.Getenv("DCS_PDF_CORE_ADDR")
 	if addr == "" {

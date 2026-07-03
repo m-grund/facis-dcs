@@ -272,6 +272,71 @@ type RetrieveAllEvent struct {
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
+// RetrieveArchivedEvent is emitted when archive data is retrieved.
+type RetrieveArchivedEvent struct {
+	RetrievedBy string    `json:"retrieved_by"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// StoreArchivedEvent is emitted when a contract is stored in the archive.
+type StoreArchivedEvent struct {
+	DID             string                 `json:"did"`
+	ContractVersion int                    `json:"contract_version"`
+	StoredBy        string                 `json:"stored_by"`
+	ContentHash     string                 `json:"content_hash"`
+	SnapshotCID     string                 `json:"snapshot_cid"`
+	ArchiveStatus   string                 `json:"archive_status"`
+	NotaryReceipt   *ArchiveNotaryReceipt  `json:"notary_receipt,omitempty"`
+	TSAReceipt      *ArchiveTSAReceipt     `json:"tsa_receipt,omitempty"`
+	EvidenceSummary ArchiveEvidenceSummary `json:"evidence_summary"`
+	OccurredAt      time.Time              `json:"occurred_at"`
+}
+
+type ArchiveEvidenceSummary struct {
+	SnapshotHashAlgorithm string `json:"snapshot_hash_algorithm"`
+	SignatureStatus       string `json:"signature_status"`
+	CredentialHashStatus  string `json:"credential_hash_status"`
+}
+
+type ArchiveNotaryReceipt struct {
+	ReceiptType    string    `json:"receiptType"`
+	ArchiveEntryID string    `json:"archiveEntryId"`
+	EventHash      string    `json:"eventHash"`
+	PreviousHash   *string   `json:"previousHash"`
+	ReceivedAt     time.Time `json:"receivedAt"`
+}
+
+type ArchiveTSAReceipt struct {
+	ReceiptType    string    `json:"receipt_type"`
+	Token          string    `json:"token"`
+	TokenEncoding  string    `json:"token_encoding"`
+	HashAlgorithm  string    `json:"hash_algorithm"`
+	MessageImprint string    `json:"message_imprint"`
+	GeneratedAt    time.Time `json:"generated_at"`
+	Policy         string    `json:"policy,omitempty"`
+	SerialNumber   string    `json:"serial_number,omitempty"`
+}
+
+// EventType implements [event.Event].
+func (r RetrieveArchivedEvent) EventType() string {
+	return eventtype.RetrieveArchived.String()
+}
+
+// GetDID implements [event.Event].
+func (r RetrieveArchivedEvent) GetDID() string {
+	return "*"
+}
+
+// EventType implements [event.Event].
+func (e StoreArchivedEvent) EventType() string {
+	return eventtype.StoreArchived.String()
+}
+
+// GetDID implements [event.Event].
+func (e StoreArchivedEvent) GetDID() string {
+	return e.DID
+}
+
 // EventType implements the Event interface.
 func (e RetrieveAllEvent) EventType() string {
 	return eventtype.RetrieveAll.String()

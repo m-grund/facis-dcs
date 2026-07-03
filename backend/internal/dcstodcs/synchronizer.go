@@ -71,14 +71,14 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 			return
 		}
 
-		evtType, err := eventtype.NewEventType(evt.Type())
-		if err != nil {
-			log.Errorf(ctx, err, "failed to parse source event type, %s", evt.Type())
-			return
-		}
-
 		switch source {
 		case componenttype.ContractWorkflowEngine:
+			evtType, err := eventtype.NewEventType(evt.Type())
+			if err != nil {
+				log.Errorf(ctx, err, "failed to parse contract workflow event type, %s", evt.Type())
+				return
+			}
+
 			if evtType == eventtype.RetrieveAll || evtType == eventtype.RetrieveByID || evtType == eventtype.RetrieveHistoryByDID {
 				return
 			}
@@ -89,7 +89,7 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 			}
 
 			var data map[string]interface{}
-			err := json.Unmarshal(evt.Data(), &data)
+			err = json.Unmarshal(evt.Data(), &data)
 			if err != nil {
 				log.Errorf(ctx, err, "failed to unmarshal event data, %s", evt.Data())
 			}

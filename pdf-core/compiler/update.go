@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -22,11 +21,11 @@ var ErrNoChanges = errors.New("no changes: payloads are semantically identical")
 // DiffNQuads returns the N-Quads present in newPayload but not oldPayload (added)
 // and those present in oldPayload but not newPayload (removed).
 func DiffNQuads(oldPayload, newPayload []byte) (added, removed []string, err error) {
-	oldNQuads, _, err := NormalizePayload(oldPayload)
+	oldNQuads, err := NormalizePayload(oldPayload)
 	if err != nil {
 		return nil, nil, fmt.Errorf("normalize old payload: %w", err)
 	}
-	newNQuads, _, err := NormalizePayload(newPayload)
+	newNQuads, err := NormalizePayload(newPayload)
 	if err != nil {
 		return nil, nil, fmt.Errorf("normalize new payload: %w", err)
 	}
@@ -159,11 +158,19 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 		return nil, fmt.Errorf("extract embedded JSON-LD: %w", err)
 	}
 
-	oldNQuads, _, err := NormalizePayload(oldPayload)
+	// Canonicalize newPayload so the URDNA2015 hash is computed on the same
+	// canonical representation used for model extraction and PDF embedding.
+	newCanonical, err := CanonicalizePayload(newPayload)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalize new payload: %w", err)
+	}
+
+	// oldPayload is already canonical (it was embedded by a prior CompilePDF call).
+	oldNQuads, err := NormalizePayload(oldPayload)
 	if err != nil {
 		return nil, err
 	}
-	newNQuads, newExpanded, err := NormalizePayload(newPayload)
+	newNQuads, err := NormalizePayload(newCanonical)
 	if err != nil {
 		return nil, err
 	}
@@ -185,11 +192,7 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 		return nil, fmt.Errorf("find startxref: %w", err)
 	}
 
-	var rawNewRoot map[string]any
-	json.Unmarshal(newPayload, &rawNewRoot) //nolint:errcheck // already validated by NormalizePayload
-	newCtx, _ := rawNewRoot["@context"].(map[string]any)
-	newRootID, _ := rawNewRoot["@id"].(string)
-	newDoc, err := extractDocumentModel(newExpanded, newRootID, newCtx, newPayload, newHashHex)
+	newDoc, err := extractDocumentModelFromCanonical(newCanonical, newHashHex)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +239,7 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 	var result []byte
 
 	for range 6 {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(newHashHex), newRootID, newHashHex, hardBindingHash, exclusions, compiledAt)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(newHashHex), newDoc.ContractID, newHashHex, hardBindingHash, exclusions, compiledAt)
 		if err != nil {
 			return nil, fmt.Errorf("render update manifest: %w", err)
 		}

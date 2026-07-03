@@ -13,6 +13,7 @@ from steps.support.api_client import (
     template_verify_url
 )
 from steps.support.services.auth_service import AuthService
+from steps.support.services.template_service import TemplateService
 
 
 class ContractService:
@@ -71,7 +72,7 @@ class ContractService:
             context,
             template_create_url(context),
             {
-                "template_type": "FRAME_CONTRACT",
+                "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Contract Source Template",
                 "description": "BDD template for contract workflows",
                 "template_data": {"title": "BDD Template", "clauses": [{"id": "c1", "text": "Base clause"}]},

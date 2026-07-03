@@ -7,10 +7,9 @@ import type {
   SemanticValueConstraint,
 } from '@template-repository/models/contract-template'
 import {
-  parseSegments,
+  parseSegmentsFromContent,
   isText,
   isPlaceholder,
-  type Segment,
   isNewline,
 } from '@template-repository/composables/useClauseTextChips'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
@@ -19,10 +18,11 @@ import PreviewParamInput from './PreviewParamInput.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
+import type { DcsContentSegment } from '@/models/dcs-jsonld'
 
 const props = defineProps<{
   blockId: string
-  text: string
+  content: DcsContentSegment[]
   semanticConditions: SemanticCondition[]
   semanticConditionValues?: SemanticConditionValue[]
   verificationResult?: VerificationResult | null
@@ -47,7 +47,7 @@ type PreviewSegment =
 const previewNewlineSpanClass = PREVIEW_NEWLINE_SPAN_CLASS
 
 const segments = computed<PreviewSegment[]>(() => {
-  const baseSegments: Segment[] = parseSegments(props.text ?? '', props.semanticConditions)
+  const baseSegments = parseSegmentsFromContent(props.content ?? [], props.semanticConditions)
   const result: PreviewSegment[] = []
   for (const seg of baseSegments) {
     if (isText(seg)) {

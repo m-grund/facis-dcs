@@ -173,16 +173,12 @@ async function onRequestSync(contract: Contract) {
               View
             </RouterLink>
             <RouterLink
-              :to="
-                canEdit
-                  ? {
-                      name: ROUTES.CONTRACTS.EDIT,
-                      params: { did: contract.did },
-                    }
-                  : '#'
-              "
+              v-if="canEdit"
+              :to="{
+                name: ROUTES.CONTRACTS.EDIT,
+                params: { did: contract.did },
+              }"
               class="btn gap-2 btn-sm btn-primary"
-              :class="{ 'btn-disabled': !canEdit }"
             >
               Edit
             </RouterLink>

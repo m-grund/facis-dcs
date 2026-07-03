@@ -3,7 +3,6 @@ import type { Contract } from '@/models/contract/contract'
 import type { ContractApprovalTask } from '@/models/contract/contract-approval-task'
 import type { ContractNegotiationTask } from '@/models/contract/contract-negotiation-task'
 import type { ContractReviewTask } from '@/models/contract/contract-review-task'
-import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { TemplateState } from '@/types/contract-template-state'
 import { defineStore } from 'pinia'
 import { computed, ref, type Ref } from 'vue'
@@ -27,16 +26,12 @@ export const useContractsStore = defineStore('contracts', () => {
 
   const hasApprovedTemplates = computed(() =>
     contractTemplates.value.some(
-      (template) =>
-        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
-        template.template_type === TemplateType.frameContract,
+      (template) => template.state === TemplateState.registered || template.state === TemplateState.published,
     ),
   )
   const approvedTemplates = computed(() =>
     contractTemplates.value.filter(
-      (template) =>
-        (template.state === TemplateState.registered || template.state === TemplateState.published) &&
-        template.template_type === TemplateType.frameContract,
+      (template) => template.state === TemplateState.registered || template.state === TemplateState.published,
     ),
   )
 

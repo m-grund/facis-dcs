@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,21 +22,21 @@ import (
 var liberationSansTTF []byte
 
 func CompilePDF(ctx context.Context, payload []byte, compiledAt time.Time) ([]byte, error) {
-	nquads, expanded, err := NormalizePayload(payload)
+	// Compact to stable canonical form first. All subsequent operations (URDNA2015
+	// hash and model extraction) run on the same canonical representation so the
+	// FileID hash is invariant across semantically equivalent input flavors.
+	canonical, err := CanonicalizePayload(payload)
 	if err != nil {
 		return nil, err
 	}
-	// Hash the URDNA2015 N-Quads for a graph-canonical FileID.
+	nquads, err := NormalizePayload(canonical)
+	if err != nil {
+		return nil, err
+	}
 	sum := sha256.Sum256(nquads)
 	hashHex := hex.EncodeToString(sum[:])
 
-	// Raw @context is already validated by NormalizePayload.
-	var rawRoot map[string]any
-	json.Unmarshal(payload, &rawRoot) //nolint:errcheck // already validated above
-	rawCtx, _ := rawRoot["@context"].(map[string]any)
-	rootID, _ := rawRoot["@id"].(string)
-
-	doc, err := extractDocumentModel(expanded, rootID, rawCtx, payload, hashHex)
+	doc, err := extractDocumentModelFromCanonical(canonical, hashHex)
 	if err != nil {
 		return nil, err
 	}
@@ -57,47 +56,21 @@ func ExtractLifecycleEffectiveAt(pdf []byte) (time.Time, error) {
 }
 
 func ExtractEmbeddedJSONLD(pdf []byte) ([]byte, error) {
-	fileSpecPos := bytes.Index(pdf, []byte("/F (payload.jsonld)"))
-	if fileSpecPos < 0 {
-		return nil, fmt.Errorf("embedded JSON-LD filespec not found")
-	}
-	efPos := bytes.Index(pdf[fileSpecPos:], []byte("/EF << /F "))
-	if efPos < 0 {
-		return nil, fmt.Errorf("embedded JSON-LD object reference not found")
-	}
-	efPos += fileSpecPos + len("/EF << /F ")
-	refEnd := bytes.Index(pdf[efPos:], []byte(" 0 R"))
-	if refEnd < 0 {
-		return nil, fmt.Errorf("embedded JSON-LD object reference malformed")
-	}
-	objIDStr := strings.TrimSpace(string(pdf[efPos : efPos+refEnd]))
-	objID, err := strconv.Atoi(objIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("embedded JSON-LD object id invalid: %w", err)
-	}
-
-	objMarker := []byte(fmt.Sprintf("%d 0 obj", objID))
-	objPos := bytes.Index(pdf, objMarker)
-	if objPos < 0 {
-		return nil, fmt.Errorf("embedded JSON-LD object not found")
-	}
-	streamStart := bytes.Index(pdf[objPos:], []byte("stream\n"))
-	if streamStart < 0 {
-		return nil, fmt.Errorf("embedded JSON-LD stream start not found")
-	}
-	streamStart += objPos + len("stream\n")
-	streamEnd := bytes.Index(pdf[streamStart:], []byte("\nendstream"))
-	if streamEnd < 0 {
-		return nil, fmt.Errorf("embedded JSON-LD stream end not found")
-	}
-	return append([]byte(nil), pdf[streamStart:streamStart+streamEnd]...), nil
+	return extractJSONLDStream(pdf, false)
 }
 
 // ExtractLatestEmbeddedJSONLD returns the JSON-LD stream from the most recent
-// definition of the embedded-file object.  For an incrementally updated PDF
+// definition of the embedded-file object. For an incrementally updated PDF
 // this is the superseding object written by UpdatePDF; for a plain compiled PDF
 // it is the same object returned by ExtractEmbeddedJSONLD.
 func ExtractLatestEmbeddedJSONLD(pdf []byte) ([]byte, error) {
+	return extractJSONLDStream(pdf, true)
+}
+
+// extractJSONLDStream finds the embedded payload.jsonld stream in a PDF.
+// When lastOccurrence is true, the last (superseding) object definition is used,
+// mirroring PDF cross-reference resolution rules for incremental updates.
+func extractJSONLDStream(pdf []byte, lastOccurrence bool) ([]byte, error) {
 	fileSpecPos := bytes.Index(pdf, []byte("/F (payload.jsonld)"))
 	if fileSpecPos < 0 {
 		return nil, fmt.Errorf("embedded JSON-LD filespec not found")
@@ -111,16 +84,18 @@ func ExtractLatestEmbeddedJSONLD(pdf []byte) ([]byte, error) {
 	if refEnd < 0 {
 		return nil, fmt.Errorf("embedded JSON-LD object reference malformed")
 	}
-	objIDStr := strings.TrimSpace(string(pdf[efPos : efPos+refEnd]))
-	objID, err := strconv.Atoi(objIDStr)
+	objID, err := strconv.Atoi(strings.TrimSpace(string(pdf[efPos : efPos+refEnd])))
 	if err != nil {
 		return nil, fmt.Errorf("embedded JSON-LD object id invalid: %w", err)
 	}
 
-	// Use LastIndex so that the superseding definition in an incremental update
-	// takes precedence over the original, mirroring PDF xref resolution rules.
 	objMarker := []byte(fmt.Sprintf("%d 0 obj", objID))
-	objPos := bytes.LastIndex(pdf, objMarker)
+	var objPos int
+	if lastOccurrence {
+		objPos = bytes.LastIndex(pdf, objMarker)
+	} else {
+		objPos = bytes.Index(pdf, objMarker)
+	}
 	if objPos < 0 {
 		return nil, fmt.Errorf("embedded JSON-LD object not found")
 	}
@@ -137,7 +112,7 @@ func ExtractLatestEmbeddedJSONLD(pdf []byte) ([]byte, error) {
 }
 
 func AppendVerificationWitness(ctx context.Context, pdf []byte, payload []byte) ([]byte, error) {
-	nquads, _, err := NormalizePayload(payload)
+	nquads, err := NormalizePayload(payload)
 	if err != nil {
 		return nil, err
 	}

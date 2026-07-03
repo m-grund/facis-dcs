@@ -114,69 +114,10 @@ function displayDate(value: unknown): string {
                   <div class="text-xs font-semibold text-base-content/60">Updated At</div>
                   <div class="font-mono text-sm break-all sm:col-span-2">{{ displayDate(catalogue.updated_at) }}</div>
                 </div>
-              </div>
-            </section>
-
-            <section v-if="catalogue.participant" class="rounded-xl border border-base-300 bg-base-100">
-              <div class="border-b border-base-300 px-4 py-3">
-                <div class="text-sm font-semibold">Participant</div>
-              </div>
-              <div class="space-y-2 p-4">
-                <div class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4">
-                  <div class="text-xs font-semibold text-base-content/60">Legal Name</div>
+                <div v-if="catalogue.participant_id" class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4">
+                  <div class="text-xs font-semibold text-base-content/60">Issuer (Participant DID)</div>
                   <div class="font-mono text-sm break-all sm:col-span-2">
-                    {{ displayValue(catalogue.participant.legal_name) }}
-                  </div>
-                </div>
-                <div class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4">
-                  <div class="text-xs font-semibold text-base-content/60">Registration Number</div>
-                  <div class="font-mono text-sm break-all sm:col-span-2">
-                    {{ displayValue(catalogue.participant.registration_number) }}
-                  </div>
-                </div>
-                <div class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4">
-                  <div class="text-xs font-semibold text-base-content/60">LEI Code</div>
-                  <div class="font-mono text-sm break-all sm:col-span-2">
-                    {{ displayValue(catalogue.participant.lei_code) }}
-                  </div>
-                </div>
-                <div
-                  v-if="catalogue.participant.ethereum_address"
-                  class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4"
-                >
-                  <div class="text-xs font-semibold text-base-content/60">Ethereum Address</div>
-                  <div class="font-mono text-sm break-all sm:col-span-2">
-                    {{ displayValue(catalogue.participant.ethereum_address) }}
-                  </div>
-                </div>
-                <div class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4">
-                  <div class="text-xs font-semibold text-base-content/60">Terms and Conditions</div>
-                  <div class="font-mono text-sm break-all sm:col-span-2">
-                    {{ displayValue(catalogue.participant.terms_and_conditions) }}
-                  </div>
-                </div>
-
-                <div v-if="catalogue.participant.headquarter_address" class="pt-2">
-                  <div class="mb-2 text-xs font-semibold text-base-content/60">Headquarter Address</div>
-                  <div class="space-y-2 rounded-lg p-3">
-                    <div
-                      v-if="catalogue.participant.headquarter_address?.country"
-                      class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4"
-                    >
-                      <div class="text-xs font-semibold text-base-content/60">Country</div>
-                      <div class="font-mono text-sm break-all sm:col-span-2">
-                        {{ displayValue(catalogue.participant.headquarter_address?.country) }}
-                      </div>
-                    </div>
-                    <div
-                      v-if="catalogue.participant.headquarter_address?.locality"
-                      class="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-4"
-                    >
-                      <div class="text-xs font-semibold text-base-content/60">Locality</div>
-                      <div class="font-mono text-sm break-all sm:col-span-2">
-                        {{ displayValue(catalogue.participant.headquarter_address?.locality) }}
-                      </div>
-                    </div>
+                    {{ displayValue(catalogue.participant_id) }}
                   </div>
                 </div>
               </div>

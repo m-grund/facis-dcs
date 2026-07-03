@@ -1,35 +1,20 @@
-export type SemanticProfileVersion = 'v1'
 export type ValidationSeverity = 'info' | 'warning' | 'error' | 'blocking'
 export type ParameterType = 'string' | 'decimal' | 'integer' | 'boolean' | 'date' | 'enum'
 export type JsonPath = `$${string}`
 export type PlaceholderRef = `{{${string}.${string}}}` | `{{${string}}}`
 
-export interface SemanticProfile {
-  name: 'FACIS DCS Semantic Contract Profile'
-  version: SemanticProfileVersion
-  context: string
-  ontology: string
-  shapes?: string
-}
-
-export const FACIS_DCS_SEMANTIC_PROFILE: SemanticProfile = {
-  name: 'FACIS DCS Semantic Contract Profile',
-  version: 'v1',
-  context: 'https://w3id.org/facis/dcs/context/v1',
-  ontology: 'https://w3id.org/facis/sla/ontology',
-  shapes: 'https://w3id.org/facis/dcs/shapes/v1',
-}
-
 export type DcsOperator =
-  | 'Equals'
-  | 'NotEquals'
-  | 'GreaterThan'
-  | 'GreaterThanOrEqual'
-  | 'LessThan'
-  | 'LessThanOrEqual'
-  | 'Between'
-  | 'Contains'
-  | 'MatchesRegex'
+  | 'odrl:eq'
+  | 'odrl:neq'
+  | 'odrl:gt'
+  | 'odrl:gteq'
+  | 'odrl:lt'
+  | 'odrl:lteq'
+  | 'odrl:isAnyOf'
+  | 'odrl:isNoneOf'
+  | 'odrl:hasPart'
+  | 'dcs:between'
+  | 'dcs:matchesRegex'
 
 export interface UiMetadata {
   label?: string
@@ -73,6 +58,25 @@ export interface SemanticRule {
   severity: ValidationSeverity
   source?: 'semanticCondition' | 'manual' | 'sla'
   message?: string
+}
+
+export interface OdrlConstraint {
+  '@type': 'odrl:Constraint'
+  'odrl:leftOperand': unknown
+  'odrl:operator': { '@id': string }
+  'odrl:rightOperand': unknown
+}
+
+export interface OdrlDuty {
+  '@type': 'odrl:Duty'
+  '@id': string
+  'odrl:constraint': OdrlConstraint[]
+}
+
+export interface PolicyBundle {
+  '@type': 'PolicyBundle'
+  format: 'odrl-jsonld'
+  rules: OdrlDuty[]
 }
 
 export interface ValidationFinding {
@@ -189,8 +193,7 @@ interface SemanticConditionLike {
     parameterName: string
     type: ParameterType
     isRequired?: boolean
-    fixedValue?: unknown
-    operators?: ({ operate: DcsOperator; targets?: string[] } | DcsOperator)[]
+    operators?: ({ operate: DcsOperator; targets?: unknown[] } | DcsOperator)[]
   }[]
 }
 
@@ -202,20 +205,20 @@ interface DocumentBlockLike {
 }
 
 export interface SemanticTemplateRuntimeExtension {
-  semanticProfile: SemanticProfile
   placeholderBindings: PlaceholderBinding[]
   semanticRules: SemanticRule[]
+  policyBundle?: PolicyBundle
 }
 
 export function buildSemanticTemplateExtension(
   documentBlocks: DocumentBlockLike[],
   semanticConditions: SemanticConditionLike[],
-  semanticProfile: SemanticProfile = FACIS_DCS_SEMANTIC_PROFILE,
 ): SemanticTemplateRuntimeExtension {
+  const semanticRules = buildSemanticRulesFromConditions(documentBlocks, semanticConditions)
   return {
-    semanticProfile,
     placeholderBindings: buildPlaceholderBindings(documentBlocks, semanticConditions),
-    semanticRules: buildSemanticRulesFromConditions(documentBlocks, semanticConditions),
+    semanticRules,
+    policyBundle: buildPolicyBundleFromSemanticRules(semanticRules),
   }
 }
 
@@ -266,7 +269,6 @@ export function buildSemanticRulesFromConditions(
   const rules: SemanticRule[] = []
   for (const condition of semanticConditions) {
     for (const parameter of condition.parameters) {
-      if (parameter.fixedValue !== undefined && parameter.fixedValue !== null && parameter.fixedValue !== '') continue
       for (const rawOperator of parameter.operators ?? []) {
         const operate = typeof rawOperator === 'string' ? rawOperator : rawOperator.operate
         const operator = normalizeSemanticOperator(operate)
@@ -285,7 +287,7 @@ export function buildSemanticRulesFromConditions(
           blockIds: blockIdsByCondition.get(condition.conditionId) ?? [],
           leftOperand: `{{${condition.conditionId}.${parameter.parameterName}}}`,
           operator,
-          rightOperand: targets.length === 1 ? targets[0] : targets,
+          rightOperand: targets.length === 1 && !isSetOperator(operator) ? targets[0] : targets,
           valueType: parameter.type,
           severity: parameter.isRequired ? 'blocking' : 'error',
           source: 'semanticCondition',
@@ -302,21 +304,73 @@ export function buildSemanticRulesFromConditions(
   return rules
 }
 
+export function buildPolicyBundleFromSemanticRules(semanticRules: SemanticRule[]): PolicyBundle | undefined {
+  const rules = semanticRules
+    .map((rule): OdrlDuty | null => {
+      const operator = odrlOperatorFor(rule.operator)
+      if (!operator) return null
+      return {
+        '@type': 'odrl:Duty',
+        '@id': `${rule.ruleId}-duty`,
+        'odrl:constraint': [
+          {
+            '@type': 'odrl:Constraint',
+            'odrl:leftOperand': rule.leftOperand,
+            'odrl:operator': { '@id': operator },
+            'odrl:rightOperand': rule.rightOperand,
+          },
+        ],
+      }
+    })
+    .filter((rule): rule is OdrlDuty => rule !== null)
+
+  if (!rules.length) return undefined
+  return {
+    '@type': 'PolicyBundle',
+    format: 'odrl-jsonld',
+    rules,
+  }
+}
+
 export function normalizeSemanticOperator(value: string): DcsOperator | null {
   return isDcsOperator(value) ? value : null
 }
 
+function odrlOperatorFor(operator: DcsOperator): string | null {
+  return isStandardOdrlOperator(operator) ? operator : null
+}
+
+function isSetOperator(operator: DcsOperator): boolean {
+  return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
+}
+
+function isStandardOdrlOperator(value: string): value is Exclude<DcsOperator, 'dcs:between' | 'dcs:matchesRegex'> {
+  return [
+    'odrl:eq',
+    'odrl:neq',
+    'odrl:gt',
+    'odrl:gteq',
+    'odrl:lt',
+    'odrl:lteq',
+    'odrl:isAnyOf',
+    'odrl:isNoneOf',
+    'odrl:hasPart',
+  ].includes(value)
+}
+
 function isDcsOperator(value: string): value is DcsOperator {
   return [
-    'Equals',
-    'NotEquals',
-    'GreaterThan',
-    'GreaterThanOrEqual',
-    'LessThan',
-    'LessThanOrEqual',
-    'Between',
-    'Contains',
-    'MatchesRegex',
+    'odrl:eq',
+    'odrl:neq',
+    'odrl:gt',
+    'odrl:gteq',
+    'odrl:lt',
+    'odrl:lteq',
+    'odrl:isAnyOf',
+    'odrl:isNoneOf',
+    'odrl:hasPart',
+    'dcs:between',
+    'dcs:matchesRegex',
   ].includes(value)
 }
 
@@ -328,7 +382,7 @@ function buildRuleMessage(
   conditionName: string,
   parameterName: string,
   operator: DcsOperator,
-  targets: string[],
+  targets: unknown[],
 ): string {
   const target = targets.length ? ` ${targets.join(', ')}` : ''
   return `${conditionName}.${parameterName} must satisfy ${operator}${target}.`

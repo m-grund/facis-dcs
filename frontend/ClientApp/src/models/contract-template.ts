@@ -1,22 +1,7 @@
-import type { TemplateDataVersion } from '@/modules/template-repository/models/template-draft-store'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
-import type {
-  SchemaReferenceSet,
-  PolicyReference,
-  ValidationProfile,
-  DocumentOutline,
-  DocumentBlock,
-  MetaData,
-  SemanticCondition,
-} from '@/modules/template-repository/models/contract-template'
-import type {
-  SemanticProfile,
-  TemplateVariable,
-  PlaceholderBinding,
-  SemanticRule,
-  SLAAgreement,
-} from './semantic/facis-dcs-semantic'
+import type { ContractTemplateResponsible } from './contract-template-responsible'
+import type { DcsTemplateData } from './dcs-jsonld'
 
 export interface ContractTemplate {
   did: string
@@ -28,32 +13,16 @@ export interface ContractTemplate {
   state: ContractTemplateState
   name?: string
   description?: string
-  template_data?: ContractTemplateData
+  template_data?: DcsTemplateData
   updated_at: string
-  outdated: boolean
+  responsible?: ContractTemplateResponsible
+  outdated?: boolean
   latest_did?: string
 }
 
 export type PartialContractTemplate = ContractTemplate
 
-export interface ContractTemplateData {
-  '@context'?: string
-  documentOutline: DocumentOutline
-  semanticConditions: SemanticCondition[]
-  documentBlocks: DocumentBlock[]
-  customMetaData: MetaData[]
-  schemaRefs?: SchemaReferenceSet
-  policyRefs?: PolicyReference[]
-  validation?: ValidationProfile
-  semanticProfile?: SemanticProfile
-  templateVariables?: TemplateVariable[]
-  placeholderBindings?: PlaceholderBinding[]
-  semanticRules?: SemanticRule[]
-  sla?: SLAAgreement
-  // Only when the template is a frame contract, it can have sub-templates
-  subTemplateSnapshots?: SubTemplateSnapshot[]
-  templateDataVersion?: TemplateDataVersion
-}
+export type ContractTemplateData = DcsTemplateData
 
 export interface SubTemplateSnapshot {
   did: string
@@ -61,5 +30,5 @@ export interface SubTemplateSnapshot {
   version: number
   name?: string
   description?: string
-  template_data?: Omit<ContractTemplateData, 'subTemplateSnapshots' | 'templateDataVersion'>
+  template_data?: DcsTemplateData
 }

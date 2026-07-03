@@ -5,22 +5,44 @@ Feature: Amendment
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:amendment-base",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "Amendment Test Document",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Original Terms",
-            "clauses": [
-              "Original clause established at document creation."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Amendment Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Amendment Test Document"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:amendment-base#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:amendment-base#s1",
+              "children": ["urn:doc:amendment-base#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:amendment-base#s1",
+              "title": "1. Original Terms"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:amendment-base#c1",
+              "content": ["Original clause established at document creation."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
@@ -28,29 +50,59 @@ Feature: Amendment
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:amendment-base",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "Amendment Test Document",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Original Terms",
-            "clauses": [
-              "Original clause established at document creation."
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Amendment",
-            "clauses": [
-              "Amendment clause added to reflect updated terms."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Amendment Test Document",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Amendment Test Document"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:amendment-base#s1", "urn:doc:amendment-base#s2"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:amendment-base#s1",
+              "children": ["urn:doc:amendment-base#c1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:amendment-base#s2",
+              "children": ["urn:doc:amendment-base#c2"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:amendment-base#s1",
+              "title": "1. Original Terms"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:amendment-base#c1",
+              "content": ["Original clause established at document creation."]
+            },
+            {
+              "@type": "Section",
+              "@id": "urn:doc:amendment-base#s2",
+              "title": "2. Amendment"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:amendment-base#c2",
+              "content": ["Amendment clause added to reflect updated terms."]
+            }
+          ]
+        }
       }
       """
     When I update the compiled PDF with the amended payload through /update
@@ -66,22 +118,44 @@ Feature: Amendment
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:amendment-nochange",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "No-Change Test",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Terms",
-            "clauses": [
-              "This clause will not change."
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "No-Change Test",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "No-Change Test"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:amendment-nochange#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:amendment-nochange#s1",
+              "children": ["urn:doc:amendment-nochange#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:amendment-nochange#s1",
+              "title": "1. Terms"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:amendment-nochange#c1",
+              "content": ["This clause will not change."]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download
