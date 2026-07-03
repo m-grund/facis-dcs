@@ -1,52 +1,3 @@
-<template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <!-- Tabs -->
-    <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
-      <div class="mx-auto max-w-4xl px-6 pt-3">
-        <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">View Template Catalogue</p>
-        <div role="tablist" class="tabs-border tabs tabs-lg">
-          <a
-            v-for="tab in tabs"
-            :key="tab.id"
-            role="tab"
-            class="tab"
-            :class="{ 'tab-active text-primary': activeTab === tab.id }"
-            @click="setActiveTab(tab.id)"
-          >
-            {{ tab.label }}
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab Content -->
-    <div class="mt-5 grow">
-      <div class="mx-auto max-w-4xl p-6">
-        <div v-if="loading" class="px-4">Loading Template Catalogue...</div>
-        <div v-else-if="error" class="px-4">{{ error }}</div>
-        <div v-else>
-          <CatalogueTemplateDetailsInfo v-show="activeTab === 'details'" />
-          <CatalogueTemplateMetaDataInfo v-show="activeTab === 'meta'" />
-          <CatalogueTemplatePreviewInfo v-show="activeTab === 'preview'" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Pinned Footer -->
-    <div v-if="did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
-        <button class="btn flex-1 btn-primary" :disabled="isRegisterDisabled" @click="registerTemplate">
-          <span v-if="registerLoading" class="loading loading-sm loading-spinner"></span>
-          Register
-        </button>
-      </div>
-    </div>
-
-    <ConfirmationModal ref="confirmation-modal" />
-  </div>
-</template>
-
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import { contractTemplateService } from '@/services/contract-template-service'
@@ -211,3 +162,52 @@ async function registerTemplate() {
   }
 }
 </script>
+
+<template>
+  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
+    <!-- Tabs -->
+    <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
+      <div class="mx-auto max-w-4xl px-6 pt-3">
+        <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">View Template Catalogue</p>
+        <div role="tablist" class="tabs-border tabs tabs-lg">
+          <a
+            v-for="tab in tabs"
+            :key="tab.id"
+            role="tab"
+            class="tab"
+            :class="{ 'tab-active text-primary': activeTab === tab.id }"
+            @click="setActiveTab(tab.id)"
+          >
+            {{ tab.label }}
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="mt-5 grow">
+      <div class="mx-auto max-w-4xl p-6">
+        <div v-if="loading" class="px-4">Loading Template Catalogue...</div>
+        <div v-else-if="error" class="px-4">{{ error }}</div>
+        <div v-else>
+          <CatalogueTemplateDetailsInfo v-show="activeTab === 'details'" />
+          <CatalogueTemplateMetaDataInfo v-show="activeTab === 'meta'" />
+          <CatalogueTemplatePreviewInfo v-show="activeTab === 'preview'" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Pinned Footer -->
+    <div v-if="did" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn flex-1 btn-primary" :disabled="isRegisterDisabled" @click="registerTemplate">
+          <span v-if="registerLoading" class="loading loading-sm loading-spinner"></span>
+          Register
+        </button>
+      </div>
+    </div>
+
+    <ConfirmationModal ref="confirmation-modal" />
+  </div>
+</template>

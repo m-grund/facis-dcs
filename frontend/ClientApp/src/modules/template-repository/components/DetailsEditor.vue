@@ -1,3 +1,98 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { TemplateType, isApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
+import { contractTemplateService } from '@/services/contract-template-service'
+import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
+import { TemplateState } from '@/types/contract-template-state'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { useTemplatePermissions } from '../composables/useTemplatePermissions'
+import { useRoute } from 'vue-router'
+
+interface SubcontractKey {
+  did: string
+  version: number
+  document_number?: string
+}
+
+const route = useRoute()
+const isCreationMode = computed(() => !route.params.did)
+
+const store = useTemplateDraftStore()
+const uiStore = useTemplateEditorUiStore()
+const { templates: allTemplates } = useTemplateList()
+const { templateType, documentBlocks, subTemplateSnapshots, state, version } = storeToRefs(store)
+
+const { isManager } = useTemplatePermissions()
+
+const document_number = computed({
+  get: () => store.document_number,
+  set: (value: string) => store.updateDocumentNumber(value),
+})
+
+const name = computed({
+  get: () => store.name,
+  set: (value: string) => store.updateName(value.trim()),
+})
+
+const description = computed({
+  get: () => store.description,
+  set: (value: string) => store.updateDescription(value),
+})
+
+const selectedSubcontracts = computed<SubcontractKey[]>(() =>
+  subTemplateSnapshots.value.map((item) => ({
+    did: item.did,
+    version: item.version,
+    document_number: item.document_number,
+  })),
+)
+const showSubcontractPicker = ref(false)
+const subcontractSearchQuery = ref('')
+
+const isSameTemplate = (a: SubcontractKey, b: SubcontractKey) =>
+  a.did === b.did && a.version === b.version && a.document_number === b.document_number
+const isSelected = (t: SubcontractKey) => selectedSubcontracts.value.some((s) => isSameTemplate(s, t))
+
+const filteredSubcontractTemplates = computed(() => {
+  const q = subcontractSearchQuery.value.toLowerCase()
+  const selectableStates = new Set<string>([TemplateState.approved, TemplateState.published])
+  return allTemplates.value.filter(
+    (t) =>
+      !isSelected(t) &&
+      selectableStates.has(t.state) &&
+      t.template_type === TemplateType.subContract &&
+      (q === '' || (t.name ?? '').toLowerCase().includes(q) || t.did.toLowerCase().includes(q)),
+  )
+})
+
+const getSubcontractTemplateName = (item: SubcontractKey) =>
+  subTemplateSnapshots.value.find((t) => isSameTemplate(t, item))?.name ??
+  allTemplates.value.find((t) => isSameTemplate(t, item))?.name ??
+  item.did
+
+const addSubcontractTemplate = async (template: { did: string; version: number; document_number?: string }) => {
+  if (isSelected(template)) return
+  await contractTemplateService.retrieveById(template).then((fullTemplate) => {
+    if (fullTemplate) store.addSubTemplateSnapshot(fullTemplate)
+  })
+  subcontractSearchQuery.value = ''
+}
+
+const isSubcontractReferenced = (item: SubcontractKey): boolean => {
+  const inOutline = store.blockIdsInOutline
+  return documentBlocks.value.some(
+    (b) => isApprovedTemplateBlock(b) && inOutline.has(b.blockId) && b.templateId === item.did,
+  )
+}
+
+const removeSubcontractTemplate = (item: SubcontractKey) => {
+  if (isSubcontractReferenced(item)) return
+  store.removeSubTemplateSnapshot(item)
+}
+</script>
+
 <template>
   <div class="grid grid-cols-1 gap-4">
     <!-- Contract Kind -->
@@ -149,98 +244,3 @@
     </fieldset>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { TemplateType, isApprovedTemplateBlock } from '@/modules/template-repository/models/contract-template'
-import { contractTemplateService } from '@/services/contract-template-service'
-import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
-import { TemplateState } from '@/types/contract-template-state'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { useTemplatePermissions } from '../composables/useTemplatePermissions'
-import { useRoute } from 'vue-router'
-
-interface SubcontractKey {
-  did: string
-  version: number
-  document_number?: string
-}
-
-const route = useRoute()
-const isCreationMode = computed(() => !route.params.did)
-
-const store = useTemplateDraftStore()
-const uiStore = useTemplateEditorUiStore()
-const { templates: allTemplates } = useTemplateList()
-const { templateType, documentBlocks, subTemplateSnapshots, state, version } = storeToRefs(store)
-
-const { isManager } = useTemplatePermissions()
-
-const document_number = computed({
-  get: () => store.document_number,
-  set: (value: string) => store.updateDocumentNumber(value),
-})
-
-const name = computed({
-  get: () => store.name,
-  set: (value: string) => store.updateName(value.trim()),
-})
-
-const description = computed({
-  get: () => store.description,
-  set: (value: string) => store.updateDescription(value),
-})
-
-const selectedSubcontracts = computed<SubcontractKey[]>(() =>
-  subTemplateSnapshots.value.map((item) => ({
-    did: item.did,
-    version: item.version,
-    document_number: item.document_number,
-  })),
-)
-const showSubcontractPicker = ref(false)
-const subcontractSearchQuery = ref('')
-
-const isSameTemplate = (a: SubcontractKey, b: SubcontractKey) =>
-  a.did === b.did && a.version === b.version && a.document_number === b.document_number
-const isSelected = (t: SubcontractKey) => selectedSubcontracts.value.some((s) => isSameTemplate(s, t))
-
-const filteredSubcontractTemplates = computed(() => {
-  const q = subcontractSearchQuery.value.toLowerCase()
-  const selectableStates = new Set<string>([TemplateState.approved, TemplateState.published])
-  return allTemplates.value.filter(
-    (t) =>
-      !isSelected(t) &&
-      selectableStates.has(t.state) &&
-      t.template_type === TemplateType.subContract &&
-      (q === '' || (t.name ?? '').toLowerCase().includes(q) || t.did.toLowerCase().includes(q)),
-  )
-})
-
-const getSubcontractTemplateName = (item: SubcontractKey) =>
-  subTemplateSnapshots.value.find((t) => isSameTemplate(t, item))?.name ??
-  allTemplates.value.find((t) => isSameTemplate(t, item))?.name ??
-  item.did
-
-const addSubcontractTemplate = async (template: { did: string; version: number; document_number?: string }) => {
-  if (isSelected(template)) return
-  await contractTemplateService.retrieveById(template).then((fullTemplate) => {
-    if (fullTemplate) store.addSubTemplateSnapshot(fullTemplate)
-  })
-  subcontractSearchQuery.value = ''
-}
-
-const isSubcontractReferenced = (item: SubcontractKey): boolean => {
-  const inOutline = store.blockIdsInOutline
-  return documentBlocks.value.some(
-    (b) => isApprovedTemplateBlock(b) && inOutline.has(b.blockId) && b.templateId === item.did,
-  )
-}
-
-const removeSubcontractTemplate = (item: SubcontractKey) => {
-  if (isSubcontractReferenced(item)) return
-  store.removeSubTemplateSnapshot(item)
-}
-</script>

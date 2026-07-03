@@ -1,3 +1,30 @@
+<script setup lang="ts">
+import PageNavBar from '@/core/layouts/page/PageNavBar.vue'
+import PageSidebar from '@/core/layouts/page/PageSidebar.vue'
+import { useScrollStore } from '@/core/store/scroll'
+import { usePageStore } from '@core/store/page'
+import { storeToRefs } from 'pinia'
+import { onMounted, useTemplateRef } from 'vue'
+import { RouterView } from 'vue-router'
+
+const scrollContainer = useTemplateRef<HTMLElement>('scroll-container')
+
+const pageStore = usePageStore()
+const { isSidebarCollapsed, pageSidebarId } = storeToRefs(pageStore)
+const scrollStore = useScrollStore()
+
+// Functional classes for DaisyUI drawer behavior (structure/toggle), not layout or styling
+const drawerClasses = {
+  root: ['drawer', 'lg:drawer-open'],
+  header: ['drawer-content'],
+  sidebar: ['drawer-side'],
+}
+
+onMounted(() => {
+  scrollStore.scrollContainer = scrollContainer.value
+})
+</script>
+
 <template>
   <div :class="[drawerClasses.root, 'min-h-screen']">
     <input :id="pageSidebarId" type="checkbox" class="drawer-toggle" />
@@ -33,30 +60,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import PageNavBar from '@/core/layouts/page/PageNavBar.vue'
-import PageSidebar from '@/core/layouts/page/PageSidebar.vue'
-import { useScrollStore } from '@/core/store/scroll'
-import { usePageStore } from '@core/store/page'
-import { storeToRefs } from 'pinia'
-import { onMounted, useTemplateRef } from 'vue'
-import { RouterView } from 'vue-router'
-
-const scrollContainer = useTemplateRef<HTMLElement>('scroll-container')
-
-const pageStore = usePageStore()
-const { isSidebarCollapsed, pageSidebarId } = storeToRefs(pageStore)
-const scrollStore = useScrollStore()
-
-// Functional classes for DaisyUI drawer behavior (structure/toggle), not layout or styling
-const drawerClasses = {
-  root: ['drawer', 'lg:drawer-open'],
-  header: ['drawer-content'],
-  sidebar: ['drawer-side'],
-}
-
-onMounted(() => {
-  scrollStore.scrollContainer = scrollContainer.value
-})
-</script>

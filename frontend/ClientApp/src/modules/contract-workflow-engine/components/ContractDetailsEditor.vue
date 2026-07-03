@@ -1,3 +1,34 @@
+<script setup lang="ts">
+import type { Contract } from '@/models/contract/contract'
+import { ref } from 'vue'
+
+defineProps<{
+  disabled?: boolean
+}>()
+
+const contract = defineModel<Contract>('contract', { required: true })
+const inserted = defineModel<ContractDetailData>('inserted', { required: false })
+
+function getTemplateLink(contract: Contract): string {
+  return `/ui/templates/view/${contract.template_did}`
+}
+
+const expirationPolicies = [
+  { name: 'Renewal', value: 'RENEWAL' },
+  { name: 'Archiving', value: 'ARCHIVING' },
+  { name: 'Termination', value: 'TERMINATION' },
+]
+
+interface ContractDetailData {
+  name?: string
+  description?: string
+  exp_notice_period?: string
+  exp_policy?: string
+}
+
+const originalContract = ref(Object.assign({}, contract.value))
+</script>
+
 <template>
   <div class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-5">
@@ -127,34 +158,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import type { Contract } from '@/models/contract/contract'
-import { ref } from 'vue'
-
-defineProps<{
-  disabled?: boolean
-}>()
-
-const contract = defineModel<Contract>('contract', { required: true })
-const inserted = defineModel<ContractDetailData>('inserted', { required: false })
-
-function getTemplateLink(contract: Contract): string {
-  return `/ui/templates/view/${contract.template_did}`
-}
-
-const expirationPolicies = [
-  { name: 'Renewal', value: 'RENEWAL' },
-  { name: 'Archiving', value: 'ARCHIVING' },
-  { name: 'Termination', value: 'TERMINATION' },
-]
-
-interface ContractDetailData {
-  name?: string
-  description?: string
-  exp_notice_period?: string
-  exp_policy?: string
-}
-
-const originalContract = ref(Object.assign({}, contract.value))
-</script>

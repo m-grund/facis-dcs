@@ -1,3 +1,13 @@
+<script setup lang="ts">
+import AuthButton from '@/components/AuthButton.vue'
+import PermissionList from '@/components/PermissionList.vue'
+import { usePageStore } from '@core/store/page'
+import { storeToRefs } from 'pinia'
+
+const pageStore = usePageStore()
+const { isSidebarCollapsed, pageSidebarId } = storeToRefs(pageStore)
+</script>
+
 <template>
   <div class="flex-none">
     <label :for="pageSidebarId" class="btn btn-square btn-ghost lg:hidden">
@@ -28,13 +38,3 @@
   <PermissionList class="mr-2" />
   <AuthButton class="flex-none" />
 </template>
-
-<script setup lang="ts">
-import AuthButton from '@/components/AuthButton.vue'
-import PermissionList from '@/components/PermissionList.vue'
-import { usePageStore } from '@core/store/page'
-import { storeToRefs } from 'pinia'
-
-const pageStore = usePageStore()
-const { isSidebarCollapsed, pageSidebarId } = storeToRefs(pageStore)
-</script>

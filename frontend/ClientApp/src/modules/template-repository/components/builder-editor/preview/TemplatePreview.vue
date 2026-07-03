@@ -1,83 +1,3 @@
-<template>
-  <!-- Root-level blocks -->
-  <template v-if="!hasBlockId">
-    <template v-for="id in rootChildren" :key="id">
-      <TemplatePreview
-        :block-id="id"
-        :section-level="sectionLevel"
-        :document-outline="documentOutline"
-        :document-blocks="documentBlocks"
-        :semantic-conditions="semanticConditions"
-        :sub-template-snapshots="subTemplateSnapshots"
-        :semantic-condition-values="semanticConditionValues"
-        :verification-result="verificationResult"
-        :set-semantic-condition-value="setSemanticConditionValue"
-      />
-    </template>
-  </template>
-  <!-- Nested blocks -->
-  <template v-else>
-    <!-- Section block -->
-    <ConditionalWrapper v-if="block && isSection" :enabled="true" tag="section" wrapper-class="w-full mb-4">
-      <PreviewSectionBlock :title="sectionTitle" :has-children="childrenIds.length > 0" :level="sectionLevel">
-        <template v-for="childId in childrenIds" :key="childId">
-          <TemplatePreview
-            :block-id="childId"
-            :section-level="sectionLevel + 1"
-            :document-outline="documentOutline"
-            :document-blocks="documentBlocks"
-            :semantic-conditions="semanticConditions"
-            :sub-template-snapshots="subTemplateSnapshots"
-            :semantic-condition-values="semanticConditionValues"
-            :verification-result="verificationResult"
-            :set-semantic-condition-value="setSemanticConditionValue"
-          />
-        </template>
-      </PreviewSectionBlock>
-    </ConditionalWrapper>
-    <!-- Text block -->
-    <PreviewTextBlock v-else-if="block && isText" :text="block.text ?? ''" />
-    <!-- Clause block -->
-    <PreviewClauseBlock
-      v-else-if="block && isClause"
-      :block-id="block.blockId"
-      :text="block.text ?? ''"
-      :semantic-conditions="clauseSemanticConditions"
-      :semantic-condition-values="semanticConditionValues"
-      :verification-result="verificationResult"
-      :set-semantic-condition-value="setSemanticConditionValue"
-    />
-    <!-- Approved template block -->
-    <ConditionalWrapper v-else-if="block && isApprovedTemplate" :enabled="hasApprovedTemplateChildren">
-      <TemplatePreview
-        v-if="subTemplate?.template_data"
-        :document-outline="subTemplate.template_data.documentOutline"
-        :document-blocks="subTemplate.template_data.documentBlocks"
-        :semantic-conditions="subTemplate.template_data.semanticConditions"
-        :sub-template-snapshots="subTemplateSnapshots"
-        :sub-block-id="block.blockId"
-        :section-level="sectionLevel"
-        :semantic-condition-values="semanticConditionValues"
-        :verification-result="verificationResult"
-        :set-semantic-condition-value="setSemanticConditionValue"
-      />
-      <template v-for="childId in childrenIds" :key="childId">
-        <TemplatePreview
-          :block-id="childId"
-          :section-level="sectionLevel + 1"
-          :document-outline="documentOutline"
-          :document-blocks="documentBlocks"
-          :semantic-conditions="semanticConditions"
-          :sub-template-snapshots="subTemplateSnapshots"
-          :semantic-condition-values="semanticConditionValues"
-          :verification-result="verificationResult"
-          :set-semantic-condition-value="setSemanticConditionValue"
-        />
-      </template>
-    </ConditionalWrapper>
-  </template>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
@@ -224,3 +144,83 @@ const subTemplate = computed((): SubTemplateSnapshot | undefined => {
 })
 const hasApprovedTemplateChildren = computed(() => isApprovedTemplate.value && childrenIds.value.length > 0)
 </script>
+
+<template>
+  <!-- Root-level blocks -->
+  <template v-if="!hasBlockId">
+    <template v-for="id in rootChildren" :key="id">
+      <TemplatePreview
+        :block-id="id"
+        :section-level="sectionLevel"
+        :document-outline="documentOutline"
+        :document-blocks="documentBlocks"
+        :semantic-conditions="semanticConditions"
+        :sub-template-snapshots="subTemplateSnapshots"
+        :semantic-condition-values="semanticConditionValues"
+        :verification-result="verificationResult"
+        :set-semantic-condition-value="setSemanticConditionValue"
+      />
+    </template>
+  </template>
+  <!-- Nested blocks -->
+  <template v-else>
+    <!-- Section block -->
+    <ConditionalWrapper v-if="block && isSection" :enabled="true" tag="section" wrapper-class="w-full mb-4">
+      <PreviewSectionBlock :title="sectionTitle" :has-children="childrenIds.length > 0" :level="sectionLevel">
+        <template v-for="childId in childrenIds" :key="childId">
+          <TemplatePreview
+            :block-id="childId"
+            :section-level="sectionLevel + 1"
+            :document-outline="documentOutline"
+            :document-blocks="documentBlocks"
+            :semantic-conditions="semanticConditions"
+            :sub-template-snapshots="subTemplateSnapshots"
+            :semantic-condition-values="semanticConditionValues"
+            :verification-result="verificationResult"
+            :set-semantic-condition-value="setSemanticConditionValue"
+          />
+        </template>
+      </PreviewSectionBlock>
+    </ConditionalWrapper>
+    <!-- Text block -->
+    <PreviewTextBlock v-else-if="block && isText" :text="block.text ?? ''" />
+    <!-- Clause block -->
+    <PreviewClauseBlock
+      v-else-if="block && isClause"
+      :block-id="block.blockId"
+      :text="block.text ?? ''"
+      :semantic-conditions="clauseSemanticConditions"
+      :semantic-condition-values="semanticConditionValues"
+      :verification-result="verificationResult"
+      :set-semantic-condition-value="setSemanticConditionValue"
+    />
+    <!-- Approved template block -->
+    <ConditionalWrapper v-else-if="block && isApprovedTemplate" :enabled="hasApprovedTemplateChildren">
+      <TemplatePreview
+        v-if="subTemplate?.template_data"
+        :document-outline="subTemplate.template_data.documentOutline"
+        :document-blocks="subTemplate.template_data.documentBlocks"
+        :semantic-conditions="subTemplate.template_data.semanticConditions"
+        :sub-template-snapshots="subTemplateSnapshots"
+        :sub-block-id="block.blockId"
+        :section-level="sectionLevel"
+        :semantic-condition-values="semanticConditionValues"
+        :verification-result="verificationResult"
+        :set-semantic-condition-value="setSemanticConditionValue"
+      />
+      <template v-for="childId in childrenIds" :key="childId">
+        <TemplatePreview
+          :block-id="childId"
+          :section-level="sectionLevel + 1"
+          :document-outline="documentOutline"
+          :document-blocks="documentBlocks"
+          :semantic-conditions="semanticConditions"
+          :sub-template-snapshots="subTemplateSnapshots"
+          :semantic-condition-values="semanticConditionValues"
+          :verification-result="verificationResult"
+          :set-semantic-condition-value="setSemanticConditionValue"
+        />
+      </template>
+    </ConditionalWrapper>
+  </template>
+</template>

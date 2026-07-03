@@ -1,71 +1,3 @@
-<template>
-  <div class="space-y-6">
-    <!-- Section 1: New clause -->
-    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <ClauseEditorForm
-        mode="create"
-        :initial-title="newClauseTitle"
-        :initial-text="newClauseText"
-        :semantic-conditions="newClauseSemanticConditions"
-        @submit="addClause"
-      />
-    </section>
-
-    <!-- Section 2: Existing clauses -->
-    <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Existing clauses</h3>
-      <ExistingClausesList
-        :clause-blocks="clauseBlocks"
-        :semantic-conditions="semanticConditions"
-        :block-ids-in-outline="store.blockIdsInOutline"
-        :editing-block-id="editingBlockId"
-        :editable="uiStore.isTemplateEditable"
-        @delete="deleteClause"
-        @edit="startEditClause"
-        @save="saveEditedClause"
-        @cancel-edit="cancelEdit"
-      />
-
-      <div v-if="uiStore.isTemplateEditable && ontologyDomainTypes.length" class="mt-5 border-t border-base-300 pt-4">
-        <h4 class="mb-3 text-xs font-semibold text-base-content/50 uppercase">Domain types</h4>
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div
-            v-for="domainType in ontologyDomainTypes"
-            :key="domainType.id"
-            class="group grid min-h-[88px] grid-cols-1 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-3 shadow-sm transition-all hover:border-primary/50 hover:bg-base-200 hover:shadow md:grid-cols-[minmax(0,1fr)_minmax(11rem,14rem)_auto]"
-          >
-            <div class="min-w-0">
-              <span class="block text-sm font-medium text-base-content">{{ domainType.label }}</span>
-              <span class="block text-xs text-base-content/50">{{ domainType.fields.length }} domain fields</span>
-            </div>
-            <label v-if="domainType.roleRequired" class="mx-auto w-full max-w-56">
-              <span class="label-text mb-1 block text-xs text-base-content/60">Contract role</span>
-              <select
-                v-model="selectedDomainTypeRoles[domainType.id]"
-                class="select-bordered select w-full select-xs text-left"
-              >
-                <option value="">Select role</option>
-                <option v-for="option in roleOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <span v-else class="hidden md:block" />
-            <button
-              type="button"
-              class="btn justify-self-start transition-transform btn-xs btn-secondary group-hover:translate-x-0.5 md:justify-self-end"
-              :disabled="domainType.roleRequired && !selectedDomainTypeRoles[domainType.id]"
-              @click="describeNewClauseFromDomainType(domainType.id)"
-            >
-              Use
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -208,3 +140,71 @@ function describeNewClauseFromDomainType(domainTypeId: string) {
   newClauseText.value = text
 }
 </script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Section 1: New clause -->
+    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <ClauseEditorForm
+        mode="create"
+        :initial-title="newClauseTitle"
+        :initial-text="newClauseText"
+        :semantic-conditions="newClauseSemanticConditions"
+        @submit="addClause"
+      />
+    </section>
+
+    <!-- Section 2: Existing clauses -->
+    <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Existing clauses</h3>
+      <ExistingClausesList
+        :clause-blocks="clauseBlocks"
+        :semantic-conditions="semanticConditions"
+        :block-ids-in-outline="store.blockIdsInOutline"
+        :editing-block-id="editingBlockId"
+        :editable="uiStore.isTemplateEditable"
+        @delete="deleteClause"
+        @edit="startEditClause"
+        @save="saveEditedClause"
+        @cancel-edit="cancelEdit"
+      />
+
+      <div v-if="uiStore.isTemplateEditable && ontologyDomainTypes.length" class="mt-5 border-t border-base-300 pt-4">
+        <h4 class="mb-3 text-xs font-semibold text-base-content/50 uppercase">Domain types</h4>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div
+            v-for="domainType in ontologyDomainTypes"
+            :key="domainType.id"
+            class="group grid min-h-[88px] grid-cols-1 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-3 shadow-sm transition-all hover:border-primary/50 hover:bg-base-200 hover:shadow md:grid-cols-[minmax(0,1fr)_minmax(11rem,14rem)_auto]"
+          >
+            <div class="min-w-0">
+              <span class="block text-sm font-medium text-base-content">{{ domainType.label }}</span>
+              <span class="block text-xs text-base-content/50">{{ domainType.fields.length }} domain fields</span>
+            </div>
+            <label v-if="domainType.roleRequired" class="mx-auto w-full max-w-56">
+              <span class="label-text mb-1 block text-xs text-base-content/60">Contract role</span>
+              <select
+                v-model="selectedDomainTypeRoles[domainType.id]"
+                class="select-bordered select w-full select-xs text-left"
+              >
+                <option value="">Select role</option>
+                <option v-for="option in roleOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <span v-else class="hidden md:block" />
+            <button
+              type="button"
+              class="btn justify-self-start transition-transform btn-xs btn-secondary group-hover:translate-x-0.5 md:justify-self-end"
+              :disabled="domainType.roleRequired && !selectedDomainTypeRoles[domainType.id]"
+              @click="describeNewClauseFromDomainType(domainType.id)"
+            >
+              Use
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</template>

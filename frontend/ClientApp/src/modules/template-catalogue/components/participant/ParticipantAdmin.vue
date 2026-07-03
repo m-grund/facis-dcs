@@ -1,3 +1,118 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import { useParticipant } from '@/modules/template-catalogue/composables/useParticipant'
+import type { TemplateCatalogueCreateParticipantRequest } from '@/models/requests/template-catalogue-integration-request'
+
+const confirmationModal = ref<InstanceType<typeof ConfirmationModal> | null>(null)
+
+const { currentParticipant, loading, error, loadCurrent, createParticipant, updateParticipant, deleteParticipant } =
+  useParticipant()
+
+const showCreateForm = ref(false)
+const showValidation = ref(false)
+const submitting = computed(() => loading.value)
+
+const defaultForm = (): TemplateCatalogueCreateParticipantRequest => ({
+  legal_name: '',
+  registration_number: '',
+  lei_code: '',
+  ethereum_address: '',
+  headquarter_address: {
+    country: '',
+    street_address: '',
+    postal_code: '',
+    locality: '',
+  },
+  legal_address: {
+    country: '',
+    street_address: '',
+    postal_code: '',
+    locality: '',
+  },
+  terms_and_conditions: '',
+})
+
+const form = ref<TemplateCatalogueCreateParticipantRequest>(defaultForm())
+
+const missingLegalName = computed(() => !form.value.legal_name.trim())
+const missingRegistrationNumber = computed(() => !form.value.registration_number.trim())
+
+const canSubmit = computed(() => !missingLegalName.value && !missingRegistrationNumber.value && !submitting.value)
+
+const isUpdateMode = computed(() => !!currentParticipant.value)
+
+watch(
+  currentParticipant,
+  (value) => {
+    showValidation.value = false
+    if (value) {
+      form.value = {
+        legal_name: value.legal_name ?? '',
+        registration_number: value.registration_number ?? '',
+        lei_code: value.lei_code ?? '',
+        ethereum_address: value.ethereum_address ?? '',
+        headquarter_address: {
+          country: value.headquarter_address?.country ?? '',
+          street_address: value.headquarter_address?.street_address ?? '',
+          postal_code: value.headquarter_address?.postal_code ?? '',
+          locality: value.headquarter_address?.locality ?? '',
+        },
+        legal_address: {
+          country: value.legal_address?.country ?? '',
+          street_address: value.legal_address?.street_address ?? '',
+          postal_code: value.legal_address?.postal_code ?? '',
+          locality: value.legal_address?.locality ?? '',
+        },
+        terms_and_conditions: value.terms_and_conditions ?? '',
+      }
+      showCreateForm.value = true
+    } else {
+      form.value = defaultForm()
+      showCreateForm.value = false
+    }
+  },
+  { immediate: true },
+)
+
+void loadCurrent()
+
+function openCreateForm() {
+  showValidation.value = false
+  showCreateForm.value = true
+}
+
+async function onSubmit() {
+  showValidation.value = true
+  if (!canSubmit.value) return
+  try {
+    if (isUpdateMode.value) {
+      await updateParticipant(form.value)
+    } else {
+      await createParticipant(form.value)
+    }
+  } catch (e) {
+    // errors are surfaced in composable.error
+    console.error('Participant submit failed:', e)
+  }
+}
+
+async function onDelete() {
+  if (!currentParticipant.value) return
+  try {
+    if (!confirmationModal.value) return
+    const { isCanceled } = await confirmationModal.value.reveal({
+      message:
+        'This will delete the current participant and clear all catalogue data, including the service offering. This action cannot be undone.',
+    })
+    if (isCanceled) return
+    await deleteParticipant()
+  } catch (e) {
+    console.error('Delete participant failed:', e)
+  }
+}
+</script>
+
 <template>
   <section class="card bg-base-100">
     <div class="card-body">
@@ -178,118 +293,3 @@
 
   <ConfirmationModal ref="confirmationModal" />
 </template>
-
-<script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import { useParticipant } from '@/modules/template-catalogue/composables/useParticipant'
-import type { TemplateCatalogueCreateParticipantRequest } from '@/models/requests/template-catalogue-integration-request'
-
-const confirmationModal = ref<InstanceType<typeof ConfirmationModal> | null>(null)
-
-const { currentParticipant, loading, error, loadCurrent, createParticipant, updateParticipant, deleteParticipant } =
-  useParticipant()
-
-const showCreateForm = ref(false)
-const showValidation = ref(false)
-const submitting = computed(() => loading.value)
-
-const defaultForm = (): TemplateCatalogueCreateParticipantRequest => ({
-  legal_name: '',
-  registration_number: '',
-  lei_code: '',
-  ethereum_address: '',
-  headquarter_address: {
-    country: '',
-    street_address: '',
-    postal_code: '',
-    locality: '',
-  },
-  legal_address: {
-    country: '',
-    street_address: '',
-    postal_code: '',
-    locality: '',
-  },
-  terms_and_conditions: '',
-})
-
-const form = ref<TemplateCatalogueCreateParticipantRequest>(defaultForm())
-
-const missingLegalName = computed(() => !form.value.legal_name.trim())
-const missingRegistrationNumber = computed(() => !form.value.registration_number.trim())
-
-const canSubmit = computed(() => !missingLegalName.value && !missingRegistrationNumber.value && !submitting.value)
-
-const isUpdateMode = computed(() => !!currentParticipant.value)
-
-watch(
-  currentParticipant,
-  (value) => {
-    showValidation.value = false
-    if (value) {
-      form.value = {
-        legal_name: value.legal_name ?? '',
-        registration_number: value.registration_number ?? '',
-        lei_code: value.lei_code ?? '',
-        ethereum_address: value.ethereum_address ?? '',
-        headquarter_address: {
-          country: value.headquarter_address?.country ?? '',
-          street_address: value.headquarter_address?.street_address ?? '',
-          postal_code: value.headquarter_address?.postal_code ?? '',
-          locality: value.headquarter_address?.locality ?? '',
-        },
-        legal_address: {
-          country: value.legal_address?.country ?? '',
-          street_address: value.legal_address?.street_address ?? '',
-          postal_code: value.legal_address?.postal_code ?? '',
-          locality: value.legal_address?.locality ?? '',
-        },
-        terms_and_conditions: value.terms_and_conditions ?? '',
-      }
-      showCreateForm.value = true
-    } else {
-      form.value = defaultForm()
-      showCreateForm.value = false
-    }
-  },
-  { immediate: true },
-)
-
-void loadCurrent()
-
-function openCreateForm() {
-  showValidation.value = false
-  showCreateForm.value = true
-}
-
-async function onSubmit() {
-  showValidation.value = true
-  if (!canSubmit.value) return
-  try {
-    if (isUpdateMode.value) {
-      await updateParticipant(form.value)
-    } else {
-      await createParticipant(form.value)
-    }
-  } catch (e) {
-    // errors are surfaced in composable.error
-    console.error('Participant submit failed:', e)
-  }
-}
-
-async function onDelete() {
-  if (!currentParticipant.value) return
-  try {
-    if (!confirmationModal.value) return
-    const { isCanceled } = await confirmationModal.value.reveal({
-      message:
-        'This will delete the current participant and clear all catalogue data, including the service offering. This action cannot be undone.',
-    })
-    if (isCanceled) return
-    await deleteParticipant()
-  } catch (e) {
-    console.error('Delete participant failed:', e)
-  }
-}
-</script>

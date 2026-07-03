@@ -157,7 +157,7 @@ func main() {
 		log.Printf(ctx, "Start building EU trust pool")
 		trustPool := identity.NewEUTrustPool()
 		if err := trustPool.Refresh(ctx); err != nil {
-			log.Fatalf(ctx, err, "Building EU trust pool: %w")
+			log.Fatalf(ctx, err, "Building EU trust pool")
 		}
 		count, _, errs := trustPool.Stats()
 		log.Printf(ctx, "EU trust pool ready: %d certificates (%d lists skipped)", count, len(errs))

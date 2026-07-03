@@ -1,3 +1,53 @@
+<script setup lang="ts">
+import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
+import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import { toProperCase } from '@/utils/string'
+import { computed, ref } from 'vue'
+
+const Limit = 20
+const page = ref(0)
+const items = ref<TemplateResourcesItem[]>([])
+
+const loading = ref(false)
+const error = ref<string | null>(null)
+const totalCount = ref(0)
+
+async function load() {
+  loading.value = true
+  error.value = null
+  try {
+    const offset = page.value * Limit
+    const resp = await templateCatalogueIntegrationService.retrieve_template({ offset, limit: Limit })
+    items.value = resp.items
+    totalCount.value = resp.totalCount
+  } catch (e: unknown) {
+    error.value = e instanceof Error && e.message ? e?.message : 'Error loading template catalogues'
+  } finally {
+    loading.value = false
+  }
+}
+void load()
+
+const totalPages = computed(() => {
+  if (loading.value) return 0
+  return totalCount.value > 0 ? Math.ceil(totalCount.value / Limit) : 1
+})
+
+const canPrev = computed(() => page.value > 0)
+const canNext = computed(() => (page.value + 1) * Limit < totalCount.value)
+
+function goPrev() {
+  if (!canPrev.value) return
+  page.value -= 1
+  void load()
+}
+
+function goNext() {
+  if (!canNext.value) return
+  page.value += 1
+  void load()
+}
+</script>
 <template>
   <div>
     <div class="mb-4 flex justify-between p-4">
@@ -58,53 +108,3 @@
     </div>
   </div>
 </template>
-<script setup lang="ts">
-import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
-import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
-import { toProperCase } from '@/utils/string'
-import { computed, ref } from 'vue'
-
-const Limit = 20
-const page = ref(0)
-const items = ref<TemplateResourcesItem[]>([])
-
-const loading = ref(false)
-const error = ref<string | null>(null)
-const totalCount = ref(0)
-
-async function load() {
-  loading.value = true
-  error.value = null
-  try {
-    const offset = page.value * Limit
-    const resp = await templateCatalogueIntegrationService.retrieve_template({ offset, limit: Limit })
-    items.value = resp.items
-    totalCount.value = resp.totalCount
-  } catch (e: unknown) {
-    error.value = e instanceof Error && e.message ? e?.message : 'Error loading template catalogues'
-  } finally {
-    loading.value = false
-  }
-}
-void load()
-
-const totalPages = computed(() => {
-  if (loading.value) return 0
-  return totalCount.value > 0 ? Math.ceil(totalCount.value / Limit) : 1
-})
-
-const canPrev = computed(() => page.value > 0)
-const canNext = computed(() => (page.value + 1) * Limit < totalCount.value)
-
-function goPrev() {
-  if (!canPrev.value) return
-  page.value -= 1
-  void load()
-}
-
-function goNext() {
-  if (!canNext.value) return
-  page.value += 1
-  void load()
-}
-</script>

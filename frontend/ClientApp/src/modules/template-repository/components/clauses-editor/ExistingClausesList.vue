@@ -1,3 +1,45 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { ClauseBlock, SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import {
+  parseSegments,
+  getPlaceholderLabelFromConditions,
+  type Segment,
+} from '@template-repository/composables/useClauseTextChips'
+import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
+import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
+import IconEdit from '@/core/components/icons/IconEdit.vue'
+import IconRemove from '@/core/components/icons/IconRemove.vue'
+
+const props = withDefaults(
+  defineProps<{
+    clauseBlocks: ClauseBlock[]
+    semanticConditions: SemanticCondition[]
+    blockIdsInOutline: Set<string>
+    editingBlockId: string | null
+    editable?: boolean
+  }>(),
+  { editable: true },
+)
+
+const outlineBlockIds = computed(() => props.blockIdsInOutline)
+
+defineEmits<{
+  delete: [blockId: string]
+  edit: [blockId: string]
+  save: [payload: { blockId: string; title: string; text: string }]
+  'cancel-edit': []
+}>()
+
+function getSegments(clause: ClauseBlock): Segment[] {
+  return parseSegments(clause.text ?? '', props.semanticConditions)
+}
+
+function getPlaceholderLabel(seg: Segment): string {
+  return getPlaceholderLabelFromConditions(seg, props.semanticConditions)
+}
+</script>
+
 <template>
   <div class="space-y-2">
     <p v-if="!clauseBlocks.length" class="py-6 text-center text-xs text-base-content/40 italic">
@@ -56,45 +98,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import type { ClauseBlock, SemanticCondition } from '@/modules/template-repository/models/contract-template'
-import {
-  parseSegments,
-  getPlaceholderLabelFromConditions,
-  type Segment,
-} from '@template-repository/composables/useClauseTextChips'
-import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
-import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
-import IconEdit from '@/core/components/icons/IconEdit.vue'
-import IconRemove from '@/core/components/icons/IconRemove.vue'
-
-const props = withDefaults(
-  defineProps<{
-    clauseBlocks: ClauseBlock[]
-    semanticConditions: SemanticCondition[]
-    blockIdsInOutline: Set<string>
-    editingBlockId: string | null
-    editable?: boolean
-  }>(),
-  { editable: true },
-)
-
-const outlineBlockIds = computed(() => props.blockIdsInOutline)
-
-defineEmits<{
-  delete: [blockId: string]
-  edit: [blockId: string]
-  save: [payload: { blockId: string; title: string; text: string }]
-  'cancel-edit': []
-}>()
-
-function getSegments(clause: ClauseBlock): Segment[] {
-  return parseSegments(clause.text ?? '', props.semanticConditions)
-}
-
-function getPlaceholderLabel(seg: Segment): string {
-  return getPlaceholderLabelFromConditions(seg, props.semanticConditions)
-}
-</script>

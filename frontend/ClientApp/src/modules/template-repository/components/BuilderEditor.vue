@@ -1,10 +1,3 @@
-<template>
-  <div class="flex flex-col gap-4">
-    <EmptyBlockCreator v-if="!hasBlocks" />
-    <EditorBlocks v-else />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -17,3 +10,10 @@ const { documentOutline } = storeToRefs(useTemplateDraftStore())
 const rootBlock = computed(() => documentOutline.value.find((b) => b.isRoot))
 const hasBlocks = computed(() => (rootBlock.value?.children?.length ?? 0) > 0)
 </script>
+
+<template>
+  <div class="flex flex-col gap-4">
+    <EmptyBlockCreator v-if="!hasBlocks" />
+    <EditorBlocks v-else />
+  </div>
+</template>

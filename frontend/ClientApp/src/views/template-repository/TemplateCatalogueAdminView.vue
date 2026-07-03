@@ -1,3 +1,11 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import ParticipantAdmin from '@/modules/template-catalogue/components/participant/ParticipantAdmin.vue'
+import ServiceOfferingAdmin from '@/modules/template-catalogue/components/service-offering/ServiceOfferingAdmin.vue'
+
+const activeTab = ref<'participant' | 'serviceOffering'>('participant')
+</script>
+
 <template>
   <div class="mb-4 flex justify-between p-4">
     <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
@@ -31,11 +39,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-import ParticipantAdmin from '@/modules/template-catalogue/components/participant/ParticipantAdmin.vue'
-import ServiceOfferingAdmin from '@/modules/template-catalogue/components/service-offering/ServiceOfferingAdmin.vue'
-
-const activeTab = ref<'participant' | 'serviceOffering'>('participant')
-</script>

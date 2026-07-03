@@ -1,24 +1,3 @@
-<template>
-  <template v-for="(seg, index) in segments" :key="index">
-    <PreviewTextBlock v-if="seg.type === 'text'" :text="seg.value" />
-    <PreviewParamInput
-      v-else-if="seg.type === 'param'"
-      :type="seg.paramType"
-      :label="seg.label"
-      :value="seg.value"
-      :value-constraint="seg.valueConstraint"
-      :is-invalid="seg.isInvalid"
-      :invalid-tip="seg.invalidTip"
-      @update:value="(val) => onParamValueChange(seg, val)"
-    />
-    <span
-      v-else-if="seg.type === 'newline'"
-      :class="[previewNewlineSpanClass, 'preview-newline-break']"
-      aria-hidden="true"
-    />
-  </template>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
@@ -115,6 +94,27 @@ function findVerificationError(conditionId: string, parameterName: string) {
   )
 }
 </script>
+
+<template>
+  <template v-for="(seg, index) in segments" :key="index">
+    <PreviewTextBlock v-if="seg.type === 'text'" :text="seg.value" />
+    <PreviewParamInput
+      v-else-if="seg.type === 'param'"
+      :type="seg.paramType"
+      :label="seg.label"
+      :value="seg.value"
+      :value-constraint="seg.valueConstraint"
+      :is-invalid="seg.isInvalid"
+      :invalid-tip="seg.invalidTip"
+      @update:value="(val) => onParamValueChange(seg, val)"
+    />
+    <span
+      v-else-if="seg.type === 'newline'"
+      :class="[previewNewlineSpanClass, 'preview-newline-break']"
+      aria-hidden="true"
+    />
+  </template>
+</template>
 
 <style scoped>
 .preview-newline-break + .preview-newline-break {
