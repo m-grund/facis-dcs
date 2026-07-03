@@ -12,6 +12,14 @@ jobs:
     with: 
       dockerfile: "deployment/docker/Dockerfile"
       harbor_config: "deployment/harbor.config"
+  dockerbuild-pdf-core:
+    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@main
+    secrets: inherit
+    with:
+      dockerfile: "pdf-core/Dockerfile"
+      buildContext: "pdf-core"
+      service: "pdf-core"
+      harbor_config: "deployment/harbor.config"
   # helm:
   #   uses: eclipse-xfsc/dev-ops/.github/workflows/helm.yml@main
   #   secrets: inherit
