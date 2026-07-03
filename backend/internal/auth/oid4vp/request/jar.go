@@ -57,8 +57,8 @@ func BuildJWT(signer Signer, params Params) (string, error) {
 
 	now := time.Now().UTC()
 	exp := params.ExpiresAt.UTC()
-	if exp.IsZero() || !exp.After(now) {
-		exp = now.Add(5 * time.Minute)
+	if !exp.After(now) {
+		return "", fmt.Errorf("authorization request expiry must be in the future")
 	}
 
 	dcqlJSON, err := json.Marshal(params.DCQLQuery)

@@ -291,7 +291,7 @@ class AuthService:
                 jar_token,
                 ECAlgorithm.from_jwk(json.dumps(jwk)),
                 algorithms=["ES256"],
-                options={"verify_aud": False},
+                options={"verify_aud": False, "require": ["exp"]},
             )
         except Exception as exc:
             raise RuntimeError(f"authorization request JWT verification failed: {exc}") from exc
@@ -299,12 +299,10 @@ class AuthService:
         if str(payload.get("wallet_nonce") or "") != wallet_nonce:
             raise RuntimeError("authorization request wallet_nonce echo mismatch")
 
-        exp = int(payload.get("exp") or 0)
-        if exp <= int(time.time()):
-            raise RuntimeError("authorization request JWT expired")
-
         nonce = str(payload.get("nonce") or "")
-        client_id = str(payload.get("client_id") or AuthService.CLIENT_ID)
+        client_id = str(payload.get("client_id") or "")
+        if not client_id:
+            raise RuntimeError("authorization request JWT missing client_id")
         state = str(payload.get("state") or "")
         response_uri = str(payload.get("response_uri") or "")
         if str(payload.get("response_mode") or "") != "direct_post":

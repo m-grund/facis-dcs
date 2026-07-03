@@ -16,41 +16,32 @@ type Presentation struct {
 }
 
 // ParsePresentation splits a compact SD-JWT+KB presentation string.
+//
+// RFC 9901 wire format: <issuer-jwt>~<disclosure 1>~…~<disclosure N>~<kb-jwt>.
+// A presentation without key binding ends with "~" (empty last segment); DCS login
+// always requires holder binding, so those are rejected. Segment contents are
+// validated cryptographically downstream, not pattern-matched here.
 func ParsePresentation(vpToken string) (*Presentation, error) {
-	rawParts := strings.Split(strings.TrimSpace(vpToken), "~")
-	if len(rawParts) == 0 || strings.TrimSpace(rawParts[0]) == "" {
-		return nil, fmt.Errorf("vp_token is required")
+	parts := strings.Split(strings.TrimSpace(vpToken), "~")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("vp_token is not an sd-jwt presentation")
 	}
 
-	issuerJWT := strings.TrimSpace(rawParts[0])
-	if !strings.HasPrefix(issuerJWT, "eyJ") {
-		return nil, fmt.Errorf("sd-jwt presentation must start with issuer jwt")
+	issuerJWT := parts[0]
+	if issuerJWT == "" {
+		return nil, fmt.Errorf("sd-jwt presentation is missing the issuer jwt")
 	}
 
-	remainder := rawParts[1:]
-	var kbJWT string
-
-	if len(remainder) > 0 && remainder[len(remainder)-1] == "" {
-		remainder = remainder[:len(remainder)-1]
-	} else if len(remainder) > 0 && looksLikeJWT(remainder[len(remainder)-1]) {
-		kbJWT = strings.TrimSpace(remainder[len(remainder)-1])
-		remainder = remainder[:len(remainder)-1]
-	}
-
-	disclosures := make([]string, 0, len(remainder))
-	for _, part := range remainder {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			disclosures = append(disclosures, part)
-		}
-	}
-
+	kbJWT := parts[len(parts)-1]
 	if kbJWT == "" {
 		return nil, fmt.Errorf("sd-jwt presentation is missing kb-jwt")
 	}
 
-	if !strings.HasPrefix(kbJWT, "eyJ") {
-		return nil, fmt.Errorf("kb-jwt must be a compact jwt")
+	disclosures := parts[1 : len(parts)-1]
+	for i, disclosure := range disclosures {
+		if disclosure == "" {
+			return nil, fmt.Errorf("sd-jwt presentation disclosure %d is empty", i+1)
+		}
 	}
 
 	return &Presentation{
@@ -59,12 +50,6 @@ func ParsePresentation(vpToken string) (*Presentation, error) {
 		KBJWT:       kbJWT,
 		SDHash:      SDHash(issuerJWT, disclosures),
 	}, nil
-}
-
-func looksLikeJWT(value string) bool {
-	value = strings.TrimSpace(value)
-
-	return strings.HasPrefix(value, "eyJ") && strings.Count(value, ".") >= 2
 }
 
 func presentationBodyForSDHash(issuerJWT string, disclosures []string) string {

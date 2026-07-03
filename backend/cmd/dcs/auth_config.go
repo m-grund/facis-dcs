@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,10 +92,11 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 	var oid4vpStateTTL time.Duration
 
 	if v := strings.TrimSpace(os.Getenv("OID4VP_STATE_TTL_SECONDS")); v != "" {
-		var secs int
-		if _, err := fmt.Sscanf(v, "%d", &secs); err == nil && secs > 0 {
-			oid4vpStateTTL = time.Duration(secs) * time.Second
+		secs, err := strconv.Atoi(v)
+		if err != nil || secs <= 0 {
+			return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: OID4VP_STATE_TTL_SECONDS must be a positive integer, got %q", v)
 		}
+		oid4vpStateTTL = time.Duration(secs) * time.Second
 	}
 
 	return service.AuthConfig{

@@ -60,7 +60,7 @@ func TestBuildJWTIncludesWalletNonceAndClientMetadata(t *testing.T) {
 }
 
 func TestSignES256JWTIncludesJWKHeader(t *testing.T) {
-	token, err := signES256JWT("", "kid-1", jwt.MapClaims{"a": "b"}, map[string]string{
+	token, err := signES256JWT("kid-1", jwt.MapClaims{"a": "b"}, map[string]string{
 		"kty": "EC",
 		"crv": "P-256",
 		"x":   "x",

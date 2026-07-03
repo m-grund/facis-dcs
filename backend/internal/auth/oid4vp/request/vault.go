@@ -79,7 +79,7 @@ func (s *VaultTransitSigner) SignAuthorizationRequestJWT(claims jwt.MapClaims) (
 	if err != nil {
 		return "", err
 	}
-	return signES256JWT(oauthAuthzReqJWTType, s.kid, claims, jwk, s.signSigningInput)
+	return signES256JWT(s.kid, claims, jwk, s.signSigningInput)
 }
 
 func (s *VaultTransitSigner) getOrFetchTransitPublicJWK() (map[string]string, error) {
@@ -172,34 +172,16 @@ func (s *VaultTransitSigner) fetchTransitPublicJWK() (map[string]string, error) 
 func latestVaultPublicKey(latestVersion int, keys map[string]struct {
 	PublicKey string `json:"public_key"`
 }) (string, error) {
-	if len(keys) == 0 {
-		return "", fmt.Errorf("vault transit key response missing versions")
+	if latestVersion <= 0 {
+		return "", fmt.Errorf("vault transit key response missing latest_version")
 	}
 
-	if latestVersion > 0 {
-		entry, ok := keys[strconv.Itoa(latestVersion)]
-		if ok && strings.TrimSpace(entry.PublicKey) != "" {
-			return entry.PublicKey, nil
-		}
+	entry, ok := keys[strconv.Itoa(latestVersion)]
+	if !ok || strings.TrimSpace(entry.PublicKey) == "" {
+		return "", fmt.Errorf("vault transit key version %d has no public_key", latestVersion)
 	}
 
-	bestVersion := -1
-	bestKey := ""
-	for rawVersion, entry := range keys {
-		version, err := strconv.Atoi(rawVersion)
-		if err != nil {
-			continue
-		}
-		if version > bestVersion && strings.TrimSpace(entry.PublicKey) != "" {
-			bestVersion = version
-			bestKey = entry.PublicKey
-		}
-	}
-
-	if bestVersion < 0 {
-		return "", fmt.Errorf("vault transit key response has no usable public_key")
-	}
-	return bestKey, nil
+	return entry.PublicKey, nil
 }
 
 func ecPEMToJWK(publicKeyPEM string) (map[string]string, error) {

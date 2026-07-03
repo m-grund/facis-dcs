@@ -124,18 +124,12 @@ func (s *authSvc) Consent(ctx context.Context, p *genauth.ConsentPayload) (*gena
 		return nil, goa.PermanentError("bad_request", "consent_challenge is required")
 	}
 
-	redirectTo, err := s.hydra.AcceptConsent(ctx, challenge, "", nil)
+	redirectTo, err := s.hydra.AcceptConsent(ctx, challenge)
 	if err != nil {
 		return nil, goa.PermanentError("unauthorized", "hydra consent: %v", err)
 	}
 
-	redirectTo, err = s.hydra.ResolveRedirectChain(ctx, redirectTo, "", nil)
-	if err != nil {
-		return nil, goa.PermanentError("unauthorized", "hydra consent redirect: %v", err)
-	}
-
-	location := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
-	return &genauth.ConsentResult{Location: location}, nil
+	return &genauth.ConsentResult{Location: redirectTo}, nil
 }
 
 func (s *authSvc) LoginChallenge(ctx context.Context, p *genauth.LoginChallengePayload) error {
@@ -277,10 +271,9 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		return nil, goa.PermanentError("unauthorized", "hydra login: %v", err)
 	}
 
-	continueURL := normalizeBrowserContinueURL(s.hydra.RedirectURI(), redirectTo)
 	rolesJSON, _ := json.Marshal(grantedRoles)
 
-	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.ParticipantDID, rolesJSON, continueURL); err != nil {
+	if err := s.presentations.MarkComplete(ctx, attempt.PresentationState, verified.RawClaims, verified.SubjectDID, verified.ParticipantDID, rolesJSON, redirectTo); err != nil {
 		return nil, err
 	}
 
@@ -292,7 +285,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		Roles:             grantedRoles,
 	})
 
-	return &genauth.PresentationCallbackResult{RedirectURI: &continueURL}, nil
+	return &genauth.PresentationCallbackResult{RedirectURI: &redirectTo}, nil
 }
 
 func pointerString(v *string) string {
@@ -305,7 +298,7 @@ func pointerString(v *string) string {
 func credentialQueryIDFromDCQL(dcqlQuery any) (string, error) {
 	query, ok := dcqlQuery.(map[string]any)
 	if !ok {
-		return oid4vp.PoACredentialQueryID, nil
+		return "", fmt.Errorf("dcql query must be a JSON object")
 	}
 
 	rawCredentials, ok := query["credentials"]
@@ -423,46 +416,6 @@ func (s *authSvc) loadPresentationAttempt(ctx context.Context, presentationState
 	}
 
 	return attempt, nil
-}
-
-// normalizeBrowserContinueURL maps Hydra redirects to the RP callback URL when code is present.
-func normalizeBrowserContinueURL(configuredRedirectURI, redirectTo string) string {
-	redirectTo = strings.TrimSpace(redirectTo)
-	if redirectTo == "" {
-		return redirectTo
-	}
-
-	u, err := url.Parse(redirectTo)
-	if err != nil {
-		return redirectTo
-	}
-
-	if strings.TrimSpace(u.Query().Get("code")) == "" {
-		return redirectTo
-	}
-
-	configured := strings.TrimSpace(configuredRedirectURI)
-	if configured == "" {
-		return u.String()
-	}
-
-	cfg, err := url.Parse(configured)
-	if err != nil {
-		return u.String()
-	}
-
-	out := *cfg
-	q := out.Query()
-
-	for key, values := range u.Query() {
-		for _, v := range values {
-			q.Set(key, v)
-		}
-	}
-
-	out.RawQuery = q.Encode()
-
-	return out.String()
 }
 
 // buildOpenID4VPPresentationURI returns a cross-device wallet deep link (OpenID4VP request-by-reference).

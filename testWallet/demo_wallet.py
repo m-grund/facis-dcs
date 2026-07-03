@@ -25,7 +25,6 @@ import argparse
 import json
 import os
 import sys
-import time
 import uuid
 from dataclasses import dataclass
 import urllib.error
@@ -162,12 +161,11 @@ class _Session:
             raise RuntimeError(f"request failed: {exc.reason}") from exc
 
 
-def normalize_callback_url(redirect_uri: str, api_base: str) -> str:
+def rebase_callback_url(redirect_uri: str, api_base: str) -> str:
+    """Issue the OAuth callback against the API base this wallet already talks to."""
     api = urlparse(api_base)
     target = urlparse(redirect_uri)
-    if target.netloc.endswith(":5173") and api.port == 8991:
-        return redirect_uri.replace(f"{target.scheme}://{target.netloc}", f"{api.scheme}://{api.netloc}", 1)
-    return redirect_uri
+    return redirect_uri.replace(f"{target.scheme}://{target.netloc}", f"{api.scheme}://{api.netloc}", 1)
 
 
 def api_base_from_request_uri(request_uri: str) -> str:
@@ -257,14 +255,10 @@ def verify_authorization_request_jwt(token: str, *, expected_wallet_nonce: str) 
             token,
             ECAlgorithm.from_jwk(json.dumps(jwk)),
             algorithms=["ES256"],
-            options={"verify_aud": False},
+            options={"verify_aud": False, "require": ["exp"]},
         )
     except Exception as exc:
         raise ValueError(f"authorization request JWT signature/claims validation failed: {exc}") from exc
-
-    exp = int(payload.get("exp") or 0)
-    if exp <= int(time.time()):
-        raise ValueError("authorization request JWT is expired")
 
     echoed = str(payload.get("wallet_nonce") or "")
     if echoed != expected_wallet_nonce:
@@ -469,16 +463,10 @@ def run_wallet_flow(
         if r.status_code in (400, 404):
             log("fetch", "hint: presentation link expired or unknown — copy a fresh link from /ui/ login")
         return 1
-    body = r.text.strip()
-    content_type = (r.headers.get("content-type") or "").lower()
-    if body.startswith("eyJ") or "oauth-authz-req+jwt" in content_type:
-        try:
-            req_obj = verify_authorization_request_jwt(body, expected_wallet_nonce=wallet_nonce)
-        except ValueError as exc:
-            log("fetch", "FAILED", error=str(exc))
-            return 1
-    else:
-        log("fetch", "FAILED", error="expected signed authorization request JWT (application/oauth-authz-req+jwt)")
+    try:
+        req_obj = verify_authorization_request_jwt(r.text.strip(), expected_wallet_nonce=wallet_nonce)
+    except ValueError as exc:
+        log("fetch", "FAILED", error=str(exc))
         return 1
     response_mode = str(req_obj.get("response_mode") or "")
     if response_mode != "direct_post":
@@ -552,7 +540,7 @@ def run_wallet_flow(
         log("wallet", "DONE — VP posted; browser tab should redirect via polling")
         return 0
 
-    callback_url = normalize_callback_url(redirect_uri, api)
+    callback_url = rebase_callback_url(redirect_uri, api)
     log("oauth-callback", "GET /auth/callback (headless)", callback_prefix=callback_url[:100])
     r = session.get(callback_url, allow_redirects=False, timeout=30)
     if r.status_code != 302:

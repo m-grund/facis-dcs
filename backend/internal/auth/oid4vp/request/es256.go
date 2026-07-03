@@ -11,20 +11,16 @@ import (
 
 const oauthAuthzReqJWTType = "oauth-authz-req+jwt"
 
-func signES256JWT(typ, kid string, claims jwt.MapClaims, jwk any, sign func(signingInput string) ([]byte, error)) (string, error) {
+func signES256JWT(kid string, claims jwt.MapClaims, jwk any, sign func(signingInput string) ([]byte, error)) (string, error) {
 	kid = strings.TrimSpace(kid)
 
 	if kid == "" {
 		return "", fmt.Errorf("signing kid is required")
 	}
 
-	if typ == "" {
-		typ = oauthAuthzReqJWTType
-	}
-
 	header := map[string]any{
 		"alg": "ES256",
-		"typ": typ,
+		"typ": oauthAuthzReqJWTType,
 		"kid": kid,
 	}
 	if jwk != nil {
