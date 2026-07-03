@@ -1,3 +1,7 @@
+// Package actionflag is the "forward_to" decision on Submit while a contract
+// is in SUBMITTED (APPROVAL routes to REVIEWED, REJECT routes back to
+// NEGOTIATION). Values are case-insensitive on parse but only APPROVAL and
+// REJECT are accepted — not, e.g., "approved" or "rejected".
 package actionflag
 
 import (

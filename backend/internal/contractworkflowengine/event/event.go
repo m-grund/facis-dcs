@@ -1,3 +1,11 @@
+// Package event defines the contract workflow engine's domain events — one
+// struct per Goa endpoint/state transition, each implementing base/event.Event
+// (EventType/GetDID). Handlers pass these to base/event.Create in the same
+// DB transaction as their mutation; base/event.OutboxProcessor later anchors
+// them to the tamper-evident audit trail and republishes them on NATS, where
+// this package's own remote-sync events (RemoteActionRequestEvent,
+// RemoteSyncEvent, RemoteSyncRequestEvent, OutdatedPeerEvent) are also
+// consumed by dcstodcs to drive/guard cross-peer synchronization.
 package event
 
 import (

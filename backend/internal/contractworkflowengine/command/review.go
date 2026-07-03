@@ -30,6 +30,10 @@ type Reviewer struct {
 	CRepo db.ContractRepo
 }
 
+// Handle does not return or mutate any contract data — despite being wired
+// to a GET endpoint (design/contract_workflow_engine.go "review"), this is a
+// pure audit-trail write: it records that the latest draft was opened for
+// review. Use RetrieveByID to actually fetch contract data.
 func (h *Reviewer) Handle(ctx context.Context, cmd ReviewCmd) error {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())

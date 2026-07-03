@@ -1,3 +1,9 @@
+// Package remotesync holds the plain data types transferred between DCS
+// peers during synchronization (mirroring the db package's row types, but
+// decoupled from SQL so they can cross the wire), plus conversion helpers
+// (ToReviewTaskData, etc.) used by remotesync/command's LocalPeerUpdater to
+// persist an incoming PostSync snapshot. See dcstodcs for the HTTP transport
+// and trust checks, and remoteaction for the outbound RPC call itself.
 package remotesync
 
 import (

@@ -1,3 +1,5 @@
+// Package pg is the Postgres implementation of the template repository's
+// repository interfaces (see db package doc).
 package pg
 
 import (

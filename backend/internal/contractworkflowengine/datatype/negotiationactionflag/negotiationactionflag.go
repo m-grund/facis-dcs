@@ -1,3 +1,8 @@
+// Package negotiationactionflag is the accept/reject decision flag on the
+// "respond" endpoint (accept/reject one negotiation change request). Unlike
+// most other contract-mutating endpoints, respond does not require
+// updated_at and so is not covered by the optimistic-concurrency check
+// (see contractworkflowengine/command package doc).
 package negotiationactionflag
 
 import (

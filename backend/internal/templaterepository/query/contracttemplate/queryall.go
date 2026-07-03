@@ -1,3 +1,6 @@
+// Package contracttemplate implements read-side CQRS use cases scoped to a
+// single template (as opposed to the parent query package's cross-cutting
+// task queries).
 package contracttemplate
 
 import (

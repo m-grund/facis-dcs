@@ -1,3 +1,7 @@
+// Package conf centralizes timing/topic configuration shared across domains
+// (transaction timeouts, outbox/cron polling intervals, the event-bus topic
+// name), so these values are changed in one place rather than duplicated
+// per domain.
 package conf
 
 import (

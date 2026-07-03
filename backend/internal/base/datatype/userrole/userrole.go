@@ -1,3 +1,9 @@
+// Package userrole defines the individual end-user roles used for local RBAC
+// (checked via UserRoles.HasRoles in command/query handlers). This is a
+// separate authorization layer from peer-scoped task ownership: a contract's
+// Responsible.Approvers/Reviewers/Negotiators are peer DIDs (which DCS
+// instance is responsible for a task), while UserRole governs which
+// individual, locally authenticated user may act on behalf of that peer.
 package userrole
 
 import (

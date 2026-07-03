@@ -81,6 +81,8 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the template is
+	// older than what's stored (see command package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}

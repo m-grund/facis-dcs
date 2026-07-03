@@ -21,6 +21,11 @@ func (d *prefixDoer) Do(req *http.Request) (*http.Response, error) {
 	return d.inner.Do(req)
 }
 
+// NewDCSToDCSHttpClient builds the Goa-generated DCS-to-DCS client used to
+// call PostSync/GetSync/Action on a remote peer resolved from its did:web
+// hostname (see identity.DIDWebToHostname). Requests are authenticated via a
+// per-call did:web challenge-response signature carried in the request
+// body, not via this HTTP client — there is no bearer token here.
 func NewDCSToDCSHttpClient(host string) *dcstodcs.Client {
 	apiPath := os.Getenv("DCS_API_PATH")
 	if apiPath == "" {

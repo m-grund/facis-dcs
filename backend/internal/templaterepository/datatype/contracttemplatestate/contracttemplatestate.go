@@ -1,3 +1,9 @@
+// Package contracttemplatestate defines the template lifecycle enum. As
+// with contractworkflowengine's contractstate, there is no explicit
+// transition table here — valid transitions live imperatively in
+// templaterepository/command. REGISTERED/PUBLISHED are catalogue-facing
+// states with no equivalent in contractstate; see the copy-on-version
+// versioning scheme in command/copy.go and db/pg's CopyFromDID.
 package contracttemplatestate
 
 import (

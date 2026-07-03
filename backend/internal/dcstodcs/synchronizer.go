@@ -1,3 +1,13 @@
+// Package dcstodcs is the transport/orchestration side of DCS-to-DCS
+// federation: it broadcasts a contract's full state (this file's
+// DCSToDCSSynchronizer, triggered off the local NATS event bus) to every
+// responsible peer via PostSync, resolves/verifies peer identity via
+// did:web + eIDAS (trustedpeercheck.go, base/identity), and retries failed
+// syncs from a persistent queue. The commands that actually get executed on
+// the receiving side (PeerUpdateRequester, LocalPeerUpdater) deliberately
+// live in contractworkflowengine/remotesync/command instead of here, since
+// that's the domain the mutated data belongs to — this package only moves
+// bytes and enforces trust, it does not itself decide contract state.
 package dcstodcs
 
 import (
@@ -303,6 +313,16 @@ func ReadAllContractTasksData(ctx context.Context, db *sqlx.DB,
 	}, nil
 }
 
+// doContractPeerSync pushes the contract's full current state (all fields
+// plus every review/approval/negotiation task of every responsible peer,
+// not just the ones the local peer owns) to each other responsible peer via
+// PostSync, in Responsible list order. Any peer not present in the local
+// trusted-peer allowlist (see CheckForUntrustedPeers) aborts the remaining
+// delivery for this attempt as soon as it's reached — peers earlier in the
+// list have already received the update, but the whole attempt is still
+// recorded as failed (sync_fails), since the failure is tracked per
+// contract, not per peer; startSyncFailScheduler retries the full broadcast
+// later.
 func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did string) error {
 
 	localPeer, err := s.DIDDocument.GetID()

@@ -85,7 +85,9 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 
 	if oldData.Origin != localPeer && cmd.CauserDID != oldData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Unlike every other state-mutating handler in this package, Update does
+			NOT forward to the Origin peer — it is simply rejected on non-Origin
+			nodes. Updates must be performed directly on the contract's owner peer.
 		*/
 
 		err := tx.Commit()
@@ -96,6 +98,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return fmt.Errorf("updates are just allowed contract's owner peer")
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the contract is
+	// older than what's stored (see command package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < oldData.UpdatedAt.Unix() {
 		if localPeer != cmd.CauserDID {
 			return errors.New("contract was updated elsewhere, please force synchronisation and reload")

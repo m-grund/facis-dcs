@@ -1,3 +1,5 @@
+// Package contracttemplatetype distinguishes frame vs. sub-contract
+// templates for the contract workflow engine's own template references.
 package contracttemplatetype
 
 import (

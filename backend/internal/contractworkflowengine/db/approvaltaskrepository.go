@@ -1,3 +1,7 @@
+// Package db holds the contract workflow engine's repository interfaces
+// (Postgres implementations in db/pg). Fields such as Approver/Reviewer/
+// Negotiator store peer DIDs: task ownership is checked per responsible
+// peer (e.g. IsValidApprover), not per individual end user.
 package db
 
 import (

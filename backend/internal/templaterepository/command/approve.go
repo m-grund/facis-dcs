@@ -52,6 +52,10 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the template is
+	// older than what's stored (see command package doc / ADR-0007). Templates
+	// aren't peer-synced, so unlike contractworkflowengine there's no
+	// local-vs-remote distinction in the error message here.
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}

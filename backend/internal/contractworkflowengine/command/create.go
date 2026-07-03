@@ -126,6 +126,9 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
 
+	// Reviewers/Approvers/Negotiators are peer DIDs (other DCS instances), not
+	// individual users — task ownership is peer-scoped. Origin below marks
+	// this node as the single writer for this contract (see package doc).
 	resp := db.Responsible{
 		Creator:     localPeer,
 		Reviewers:   cmd.Reviewers,

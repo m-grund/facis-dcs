@@ -1,3 +1,6 @@
+// Package contract implements read-side CQRS use cases scoped to a single
+// contract (as opposed to the parent query package's cross-cutting task
+// queries).
 package contract
 
 import (

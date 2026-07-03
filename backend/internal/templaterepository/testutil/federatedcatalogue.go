@@ -1,3 +1,6 @@
+// Package testutil provides a fake/stub Federated Catalogue HTTP server for
+// templaterepository's tests (register/publish flows that would otherwise
+// require a real FCClient).
 package testutil
 
 import (

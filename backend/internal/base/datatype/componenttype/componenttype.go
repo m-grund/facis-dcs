@@ -1,3 +1,7 @@
+// Package componenttype enumerates the domains that can own an event/audit
+// entry (used as the "component" tag on outbox events and audit-trail rows,
+// and to route outbox-processor CID-chaining per resource, see
+// base/event.OutboxProcessor).
 package componenttype
 
 import (

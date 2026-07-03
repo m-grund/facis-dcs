@@ -67,7 +67,8 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 
 	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Not the Origin peer for this contract: forward unchanged instead of
+			mutating locally (single-writer-per-aggregate, see package doc).
 		*/
 
 		err := tx.Commit()
@@ -83,6 +84,10 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return nil
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the contract is
+	// older than what's stored (see package doc / ADR-0007). The distinct
+	// messages tell a local caller to simply reload vs. a forwarded/remote
+	// caller to force a full peer re-sync first.
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		if localPeer != cmd.CauserDID {
 			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
@@ -94,6 +99,9 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid contract state")
 	}
 
+	// IsValidApprover checks CauserDID (a peer DID) against the task's assigned
+	// approver — task ownership is peer-scoped, not individual-user-scoped;
+	// per-user permission was already checked locally via UserRoles upstream.
 	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return err

@@ -1,3 +1,9 @@
+// Package pg is the Postgres implementation of the template repository's
+// repository interfaces. CopyFromDID and ReadAllMetaData below implement
+// the copy-on-version scheme described in ADR-0006: every template version
+// is its own row/DID, chained via base_template, rather than a single
+// mutable row with a version counter (contrast contractworkflowengine's
+// contracts table).
 package pg
 
 import (
@@ -19,6 +25,15 @@ import (
 type PostgresContractTemplateRepo struct {
 }
 
+// CopyFromDID creates copyDID as a copy of the source row did (note: did is
+// the source and copyDID is the destination — inverted relative to the
+// Copy command's own CopyDID/NewDID field names). The SQL CASE below
+// decides versioning: if the source is not yet REGISTERED/PUBLISHED, the
+// copy gets version=1 and starts its own base_template lineage (pointing at
+// itself); if the source already is REGISTERED/PUBLISHED, the copy inherits
+// the source's base_template and gets version+1. The WHERE/NOT EXISTS guard
+// prevents two competing REGISTERED/PUBLISHED rows at the same version
+// within one lineage.
 func (r *PostgresContractTemplateRepo) CopyFromDID(ctx context.Context, tx *sqlx.Tx, did string, copyDID string) (int, error) {
 	var exists bool
 	if err := tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM contract_templates WHERE did = $1)`, did); err != nil {
@@ -143,6 +158,11 @@ func (r *PostgresContractTemplateRepo) ReadDataByID(ctx context.Context, tx *sql
 	return &ct, nil
 }
 
+// ReadAllMetaData computes "is this the latest version?" at read time via a
+// window function over each base_template lineage, rather than storing a
+// flag: outdated is true for any REGISTERED/PUBLISHED row that isn't the
+// highest version in its lineage, and latest_did then points readers to the
+// actual newest version.
 func (r *PostgresContractTemplateRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractTemplateMetadata, error) {
 	query := `
 		WITH latest AS (

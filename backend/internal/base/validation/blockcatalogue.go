@@ -1,3 +1,6 @@
+// Package validation normalizes and validates template/contract JSON-LD
+// data against the ontology's block catalogue before persistence (used by
+// both templaterepository and contractworkflowengine command handlers).
 package validation
 
 import "fmt"

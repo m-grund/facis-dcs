@@ -1,3 +1,7 @@
+// Package contracttemplate implements the contract workflow engine's
+// read-only queries against contract templates (e.g. listing approved
+// templates available to create a contract from) — not to be confused with
+// the templaterepository domain, which owns template authoring/versioning.
 package contracttemplate
 
 import (

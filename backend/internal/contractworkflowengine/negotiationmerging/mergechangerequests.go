@@ -13,6 +13,11 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
+// MergeChangeRequests folds every accepted (not merely proposed) change
+// request of contractVersion into a single update. Requests are applied in
+// read order, field by field, so a later accepted request silently
+// overwrites an earlier one touching the same field (last-write-wins, no
+// conflict detection).
 func MergeChangeRequests(ctx context.Context, tx *sqlx.Tx, cRepo db.ContractRepo, nRepo db.NegotiationRepo, did string, contractVersion int) (*db.ContractUpdateData, error) {
 	changeRequests, err := nRepo.ReadAllAcceptedByContractDIDAndVersion(ctx, tx, did, contractVersion)
 	if err != nil {
@@ -117,6 +122,10 @@ func readSemanticConditionValues(contractData map[string]any) ([]SemanticConditi
 	return values, nil
 }
 
+// upsertSemanticConditionValue applies last-write-wins at the level of a
+// single (BlockID, ParameterName, ConditionID) parameter, which is finer
+// grained than the field-level merge used for the other contract attributes
+// above, but still without explicit conflict detection.
 func upsertSemanticConditionValue(values []SemanticConditionValue, newValue SemanticConditionValue) []SemanticConditionValue {
 	for i, existing := range values {
 		if existing.BlockID == newValue.BlockID &&

@@ -1,3 +1,11 @@
+// Package event implements the base-level transactional outbox pattern that
+// every domain's command/query handlers use for audit logging: handlers
+// persist a domain event in the outbox table within their own DB
+// transaction (see Create/eventpersistence.go); OutboxProcessor then
+// asynchronously anchors each event to IPFS/TSA as a tamper-evident,
+// hash-chained audit-trail entry (see outboxprocessor.go) and republishes it
+// on the NATS event bus as a CloudEvent (this file) for other domains
+// (pdfgeneration, webhookplatform, dcstodcs) to subscribe to.
 package event
 
 import (

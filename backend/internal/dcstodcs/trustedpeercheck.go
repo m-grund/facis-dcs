@@ -12,6 +12,12 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// CheckForUntrustedPeers is the third trust layer for federation, alongside
+// the eIDAS certificate chain and the per-request did:web challenge-response
+// signature (both in base/identity): even a peer with a cryptographically
+// and regulatorily valid identity must additionally be explicitly listed in
+// this node's local trusted_peers table before any contract data is synced
+// to it.
 func CheckForUntrustedPeers(ctx context.Context, db *sqlx.DB, sRepo db.SyncRepository, localPeer string, responsible []string) ([]string, error) {
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {

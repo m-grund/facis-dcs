@@ -1,3 +1,7 @@
+// Package db holds the base-level repository interfaces shared across
+// domains: the audit-trail CID store (this file) and the transactional
+// outbox (see PersistEvent/UpdateOutboxEvent). db/pq holds the Postgres
+// implementations.
 package db
 
 import (
