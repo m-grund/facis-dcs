@@ -172,10 +172,13 @@ var _ = Service("Auth", func() {
 		NoSecurity()
 		Payload(func() {
 			Attribute("state", String, "Login state identifier from the login response")
+			Attribute("wallet_nonce", String, "Wallet-provided nonce echoed in the authorization request object when request_uri_method=post")
+			Attribute("wallet_metadata", String, "Wallet metadata JSON submitted with request_uri_method=post")
 			Required("state")
 		})
 		HTTP(func() {
 			POST("/auth/presentation/request/{state}")
+			GET("/auth/presentation/request/{state}")
 			SkipResponseBodyEncodeDecode()
 			Response(StatusOK, func() {
 				ContentType("application/oauth-authz-req+jwt")
@@ -189,7 +192,6 @@ var _ = Service("Auth", func() {
 		Payload(PresentationCallbackPayload)
 		Result(func() {
 			Attribute("redirect_uri", String, "Redirect URI used by the frontend to continue the Hydra OIDC flow after presentation handling")
-			Required("redirect_uri")
 		})
 		HTTP(func() {
 			POST("/auth/presentation/callback")
@@ -202,8 +204,9 @@ var _ = Service("Auth", func() {
 var PresentationCallbackPayload = Type("PresentationCallbackPayload", func() {
 	Description("Wallet direct-post of a verifiable presentation.")
 	Attribute("state", String, "Login state identifier from the OpenID4VP request")
-	Attribute("vp_token", String, "Verifiable presentation token submitted by the wallet")
-	Attribute("presentation_submission", Any, "Presentation submission metadata returned by the wallet")
+	Attribute("vp_token", String, "JSON object serialization keyed by DCQL credential-query id containing arrays of verifiable presentations")
+	Attribute("error", String, "Error code when wallet could not return a verifiable presentation")
+	Attribute("error_description", String, "Optional wallet-provided details for the error")
 	Required("state")
 })
 

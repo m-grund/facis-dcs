@@ -20,6 +20,7 @@ type Params struct {
 	ResponseURI string
 	State       string
 	Nonce       string
+	WalletNonce string
 	ExpiresAt   time.Time
 	DCQLQuery   any
 }
@@ -79,8 +80,21 @@ func BuildJWT(signer Signer, params Params) (string, error) {
 		"state":         state,
 		"nonce":         nonce,
 		"dcql_query":    dcql,
-		"iat":           now.Unix(),
-		"exp":           exp.Unix(),
+		"client_metadata": map[string]any{
+			"vp_formats_supported": map[string]any{
+				"dc+sd-jwt": map[string]any{
+					"sd-jwt_alg_values": []string{"ES256"},
+					"kb-jwt_alg_values": []string{"ES256"},
+				},
+			},
+		},
+		"iat": now.Unix(),
+		"exp": exp.Unix(),
 	}
+
+	if walletNonce := strings.TrimSpace(params.WalletNonce); walletNonce != "" {
+		claims["wallet_nonce"] = walletNonce
+	}
+
 	return signer.SignAuthorizationRequestJWT(claims)
 }

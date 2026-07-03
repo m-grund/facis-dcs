@@ -31,12 +31,14 @@ import (
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
 	pg "digital-contracting-service/internal/auth/db/pq"
+	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/kv"
 	"digital-contracting-service/internal/base/validation"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
@@ -432,6 +434,17 @@ func main() {
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
+
+		// The JAR signing public key cache is a required dependency of the signer:
+		// no cache, no app.
+		if authCfg.RequestSigner != nil {
+			vaultSigner, ok := authCfg.RequestSigner.(*oid4vprequest.VaultTransitSigner)
+			if !ok {
+				log.Fatalf(ctx, fmt.Errorf("oid4vp request signer %T does not support the public key cache", authCfg.RequestSigner), "auth service init failed")
+			}
+			vaultSigner.SetPublicKeyCache(kv.NewStore(db), 0)
+		}
+
 		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth, *didDocument)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument)
 		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument)
