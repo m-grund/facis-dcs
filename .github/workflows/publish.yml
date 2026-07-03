@@ -7,9 +7,7 @@ on:
   
 jobs:
   dockerbuild:
-    # TODO: must be eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@main
-    # See PR: https://github.com/eclipse-xfsc/dev-ops/pull/9
-    uses: arnemileswinter/xfsc-dev-ops/.github/workflows/dockerbuild.yml@main
+    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@harbor-env-patch
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
@@ -17,9 +15,7 @@ jobs:
       dockerfile: "deployment/docker/Dockerfile"
       harbor_config: "deployment/harbor.config"
   dockerbuild-pdf-core:
-    # TODO: must be eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@main
-    # See PR: https://github.com/eclipse-xfsc/dev-ops/pull/9
-    uses: arnemileswinter/xfsc-dev-ops/.github/workflows/dockerbuild.yml@main
+    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@harbor-env-patch
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
