@@ -84,7 +84,7 @@ var _ = Service("Auth", func() {
 	})
 
 	Method("callback", func() {
-		Description("Handles the Hydra OIDC callback, exchanges the authorization code for tokens, and redirects to auth success.")
+		Description("Handles the Hydra OIDC callback: if Hydra returned an OAuth2 error (error/error_description params), clears the session cookies and redirects to the UI with the error details attached as query params; otherwise exchanges the authorization code for tokens, sets the refresh_token and id_token session cookies, and redirects to auth success.")
 		NoSecurity()
 		Payload(func() {
 			Attribute("code", String, "Authorization code from Hydra")
@@ -125,7 +125,7 @@ var _ = Service("Auth", func() {
 	})
 
 	Method("logout", func() {
-		Description("Returns the Hydra OIDC logout URL for ending the current session.")
+		Description("Revokes the current refresh token at Hydra, clears the refresh_token and id_token session cookies, and returns the Hydra OIDC end-session (logout) URL for the client to redirect to.")
 		NoSecurity()
 		Result(func() {
 			Attribute("logout_url", String, "Hydra OIDC logout URL")

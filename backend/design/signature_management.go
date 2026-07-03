@@ -230,7 +230,7 @@ var _ = Service("SignatureManagement", func() {
 	Description("Signature Management APIs (/signature/...)")
 
 	Method("retrieve", func() {
-		Description("fetch contracts.")
+		Description("fetch contracts, recording an audit-trail entry for the read.")
 		Meta("dcs:requirements", "DCS-IR-SM-01")
 		Meta("dcs:ui", "Secure Contract Viewer")
 		Meta("dcs:sm:components", "Signer Authorization & PoA application")
@@ -259,7 +259,7 @@ var _ = Service("SignatureManagement", func() {
 
 	// GET /signature/retrieve/{did}
 	Method("retrieve_by_id", func() {
-		Description("fetch contract & envelope by id.")
+		Description("fetch a contract and its signature envelope by DID, recording an audit-trail entry for the read.")
 		Meta("dcs:requirements", "DCS-IR-SM-01")
 		Meta("dcs:ui", "Secure Contract Viewer")
 		Meta("dcs:sm:components", "Signer Authorization & PoA application")
@@ -335,7 +335,7 @@ var _ = Service("SignatureManagement", func() {
 	})
 
 	Method("validate", func() {
-		Description("validate applied signature. validate contract signature(s).")
+		Description("validate the contract's applied signature(s) and return any compliance findings.")
 		Meta("dcs:requirements", "DCS-IR-SM-04", "DCS-IR-SM-05")
 		Meta("dcs:ui", "Secure Contract Viewer", "Signature Compliance Viewer")
 		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
@@ -388,7 +388,7 @@ var _ = Service("SignatureManagement", func() {
 		Description("retrieve compliance/audit logs.")
 		Meta("dcs:requirements", "DCS-IR-SM-08")
 		Meta("dcs:ui", "Signature Compliance Viewer")
-		Meta("dcs:sm:components", "")
+		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
 
 		Security(JWTAuth, func() {
 			Scope("Auditor")
@@ -411,10 +411,10 @@ var _ = Service("SignatureManagement", func() {
 	})
 
 	Method("compliance", func() {
-		Description("run compliance check.")
+		Description("Record that a compliance check has been requested for the contract; emits a ComplianceValidationEvent but does not itself compute or return findings (the response's findings list is currently always empty).")
 		Meta("dcs:requirements", "DCS-IR-SM-07")
 		Meta("dcs:ui", "Signature Compliance Viewer")
-		Meta("dcs:sm:components", "")
+		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
 
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")

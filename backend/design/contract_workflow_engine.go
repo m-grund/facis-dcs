@@ -479,7 +479,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	Description("Contract Workflow Engine APIs (/contract/...)")
 
 	Method("create", func() {
-		Description("initiate new contract draft from.")
+		Description("initiate a new contract draft from an approved template.")
 		Meta("dcs:requirements", "DCS-IR-CWE-01", "DCS-IR-CWE-02")
 		Meta("dcs:cwe:components", "Contract Assembling")
 		Meta("dcs:ui", "Contract Creation")
@@ -528,8 +528,8 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	Method("submit", func() {
-		Description("finalize and submit contract for negotiation/review. finalize and submit negotiated version. finalize review outcome. finalize decision. finalize review outcome.")
-		Description(`with action flag { forwardTo: "approval" | "rejected" } and optional reviewComments. allow resubmission path with approver comments.`)
+		Description("Overloaded state transition whose effect depends on the contract's current state: DRAFT/REJECTED -> NEGOTIATION; NEGOTIATION -> SUBMITTED once all negotiators have accepted (or stays in NEGOTIATION with contract_version+1 if accepted change requests still need merging); SUBMITTED -> REVIEWED or back to NEGOTIATION depending on action_flag; REVIEWED -> SUBMITTED (re-review). Requires updated_at for optimistic concurrency and is forwarded to the contract's origin peer if the local node is not the origin.")
+		Description(`With action flag { forwardTo: "approval" | "reject" } and optional comments. Allows a resubmission path with reviewer/approver comments.`)
 		Meta("dcs:requirements", "DCS-IR-CWE-01", "DCS-IR-CWE-03", "DCS-IR-CWE-06", "DCS-IR-CWE-09")
 		Meta("dcs:cwe:components", "")
 		Meta("dcs:downstream:sm:component", "Signer Authorization & PoA application")
@@ -586,7 +586,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	Method("respond", func() {
-		Description("provide feedback/findings. respond to counterpart changes.")
+		Description("Accept or reject a specific negotiation change request (action_flag: ACCEPTING | REJECTING). Forwarded to the contract's origin peer if the local node is not the origin. Unlike most other state-mutating contract endpoints, this one does not require updated_at and is therefore not covered by the optimistic-concurrency timestamp check.")
 		Meta("dcs:requirements", "DCS-IR-CWE-03", "DCS-IR-CWE-05", "DCS-IR-CWE-06")
 		Meta("dcs:cwe:components", "Contract Versioning")
 		Meta("dcs:ui", "Contract Creator", "Contract Review")
@@ -613,7 +613,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	Method("review", func() {
-		Description("retrieve latest draft for comparison.")
+		Description("Record that the contract's latest draft was opened for review. This does not return contract data (use retrieve_by_id for that) — it only logs a review-tracking event into the audit trail, as a write side effect behind a GET request.")
 		Meta("dcs:requirements", "DCS-IR-CWE-04")
 		Meta("dcs:cwe:components", "Contract Versioning")
 		Meta("dcs:ui", "Contract Negotiation", "Contract Review")
@@ -643,7 +643,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 	// GET /contract/retrieve
 	Method("retrieve", func() {
-		Description("fetch contracts and review and approval tasks")
+		Description("fetch contracts and their review, approval, and negotiation tasks")
 		Meta("dcs:cwe:components", "")
 		Meta("dcs:ui", "Contract Negotiation", "Contract Review", "Contract Approval", "Contract Management Dashboard")
 
@@ -887,7 +887,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	Method("audit", func() {
-		Description("generate audit record.")
+		Description("retrieve the audit trail (event log and policy trail) for a contract.")
 		Meta("dcs:requirements", "DCS-IR-CWE-12", "DCS-IR-CWE-13")
 		Meta("dcs:cwe:components", "")
 		Meta("dcs:ui", "Contract Management Dashboard")
