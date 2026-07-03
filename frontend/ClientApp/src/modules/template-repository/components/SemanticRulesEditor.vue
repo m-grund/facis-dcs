@@ -1,41 +1,3 @@
-<template>
-  <div class="space-y-6">
-    <!-- Section 1: New rule -->
-    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <SemanticRuleForm :existing-conditions="conditions" @add-rule="handleAddRule" />
-    </section>
-
-    <!-- Section 2: Existing rules -->
-    <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Existing rules</h3>
-      <div class="space-y-2">
-        <template v-for="rule in conditionItems" :key="rule.condition.conditionId">
-          <div
-            v-if="editingConditionId === rule.condition.conditionId"
-            class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm"
-          >
-            <SemanticRuleForm
-              mode="edit"
-              :existing-conditions="conditions"
-              :initial-condition="rule.condition"
-              @update-rule="handleUpdateRule"
-              @cancel="stopEdit"
-            />
-          </div>
-          <SemanticRuleItem
-            v-else
-            :condition="rule.condition"
-            :used-in-clause-count="rule.usedInClauseCount"
-            :is-editable="uiStore.isTemplateEditable"
-            @edit-rule="startEdit"
-            @delete-rule="deleteRule"
-          />
-        </template>
-      </div>
-    </section>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -133,3 +95,41 @@ function stopEdit() {
   editingConditionId.value = null
 }
 </script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Section 1: New rule -->
+    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <SemanticRuleForm :existing-conditions="conditions" @add-rule="handleAddRule" />
+    </section>
+
+    <!-- Section 2: Existing rules -->
+    <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Existing rules</h3>
+      <div class="space-y-2">
+        <template v-for="rule in conditionItems" :key="rule.condition.conditionId">
+          <div
+            v-if="editingConditionId === rule.condition.conditionId"
+            class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm"
+          >
+            <SemanticRuleForm
+              mode="edit"
+              :existing-conditions="conditions"
+              :initial-condition="rule.condition"
+              @update-rule="handleUpdateRule"
+              @cancel="stopEdit"
+            />
+          </div>
+          <SemanticRuleItem
+            v-else
+            :condition="rule.condition"
+            :used-in-clause-count="rule.usedInClauseCount"
+            :is-editable="uiStore.isTemplateEditable"
+            @edit-rule="startEdit"
+            @delete-rule="deleteRule"
+          />
+        </template>
+      </div>
+    </section>
+  </div>
+</template>

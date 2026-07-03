@@ -131,7 +131,7 @@ func NewDIDDocument(didFilePath string, privateKeyPath string) (*DIDDocument, er
 		return nil, fmt.Errorf("parsing private key: %w", err)
 	}
 
-	if pubKey.N.Cmp(privKey.PublicKey.N) != 0 {
+	if pubKey.N.Cmp(privKey.N) != 0 {
 		return nil, errors.New("public key from DID document does not match private key")
 	}
 
@@ -319,7 +319,7 @@ func fetchCertificateDER(certURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching certificate from %s: %w", certURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s fetching certificate from %s", resp.Status, certURL)
@@ -429,25 +429,6 @@ func DIDWebToHostname(did string) (string, error) {
 	return host, nil
 }
 
-// HostnameToDIDWeb converts a host (including port) into a did:web
-// identifier, e.g. "localhost:8991" -> "did:web:localhost%3A8991".
-func HostnameToDIDWeb(host string) string {
-	return "did:web:" + strings.ReplaceAll(host, ":", "%3A")
-}
-
-func publicKeyFromDID(didJSON []byte) (*rsa.PublicKey, error) {
-	var doc DIDDocument
-	if err := json.Unmarshal(didJSON, &doc); err != nil {
-		return nil, err
-	}
-
-	if len(doc.VerificationMethod) == 0 {
-		return nil, errors.New("no verification methods in DID document")
-	}
-
-	return doc.VerificationMethod[0].PublicKeyJWK.RSAPublicKey()
-}
-
 func privateKeyFromPEM(pemData []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(pemData)
 	if block == nil {
@@ -469,7 +450,7 @@ func fetchDIDDocumentFromURL(url string) (*DIDDocument, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s from %s", resp.Status, url)

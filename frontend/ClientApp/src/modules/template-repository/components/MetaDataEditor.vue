@@ -1,3 +1,50 @@
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import MetaDataRow from '@template-repository/components/meta-data/MetaDataRow.vue'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+
+const store = useTemplateDraftStore()
+const uiStore = useTemplateEditorUiStore()
+const { customMetaData } = storeToRefs(store)
+
+const allNames = computed(() => customMetaData.value.map((m) => m.name ?? ''))
+
+const draft = reactive({
+  name: '',
+  value: '',
+})
+
+const addRowKey = ref(0)
+const activeIndex = ref<number | null>(null)
+
+function resetDraft() {
+  draft.name = ''
+  draft.value = ''
+  addRowKey.value += 1
+}
+
+function setActiveIndex(index: number) {
+  activeIndex.value = index
+}
+
+function createMeta(payload: { name: string; value: string }) {
+  const ok = store.addMetaData(payload)
+  if (ok) {
+    resetDraft()
+  }
+}
+
+function updateMeta(index: number, payload: { name: string; value: string }) {
+  store.updateMetaData(index, payload)
+}
+
+function deleteMeta(index: number) {
+  store.deleteMetaData(index)
+}
+</script>
+
 <template>
   <div class="space-y-3">
     <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
@@ -49,50 +96,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import MetaDataRow from '@template-repository/components/meta-data/MetaDataRow.vue'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-
-const store = useTemplateDraftStore()
-const uiStore = useTemplateEditorUiStore()
-const { customMetaData } = storeToRefs(store)
-
-const allNames = computed(() => customMetaData.value.map((m) => m.name ?? ''))
-
-const draft = reactive({
-  name: '',
-  value: '',
-})
-
-const addRowKey = ref(0)
-const activeIndex = ref<number | null>(null)
-
-function resetDraft() {
-  draft.name = ''
-  draft.value = ''
-  addRowKey.value += 1
-}
-
-function setActiveIndex(index: number) {
-  activeIndex.value = index
-}
-
-function createMeta(payload: { name: string; value: string }) {
-  const ok = store.addMetaData(payload)
-  if (ok) {
-    resetDraft()
-  }
-}
-
-function updateMeta(index: number, payload: { name: string; value: string }) {
-  store.updateMetaData(index, payload)
-}
-
-function deleteMeta(index: number) {
-  store.deleteMetaData(index)
-}
-</script>

@@ -1,197 +1,3 @@
-<template>
-  <h3 class="mb-4 text-sm font-semibold text-base-content/80">{{ formTitle }}</h3>
-  <div class="space-y-4">
-    <div>
-      <label class="label-text mb-1 block text-xs text-base-content/60">
-        Rule name
-        <RequiredIndicator />
-      </label>
-      <input
-        v-model="newCondition.conditionName"
-        type="text"
-        class="input-bordered input input-sm w-full"
-        :class="{ 'input-error': isRuleNameDuplicate }"
-        placeholder=""
-      />
-      <p class="mt-0.5 text-xs text-base-content/50">Used when selecting this rule for a clause.</p>
-      <p v-if="isRuleNameDuplicate" class="mt-0.5 text-xs text-error">Rule name already exists.</p>
-    </div>
-
-    <div class="space-y-4">
-      <p class="label-text mb-1 text-xs text-base-content/60">Parameters</p>
-      <div
-        class="grid grid-cols-1 gap-x-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50 p-3 md:grid-cols-12"
-      >
-        <p class="mb-2 text-xs font-medium text-base-content/70 md:col-span-12">New parameter</p>
-        <div class="flex flex-col gap-1 md:col-span-4">
-          <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">
-              Domain field
-              <RequiredIndicator />
-            </span>
-          </label>
-          <div class="relative">
-            <input
-              v-model="domainFieldSearch"
-              type="search"
-              class="input-bordered input input-sm h-9 w-full"
-              :class="{ 'input-primary': selectedDomainPath }"
-              placeholder="Search domain fields"
-              autocomplete="off"
-              @focus="showDomainFieldOptions = true"
-              @input="handleDomainFieldInput"
-              @keydown.escape="showDomainFieldOptions = false"
-              @blur="hideDomainFieldOptions"
-            />
-            <div
-              v-if="showDomainFieldOptions"
-              class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
-            >
-              <template v-if="groupedDomainFields.length">
-                <section v-for="group in groupedDomainFields" :key="group.name">
-                  <div class="sticky top-0 z-10 border-b border-base-200 bg-base-100 px-3 py-1">
-                    <p class="text-xs font-semibold text-base-content/50 uppercase">{{ group.name }}</p>
-                  </div>
-                  <button
-                    v-for="field in group.fields"
-                    :key="field.semanticPath"
-                    type="button"
-                    class="w-full border-b border-base-200 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-base-200"
-                    :class="{ 'bg-primary/10': selectedDomainPath === field.semanticPath }"
-                    @mousedown.prevent="selectDomainField(field.semanticPath)"
-                  >
-                    <span class="block text-sm font-medium text-base-content">{{ field.label }}</span>
-                    <span class="block text-xs text-base-content/50">{{ field.semanticPath }}</span>
-                    <span v-if="field.valueConstraint" class="block text-xs text-base-content/50">
-                      {{ formatValueConstraint(field.valueConstraint) }}
-                    </span>
-                  </button>
-                </section>
-              </template>
-              <p v-else class="p-3 text-sm text-base-content/50">No matching domain fields.</p>
-            </div>
-          </div>
-          <p v-if="selectedDomainField" class="text-xs text-base-content/50">{{ selectedDomainField.semanticPath }}</p>
-          <p v-if="selectedDomainField?.valueConstraint" class="text-xs text-base-content/50">
-            {{ formatValueConstraint(selectedDomainField.valueConstraint) }}
-          </p>
-          <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
-        </div>
-        <div class="flex flex-col gap-1 md:col-span-2">
-          <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">
-              Type
-              <RequiredIndicator />
-            </span>
-          </label>
-          <select v-model="draftParameter.type" class="select-bordered select h-9 w-full select-sm" disabled>
-            <option value="date">Date</option>
-            <option value="string">Text</option>
-            <option value="decimal">Decimal</option>
-            <option value="integer">Integer</option>
-            <option value="boolean">Boolean</option>
-            <option value="enum">Enum</option>
-          </select>
-        </div>
-        <div class="flex flex-col gap-1 md:col-span-3">
-          <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">Fixed value</span>
-          </label>
-          <select
-            v-if="fixedValueOptions.length"
-            v-model="draftFixedValue"
-            class="select-bordered select h-9 w-full select-sm"
-          >
-            <option value="">None</option>
-            <option v-for="value in fixedValueOptions" :key="value" :value="value">{{ value }}</option>
-          </select>
-          <input
-            v-else
-            v-model="draftFixedValue"
-            type="text"
-            class="input-bordered input input-sm h-9 w-full"
-            placeholder="None"
-          />
-          <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
-        </div>
-        <div class="flex flex-col gap-1 md:col-span-2">
-          <label class="label min-h-0 py-0">
-            <span class="label-text text-xs text-base-content/60">Required</span>
-          </label>
-          <div class="flex h-9 items-center">
-            <label class="label h-auto min-h-0 cursor-pointer justify-start gap-2 py-0">
-              <input
-                v-model="draftParameter.isRequired"
-                type="checkbox"
-                class="checkbox checkbox-sm checkbox-primary"
-              />
-              <span class="label-text text-xs">Required</span>
-            </label>
-          </div>
-        </div>
-        <div class="flex flex-col gap-1 md:col-span-1">
-          <label class="invisible label min-h-0 py-0">
-            <span class="label-text text-xs">Add</span>
-          </label>
-          <div class="flex h-9 items-center">
-            <button
-              type="button"
-              class="btn btn-square w-full btn-sm btn-secondary"
-              aria-label="Add parameter"
-              title="Add parameter"
-              :disabled="!canAddParameter"
-              @click="addParameter"
-            >
-              +
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Added parameters -->
-      <div v-if="newCondition.parameters.length" class="space-y-2">
-        <p class="text-xs font-medium text-base-content/70">Added parameters</p>
-        <ul class="space-y-2">
-          <li
-            v-for="(param, idx) in newCondition.parameters"
-            :key="idx"
-            class="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2.5"
-          >
-            <span class="rounded border border-base-300 bg-base-200/50 px-2 py-0.5 font-mono text-sm font-medium">
-              {{ semanticParameterLabel(param) }}
-            </span>
-            <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
-            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">
-              fixed: {{ param.fixedValue }}
-            </span>
-            <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
-              {{ formatValueConstraint(param.valueConstraint) }}
-            </span>
-            <span class="badge badge-ghost badge-sm">{{ semanticParameterTypeLabel(param.type) }}</span>
-            <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
-            <button
-              type="button"
-              class="btn ml-auto shrink-0 text-error btn-ghost btn-xs"
-              aria-label="Delete parameter"
-              @click="deleteParameter(idx)"
-            >
-              ✕
-            </button>
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="flex items-center justify-between">
-      <button v-if="isEditMode" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">Cancel</button>
-      <span v-else />
-      <button type="button" class="btn btn-sm btn-secondary" :disabled="!canSubmitRule" @click="submitRule">
-        {{ submitLabel }}
-      </button>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import RequiredIndicator from '@core/components/RequiredIndicator.vue'
@@ -510,3 +316,197 @@ function validateDraftFixedValue(): string {
   return ''
 }
 </script>
+
+<template>
+  <h3 class="mb-4 text-sm font-semibold text-base-content/80">{{ formTitle }}</h3>
+  <div class="space-y-4">
+    <div>
+      <label class="label-text mb-1 block text-xs text-base-content/60">
+        Rule name
+        <RequiredIndicator />
+      </label>
+      <input
+        v-model="newCondition.conditionName"
+        type="text"
+        class="input-bordered input input-sm w-full"
+        :class="{ 'input-error': isRuleNameDuplicate }"
+        placeholder=""
+      />
+      <p class="mt-0.5 text-xs text-base-content/50">Used when selecting this rule for a clause.</p>
+      <p v-if="isRuleNameDuplicate" class="mt-0.5 text-xs text-error">Rule name already exists.</p>
+    </div>
+
+    <div class="space-y-4">
+      <p class="label-text mb-1 text-xs text-base-content/60">Parameters</p>
+      <div
+        class="grid grid-cols-1 gap-x-3 rounded-lg border-2 border-dashed border-base-300 bg-base-200/50 p-3 md:grid-cols-12"
+      >
+        <p class="mb-2 text-xs font-medium text-base-content/70 md:col-span-12">New parameter</p>
+        <div class="flex flex-col gap-1 md:col-span-4">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">
+              Domain field
+              <RequiredIndicator />
+            </span>
+          </label>
+          <div class="relative">
+            <input
+              v-model="domainFieldSearch"
+              type="search"
+              class="input-bordered input input-sm h-9 w-full"
+              :class="{ 'input-primary': selectedDomainPath }"
+              placeholder="Search domain fields"
+              autocomplete="off"
+              @focus="showDomainFieldOptions = true"
+              @input="handleDomainFieldInput"
+              @keydown.escape="showDomainFieldOptions = false"
+              @blur="hideDomainFieldOptions"
+            />
+            <div
+              v-if="showDomainFieldOptions"
+              class="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-base-300 bg-base-100 shadow-lg"
+            >
+              <template v-if="groupedDomainFields.length">
+                <section v-for="group in groupedDomainFields" :key="group.name">
+                  <div class="sticky top-0 z-10 border-b border-base-200 bg-base-100 px-3 py-1">
+                    <p class="text-xs font-semibold text-base-content/50 uppercase">{{ group.name }}</p>
+                  </div>
+                  <button
+                    v-for="field in group.fields"
+                    :key="field.semanticPath"
+                    type="button"
+                    class="w-full border-b border-base-200 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-base-200"
+                    :class="{ 'bg-primary/10': selectedDomainPath === field.semanticPath }"
+                    @mousedown.prevent="selectDomainField(field.semanticPath)"
+                  >
+                    <span class="block text-sm font-medium text-base-content">{{ field.label }}</span>
+                    <span class="block text-xs text-base-content/50">{{ field.semanticPath }}</span>
+                    <span v-if="field.valueConstraint" class="block text-xs text-base-content/50">
+                      {{ formatValueConstraint(field.valueConstraint) }}
+                    </span>
+                  </button>
+                </section>
+              </template>
+              <p v-else class="p-3 text-sm text-base-content/50">No matching domain fields.</p>
+            </div>
+          </div>
+          <p v-if="selectedDomainField" class="text-xs text-base-content/50">{{ selectedDomainField.semanticPath }}</p>
+          <p v-if="selectedDomainField?.valueConstraint" class="text-xs text-base-content/50">
+            {{ formatValueConstraint(selectedDomainField.valueConstraint) }}
+          </p>
+          <p v-if="isParameterNameDuplicate" class="text-xs text-error">Parameter name already exists.</p>
+        </div>
+        <div class="flex flex-col gap-1 md:col-span-2">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">
+              Type
+              <RequiredIndicator />
+            </span>
+          </label>
+          <select v-model="draftParameter.type" class="select-bordered select h-9 w-full select-sm" disabled>
+            <option value="date">Date</option>
+            <option value="string">Text</option>
+            <option value="decimal">Decimal</option>
+            <option value="integer">Integer</option>
+            <option value="boolean">Boolean</option>
+            <option value="enum">Enum</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1 md:col-span-3">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">Fixed value</span>
+          </label>
+          <select
+            v-if="fixedValueOptions.length"
+            v-model="draftFixedValue"
+            class="select-bordered select h-9 w-full select-sm"
+          >
+            <option value="">None</option>
+            <option v-for="value in fixedValueOptions" :key="value" :value="value">{{ value }}</option>
+          </select>
+          <input
+            v-else
+            v-model="draftFixedValue"
+            type="text"
+            class="input-bordered input input-sm h-9 w-full"
+            placeholder="None"
+          />
+          <p v-if="fixedValueError" class="text-xs text-error">{{ fixedValueError }}</p>
+        </div>
+        <div class="flex flex-col gap-1 md:col-span-2">
+          <label class="label min-h-0 py-0">
+            <span class="label-text text-xs text-base-content/60">Required</span>
+          </label>
+          <div class="flex h-9 items-center">
+            <label class="label h-auto min-h-0 cursor-pointer justify-start gap-2 py-0">
+              <input
+                v-model="draftParameter.isRequired"
+                type="checkbox"
+                class="checkbox checkbox-sm checkbox-primary"
+              />
+              <span class="label-text text-xs">Required</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1 md:col-span-1">
+          <label class="invisible label min-h-0 py-0">
+            <span class="label-text text-xs">Add</span>
+          </label>
+          <div class="flex h-9 items-center">
+            <button
+              type="button"
+              class="btn btn-square w-full btn-sm btn-secondary"
+              aria-label="Add parameter"
+              title="Add parameter"
+              :disabled="!canAddParameter"
+              @click="addParameter"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Added parameters -->
+      <div v-if="newCondition.parameters.length" class="space-y-2">
+        <p class="text-xs font-medium text-base-content/70">Added parameters</p>
+        <ul class="space-y-2">
+          <li
+            v-for="(param, idx) in newCondition.parameters"
+            :key="idx"
+            class="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2.5"
+          >
+            <span class="rounded border border-base-300 bg-base-200/50 px-2 py-0.5 font-mono text-sm font-medium">
+              {{ semanticParameterLabel(param) }}
+            </span>
+            <span class="text-xs text-base-content/50">{{ param.semanticPath }}</span>
+            <span v-if="param.fixedValue !== undefined" class="badge badge-outline badge-sm">
+              fixed: {{ param.fixedValue }}
+            </span>
+            <span v-if="param.valueConstraint" class="text-xs text-base-content/50">
+              {{ formatValueConstraint(param.valueConstraint) }}
+            </span>
+            <span class="badge badge-ghost badge-sm">{{ semanticParameterTypeLabel(param.type) }}</span>
+            <span class="text-xs text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
+            <button
+              type="button"
+              class="btn ml-auto shrink-0 text-error btn-ghost btn-xs"
+              aria-label="Delete parameter"
+              @click="deleteParameter(idx)"
+            >
+              ✕
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between">
+      <button v-if="isEditMode" type="button" class="btn btn-outline btn-xs" @click="$emit('cancel')">Cancel</button>
+      <span v-else />
+      <button type="button" class="btn btn-sm btn-secondary" :disabled="!canSubmitRule" @click="submitRule">
+        {{ submitLabel }}
+      </button>
+    </div>
+  </div>
+</template>

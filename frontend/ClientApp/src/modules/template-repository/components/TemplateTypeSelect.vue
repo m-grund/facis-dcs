@@ -1,3 +1,15 @@
+<script setup lang="ts">
+import { TemplateType, type TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
+
+defineProps<{
+  modelValue: TemplateTypeValue
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: TemplateTypeValue]
+}>()
+</script>
+
 <template>
   <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
     <button
@@ -32,15 +44,3 @@
     </button>
   </div>
 </template>
-
-<script setup lang="ts">
-import { TemplateType, type TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
-
-defineProps<{
-  modelValue: TemplateTypeValue
-}>()
-
-const emit = defineEmits<{
-  'update:modelValue': [value: TemplateTypeValue]
-}>()
-</script>

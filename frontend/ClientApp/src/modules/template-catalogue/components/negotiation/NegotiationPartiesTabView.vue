@@ -1,3 +1,16 @@
+<script setup lang="ts">
+import type { Participant } from '@/modules/template-catalogue/models/participant'
+
+defineProps<{
+  initiator: Participant | null
+  participants: Participant[]
+  selectedResponderIndexes: number[]
+  selectedResponders: { index: number; participant: Participant }[]
+}>()
+
+defineEmits<(e: 'toggle-participant', index: number) => void>()
+</script>
+
 <template>
   <section class="space-y-4">
     <section class="rounded-xl border border-base-300 p-3">
@@ -77,16 +90,3 @@
     </section>
   </section>
 </template>
-
-<script setup lang="ts">
-import type { Participant } from '@/modules/template-catalogue/models/participant'
-
-defineProps<{
-  initiator: Participant | null
-  participants: Participant[]
-  selectedResponderIndexes: number[]
-  selectedResponders: { index: number; participant: Participant }[]
-}>()
-
-defineEmits<(e: 'toggle-participant', index: number) => void>()
-</script>

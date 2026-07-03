@@ -1,3 +1,112 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import { useServiceOffering } from '@/modules/template-catalogue/composables/useServiceOffering'
+import type { TemplateCatalogueCreateServiceOfferingRequest } from '@/models/requests/template-catalogue-integration-request'
+
+const {
+  currentServiceOffering,
+  loading,
+  error,
+  loadCurrent,
+  createServiceOffering,
+  updateServiceOffering,
+  deleteServiceOffering,
+} = useServiceOffering()
+
+const confirmationModal = ref<InstanceType<typeof ConfirmationModal> | null>(null)
+
+const showCreateForm = ref(false)
+const showValidation = ref(false)
+const keywordInput = ref('')
+const submitting = computed(() => loading.value)
+
+const defaultForm = (): TemplateCatalogueCreateServiceOfferingRequest => ({
+  keywords: [],
+  description: '',
+  end_point_url: '',
+  terms_and_conditions: '',
+})
+
+const form = ref<TemplateCatalogueCreateServiceOfferingRequest>(defaultForm())
+
+const isUpdateMode = computed(() => !!currentServiceOffering.value)
+
+const missingEndPointUrl = computed(() => !form.value.end_point_url.trim())
+const canSubmit = computed(() => !missingEndPointUrl.value && !submitting.value)
+
+watch(
+  currentServiceOffering,
+  (value) => {
+    showValidation.value = false
+    if (value) {
+      form.value = {
+        keywords: [...(value.keywords ?? [])],
+        description: value.description ?? '',
+        end_point_url: value.end_point_url ?? '',
+        terms_and_conditions: value.terms_and_conditions ?? '',
+      }
+      showCreateForm.value = true
+    } else {
+      form.value = defaultForm()
+      keywordInput.value = ''
+      showCreateForm.value = false
+    }
+  },
+  { immediate: true },
+)
+
+void loadCurrent()
+
+function openCreateForm() {
+  showValidation.value = false
+  showCreateForm.value = true
+}
+
+function addKeyword() {
+  const trimmed = keywordInput.value.trim()
+  if (!trimmed) return
+  if (form.value.keywords.includes(trimmed)) {
+    keywordInput.value = ''
+    return
+  }
+  form.value.keywords.push(trimmed)
+  keywordInput.value = ''
+}
+
+function removeKeyword(index: number) {
+  form.value.keywords.splice(index, 1)
+}
+
+async function onSubmit() {
+  showValidation.value = true
+  if (!canSubmit.value) return
+  try {
+    if (isUpdateMode.value) {
+      await updateServiceOffering(form.value)
+    } else {
+      await createServiceOffering(form.value)
+    }
+  } catch (e) {
+    console.error('Service offering submit failed:', e)
+  }
+}
+
+async function onDelete() {
+  if (!currentServiceOffering.value) return
+  try {
+    if (!confirmationModal.value) return
+    const { isCanceled } = await confirmationModal.value.reveal({
+      message: 'This will delete the current service offering. This action cannot be undone.',
+    })
+    if (isCanceled) return
+    await deleteServiceOffering()
+  } catch (e) {
+    console.error('Delete service offering failed:', e)
+  }
+}
+</script>
+
 <template>
   <section class="card bg-base-100">
     <div class="card-body">
@@ -110,112 +219,3 @@
 
   <ConfirmationModal ref="confirmationModal" />
 </template>
-
-<script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import { useServiceOffering } from '@/modules/template-catalogue/composables/useServiceOffering'
-import type { TemplateCatalogueCreateServiceOfferingRequest } from '@/models/requests/template-catalogue-integration-request'
-
-const {
-  currentServiceOffering,
-  loading,
-  error,
-  loadCurrent,
-  createServiceOffering,
-  updateServiceOffering,
-  deleteServiceOffering,
-} = useServiceOffering()
-
-const confirmationModal = ref<InstanceType<typeof ConfirmationModal> | null>(null)
-
-const showCreateForm = ref(false)
-const showValidation = ref(false)
-const keywordInput = ref('')
-const submitting = computed(() => loading.value)
-
-const defaultForm = (): TemplateCatalogueCreateServiceOfferingRequest => ({
-  keywords: [],
-  description: '',
-  end_point_url: '',
-  terms_and_conditions: '',
-})
-
-const form = ref<TemplateCatalogueCreateServiceOfferingRequest>(defaultForm())
-
-const isUpdateMode = computed(() => !!currentServiceOffering.value)
-
-const missingEndPointUrl = computed(() => !form.value.end_point_url.trim())
-const canSubmit = computed(() => !missingEndPointUrl.value && !submitting.value)
-
-watch(
-  currentServiceOffering,
-  (value) => {
-    showValidation.value = false
-    if (value) {
-      form.value = {
-        keywords: [...(value.keywords ?? [])],
-        description: value.description ?? '',
-        end_point_url: value.end_point_url ?? '',
-        terms_and_conditions: value.terms_and_conditions ?? '',
-      }
-      showCreateForm.value = true
-    } else {
-      form.value = defaultForm()
-      keywordInput.value = ''
-      showCreateForm.value = false
-    }
-  },
-  { immediate: true },
-)
-
-void loadCurrent()
-
-function openCreateForm() {
-  showValidation.value = false
-  showCreateForm.value = true
-}
-
-function addKeyword() {
-  const trimmed = keywordInput.value.trim()
-  if (!trimmed) return
-  if (form.value.keywords.includes(trimmed)) {
-    keywordInput.value = ''
-    return
-  }
-  form.value.keywords.push(trimmed)
-  keywordInput.value = ''
-}
-
-function removeKeyword(index: number) {
-  form.value.keywords.splice(index, 1)
-}
-
-async function onSubmit() {
-  showValidation.value = true
-  if (!canSubmit.value) return
-  try {
-    if (isUpdateMode.value) {
-      await updateServiceOffering(form.value)
-    } else {
-      await createServiceOffering(form.value)
-    }
-  } catch (e) {
-    console.error('Service offering submit failed:', e)
-  }
-}
-
-async function onDelete() {
-  if (!currentServiceOffering.value) return
-  try {
-    if (!confirmationModal.value) return
-    const { isCanceled } = await confirmationModal.value.reveal({
-      message: 'This will delete the current service offering. This action cannot be undone.',
-    })
-    if (isCanceled) return
-    await deleteServiceOffering()
-  } catch (e) {
-    console.error('Delete service offering failed:', e)
-  }
-}
-</script>

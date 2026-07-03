@@ -1,126 +1,3 @@
-<template>
-  <button type="button" v-bind="$attrs" @click="openModal">Create</button>
-  <Teleport to="body">
-    <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
-      <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
-        <h3 class="text-lg font-bold">Contract Participants</h3>
-
-        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
-        <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
-
-        <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
-          <section class="flex flex-col gap-2">
-            <span class="font-medium">Reviewers</span>
-            <ul v-if="reviewers.length > 0" class="flex flex-col gap-1">
-              <li
-                v-for="did in reviewers"
-                :key="did"
-                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-              >
-                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
-                <button
-                  type="button"
-                  class="btn shrink-0 btn-ghost btn-xs"
-                  aria-label="Remove"
-                  @click="removeReviewer(did)"
-                >
-                  ✕
-                </button>
-              </li>
-            </ul>
-            <div class="flex flex-col gap-2">
-              <input
-                v-model="reviewerDraft"
-                type="text"
-                class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:web:..."
-                @input="reviewerError = ''"
-                @keydown.enter.prevent="addReviewer"
-              />
-              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addReviewer">+</button>
-            </div>
-            <p v-if="reviewerError" class="text-xs text-error">{{ reviewerError }}</p>
-          </section>
-
-          <section class="flex flex-col gap-2">
-            <span class="font-medium">Approvers</span>
-            <ul v-if="approvers.length > 0" class="flex flex-col gap-1">
-              <li
-                v-for="did in approvers"
-                :key="did"
-                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-              >
-                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
-                <button
-                  type="button"
-                  class="btn shrink-0 btn-ghost btn-xs"
-                  aria-label="Remove"
-                  @click="removeApprover(did)"
-                >
-                  ✕
-                </button>
-              </li>
-            </ul>
-            <div class="flex flex-col gap-2">
-              <input
-                v-model="approverDraft"
-                type="text"
-                class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:web:..."
-                @input="approverError = ''"
-                @keydown.enter.prevent="addApprover"
-              />
-              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addApprover">+</button>
-            </div>
-            <p v-if="approverError" class="text-xs text-error">{{ approverError }}</p>
-          </section>
-
-          <section class="flex flex-col gap-2">
-            <span class="font-medium">Negotiators</span>
-            <ul v-if="negotiators.length > 0" class="flex flex-col gap-1">
-              <li
-                v-for="did in negotiators"
-                :key="did"
-                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-              >
-                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
-                <button
-                  type="button"
-                  class="btn shrink-0 btn-ghost btn-xs"
-                  aria-label="Remove"
-                  @click="removeNegotiator(did)"
-                >
-                  ✕
-                </button>
-              </li>
-            </ul>
-            <div class="flex flex-col gap-2">
-              <input
-                v-model="negotiatorDraft"
-                type="text"
-                class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:web:..."
-                @input="negotiatorError = ''"
-                @keydown.enter.prevent="addNegotiator"
-              />
-              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addNegotiator">+</button>
-            </div>
-            <p v-if="negotiatorError" class="text-xs text-error">{{ negotiatorError }}</p>
-          </section>
-        </div>
-
-        <div class="modal-action mt-2">
-          <button type="button" class="btn btn-outline" @click="onModalClose">Cancel</button>
-          <button type="button" class="btn btn-primary" @click="onModalSubmit">Apply</button>
-        </div>
-      </div>
-      <form method="dialog" class="modal-backdrop">
-        <button type="submit" aria-label="Close">close</button>
-      </form>
-    </dialog>
-  </Teleport>
-</template>
-
 <script setup lang="ts">
 import { getLocalDIDFile } from '@/services/did-service'
 import { isDuplicateInList, mergeDraftIntoList } from '@/utils/participant-selection'
@@ -292,3 +169,126 @@ function onModalClose() {
   assigneeModal.value?.close()
 }
 </script>
+
+<template>
+  <button type="button" v-bind="$attrs" @click="openModal">Create</button>
+  <Teleport to="body">
+    <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
+      <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
+        <h3 class="text-lg font-bold">Contract Participants</h3>
+
+        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
+        <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
+
+        <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Reviewers</span>
+            <ul v-if="reviewers.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in reviewers"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeReviewer(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="reviewerDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:web:..."
+                @input="reviewerError = ''"
+                @keydown.enter.prevent="addReviewer"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addReviewer">+</button>
+            </div>
+            <p v-if="reviewerError" class="text-xs text-error">{{ reviewerError }}</p>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Approvers</span>
+            <ul v-if="approvers.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in approvers"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeApprover(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="approverDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:web:..."
+                @input="approverError = ''"
+                @keydown.enter.prevent="addApprover"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addApprover">+</button>
+            </div>
+            <p v-if="approverError" class="text-xs text-error">{{ approverError }}</p>
+          </section>
+
+          <section class="flex flex-col gap-2">
+            <span class="font-medium">Negotiators</span>
+            <ul v-if="negotiators.length > 0" class="flex flex-col gap-1">
+              <li
+                v-for="did in negotiators"
+                :key="did"
+                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
+              >
+                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
+                <button
+                  type="button"
+                  class="btn shrink-0 btn-ghost btn-xs"
+                  aria-label="Remove"
+                  @click="removeNegotiator(did)"
+                >
+                  ✕
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-col gap-2">
+              <input
+                v-model="negotiatorDraft"
+                type="text"
+                class="input-bordered input input-sm w-full font-mono text-xs"
+                placeholder="did:web:..."
+                @input="negotiatorError = ''"
+                @keydown.enter.prevent="addNegotiator"
+              />
+              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addNegotiator">+</button>
+            </div>
+            <p v-if="negotiatorError" class="text-xs text-error">{{ negotiatorError }}</p>
+          </section>
+        </div>
+
+        <div class="modal-action mt-2">
+          <button type="button" class="btn btn-outline" @click="onModalClose">Cancel</button>
+          <button type="button" class="btn btn-primary" @click="onModalSubmit">Apply</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit" aria-label="Close">close</button>
+      </form>
+    </dialog>
+  </Teleport>
+</template>

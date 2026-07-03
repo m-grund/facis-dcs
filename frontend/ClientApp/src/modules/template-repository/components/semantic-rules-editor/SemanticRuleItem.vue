@@ -1,3 +1,21 @@
+<script setup lang="ts">
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import IconEdit from '@/core/components/icons/IconEdit.vue'
+import IconRemove from '@/core/components/icons/IconRemove.vue'
+import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
+
+defineProps<{
+  condition: SemanticCondition
+  usedInClauseCount: number
+  isEditable: boolean
+}>()
+
+defineEmits<{
+  'edit-rule': [conditionId: string]
+  'delete-rule': [conditionId: string]
+}>()
+</script>
+
 <template>
   <div
     class="group flex items-start gap-3 rounded-lg border border-base-300 bg-base-200/30 p-3 transition-all hover:shadow-sm"
@@ -46,21 +64,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
-import IconEdit from '@/core/components/icons/IconEdit.vue'
-import IconRemove from '@/core/components/icons/IconRemove.vue'
-import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
-
-defineProps<{
-  condition: SemanticCondition
-  usedInClauseCount: number
-  isEditable: boolean
-}>()
-
-defineEmits<{
-  'edit-rule': [conditionId: string]
-  'delete-rule': [conditionId: string]
-}>()
-</script>

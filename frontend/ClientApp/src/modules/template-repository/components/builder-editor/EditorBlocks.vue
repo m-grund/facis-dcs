@@ -1,50 +1,3 @@
-<template>
-  <div class="flex flex-col gap-2">
-    <div
-      v-for="item in flatItemsWithBlock"
-      :key="item.blockId"
-      :class="[
-        'flex min-w-0 items-stretch',
-        'transition-[opacity] duration-200 ease-out',
-        isInFadeOutSet(item.blockId) && 'opacity-50',
-      ]"
-    >
-      <!-- Indent area: width by depth, left border for children to show hierarchy -->
-      <div
-        v-if="item.block && !isMergedApprovedTemplateBlock(item.block)"
-        :class="[
-          'relative flex min-h-[2.5rem] flex-shrink-0 items-center',
-          'transition-[width] duration-300 ease-out',
-          item.depthLevel > 0 && !horizontalPreviewFor(item) && 'border-l-2 border-base-300',
-          horizontalPreviewFor(item) && 'border-l-2 border-primary',
-        ]"
-        :style="{ width: effectiveIndentWidth(item) }"
-        aria-hidden
-      >
-        <component
-          :is="horizontalArrowIcon(item)"
-          v-if="horizontalPreviewFor(item)"
-          :size="14"
-          class="pointer-events-none absolute top-1/2 left-0.5 -translate-y-1/2 text-primary"
-        />
-      </div>
-      <EditorBlock
-        :item="item"
-        @select="selectBlock(item.blockId)"
-        @insert-above="onInsertAbove(item)"
-        @insert-below="onInsertBelow(item)"
-        @insert-nest="onInsertNest(item)"
-        @confirm="(payload) => confirmBlock(item.blockId, payload)"
-        @move-up="onMoveUp(item)"
-        @move-down="onMoveDown(item)"
-        @move-outdent="onMoveOutdent(item)"
-        @move-indent="onMoveIndent(item)"
-        @delete="deleteBlock(item.blockId)"
-      />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -182,3 +135,50 @@ function enrichFlatItem(
   }
 }
 </script>
+
+<template>
+  <div class="flex flex-col gap-2">
+    <div
+      v-for="item in flatItemsWithBlock"
+      :key="item.blockId"
+      :class="[
+        'flex min-w-0 items-stretch',
+        'transition-[opacity] duration-200 ease-out',
+        isInFadeOutSet(item.blockId) && 'opacity-50',
+      ]"
+    >
+      <!-- Indent area: width by depth, left border for children to show hierarchy -->
+      <div
+        v-if="item.block && !isMergedApprovedTemplateBlock(item.block)"
+        :class="[
+          'relative flex min-h-[2.5rem] flex-shrink-0 items-center',
+          'transition-[width] duration-300 ease-out',
+          item.depthLevel > 0 && !horizontalPreviewFor(item) && 'border-l-2 border-base-300',
+          horizontalPreviewFor(item) && 'border-l-2 border-primary',
+        ]"
+        :style="{ width: effectiveIndentWidth(item) }"
+        aria-hidden
+      >
+        <component
+          :is="horizontalArrowIcon(item)"
+          v-if="horizontalPreviewFor(item)"
+          :size="14"
+          class="pointer-events-none absolute top-1/2 left-0.5 -translate-y-1/2 text-primary"
+        />
+      </div>
+      <EditorBlock
+        :item="item"
+        @select="selectBlock(item.blockId)"
+        @insert-above="onInsertAbove(item)"
+        @insert-below="onInsertBelow(item)"
+        @insert-nest="onInsertNest(item)"
+        @confirm="(payload) => confirmBlock(item.blockId, payload)"
+        @move-up="onMoveUp(item)"
+        @move-down="onMoveDown(item)"
+        @move-outdent="onMoveOutdent(item)"
+        @move-indent="onMoveIndent(item)"
+        @delete="deleteBlock(item.blockId)"
+      />
+    </div>
+  </div>
+</template>

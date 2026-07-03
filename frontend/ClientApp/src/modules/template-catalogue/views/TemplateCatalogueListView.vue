@@ -1,3 +1,15 @@
+<script setup lang="ts">
+import TemplateCatalogueList from '@/modules/template-catalogue/components/catalogue-template/TemplateCatalogueList.vue'
+import { useTemplateCatalogueList } from '@/modules/template-catalogue/composables/useTemplateCatalogueList'
+import { onMounted } from 'vue'
+
+const { templates, loading, error, refresh } = useTemplateCatalogueList()
+
+onMounted(() => {
+  void refresh()
+})
+</script>
+
 <template>
   <div class="mb-4 flex justify-between border-b border-base-content/10 bg-base-100 p-4">
     <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
@@ -14,15 +26,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import TemplateCatalogueList from '@/modules/template-catalogue/components/catalogue-template/TemplateCatalogueList.vue'
-import { useTemplateCatalogueList } from '@/modules/template-catalogue/composables/useTemplateCatalogueList'
-import { onMounted } from 'vue'
-
-const { templates, loading, error, refresh } = useTemplateCatalogueList()
-
-onMounted(() => {
-  void refresh()
-})
-</script>
