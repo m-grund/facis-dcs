@@ -39,7 +39,6 @@ type GetHistoryByIDResult struct {
 	CreatedBy      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	Responsible    *db.Responsible
 	TemplateData   *datatype.JSON
 }
 
@@ -109,7 +108,6 @@ func (h *GetHistoryByIDHandler) Handle(ctx context.Context, query GetHistoryByID
 			UpdatedAt:      entry.UpdatedAt,
 			TemplateData:   entry.TemplateData,
 			TemplateType:   ctType,
-			Responsible:    entry.Responsible,
 		}
 	}
 

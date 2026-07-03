@@ -3,8 +3,6 @@ import type { PartialContractTemplate } from '@/models/contract-template'
 import type { Contract } from '@/models/contract/contract'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
-import SubmitSelectionDialog from '@/components/SubmitSelectionDialog.vue'
-import type { SubmitContractAssignees } from '@/utils/submit-selection'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import {
   useSemanticValueVerification,
@@ -35,6 +33,8 @@ import {
   getSemanticConditionsFromTemplateData,
 } from '@/modules/template-repository/store/dcsDraftStore'
 import { useContractsStore } from '@/stores/contracts-store'
+import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
+import type { ParticipantSelection } from '@/utils/participant-selection'
 
 const route = useRoute()
 const router = useRouter()
@@ -144,11 +144,16 @@ function verifySemanticValues(): boolean {
   return false
 }
 
-const submit = async () => {
+const createContract = async ({ reviewers, approvers, negotiators }: ParticipantSelection) => {
   isSubmitting.value = true
   try {
-    if (!isEditMode.value && !!selectedTemplate.value) {
-      const response = await contractWorkflowService.create({ did: selectedTemplate.value.did })
+    if (selectedTemplate.value) {
+      const response = await contractWorkflowService.create({
+        template_did: selectedTemplate.value.did,
+        reviewers,
+        approvers,
+        negotiators,
+      })
       did.value = response.did
       if (selectedParentContractDid.value) {
         const newContract = await contractWorkflowService.retrieveById({ did: response.did })
@@ -166,8 +171,18 @@ const submit = async () => {
         })
       }
       errorStore.add('Contract created.', 'info')
-    } else if (contract.value) {
-      const contractData = buildCurrentContractData()
+    }
+  } catch (error) {
+    console.error('creation failed', error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const updateContract = async () => {
+  isSubmitting.value = true
+  try {
+    if (contract.value) {
       await contractWorkflowService.update({
         did: contract.value.did,
         updated_at: contract.value.updated_at,
@@ -175,7 +190,7 @@ const submit = async () => {
         exp_policy: contract.value.exp_policy,
         name: contract.value.name,
         description: contract.value.description,
-        contract_data: contractData,
+        contract_data: buildCurrentContractData(),
       })
       await router.push({ name: ROUTES.CONTRACTS.LIST })
     }
@@ -186,7 +201,7 @@ const submit = async () => {
   }
 }
 
-const submitContract = async ({ reviewers, approvers, negotiators }: SubmitContractAssignees) => {
+const submitContract = async ({ reviewers, approvers, negotiators }: ParticipantSelection) => {
   if (!contract.value || !verifySemanticValues()) return
   isSubmitting.value = true
   try {
@@ -459,11 +474,22 @@ onBeforeRouteLeave(() => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <button class="btn flex-1 btn-primary" :disabled="isSubmitting || !canSubmit" @click="submit">
+        <ParticipantSelectionDialog
+          v-if="!isEditMode"
+          :disabled="isSubmitting || !canSubmit"
+          class="btn flex-1 btn-primary"
+          @submit="createContract"
+        />
+        <button
+          v-if="isEditMode"
+          class="btn flex-1 btn-primary"
+          :disabled="isSubmitting || !canSubmit"
+          @click="updateContract"
+        >
           <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          {{ isEditMode ? 'Update' : 'Create' }}
+          Update
         </button>
-        <SubmitSelectionDialog
+        <ParticipantSelectionDialog
           v-if="contract?.state === ContractState.draft && canSubmitContract"
           class="btn flex-1 btn-primary"
           :disabled="isSubmitting"

@@ -1,9 +1,15 @@
 package conf
 
-import "time"
+import (
+	"time"
+)
 
 func TransactionTimeout() time.Duration {
-	return 5 * time.Minute
+	return 1 * time.Minute
+}
+
+func HTTPClientTimeout() time.Duration {
+	return 1 * time.Minute
 }
 
 func OutboxProcessorTimeOut() time.Duration {
@@ -11,7 +17,7 @@ func OutboxProcessorTimeOut() time.Duration {
 }
 
 func EventBusTopic() string {
-	return "digital-contracting-service"
+	return "dcs"
 }
 
 func GlobalAuditTrailName() string {
@@ -24,4 +30,8 @@ func LoginAttemptsThresholdInDuration() int {
 
 func LoginLockoutDuration() time.Duration {
 	return 15 * time.Minute
+}
+
+func SyncFailCronJobTimeOut() time.Duration {
+	return 24 * time.Hour
 }

@@ -1,23 +1,3 @@
-<template>
-  <div class="grid min-h-128 grid-cols-1 gap-4 lg:grid-cols-2">
-    <DiffPane
-      :title="leftPaneTitle"
-      :blocks="leftBlocks"
-      :diff-rows="contractDiffDocument.leftRows"
-      :highlight-diff="highlightDiff"
-      :show-no-prior-version="!hasLeftContractData"
-      :show-line-numbers="showLineNumbers"
-    />
-    <DiffPane
-      :title="rightPaneTitle"
-      :blocks="rightBlocks"
-      :diff-rows="contractDiffDocument.rightRows"
-      :highlight-diff="highlightDiff"
-      :show-line-numbers="showLineNumbers"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
 import type { ContractData } from '@/models/contract-data'
 import {
@@ -62,3 +42,23 @@ const rightBlocks = computed<ContractPlainTextBlock[]>(() => {
 
 const contractDiffDocument = computed(() => buildContractBlockDiff(leftBlocks.value, rightBlocks.value))
 </script>
+
+<template>
+  <div class="grid min-h-128 grid-cols-1 gap-4 lg:grid-cols-2">
+    <DiffPane
+      :title="leftPaneTitle"
+      :blocks="leftBlocks"
+      :diff-rows="contractDiffDocument.leftRows"
+      :highlight-diff="highlightDiff"
+      :show-no-prior-version="!hasLeftContractData"
+      :show-line-numbers="showLineNumbers"
+    />
+    <DiffPane
+      :title="rightPaneTitle"
+      :blocks="rightBlocks"
+      :diff-rows="contractDiffDocument.rightRows"
+      :highlight-diff="highlightDiff"
+      :show-line-numbers="showLineNumbers"
+    />
+  </div>
+</template>

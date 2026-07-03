@@ -8,6 +8,11 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -19,21 +24,24 @@ import (
 )
 
 type TerminateCmd struct {
-	DID          string
-	TerminatedBy string
-	Reason       string
-	UpdatedAt    time.Time
-	HolderDID    string
-	UserRoles    userrole.UserRoles
+	DID          string             `json:"did"`
+	TerminatedBy string             `json:"terminated_by"`
+	Reason       string             `json:"reason"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+	HolderDID    string             `json:"holder_did"`
+	UserRoles    userrole.UserRoles `json:"user_roles"`
+	CauserDID    string             `json:"causer_did"`
 }
 
 type Terminator struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
@@ -53,7 +61,33 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.Terminate.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		if localPeer != cmd.CauserDID {
+			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
+		}
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
@@ -64,21 +98,6 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 	err = h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Terminated.String())
 	if err != nil {
 		return fmt.Errorf("could not update contract state: %w", err)
-	}
-
-	err = h.NTRepo.Delete(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not delete notification task: %w", err)
-	}
-
-	err = h.RTRepo.Delete(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not delete receive task: %w", err)
-	}
-
-	err = h.ATRepo.Delete(ctx, tx, cmd.DID)
-	if err != nil {
-		return fmt.Errorf("could not delete approval task: %w", err)
 	}
 
 	evt := contractevents.TerminateEvent{

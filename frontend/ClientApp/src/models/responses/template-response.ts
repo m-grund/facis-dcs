@@ -3,11 +3,11 @@ import type { ContractTemplateEventType } from '@/types/contract-template-event-
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
 import type { PartialContractTemplate } from '../contract-template'
+import type { ContractTemplateResponsible } from '../contract-template-responsible'
 import type { DcsTemplateData } from '../dcs-jsonld'
 import type { ContractTemplateApprovalTask } from '../contract-template-approval-task'
 import type { ContractTemplateEvent } from '../contract-template-event'
 import type { ContractTemplateReviewTask } from '../contract-template-review-task'
-import type { ContractTemplateResponsible } from '../contract-template-responsible'
 
 export interface ContractTemplateCreateResponse {
   did: string
@@ -40,7 +40,6 @@ interface ContractTemplateSearchResponseItem {
   created_at: string
   created_by: string
   updated_at: string
-  responsible?: ContractTemplateResponsible
 }
 
 export type ContractTemplateSearchResponse = ContractTemplateSearchResponseItem[]

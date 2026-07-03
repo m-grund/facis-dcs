@@ -1,3 +1,52 @@
+<script setup lang="ts">
+import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
+import type { TemplateResource } from '@/modules/template-catalogue/models/template-resource'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const router = useRouter()
+const route = useRoute()
+
+const loading = ref(false)
+const error = ref<string | null>(null)
+const catalogue = ref<TemplateResource | null>(null)
+
+const did = computed(() => String(route.params.did ?? ''))
+const version = computed(() => {
+  const raw = route.query.version
+  const value = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isFinite(value) ? value : 1
+})
+
+async function load() {
+  loading.value = true
+  error.value = null
+  try {
+    catalogue.value = await templateCatalogueIntegrationService.retrieve_template_by_id({
+      did: did.value,
+      version: version.value,
+    })
+  } catch (e: unknown) {
+    error.value = e instanceof Error && e.message ? e?.message : 'Error loading template catalogue'
+  } finally {
+    loading.value = false
+  }
+}
+
+void load()
+
+/* eslint-disable @typescript-eslint/no-base-to-string */
+function displayValue(value: unknown): string {
+  return value === null || value === undefined || value === '' ? '' : String(value)
+}
+
+function displayDate(value: unknown): string {
+  if (value === null || value === undefined || value === '') return ''
+  const d = new Date(String(value))
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString()
+}
+/* eslint-enable @typescript-eslint/no-base-to-string */
+</script>
 <template>
   <div>
     <div class="mb-8 flex justify-between">
@@ -98,52 +147,3 @@
     </div>
   </div>
 </template>
-<script setup lang="ts">
-import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
-import type { TemplateResource } from '@/modules/template-catalogue/models/template-resource'
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-
-const router = useRouter()
-const route = useRoute()
-
-const loading = ref(false)
-const error = ref<string | null>(null)
-const catalogue = ref<TemplateResource | null>(null)
-
-const did = computed(() => String(route.params.did ?? ''))
-const version = computed(() => {
-  const raw = route.query.version
-  const value = typeof raw === 'string' ? Number(raw) : NaN
-  return Number.isFinite(value) ? value : 1
-})
-
-async function load() {
-  loading.value = true
-  error.value = null
-  try {
-    catalogue.value = await templateCatalogueIntegrationService.retrieve_template_by_id({
-      did: did.value,
-      version: version.value,
-    })
-  } catch (e: unknown) {
-    error.value = e instanceof Error && e.message ? e?.message : 'Error loading template catalogue'
-  } finally {
-    loading.value = false
-  }
-}
-
-void load()
-
-/* eslint-disable @typescript-eslint/no-base-to-string */
-function displayValue(value: unknown): string {
-  return value === null || value === undefined || value === '' ? '' : String(value)
-}
-
-function displayDate(value: unknown): string {
-  if (value === null || value === undefined || value === '') return ''
-  const d = new Date(String(value))
-  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString()
-}
-/* eslint-enable @typescript-eslint/no-base-to-string */
-</script>

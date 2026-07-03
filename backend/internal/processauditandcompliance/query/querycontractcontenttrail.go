@@ -56,7 +56,7 @@ func (h *ContractContentTrailAuditor) Handle(ctx context.Context, query GetContr
 	}
 
 	for contractIndex, metadata := range contracts {
-		contract, err := h.CRepo.ReadDataByID(ctx, tx, metadata.DID)
+		contract, err := h.CRepo.ReadDataByDID(ctx, tx, metadata.DID)
 		if err != nil {
 			return nil, fmt.Errorf("could not read data: %w", err)
 		}

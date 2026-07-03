@@ -18,13 +18,14 @@ type ApprovalTaskData struct {
 
 type ApprovalTaskRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data ApprovalTaskData) (*time.Time, error)
+	RemoteCreate(ctx context.Context, tx *sqlx.Tx, data ApprovalTaskData) error
+	RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data ApprovalTaskData) error
 	ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error
-	ReadAll(ctx context.Context, tx *sqlx.Tx, did string) ([]ApprovalTaskData, error)
+	ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ApprovalTaskData, error)
 	ReadAllByApprover(ctx context.Context, tx *sqlx.Tx, approver string) ([]ApprovalTaskData, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, approver string, state string) error
 	AnyTasksInState(ctx context.Context, tx *sqlx.Tx, did string, states ...string) (bool, error)
 	IsValidApprover(ctx context.Context, tx *sqlx.Tx, did string, approver string) (bool, error)
 	TaskExistsInState(ctx context.Context, tx *sqlx.Tx, did string, approver string, state string) (bool, error)
 	TaskExists(ctx context.Context, tx *sqlx.Tx, did string) (bool, error)
-	Delete(ctx context.Context, tx *sqlx.Tx, did string) error
 }

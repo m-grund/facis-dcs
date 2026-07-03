@@ -1,41 +1,3 @@
-<template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <TemplateEditors title="Approve Template" />
-
-    <!-- Pinned Footer -->
-    <div v-if="hasDid" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <!-- Decision notes container -->
-      <ConfirmationModal ref="decision-note-dialog" />
-      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
-        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
-        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="reject">
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          Reject
-        </button>
-        <button
-          :disabled="isSubmitting || (!isApprover && !isManager)"
-          class="btn flex-1 btn-primary"
-          @click="resubmit"
-        >
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          Resubmit
-        </button>
-        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="approve">
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          Approve
-        </button>
-        <TemplateManagerActions
-          v-if="contractTemplate && isManager"
-          :template="contractTemplate"
-          class="btn flex-1 btn-primary"
-        />
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
@@ -94,7 +56,6 @@ watch(
           version: template.version ?? null,
           document_number: template.document_number ?? null,
           updated_at: template.updated_at ?? null,
-          responsible: template.responsible ?? null,
         })
       })
       .catch((error: unknown) => {
@@ -114,7 +75,6 @@ async function approve() {
     console.error('Missing did or updated_at for approval')
     return
   }
-  isSubmitting.value = true
   try {
     const decisionNoteResult = await decisionNoteDialog.value?.reveal({
       message: 'Add decision note?',
@@ -125,6 +85,7 @@ async function approve() {
     } else if (decisionNoteResult?.data) {
       decisionNote.value = decisionNoteResult.data
     }
+    isSubmitting.value = true
     await contractTemplateService.approve({
       did,
       updated_at: updatedAt,
@@ -145,7 +106,6 @@ async function resubmit() {
     console.error('Missing did or updated_at for reopen reviews')
     return
   }
-  isSubmitting.value = true
   try {
     const decisionNoteResult = await decisionNoteDialog.value?.reveal({
       message: 'Add decision note?',
@@ -156,6 +116,7 @@ async function resubmit() {
     } else if (decisionNoteResult?.data) {
       decisionNote.value = decisionNoteResult.data
     }
+    isSubmitting.value = true
     await contractTemplateService.submit({
       did,
       updated_at: updatedAt,
@@ -219,3 +180,41 @@ const exportPDF = async () => {
   URL.revokeObjectURL(url)
 }
 </script>
+
+<template>
+  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
+    <TemplateEditors title="Approve Template" />
+
+    <!-- Pinned Footer -->
+    <div v-if="hasDid" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
+      <!-- Decision notes container -->
+      <ConfirmationModal ref="decision-note-dialog" />
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
+        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="reject">
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Reject
+        </button>
+        <button
+          :disabled="isSubmitting || (!isApprover && !isManager)"
+          class="btn flex-1 btn-primary"
+          @click="resubmit"
+        >
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Resubmit
+        </button>
+        <button :disabled="isSubmitting || (!isApprover && !isManager)" class="btn flex-1 btn-primary" @click="approve">
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Approve
+        </button>
+        <TemplateManagerActions
+          v-if="contractTemplate && isManager"
+          :template="contractTemplate"
+          class="btn flex-1 btn-primary"
+        />
+      </div>
+    </div>
+  </div>
+</template>

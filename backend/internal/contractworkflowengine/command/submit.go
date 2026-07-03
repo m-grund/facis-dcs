@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/datatype/userrole"
-
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -21,74 +21,36 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/contractworkflowengine/negotiationmerging"
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"github.com/jmoiron/sqlx"
 )
 
 type SubmitCmd struct {
-	DID          string
-	UpdatedAt    time.Time
-	SubmittedBy  string
-	Reviewers    []string
-	Approvers    []string
-	Negotiators  []string
-	ActionFlag   *actionflag.ActionFlag
-	Comments     []string
-	ContractData *datatype.JSON
-	HolderDID    string
-	UserRoles    userrole.UserRoles
+	DID          string                 `json:"did"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	SubmittedBy  string                 `json:"submitted_by"`
+	Reviewers    []string               `json:"reviewers"`
+	Approvers    []string               `json:"approvers"`
+	Negotiators  []string               `json:"negotiators"`
+	ActionFlag   *actionflag.ActionFlag `json:"action_flag"`
+	Comments     []string               `json:"comments"`
+	ContractData *datatype.JSON         `json:"contract_data"`
+	HolderDID    string                 `json:"holder_did"`
+	UserRoles    userrole.UserRoles     `json:"user_roles"`
+	CauserDID    string                 `json:"causer_did"`
 }
 
 type Submitter struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
-}
-
-func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, cmd SubmitCmd) error {
-	for _, reviewer := range cmd.Reviewers {
-		reviewTask := db.ReviewTaskData{
-			DID:       cmd.DID,
-			Reviewer:  reviewer,
-			State:     reviewtaskstate.Open.String(),
-			CreatedBy: cmd.SubmittedBy,
-		}
-		_, err := rtRepo.Create(ctx, tx, reviewTask)
-		if err != nil {
-			return fmt.Errorf("could not create review task: %w", err)
-		}
-	}
-
-	for _, negotiator := range cmd.Negotiators {
-		negotiationTask := db.NegotiationTaskData{
-			DID:        cmd.DID,
-			Negotiator: negotiator,
-			State:      reviewtaskstate.Open.String(),
-			CreatedBy:  cmd.SubmittedBy,
-		}
-		_, err := ntRepo.Create(ctx, tx, negotiationTask)
-		if err != nil {
-			return fmt.Errorf("could not create negotiation task: %w", err)
-		}
-	}
-
-	for _, approver := range cmd.Approvers {
-		data := db.ApprovalTaskData{
-			DID:       cmd.DID,
-			CreatedBy: cmd.SubmittedBy,
-			Approver:  approver,
-			State:     reviewtaskstate.Open.String(),
-		}
-		_, err := atRepo.Create(ctx, tx, data)
-		if err != nil {
-			return fmt.Errorf("could not create approval task: %w", err)
-		}
-	}
-
-	return nil
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
@@ -108,7 +70,33 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.Submit.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		if localPeer != cmd.CauserDID {
+			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
+		}
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
@@ -116,8 +104,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	if hasSubmittedContractData && !canSubmitUpdatedContractData(processData.State) {
 		return errors.New("contract data can only be submitted in draft or rejected state")
 	}
-
-	var responsible *any
 	var nextState contractstate.ContractState
 	if processData.State == contractstate.Draft.String() {
 
@@ -126,7 +112,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		// This avoids that state changes on different DCS are possible
-		if cmd.SubmittedBy != processData.CreatedBy {
+		if cmd.CauserDID == localPeer && cmd.SubmittedBy != processData.CreatedBy {
 			return errors.New("invalid participant")
 		}
 
@@ -165,11 +151,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return fmt.Errorf("could not update contract: %w", err)
 		}
 
-		err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
-		if err != nil {
-			return err
-		}
-
 		nextState = contractstate.Negotiation
 
 	} else if processData.State == contractstate.Rejected.String() {
@@ -179,7 +160,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		// This avoids that state changes on different DCS are possible
-		if cmd.SubmittedBy != processData.CreatedBy {
+		if cmd.CauserDID == localPeer && cmd.SubmittedBy != processData.CreatedBy {
 			return errors.New("invalid participant")
 		}
 
@@ -214,16 +195,16 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.SubmittedBy)
+		isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
 		if err != nil {
 			return fmt.Errorf("could not validate negotiator: %w", err)
 		}
 
 		if !isValidNegotiator {
-			return errors.New("invalid user")
+			return errors.New("this peer is not a valid negotiator")
 		}
 
-		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, cmd.SubmittedBy)
+		hasOpenNegotiations, err := h.NRepo.HasOpenNegotiationDecisions(ctx, tx, cmd.DID, processData.ContractVersion, cmd.CauserDID)
 		if err != nil {
 			return fmt.Errorf("could not check open negotiations: %w", err)
 		}
@@ -232,7 +213,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("not all negotiations are processed")
 		}
 
-		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, negotiationtaskstate.Accepted.String())
+		err = h.NTRepo.UpdateState(ctx, tx, processData.DID, cmd.CauserDID, negotiationtaskstate.Accepted.String())
 		if err != nil {
 			return fmt.Errorf("could not update negotiation task: %w", err)
 		}
@@ -292,7 +273,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.SubmittedBy)
+		isValid, err := h.RTRepo.IsValidReviewer(ctx, tx, processData.DID, cmd.CauserDID)
 		if err != nil {
 			return err
 		}
@@ -304,7 +285,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		if cmd.ActionFlag != nil {
 			switch *cmd.ActionFlag {
 			case actionflag.Approval:
-				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.SubmittedBy, contractstate.Approved.String())
+				err = h.RTRepo.UpdateState(ctx, tx, processData.DID, cmd.CauserDID, contractstate.Approved.String())
 				if err != nil {
 					return fmt.Errorf("could not update approval task: %w", err)
 				}
@@ -341,7 +322,7 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid user permission")
 		}
 
-		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.SubmittedBy)
+		isValid, err := h.ATRepo.IsValidApprover(ctx, tx, processData.DID, cmd.CauserDID)
 		if err != nil {
 			return err
 		}
@@ -371,24 +352,23 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not update contract state: %w", err)
 		}
+	}
 
-		evt := contractevents.SubmitEvent{
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			SubmittedBy:     cmd.SubmittedBy,
-			PreviousState:   processData.State,
-			NewState:        nextState.String(),
-			ActionFlag:      cmd.ActionFlag,
-			Comments:        cmd.Comments,
-			OccurredAt:      time.Now().UTC(),
-			Responsible:     responsible,
-			HolderDID:       cmd.HolderDID,
-			UserRoles:       cmd.UserRoles,
-		}
-		err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
-		if err != nil {
-			return fmt.Errorf("could not create event: %w", err)
-		}
+	evt := contractevents.SubmitEvent{
+		DID:             cmd.DID,
+		ContractVersion: processData.ContractVersion,
+		SubmittedBy:     cmd.SubmittedBy,
+		PreviousState:   processData.State,
+		NewState:        nextState.String(),
+		ActionFlag:      cmd.ActionFlag,
+		Comments:        cmd.Comments,
+		OccurredAt:      time.Now().UTC(),
+		HolderDID:       cmd.HolderDID,
+		UserRoles:       cmd.UserRoles,
+	}
+	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
+	if err != nil {
+		return fmt.Errorf("could not create event: %w", err)
 	}
 
 	return tx.Commit()
@@ -410,7 +390,7 @@ func (h *Submitter) contractDataForSemanticValidation(ctx context.Context, tx *s
 		return normalizedContractData, nil
 	}
 
-	contractData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+	contractData, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contract data: %w", err)
 	}

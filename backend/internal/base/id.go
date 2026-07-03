@@ -3,12 +3,9 @@ package base
 import (
 	"crypto/rand"
 	"fmt"
-	"os"
-
-	"digital-contracting-service/internal/base/datatype"
 )
 
-// UUID v4
+// generateUUID generates a UUID v4.
 func generateUUID() (string, error) {
 	uuid := make([]byte, 16)
 	_, err := rand.Read(uuid)
@@ -23,18 +20,11 @@ func generateUUID() (string, error) {
 		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }
 
-func GetDID(resourceType datatype.ResourceType) (*string, error) {
-
-	dcsIssuer := "localhost"
-	if os.Getenv("DCS_ISSUER") != "" {
-		dcsIssuer = os.Getenv("DCS_ISSUER")
-	}
-
+func GenerateID() (*string, error) {
 	uuid, err := generateUUID()
 	if err != nil {
 		return nil, err
 	}
 
-	did := fmt.Sprintf("did:web:%s:%s:%s", dcsIssuer, resourceType.String(), uuid)
-	return &did, nil
+	return &uuid, nil
 }

@@ -59,3 +59,7 @@ dependencies:
     version: "85.2.0"
     repository: "https://prometheus-community.github.io/helm-charts"
     condition: monitoring.enabled
+  - name: traefik
+    version: "41.0.0"
+    repository: "https://traefik.github.io/charts"
+    condition: traefik.enabled

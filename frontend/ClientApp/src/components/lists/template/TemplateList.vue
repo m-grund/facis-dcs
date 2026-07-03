@@ -1,19 +1,49 @@
 <script setup lang="ts">
+import Pagination from '@/components/Pagination.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
+import { useContractTemplatesStore } from '@/stores/contract-templates-store.ts'
 import { useTemplateStateFilterStore } from '@/stores/state-filter-store'
 import { contractTemplateStates } from '@/types/contract-template-state'
 import { compareValues } from '@/utils/comparison'
-import { computed, onUnmounted, ref, type Ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
 import TemplateListItem from './TemplateListItem.vue'
 import TemplateListSearch from './TemplateListSearch.vue'
 
-const props = defineProps<{
-  templates: PartialContractTemplate[]
-  hasReviewTask: (template: PartialContractTemplate) => boolean
-  hasApprovalTask: (template: PartialContractTemplate) => boolean
-}>()
+const templatesStore = useContractTemplatesStore()
+const { loading, error } = storeToRefs(templatesStore)
+
+const templates: Ref<PartialContractTemplate[]> = ref([])
+
+const pageLimits = ref([25, 50, 100])
+const limit = computed(() => pageLimits.value[0] ?? 25)
+const currentPage = ref(1)
+const hasNextPage = ref(true)
+
+const searchResults: Ref<PartialContractTemplate[] | null> = ref(null)
+
+watch([currentPage, limit, searchResults], async () => {
+  if (searchResults.value !== null) {
+    const offset = (currentPage.value - 1) * limit.value
+    const end = offset + limit.value
+    templates.value = searchResults.value.slice(offset, end)
+    hasNextPage.value = searchResults.value.length > end
+  } else {
+    await setPaginatedTemplates()
+  }
+})
+
+onMounted(async () => {
+  await setPaginatedTemplates()
+})
+
+const setPaginatedTemplates = async () => {
+  await templatesStore.loadPaginatedTemplates(currentPage.value, limit.value)
+  templates.value = templatesStore.paginatedTemplates
+  hasNextPage.value = templates.value.length === limit.value
+}
 
 const sorter = new Map<keyof PartialContractTemplate, string>([
   ['created_at', 'Creation date'],
@@ -28,18 +58,16 @@ const sortOrder = ref(1)
 
 const stateFilterStore = useTemplateStateFilterStore()
 
-const searchedTemplates: Ref<PartialContractTemplate[]> = ref(props.templates)
-
 const sortedTemplates = computed(() => {
   if (!sorter.has(sortBy.value)) {
-    return searchedTemplates.value
+    return templates.value
   }
-  return searchedTemplates.value
+  return templates.value
     .slice()
     .sort((templateA, templateB) => compareValues(templateA, templateB, sortBy.value, sortOrder.value))
 })
 
-const hasTemplates = computed(() => props.templates.length > 0)
+const hasTemplates = computed(() => templates.value.length > 0)
 
 const filteredTemplates = computed(() => {
   if (stateFilterStore.hasFilters) {
@@ -48,15 +76,18 @@ const filteredTemplates = computed(() => {
   return sortedTemplates.value
 })
 
-const applySearchResult = (searchResult: PartialContractTemplate[]) => {
-  searchedTemplates.value = searchResult
+const applySearchResult = (searchResult: PartialContractTemplate[] | null) => {
+  searchResults.value = searchResult
+  currentPage.value = 1
 }
 
 onUnmounted(() => stateFilterStore.reset())
 </script>
 
 <template>
-  <ul class="list">
+  <div v-if="loading" class="pl-4">Loading Templates...</div>
+  <div v-else-if="error" class="pl-4">{{ error }}</div>
+  <ul v-else class="list">
     <li class="flex flex-col justify-between px-4 tracking-wide sm:flex-row">
       <TemplateListSearch :templates="templates" class="flex-1" @search-result="applySearchResult" />
       <ListStateFilter
@@ -74,4 +105,18 @@ onUnmounted(() => stateFilterStore.reset())
     />
     <li v-if="filteredTemplates.length < 1" class="px-4">No templates found</li>
   </ul>
+  <div class="grid w-full grid-cols-3 items-center px-4 pb-4">
+    <select v-model.number="limit" class="select max-w-30 justify-self-start select-sm" @change="currentPage = 1">
+      <option disabled>Pick a page limit</option>
+      <option v-for="pageLimit in pageLimits" :key="pageLimit">{{ pageLimit }}</option>
+    </select>
+    <Pagination
+      :current-page="currentPage"
+      :has-next-page="hasNextPage"
+      class="justify-self-center"
+      @next-page="currentPage++"
+      @previous-page="currentPage--"
+    />
+    <div class="justify-self-end"></div>
+  </div>
 </template>

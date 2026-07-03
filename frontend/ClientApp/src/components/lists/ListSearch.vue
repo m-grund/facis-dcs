@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends { did: string }">
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/vue'
-import { computed, ref, useTemplateRef, type Ref } from 'vue'
+import { computed, ref, shallowRef, useTemplateRef, type Ref, type ShallowRef } from 'vue'
 
 type FilterLabelConfig<T> = Partial<Record<keyof T, string>>
 type SearchFunction<T> = (request: Record<string, unknown>) => Promise<T[]>
@@ -14,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  searchResult: [value: T[]]
+  searchResult: [value: T[] | null]
 }>()
 
 const searchQuery = ref('')
@@ -26,7 +26,7 @@ type FilterLabelValue = FilterLabels[FilterLabelKey]
 
 const selectedFilter = ref<FilterLabelValue>(Object.values(props.filterLabels)[0] ?? '')
 const filterPopover = useTemplateRef('filter-popover')
-const searchResults: Ref<T[]> = ref([])
+const searchResults: ShallowRef<T[]> = shallowRef([])
 
 const selectedOption: Ref<T | null> = ref(null)
 
@@ -41,9 +41,7 @@ const searchedItems = computed(() => {
 
   if (searchResults.value.length === 0) return []
 
-  const backendIds = new Set(searchResults.value.map((item) => item.did))
-
-  return props.items.filter((item) => backendIds.has(item.did))
+  return searchResults.value
 })
 
 const inputValue: Ref<T> = computed(() => {
@@ -78,7 +76,8 @@ async function searchList(event?: Event) {
       await searchRequest()
     }
   }
-  emit('searchResult', searchedItems.value)
+  if (searchQuery.value.trim().length > 0) emit('searchResult', searchedItems.value)
+  else emit('searchResult', null)
 }
 
 const getDisplayValue = (template: T | null): string => {
@@ -97,7 +96,11 @@ async function onComboboxFocus() {
 
 async function onSearchChange(event: Event) {
   searchQuery.value = (event.target as HTMLInputElement).value
-  await searchRequest()
+  if (searchQuery.value.trim().length === 0) {
+    emit('searchResult', null)
+  } else {
+    await searchRequest()
+  }
 }
 
 function onComboboxUpdate(item: T) {

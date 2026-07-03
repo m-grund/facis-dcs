@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/validation"
@@ -139,7 +138,7 @@ type submitContractRepoFake struct {
 	readDataCalled bool
 }
 
-func (r *submitContractRepoFake) ReadDataByID(context.Context, *sqlx.Tx, string) (*db.Contract, error) {
+func (r *submitContractRepoFake) ReadDataByDID(context.Context, *sqlx.Tx, string) (*db.Contract, error) {
 	r.readDataCalled = true
 	return r.stored, nil
 }
@@ -149,6 +148,6 @@ func (r *submitContractRepoFake) Update(_ context.Context, _ *sqlx.Tx, data db.C
 	return nil
 }
 
-func (r *submitContractRepoFake) Create(context.Context, *sqlx.Tx, db.Contract) (*time.Time, error) {
+func (r *submitContractRepoFake) Create(context.Context, *sqlx.Tx, db.Contract) error {
 	panic("not implemented")
 }

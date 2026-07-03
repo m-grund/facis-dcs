@@ -8,6 +8,12 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
+	db2 "digital-contracting-service/internal/dcstodcs/db"
+
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -19,18 +25,21 @@ import (
 )
 
 type AcceptNegotiationCmd struct {
-	ID         string
-	DID        string
-	AcceptedBy string
-	HolderDID  string
-	UserRoles  userrole.UserRoles
+	ID         string             `json:"id"`
+	DID        string             `json:"did"`
+	AcceptedBy string             `json:"accepted_by"`
+	HolderDID  string             `json:"holder_did"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
+	CauserDID  string             `json:"causer_did"`
 }
 
 type NegotiationAcceptor struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationCmd) error {
@@ -49,11 +58,34 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return fmt.Errorf("could not process core data: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.AcceptNegotiation.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if processData.State != contractstate.Negotiation.String() || processData.State == contractstate.Terminated.String() {
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.AcceptedBy)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
@@ -62,7 +94,7 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return errors.New("invalid user")
 	}
 
-	err = h.NRepo.Accept(ctx, tx, cmd.ID, cmd.AcceptedBy)
+	err = h.NRepo.Accept(ctx, tx, cmd.ID, cmd.CauserDID)
 	if err != nil {
 		return fmt.Errorf("could not accept negotiation: %w", err)
 	}

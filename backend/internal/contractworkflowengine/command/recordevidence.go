@@ -8,6 +8,11 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
+
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
@@ -19,16 +24,19 @@ import (
 )
 
 type RecordEvidenceCmd struct {
-	DID        string
-	RecordedBy string
-	UpdatedAt  time.Time
-	HolderDID  string
-	UserRoles  userrole.UserRoles
+	DID        string             `json:"did"`
+	RecordedBy string             `json:"recorded_by"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+	HolderDID  string             `json:"holder_did"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
+	CauserDID  string             `json:"causer_did"`
 }
 
 type EvidenceRecorder struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) error {
@@ -48,7 +56,33 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.RecordEvidence.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		if localPeer != cmd.CauserDID {
+			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
+		}
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 

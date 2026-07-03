@@ -16,6 +16,7 @@ ingress:
   enabled: false
   className: ""
   annotations: {}
+  stripPrefix: ""
   pathType: Prefix
   hosts: []
   tls: []
@@ -50,7 +51,14 @@ topics:
   signer: "signer"
 
 # List configuration
-listSize: "125000"
+listSize: "131072"
+
+# BDD list initialization
+bddListInit:
+  enabled: false
+  tenantID: "default"
+  tenantIDs: []
+  listID: "1"
 
 # Logging level
 logging:

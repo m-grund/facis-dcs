@@ -5,7 +5,10 @@ import type { ContractData } from '../contract-data'
 import type { ContractChangeRequest, ExpirationPolicy } from '../contract/contract'
 
 export interface ContractCreateRequest {
-  did: string
+  template_did: string
+  reviewers?: string[]
+  approvers?: string[]
+  negotiators?: string[]
 }
 
 export interface ContractUpdateRequest {
@@ -33,7 +36,10 @@ export interface ContractSubmitRequest {
   negotiators?: string[]
 }
 
-export type ContractRetrieveRequest = Record<string, unknown>
+export interface ContractRetrieveRequest {
+  offset?: number
+  limit?: number
+}
 
 export interface ContractRetrieveByIdRequest {
   did: string
@@ -44,6 +50,8 @@ export interface ContractReviewRequest {
 }
 
 export interface ContractSearchRequest {
+  offset?: number
+  limit?: number
   did?: string
   contract_version?: number
   state?: ContractState

@@ -45,7 +45,7 @@ func (h *GetAllReviewTasksForDIDHandler) Handle(ctx context.Context, query GetAl
 		}
 	}(tx)
 
-	reviewTasks, err := h.RTRepo.ReadAll(ctx, tx, query.DID)
+	reviewTasks, err := h.RTRepo.ReadAllByDID(ctx, tx, query.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not read all review tasks: %w", err)
 	}

@@ -5,6 +5,7 @@ CREATE TYPE contract_expiration_policy AS ENUM ('RENEWAL', 'TERMINATION', 'ARCHI
 CREATE TABLE IF NOT EXISTS contracts
 (
     did               VARCHAR(255),
+    origin            VARCHAR(255),
 
     created_by        VARCHAR(255)   NOT NULL,
     created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -43,7 +44,9 @@ CREATE INDEX idx_contract_contracts_search ON contracts
 CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
+    IF NEW.updated_at = OLD.updated_at THEN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS contract_history
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
     did               VARCHAR(255),
+    origin            VARCHAR(255),
 
     created_by        VARCHAR(255)   NOT NULL,
     created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -307,6 +311,7 @@ EXECUTE FUNCTION reject_contract_archive_entry_event_modification();
 CREATE OR REPLACE VIEW contracts_effective AS
 SELECT
     did,
+    origin,
     created_by,
     created_at,
     updated_at,
@@ -335,6 +340,7 @@ FROM contracts;
 CREATE OR REPLACE VIEW contracts_effective_metadata AS
 SELECT
     did,
+    origin,
     created_by,
     created_at,
     updated_at,
@@ -385,6 +391,7 @@ WHERE a.archive_status <> 'DELETED';
 CREATE OR REPLACE VIEW contracts_effective_process_data AS
 SELECT
     did,
+    origin,
     created_by,
     created_at,
     updated_at,

@@ -1,3 +1,11 @@
+<script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { TemplateType } from '@template-repository/models/contract-template'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+
+const { templateType, name, description, version } = storeToRefs(useTemplateDraftStore())
+</script>
+
 <template>
   <div class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body">
@@ -52,11 +60,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import { TemplateType } from '@template-repository/models/contract-template'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-
-const { templateType, name, description, version } = storeToRefs(useTemplateDraftStore())
-</script>

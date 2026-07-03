@@ -7,6 +7,9 @@ import (
 	"slices"
 	"time"
 
+	"digital-contracting-service/internal/dcstodcs"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
+
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
@@ -16,6 +19,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
 	"digital-contracting-service/internal/contractworkflowengine/command"
@@ -33,24 +37,31 @@ import (
 )
 
 type contractWorkflowEnginesrvc struct {
-	DB            *sqlx.DB
-	CRepo         db.ContractRepo
-	RTRepo        db.ReviewTaskRepo
-	ATRepo        db.ApprovalTaskRepo
-	NTRepo        db.NegotiationTaskRepo
-	NRepo         db.NegotiationRepo
-	CTRepo        db.ContractTemplateRepo
-	FCClient      *fcclient.FederatedCatalogueClient
-	ATrailReader  base.AuditTrailReader
-	IPFSClient    *ipfs.APIClient
-	ArchiveNotary command.ArchiveNotary
-	ArchiveTSA    *tsa.APIClient
+	DB                   *sqlx.DB
+	CRepo                db.ContractRepo
+	RTRepo               db.ReviewTaskRepo
+	ATRepo               db.ApprovalTaskRepo
+	NTRepo               db.NegotiationTaskRepo
+	NRepo                db.NegotiationRepo
+	SRepo                db2.SyncRepository
+	CTRepo               db.ContractTemplateRepo
+	FCClient             *fcclient.FederatedCatalogueClient
+	DIDDocument          identity.DIDDocument
+	ATrailReader         base.AuditTrailReader
+	DCSToDCSSynchronizer dcstodcs.DCSToDCSSynchronizer
+	TrustPool            *identity.EUTrustPool
+	IPFSClient           *ipfs.APIClient
+	ArchiveNotary        command.ArchiveNotary
+	ArchiveTSA           *tsa.APIClient
 	auth.JWTAuthenticator
 }
 
 func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
-	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary, archiveTSA *tsa.APIClient) contractworkflowengine.Service {
+	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
+	sRepo db2.SyncRepository, trustPool *identity.EUTrustPool,
+	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument identity.DIDDocument,
+	ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary, archiveTSA *tsa.APIClient) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -60,9 +71,12 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		ATRepo:           atRepo,
 		NTRepo:           ntRepo,
 		NRepo:            nRepo,
+		SRepo:            sRepo,
 		CTRepo:           ctRepo,
 		FCClient:         fcClient,
+		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
+		TrustPool:        trustPool,
 		IPFSClient:       ipfsClient,
 		ArchiveNotary:    archiveNotary,
 		ArchiveTSA:       archiveTSA,
@@ -74,22 +88,55 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	did, err := base.GetDID(datatype.ContractResourceType)
+	did, err := base.GenerateID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedReviewers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Reviewers)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedAprovers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Approvers)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedNegotiators, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Negotiators)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	untrustedPeers := base.Unique(untrustedReviewers, untrustedAprovers, untrustedNegotiators)
+	if len(untrustedPeers) > 0 {
+		err := fmt.Errorf("untrusted peers are not allowed: %v", untrustedPeers)
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	cmd := command.CreateCmd{
 		DID:         *did,
-		TemplateDID: req.Did,
+		TemplateDID: req.TemplateDid,
 		CreatedBy:   middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
+		Reviewers:   req.Reviewers,
+		Approvers:   req.Approvers,
+		Negotiators: req.Negotiators,
 	}
 	createHandler := command.Creator{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		CTRepo: s.CTRepo,
+		DB:          s.DB,
+		CTRepo:      s.CTRepo,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NTRepo:      s.NTRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
@@ -103,6 +150,11 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 
 func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractworkflowengine.ContractUpdateRequest) (res *contractworkflowengine.ContractUpdateResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -111,7 +163,7 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	metaData, err := datatype.NewJSON(req.ContractData)
+	contractData, err := datatype.NewJSON(req.ContractData)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -122,7 +174,6 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		if err != nil {
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
-
 		startDate = &startD
 	}
 
@@ -132,7 +183,6 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		if err != nil {
 			return nil, contractworkflowengine.MakeInternalError(err)
 		}
-
 		expDate = &expD
 	}
 
@@ -145,6 +195,11 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		expPolicy = &policy
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.UpdateCmd{
 		DID:             req.Did,
 		UpdatedAt:       updatedAt,
@@ -153,15 +208,22 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 		UserRoles:       middleware.GetUserRoles(ctx),
 		Name:            req.Name,
 		Description:     req.Description,
-		ContractData:    &metaData,
+		ContractData:    &contractData,
 		StartDate:       startDate,
 		ExpDate:         expDate,
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: req.ExpNoticePeriod,
+		CauserDID:       localPeer,
 	}
 	handler := command.Updater{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NTRepo:      s.NTRepo,
+		NRepo:       s.NRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -174,6 +236,11 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 }
 
 func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractworkflowengine.ContractSubmitRequest) (res *contractworkflowengine.ContractSubmitResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -201,6 +268,11 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		contractData = &data
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.SubmitCmd{
 		DID:          req.Did,
 		UpdatedAt:    updatedAt,
@@ -213,14 +285,17 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		Reviewers:    req.Reviewers,
 		Approvers:    req.Approvers,
 		Negotiators:  req.Negotiators,
+		CauserDID:    localPeer,
 	}
 	handler := command.Submitter{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
-		NRepo:  s.NRepo,
-		NTRepo: s.NTRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NRepo:       s.NRepo,
+		NTRepo:      s.NTRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -262,6 +337,7 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
 		Pagination:  pagination,
+		DIDDocument: s.DIDDocument,
 	}
 	qryHandler := contract.GetAllMetadataHandler{
 		DB:     s.DB,
@@ -452,6 +528,7 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 }
 
 func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveByIDRequest) (res []*contractworkflowengine.ContractHistoryRetrieveByIDResponse, err error) {
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -517,6 +594,11 @@ func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, re
 
 func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contractworkflowengine.ContractNegotiationRequest) (res *contractworkflowengine.ContractNegotiationResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
@@ -530,6 +612,11 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.NegotiationCmd{
 		DID:           req.Did,
 		UpdatedAt:     updatedAt,
@@ -537,13 +624,16 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 		HolderDID:     middleware.GetHolderDID(ctx),
 		ChangeRequest: &changeRequest,
 		UserRoles:     middleware.GetUserRoles(ctx),
+		CauserDID:     localPeer,
 	}
 	handler := command.Negotiator{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		NRepo:  s.NRepo,
-		RTRepo: s.RTRepo,
-		NTRepo: s.NTRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		NRepo:       s.NRepo,
+		RTRepo:      s.RTRepo,
+		NTRepo:      s.NTRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -557,12 +647,22 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 
 func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractworkflowengine.ContractNegotiationRespondRequest) (res *contractworkflowengine.ContractNegotiationRespondResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
 	actionFlag, err := negotiationactionflag.NewNegotiationActionFlag(req.ActionFlag)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(fmt.Errorf("unknown action flag: %s", req.ActionFlag))
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
 	switch actionFlag {
@@ -572,12 +672,14 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 			DID:        req.Did,
 			AcceptedBy: middleware.GetParticipantID(ctx),
 			UserRoles:  middleware.GetUserRoles(ctx),
+			CauserDID:  localPeer,
 		}
 		handler := command.NegotiationAcceptor{
-			DB:     s.DB,
-			CRepo:  s.CRepo,
-			NRepo:  s.NRepo,
-			NTRepo: s.NTRepo,
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			NRepo:       s.NRepo,
+			NTRepo:      s.NTRepo,
+			DIDDocument: s.DIDDocument,
 		}
 		err = handler.Handle(ctx, cmd)
 		if err != nil {
@@ -590,12 +692,15 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 			RejectedBy:      middleware.GetParticipantID(ctx),
 			UserRoles:       middleware.GetUserRoles(ctx),
 			RejectionReason: req.RejectionReason,
+			CauserDID:       localPeer,
 		}
 		handler := command.NegotiationRejector{
-			DB:     s.DB,
-			CRepo:  s.CRepo,
-			NRepo:  s.NRepo,
-			NTRepo: s.NTRepo,
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			NRepo:       s.NRepo,
+			NTRepo:      s.NTRepo,
+			SRepo:       s.SRepo,
+			DIDDocument: s.DIDDocument,
 		}
 		err = handler.Handle(ctx, cmd)
 		if err != nil {
@@ -709,10 +814,20 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 
 func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractworkflowengine.ContractApproveRequest) (res *contractworkflowengine.ContractApproveResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
 	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -723,11 +838,14 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		ApprovedBy: middleware.GetParticipantID(ctx),
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
+		CauserDID:  localPeer,
 	}
 	handler := command.Approver{
 		DB:            s.DB,
 		CRepo:         s.CRepo,
 		ATRepo:        s.ATRepo,
+		SRepo:         s.SRepo,
+		DIDDocument:   s.DIDDocument,
 		IPFSStorer:    s.IPFSClient,
 		ArchiveNotary: s.ArchiveNotary,
 		ArchiveTSA:    s.ArchiveTSA,
@@ -744,12 +862,22 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 
 func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractworkflowengine.ContractRejectRequest) (res *contractworkflowengine.ContractRejectResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
 	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
 	cmd := command.RejectCmd{
@@ -759,12 +887,15 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		Reason:     req.Reason,
+		CauserDID:  localPeer,
 	}
 	handler := command.Rejecter{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -786,12 +917,18 @@ func (s *contractWorkflowEnginesrvc) Store(ctx context.Context, req *contractwor
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	cmd := command.RecordEvidenceCmd{
 		DID:        req.Did,
 		RecordedBy: middleware.GetParticipantID(ctx),
 		HolderDID:  middleware.GetHolderDID(ctx),
 		UserRoles:  middleware.GetUserRoles(ctx),
 		UpdatedAt:  updatedAt,
+		CauserDID:  localPeer,
 	}
 	handler := command.EvidenceRecorder{
 		DB:    s.DB,
@@ -809,10 +946,20 @@ func (s *contractWorkflowEnginesrvc) Store(ctx context.Context, req *contractwor
 
 func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contractworkflowengine.ContractTerminateRequest) (res *contractworkflowengine.ContractTerminateResponse, err error) {
 
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
 	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
@@ -824,14 +971,17 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 		HolderDID:    middleware.GetHolderDID(ctx),
 		UserRoles:    middleware.GetUserRoles(ctx),
 		Reason:       req.Reason,
+		CauserDID:    localPeer,
 	}
 	handler := command.Terminator{
-		DB:     s.DB,
-		CRepo:  s.CRepo,
-		NRepo:  s.NRepo,
-		NTRepo: s.NTRepo,
-		RTRepo: s.RTRepo,
-		ATRepo: s.ATRepo,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		NRepo:       s.NRepo,
+		NTRepo:      s.NTRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

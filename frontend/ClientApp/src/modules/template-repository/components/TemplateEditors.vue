@@ -1,3 +1,41 @@
+<script setup lang="ts">
+import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
+import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
+import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
+import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
+import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
+import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
+import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import AuditView from './AuditView.vue'
+
+withDefaults(
+  defineProps<{
+    title: string
+  }>(),
+  {},
+)
+
+const route = useRoute()
+
+const templateEditorUiStore = useTemplateEditorUiStore()
+const draftStore = useTemplateDraftStore()
+const { activeTab } = storeToRefs(templateEditorUiStore)
+const { state, templateType } = storeToRefs(draftStore)
+const tabs = computed(() => {
+  return templateEditorUiStore.availableTabs(templateType.value).filter((tab) => {
+    return tab.id !== 'audit' || !!route.params.did
+  })
+})
+const currentTabNumber = computed(() => 1 + tabs.value.map((tab) => tab.id).indexOf(activeTab.value))
+const { isManager } = useTemplatePermissions()
+</script>
+
 <template>
   <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
     <div class="mx-auto max-w-5xl px-6 pt-3">
@@ -120,41 +158,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
-import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
-import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
-import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
-import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
-import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
-import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
-import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
-import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import AuditView from './AuditView.vue'
-
-withDefaults(
-  defineProps<{
-    title: string
-  }>(),
-  {},
-)
-
-const route = useRoute()
-
-const templateEditorUiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
-const { activeTab } = storeToRefs(templateEditorUiStore)
-const { state, templateType } = storeToRefs(draftStore)
-const tabs = computed(() => {
-  return templateEditorUiStore.availableTabs(templateType.value).filter((tab) => {
-    return tab.id !== 'audit' || !!route.params.did
-  })
-})
-const currentTabNumber = computed(() => 1 + tabs.value.map((tab) => tab.id).indexOf(activeTab.value))
-const { isManager } = useTemplatePermissions()
-</script>

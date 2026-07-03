@@ -24,7 +24,6 @@ export interface ContractSubmitResponse {
   current_state: ContractState
 }
 
-
 export type ApprovedContractTemplateRetrieveResponse = ContractTemplate[]
 
 export interface ContractRetrieveResponse {

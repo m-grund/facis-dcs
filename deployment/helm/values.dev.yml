@@ -34,6 +34,7 @@
 #   CRYPTO_PROVIDER_VC_KEY=dcs-vc-signing-key
 #   CRYPTO_PROVIDER_VC_SIGNATURE_TYPE=ed25519signature2020
 #   STATUSLIST_SERVICE_URL=http://localhost:30821
+#   OID4VP_STATUSLIST_SKIP_JWS_VERIFY=true
 #   ISSUER_DID=did:web:localhost
 
 # In development, don't deploy the DCS or pdf-core containers — both run locally.

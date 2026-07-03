@@ -1,69 +1,3 @@
-<template>
-  <div class="space-y-4">
-    <!-- tool bar -->
-    <div class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <p class="mb-1 text-sm font-medium text-base-content">Comparing changes</p>
-      <p class="mb-3 text-xs text-base-content/50">Choose two versions to see what's changed.</p>
-      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <label class="form-control w-full md:flex-1">
-          <span class="label-text text-xs text-base-content/70">Left</span>
-          <select
-            v-model="leftPick"
-            class="select-bordered select w-full select-sm"
-            :disabled="loading || compareOptions.length < 2"
-          >
-            <option v-for="opt in compareOptions" :key="`L-${opt.id}`" :value="opt.id" :disabled="opt.id === rightPick">
-              {{ opt.label }}
-            </option>
-          </select>
-        </label>
-        <label class="form-control w-full md:flex-1">
-          <span class="label-text text-xs text-base-content/70">Right</span>
-          <select
-            v-model="rightPick"
-            class="select-bordered select w-full select-sm"
-            :disabled="loading || compareOptions.length < 2"
-          >
-            <option v-for="opt in compareOptions" :key="`R-${opt.id}`" :value="opt.id" :disabled="opt.id === leftPick">
-              {{ opt.label }}
-            </option>
-          </select>
-        </label>
-      </div>
-
-      <div class="mt-4 flex flex-wrap items-center gap-6 border-t border-base-300 pt-4">
-        <label
-          for="contract-diff-line-numbers"
-          class="flex cursor-pointer items-center gap-3 text-sm text-base-content/80"
-        >
-          <span class="select-none">Line numbers</span>
-          <input id="contract-diff-line-numbers" v-model="showLineNumbers" type="checkbox" class="checkbox mt-1" />
-        </label>
-        <label
-          for="contract-diff-highlight"
-          class="flex cursor-pointer items-center gap-3 text-sm text-base-content/80"
-        >
-          <span class="select-none">Highlight changes</span>
-          <input id="contract-diff-highlight" v-model="highlightDiff" type="checkbox" class="checkbox mt-1" />
-        </label>
-      </div>
-
-      <p v-if="loading" class="mt-3 text-sm text-base-content/60">Loading history…</p>
-      <p v-else-if="loadError" class="mt-3 text-sm text-error">{{ loadError }}</p>
-      <p v-else-if="compareOptions.length < 2" class="mt-3 text-sm text-base-content/60">
-        Add at least one saved history entry to compare versions.
-      </p>
-    </div>
-
-    <DiffView
-      :left-contract-data="leftContractData"
-      :right-contract-data="rightContractData"
-      :show-line-numbers="showLineNumbers"
-      :highlight-diff="highlightDiff"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
 import type { ContractData } from '@/models/contract-data'
 import type { ContractHistoryItem } from '@/models/responses/contract-response'
@@ -242,3 +176,69 @@ watch([historyItems, showCurrentDraft], () => normalizePicksAfterHistoryChange()
 
 watch([leftPick, rightPick], () => ensureDistinctPicks())
 </script>
+
+<template>
+  <div class="space-y-4">
+    <!-- tool bar -->
+    <div class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <p class="mb-1 text-sm font-medium text-base-content">Comparing changes</p>
+      <p class="mb-3 text-xs text-base-content/50">Choose two versions to see what's changed.</p>
+      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <label class="form-control w-full md:flex-1">
+          <span class="label-text text-xs text-base-content/70">Left</span>
+          <select
+            v-model="leftPick"
+            class="select-bordered select w-full select-sm"
+            :disabled="loading || compareOptions.length < 2"
+          >
+            <option v-for="opt in compareOptions" :key="`L-${opt.id}`" :value="opt.id" :disabled="opt.id === rightPick">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+        <label class="form-control w-full md:flex-1">
+          <span class="label-text text-xs text-base-content/70">Right</span>
+          <select
+            v-model="rightPick"
+            class="select-bordered select w-full select-sm"
+            :disabled="loading || compareOptions.length < 2"
+          >
+            <option v-for="opt in compareOptions" :key="`R-${opt.id}`" :value="opt.id" :disabled="opt.id === leftPick">
+              {{ opt.label }}
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-6 border-t border-base-300 pt-4">
+        <label
+          for="contract-diff-line-numbers"
+          class="flex cursor-pointer items-center gap-3 text-sm text-base-content/80"
+        >
+          <span class="select-none">Line numbers</span>
+          <input id="contract-diff-line-numbers" v-model="showLineNumbers" type="checkbox" class="checkbox mt-1" />
+        </label>
+        <label
+          for="contract-diff-highlight"
+          class="flex cursor-pointer items-center gap-3 text-sm text-base-content/80"
+        >
+          <span class="select-none">Highlight changes</span>
+          <input id="contract-diff-highlight" v-model="highlightDiff" type="checkbox" class="checkbox mt-1" />
+        </label>
+      </div>
+
+      <p v-if="loading" class="mt-3 text-sm text-base-content/60">Loading history…</p>
+      <p v-else-if="loadError" class="mt-3 text-sm text-error">{{ loadError }}</p>
+      <p v-else-if="compareOptions.length < 2" class="mt-3 text-sm text-base-content/60">
+        Add at least one saved history entry to compare versions.
+      </p>
+    </div>
+
+    <DiffView
+      :left-contract-data="leftContractData"
+      :right-contract-data="rightContractData"
+      :show-line-numbers="showLineNumbers"
+      :highlight-diff="highlightDiff"
+    />
+  </div>
+</template>

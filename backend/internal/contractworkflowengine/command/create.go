@@ -7,6 +7,10 @@ import (
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base/identity"
+
+	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"github.com/jmoiron/sqlx"
@@ -20,20 +24,83 @@ import (
 )
 
 type CreateCmd struct {
-	DID         string
-	TemplateDID string
-	CreatedBy   string
-	HolderDID   string
-	UserRoles   userrole.UserRoles
+	DID         string             `json:"did"`
+	TemplateDID string             `json:"template_did"`
+	CreatedBy   string             `json:"created_by"`
+	HolderDID   string             `json:"holder_did"`
+	Reviewers   []string           `json:"reviewers"`
+	Approvers   []string           `json:"approvers"`
+	Negotiators []string           `json:"negotiators"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
 type Creator struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	CTRepo db.ContractTemplateRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	CTRepo      db.ContractTemplateRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NTRepo      db.NegotiationTaskRepo
+	DIDDocument identity.DIDDocument
+}
+
+func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, cmd CreateCmd) error {
+	for _, reviewer := range cmd.Reviewers {
+		reviewTask := db.ReviewTaskData{
+			DID:       cmd.DID,
+			Reviewer:  reviewer,
+			State:     reviewtaskstate.Open.String(),
+			CreatedBy: cmd.CreatedBy,
+		}
+		_, err := rtRepo.Create(ctx, tx, reviewTask)
+		if err != nil {
+			return fmt.Errorf("could not create review task: %w", err)
+		}
+	}
+
+	for _, negotiator := range cmd.Negotiators {
+		negotiationTask := db.NegotiationTaskData{
+			DID:        cmd.DID,
+			Negotiator: negotiator,
+			State:      reviewtaskstate.Open.String(),
+			CreatedBy:  cmd.CreatedBy,
+		}
+		_, err := ntRepo.Create(ctx, tx, negotiationTask)
+		if err != nil {
+			return fmt.Errorf("could not create negotiation task: %w", err)
+		}
+	}
+
+	for _, approver := range cmd.Approvers {
+		data := db.ApprovalTaskData{
+			DID:       cmd.DID,
+			CreatedBy: cmd.CreatedBy,
+			Approver:  approver,
+			State:     reviewtaskstate.Open.String(),
+		}
+		_, err := atRepo.Create(ctx, tx, data)
+		if err != nil {
+			return fmt.Errorf("could not create approval task: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
+
+	if len(cmd.Reviewers) == 0 {
+		return errors.New("no reviewers provided")
+	}
+
+	if len(cmd.Negotiators) == 0 {
+		return errors.New("no negotiators provided")
+	}
+
+	if len(cmd.Approvers) == 0 {
+		return errors.New("no approvers provided")
+	}
+
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -54,17 +121,36 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return fmt.Errorf("could not get DID: %w", err)
+	}
+
+	resp := db.Responsible{
+		Creator:     localPeer,
+		Reviewers:   cmd.Reviewers,
+		Approvers:   cmd.Approvers,
+		Negotiators: cmd.Negotiators,
+	}
+
 	data := db.Contract{
 		DID:             cmd.DID,
+		Origin:          localPeer,
 		CreatedBy:       cmd.CreatedBy,
 		State:           contractstate.Draft.String(),
 		ContractData:    normalizedContractData,
 		TemplateDID:     cmd.TemplateDID,
 		TemplateVersion: contractTemplate.TemplateVersion,
+		Responsible:     &resp,
 	}
-	createdAt, err := h.CRepo.Create(ctx, tx, data)
+	err = h.CRepo.Create(ctx, tx, data)
 	if err != nil {
 		return fmt.Errorf("could not create contract: %w", err)
+	}
+
+	err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
+	if err != nil {
+		return err
 	}
 
 	evt := contractevents.CreateEvent{
@@ -72,9 +158,10 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		TemplateDID:  cmd.TemplateDID,
 		CreatedBy:    cmd.CreatedBy,
 		ContractData: normalizedContractData,
-		OccurredAt:   *createdAt,
+		OccurredAt:   data.CreatedAt,
 		HolderDID:    cmd.HolderDID,
 		UserRoles:    cmd.UserRoles,
+		Responsible:  &resp,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ContractWorkflowEngine)
 	if err != nil {

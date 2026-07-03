@@ -13,7 +13,7 @@ const (
 	ContractStorageArchive    ComponentType = "CONTRACT_STORAGE_ARCHIVE"
 	ProcessAuditAndCompliance ComponentType = "PROCESS_AUDIT_AND_COMPLIANCE"
 	SignatureManagement       ComponentType = "SIGNATURE_MANAGEMENT"
-	Authentication            ComponentType = "AUTHENTICATION"
+	System                    ComponentType = "SYSTEM"
 )
 
 var validType = map[ComponentType]bool{
@@ -22,7 +22,7 @@ var validType = map[ComponentType]bool{
 	ContractStorageArchive:    true,
 	ProcessAuditAndCompliance: true,
 	SignatureManagement:       true,
-	Authentication:            true,
+	System:                    true,
 }
 
 func NewComponentType(s string) (ComponentType, error) {

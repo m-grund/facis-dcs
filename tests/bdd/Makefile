@@ -18,8 +18,20 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 LOCAL_FORWARD_PORT ?= 18991
 SERVICE_PORT ?= 8991
-DCS_ISSUER ?= localhost
+DCS_DID ?= localhost
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
+BDD_INGRESS_PORT ?= 18080
+BDD_PUBLIC_ORIGIN ?= http://localhost:$(BDD_INGRESS_PORT)
+BDD_DCS_BASE_URL ?= $(BDD_PUBLIC_ORIGIN)$(DCS_API_BASE_PATH)
+KIND_CONFIG ?= $(THIS_DIR)kind-config.yaml
+BDD_HELM_SET := \
+	--set-string hydra.config.selfIssuerURL="$(BDD_PUBLIC_ORIGIN)" \
+	--set-string route.publicBaseURL="$(BDD_DCS_BASE_URL)" \
+	--set-string hydra.config.loginURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/ui/" \
+	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/consent" \
+	--set-string hydra.config.logoutURL="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete" \
+	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/callback" \
+	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN)/digital-contracting-service/api/auth/logout-complete"
 HELM_CHART_PATH ?= ../../deployment/helm
 HELM_TIMEOUT ?= 20m
 
@@ -38,22 +50,21 @@ KIND_BIN ?= kind
 KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
+CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
 
-.PHONY: setup_dev run_bdd_dev run_bdd_all run_bdd_helm_dev run_bdd_helm_all ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind_dev run_bdd_kind_all run_bdd_kind_ci build_dcs_image build_pdf_core_image clean help kind_up run_bdd_kind_once kind_down
+.PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
-	@echo "make setup_dev    # Create venv and install bdd-executor"
-	@echo "make run_bdd_dev  # Run all BDD scenarios"
-	@echo "make run_bdd_all  # Run all BDD scenarios"
-	@echo "make run_bdd_helm_dev # Port-forward Helm service and run all scenarios"
-	@echo "make run_bdd_helm_all # Port-forward Helm service and run all scenarios"
-	@echo "make run_bdd_kind_dev # Build ephemeral kind+Helm stack and run all scenarios"
-	@echo "make run_bdd_kind_all # Build ephemeral kind+Helm stack and run all scenarios"
-	@echo "make ensure_kind     # Validate kind is available in PATH"
-	@echo "make ensure_k8s_tools # Validate kubectl and helm are available in PATH"
-	@echo "make kind_delete     # Delete kind cluster used for BDD"
-	@echo "make clean        # Remove local test artifacts"
-setup_dev:
+	@echo "make setup_environment   # Create venv and install bdd-executor"
+	@echo "make run_bdd_test		# Run all BDD scenarios"
+	@echo "make run_bdd_helm		# Run BDD via Traefik on http://localhost:18080"
+	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
+	@echo "make ensure_kind			# Validate kind is available in PATH"
+	@echo "make ensure_k8s_tools	# Validate kubectl and helm are available in PATH"
+	@echo "make kind_delete			# Delete kind cluster used for BDD"
+	@echo "make clean				# Remove local test artifacts"
+
+setup_environment:
 	@if [[ -f "$(VENV_PATH)/bin/pip" ]] && ! "$(VENV_PATH)/bin/pip" --version >/dev/null 2>&1; then \
 		echo "Existing virtualenv at $(VENV_PATH) is not usable in this environment; recreating"; \
 		rm -rf "$(VENV_PATH)"; \
@@ -69,56 +80,34 @@ setup_dev:
 		fi; \
 		SRC_PATH="$(BDD_EXECUTOR_FALLBACK_PATH)"; \
 	fi; \
-	"$(VENV_PATH)/bin/pip" install --upgrade pip wheel; \
-	"$(VENV_PATH)/bin/pip" install -e "$$SRC_PATH[dev]"; \
-	"$(VENV_PATH)/bin/pip" install psycopg2-binary
+	"$(VENV_PATH)/bin/pip" install -q --upgrade pip wheel; \
+	"$(VENV_PATH)/bin/pip" install -q -e "$$SRC_PATH[dev]"; \
+	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary
+	"$(VENV_PATH)/bin/pip" install -q -r "$(PROJECT_ROOT)/testWallet/requirements.txt"
 
-run_bdd_dev: setup_dev
+run_bdd_test: setup_environment
 	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
-		(echo "ERROR: bdd-executor (eu.xfsc.bdd.core) not found in venv — run 'make setup_dev' first" && exit 1)
+		(echo "ERROR: bdd-executor (eu.xfsc.bdd.core) not found in venv — run 'make setup_environment' first" && exit 1)
 	source "$(VENV_PATH)/bin/activate" && \
 	mkdir -p "$(REPORTS_ABS)/junit" && \
 	cd "$(PROJECT_ROOT)" && \
 	"$(VENV_ABS)/bin/coverage" run --append -m behave $(ARG_BDD_JUNIT) $(FEATURES_PATH) $(ARG_BDD)
 
-run_bdd_all: setup_dev
-	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
-		(echo "ERROR: bdd-executor (eu.xfsc.bdd.core) not found in venv — run 'make setup_dev' first" && exit 1)
-	source "$(VENV_PATH)/bin/activate" && \
-	mkdir -p "$(REPORTS_ABS)/junit" && \
-	cd "$(PROJECT_ROOT)" && \
-	"$(VENV_ABS)/bin/coverage" run --append -m behave $(ARG_BDD_JUNIT) $(FEATURES_PATH) $(ARG_BDD)
-
-run_bdd_helm_dev: setup_dev ensure_k8s_tools
+run_bdd_helm: setup_environment ensure_k8s_tools
 	@VENV_PATH="$(VENV_ABS)" \
 		PROJECT_ROOT="$(PROJECT_ROOT)" \
 		FEATURES_PATH="$(FEATURES_PATH)" \
 		KUBECTL_BIN="$(KUBECTL_BIN)" \
 		K8S_NAMESPACE="$(K8S_NAMESPACE)" \
 		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
+		BDD_DCS_BASE_URL="$(BDD_DCS_BASE_URL)" \
+		BDD_PUBLIC_ORIGIN="$(BDD_PUBLIC_ORIGIN)" \
+		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
-		DCS_ISSUER="$(DCS_ISSUER)" \
+		DCS_DID="$(DCS_DID)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
-		BDD_RUN_MODE=dev \
-		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
-		ARG_BDD="$(ARG_BDD)" \
-		bash "$(BDD_RUNNER_SCRIPT)"
-
-run_bdd_helm_all: setup_dev ensure_k8s_tools
-	@VENV_PATH="$(VENV_ABS)" \
-		PROJECT_ROOT="$(PROJECT_ROOT)" \
-		FEATURES_PATH="$(FEATURES_PATH)" \
-		KUBECTL_BIN="$(KUBECTL_BIN)" \
-		K8S_NAMESPACE="$(K8S_NAMESPACE)" \
-		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
-		DCS_SERVICE="$(DCS_SERVICE)" \
-		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
-		SERVICE_PORT="$(SERVICE_PORT)" \
-		DCS_ISSUER="$(DCS_ISSUER)" \
-		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
-		BDD_RUN_MODE=all \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
 		ARG_BDD="$(ARG_BDD)" \
 		bash "$(BDD_RUNNER_SCRIPT)"
@@ -148,7 +137,7 @@ kind_create: ensure_kind ensure_k8s_tools
 		fi; \
 	fi; \
 	if [[ "$$cluster_healthy" == "false" ]]; then \
-		"$(KIND_BIN)" create cluster --name "$(KIND_CLUSTER_NAME)" --wait "$(KIND_WAIT)"; \
+		"$(KIND_BIN)" create cluster --name "$(KIND_CLUSTER_NAME)" --config "$(KIND_CONFIG)" --wait "$(KIND_WAIT)"; \
 	fi
 
 kind_delete: ensure_kind
@@ -165,8 +154,6 @@ kind_load_image: kind_create
 	fi
 	@docker image inspect "$(DOCKER_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(DOCKER_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(DOCKER_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
-
-CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
 
 kind_load_pdf_core_image: kind_create
 	@if ! command -v docker >/dev/null 2>&1; then \
@@ -193,6 +180,7 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 		--values "$(HELM_CHART_PATH)/values.bdd.yml" \
 		--set image.repository="$(DOCKER_IMAGE_REPOSITORY)" \
 		--set image.tag="$(DOCKER_IMAGE_TAG)" \
+		$(BDD_HELM_SET) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
@@ -223,8 +211,8 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 kind_uninstall:
 	@"$(HELM_BIN)" uninstall "$(HELM_RELEASE)" --namespace "$(KIND_NAMESPACE)" >/dev/null 2>&1 || true
 
-run_bdd_kind_dev: kind_deploy
-	@$(MAKE) run_bdd_helm_dev \
+run_bdd_kind: kind_deploy
+	@$(MAKE) run_bdd_helm \
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
 
@@ -233,20 +221,23 @@ run_bdd_kind_all: kind_deploy
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
 
-run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind_dev
+run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
+# start kind cluster, deploy DCS and dependencies, and prepare for BDD runs
+kind_up: build_dcs_image build_pdf_core_image kind_deploy setup_environment ensure_k8s_tools
+	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with DCS deployed in namespace $(KIND_NAMESPACE)"
+	@echo "You can now run 'make run_bdd_kind_once' to execute the BDD suite against this cluster without redeploying between runs."
 
-# Nur Deployment hochfahren (ohne Tests)
-kind_up: build_dcs_image build_pdf_core_image kind_deploy
-
-# Nur Tests ausführen gegen ein bereits laufendes Deployment
-run_bdd_kind_once: setup_dev ensure_k8s_tools
-	@$(MAKE) run_bdd_helm_dev \
+# run BDD suite once against kind deployment (without redeploying cluster between runs)
+# Optionally pass F=<path> to run a single feature file, e.g. make run_bdd_kind_once F=features/login.feature
+run_bdd_kind_once:
+	@$(MAKE) run_bdd_helm \
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
-		HELM_RELEASE="$(HELM_RELEASE)"
+		HELM_RELEASE="$(HELM_RELEASE)" \
+		FEATURES_PATH="$(if $(F),$(F),$(FEATURES_PATH))"
 
-# Deployment wieder runterfahren + Cluster löschen
-kind_down: kind_uninstall kind_delete
+# Shutdown deployment, cluster and clean test artifacts
+kind_down: kind_uninstall kind_delete clean

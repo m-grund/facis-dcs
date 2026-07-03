@@ -8,6 +8,10 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
+	db2 "digital-contracting-service/internal/dcstodcs/db"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -23,26 +27,34 @@ import (
 )
 
 type UpdateCmd struct {
-	DID             string
-	UpdatedAt       time.Time
-	UpdatedBy       string
-	StartDate       *time.Time
-	ExpDate         *time.Time
-	ExpPolicy       *expirationpolicy.ExpirationPolicy
-	ExpNoticePeriod *int
-	Name            *string
-	Description     *string
-	ContractData    *datatype.JSON
-	HolderDID       string
-	UserRoles       userrole.UserRoles
+	DID             string                             `json:"did"`
+	UpdatedAt       time.Time                          `json:"updated_at"`
+	UpdatedBy       string                             `json:"updated_by"`
+	StartDate       *time.Time                         `json:"start_date"`
+	ExpDate         *time.Time                         `json:"exp_date"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	ExpNoticePeriod *int                               `json:"exp_notice_period"`
+	Name            *string                            `json:"name"`
+	Description     *string                            `json:"description"`
+	ContractData    *datatype.JSON                     `json:"contract_data"`
+	HolderDID       string                             `json:"holder_did"`
+	UserRoles       userrole.UserRoles                 `json:"user_roles"`
+	CauserDID       string                             `json:"causer_did"`
 }
 
 type Updater struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	RTRepo      db.ReviewTaskRepo
+	ATRepo      db.ApprovalTaskRepo
+	NTRepo      db.NegotiationTaskRepo
+	NRepo       db.NegotiationRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
+
 	if cmd.ContractData != nil && cmd.ContractData.IsNotNullValue() {
 		normalizedContractData, err := validation.NormalizeContractDataForPersistence(cmd.ContractData, cmd.DID, true)
 		if err != nil {
@@ -61,18 +73,34 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		}
 	}(tx)
 
-	oldData, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+	oldData, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract data: %w", err)
 	}
 
-	if cmd.UpdatedAt.Unix() < oldData.UpdatedAt.Unix() {
-		return errors.New("contract was updated elsewhere, please reload")
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
 	}
 
-	// This avoids that updates on different DCS are possible
-	if oldData.CreatedBy != cmd.UpdatedBy {
-		return errors.New("invalid participant")
+	if oldData.Origin != localPeer && cmd.CauserDID != oldData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		return fmt.Errorf("updates are just allowed contract's owner peer")
+	}
+
+	if cmd.UpdatedAt.Unix() < oldData.UpdatedAt.Unix() {
+		if localPeer != cmd.CauserDID {
+			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
+		}
+		return errors.New("contract was updated elsewhere, please reload")
 	}
 
 	if oldData.State != contracttemplatestate.Draft.String() {
@@ -138,7 +166,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		OldContractData:    oldData.ContractData,
 		NewContractData:    cmd.ContractData,
 		OldStartDate:       oldData.StartDate,
-		NewStartDate:       newData.StartDate,
+		NewStartDate:       cmd.StartDate,
 		OldExpDate:         oldData.ExpDate,
 		NewExpDate:         cmd.ExpDate,
 		OldExpPolicy:       oldExpPolicy,

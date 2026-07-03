@@ -1,47 +1,3 @@
-<template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <TemplateEditors title="Review Template" />
-
-    <!-- Pinned Footer -->
-    <div v-if="hasDid" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
-      <!-- Comments container -->
-      <ConfirmationModal ref="comment-dialog" />
-      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
-        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
-        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
-        <!-- Verify / Return to draft / request changes -->
-        <VerificationFindingsDialog
-          class="btn flex-1 btn-primary"
-          :disabled="(!isReviewer && !isManager) || isSubmitting"
-        />
-        <button
-          class="btn flex-1 btn-primary"
-          :disabled="(!isReviewer && !isManager) || isSubmitting"
-          @click="returnToDraft"
-        >
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          Reject
-        </button>
-        <!-- Complete review (verify then forward to approval) -->
-        <button
-          class="btn flex-1 btn-primary"
-          :disabled="(!isReviewer && !isManager) || isSubmitting"
-          @click="forwardToApproval"
-        >
-          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
-          Approve
-        </button>
-        <TemplateManagerActions
-          v-if="contractTemplate && isManager"
-          :template="contractTemplate"
-          class="btn flex-1 btn-primary"
-        />
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
@@ -101,7 +57,6 @@ watch(
           version: template.version ?? null,
           document_number: template.document_number ?? null,
           updated_at: template.updated_at ?? null,
-          responsible: template.responsible ?? null,
         })
       })
       .catch((error: unknown) => {
@@ -121,7 +76,6 @@ const forwardToApproval = async () => {
     console.error('Missing did or updated_at for submission')
     return
   }
-  isSubmitting.value = true
   try {
     const commentResult = await commentDialog.value?.reveal({
       message: 'Add comment?',
@@ -132,6 +86,7 @@ const forwardToApproval = async () => {
     } else if (commentResult?.data) {
       comment.value = commentResult.data
     }
+    isSubmitting.value = true
 
     await contractTemplateService.submit({
       did,
@@ -156,7 +111,6 @@ const returnToDraft = async () => {
     console.error('Missing did or updated_at for rejection')
     return
   }
-  isSubmitting.value = true
   try {
     const commentResult = await commentDialog.value?.reveal({
       message: 'Add comment?',
@@ -167,6 +121,7 @@ const returnToDraft = async () => {
     } else if (commentResult?.data) {
       comment.value = commentResult.data
     }
+    isSubmitting.value = true
     await contractTemplateService.submit({
       did,
       updated_at: updatedAt,
@@ -198,3 +153,47 @@ const exportPDF = async () => {
   URL.revokeObjectURL(url)
 }
 </script>
+
+<template>
+  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
+    <TemplateEditors title="Review Template" />
+
+    <!-- Pinned Footer -->
+    <div v-if="hasDid" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
+      <!-- Comments container -->
+      <ConfirmationModal ref="comment-dialog" />
+      <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
+        <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
+        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
+        <!-- Verify / Return to draft / request changes -->
+        <VerificationFindingsDialog
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+        />
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="returnToDraft"
+        >
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Reject
+        </button>
+        <!-- Complete review (verify then forward to approval) -->
+        <button
+          class="btn flex-1 btn-primary"
+          :disabled="(!isReviewer && !isManager) || isSubmitting"
+          @click="forwardToApproval"
+        >
+          <span v-if="isSubmitting" class="loading loading-sm loading-spinner"></span>
+          Approve
+        </button>
+        <TemplateManagerActions
+          v-if="contractTemplate && isManager"
+          :template="contractTemplate"
+          class="btn flex-1 btn-primary"
+        />
+      </div>
+    </div>
+  </div>
+</template>

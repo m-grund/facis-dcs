@@ -8,6 +8,11 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
+
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -21,20 +26,23 @@ import (
 )
 
 type NegotiationCmd struct {
-	DID           string
-	NegotiatedBy  string
-	ChangeRequest *datatype.JSON
-	UpdatedAt     time.Time
-	HolderDID     string
-	UserRoles     userrole.UserRoles
+	DID           string             `json:"did"`
+	NegotiatedBy  string             `json:"negotiated_by"`
+	ChangeRequest *datatype.JSON     `json:"change_request"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	HolderDID     string             `json:"holder_did"`
+	UserRoles     userrole.UserRoles `json:"user_roles"`
+	CauserDID     string             `json:"causer_did"`
 }
 
 type Negotiator struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	NRepo  db.NegotiationRepo
-	NTRepo db.NegotiationTaskRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	RTRepo      db.ReviewTaskRepo
+	NRepo       db.NegotiationRepo
+	NTRepo      db.NegotiationTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
@@ -57,7 +65,33 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return fmt.Errorf("could not process core data: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.Negotiate.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		if localPeer != cmd.CauserDID {
+			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
+		}
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
@@ -65,13 +99,13 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return errors.New("current contract state is invalid")
 	}
 
-	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.NegotiatedBy)
+	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return fmt.Errorf("could not validate negotiator: %w", err)
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid user")
+		return errors.New("invalid permissions")
 	}
 
 	negotiators, err := h.NTRepo.ReadNegotiatorsForDID(ctx, tx, cmd.DID)

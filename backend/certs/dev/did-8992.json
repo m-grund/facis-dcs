@@ -1,0 +1,27 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "id": "did:web:localhost%3A8992",
+  "verificationMethod": [
+    {
+      "id": "did:web:localhost%3A8992#dev-key-1",
+      "type": "JsonWebKey2020",
+      "controller": "did:web:localhost%3A8992",
+      "publicKeyJwk": {
+        "kty": "RSA",
+        "n": "snBW7Zjp-YWfLDfEg1qR3152twcTLaHt0If3Qf_-Q3opJ411GPTNzklHz8yzeGxeJIoULTavZE0JkscweYwyTmHJPmHv_dXupyAICuXkDdk5xiUBexhGLcZx-qG0z_sq9oLEBKNrzsqh3nM-XGCQEpWUOtntRnkax41xQKSwmK9RD5qN33eS82TTwIvgk95eKvBDrXxl6rh2M2llzS1eYOCIlG3yD0Zyqzv34JuPCbZQCginaAwLSy4-ffooYhAJXw0JGnqAZ9G7EA0mCO8lCoUeLiArRIHL_vqQxIHS4w0pIJ4bnLMU5fYT6bBNf_DTPtFXEaQd9rYXwT0FvnftuQ",
+        "e": "AQAB",
+        "kid": "dev-key-1",
+        "alg": "PS256",
+        "x5c": [
+          "MIIDFjCCAf6gAwIBAgIUS6/HJd5IK9nW+95WgY54Ny1TKOcwDQYJKoZIhvcNAQELBQAwODEXMBUGA1UEAwwObG9jYWxob3N0Ojg5OTIxEDAOBgNVBAoMB0RDUyBEZXYxCzAJBgNVBAYTAkRFMB4XDTI2MDYyMzA2NDgxOFoXDTI4MDkyNTA2NDgxOFowODEXMBUGA1UEAwwObG9jYWxob3N0Ojg5OTIxEDAOBgNVBAoMB0RDUyBEZXYxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsnBW7Zjp+YWfLDfEg1qR3152twcTLaHt0If3Qf/+Q3opJ411GPTNzklHz8yzeGxeJIoULTavZE0JkscweYwyTmHJPmHv/dXupyAICuXkDdk5xiUBexhGLcZx+qG0z/sq9oLEBKNrzsqh3nM+XGCQEpWUOtntRnkax41xQKSwmK9RD5qN33eS82TTwIvgk95eKvBDrXxl6rh2M2llzS1eYOCIlG3yD0Zyqzv34JuPCbZQCginaAwLSy4+ffooYhAJXw0JGnqAZ9G7EA0mCO8lCoUeLiArRIHL/vqQxIHS4w0pIJ4bnLMU5fYT6bBNf/DTPtFXEaQd9rYXwT0FvnftuQIDAQABoxgwFjAUBgNVHREEDTALgglsb2NhbGhvc3QwDQYJKoZIhvcNAQELBQADggEBAHTq337zjgo8AasSA/uPopTiNaV0RGjCLtsuTIgVFvGIaVxz5RA2Zcf5nc0eVBZyxzT1fXCBHikF7OutxGUx1Gi+aZtTiiQPtX/b1YsD6/YsX7vonzeiIEUFu0tKrCFmj+hYJzeVvoDrziGNZcK5GpqOiliAPKoQW3XXlAc9GkW90oHOUekRM2W3drQdhFxqE4/3SS/DaABd/dbz0tnEtCmeYzv69c94fEf8s2aTh7ljpT1ZqKth6jttQs74eoHYKmccHC0KDNpfrqwPRbF8BdHR0O4EYLOsxzTeen475Un5rAz3w/29P1Z/Rsj9z1hPXztG+achMo0cJ6n92yfmt/Q="
+        ]
+      }
+    }
+  ],
+  "assertionMethod": [
+    "did:web:localhost%3A8992#dev-key-1"
+  ]
+}

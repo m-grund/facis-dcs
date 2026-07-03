@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 
 	"github.com/cloudevents/sdk-go/v2/event"
 	cloudeventprovider "github.com/eclipse-xfsc/cloud-event-provider"
@@ -21,20 +23,21 @@ func (c CloudEventPubClient) Close() error {
 	return c.client.Close()
 }
 
-func (c CloudEventPubClient) Publish(eventSource string, eventType string, payload []byte) error {
+func (c CloudEventPubClient) Publish(eventSource string, eventType string, payload json.RawMessage) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not marshal payload: %w", err)
 	}
-	event, err := cloudeventprovider.NewEvent(eventSource, eventType, data)
+	evt, err := cloudeventprovider.NewEvent(eventSource, eventType, data)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create cloud event: %w", err)
 	}
 
-	return c.client.PubCtx(c.ctx, event)
+	return c.client.PubCtx(c.ctx, evt)
 }
 
 func NewNatsPubClient(topic string, natsURL string) (*CloudEventPubClient, error) {
+	log.Println("nats: create publisher client for topic", topic)
 	client, err := cloudeventprovider.New(cloudeventprovider.Config{
 		Protocol: cloudeventprovider.ProtocolTypeNats,
 		Settings: cloudeventprovider.NatsConfig{
@@ -71,6 +74,7 @@ func (c CloudEventSubClient) Subscribe(f func(evt event.Event)) error {
 }
 
 func NewNatsSubClient(topic string, natsURL string) (*CloudEventSubClient, error) {
+	log.Println("nats: create subscriber client for topic", topic)
 	client, err := cloudeventprovider.New(cloudeventprovider.Config{
 		Protocol: cloudeventprovider.ProtocolTypeNats,
 		Settings: cloudeventprovider.NatsConfig{
@@ -81,5 +85,6 @@ func NewNatsSubClient(topic string, natsURL string) (*CloudEventSubClient, error
 		return nil, errors.New("could not create cloud event provider client")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+
 	return &CloudEventSubClient{ctx, cancel, topic, client}, nil
 }

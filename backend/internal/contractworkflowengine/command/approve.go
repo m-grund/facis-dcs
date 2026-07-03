@@ -10,7 +10,9 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/validation"
+	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"github.com/jmoiron/sqlx"
 
@@ -21,22 +23,26 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
+	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 )
 
 type ApproveCmd struct {
-	DID           string
-	UpdatedAt     time.Time
-	ApprovedBy    string
-	DecisionNotes []string
-	HolderDID     string
-	UserRoles     userrole.UserRoles
+	DID           string             `json:"did"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	ApprovedBy    string             `json:"approved_by"`
+	DecisionNotes []string           `json:"decision_notes"`
+	HolderDID     string             `json:"holder_did"`
+	UserRoles     userrole.UserRoles `json:"user_roles"`
+	CauserDID     string             `json:"causer_did"`
 }
 
 type Approver struct {
 	DB            *sqlx.DB
 	CRepo         db.ContractRepo
 	ATRepo        db.ApprovalTaskRepo
+	SRepo         db2.SyncRepository
+	DIDDocument   identity.DIDDocument
 	IPFSStorer    ArchiveSnapshotStorer
 	ArchiveNotary ArchiveNotary
 	ArchiveTSA    ArchiveTimestampIssuer
@@ -67,7 +73,33 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	localPeer, err := h.DIDDocument.GetID()
+	if err != nil {
+		return err
+	}
+
+	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
+		/*
+			Forwards the action to contract owner peer
+		*/
+
+		err := tx.Commit()
+		if err != nil {
+			return fmt.Errorf("could not commit transaction: %w", err)
+		}
+
+		err = remoteaction.Approve.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
+		if localPeer != cmd.CauserDID {
+			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
+		}
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
@@ -75,7 +107,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid contract state")
 	}
 
-	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, cmd.ApprovedBy)
+	valid, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, cmd.CauserDID)
 	if err != nil {
 		return err
 	}
@@ -84,7 +116,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("invalid user")
 	}
 
-	contractForPolicyValidation, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+	contractForPolicyValidation, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract for policy validation: %w", err)
 	}
@@ -103,7 +135,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return err
 	}
 
-	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.ApprovedBy, approvaltaskstate.Approved.String())
+	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.CauserDID, approvaltaskstate.Approved.String())
 	if err != nil {
 		return fmt.Errorf("could not update approval task state: %w", err)
 	}
@@ -119,7 +151,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			return fmt.Errorf("could not update current template state: %w", err)
 		}
 
-		approvedContract, err := h.CRepo.ReadDataByID(ctx, tx, cmd.DID)
+		approvedContract, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 		if err != nil {
 			return fmt.Errorf("could not read approved contract for archive storage: %w", err)
 		}

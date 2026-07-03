@@ -188,3 +188,46 @@ func (r PostgresNegotiationRepo) Delete(ctx context.Context, tx *sqlx.Tx, did st
 	_, err := tx.ExecContext(ctx, statement, did)
 	return err
 }
+
+func (r PostgresNegotiationRepo) ReadAllNegotiationDecisionsByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.NegotiationDecisionData, error) {
+	query := `
+        SELECT cnd.id, negotiation_id, negotiator, decision, rejection_reason
+        FROM contract_negotiations cn
+            JOIN contract_negotiation_decisions cnd ON cnd.negotiation_id = cn.id
+            WHERE cn.did = $1
+    `
+	var decisions []db.NegotiationDecisionData
+	err := tx.SelectContext(ctx, &decisions, query, did)
+	if err != nil {
+		return nil, err
+	}
+	return decisions, nil
+}
+
+func (r PostgresNegotiationRepo) RemoteCreateOrUpdateNegotiation(ctx context.Context, tx *sqlx.Tx, data db.NegotiationData) error {
+	statement := `
+        INSERT INTO contract_negotiations (
+            id, did, contract_version, change_request, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+            contract_version = EXCLUDED.contract_version,
+            change_request = EXCLUDED.change_request
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.ID, data.DID, data.ContractVersion, data.ChangeRequest, data.CreatedBy, data.CreatedAt)
+	return err
+}
+
+func (r PostgresNegotiationRepo) RemoteCreateOrUpdateNegotiationDecision(ctx context.Context, tx *sqlx.Tx, data db.NegotiationDecisionData) error {
+	statement := `
+        INSERT INTO contract_negotiation_decisions (
+            id, negotiation_id, negotiator, decision, rejection_reason
+        ) VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE SET
+            decision = EXCLUDED.decision,
+            rejection_reason = EXCLUDED.rejection_reason
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.ID, data.NegotiationID, data.Negotiator, data.Decision, data.RejectionReason)
+	return err
+}

@@ -2,6 +2,7 @@
 import type { Contract } from '@/models/contract/contract'
 import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
+import { requestContractSync } from '@/services/dcs-to-dcs-service'
 import { useContractsStore } from '@/stores/contracts-store'
 import { ContractState } from '@/types/contract-state'
 import { computed } from 'vue'
@@ -91,29 +92,47 @@ function isTemplateVersionWarningVisible(contract: Contract) {
   if (contract.state === ContractState.terminated || contract.state === ContractState.signed) {
     return false
   }
-  return contract.template_is_deprecated == false && contract.latest_template_did !== null && contract.template_did !== contract.latest_template_did
+  if (contract?.latest_template_did === null || contract?.latest_template_did === undefined) {
+    return false
+  }
+  return (
+    contract.template_is_deprecated == false &&
+    contract?.latest_template_did !== null &&
+    contract.template_did !== contract.latest_template_did
+  )
 }
 
 function isTemplateVersionErrorVisible(contract: Contract) {
-   if (contract.state === ContractState.terminated || contract.state === ContractState.signed) {
+  if (contract.state === ContractState.terminated || contract.state === ContractState.signed) {
     return false
   }
   return contract.template_is_deprecated
 }
 
+async function onRequestSync(contract: Contract) {
+  try {
+    const resp = await requestContractSync(contract.did)
+    console.log(resp)
+  } catch (err) {
+    console.error(err)
+  }
+}
 </script>
 
 <template>
   <li class="list-row w-full min-w-0">
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
-
         <div v-if="isTemplateVersionErrorVisible(contract)" class="-mt-9 flex w-full justify-center">
-          <a class="badge badge-md badge-error justify-self-center" :href="getTemplateLink(contract)">This contract uses a deprecated template</a>
+          <a class="badge justify-self-center badge-md badge-error" :href="getTemplateLink(contract)">
+            This contract uses a deprecated template
+          </a>
         </div>
 
         <div v-if="isTemplateVersionWarningVisible(contract)" class="-mt-9 flex w-full justify-center">
-          <a class="badge badge-md badge-warning justify-self-center" :href="getTemplateLink(contract)">A newer template version is available</a>
+          <a class="badge justify-self-center badge-md badge-warning" :href="getTemplateLink(contract)">
+            A newer template version is available
+          </a>
         </div>
 
         <h2 class="card-title justify-between">
@@ -131,6 +150,22 @@ function isTemplateVersionErrorVisible(contract: Contract) {
             {{ contract.description }}
           </div>
           <div class="card-actions justify-end">
+            <button class="btn btn-ghost btn-sm" title="Sync" @click="onRequestSync(contract)">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
             <RouterLink
               :to="{ name: resolveViewRouteName, params: { did: contract.did } }"
               class="btn btn-sm btn-primary"
@@ -139,12 +174,10 @@ function isTemplateVersionErrorVisible(contract: Contract) {
             </RouterLink>
             <RouterLink
               v-if="canEdit"
-              :to="
-                {
-                  name: ROUTES.CONTRACTS.EDIT,
-                  params: { did: contract.did },
-                }
-              "
+              :to="{
+                name: ROUTES.CONTRACTS.EDIT,
+                params: { did: contract.did },
+              }"
               class="btn gap-2 btn-sm btn-primary"
             >
               Edit

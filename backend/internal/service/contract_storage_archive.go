@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"digital-contracting-service/internal/base/identity"
+
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/auth"
@@ -19,17 +21,19 @@ import (
 
 // ContractStorageArchive service implementation.
 type contractStorageArchivesrvc struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	DIDDocument identity.DIDDocument
 	auth.JWTAuthenticator
 }
 
 // NewContractStorageArchive returns the ContractStorageArchive service implementation.
-func NewContractStorageArchive(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo) contractstoragearchive.Service {
+func NewContractStorageArchive(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, didDocument identity.DIDDocument) contractstoragearchive.Service {
 	return &contractStorageArchivesrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
+		DIDDocument:      didDocument,
 	}
 }
 

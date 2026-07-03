@@ -33,6 +33,35 @@ func (r *PostgresApprovalTaskRepo) Create(ctx context.Context, tx *sqlx.Tx, data
 	return &createdAt, nil
 }
 
+func (r *PostgresApprovalTaskRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, data db.ApprovalTaskData) error {
+	statement := `
+        INSERT INTO contract_approval_task (
+            id, did, state, approver, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.ID, data.DID,
+		data.State, data.Approver, data.CreatedBy, data.CreatedAt,
+	)
+	return err
+}
+
+func (r *PostgresApprovalTaskRepo) RemoteUpdate(ctx context.Context, tx *sqlx.Tx, data db.ApprovalTaskData) error {
+	statement := `
+        INSERT INTO contract_approval_task (
+            id, did, state, approver, created_by, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+            state = EXCLUDED.state,
+            approver = EXCLUDED.approver
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.ID, data.DID,
+		data.State, data.Approver, data.CreatedBy, data.CreatedAt,
+	)
+	return err
+}
+
 func (r *PostgresApprovalTaskRepo) ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         UPDATE contract_approval_task SET state = 'OPEN'
@@ -42,7 +71,7 @@ func (r *PostgresApprovalTaskRepo) ReopenTasks(ctx context.Context, tx *sqlx.Tx,
 	return err
 }
 
-func (r *PostgresApprovalTaskRepo) ReadAll(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ApprovalTaskData, error) {
+func (r *PostgresApprovalTaskRepo) ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.ApprovalTaskData, error) {
 	query := `
         SELECT id, did, state, approver,
                created_by, created_at
@@ -149,13 +178,4 @@ func (r *PostgresApprovalTaskRepo) TaskExists(ctx context.Context, tx *sqlx.Tx, 
 		return false, err
 	}
 	return count > 0, nil
-}
-
-func (r *PostgresApprovalTaskRepo) Delete(ctx context.Context, tx *sqlx.Tx, did string) error {
-	statement := `
-        DELETE FROM contract_approval_task
-        WHERE did = $1
-    `
-	_, err := tx.ExecContext(ctx, statement, did)
-	return err
 }

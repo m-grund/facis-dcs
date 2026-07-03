@@ -15,6 +15,7 @@ import type {
   ContractTemplateUpdateManageRequest,
   ContractTemplateVerifyRequest,
   ContractTemplatePublishRequest,
+  ContractTemplateRetrieveRequest,
 } from '@/models/requests/template-request'
 import type {
   ContractTemplateApproveResponse,
@@ -98,9 +99,9 @@ export const contractTemplateService: ContractTemplateService = {
       })
   },
 
-  async retrieve() {
+  async retrieve(request?: ContractTemplateRetrieveRequest) {
     return http
-      .get<ContractTemplateRetrieveResponse>('/template/retrieve')
+      .get<ContractTemplateRetrieveResponse>('/template/retrieve', { params: request })
       .then((res) => res.data)
       .catch((err: unknown) => {
         console.error('Retrieve Error:', err)

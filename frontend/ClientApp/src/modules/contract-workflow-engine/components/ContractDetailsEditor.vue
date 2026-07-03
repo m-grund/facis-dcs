@@ -1,3 +1,34 @@
+<script setup lang="ts">
+import type { Contract } from '@/models/contract/contract'
+import { ref } from 'vue'
+
+defineProps<{
+  disabled?: boolean
+}>()
+
+const contract = defineModel<Contract>('contract', { required: true })
+const inserted = defineModel<ContractDetailData>('inserted', { required: false })
+
+function getTemplateLink(contract: Contract): string {
+  return `/ui/templates/view/${contract.template_did}`
+}
+
+const expirationPolicies = [
+  { name: 'Renewal', value: 'RENEWAL' },
+  { name: 'Archiving', value: 'ARCHIVING' },
+  { name: 'Termination', value: 'TERMINATION' },
+]
+
+interface ContractDetailData {
+  name?: string
+  description?: string
+  exp_notice_period?: string
+  exp_policy?: string
+}
+
+const originalContract = ref(Object.assign({}, contract.value))
+</script>
+
 <template>
   <div class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-5">
@@ -90,7 +121,7 @@
           disabled
         />
       </fieldset>
-      <fieldset v-if="showResponsiblities" class="fieldset border-none p-0">
+      <fieldset class="fieldset border-none p-0">
         <div class="collapse-arrow collapse [&>input~.collapse-title::after]:scale-75">
           <input type="checkbox" name="responsibles" />
           <legend class="collapse-title fieldset-legend pl-0 font-semibold">Responsible Participants</legend>
@@ -127,39 +158,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import type { Contract } from '@/models/contract/contract'
-import { ContractState } from '@/types/contract-state'
-import { computed, ref } from 'vue'
-
-defineProps<{
-  disabled?: boolean
-}>()
-
-const contract = defineModel<Contract>('contract', { required: true })
-const inserted = defineModel<ContractDetailData>('inserted', { required: false })
-
-function getTemplateLink(contract: Contract): string {
-  return `/ui/templates/view/${contract.template_did}`
-}
-
-const expirationPolicies = [
-  { name: 'Renewal', value: 'RENEWAL' },
-  { name: 'Archiving', value: 'ARCHIVING' },
-  { name: 'Termination', value: 'TERMINATION' },
-]
-
-interface ContractDetailData {
-  name?: string
-  description?: string
-  exp_notice_period?: string
-  exp_policy?: string
-}
-
-const originalContract = ref(Object.assign({}, contract.value))
-
-const showResponsiblities = computed(
-  () => !([ContractState.draft, ContractState.terminated] as ContractState[]).includes(contract.value.state),
-)
-</script>

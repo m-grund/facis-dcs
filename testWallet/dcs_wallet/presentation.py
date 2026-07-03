@@ -8,7 +8,7 @@ import jwt
 from jwt.algorithms import ECAlgorithm
 
 from dcs_wallet.credential import decode_jwt_payload, load_credential_claims, load_credential_sd_jwt
-from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, join_sd_jwt, sd_hash, split_sd_jwt
+from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, KB_JWT_IAT_LEEWAY_SEC, join_sd_jwt, sd_hash, split_sd_jwt
 
 VP_FORMAT = "dc+sd-jwt"
 _REQUIRED_EC_PUBLIC_FIELDS = ("kty", "crv", "x", "y")
@@ -51,7 +51,7 @@ def build_kb_jwt(*, issuer_jwt: str, disclosures: list[str], nonce: str, aud: st
         raise ValueError("aud/client_id is required for a standards-compliant KB-JWT")
 
     kb_claims = {
-        "iat": int(time.time()),
+        "iat": int(time.time()) - KB_JWT_IAT_LEEWAY_SEC,
         "aud": aud,
         "nonce": nonce,
         "sd_hash": sd_hash(issuer_jwt, disclosures, sd_alg=sd_alg),

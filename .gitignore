@@ -23,6 +23,8 @@ frontend/ClientApp/.vite
 
 deployment/certs
 
+testWallet/.venv
+
 # OID4VP demo secrets, generate via testWallet/scripts/generate_dev_keys.py
 testWallet/dcs_wallet/__pycache__/
 

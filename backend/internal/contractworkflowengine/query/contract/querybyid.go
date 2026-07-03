@@ -47,6 +47,7 @@ type GetByIDResult struct {
 	ExpPolicy       *expirationpolicy.ExpirationPolicy
 	ExpNoticePeriod *int
 	Responsible     *db.Responsible
+	Origin          string
 }
 
 type GetByIDHandler struct {
@@ -68,7 +69,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		}
 	}(tx)
 
-	data, err := h.CRepo.ReadDataByID(ctx, tx, query.DID)
+	data, err := h.CRepo.ReadDataByDID(ctx, tx, query.DID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get contract data: %w", err)
 	}
@@ -127,5 +128,6 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: data.ExpNoticePeriod,
 		Responsible:     data.Responsible,
+		Origin:          data.Origin,
 	}, nil
 }

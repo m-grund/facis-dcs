@@ -3,6 +3,8 @@ package event
 import (
 	"time"
 
+	"digital-contracting-service/internal/contractworkflowengine/db"
+
 	"digital-contracting-service/internal/base/datatype/userrole"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -12,6 +14,26 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 )
+
+// RemoteActionRequestEvent is emitted when a action on main peer ist triggered
+type RemoteActionRequestEvent struct {
+	DID         string    `json:"did"`
+	OccurredAt  time.Time `json:"occurred_at"`
+	Action      string    `json:"action"`
+	FromPeerDID string    `json:"from_peer_did"`
+	MainPeerDID string    `json:"main_peer_did"`
+	Component   string    `json:"component"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteActionRequestEvent) EventType() string {
+	return eventtype.RemoteActionRequestEvent.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteActionRequestEvent) GetDID() string {
+	return e.DID
+}
 
 // CreateEvent is emitted when a new contract is created.
 type CreateEvent struct {
@@ -24,6 +46,7 @@ type CreateEvent struct {
 	ContractData *datatype.JSON     `json:"contract_data"`
 	OccurredAt   time.Time          `json:"occurred_at"`
 	UserRoles    userrole.UserRoles `json:"user_roles"`
+	Responsible  *db.Responsible    `json:"responsible,omitempty"`
 }
 
 // EventType implements the Event interface.
@@ -33,6 +56,108 @@ func (e CreateEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e CreateEvent) GetDID() string {
+	return e.DID
+}
+
+// RemoteSyncEvent is emitted when a new contract is created.
+type RemoteSyncEvent struct {
+	DID             string                             `json:"did"`
+	TemplateDID     string                             `json:"template_did"`
+	CreatedBy       string                             `json:"created_by"`
+	Name            *string                            `json:"name"`
+	Description     *string                            `json:"description"`
+	ContractData    *datatype.JSON                     `json:"contract_data"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	Responsible     *db.Responsible                    `json:"responsible"`
+	ContractVersion int                                `json:"contract_version"`
+	State           contractstate.ContractState        `json:"state"`
+	CreatedAt       time.Time                          `json:"created_at"`
+	UpdatedAt       time.Time                          `json:"updated_at"`
+	TemplateVersion int                                `json:"template_version"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	ExpDate         *time.Time                         `json:"exp_date"`
+	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
+	StartDate       *time.Time                         `json:"start_date"`
+	Origin          string                             `json:"origin"`
+	FromPeerDID     string                             `json:"from_peer_did"`
+	LocalPeerDID    string                             `json:"local_peer_did"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteSyncEvent) EventType() string {
+	return eventtype.RemoteSync.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteSyncEvent) GetDID() string {
+	return e.DID
+}
+
+// RemoteSyncRequestEvent is emitted when a new contract is created.
+type RemoteSyncRequestEvent struct {
+	DID             string                             `json:"did"`
+	TemplateDID     string                             `json:"template_did"`
+	CreatedBy       string                             `json:"created_by"`
+	Name            *string                            `json:"name"`
+	Description     *string                            `json:"description"`
+	ContractData    *datatype.JSON                     `json:"contract_data"`
+	OccurredAt      time.Time                          `json:"occurred_at"`
+	Responsible     *db.Responsible                    `json:"responsible"`
+	ContractVersion int                                `json:"contract_version"`
+	State           contractstate.ContractState        `json:"state"`
+	CreatedAt       time.Time                          `json:"created_at"`
+	UpdatedAt       time.Time                          `json:"updated_at"`
+	TemplateVersion int                                `json:"template_version"`
+	ExpPolicy       *expirationpolicy.ExpirationPolicy `json:"exp_policy"`
+	ExpDate         *time.Time                         `json:"exp_date"`
+	ExpNoticePeriod *expirationpolicy.ExpirationPolicy `json:"exp_notice_period"`
+	StartDate       *time.Time                         `json:"start_date"`
+	Origin          string                             `json:"origin"`
+	FromPeerDID     string                             `json:"from_peer_did"`
+	LocalPeerDID    string                             `json:"local_peer_did"`
+}
+
+// EventType implements the Event interface.
+func (e RemoteSyncRequestEvent) EventType() string {
+	return eventtype.RemoteSyncRequest.String()
+}
+
+// GetDID implements the Event interface.
+func (e RemoteSyncRequestEvent) GetDID() string {
+	return e.DID
+}
+
+// RecoverOutdatedPeerEvent is emitted when sync fails are handled
+type RecoverOutdatedPeerEvent struct {
+	DID        string    `json:"did"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e RecoverOutdatedPeerEvent) EventType() string {
+	return eventtype.OutdatedPeer.String()
+}
+
+// GetDID implements the Event interface.
+func (e RecoverOutdatedPeerEvent) GetDID() string {
+	return e.DID
+}
+
+// OutdatedPeerEvent is emitted when remote contract data is outdated
+type OutdatedPeerEvent struct {
+	DID             string    `json:"did"`
+	OutdatedPeerDID string    `json:"outdated_peer_did"`
+	OccurredAt      time.Time `json:"occurred_at"`
+	Origin          string    `json:"origin"`
+}
+
+// EventType implements the Event interface.
+func (e OutdatedPeerEvent) EventType() string {
+	return eventtype.OutdatedPeer.String()
+}
+
+// GetDID implements the Event interface.
+func (e OutdatedPeerEvent) GetDID() string {
 	return e.DID
 }
 
@@ -80,7 +205,6 @@ type SubmitEvent struct {
 	ContractVersion int                    `json:"contract_version"`
 	ActionFlag      *actionflag.ActionFlag `json:"action_flag,omitempty"`
 	Comments        []string               `json:"comments"`
-	Responsible     *any                   `json:"responsible,omitempty"`
 	UserRoles       userrole.UserRoles     `json:"user_roles"`
 }
 
@@ -160,12 +284,6 @@ type StoreArchivedEvent struct {
 	OccurredAt      time.Time              `json:"occurred_at"`
 }
 
-// SearchEvent is emitted when contract data is searched.
-type SearchEvent struct {
-	RetrievedBy string    `json:"retrieved_by"`
-	OccurredAt  time.Time `json:"occurred_at"`
-}
-
 type ArchiveEvidenceSummary struct {
 	SnapshotHashAlgorithm string `json:"snapshot_hash_algorithm"`
 	SignatureStatus       string `json:"signature_status"`
@@ -209,16 +327,6 @@ func (e StoreArchivedEvent) EventType() string {
 // GetDID implements [event.Event].
 func (e StoreArchivedEvent) GetDID() string {
 	return e.DID
-}
-
-// EventType implements the Event interface.
-func (e SearchEvent) EventType() string {
-	return eventtype.Search.String()
-}
-
-// GetDID implements the Event interface.
-func (e SearchEvent) GetDID() string {
-	return "*"
 }
 
 // EventType implements the Event interface.
@@ -492,5 +600,23 @@ func (e RetrieveAllTemplatesEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e RetrieveAllTemplatesEvent) GetDID() string {
+	return "*"
+}
+
+// SearchEvent is emitted when contract data is searched.
+type SearchEvent struct {
+	RetrievedBy string             `json:"retrieved_by"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	HolderDID   string             `json:"holder_did"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e SearchEvent) EventType() string {
+	return eventtype.Search.String()
+}
+
+// GetDID implements the Event interface.
+func (e SearchEvent) GetDID() string {
 	return "*"
 }

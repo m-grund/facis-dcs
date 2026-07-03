@@ -36,8 +36,16 @@ kubectl wait --for=condition=ready pod \
   -l "app.kubernetes.io/instance=${HELM_RELEASE},app.kubernetes.io/name=federated-catalogue" \
   --timeout=10m
 
+echo "Waiting for statuslist-service..."
+kubectl wait --for=condition=ready pod \
+  -l "app.kubernetes.io/instance=${HELM_RELEASE},app.kubernetes.io/name=statuslist-service" \
+  --timeout=5m
+
+echo "Initializing statuslist for dev (NATS create when list is empty)..."
+python3 testWallet/scripts/ensure_statuslist_for_dev.py
+
 # Setup backend .env
-cp backend/.env.dev backend/.env
+cp backend/.env.dev1 backend/.env
 echo "✓ .env updated from .env.dev"
 
 # Fetch cert-chain from K8s secret
