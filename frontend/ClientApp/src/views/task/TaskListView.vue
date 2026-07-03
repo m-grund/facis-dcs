@@ -48,10 +48,10 @@ const hasContractRole = computed(() => {
 
 const loadTasks = async () => {
   if (route.name !== ROUTES.TASKS.NEGOTIATIONS && hasTemplateRole.value) {
-    await templatesStore.loadTemplates()
+    await templatesStore.loadTasks()
   }
   if (hasContractRole.value) {
-    await contractsStore.loadContracts()
+    await contractsStore.loadTasks()
   }
 }
 

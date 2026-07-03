@@ -1,17 +1,49 @@
 <script setup lang="ts">
+import Pagination from '@/components/Pagination.vue'
 import type { Contract } from '@/models/contract/contract'
+import { useContractsStore } from '@/stores/contracts-store.ts'
 import { useContractStateFilterStore } from '@/stores/state-filter-store'
 import { contractStates } from '@/types/contract-state'
 import { compareValues } from '@/utils/comparison'
-import { computed, onUnmounted, ref, type Ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
 import ContractListItem from './ContractListItem.vue'
 import ContractListSearch from './ContractListSearch.vue'
 
-const props = defineProps<{
-  contracts: Contract[]
-}>()
+const contractsStore = useContractsStore()
+const { loading, error } = storeToRefs(contractsStore)
+
+const contracts: Ref<Contract[]> = ref([])
+
+const pageLimits = ref([2, 25, 50, 100])
+const limit = computed(() => pageLimits.value[0] ?? 25)
+const currentPage = ref(1)
+const hasNextPage = ref(true)
+
+const searchResults: Ref<Contract[] | null> = ref(null)
+
+watch([currentPage, limit, searchResults], async () => {
+  if (searchResults.value !== null) {
+    const offset = (currentPage.value - 1) * limit.value
+    const end = offset + limit.value
+    contracts.value = searchResults.value.slice(offset, end)
+    hasNextPage.value = searchResults.value.length > end
+  } else {
+    await setPaginatedContracts()
+  }
+})
+
+onMounted(async () => {
+  await setPaginatedContracts()
+})
+
+const setPaginatedContracts = async () => {
+  await contractsStore.loadPaginatedContracts(currentPage.value, limit.value)
+  contracts.value = contractsStore.paginatedContracts
+  hasNextPage.value = contracts.value.length === limit.value
+}
 
 const sorter = new Map<keyof Contract, string>([
   ['created_at', 'Creation date'],
@@ -26,18 +58,16 @@ const sortOrder = ref(1)
 
 const stateFilterStore = useContractStateFilterStore()
 
-const searchedContracts: Ref<Contract[]> = ref(props.contracts)
-
 const sortedContracts = computed(() => {
   if (!sorter.has(sortBy.value)) {
-    return searchedContracts.value
+    return contracts.value
   }
-  return searchedContracts.value
+  return contracts.value
     .slice()
     .sort((contractA, contractB) => compareValues(contractA, contractB, sortBy.value, sortOrder.value))
 })
 
-const hasContracts = computed(() => props.contracts.length > 0)
+const hasContracts = computed(() => contracts.value.length > 0)
 
 const filteredContracts = computed(() => {
   if (stateFilterStore.hasFilters) {
@@ -46,14 +76,17 @@ const filteredContracts = computed(() => {
   return sortedContracts.value
 })
 
-const applySearchResult = (searchResult: Contract[]) => {
-  searchedContracts.value = searchResult
+const applySearchResult = (searchResult: Contract[] | null) => {
+  searchResults.value = searchResult
+  currentPage.value = 1
 }
 
 onUnmounted(() => stateFilterStore.reset())
 </script>
 
 <template>
+  <div v-if="loading" class="pl-4">Loading Templates...</div>
+  <div v-else-if="error" class="pl-4">{{ error }}</div>
   <ul class="list">
     <li class="flex flex-col justify-between px-4 tracking-wide sm:flex-row">
       <ContractListSearch :contracts="contracts" class="flex-1" @search-result="applySearchResult" />
@@ -69,4 +102,18 @@ onUnmounted(() => stateFilterStore.reset())
     </template>
     <li v-else class="px-4">No contracts found.</li>
   </ul>
+  <div class="grid w-full grid-cols-3 items-center px-4 pb-4">
+    <select v-model.number="limit" class="select max-w-30 justify-self-start select-sm" @change="currentPage = 1">
+      <option disabled>Pick a page limit</option>
+      <option v-for="pageLimit in pageLimits" :key="pageLimit">{{ pageLimit }}</option>
+    </select>
+    <Pagination
+      :current-page="currentPage"
+      :has-next-page="hasNextPage"
+      class="justify-self-center"
+      @next-page="currentPage++"
+      @previous-page="currentPage--"
+    />
+    <div class="justify-self-end"></div>
+  </div>
 </template>

@@ -421,10 +421,6 @@
   .gap-y-6 {
     row-gap: var(--space-6, 32px);
   }
-
-  .scrollbar-gutter-stable {
-    scrollbar-gutter: stable;
-  }
 }
 
 .btn-outline {

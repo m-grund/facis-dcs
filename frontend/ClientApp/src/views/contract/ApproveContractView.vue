@@ -109,6 +109,7 @@ const approve = async () => {
       message: 'Confirm approval',
     })
     if (confirmationResult?.isCanceled) return
+    isSubmitting.value = true
     const response = await contractWorkflowService.approve({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -118,6 +119,8 @@ const approve = async () => {
     }
   } catch (err) {
     console.error('Failed to approve', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -130,6 +133,7 @@ const resubmit = async () => {
     })
     if (confirmationResult?.isCanceled) return
     const comment = confirmationResult?.data
+    isSubmitting.value = true
     const response = await contractWorkflowService.submit({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -140,6 +144,8 @@ const resubmit = async () => {
     }
   } catch (err) {
     console.error('Failed to resubmit', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -156,6 +162,7 @@ const reject = async () => {
       console.error('Reason is required for rejection')
       return
     }
+    isSubmitting.value = true
     const response = await contractWorkflowService.reject({
       did: contract.value.did,
       updated_at: contract.value.updated_at,
@@ -166,6 +173,8 @@ const reject = async () => {
     }
   } catch (err) {
     console.error('Failed to reject', err)
+  } finally {
+    isSubmitting.value = false
   }
 }
 

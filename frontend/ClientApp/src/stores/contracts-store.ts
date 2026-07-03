@@ -11,6 +11,7 @@ import { contractWorkflowService } from '@/services/contract-workflow-service'
 
 export const useContractsStore = defineStore('contracts', () => {
   const contracts: Ref<Contract[]> = ref([])
+  const paginatedContracts: Ref<Contract[]> = ref([])
   const reviewTasks: Ref<ContractReviewTask[]> = ref([])
   const approvalTasks: Ref<ContractApprovalTask[]> = ref([])
   const negotiationTasks: Ref<ContractNegotiationTask[]> = ref([])
@@ -39,11 +40,14 @@ export const useContractsStore = defineStore('contracts', () => {
     ),
   )
 
+  const fetchContracts = async (limit?: number, offset?: number) =>
+    await contractWorkflowService.retrieve({ limit, offset })
+
   async function loadContracts() {
     loading.value = true
     error.value = null
     try {
-      const data = await contractWorkflowService.retrieve()
+      const data = await fetchContracts()
       contracts.value = data.contracts
       reviewTasks.value = data.review_tasks.map((task) => ({ ...task, type: 'contract' }))
       approvalTasks.value = data.approval_tasks.map((task) => ({ ...task, type: 'contract' }))
@@ -67,6 +71,25 @@ export const useContractsStore = defineStore('contracts', () => {
     }
   }
 
+  async function loadPaginatedContracts(currentPage: number, limit: number) {
+    loading.value = true
+    error.value = null
+    try {
+      const offset = currentPage
+      const paginatedResult = await fetchContracts(limit, offset)
+      paginatedContracts.value = paginatedResult.contracts
+      negotiationTasks.value = paginatedResult.negotiation_tasks
+      reviewTasks.value = paginatedResult.review_tasks
+      approvalTasks.value = paginatedResult.approval_tasks
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Error loading contracts'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const loadTasks = loadContracts
+
   function hasNegotiationTask(contract: Contract) {
     return negotiationTasks.value.some((task) => task.did === contract.did)
   }
@@ -85,8 +108,11 @@ export const useContractsStore = defineStore('contracts', () => {
     approvalTasks,
     negotiationTasks,
     hasContracts,
+    paginatedContracts,
     findContractByDid,
     loadContracts,
+    loadPaginatedContracts,
+    loadTasks,
     loading,
     error,
     hasNegotiationTask,
