@@ -1,12 +1,21 @@
-PYTHON ?= python3
+VENV_DIR ?= .venv
+PYTHON := $(VENV_DIR)/bin/python
+PIP := $(VENV_DIR)/bin/pip
+VENV_STAMP := $(VENV_DIR)/.install-stamp
 
 .PHONY: install ensure-statuslist test
 
-install:
-	$(PYTHON) -m pip install -r requirements.txt
+$(PYTHON):
+	python3 -m venv $(VENV_DIR)
 
-ensure-statuslist:
+$(VENV_STAMP): $(PYTHON) requirements.txt
+	$(PIP) install -r requirements.txt
+	touch $@
+
+install: $(VENV_STAMP)
+
+ensure-statuslist: $(VENV_STAMP)
 	$(PYTHON) scripts/ensure_statuslist_for_dev.py
 
-test:
+test: $(VENV_STAMP)
 	$(PYTHON) -m unittest discover -s dcs_wallet -p "test_*.py"
