@@ -3,7 +3,7 @@
 DCS demonstration wallet — local OpenID4VP CLI for login testing.
 
 Loads PoA test credentials from this directory, fetches the presentation request,
-builds a verifiable presentation, and POSTs it to the DCS callback endpoint.
+builds a verifiable presentation, and direct-posts it to the request object's response_uri.
 
 Usage (from repo root):
 
@@ -25,12 +25,16 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from dataclasses import dataclass
 import urllib.error
 import urllib.request
 from http.cookiejar import CookieJar
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
+
+import jwt
+from jwt.algorithms import ECAlgorithm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload, load_credential_claims
@@ -117,11 +121,26 @@ class _Session:
                 return _Response(exc.code, {k.lower(): v for k, v in exc.headers.items()}, exc.read())
             raise
 
-    def post(self, url: str, *, json_body: dict | None = None, timeout: float = 30, accept: str | None = None) -> _Response:
-        data = b"" if json_body is None else json.dumps(json_body).encode()
+    def post(
+        self,
+        url: str,
+        *,
+        json_body: dict | None = None,
+        form_body: dict[str, str] | None = None,
+        timeout: float = 30,
+        accept: str | None = None,
+    ) -> _Response:
+        if json_body is not None and form_body is not None:
+            raise ValueError("post() accepts either json_body or form_body, not both")
+
+        data = b""
         headers = dict(self._headers)
         if json_body is not None:
+            data = json.dumps(json_body).encode()
             headers["Content-Type"] = "application/json"
+        if form_body is not None:
+            data = urlencode(form_body).encode()
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
         if accept:
             headers["Accept"] = accept
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -142,12 +161,11 @@ class _Session:
             raise RuntimeError(f"request failed: {exc.reason}") from exc
 
 
-def normalize_callback_url(redirect_uri: str, api_base: str) -> str:
+def rebase_callback_url(redirect_uri: str, api_base: str) -> str:
+    """Issue the OAuth callback against the API base this wallet already talks to."""
     api = urlparse(api_base)
     target = urlparse(redirect_uri)
-    if target.netloc.endswith(":5173") and api.port == 8991:
-        return redirect_uri.replace(f"{target.scheme}://{target.netloc}", f"{api.scheme}://{api.netloc}", 1)
-    return redirect_uri
+    return redirect_uri.replace(f"{target.scheme}://{target.netloc}", f"{api.scheme}://{api.netloc}", 1)
 
 
 def api_base_from_request_uri(request_uri: str) -> str:
@@ -204,8 +222,93 @@ def prompt_presentation_url() -> str:
     return resolve_https_request_uri(line)
 
 
-def decode_authorization_request_jwt(token: str) -> dict:
-    return decode_jwt_payload(token)
+def wallet_metadata_json() -> str:
+    return json.dumps(
+        {
+            "vp_formats_supported": {
+                "dc+sd-jwt": {
+                    "sd-jwt_alg_values": ["ES256"],
+                    "kb-jwt_alg_values": ["ES256"],
+                }
+            }
+        },
+        separators=(",", ":"),
+    )
+
+
+def verify_authorization_request_jwt(token: str, *, expected_wallet_nonce: str) -> dict:
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception as exc:
+        raise ValueError(f"invalid authorization request JWT header: {exc}") from exc
+
+    typ = str(header.get("typ") or "")
+    if typ != "oauth-authz-req+jwt":
+        raise ValueError(f"authorization request JWT typ must be oauth-authz-req+jwt, got {typ!r}")
+
+    jwk = header.get("jwk")
+    if not isinstance(jwk, dict):
+        raise ValueError("authorization request JWT header missing jwk")
+
+    try:
+        payload = jwt.decode(
+            token,
+            ECAlgorithm.from_jwk(json.dumps(jwk)),
+            algorithms=["ES256"],
+            options={"verify_aud": False, "require": ["exp"]},
+        )
+    except Exception as exc:
+        raise ValueError(f"authorization request JWT signature/claims validation failed: {exc}") from exc
+
+    echoed = str(payload.get("wallet_nonce") or "")
+    if echoed != expected_wallet_nonce:
+        raise ValueError("authorization request wallet_nonce echo mismatch")
+
+    return payload
+
+
+def parse_single_dcql_credential_query(dcql_query: object) -> tuple[str, list[str], list[list[str]]]:
+    if not isinstance(dcql_query, dict):
+        raise ValueError("dcql_query must be an object")
+    if "credential_sets" in dcql_query:
+        raise ValueError("dcql credential_sets are not supported by this wallet")
+
+    credentials = dcql_query.get("credentials")
+    if not isinstance(credentials, list) or len(credentials) != 1:
+        raise ValueError("wallet supports exactly one dcql credential query")
+
+    query = credentials[0]
+    if not isinstance(query, dict):
+        raise ValueError("dcql credentials[0] must be an object")
+
+    query_id = str(query.get("id") or "").strip()
+    if not query_id:
+        raise ValueError("dcql credentials[0].id is required")
+
+    fmt = str(query.get("format") or "").strip()
+    if fmt != "dc+sd-jwt":
+        raise ValueError(f"unsupported dcql credential format: {fmt!r}")
+
+    vct_values: list[str] = []
+    meta = query.get("meta")
+    if isinstance(meta, dict):
+        raw_vct_values = meta.get("vct_values")
+        if isinstance(raw_vct_values, list):
+            vct_values = [str(v).strip() for v in raw_vct_values if str(v).strip()]
+
+    claim_paths: list[list[str]] = []
+    raw_claims = query.get("claims")
+    if isinstance(raw_claims, list):
+        for raw_claim in raw_claims:
+            if not isinstance(raw_claim, dict):
+                continue
+            raw_path = raw_claim.get("path")
+            if isinstance(raw_path, list):
+                path = [str(p).strip() for p in raw_path if str(p).strip()]
+                if path:
+                    claim_paths.append(path)
+
+    return query_id, vct_values, claim_paths
 
 
 def list_available_credentials() -> list[CredentialOption]:
@@ -283,30 +386,35 @@ def ensure_wallet_keys() -> bool:
     return False
 
 
-def resolve_credential_name(credential_name: str | None) -> str | None:
+def resolve_credential_name(credential_name: str | None, *, vct_values: list[str] | None = None) -> str | None:
     if credential_name:
+        if vct_values:
+            try:
+                claims = load_credential_claims(credential_name)
+            except Exception as exc:
+                log("wallet", "FAILED", error=f"cannot load credential {credential_name}: {exc}")
+                return None
+            if str(claims.get("vct") or "") not in vct_values:
+                log("wallet", "FAILED", error=f"credential {credential_name} does not match requested vct_values")
+                return None
         return credential_name
+
     options = list_available_credentials()
+    if vct_values:
+        filtered: list[CredentialOption] = []
+        for option in options:
+            claims = load_credential_claims(option.stem)
+            if str(claims.get("vct") or "") in vct_values:
+                filtered.append(option)
+        options = filtered
+
     if not options:
-        log("wallet", "FAILED", error=f"no credentials/*{CREDENTIAL_EXT} found — run: {_GENERATE_HINT}")
+        log("wallet", "FAILED", error=f"no credentials matched DCQL query and vct_values={vct_values or []}")
         return None
     return prompt_credential_choice(options)
 
 
-def state_from_request_uri(request_uri: str) -> str:
-    parsed = urlparse(request_uri)
-    path = parsed.path
-    idx = path.find(REQUEST_URI_MARKER)
-    if idx < 0:
-        raise ValueError(f"request_uri missing {REQUEST_URI_MARKER}")
-    tail = path[idx + len(REQUEST_URI_MARKER) :]
-    state = unquote(tail.split("/")[0].strip())
-    if not state:
-        raise ValueError("request_uri has empty state")
-    return state
-
-
-def log_vp_token(vp_token: str, *, credential: str, aud: str, nonce: str) -> None:
+def log_vp_token(vp_token: str, *, query_id: str, credential: str, aud: str, nonce: str) -> None:
     """Print a short, human-readable summary of the SD-JWT+KB presentation."""
     issuer_jwt, disclosures, kb_jwt = split_sd_jwt(vp_token)
     issuer_claims = decode_jwt_payload(issuer_jwt)
@@ -322,8 +430,8 @@ def log_vp_token(vp_token: str, *, credential: str, aud: str, nonce: str) -> Non
     print(f"KB nonce        : {kb_claims.get('nonce', nonce)}  (from OpenID4VP request)")
     print(f"KB sd_hash      : {str(kb_claims.get('sd_hash', ''))[:24]}...")
     print()
-    print("compact vp_token (value for POST /auth/presentation/callback):")
-    print(vp_token)
+    print("direct_post form field vp_token (JSON object string):")
+    print(json.dumps({query_id: [vp_token]}, separators=(",", ":")))
     print("=== end vp_token ===")
     print()
 
@@ -331,15 +439,19 @@ def log_vp_token(vp_token: str, *, credential: str, aud: str, nonce: str) -> Non
 def run_wallet_flow(
     session: _Session,
     api: str,
-    state: str,
     request_uri: str,
     *,
     credential_name: str | None,
 ) -> int:
+    wallet_nonce = str(uuid.uuid4())
     log("fetch", "POST OpenID4VP request object", url=request_uri[:120])
     try:
         r = session.post(
             request_uri,
+            form_body={
+                "wallet_nonce": wallet_nonce,
+                "wallet_metadata": wallet_metadata_json(),
+            },
             timeout=30,
             accept="application/oauth-authz-req+jwt, application/jwt",
         )
@@ -351,47 +463,55 @@ def run_wallet_flow(
         if r.status_code in (400, 404):
             log("fetch", "hint: presentation link expired or unknown — copy a fresh link from /ui/ login")
         return 1
-    body = r.text.strip()
-    content_type = (r.headers.get("content-type") or "").lower()
-    if body.startswith("eyJ") or "oauth-authz-req+jwt" in content_type:
-        try:
-            req_obj = decode_authorization_request_jwt(body)
-        except ValueError as exc:
-            log("fetch", "FAILED", error=str(exc))
-            return 1
-    else:
-        log("fetch", "FAILED", error="expected signed authorization request JWT (application/oauth-authz-req+jwt)")
+    try:
+        req_obj = verify_authorization_request_jwt(r.text.strip(), expected_wallet_nonce=wallet_nonce)
+    except ValueError as exc:
+        log("fetch", "FAILED", error=str(exc))
         return 1
-    log(
-        "fetch-ok",
-        "request object",
-        response_uri=req_obj.get("response_uri"),
-        nonce_prefix=str(req_obj.get("nonce") or "")[:12],
-    )
+    response_mode = str(req_obj.get("response_mode") or "")
+    if response_mode != "direct_post":
+        log("fetch", "FAILED", error=f"unsupported response_mode: {response_mode!r}")
+        return 1
 
-    chosen = resolve_credential_name(credential_name)
+    response_uri = str(req_obj.get("response_uri") or "")
+    state = str(req_obj.get("state") or "")
+    nonce = str(req_obj.get("nonce") or "")
+    client_id = str(req_obj.get("client_id") or "")
+    if not response_uri or not state or not nonce or not client_id:
+        log("fetch", "FAILED", error="request object missing one of response_uri/state/nonce/client_id")
+        return 1
+
+    try:
+        query_id, vct_values, claim_paths = parse_single_dcql_credential_query(req_obj.get("dcql_query"))
+    except ValueError as exc:
+        log("fetch", "FAILED", error=str(exc))
+        return 1
+
+    log("fetch-ok", "request object verified", response_uri=response_uri, nonce_prefix=nonce[:12], query_id=query_id)
+
+    chosen = resolve_credential_name(credential_name, vct_values=vct_values)
     if not chosen:
         return 1
     if not ensure_wallet_keys():
         return 1
 
-    nonce = str(req_obj.get("nonce") or "")
-    client_id = str(req_obj.get("client_id") or "")
     try:
         vp_token = build_vp_token(
             credential_name=chosen,
             nonce=nonce,
             client_id=client_id,
+            requested_claim_paths=claim_paths,
         )
     except Exception as exc:
         log("present", "FAILED to build VP", error=str(exc))
         return 1
-    log_vp_token(vp_token, credential=chosen, aud=client_id, nonce=nonce)
-    log("present", "POST /auth/presentation/callback", credential=chosen)
+    log_vp_token(vp_token, query_id=query_id, credential=chosen, aud=client_id, nonce=nonce)
+    vp_token_object = json.dumps({query_id: [vp_token]}, separators=(",", ":"))
+    log("present", "direct_post to response_uri", credential=chosen)
     try:
         r = session.post(
-            f"{api}/auth/presentation/callback",
-            json_body={"state": state, "vp_token": vp_token},
+            response_uri,
+            form_body={"state": state, "vp_token": vp_token_object},
             timeout=60,
         )
     except RuntimeError as exc:
@@ -420,7 +540,7 @@ def run_wallet_flow(
         log("wallet", "DONE — VP posted; browser tab should redirect via polling")
         return 0
 
-    callback_url = normalize_callback_url(redirect_uri, api)
+    callback_url = rebase_callback_url(redirect_uri, api)
     log("oauth-callback", "GET /auth/callback (headless)", callback_prefix=callback_url[:100])
     r = session.get(callback_url, allow_redirects=False, timeout=30)
     if r.status_code != 302:
@@ -443,13 +563,12 @@ def run_wallet_flow(
 def present_for_browser_session(session: _Session, pasted: str, *, credential_name: str | None) -> int:
     try:
         request_uri = resolve_https_request_uri(pasted)
-        state = state_from_request_uri(request_uri)
         api = api_base_from_request_uri(request_uri)
     except ValueError as exc:
         log("login", "FAILED", error=str(exc))
         return 1
-    log("wallet", "present VP for browser login page", api_base=api, state_prefix=state[:16])
-    return run_wallet_flow(session, api, state, request_uri, credential_name=credential_name)
+    log("wallet", "present VP for browser login page", api_base=api)
+    return run_wallet_flow(session, api, request_uri, credential_name=credential_name)
 
 
 def main() -> int:
@@ -503,10 +622,9 @@ def main() -> int:
         log("login", "FAILED", status=r.status_code, body=r.text[:300])
         return 1
     init_body = r.json()
-    state = init_body["state"]
     request_uri = init_body["request_uri"]
-    log("login-ok", "initiate OK", request_uri_prefix=request_uri[:96], state_prefix=state[:16])
-    return run_wallet_flow(session, api, state, request_uri, credential_name=credential)
+    log("login-ok", "initiate OK", request_uri_prefix=request_uri[:96])
+    return run_wallet_flow(session, api, request_uri, credential_name=credential)
 
 
 if __name__ == "__main__":

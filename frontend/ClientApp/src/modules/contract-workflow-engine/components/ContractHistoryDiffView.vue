@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { ContractData } from '@/models/contract-data'
 import type { ContractHistoryItem } from '@/models/responses/contract-response'
-import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import DiffView from '@/modules/contract-workflow-engine/components/DiffView.vue'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { ContractState, type ContractState as ContractStateType } from '@/types/contract-state'
@@ -14,8 +13,6 @@ const props = defineProps<{
   contractState: ContractStateType
   currentContractData?: ContractData
 }>()
-
-const { preprocessContractData } = useContractDataPreprocess()
 
 const loading = ref(false)
 const loadError = ref('')
@@ -101,9 +98,7 @@ function formatHistoryOptionLabel(item: ContractHistoryItem): string {
 function resolveData(id: string): ContractData | undefined {
   if (id === DRAFT_ID) return props.currentContractData
   const row = sortedHistory.value.find((item) => historyOptionId(item) === id)
-  const raw = row?.contract_data
-  if (!raw) return undefined
-  return preprocessContractData(raw)
+  return row?.contract_data
 }
 
 const leftContractData = computed((): ContractData | undefined => resolveData(leftPick.value))

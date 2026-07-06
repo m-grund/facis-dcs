@@ -31,22 +31,23 @@ import (
 	templaterepository "digital-contracting-service/gen/template_repository"
 	"digital-contracting-service/internal/auth"
 	pg "digital-contracting-service/internal/auth/db/pq"
+	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
-	"digital-contracting-service/internal/base/validation"
+	"digital-contracting-service/internal/base/kv"
+	"digital-contracting-service/internal/base/tsa"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
+	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
 	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
-	pdfpkg "digital-contracting-service/internal/pdfgeneration"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
-	"digital-contracting-service/internal/semantic/mapper"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -59,8 +60,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"goa.design/clue/debug"
 	"goa.design/clue/log"
-
-	"digital-contracting-service/internal/base/tsa"
 )
 
 func fileExists(path string) bool {
@@ -290,6 +289,11 @@ func main() {
 		ARepo:      &aRepo,
 	}
 
+	archiveNotaryURL := strings.TrimSpace(os.Getenv("ORCE_ARCHIVE_NOTARY_URL"))
+	var archiveNotaryClient cwecommand.ArchiveNotary
+	if archiveNotaryURL != "" {
+		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL)
+	}
 	// Initialize the Federated Catalogue client.
 	fcURL := os.Getenv("FEDERATED_CATALOGUE_API_URL")
 	fcClientID := os.Getenv("FEDERATED_CATALOGUE_CLIENT_ID")
@@ -382,17 +386,6 @@ func main() {
 	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
 	statusListPublisher := provenance.NewOCMWStatusListPublisher(statusListServiceURL, issuerDID, statusListTenantID)
 
-	// Initialize pdf-core context IRI — used as @context in every JSON-LD envelope.
-	// In co-deployment, points at the pdf-core ontology context endpoint.
-	// Swap to a registered w3id IRI in future without any code change.
-	pdfCoreContextIRI := os.Getenv("PDF_CORE_CONTEXT_IRI")
-	if pdfCoreContextIRI == "" {
-		log.Fatalf(ctx, nil, "PDF_CORE_CONTEXT_IRI is required")
-	}
-	mapper.SetOntologyContextIRI(pdfCoreContextIRI)
-	pdfpkg.SetVocabIRI(pdfCoreContextIRI + "#")
-	validation.SetVocabIRI(pdfCoreContextIRI + "#")
-
 	// Initialize pdf-core client (PDF rendering + C2PA provenance microservice).
 	pdfCoreURL := os.Getenv("PDF_CORE_URL")
 	if pdfCoreURL == "" {
@@ -432,8 +425,19 @@ func main() {
 		if err != nil {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
-		contractStorageArchiveSvc = service.NewContractStorageArchive(jwtAuth, *didDocument)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument)
+
+		// The JAR signing public key cache is a required dependency of the signer:
+		// no cache, no app.
+		if authCfg.RequestSigner != nil {
+			vaultSigner, ok := authCfg.RequestSigner.(*oid4vprequest.VaultTransitSigner)
+			if !ok {
+				log.Fatalf(ctx, fmt.Errorf("oid4vp request signer %T does not support the public key cache", authCfg.RequestSigner), "auth service init failed")
+			}
+			vaultSigner.SetPublicKeyCache(kv.NewStore(db), 0)
+		}
+
+		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo, *didDocument)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient)
 		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)

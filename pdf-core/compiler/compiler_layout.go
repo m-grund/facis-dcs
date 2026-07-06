@@ -4,6 +4,33 @@ import (
 	"strings"
 )
 
+func clauseSegmentText(seg clauseSegment) string {
+	switch seg.Type {
+	case "prose", "ontology-link", "external-link":
+		return seg.Text
+	case "typed-value":
+		if seg.Unit == "" {
+			return seg.Value
+		}
+		return seg.Value + " (" + seg.Unit + ")"
+	default:
+		return ""
+	}
+}
+
+func wrapTextPreservingBreaksPts(input string, maxWidth float64, fontSize float64) []string {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(input, "\r\n", "\n"), "\r", "\n")
+	parts := strings.Split(normalized, "\n")
+	lines := make([]string, 0, len(parts))
+	for _, part := range parts {
+		lines = append(lines, wrapTextPts(part, maxWidth, fontSize)...)
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	return lines
+}
+
 // layoutDocument lays out doc into pages and also returns the flat section list
 // (depth-first traversal of the section tree) and corresponding depths. Callers
 // that need to look up a clause by positionedLine.SectionIdx must use
@@ -71,24 +98,9 @@ func layoutDocumentFull(doc documentModel) (pages []pageLayout, flatSections []s
 		for clauseIdx, clause := range section.Clauses {
 			var clauseText strings.Builder
 			for _, seg := range clause.Segments {
-				switch seg.Type {
-				case "prose":
-					clauseText.WriteString(seg.Text)
-				case "ontology-link":
-					clauseText.WriteString(seg.Text)
-				case "external-link":
-					clauseText.WriteString(seg.Text)
-				case "typed-value":
-					clauseText.WriteString(seg.Value)
-					if seg.Unit != "" {
-						clauseText.WriteString(" (")
-						clauseText.WriteString(seg.Unit)
-						clauseText.WriteString(")")
-					}
-				}
-				clauseText.WriteString(" ")
+				clauseText.WriteString(clauseSegmentText(seg))
 			}
-			for _, wrapped := range wrapTextPts(clauseText.String(), clauseTextWidth, 11.0) {
+			for _, wrapped := range wrapTextPreservingBreaksPts(clauseText.String(), clauseTextWidth, 11.0) {
 				lineToClause = append(lineToClause, lineMetadata{
 					lineIndex:      len(lineSpecs),
 					sectionIdx:     flatIdx,

@@ -1,3 +1,6 @@
+// Package db holds the repository interface backing dcstodcs's trust
+// allowlist (TrustedPeer) and its retry queue for failed peer broadcasts
+// (SyncFail); db/pg holds the Postgres implementation.
 package db
 
 import (

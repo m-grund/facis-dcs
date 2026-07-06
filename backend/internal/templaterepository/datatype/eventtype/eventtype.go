@@ -1,3 +1,5 @@
+// Package eventtype enumerates the template repository's own event type
+// strings, used as the EventType() of templaterepository/event structs.
 package eventtype
 
 import (

@@ -186,6 +186,30 @@ spec:
               {{- end }}
             - name: IPFS_MFS_BASE_URL
               value: {{ include "digital-contracting-service.ipfsMfsBaseURL" . | quote }}
+            # ---- Archive notary / ORCE ---------------------------------------------
+            {{- $archiveNotaryBaseURL := .Values.archiveNotary.baseURL | default "" }}
+            {{- if and (not $archiveNotaryBaseURL) .Values.orce.enabled }}
+            {{- $archiveNotaryBaseURL = printf "http://%s-orce:%v" .Release.Name (.Values.orce.service.port | default 1880) }}
+            {{- end }}
+            {{- $archiveNotaryURL := "" }}
+            {{- $archiveAuditLogURL := "" }}
+            {{- if $archiveNotaryBaseURL }}
+            {{- $archiveNotaryURL = printf "%s%s" $archiveNotaryBaseURL .Values.archiveNotary.notaryPath }}
+            {{- $archiveAuditLogURL = printf "%s%s" $archiveNotaryBaseURL .Values.archiveNotary.auditLogPath }}
+            {{- end }}
+            - name: ORCE_ARCHIVE_NOTARY_URL
+              value: {{ $archiveNotaryURL | quote }}
+            - name: ORCE_ARCHIVE_AUDIT_LOG_URL
+              value: {{ $archiveAuditLogURL | quote }}
+            - name: ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN
+              {{- if .Values.archiveNotary.auditLogBearerTokenSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.archiveNotary.auditLogBearerTokenSecretRef.name | quote }}
+                  key: {{ .Values.archiveNotary.auditLogBearerTokenSecretRef.key | quote }}
+              {{- else }}
+              value: {{ .Values.archiveNotary.auditLogBearerToken | quote }}
+              {{- end }}
             # ---- PDF-Core (C2PA PDF compiler/verifier) --------------------------
             - name: PDF_CORE_URL
               value: {{ include "digital-contracting-service.pdfCoreURL" . | quote }}

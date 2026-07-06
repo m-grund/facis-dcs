@@ -3,6 +3,30 @@
 `credentials/*.jwt` are complete SD-JWT+KB tokens generated from `credentials/*.template.json`.
 There is no `presentations/` directory.
 
+## OpenID4VP wire format (current)
+
+`demo_wallet.py` now follows OpenID4VP 1.0 request-by-reference and direct_post:
+
+- Fetch request object: `POST request_uri` with form body `wallet_nonce` + `wallet_metadata`
+- Verify request JWT header/payload:
+  - `typ == oauth-authz-req+jwt`
+  - header `jwk` is present and verifies ES256 signature
+  - payload `wallet_nonce` exactly echoes the sent nonce
+  - `exp` is valid
+- Submit presentation: `POST response_uri` with `application/x-www-form-urlencoded` fields:
+  - `state=<request-object-state>`
+  - `vp_token=<json object string>`
+
+`vp_token` is not a bare SD-JWT string. It is a JSON object keyed by DCQL query id:
+
+```json
+{
+  "dcs_poa_credential": [
+    "<sd-jwt>~<disclosure>~<kb-jwt>"
+  ]
+}
+```
+
 ## Clear entry points
 
 Generate or refresh keys and trust list:

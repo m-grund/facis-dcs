@@ -4,6 +4,7 @@ import type {
   TemplateEditorTabId,
   BlockMovementPreview,
   ClausePlaceholderHighlight,
+  PendingClauseDraft,
 } from '@template-repository/models/template-editor-ui-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { TemplateType, type TemplateTypeValue } from '../models/contract-template'
@@ -13,7 +14,7 @@ const defaultState: Readonly<TemplateEditorUiState> = {
   activeTab: 'details',
   tabs: [
     { id: 'details', label: 'Details' },
-    { id: 'semantic', label: 'Semantic Rules' },
+    { id: 'semantic', label: 'Data Requirements' },
     { id: 'clauses', label: 'Clauses' },
     { id: 'builder', label: 'Builder' },
     { id: 'meta', label: 'Meta Data' },
@@ -23,6 +24,8 @@ const defaultState: Readonly<TemplateEditorUiState> = {
   blockMovementPreview: null,
   selectedBlockId: null,
   clausePlaceholderHighlight: null,
+  pendingClauseDraft: null,
+  pendingPlacementClauseBlockId: null,
   isPreviewDialogOpen: false,
   isTemplateEditable: false,
   workflow: 'template',
@@ -42,6 +45,7 @@ export const useTemplateEditorUiStore = defineStore(storeId, {
     },
     closeAddBlockModal() {
       this.addBlockModalContext = null
+      this.pendingPlacementClauseBlockId = null
     },
     setBlockMovementPreview(value: BlockMovementPreview | null) {
       this.blockMovementPreview = value
@@ -52,13 +56,28 @@ export const useTemplateEditorUiStore = defineStore(storeId, {
     setClausePlaceholderHighlight(value: ClausePlaceholderHighlight) {
       this.clausePlaceholderHighlight = value
     },
+    startClauseDraft(value: PendingClauseDraft) {
+      this.pendingClauseDraft = value
+      this.activeTab = 'clauses'
+      this.clausePlaceholderHighlight = null
+    },
+    clearPendingClauseDraft() {
+      this.pendingClauseDraft = null
+    },
+    startClausePlacement(blockId: string) {
+      this.pendingPlacementClauseBlockId = blockId
+      this.activeTab = 'builder'
+    },
+    clearPendingClausePlacement() {
+      this.pendingPlacementClauseBlockId = null
+    },
     togglePreviewDialog() {
       this.isPreviewDialogOpen = !this.isPreviewDialogOpen
     },
     availableTabs(templateType: TemplateTypeValue) {
       const isManager = useAuthStore().user?.roles?.includes('TEMPLATE_MANAGER') ?? false
       const tabs = this.tabs.filter((tab) => tab.id !== 'audit' || isManager)
-      if (templateType === TemplateType.subContract) return tabs
+      if (templateType === TemplateType.component) return tabs
       return tabs.filter((tab) => !['semantic', 'clauses'].includes(tab.id))
     },
     setTemplateEditable(isEditable: boolean) {

@@ -1,3 +1,8 @@
+// Package event defines the template repository's domain events, each
+// implementing base/event.Event (EventType/GetDID). Handlers pass these to
+// base/event.Create in the same DB transaction as their mutation;
+// base/event.OutboxProcessor anchors them into the tamper-evident audit
+// trail and republishes them on NATS.
 package event
 
 import (

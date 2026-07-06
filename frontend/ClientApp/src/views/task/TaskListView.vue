@@ -41,7 +41,15 @@ const hasTemplateRole = computed(() => {
 const hasContractRole = computed(() => {
   return (
     authStore.user?.roles?.some((role) =>
-      (['CONTRACT_CREATOR', 'CONTRACT_REVIEWER', 'CONTRACT_APPROVER', 'CONTRACT_MANAGER'] as UserRole[]).includes(role),
+      (
+        [
+          'CONTRACT_CREATOR',
+          'CONTRACT_NEGOTIATOR',
+          'CONTRACT_REVIEWER',
+          'CONTRACT_APPROVER',
+          'CONTRACT_MANAGER',
+        ] as UserRole[]
+      ).includes(role),
     ) ?? false
   )
 })

@@ -20,7 +20,6 @@ import (
 	"digital-contracting-service/internal/base/ipfs"
 	cweeventtype "digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
-	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tplevttype "digital-contracting-service/internal/templaterepository/datatype/eventtype"
@@ -134,12 +133,10 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 
 	var jsonldBytes []byte
 	if contract.ContractData != nil {
-		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*contract.ContractData))
-		if err != nil {
-			return fmt.Errorf("marshal contract JSON-LD for %s: %w", cweEvt.DID, err)
-		}
+		jsonldBytes = []byte(*contract.ContractData)
 	}
+	payloadHashSum := sha256.Sum256(jsonldBytes)
+	currentPayloadHash := hex.EncodeToString(payloadHashSum[:])
 
 	state := cweEvt.NewState
 	effectiveAt := cweEvt.OccurredAt
@@ -192,7 +189,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("store updated PDF in IPFS for contract %s: %w", cweEvt.DID, err)
 	}
 
-	if err = s.CRepo.UpdatePDFState(ctx, tx, cweEvt.DID, cwedb.ContractPDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState}); err != nil {
+	if err = s.CRepo.UpdatePDFState(ctx, tx, cweEvt.DID, cwedb.ContractPDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState, PayloadHash: currentPayloadHash}); err != nil {
 		return fmt.Errorf("update pdf_ipfs_cid for %s: %w", cweEvt.DID, err)
 	}
 
@@ -224,11 +221,7 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
-		var err error
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
-		if err != nil {
-			return fmt.Errorf("marshal template JSON-LD for %s: %w", tplEvt.DID, err)
-		}
+		jsonldBytes = []byte(*tpl.TemplateData)
 	}
 
 	state := tplEvt.NewState
@@ -290,6 +283,8 @@ func (s *Subscriber) appendOneTemplateManifest(
 
 	h := sha256.Sum256(pdfBytes)
 	fileHash := hex.EncodeToString(h[:])
+	payloadHashSum := sha256.Sum256(jsonldBytes)
+	currentPayloadHash := hex.EncodeToString(payloadHashSum[:])
 
 	_, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
 		ctx, did, fileHash, c2paState, "", s.IssuerDID, effectiveAt,
@@ -310,7 +305,7 @@ func (s *Subscriber) appendOneTemplateManifest(
 		return nil, fmt.Errorf("store updated PDF in IPFS for template %s: %w", did, err)
 	}
 
-	if err := s.TRepo.UpdatePDFState(ctx, tx, did, tpldb.ContractTemplatePDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState}); err != nil {
+	if err := s.TRepo.UpdatePDFState(ctx, tx, did, tpldb.ContractTemplatePDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState, PayloadHash: currentPayloadHash}); err != nil {
 		return nil, fmt.Errorf("update contract_templates pdf_ipfs_cid: %w", err)
 	}
 

@@ -4,7 +4,8 @@ import type {
   SemanticParameterType,
   SemanticValueConstraint,
 } from '@/modules/template-repository/models/contract-template'
-import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
+import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
+import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
 
 const props = defineProps<{
   type: SemanticParameterType
@@ -20,15 +21,17 @@ const stringValue = ref('')
 const numberValue = ref('')
 const dateValue = ref('')
 const booleanValue = ref(false)
-const allowedValues = computed(() => resolveAllowedValues(props.valueConstraint))
+const valueOptions = computed(() => resolveValueOptions(props.valueConstraint))
 const tipText = computed(() => props.invalidTip ?? props.valueConstraint?.description ?? props.label ?? '')
+const placeholderBaseClass =
+  'rounded-sm border-0 border-b border-neutral/70 bg-primary/5 px-1.5 py-0.5 font-medium text-primary outline-none transition-colors focus:border-neutral focus:bg-primary/10'
 const inputClass = computed(
   () =>
-    `border-b bg-transparent text-sm leading-relaxed px-0.5 outline-none ${props.isInvalid ? 'border-error text-error' : 'border-base-400'}`,
+    `min-w-20 ${placeholderBaseClass} text-sm leading-relaxed ${props.isInvalid ? 'border-error bg-error/5 text-error focus:border-error focus:bg-error/10' : ''}`,
 )
 const selectClass = computed(
   () =>
-    `select select-xs h-7 min-h-0 w-28 rounded-md bg-transparent px-1 text-sm leading-relaxed ${props.isInvalid ? 'select-error text-error' : 'select-bordered'}`,
+    `w-32 ${placeholderBaseClass} text-sm leading-relaxed ${props.isInvalid ? 'border-error bg-error/5 text-error focus:border-error focus:bg-error/10' : ''}`,
 )
 
 watch(
@@ -46,7 +49,7 @@ watch(
   (value) => {
     const next = value ?? ''
     if (props.type === 'string' || props.type === 'enum') stringValue.value = `${next}`
-    if (props.type === 'decimal' || props.type === 'integer') numberValue.value = `${next}`
+    if (props.type === 'decimal' || props.type === 'integer') numberValue.value = formatNumberInput(next)
     if (props.type === 'date') dateValue.value = `${next}`
     if (props.type === 'boolean') booleanValue.value = Boolean(next)
   },
@@ -58,8 +61,14 @@ function emitStringValue(event: Event) {
   emit('update:value', next)
 }
 
+function formatOption(option: ValueOption) {
+  if (option.symbol) return `${option.symbol} ${option.value}`
+  return option.label === option.value ? option.value : `${option.label} (${option.value})`
+}
+
 function emitIntegerValue(event: Event) {
   const next = getIntegerInput((event.target as HTMLInputElement | null)?.value ?? '')
+  numberValue.value = formatNumberInput(next)
   if (next === '' || next === '-') {
     emit('update:value', '')
     return
@@ -69,7 +78,9 @@ function emitIntegerValue(event: Event) {
 }
 
 function emitDecimalValue(event: Event) {
-  const next = (event.target as HTMLInputElement | null)?.value ?? ''
+  const input = (event.target as HTMLInputElement | null)?.value ?? ''
+  numberValue.value = formatNumberInput(input)
+  const next = normalizeNumberInput(input)
   if (next === '') {
     emit('update:value', '')
     return
@@ -123,14 +134,16 @@ function onIntegerKeyDown(event: KeyboardEvent) {
 <template>
   <span class="tooltip tooltip-top inline-flex items-baseline" :data-tip="tipText">
     <select
-      v-if="allowedValues.length && (type === 'string' || type === 'enum')"
+      v-if="valueOptions.length && (type === 'string' || type === 'enum')"
       v-model="stringValue"
       :class="selectClass"
       :aria-label="label"
       @change="emitStringValue"
     >
       <option value=""></option>
-      <option v-for="option in allowedValues" :key="option" :value="option">{{ option }}</option>
+      <option v-for="option in valueOptions" :key="option.value" :value="option.value">
+        {{ formatOption(option) }}
+      </option>
     </select>
     <input
       v-else-if="type === 'string' || type === 'enum'"
@@ -153,7 +166,8 @@ function onIntegerKeyDown(event: KeyboardEvent) {
     <input
       v-else-if="type === 'decimal'"
       v-model="numberValue"
-      type="number"
+      type="text"
+      inputmode="decimal"
       :class="inputClass"
       :aria-label="label"
       @input="emitDecimalValue"

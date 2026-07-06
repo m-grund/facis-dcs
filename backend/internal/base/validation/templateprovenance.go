@@ -160,7 +160,7 @@ func auditTemplateSubmitProvenance(eventData map[string]any, state *templateProv
 
 	if newState == "SUBMITTED" {
 		state.submitted = true
-		extractResponsiblePersons(eventData, state)
+		extractResponsible(eventData, state)
 		if state.creator != "" && submittedBy != "" && state.creator != submittedBy && previousState != "SUBMITTED" {
 			findings = append(findings, templateProvenanceFinding(
 				"FACIS-TPL-PROV-003",
@@ -210,7 +210,7 @@ func auditTemplateSubmitProvenance(eventData map[string]any, state *templateProv
 	return findings
 }
 
-func extractResponsiblePersons(eventData map[string]any, state *templateProvenanceState) {
+func extractResponsible(eventData map[string]any, state *templateProvenanceState) {
 	responsible, ok := eventData["responsible_persons"].(map[string]any)
 	if !ok {
 		return

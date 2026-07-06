@@ -15,13 +15,6 @@
   "validUntil": "2027-05-31T23:59:59Z",
   "derivedFromTemplate": "did:web:dcs.example:template:sla-api-access-v1",
   "templateVersion": 1,
-  "semanticProfile": {
-    "name": "FACIS DCS Semantic Contract Profile",
-    "version": "v1",
-    "context": "https://w3id.org/facis/dcs/context/v1",
-    "ontology": "https://w3id.org/facis/dcs/ontology/v1",
-    "shapes": "https://w3id.org/facis/dcs/shapes/v1"
-  },
   "parties": [
     {
       "@type": "CompanyParty",

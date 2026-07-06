@@ -8,7 +8,7 @@ const uiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()
 
 const { isPreviewDialogOpen } = storeToRefs(uiStore)
-const { documentOutline, documentBlocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
+const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
 
 // This container is block, not flex
 const previewContainerClasses = 'w-full h-full overflow-auto px-10 py-8'
@@ -45,8 +45,8 @@ function close() {
             >
               <div :class="previewContainerClasses">
                 <TemplatePreview
-                  :document-outline="documentOutline"
-                  :document-blocks="documentBlocks"
+                  :layout="layout"
+                  :blocks="blocks"
                   :semantic-conditions="semanticConditions"
                   :sub-template-snapshots="subTemplateSnapshots"
                 />

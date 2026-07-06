@@ -3,7 +3,6 @@
     "@version": 1.1,
     "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
     "dcst": "https://w3id.org/facis/dcs/taxonomy/v1#",
-    "dct": "http://purl.org/dc/terms/",
     "odrl": "http://www.w3.org/ns/odrl/2/",
     "prov": "http://www.w3.org/ns/prov#",
     "vc": "https://www.w3.org/2018/credentials#",
@@ -110,7 +109,6 @@
     "blockType": "dcs:blockType",
     "type": "dcs:jsonType",
     "semanticProfileVersion": "dcs:semanticProfileVersion",
-    "semanticProfile": "dcs:semanticProfile",
     "schemaRefs": {
       "@id": "dcs:schemaRefs",
       "@type": "@json"
@@ -259,6 +257,19 @@
       "@container": "@set"
     },
     "allowedValuesRef": "dcs:allowedValuesRef",
+    "valueCatalog": {
+      "@id": "dcs:valueCatalog",
+      "@type": "@id"
+    },
+    "valueOptions": {
+      "@id": "dcs:valueOption",
+      "@container": "@set"
+    },
+    "value": "dcs:value",
+    "valueLabel": "dcs:valueLabel",
+    "label": "dcs:valueLabel",
+    "valueSymbol": "dcs:valueSymbol",
+    "symbol": "dcs:valueSymbol",
     "pattern": "dcs:pattern",
     "minInclusive": "dcs:minInclusive",
     "maxInclusive": "dcs:maxInclusive",

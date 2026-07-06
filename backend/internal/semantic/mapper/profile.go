@@ -2,17 +2,8 @@ package mapper
 
 // OntologyProfile controls the JSON-LD envelope produced by BuildTemplateJSONLD
 // and BuildContractJSONLD. It captures everything that varies between ontologies:
-// which @context URI to reference, what semantic-profile metadata to emit, and
 // which JSONB fields are promoted to the outer envelope level vs. kept nested.
 type OntologyProfile struct {
-	Name    string
-	Version string
-
-	// ContextURL is written into @context in every produced envelope.
-	ContextURL  string
-	OntologyURL string
-	ShapesURL   string
-
 	// TemplatePromotedFields lists JSONB keys that are extracted from the
 	// inner template_data object and placed at the outer envelope level.
 	TemplatePromotedFields map[string]bool
@@ -27,14 +18,10 @@ type OntologyProfile struct {
 // under docs/semantic-ontology/examples/.
 func DefaultProfile() OntologyProfile {
 	return OntologyProfile{
-		Name:        semanticProfileName,
-		Version:     semanticProfileV1,
-		ContextURL:  jsonLDContextV1,
-		OntologyURL: ontologyV1,
-		ShapesURL:   shaclShapesV1,
 		TemplatePromotedFields: map[string]bool{
 			"sla":           true,
 			"semanticRules": true,
+			"policyBundle":  true,
 			"provenance":    true,
 			"contentHash":   true, // DCS-FR-CWE-04: content-hash sync between machine- and human-readable
 		},
@@ -43,6 +30,7 @@ func DefaultProfile() OntologyProfile {
 			"signatories":       true,
 			"sla":               true,
 			"semanticRules":     true,
+			"policyBundle":      true,
 			"validationReports": true,
 			"clauses":           true,
 			"contractVersions":  true,

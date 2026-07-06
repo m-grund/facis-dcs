@@ -1,15 +1,11 @@
 <script setup lang="ts">
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
-import type { ContractData } from '@/models/contract-data'
+import ContractStructureTree from '@/modules/contract-workflow-engine/components/ContractStructureTree.vue'
 import type { Contract } from '@/models/contract/contract'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import {
-  useSemanticValueVerification,
-  type VerificationResult,
-} from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
+import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
@@ -17,8 +13,8 @@ import { useTemplateDraftStore } from '@/modules/template-repository/store/templ
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
-import { useErrorStore } from '@/stores/error-store'
-import { useNavStore } from '@/stores/nav-store'
+import { useContractsStore } from '@/stores/contracts-store'
+import { ROUTES } from '@/router/router'
 import { ContractState } from '@/types/contract-state'
 import type { UserRole } from '@/types/user-role'
 import { storeToRefs } from 'pinia'
@@ -26,30 +22,19 @@ import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const navStore = useNavStore()
 
 const authStore = useAuthStore()
+const contractsStore = useContractsStore()
+const { contracts } = storeToRefs(contractsStore)
 const templateDraftStore = useTemplateDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const contractContentValuesStore = useContractContentValuesStore()
-const { hasConditionParameterForValue, verifySemanticValue } = useSemanticValueVerification()
 const { preprocessContractData } = useContractDataPreprocess()
 const { activeTab } = storeToRefs(contractEditorUiStore)
 
-const errorStore = useErrorStore()
-
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
-
-const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
-  return (blockId: string, conditionId: string, parameterName: string, parameterValue: string | number | boolean) =>
-    contractContentValuesStore.setSemanticConditionValue({ blockId, conditionId, parameterName, parameterValue })
-})
-
-const isDisabled = computed(() => {
-  return contract.value?.state === ContractState.terminated
-})
 
 const isAuditingAuthorized = computed(
   () =>
@@ -83,72 +68,32 @@ watch(
   { immediate: true },
 )
 
-watch(
-  () => [
-    templateDraftStore.documentBlocks,
-    templateDraftStore.semanticConditions,
-    templateDraftStore.subTemplateSnapshots,
-  ],
-  () => {
-    const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
-      (conditionValue) =>
-        !hasConditionParameterForValue(
-          conditionValue,
-          templateDraftStore.documentBlocks,
-          templateDraftStore.semanticConditions,
-          templateDraftStore.subTemplateSnapshots,
-        ),
-    )
-    contractContentValuesStore.removeSemanticConditionValues(invalidValues)
-  },
-  { deep: true },
+const parentContract = computed(() => ancestors.value[ancestors.value.length - 1] ?? null)
+
+const ancestors = computed(() => {
+  const chain: Contract[] = []
+  let currentDid = contract.value?.contract_data?.['dcs:parentContract']?.['@id']
+  while (currentDid) {
+    const parent = contracts.value.find((c) => c.did === currentDid)
+    if (!parent) {
+      chain.unshift({ did: currentDid, name: currentDid } as Contract)
+      break
+    }
+    chain.unshift(parent)
+    currentDid = parent.parent_contract_did ?? undefined
+  }
+  return chain
+})
+
+const childContracts = computed(() => contracts.value.filter((c) => c.parent_contract_did === contract.value?.did))
+
+const contractTitle = computed(
+  () => contract.value?.name ?? contract.value?.contract_data?.['dcs:metadata']?.['dcs:title'] ?? contract.value?.did,
 )
-
-const submitRejectedTemplate = async () => {
-  if (!contract.value) return
-  const isSemanticValueValid = verifySemanticValues()
-  if (!isSemanticValueValid) return
-  try {
-    const response = await contractWorkflowService.submit({
-      did: contract.value.did,
-      updated_at: contract.value.updated_at,
-    })
-    if (response.did) {
-      await navStore.goToPreviousRoute()
-    }
-  } catch (error) {
-    console.error('Contract Submission failed', error)
-  }
-}
-
-const verifySemanticValues = (): boolean => {
-  const subTemplateSemanticConditions = templateDraftStore?.subTemplateSnapshots?.map((subTemplate) => {
-    return {
-      templateId: subTemplate.did,
-      version: subTemplate.version,
-      document_number: subTemplate.document_number,
-      semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
-    }
-  })
-  const result = verifySemanticValue(
-    templateDraftStore.semanticConditions,
-    subTemplateSemanticConditions,
-    contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
-  )
-  verificationResult.value = result
-  if (result.isValid) {
-    return true
-  } else {
-    result.errors.forEach((error) => errorStore.add(error.message))
-  }
-  // go to content tab and highlight semantic inconsistencies
-  contractEditorUiStore.setActiveTab('content')
-  return false
-}
 
 onMounted(() => {
   templateEditorUiStore.reset({ workflow: 'contract', isTemplateEditable: false })
+  if (contracts.value.length === 0) void contractsStore.loadContracts()
 })
 
 onUnmounted(() => {
@@ -167,21 +112,21 @@ function applyContractDataToDraft(contractData?: unknown) {
     verificationResult.value = null
     return
   }
-  const cd = preprocessContractData(contractData as ContractData)
-  templateDraftStore.reset({
-    workflow: 'contract',
-    documentOutline: cd.documentOutline ?? [],
-    documentBlocks: cd.documentBlocks ?? [],
-    semanticConditions: cd.semanticConditions ?? [],
-    subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
-    templateDataVersion: cd.templateDataVersion,
-    semanticProfile: cd.semanticProfile,
-    templateVariables: cd.templateVariables ?? [],
-    placeholderBindings: cd.placeholderBindings ?? [],
-    semanticRules: cd.semanticRules ?? [],
-    sla: cd.sla ?? null,
-  })
-  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  const cd = preprocessContractData(contractData)
+  if (cd) {
+    templateDraftStore.reset({
+      workflow: 'contract',
+      blocks: cd.blocks,
+      layout: cd.layout,
+      contractData: cd.contractData,
+      policies: cd.policies,
+      subTemplateSnapshots: cd.subTemplateSnapshots,
+    })
+    contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  } else {
+    templateDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+  }
   verificationResult.value = null
 }
 
@@ -201,8 +146,8 @@ const exportPDF = async () => {
 </script>
 
 <template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <div v-if="!!contract">
+  <div class="flex h-full flex-col">
+    <div v-if="!!contract" class="flex flex-1 flex-col">
       <div class="flex flex-1 flex-col">
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
@@ -228,6 +173,36 @@ const exportPDF = async () => {
             <div class="grid grid-cols-1 gap-4">
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" disabled />
+
+                <!-- Parent contract -->
+                <div v-if="parentContract" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-2">
+                    <h2 class="card-title text-sm">Part of Contract</h2>
+                    <RouterLink
+                      :to="{ name: ROUTES.CONTRACTS.VIEW, params: { did: parentContract.did } }"
+                      class="badge badge-outline badge-primary"
+                    >
+                      {{ parentContract.name ?? parentContract.did }}
+                    </RouterLink>
+                  </div>
+                </div>
+
+                <!-- Child contracts -->
+                <div v-if="childContracts.length > 0" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-3">
+                    <h2 class="card-title text-sm">Component Contracts</h2>
+                    <div class="flex flex-wrap gap-2">
+                      <RouterLink
+                        v-for="child in childContracts"
+                        :key="child.did"
+                        :to="{ name: ROUTES.CONTRACTS.VIEW, params: { did: child.did } }"
+                        class="badge badge-outline badge-secondary"
+                      >
+                        {{ child.name ?? child.did }}
+                      </RouterLink>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div v-show="activeTab === 'content'">
@@ -235,13 +210,12 @@ const exportPDF = async () => {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :document-outline="templateDraftStore.documentOutline"
-                        :document-blocks="templateDraftStore.documentBlocks"
+                        :layout="templateDraftStore.layout"
+                        :blocks="templateDraftStore.blocks"
                         :semantic-conditions="templateDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
                         :sub-template-snapshots="templateDraftStore.subTemplateSnapshots"
-                        :set-semantic-condition-value="setSemanticConditionValue"
                       />
                     </div>
                   </div>
@@ -258,6 +232,55 @@ const exportPDF = async () => {
                   </div>
                 </div>
               </template>
+
+              <div v-show="activeTab === 'structure'">
+                <div class="card border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-4">
+                    <!-- Ancestor chain -->
+                    <div v-if="ancestors.length > 0" class="space-y-1">
+                      <div
+                        v-for="(ancestor, i) in ancestors"
+                        :key="ancestor.did"
+                        class="flex items-center gap-2 text-sm text-base-content/60"
+                        :style="{ paddingLeft: `${i * 1}rem` }"
+                      >
+                        <span class="shrink-0 text-xs">↑</span>
+                        <RouterLink
+                          :to="{ name: ROUTES.CONTRACTS.VIEW, params: { did: ancestor.did } }"
+                          class="link font-medium text-base-content link-hover"
+                          target="_blank"
+                        >
+                          {{ ancestor.name ?? ancestor.did }}
+                        </RouterLink>
+                        <span class="badge badge-ghost badge-xs">{{ ancestor.state }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Current contract -->
+                    <div
+                      class="flex items-center gap-2"
+                      :style="ancestors.length > 0 ? { paddingLeft: `${ancestors.length}rem` } : {}"
+                    >
+                      <span class="h-2 w-2 shrink-0 rounded-full bg-primary"></span>
+                      <span class="text-sm font-semibold">{{ contractTitle }}</span>
+                      <span class="badge badge-xs badge-primary">{{ contract.state }}</span>
+                    </div>
+
+                    <!-- Children -->
+                    <div
+                      v-if="childContracts.length > 0"
+                      :style="{ paddingLeft: `${ancestors.length + 1}rem` }"
+                      class="border-l border-base-300 pl-4"
+                    >
+                      <ContractStructureTree :root-did="contract.did" :contracts="contracts" />
+                    </div>
+
+                    <p v-else-if="ancestors.length === 0" class="text-sm text-base-content/40">
+                      This contract has no parent or child contracts.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -267,7 +290,6 @@ const exportPDF = async () => {
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
         <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
-        <button :disabled="isDisabled" class="btn flex-1 btn-primary" @click="submitRejectedTemplate">Submit</button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>

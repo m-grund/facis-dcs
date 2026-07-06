@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
+	baseevent "digital-contracting-service/internal/base/event"
 
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
 
@@ -17,6 +19,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
+	pacevent "digital-contracting-service/internal/processauditandcompliance/event"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/jmoiron/sqlx"
@@ -31,6 +34,17 @@ type processAuditAndCompliancesrvc struct {
 	auth.JWTAuthenticator
 }
 
+type auditScopeConfig struct {
+	scopeName                      string
+	component                      componenttype.ComponentType
+	requiresTemplateRepo           bool
+	requiresContractRepo           bool
+	includeTemplatePolicyTrail     bool
+	includeTemplateProvenanceTrail bool
+	includeContractContentTrail    bool
+	includeArchiveTrail            bool
+}
+
 func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, auditTrailReader base.AuditTrailReader, ctRepo templatedb.ContractTemplateRepo, cRepo cwedb.ContractRepo) processauditandcompliance.Service {
 	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader, CTRepo: ctRepo, CRepo: cRepo}
 }
@@ -40,60 +54,14 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	var scope componenttype.ComponentType
-	switch req.Scope {
-	case "templates":
-		scope = componenttype.ContractTemplateRepo
-	case "contracts":
-		scope = componenttype.ContractWorkflowEngine
-	default:
-		return res, fmt.Errorf("unknown scope: %s", req.Scope)
+	scopeConfig, err := resolveAuditScope(req.Scope)
+	if err != nil {
+		return nil, processauditandcompliance.MakeBadRequest(err)
 	}
-
-	if isStaticContractAudit(req) {
-		if scope != componenttype.ContractWorkflowEngine {
-			return nil, processauditandcompliance.MakeBadRequest(fmt.Errorf("static contract audits require scope %q", "contracts"))
-		}
-
-		auditStaticContentQry := qry2.GetStaticContentAuditQry{
-			DID:              req.ContractDid,
-			RetrievedBy:      middleware.GetParticipantID(ctx),
-			HolderDID:        middleware.GetHolderDID(ctx),
-			UserRoles:        middleware.GetUserRoles(ctx),
-			Policy:           req.Policy,
-			PolicyVersion:    req.PolicyVersion,
-			ContractVersion:  req.ContractVersion,
-			ContractDocument: req.ContractDocument,
-		}
-		auditStaticContentAuditor := qry2.StaticContentAuditor{}
-		entries, err := auditStaticContentAuditor.Handle(ctx, auditStaticContentQry)
-		if err != nil {
-			return nil, processauditandcompliance.MakeBadRequest(err)
-		}
-
-		result := []*processauditandcompliance.PACResourceAuditTrailEntry{}
-		for _, entry := range entries {
-			result = append(result, &processauditandcompliance.PACResourceAuditTrailEntry{
-				ID:               entry.ID,
-				Component:        entry.Component,
-				EventType:        entry.EventType,
-				EventData:        entry.EventData,
-				Did:              entry.DID,
-				CreatedAt:        entry.CreatedAt.Format(time.RFC3339),
-				GlobalLogPredCid: entry.GlobalLogPredCID,
-				ResLogPredCid:    entry.ResLogPredCID,
-			})
-		}
-
-		return []*processauditandcompliance.PACAuditResponse{
-			{
-				Component:  componenttype.ContractWorkflowEngine.String(),
-				Did:        base.DerefString(req.ContractDid),
-				CreatedAt:  time.Now().UTC().Format(time.RFC3339),
-				AuditTrail: result,
-			},
-		}, nil
+	if err := s.validateAuditScopeDependencies(scopeConfig); err != nil {
+		return nil, processauditandcompliance.MakeInternalError(err)
 	}
+	scope := scopeConfig.component
 
 	qry := qry2.GetAuditLogQry{
 		Scope:     scope,
@@ -111,13 +79,11 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	contractContentEntriesByDID := make(map[string][]datatype.AuditLogEntry)
-	if scope == componenttype.ContractWorkflowEngine && s.CRepo != nil {
+	if scopeConfig.includeContractContentTrail {
 		contractContentTrailQry := qry2.GetContractContentTrailQry{
-			RetrievedBy:   middleware.GetParticipantID(ctx),
-			HolderDID:     middleware.GetHolderDID(ctx),
-			UserRoles:     middleware.GetUserRoles(ctx),
-			Policy:        req.Policy,
-			PolicyVersion: req.PolicyVersion,
+			RetrievedBy: middleware.GetParticipantID(ctx),
+			HolderDID:   middleware.GetHolderDID(ctx),
+			UserRoles:   middleware.GetUserRoles(ctx),
 		}
 		contractContentTrailHandler := qry2.ContractContentTrailAuditor{
 			DB:    s.DB,
@@ -131,7 +97,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 	}
 
 	templatePolicyEntriesByDID := make(map[string][]datatype.AuditLogEntry)
-	if scope == componenttype.ContractTemplateRepo && s.CTRepo != nil {
+	if scopeConfig.includeTemplatePolicyTrail {
 		policyTrailQry := qry2.GetContractPolicyTrailQry{
 			RetrievedBy: middleware.GetParticipantID(ctx),
 			HolderDID:   middleware.GetHolderDID(ctx),
@@ -146,6 +112,15 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			return nil, processauditandcompliance.MakeInternalError(err)
 		}
 		templatePolicyEntriesByDID = result
+	}
+
+	archiveEntriesByDID := map[string][]*processauditandcompliance.PACResourceAuditTrailEntry{}
+	if scopeConfig.includeArchiveTrail {
+		result, err := s.auditArchiveTrailEntries(ctx)
+		if err != nil {
+			return nil, processauditandcompliance.MakeInternalError(err)
+		}
+		archiveEntriesByDID = result
 	}
 
 	result := make([]*processauditandcompliance.PACAuditResponse, 0)
@@ -174,7 +149,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 				ResLogPredCid:    entry.ResLogPredCID,
 			})
 		}
-		if scope == componenttype.ContractTemplateRepo && did != "" {
+		if scopeConfig.includeTemplatePolicyTrail && did != "" {
 			for _, entry := range templatePolicyEntriesByDID[did] {
 				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
 					ID:               entry.ID,
@@ -189,7 +164,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			}
 			seenDIDs[did] = true
 		}
-		if scope == componenttype.ContractTemplateRepo && did != "" {
+		if scopeConfig.includeTemplateProvenanceTrail && did != "" {
 
 			provenanceQuery := qry2.GetTemplateApprovalProvenanceTrailQry{
 				RetrievedBy: middleware.GetParticipantID(ctx),
@@ -217,7 +192,7 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 				})
 			}
 		}
-		if scope == componenttype.ContractWorkflowEngine && did != "" {
+		if scopeConfig.includeContractContentTrail && did != "" {
 			for _, entry := range contractContentEntriesByDID[did] {
 				history = append(history, &processauditandcompliance.PACResourceAuditTrailEntry{
 					ID:               entry.ID,
@@ -230,6 +205,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 					ResLogPredCid:    entry.ResLogPredCID,
 				})
 			}
+			seenDIDs[did] = true
+		}
+		if scopeConfig.includeArchiveTrail && did != "" {
+			history = append(history, archiveEntriesByDID[did]...)
 			seenDIDs[did] = true
 		}
 		if len(history) == 0 {
@@ -295,23 +274,192 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 			AuditTrail: auditTrail,
 		})
 	}
+	for did, entries := range archiveEntriesByDID {
+		if seenDIDs[did] || len(entries) == 0 {
+			continue
+		}
+		result = append(result, &processauditandcompliance.PACAuditResponse{
+			Component:  componenttype.ContractStorageArchive.String(),
+			Did:        did,
+			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+			AuditTrail: entries,
+		})
+	}
 
 	return result, nil
 }
 
-func isStaticContractAudit(req *processauditandcompliance.PACAuditRequest) bool {
-	if req == nil {
-		return false
+func resolveAuditScope(rawScope string) (auditScopeConfig, error) {
+	normalizedScope := strings.TrimSpace(rawScope)
+	switch strings.ToLower(normalizedScope) {
+	case "templates":
+		return templateAuditScopeConfig(), nil
+	case "contracts":
+		return contractAuditScopeConfig(), nil
+	case "archive":
+		return archiveAuditScopeConfig(), nil
+	case "signatures":
+		return auditScopeConfig{
+			scopeName: "signatures",
+			component: componenttype.SignatureManagement,
+		}, nil
 	}
-	if req.ContractDocument != nil {
-		return true
+
+	scope, err := componenttype.NewComponentType(normalizedScope)
+	if err != nil {
+		return auditScopeConfig{}, fmt.Errorf("invalid audit scope %q; allowed values are templates, contracts, archive, or a valid component type", rawScope)
 	}
-	return req.AuditMode != nil && strings.EqualFold(strings.TrimSpace(*req.AuditMode), "static_contract")
+
+	switch scope {
+	case componenttype.ContractTemplateRepo:
+		return templateAuditScopeConfig(), nil
+	case componenttype.ContractWorkflowEngine:
+		return contractAuditScopeConfig(), nil
+	case componenttype.ContractStorageArchive:
+		return archiveAuditScopeConfig(), nil
+	case componenttype.SignatureManagement:
+		return auditScopeConfig{scopeName: "signatures", component: scope}, nil
+	default:
+		return auditScopeConfig{scopeName: scope.String(), component: scope}, nil
+	}
+}
+
+func templateAuditScopeConfig() auditScopeConfig {
+	return auditScopeConfig{
+		scopeName:                      "templates",
+		component:                      componenttype.ContractTemplateRepo,
+		requiresTemplateRepo:           true,
+		includeTemplatePolicyTrail:     true,
+		includeTemplateProvenanceTrail: true,
+	}
+}
+
+func contractAuditScopeConfig() auditScopeConfig {
+	return auditScopeConfig{
+		scopeName:                   "contracts",
+		component:                   componenttype.ContractWorkflowEngine,
+		requiresContractRepo:        true,
+		includeContractContentTrail: true,
+	}
+}
+
+func archiveAuditScopeConfig() auditScopeConfig {
+	return auditScopeConfig{
+		scopeName:            "archive",
+		component:            componenttype.ContractStorageArchive,
+		requiresContractRepo: true,
+		includeArchiveTrail:  true,
+	}
+}
+
+func (s *processAuditAndCompliancesrvc) validateAuditScopeDependencies(scopeConfig auditScopeConfig) error {
+	if scopeConfig.requiresTemplateRepo && s.CTRepo == nil {
+		return fmt.Errorf("audit scope %s is not configured", scopeConfig.scopeName)
+	}
+	if scopeConfig.requiresContractRepo && s.CRepo == nil {
+		return fmt.Errorf("audit scope %s is not configured", scopeConfig.scopeName)
+	}
+	return nil
 }
 
 func (s *processAuditAndCompliancesrvc) AuditReport(ctx context.Context, p *processauditandcompliance.AuditReportPayload) (res any, err error) {
 	log.Printf(ctx, "processAuditAndCompliance.audit_report")
-	return
+	scope := "contracts"
+	if p != nil && p.Scope != nil && strings.TrimSpace(*p.Scope) != "" {
+		scope = strings.TrimSpace(*p.Scope)
+	}
+	format := "json"
+	if p != nil && p.Format != nil && strings.TrimSpace(*p.Format) != "" {
+		format = strings.ToLower(strings.TrimSpace(*p.Format))
+	}
+	did := ""
+	if p != nil && p.Did != nil {
+		did = strings.TrimSpace(*p.Did)
+	}
+	if format != "json" && format != "csv" && format != "pdf" {
+		return nil, fmt.Errorf("unsupported audit report format %q", format)
+	}
+
+	auditResponses, err := s.Audit(ctx, &processauditandcompliance.PACAuditRequest{Scope: scope})
+	if err != nil {
+		return nil, err
+	}
+	generatedAt := time.Now().UTC()
+	generatedBy := middleware.GetParticipantID(ctx)
+	report := buildAuditReport(scope, did, generatedBy, generatedAt, auditResponses)
+	report.Format = format
+
+	var response any
+	var contentHash string
+	switch format {
+	case "json":
+		bytes, err := json.Marshal(report)
+		if err != nil {
+			return nil, err
+		}
+		contentHash = hashBytes(bytes)
+		report.ContentHash = contentHash
+		response = report
+	case "csv":
+		bytes, err := renderAuditReportCSV(report)
+		if err != nil {
+			return nil, err
+		}
+		download := reportDownloadEnvelope(report, format, bytes, "text/csv")
+		contentHash = download.ContentHash
+		response = download
+	case "pdf":
+		bytes := renderAuditReportPDF(report)
+		download := reportDownloadEnvelope(report, format, bytes, "application/pdf")
+		contentHash = download.ContentHash
+		response = download
+	}
+
+	if err := s.persistReportGeneratedEvent(ctx, report, format, contentHash); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (s *processAuditAndCompliancesrvc) persistReportGeneratedEvent(ctx context.Context, report auditReport, format string, contentHash string) error {
+	if s.DB == nil {
+		return nil
+	}
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
+	evt := pacevent.ReportGeneratedEvent{
+		ReportID:    report.ReportID,
+		Scope:       report.Scope,
+		Format:      format,
+		DID:         report.DID,
+		GeneratedBy: report.GeneratedBy,
+		GeneratedAt: time.Now().UTC(),
+		ContentHash: contentHash,
+		Summary: map[string]int{
+			"totalEvents": report.Summary.TotalEvents,
+			"totalChecks": report.Summary.TotalChecks,
+			"passed":      report.Summary.Passed,
+			"failed":      report.Summary.Failed,
+			"warnings":    report.Summary.Warnings,
+			"needsReview": report.Summary.NeedsReview,
+		},
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	}
+	if err := baseevent.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance); err != nil {
+		return fmt.Errorf("could not create report event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("could not commit report event: %w", err)
+	}
+	return nil
 }
 
 func (s *processAuditAndCompliancesrvc) Monitor(ctx context.Context, p *processauditandcompliance.MonitorPayload) (res any, err error) {

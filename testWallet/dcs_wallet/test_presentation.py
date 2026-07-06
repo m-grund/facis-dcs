@@ -8,7 +8,7 @@ from jwt.algorithms import ECAlgorithm
 
 from dcs_wallet.credential import decode_jwt_payload, load_credential_sd_jwt
 from dcs_wallet.presentation import build_vp_token, load_jwk
-from dcs_wallet.sdjwt import KB_JWT_TYP, sd_hash, split_sd_jwt
+from dcs_wallet.sdjwt import KB_JWT_TYP, decode_disclosure, sd_hash, split_sd_jwt
 
 
 class PresentationTest(unittest.TestCase):
@@ -66,6 +66,22 @@ class PresentationTest(unittest.TestCase):
         self.assertEqual(kb_payload["nonce"], "unit-test-nonce")
         self.assertEqual(kb_payload["sd_hash"], sd_hash(issuer_jwt, disclosures))
         self.assertNotIn("sub", kb_payload)
+
+    def test_vp_token_selective_disclosure_filters_claims(self) -> None:
+        vp = build_vp_token(
+            credential_name="johndoe",
+            nonce="unit-test-nonce",
+            client_id="unit-test-aud",
+            requested_claim_paths=[["organization"]],
+        )
+        _issuer_jwt, disclosures, _kb_jwt = split_sd_jwt(vp)
+        disclosed_claim_names = []
+        for disclosure in disclosures:
+            value = decode_disclosure(disclosure)
+            self.assertEqual(len(value), 3)
+            disclosed_claim_names.append(value[1])
+
+        self.assertEqual(disclosed_claim_names, ["organization"])
 
 
 if __name__ == "__main__":

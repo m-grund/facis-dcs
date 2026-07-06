@@ -2,7 +2,9 @@ package template
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -24,19 +26,21 @@ MATCH (n:ContractTemplate)
 RETURN count(n) AS total
 `
 
+// TODO: fix FC GraphDB issue
 const retrieveTemplatesStatementTemplate = `
 MATCH (ct:ContractTemplate)
+OPTIONAL MATCH (ct)-[:metadata]->(m)
 RETURN {
-  did: ct.did,
-  document_number: ct.documentNumber,
-  version: ct.version,
-  schema_version: ct.schemaVersion,
-  name: ct.name,
-  description: ct.description,
-  template_type: ct.templateType,
-  participant_id: ct.participantId,
-  created_at: ct.createdAt,
-  updated_at: ct.updatedAt
+  did: head(ct.claimsGraphUri),
+  document_number: m.documentNumber,
+  version: m.templateVersion,
+  schema_version: m.schemaVersion,
+  name: m.name,
+  description: m.description,
+  template_type: m.templateType,
+  participant_id: m.createdBy,
+  created_at: m.createdAt,
+  updated_at: m.updatedAt
 } AS n
 SKIP %d
 LIMIT %d
@@ -51,8 +55,7 @@ func (h *GetAllMetadataHandler) Handle(qry GetAllMetadataQry) (*templatecatalogu
 	}
 
 	countResp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
-		Statement:  retrieveTemplatesCountStatement,
-		Parameters: map[string]string{},
+		Statement: retrieveTemplatesCountStatement,
 	})
 	if err != nil {
 		return nil, err
@@ -67,8 +70,7 @@ func (h *GetAllMetadataHandler) Handle(qry GetAllMetadataQry) (*templatecatalogu
 
 	statement := fmt.Sprintf(retrieveTemplatesStatementTemplate, qry.Offset, limit)
 	dataResp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
-		Statement:  statement,
-		Parameters: map[string]string{},
+		Statement: statement,
 	})
 	if err != nil {
 		return nil, err
@@ -76,33 +78,62 @@ func (h *GetAllMetadataHandler) Handle(qry GetAllMetadataQry) (*templatecatalogu
 
 	items := make([]*templatecatalogueintegration.TemplateCatalogueItem, 0, len(dataResp.Items))
 	for _, item := range dataResp.Items {
-		var ct map[string]interface{}
-		// Extract the template projection map from the item
-		for _, v := range item {
-			if m, ok := v.(map[string]interface{}); ok {
-				ct = m
-				break
+		if ct := projectionMap(item); ct != nil {
+			if mapped := mapCatalogueItem(ct); mapped != nil {
+				items = append(items, mapped)
 			}
 		}
-		if ct == nil {
-			continue
-		}
-		items = append(items, &templatecatalogueintegration.TemplateCatalogueItem{
-			Did:            ptr.StringFromMap(ct, "did"),
-			DocumentNumber: ptr.Ref(ptr.StringFromMap(ct, "document_number")),
-			Version:        ptr.Ref(ptr.IntFromMap(ct, "version")),
-			SchemaVersion:  ptr.Ref(ptr.IntFromMap(ct, "schema_version")),
-			Name:           ptr.Ref(ptr.StringFromMap(ct, "name")),
-			Description:    ptr.Ref(ptr.StringFromMap(ct, "description")),
-			TemplateType:   ptr.Ref(ptr.StringFromMap(ct, "template_type")),
-			ParticipantID:  ptr.Ref(ptr.StringFromMap(ct, "participant_id")),
-			CreatedAt:      ptr.Ref(ptr.StringFromMap(ct, "created_at")),
-			UpdatedAt:      ptr.Ref(ptr.StringFromMap(ct, "updated_at")),
-		})
 	}
 
 	return &templatecatalogueintegration.TemplateCatalogueRetrieveResponse{
 		TotalCount: totalCount,
 		Items:      items,
 	}, nil
+}
+
+func projectionMap(row map[string]interface{}) map[string]interface{} {
+	if row == nil {
+		return nil
+	}
+	for _, value := range row {
+		if mapped, ok := value.(map[string]interface{}); ok {
+			return mapped
+		}
+	}
+	return nil
+}
+
+func mapCatalogueItem(ct map[string]interface{}) *templatecatalogueintegration.TemplateCatalogueItem {
+	if ct == nil {
+		return nil
+	}
+	did := ptr.StringFromMap(ct, "did")
+	if strings.TrimSpace(did) == "" {
+		return nil
+	}
+	return &templatecatalogueintegration.TemplateCatalogueItem{
+		Did:            did,
+		DocumentNumber: ptr.Ref(ptr.StringFromMap(ct, "document_number")),
+		Version:        ptr.Ref(ptr.IntFromMap(ct, "version")),
+		SchemaVersion:  ptr.Ref(ptr.IntFromMap(ct, "schema_version")),
+		Name:           ptr.Ref(ptr.StringFromMap(ct, "name")),
+		Description:    ptr.Ref(ptr.StringFromMap(ct, "description")),
+		TemplateType:   ptr.Ref(ptr.StringFromMap(ct, "template_type")),
+		ParticipantID:  ptr.Ref(ptr.StringFromMap(ct, "participant_id")),
+		CreatedAt:      ptr.Ref(ptr.StringFromMap(ct, "created_at")),
+		UpdatedAt:      ptr.Ref(ptr.StringFromMap(ct, "updated_at")),
+	}
+}
+
+func parseTemplateDataJSON(templateDataJSON string) (any, error) {
+	if strings.TrimSpace(templateDataJSON) == "" {
+		return nil, nil
+	}
+
+	var templateData map[string]interface{}
+	if err := json.Unmarshal([]byte(templateDataJSON), &templateData); err != nil {
+		return nil, fmt.Errorf("unmarshal templateDataJSON failed: %w", err)
+	}
+
+	return templateData, nil
 }

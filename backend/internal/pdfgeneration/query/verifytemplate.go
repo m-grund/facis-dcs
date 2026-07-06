@@ -11,7 +11,6 @@ import (
 
 	pdfgen "digital-contracting-service/gen/pdf_generation"
 	"digital-contracting-service/internal/base/ipfs"
-	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tpldb "digital-contracting-service/internal/templaterepository/db"
@@ -64,10 +63,7 @@ func (h *VerifyTemplatePdfHandler) Handle(ctx context.Context, qry VerifyTemplat
 
 		var jsonldBytes []byte
 		if tpl.TemplateData != nil {
-			jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
-			if err != nil {
-				return nil, fmt.Errorf("marshal template JSON-LD for verify append %s: %w", qry.DID, err)
-			}
+			jsonldBytes = []byte(*tpl.TemplateData)
 		}
 
 		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
@@ -80,6 +76,7 @@ func (h *VerifyTemplatePdfHandler) Handle(ctx context.Context, qry VerifyTemplat
 				IPFSCID:         state.IPFSCID,
 				RendererVersion: state.RendererVersion,
 				C2PAState:       state.C2PAState,
+				PayloadHash:     state.PayloadHash,
 			})
 		}
 

@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 	"sync"
@@ -45,6 +48,47 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
+type formRequestDecoder struct {
+	r *http.Request
+}
+
+func (d *formRequestDecoder) Decode(v any) error {
+	if err := d.r.ParseForm(); err != nil {
+		return fmt.Errorf("parse form body: %w", err)
+	}
+
+	m := make(map[string]any, len(d.r.PostForm))
+	for key, values := range d.r.PostForm {
+		if len(values) == 0 {
+			continue
+		}
+		m[key] = values[0]
+	}
+
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("marshal form payload: %w", err)
+	}
+
+	if err := json.Unmarshal(raw, v); err != nil {
+		return fmt.Errorf("decode form payload: %w", err)
+	}
+
+	return nil
+}
+
+func requestDecoderWithForm(r *http.Request) goahttp.Decoder {
+	if r != nil {
+		contentType := r.Header.Get("Content-Type")
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if (err == nil && mediaType == "application/x-www-form-urlencoded") || r.ContentLength == 0 {
+			return &formRequestDecoder{r: r}
+		}
+	}
+
+	return goahttp.RequestDecoder(r)
+}
+
 var (
 	httpRequestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -77,7 +121,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	// Other encodings can be used by providing the corresponding functions,
 	// see goa.design/implement/encoding.
 	var (
-		dec = goahttp.RequestDecoder
+		dec = requestDecoderWithForm
 		enc = goahttp.ResponseEncoder
 	)
 
@@ -237,19 +281,24 @@ type errorResponse struct {
 
 func (e *errorResponse) StatusCode() int { return e.statusCode }
 
-// errorFormatter maps named ServiceErrors ("unauthorized", "forbidden") to the
-// correct HTTP status codes. All other errors fall through to the default Goa
-// heuristic.
+// errorFormatter maps named ServiceErrors to the correct HTTP status codes.
+// All other errors fall through to the default Goa heuristic.
 func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
 	resp := goahttp.NewErrorResponse(ctx, err)
 
 	var gerr *goa.ServiceError
 	if errors.As(err, &gerr) {
 		switch gerr.Name {
+		case "bad_request":
+			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusBadRequest}
 		case "unauthorized":
 			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusUnauthorized}
 		case "forbidden":
 			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusForbidden}
+		case "not_found":
+			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusNotFound}
+		case "service_unavailable":
+			return &errorResponse{ErrorResponse: resp.(*goahttp.ErrorResponse), statusCode: http.StatusServiceUnavailable}
 		}
 	}
 

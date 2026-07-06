@@ -1,3 +1,8 @@
+// Package eventtype enumerates the contract workflow engine's own event
+// type strings, used both as the EventType() of contractworkflowengine/event
+// structs and to filter/interpret events consumed by dcstodcs
+// (RemoteSyncRequest/RemoteActionRequestEvent are explicitly excluded from
+// triggering a further peer sync, to avoid sync loops).
 package eventtype
 
 import (
@@ -22,6 +27,8 @@ const (
 	Update                   EventType = "UPDATE_CONTRACT"
 	OutdatedPeer             EventType = "OUTDATED_PEER"
 	RetrieveAll              EventType = "RETRIEVE_ALL_CONTRACTS"
+	RetrieveArchived         EventType = "RETRIEVE_ARCHIVED_CONTRACTS"
+	StoreArchived            EventType = "STORE_ARCHIVED_CONTRACT"
 	RetrieveByID             EventType = "RETRIEVE_CONTRACT_BY_ID"
 	RetrieveHistoryByDID     EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
 	Search                   EventType = "SEARCH_CONTRACT"
@@ -46,6 +53,8 @@ var validStates = map[EventType]bool{
 	Verify:                   true,
 	Update:                   true,
 	RetrieveAll:              true,
+	RetrieveArchived:         true,
+	StoreArchived:            true,
 	RetrieveByID:             true,
 	RetrieveHistoryByDID:     true,
 	Search:                   true,
@@ -54,6 +63,7 @@ var validStates = map[EventType]bool{
 	Terminate:                true,
 	RecordEvidence:           true,
 	ContractExpired:          true,
+	RetrieveAllTemplates:     true,
 	RemoteSync:               true,
 	RemoteSyncRequest:        true,
 	OutdatedPeer:             true,

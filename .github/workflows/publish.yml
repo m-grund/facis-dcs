@@ -7,14 +7,22 @@ on:
   
 jobs:
   dockerbuild:
-    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@main
-    secrets: inherit
+    # TODO: can use @main again as soon as dockerbuild.yml accepts secrets input.
+    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@harbor-env-patch
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
     with: 
       dockerfile: "deployment/docker/Dockerfile"
       harbor_config: "deployment/harbor.config"
-  # helm:
-  #   uses: eclipse-xfsc/dev-ops/.github/workflows/helm.yml@main
-  #   secrets: inherit
-  #   with: 
-  #     buildContext:  "deployment/helm"
-  #     harbor_config: "deployment/harbor.config"
+  dockerbuild-pdf-core:
+    # TODO: can use @main again as soon as dockerbuild.yml accepts secrets input.
+    uses: eclipse-xfsc/dev-ops/.github/workflows/dockerbuild.yml@harbor-env-patch
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
+    with:
+      dockerfile: "pdf-core/Dockerfile"
+      buildContext: "."
+      service: "pdf-core"
+      harbor_config: "deployment/harbor.config"

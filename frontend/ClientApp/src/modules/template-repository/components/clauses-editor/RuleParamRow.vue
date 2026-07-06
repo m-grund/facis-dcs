@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SemanticConditionParameter } from '@/modules/template-repository/models/contract-template'
-import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 const props = defineProps<{
   param: SemanticConditionParameter
@@ -18,7 +18,7 @@ defineEmits<{
 const rowClass = computed(() => ({
   'text-primary font-medium': props.isUsed,
   'text-error cursor-pointer hover:bg-base-200': props.isRequiredAndUnused,
-  'cursor-pointer hover:bg-base-200': props.param.fixedValue === undefined && !props.isRequiredAndUnused,
+  'cursor-pointer hover:bg-base-200': !props.isRequiredAndUnused,
 }))
 
 const label = computed(() => semanticParameterLabel(props.param))
@@ -44,9 +44,7 @@ const constraintLabel = computed(() => {
     >
       {{ label }}
     </span>
-    <span v-if="param.fixedValue !== undefined" class="text-base-content/50">fixed: {{ param.fixedValue }}</span>
-    <span v-else class="text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
-    <span class="text-base-content/40">({{ semanticParameterTypeLabel(param.type) }})</span>
+    <span class="text-base-content/50">{{ param.isRequired ? 'required' : 'optional' }}</span>
     <span v-if="constraintLabel" class="text-base-content/40">{{ constraintLabel }}</span>
   </li>
 </template>

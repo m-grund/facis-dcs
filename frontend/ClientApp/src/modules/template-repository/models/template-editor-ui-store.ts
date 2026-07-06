@@ -16,6 +16,13 @@ export type BlockMovementPreview =
  */
 export type ClausePlaceholderHighlight = { conditionId: string; parameterName?: string } | null
 
+export interface PendingClauseDraft {
+  title: string
+  text: string
+  conditionIds: string[]
+  sourceConditionName?: string
+}
+
 /** UI state for template create/edit page */
 interface TemplateEditorUiState {
   activeTab: TemplateEditorTabId
@@ -36,6 +43,8 @@ interface TemplateEditorUiState {
   selectedBlockId: string | null
   /** When non-null: clause legal-text editor highlights matching placeholder chips */
   clausePlaceholderHighlight: ClausePlaceholderHighlight
+  pendingClauseDraft: PendingClauseDraft | null
+  pendingPlacementClauseBlockId: string | null
   /** When true: builder preview dialog is open */
   isPreviewDialogOpen: boolean
   /** Whether the current template is in an editable state */

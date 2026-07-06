@@ -17,63 +17,99 @@ import (
 )
 
 // minimalPayload is a valid JSON-LD payload that CompilePDF can process.
-// The @vocab entry ensures all terms (sections, clauses, heading) expand to
-// dcs-pdf-core IRIs and therefore appear in the URDNA2015 N-Quads used for
-// determinism checks and change detection.
+// The @vocab entry ensures all terms expand to dcs ontology IRIs and therefore
+// appear in the URDNA2015 N-Quads used for determinism checks and change detection.
 const minimalPayload = `{
 	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+		"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+		"dcs": "https://w3id.org/facis/dcs/ontology/v1#"
 	},
 	"@id": "urn:doc:svc-test",
-	"@type": "dcs-pdf-core:Document",
-	"title": "Service test",
-	"sections": [
-		{"@type": "dcs-pdf-core:Section", "heading": "1. Test", "clauses": ["clause one"]}
-	]
+	"@type": "ContractTemplate",
+	"metadata": {"@type": "TemplateMetadata", "title": "Service test"},
+	"documentStructure": {
+		"@type": "DocumentStructure",
+		"layout": [
+			{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:svc-test#s1"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:svc-test#s1", "children": ["urn:doc:svc-test#c1"]}
+		],
+		"blocks": [
+			{"@type": "Section", "@id": "urn:doc:svc-test#s1", "title": "1. Test"},
+			{"@type": "Clause", "@id": "urn:doc:svc-test#c1", "content": ["clause one"]}
+		]
+	}
 }`
 
-// minimalPayloadAmended adds a second clause to minimalPayload.  With @vocab
-// in place, the new clause produces additional N-Quads, making the two payloads
-// semantically distinct so UpdatePDF detects the change.
+// minimalPayloadAmended adds a second clause to minimalPayload. The new clause
+// produces additional N-Quads, making the two payloads semantically distinct.
 const minimalPayloadAmended = `{
 	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+		"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+		"dcs": "https://w3id.org/facis/dcs/ontology/v1#"
 	},
 	"@id": "urn:doc:svc-test",
-	"@type": "dcs-pdf-core:Document",
-	"title": "Service test",
-	"sections": [
-		{"@type": "dcs-pdf-core:Section", "heading": "1. Test", "clauses": ["clause one", "clause two"]}
-	]
+	"@type": "ContractTemplate",
+	"metadata": {"@type": "TemplateMetadata", "title": "Service test"},
+	"documentStructure": {
+		"@type": "DocumentStructure",
+		"layout": [
+			{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:svc-test#s1"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:svc-test#s1", "children": ["urn:doc:svc-test#c1", "urn:doc:svc-test#c2"]}
+		],
+		"blocks": [
+			{"@type": "Section", "@id": "urn:doc:svc-test#s1", "title": "1. Test"},
+			{"@type": "Clause", "@id": "urn:doc:svc-test#c1", "content": ["clause one"]},
+			{"@type": "Clause", "@id": "urn:doc:svc-test#c2", "content": ["clause two"]}
+		]
+	}
 }`
 
 const minimalPayloadFlavorPrefixed = `{
 	"@context": {
-		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+		"dcs": "https://w3id.org/facis/dcs/ontology/v1#"
 	},
 	"@id": "urn:doc:svc-test",
-	"@type": "dcs-pdf-core:Document",
-	"dcs-pdf-core:title": "Service test",
-	"dcs-pdf-core:sections": [
-		{
-			"@type": "dcs-pdf-core:Section",
-			"dcs-pdf-core:heading": "1. Test",
-			"dcs-pdf-core:clauses": ["clause one"]
-		}
-	]
+	"@type": "dcs:ContractTemplate",
+	"dcs:metadata": {"@type": "dcs:TemplateMetadata", "dcs:title": "Service test"},
+	"dcs:documentStructure": {
+		"@type": "dcs:DocumentStructure",
+		"dcs:layout": [
+			{"@type": "dcs:LayoutNode", "dcs:isRoot": true, "dcs:children": ["urn:doc:svc-test#s1"]},
+			{"@type": "dcs:LayoutNode", "@id": "urn:doc:svc-test#s1", "dcs:children": ["urn:doc:svc-test#c1"]}
+		],
+		"dcs:blocks": [
+			{"@type": "dcs:Section", "@id": "urn:doc:svc-test#s1", "dcs:title": "1. Test"},
+			{"@type": "dcs:Clause", "@id": "urn:doc:svc-test#c1", "dcs:content": ["clause one"]}
+		]
+	}
 }`
 
 const minimalPayloadFlavorExpanded = `{
 	"@context": {},
 	"@id": "urn:doc:svc-test",
-	"@type": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Document",
-	"http://127.0.0.1:8080/ontology/dcs-pdf-core#title": [{"@value": "Service test"}],
-	"http://127.0.0.1:8080/ontology/dcs-pdf-core#sections": [{
-		"@type": "http://127.0.0.1:8080/ontology/dcs-pdf-core#Section",
-		"http://127.0.0.1:8080/ontology/dcs-pdf-core#heading": [{"@value": "1. Test"}],
-		"http://127.0.0.1:8080/ontology/dcs-pdf-core#clauses": [{"@value": "clause one"}]
+	"@type": "https://w3id.org/facis/dcs/ontology/v1#ContractTemplate",
+	"https://w3id.org/facis/dcs/ontology/v1#metadata": [{
+		"@type": "https://w3id.org/facis/dcs/ontology/v1#TemplateMetadata",
+		"https://w3id.org/facis/dcs/ontology/v1#title": [{"@value": "Service test"}]
+	}],
+	"https://w3id.org/facis/dcs/ontology/v1#documentStructure": [{
+		"@type": "https://w3id.org/facis/dcs/ontology/v1#DocumentStructure",
+		"https://w3id.org/facis/dcs/ontology/v1#layout": [
+			{"@type": "https://w3id.org/facis/dcs/ontology/v1#LayoutNode",
+			 "https://w3id.org/facis/dcs/ontology/v1#isRoot": [{"@value": true}],
+			 "https://w3id.org/facis/dcs/ontology/v1#children": [{"@value": "urn:doc:svc-test#s1"}]},
+			{"@type": "https://w3id.org/facis/dcs/ontology/v1#LayoutNode",
+			 "@id": "urn:doc:svc-test#s1",
+			 "https://w3id.org/facis/dcs/ontology/v1#children": [{"@value": "urn:doc:svc-test#c1"}]}
+		],
+		"https://w3id.org/facis/dcs/ontology/v1#blocks": [
+			{"@type": "https://w3id.org/facis/dcs/ontology/v1#Section",
+			 "@id": "urn:doc:svc-test#s1",
+			 "https://w3id.org/facis/dcs/ontology/v1#title": [{"@value": "1. Test"}]},
+			{"@type": "https://w3id.org/facis/dcs/ontology/v1#Clause",
+			 "@id": "urn:doc:svc-test#c1",
+			 "https://w3id.org/facis/dcs/ontology/v1#content": [{"@value": "clause one"}]}
+		]
 	}]
 }`
 
@@ -228,16 +264,12 @@ func TestDownload_EquivalentJSONLDFlavorsProduceIdenticalPDF(t *testing.T) {
 }
 
 func TestDownload_MalformedPayloadReportsValidationDetails(t *testing.T) {
+	// A ContractTemplate without the required dcs:metadata must fail SHACL validation
+	// with a MinCountConstraintComponent violation on dcs:metadata.
 	malformed := `{
-		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-			"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-		},
+		"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
 		"@id": "urn:doc:svc-bad",
-		"@type": "dcs-pdf-core:Document",
-		"title": "Broken",
-		"sections": [{"@type": "dcs-pdf-core:Section", "clauses": ["missing heading"]}],
-		"signatureFields": [{"@type": "dcs-pdf-core:SignatureField", "label": "Signer label only"}]
+		"@type": "ContractTemplate"
 	}`
 	rec := doRequest(http.MethodPost, "/download",
 		bytes.NewBufferString(malformed), "application/ld+json")
@@ -250,8 +282,7 @@ func TestDownload_MalformedPayloadReportsValidationDetails(t *testing.T) {
 	var v struct{ Message string `json:"message"` }
 	_ = json.Unmarshal(rec.Body.Bytes(), &v)
 	msg := v.Message
-	if !strings.Contains(msg, "path=<http://127.0.0.1:8080/ontology/dcs-pdf-core#heading>") ||
-		!strings.Contains(msg, "path=<http://127.0.0.1:8080/ontology/dcs-pdf-core#name>") ||
+	if !strings.Contains(msg, "path=<https://w3id.org/facis/dcs/ontology/v1#metadata>") ||
 		!strings.Contains(msg, "component=<http://www.w3.org/ns/shacl#MinCountConstraintComponent>") {
 		t.Fatalf("expected detailed validation report with paths, got: %s", msg)
 	}
@@ -456,18 +487,20 @@ func TestUpdateWithVCUnchangedPayloadProceeds(t *testing.T) {
 // TestOntologyContextSubstitutesBaseURL verifies that when
 // DCS_PDF_CORE_ONTOLOGY_BASE_URL is set, the context endpoint replaces the
 // hardcoded default base URL with the configured one.
-func TestOntologyContextSubstitutesBaseURL(t *testing.T) {
-	t.Setenv("DCS_PDF_CORE_ONTOLOGY_BASE_URL", "https://example.com")
+func TestOntologyContextIsValidJSONLD(t *testing.T) {
 	rec := doRequest(http.MethodGet, "/ontology/dcs-pdf-core", nil, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	res := rec.Body.Bytes()
-	if bytes.Contains(res, []byte("http://127.0.0.1:8080")) {
-		t.Error("context response still contains default base URL after substitution")
+	if len(res) == 0 {
+		t.Fatal("expected non-empty context bytes")
 	}
-	if !bytes.Contains(res, []byte("https://example.com")) {
-		t.Error("context response does not contain configured base URL")
+	if !json.Valid(res) {
+		t.Fatal("ontology context response must be valid JSON")
+	}
+	if !bytes.Contains(res, []byte("w3id.org/facis/dcs/ontology")) {
+		t.Error("ontology context must reference the canonical dcs ontology IRI")
 	}
 }
 
@@ -482,8 +515,12 @@ func TestOntologyOwl(t *testing.T) {
 	if len(res) == 0 {
 		t.Fatal("expected non-empty OWL bytes")
 	}
-	if !json.Valid(res) {
-		t.Fatal("OWL response is not valid JSON")
+	ct := rec.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/turtle") {
+		t.Fatalf("OWL endpoint must serve text/turtle, got %q", ct)
+	}
+	if !bytes.Contains(res, []byte("w3id.org/facis/dcs/ontology")) {
+		t.Error("OWL response must reference the canonical dcs ontology IRI")
 	}
 }
 

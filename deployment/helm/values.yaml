@@ -82,6 +82,16 @@ affinity: {}
 extraEnv: []
 extraEnvFrom: []
 
+# Archive notary / ORCE integration
+archiveNotary:
+  baseURL: ""
+  notaryPath: "/archive/notary"
+  auditLogPath: "/archive-audit-events.jsonl"
+  auditLogBearerToken: ""
+  auditLogBearerTokenSecretRef:
+    name: ""
+    key: "ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN"
+
 # Route and path configuration
 route:
   basePath: "/digital-contracting-service"
@@ -288,11 +298,6 @@ federatedCatalogue:
       cpu: 500m
       memory: 1Gi
 
-# XFSC Custom Policy Agent (OPA-based policy evaluation)
-# See charts/custom-policy-agent/values.yaml for all configurable fields.
-mongodb:
-  enabled: false
-
 # PDF-Core: C2PA-aware PDF compiler and verifier (DCS-OR-C2PA-*)
 pdfCore:
   enabled: true
@@ -365,20 +370,6 @@ ipfsClient:
   tenantName: "tenant_space"  # tenant identifier in the Document Manager URL path
   tenantBaseURL: ""            # IPFS_TENANT_BASE_URL explicit override
   mfsBaseURL: ""               # IPFS_MFS_BASE_URL explicit override (Kubo RPC API)
-
-customPolicyAgent:
-  enabled: false
-  mongo:
-    uri: ""
-    database: "policy"
-    collectionName: "policy"
-  nats:
-    url: ""
-  auth:
-    jwkURL: ""
-  logging:
-    level: "info"
-    format: "json"
 
 # ---- Optional monitoring stack (Prometheus, Grafana, Alertmanager) ----------------
 monitoring:

@@ -16,12 +16,9 @@ K8S_NAMESPACE ?= default
 HELM_RELEASE ?= dcs
 DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
-<<<<<<< HEAD
-=======
 LOCAL_FORWARD_PORT ?= 18991
 SERVICE_PORT ?= 8991
 DCS_DID ?= localhost
->>>>>>> development
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 BDD_INGRESS_PORT ?= 18080
 BDD_PUBLIC_ORIGIN ?= http://localhost:$(BDD_INGRESS_PORT)

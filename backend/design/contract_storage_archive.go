@@ -4,6 +4,30 @@ import (
 	. "goa.design/goa/v3/dsl"
 )
 
+var ArchiveRetrieveRequest = Type("ArchiveRetrieveRequest", func() {
+	Description("Archive retrieve request")
+
+	Token("token", String, "JWT token")
+})
+var ArchiveRetrieveResponse = Type("ArchiveRetrieveResponse", func() {
+	Description("Result for retrieving the archive")
+
+	Attribute("contracts", ArrayOf(ContractItem), "A list of contracts")
+})
+
+var ArchiveSearchRequest = Type("ArchiveSearchRequest", func() {
+	Description("Archive search request")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("contract_version", Int, "The version number of the contract")
+	Attribute("state", String, "The state of the contract")
+	Attribute("name", String, "The name of the contract")
+	Attribute("description", String, "A description for that contract")
+	Attribute("contract_data", String, "Search value for full text search in contract data")
+})
+
 // Contract Storage & Archive Service  (/archive/...)
 var _ = Service("ContractStorageArchive", func() {
 	Description("Contract Storage & Archive APIs (/archive/...)")
@@ -13,18 +37,24 @@ var _ = Service("ContractStorageArchive", func() {
 		Meta("dcs:requirements", "DCS-IR-CSA-01", "DCS-IR-CSA-05")
 		Meta("dcs:ui", "Archive Manager Dashboard", "Archive Access")
 		Meta("dcs:csa:components", "Signed Contract Archive")
+
 		Security(JWTAuth, func() {
 			Scope("Archive Manager")
 			Scope("Contract Observer")
 		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
+
+		Payload(ArchiveRetrieveRequest)
+		Result(ArchiveRetrieveResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			GET("/archive/retrieve")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(Any)
 	})
 
 	Method("search", func() {
@@ -36,14 +66,24 @@ var _ = Service("ContractStorageArchive", func() {
 			Scope("Archive Manager")
 			Scope("Contract Observer")
 		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
+		Payload(ArchiveSearchRequest)
+		Result(ArrayOfRequired(ContractItem))
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			GET("/archive/search")
+			Param("did")
+			Param("contract_version")
+			Param("state")
+			Param("name")
+			Param("description")
+			Param("contract_data")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(ArrayOf(Any))
 	})
 
 	Method("store", func() {
@@ -62,24 +102,6 @@ var _ = Service("ContractStorageArchive", func() {
 			Response(StatusOK)
 		})
 		Result(String)
-	})
-
-	Method("terminate", func() {
-		Description("terminate contract/archive entry.")
-		Meta("dcs:requirements", "DCS-IR-CSA-03", "DCS-IR-CSA-06")
-		Meta("dcs:ui", "Archive Manager Dashboard")
-		Meta("dcs:csa:components", "Automated Alerts")
-		Security(JWTAuth, func() {
-			Scope("Archive Manager")
-		})
-		Payload(func() {
-			Token("token", String, "JWT token")
-		})
-		HTTP(func() {
-			POST("/archive/terminate")
-			Response(StatusOK)
-		})
-		Result(Int)
 	})
 
 	Method("delete", func() {
@@ -118,4 +140,5 @@ var _ = Service("ContractStorageArchive", func() {
 		})
 		Result(ArrayOf(String))
 	})
+
 })

@@ -53,15 +53,15 @@ func (r *PostgresContractRepo) RemoteCreate(ctx context.Context, tx *sqlx.Tx, da
 
 func (r *PostgresContractRepo) CreateHistoryEntryForDID(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
-        INSERT INTO contract_history 
-            (did, origin, state, name, description, created_by, created_at, updated_at, 
-             contract_version, contract_data, start_date, exp_date, exp_policy, 
+        INSERT INTO contract_history
+            (did, origin, state, name, description, created_by, created_at, updated_at,
+             contract_version, contract_data, start_date, exp_date, exp_policy,
              exp_notice_period, responsible, template_did, template_version)
-        SELECT 
-            did, origin, state, name, description, created_by, created_at, updated_at, 
-            contract_version, contract_data, start_date, exp_date, exp_policy, 
+        SELECT
+            did, origin, state, name, description, created_by, created_at, updated_at,
+            contract_version, contract_data, start_date, exp_date, exp_policy,
             exp_notice_period, responsible, template_did, template_version
-        FROM contracts_effective 
+        FROM contracts_effective
         WHERE did = $1
     `
 	_, err := tx.ExecContext(ctx, statement, did)
@@ -145,8 +145,11 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 			cem.state IN ('DRAFT', 'REJECTED', 'SUBMITTED', 'NEGOTIATION', 'REVIEWED', 'APPROVED')
 			AND COALESCE(latest.version > cem.template_version, FALSE) AS outdated,
 			latest.did AS latest_template_did,
-			COALESCE(tpl.state = 'DEPRECATED', FALSE) AS template_is_deprecated
+			COALESCE(tpl.state = 'DEPRECATED', FALSE) AS template_is_deprecated,
+			ce.contract_data->'dcs:parentContract'->>'@id' AS parent_contract_did,
+			COALESCE(cem.name, ce.contract_data->'dcs:metadata'->>'dcs:title') AS name
 		FROM contracts_effective_metadata cem
+		LEFT JOIN contracts_effective ce ON ce.did = cem.did
 		LEFT JOIN contract_templates tpl
 			ON tpl.did = cem.template_did
 		LEFT JOIN LATERAL (
@@ -235,7 +238,7 @@ func (r *PostgresContractRepo) ReadProcessDataByDIDOrNil(ctx context.Context, tx
 	return &processData, nil
 }
 
-func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
     SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
            exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
@@ -253,6 +256,82 @@ func (r *PostgresContractRepo) ReadExpiredContacts(ctx context.Context, tx *sqlx
 	return cts, nil
 }
 
+func (r *PostgresContractRepo) StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data db.ContractArchiveEntry) error {
+	statement := `
+        INSERT INTO contract_archive_entries (
+            did, contract_version, stored_by, stored_at, contract_snapshot, content_hash, snapshot_cid, signature_metadata,
+            credential_hashes, tsa_receipt, evidence, retention_until
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::jsonb, '{}'::jsonb), COALESCE($9::jsonb, '{}'::jsonb), COALESCE($10::jsonb, '{}'::jsonb), COALESCE($11::jsonb, '{}'::jsonb), $12)
+        ON CONFLICT (did, contract_version) DO NOTHING
+    `
+	_, err := tx.ExecContext(ctx, statement,
+		data.DID,
+		data.ContractVersion,
+		data.StoredBy,
+		data.StoredAt,
+		data.ContractSnapshot,
+		data.ContentHash,
+		data.SnapshotCID,
+		data.SignatureMeta,
+		data.CredentialHashes,
+		data.TSAReceipt,
+		data.Evidence,
+		data.RetentionUntil,
+	)
+	return err
+}
+
+func (r *PostgresContractRepo) ReadArchiveEntries(ctx context.Context, tx *sqlx.Tx) ([]db.ContractArchiveEntry, error) {
+	query := `
+        SELECT did, contract_version, archive_status, stored_by, stored_at, contract_snapshot,
+               content_hash, snapshot_cid, snapshot_cid_created_at, signature_metadata, credential_hashes, tsa_receipt, evidence, retention_until,
+               deleted_at, deleted_by, deletion_reason
+        FROM contract_archive_entries
+        ORDER BY stored_at, did, contract_version
+    `
+	var entries []db.ContractArchiveEntry
+	err := tx.SelectContext(ctx, &entries, query)
+	if err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	query := `
+	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
+    FROM contracts_archive_metadata
+	`
+	var cts []db.ContractMetadata
+	err := tx.SelectContext(ctx, &cts, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return cts, nil
+}
+
+func (r *PostgresContractRepo) ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
+	query := `
+	        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
+        FROM contracts_archive_metadata
+    `
+	conditions, params, err := createSearchConditions(values)
+	if err != nil {
+		return nil, err
+	}
+	if len(params) > 0 {
+		query += " WHERE " + *conditions
+	}
+
+	var cts []db.ContractMetadata
+	err = tx.SelectContext(ctx, &cts, query, params...)
+	if err != nil {
+		return nil, err
+	}
+	return cts, nil
+}
+
 func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
         UPDATE contracts SET state = $2
@@ -265,8 +344,8 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 func (r *PostgresContractRepo) ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractPDFState, error) {
 	var state db.ContractPDFState
 	err := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_renderer_version,''), COALESCE(pdf_c2pa_state,'') FROM contracts WHERE did=$1`, did,
-	).Scan(&state.IPFSCID, &state.RendererVersion, &state.C2PAState)
+		`SELECT COALESCE(pdf_ipfs_cid,''), COALESCE(pdf_renderer_version,''), COALESCE(pdf_c2pa_state,''), COALESCE(pdf_payload_hash,'') FROM contracts WHERE did=$1`, did,
+	).Scan(&state.IPFSCID, &state.RendererVersion, &state.C2PAState, &state.PayloadHash)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +354,8 @@ func (r *PostgresContractRepo) ReadPDFState(ctx context.Context, tx *sqlx.Tx, di
 
 func (r *PostgresContractRepo) UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data db.ContractPDFState) error {
 	_, err := tx.ExecContext(ctx,
-		`UPDATE contracts SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3 WHERE did=$4`,
-		data.IPFSCID, data.RendererVersion, data.C2PAState, did,
+		`UPDATE contracts SET pdf_ipfs_cid=$1, pdf_renderer_version=$2, pdf_c2pa_state=$3, pdf_payload_hash=$4 WHERE did=$5`,
+		data.IPFSCID, data.RendererVersion, data.C2PAState, data.PayloadHash, did,
 	)
 	return err
 }

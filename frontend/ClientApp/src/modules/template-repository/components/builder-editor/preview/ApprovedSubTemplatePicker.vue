@@ -2,6 +2,11 @@
 import { ref } from 'vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import {
+  getBlocksFromTemplateData,
+  getLayoutFromTemplateData,
+  getSemanticConditionsFromTemplateData,
+} from '@template-repository/store/dcsDraftStore'
 
 const props = withDefaults(
   defineProps<{
@@ -90,9 +95,9 @@ function togglePreview(templateId: string) {
           <div class="max-h-64 overflow-auto rounded-md border border-base-300 bg-base-100 px-3 py-2">
             <TemplatePreview
               v-if="t.template_data"
-              :document-outline="t.template_data.documentOutline"
-              :document-blocks="t.template_data.documentBlocks"
-              :semantic-conditions="t.template_data.semanticConditions"
+              :layout="getLayoutFromTemplateData(t.template_data)"
+              :blocks="getBlocksFromTemplateData(t.template_data)"
+              :semantic-conditions="getSemanticConditionsFromTemplateData(t.template_data)"
             />
             <p v-else class="text-xs text-base-content/60 italic">No template data available.</p>
           </div>

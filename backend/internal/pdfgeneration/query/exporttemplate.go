@@ -12,7 +12,6 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/ipfs"
-	"digital-contracting-service/internal/pdfgeneration"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tpldb "digital-contracting-service/internal/templaterepository/db"
@@ -49,11 +48,9 @@ func (h *ExportTemplatePdfHandler) Handle(ctx context.Context, qry ExportTemplat
 
 	var jsonldBytes []byte
 	if tpl.TemplateData != nil {
-		jsonldBytes, err = pdfgeneration.MarshalJSONLD([]byte(*tpl.TemplateData))
-		if err != nil {
-			return nil, fmt.Errorf("marshal template JSON-LD: %w", err)
-		}
+		jsonldBytes = []byte(*tpl.TemplateData)
 	}
+	currentPayloadHash := payloadHash(jsonldBytes)
 
 	pdfState, err := h.TRepo.ReadPDFState(ctx, tx, qry.DID)
 	if err != nil {
@@ -73,10 +70,11 @@ func (h *ExportTemplatePdfHandler) Handle(ctx context.Context, qry ExportTemplat
 			IPFSCID:         state.IPFSCID,
 			RendererVersion: state.RendererVersion,
 			C2PAState:       state.C2PAState,
+			PayloadHash:     state.PayloadHash,
 		})
 	}
 
-	if pdfState.IPFSCID != "" && pdfState.C2PAState == currentC2PAState {
+	if pdfState.IPFSCID != "" && pdfState.C2PAState == currentC2PAState && pdfState.PayloadHash == currentPayloadHash {
 		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
 		if err != nil || len(r.Data) == 0 {
 			return nil, fmt.Errorf("fetch cached PDF from IPFS %s: %w", pdfState.IPFSCID, err)
@@ -86,7 +84,7 @@ func (h *ExportTemplatePdfHandler) Handle(ctx context.Context, qry ExportTemplat
 	}
 
 	if pdfState.IPFSCID != "" {
-		log.Printf("pdfgeneration: ExportTemplatePdf %s state changed %q→%q; appending", qry.DID, pdfState.C2PAState, currentC2PAState)
+		log.Printf("pdfgeneration: ExportTemplatePdf %s state/payload changed (state %q→%q, payloadHash %q→%q); appending", qry.DID, pdfState.C2PAState, currentC2PAState, pdfState.PayloadHash, currentPayloadHash)
 		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
 		if err != nil || len(r.Data) == 0 {
 			return nil, fmt.Errorf("fetch PDF from IPFS %s for update: %w", pdfState.IPFSCID, err)

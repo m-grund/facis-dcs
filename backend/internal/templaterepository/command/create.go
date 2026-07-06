@@ -1,3 +1,9 @@
+// Package command implements the write-side CQRS use cases for the template
+// repository: one file per Goa endpoint. Templates use copy-on-version
+// (see copy.go, register.go): every version is its own row/DID linked by a
+// base_template lineage key, unlike contractworkflowengine's contracts,
+// which mutate a single row in place and keep history in a separate table
+// (see ADR-0006 for the rationale).
 package command
 
 import (
@@ -39,7 +45,7 @@ type Creator struct {
 }
 
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
-	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID, cmd.Name)
+	normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("template data validation failed: %w", err)
 	}

@@ -2,7 +2,9 @@ import type { ComponentType } from '@/types/component-type'
 import type { ContractTemplateEventType } from '@/types/contract-template-event-type'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { TemplateType } from '@/types/template-type'
-import type { ContractTemplateData, PartialContractTemplate } from '../contract-template'
+import type { PartialContractTemplate } from '../contract-template'
+import type { ContractTemplateResponsible } from '../contract-template-responsible'
+import type { DcsTemplateData } from '../dcs-jsonld'
 import type { ContractTemplateApprovalTask } from '../contract-template-approval-task'
 import type { ContractTemplateEvent } from '../contract-template-event'
 import type { ContractTemplateReviewTask } from '../contract-template-review-task'
@@ -60,7 +62,8 @@ export interface ContractTemplateRetrieveByIdResponse {
   created_at: string
   updated_at: string
   /** The template data of the contract template */
-  template_data: ContractTemplateData
+  template_data: DcsTemplateData
+  responsible?: ContractTemplateResponsible
 }
 
 export interface ContractTemplateApproveResponse {

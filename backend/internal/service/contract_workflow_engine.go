@@ -20,6 +20,8 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/identity"
+	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/tsa"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -48,6 +50,9 @@ type contractWorkflowEnginesrvc struct {
 	ATrailReader         base.AuditTrailReader
 	DCSToDCSSynchronizer dcstodcs.DCSToDCSSynchronizer
 	TrustPool            *identity.EUTrustPool
+	IPFSClient           *ipfs.APIClient
+	ArchiveNotary        command.ArchiveNotary
+	ArchiveTSA           *tsa.APIClient
 	auth.JWTAuthenticator
 }
 
@@ -55,7 +60,8 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
 	sRepo db2.SyncRepository, trustPool *identity.EUTrustPool,
-	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument identity.DIDDocument) contractworkflowengine.Service {
+	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument identity.DIDDocument,
+	ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary, archiveTSA *tsa.APIClient) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -71,6 +77,9 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
 		TrustPool:        trustPool,
+		IPFSClient:       ipfsClient,
+		ArchiveNotary:    archiveNotary,
+		ArchiveTSA:       archiveTSA,
 	}
 }
 
@@ -250,20 +259,33 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		actionFlag = &flag
 	}
 
+	var contractData *datatype.JSON
+	if req.ContractData != nil {
+		data, err := datatype.NewJSON(req.ContractData)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+		contractData = &data
+	}
+
 	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
 	cmd := command.SubmitCmd{
-		DID:         req.Did,
-		UpdatedAt:   updatedAt,
-		SubmittedBy: middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-		ActionFlag:  actionFlag,
-		Comments:    req.Comments,
-		CauserDID:   localPeer,
+		DID:          req.Did,
+		UpdatedAt:    updatedAt,
+		SubmittedBy:  middleware.GetParticipantID(ctx),
+		HolderDID:    middleware.GetHolderDID(ctx),
+		UserRoles:    middleware.GetUserRoles(ctx),
+		ActionFlag:   actionFlag,
+		Comments:     req.Comments,
+		ContractData: contractData,
+		Reviewers:    req.Reviewers,
+		Approvers:    req.Approvers,
+		Negotiators:  req.Negotiators,
+		CauserDID:    localPeer,
 	}
 	handler := command.Submitter{
 		DB:          s.DB,
@@ -331,7 +353,6 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 
 	var contracts []*contractworkflowengine.ContractItem
 	for _, item := range result.Contracts {
-
 		var startDate *string
 		if item.StartDate != nil {
 			s := item.StartDate.Format(time.RFC3339)
@@ -346,14 +367,23 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 
 		var expPolicy *string
 		if item.ExpPolicy != nil {
-			s := item.ExpPolicy.String()
+			p, err := expirationpolicy.NewExpirationPolicy(*item.ExpPolicy)
+			if err != nil {
+				return nil, contractworkflowengine.MakeInternalError(err)
+			}
+			s := p.String()
 			expPolicy = &s
+		}
+
+		state, err := contractstate.NewContractState(item.State)
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
 		}
 
 		contracts = append(contracts, &contractworkflowengine.ContractItem{
 			Did:                  item.DID,
 			ContractVersion:      item.ContractVersion,
-			State:                item.State.String(),
+			State:                state.String(),
 			Name:                 item.Name,
 			Description:          item.Description,
 			CreatedBy:            item.CreatedBy,
@@ -368,6 +398,7 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 			Responsible:          item.Responsible,
 			LatestTemplateDid:    item.LatestTemplateDID,
 			TemplateIsDeprecated: item.TemplateIsDeprecated,
+			ParentContractDid:    item.ParentContractDID,
 		})
 	}
 
@@ -810,11 +841,14 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		CauserDID:  localPeer,
 	}
 	handler := command.Approver{
-		DB:          s.DB,
-		CRepo:       s.CRepo,
-		ATRepo:      s.ATRepo,
-		SRepo:       s.SRepo,
-		DIDDocument: s.DIDDocument,
+		DB:            s.DB,
+		CRepo:         s.CRepo,
+		ATRepo:        s.ATRepo,
+		SRepo:         s.SRepo,
+		DIDDocument:   s.DIDDocument,
+		IPFSStorer:    s.IPFSClient,
+		ArchiveNotary: s.ArchiveNotary,
+		ArchiveTSA:    s.ArchiveTSA,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

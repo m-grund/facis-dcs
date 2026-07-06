@@ -1,3 +1,15 @@
+// Package identity implements the did:web-based peer identity and trust
+// model used for DCS-to-DCS federation (see dcstodcs, contractworkflowengine
+// /remotesync). Each DCS instance publishes its own DID document (RSA key
+// pair) at /.well-known/did.json. Trust between two independently operated
+// instances rests on three layers, all implemented in this file: (1) an
+// eIDAS certificate chain in the DID document, validated against an EU trust
+// pool (VerifyEIDASCertificate); (2) a per-request challenge-response
+// signature proving possession of the private key (Sign/Verify), used
+// instead of a shared token since there is no common auth authority across
+// operators; and (3) a local trusted-peer allowlist enforced by callers
+// (see dcstodcs.CheckForUntrustedPeers), which is deliberately not part of
+// this package.
 package identity
 
 import (

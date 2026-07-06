@@ -1,3 +1,6 @@
+// Package approvaltaskstate is the per-approver sub-state-machine for a
+// template's approval tasks (OPEN -> APPROVED/REJECTED), mirroring
+// contractworkflowengine's own approvaltaskstate but scoped to templates.
 package approvaltaskstate
 
 import (

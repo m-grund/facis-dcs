@@ -16,30 +16,31 @@ const emit = defineEmits<{
       type="button"
       class="flex min-h-50 flex-col justify-center rounded-2xl border-2 p-8 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       :class="
-        modelValue === TemplateType.frameContract
+        modelValue === TemplateType.contractTemplate
           ? 'border-primary bg-primary/10 shadow-lg'
           : 'border-base-300 hover:border-primary/50 hover:bg-base-200/50'
       "
-      @click="emit('update:modelValue', TemplateType.frameContract)"
+      @click="emit('update:modelValue', TemplateType.contractTemplate)"
     >
-      <h3 class="mb-3 text-xl font-bold text-base-content">Frame Contract</h3>
+      <h3 class="mb-3 text-xl font-bold text-base-content">Contract</h3>
       <p class="text-sm leading-relaxed text-base-content/70">
-        All contracts are created from a frame contract. A frame contract is composed of one or more sub contracts.
+        A contract template composed of one or more components. Contracts created from this template can serve as the
+        parent for other contracts.
       </p>
     </button>
     <button
       type="button"
       class="flex min-h-50 flex-col justify-center rounded-2xl border-2 p-8 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       :class="
-        modelValue === TemplateType.subContract
+        modelValue === TemplateType.component
           ? 'border-primary bg-primary/10 shadow-lg'
           : 'border-base-300 hover:border-primary/50 hover:bg-base-200/50'
       "
-      @click="emit('update:modelValue', TemplateType.subContract)"
+      @click="emit('update:modelValue', TemplateType.component)"
     >
-      <h3 class="mb-3 text-xl font-bold text-base-content">Sub Contract</h3>
+      <h3 class="mb-3 text-xl font-bold text-base-content">Component</h3>
       <p class="text-sm leading-relaxed text-base-content/70">
-        Used by frame contracts. Define the reusable partial contracts that frame contracts can reference and compose.
+        A reusable partial contract template. Components can be embedded in other contract templates.
       </p>
     </button>
   </div>

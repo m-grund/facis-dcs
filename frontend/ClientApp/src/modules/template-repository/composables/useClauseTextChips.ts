@@ -1,7 +1,8 @@
 import type { Ref } from 'vue'
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import type { ClausePlaceholderHighlight } from '@template-repository/models/template-editor-ui-store'
-import { semanticParameterLabel, semanticParameterTypeLabel } from '@template-repository/utils/semantic-parameter-label'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
+import type { DcsContentSegment, DcsPlaceholder } from '@/models/dcs-jsonld'
 
 export type Segment =
   | { type: 'text'; value: string }
@@ -125,14 +126,154 @@ export function conditionIdsInText(text: string): Set<string> {
   return set
 }
 
-/** Builds placeholder label like "paramName (type)" from conditions. */
+// ---- JSON-LD DcsContentSegment[] helpers ----
+
+function resolveFieldId(
+  fieldId: string,
+  conditions: SemanticCondition[],
+): { conditionId: string; parameterName: string; displayText: string } | undefined {
+  for (const cond of conditions) {
+    const param = cond.parameters.find((p) => p.fieldId === fieldId)
+    if (param) {
+      return {
+        conditionId: cond.conditionId,
+        parameterName: param.parameterName,
+        displayText: `${semanticParameterLabel(param)} (${cond.conditionName})`,
+      }
+    }
+  }
+  return undefined
+}
+
+/**
+ * Converts JSON-LD DcsContentSegment[] into UI Segment[].
+ * Resolves DcsPlaceholder.dcs:bindsTo['@id'] (fieldId) via semanticConditions.
+ */
+export function parseSegmentsFromContent(content: DcsContentSegment[], conditions: SemanticCondition[]): Segment[] {
+  const segments: Segment[] = []
+  for (const seg of content) {
+    if (typeof seg === 'string') {
+      const parts = seg.split('\n')
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]
+        if (part) segments.push({ type: 'text', value: part })
+        if (i < parts.length - 1) segments.push({ type: 'newline' })
+      }
+    } else {
+      const fieldId = seg['dcs:bindsTo']['@id']
+      const resolved = resolveFieldId(fieldId, conditions)
+      segments.push({
+        type: 'placeholder',
+        conditionId: resolved?.conditionId ?? '',
+        parameterName: resolved?.parameterName ?? '',
+        displayText: resolved?.displayText ?? fieldId,
+      })
+    }
+  }
+  return segments
+}
+
+/**
+ * Converts DcsContentSegment[] to the internal `{{conditionId.parameterName}}` string.
+ * Used by the clause editor for DOM cursor arithmetic.
+ */
+export function contentToString(content: DcsContentSegment[], conditions: SemanticCondition[]): string {
+  let result = ''
+  for (const seg of content) {
+    if (typeof seg === 'string') {
+      result += seg
+    } else {
+      const fieldId = seg['dcs:bindsTo']['@id']
+      const resolved = resolveFieldId(fieldId, conditions)
+      if (resolved) {
+        result += `{{${resolved.conditionId}.${resolved.parameterName}}}`
+      }
+    }
+  }
+  return result
+}
+
+/**
+ * Converts an internal `{{conditionId.parameterName}}` string back to DcsContentSegment[].
+ * Used by the clause editor when emitting modelValue.
+ */
+export function stringToContent(text: string, conditions: SemanticCondition[]): DcsContentSegment[] {
+  const fieldIdMap = new Map<string, string>()
+  for (const cond of conditions) {
+    for (const param of cond.parameters) {
+      if (param.fieldId) fieldIdMap.set(`${cond.conditionId}.${param.parameterName}`, param.fieldId)
+    }
+  }
+  const content: DcsContentSegment[] = []
+  const re = /\{\{([^}]+)\}\}/g
+  let lastEnd = 0
+  let m: RegExpExecArray | null
+  re.lastIndex = 0
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastEnd) content.push(text.slice(lastEnd, m.index))
+    const key = m[1] ?? ''
+    const fieldId = fieldIdMap.get(key)
+    if (fieldId) {
+      const placeholder: DcsPlaceholder = { '@type': 'dcs:Placeholder', 'dcs:bindsTo': { '@id': fieldId } }
+      content.push(placeholder)
+    } else {
+      content.push(m[0])
+    }
+    lastEnd = m.index + m[0].length
+  }
+  if (lastEnd < text.length) content.push(text.slice(lastEnd))
+  return content
+}
+
+/**
+ * Returns the set of conditionIds referenced in a DcsContentSegment[] via dcs:bindsTo fieldIds.
+ */
+export function conditionIdsInContent(content: DcsContentSegment[], conditions: SemanticCondition[]): Set<string> {
+  const set = new Set<string>()
+  for (const seg of content) {
+    if (typeof seg === 'string') continue
+    const fieldId = seg['dcs:bindsTo']['@id']
+    for (const cond of conditions) {
+      if (cond.parameters.some((p) => p.fieldId === fieldId)) {
+        set.add(cond.conditionId)
+        break
+      }
+    }
+  }
+  return set
+}
+
+/**
+ * Returns the conditionId.parameterName key set for all placeholders in content.
+ * Used to track which parameter slots are already filled.
+ */
+export function usedPlaceholderKeysInContent(
+  content: DcsContentSegment[],
+  conditions: SemanticCondition[],
+): Set<string> {
+  const set = new Set<string>()
+  for (const seg of content) {
+    if (typeof seg === 'string') continue
+    const fieldId = seg['dcs:bindsTo']['@id']
+    for (const cond of conditions) {
+      const param = cond.parameters.find((p) => p.fieldId === fieldId)
+      if (param) {
+        set.add(`${cond.conditionId}.${param.parameterName}`)
+        break
+      }
+    }
+  }
+  return set
+}
+
+// ---- String-based helpers (public, kept for backwards compat with parseSegments callers) ----
+
+/** Builds placeholder label from conditions. */
 export function getPlaceholderLabelFromConditions(seg: Segment, conditions: SemanticCondition[]): string {
   if (!isPlaceholder(seg)) return ''
   const cond = conditions.find((c) => c.conditionId === seg.conditionId)
   const param = cond?.parameters.find((p) => p.parameterName === seg.parameterName)
-  const type = param?.type ?? 'string'
-  const label = param ? semanticParameterLabel(param) : seg.parameterName
-  return `${label} (${semanticParameterTypeLabel(type)})`
+  return param ? semanticParameterLabel(param) : seg.parameterName
 }
 
 export function useClauseTextChips(
@@ -354,7 +495,7 @@ export function useClauseTextChips(
     const h = highlight.value
     el.replaceChildren()
     const baseClass =
-      'inline-flex items-center px-1.5 py-0.5 rounded text-primary bg-primary/10 border border-primary/30 text-xs font-medium align-baseline cursor-pointer'
+      'inline-flex items-center px-2 py-0.5 rounded text-primary bg-primary/10 border-0 border-b border-neutral/70 text-xs font-medium align-baseline cursor-pointer'
     for (const seg of segments) {
       if (isText(seg)) {
         el.appendChild(document.createTextNode(seg.value))

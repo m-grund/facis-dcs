@@ -20,12 +20,6 @@ dependencies:
 - name: federated-catalogue
   repository: file://charts/federated-catalogue
   version: 0.1.0
-- name: custom-policy-agent
-  repository: file://charts/custom-policy-agent
-  version: 0.1.0
-- name: mongodb
-  repository: file://charts/mongodb
-  version: 0.1.0
 - name: ipfs
   repository: file://charts/ipfs
   version: 0.1.0
@@ -44,5 +38,5 @@ dependencies:
 - name: traefik
   repository: https://traefik.github.io/charts
   version: 41.0.0
-digest: sha256:d2ce04bb2195ba6e52c759e34bbcedf69693f23e9ec7e65e4a7235ff8fb94ae3
-generated: "2026-06-18T12:45:46.091622+02:00"
+digest: sha256:443430e141720896291adab3884aa940cded53170cc712e8c44afa13b4b299f3
+generated: "2026-07-03T11:36:35.661170669+02:00"

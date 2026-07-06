@@ -99,6 +99,13 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 	}
 }
 
+// processEvent anchors one outbox event into the tamper-evident audit trail:
+// it chains the entry to the previous CID (both per-resource and globally),
+// has it timestamped by the TSA, verifies that timestamp immediately as a
+// sanity check, writes the signed entry to IPFS, and only then marks the
+// outbox row processed and republishes the event on NATS. Because each
+// entry embeds the hash of its predecessor, retroactively modifying an
+// already-anchored entry breaks the chain and is detectable.
 func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.OutboxEvent, origin string) error {
 	tx, err := j.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -116,22 +123,12 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	}
 
 	var resLogPredCID *string
-	switch event.Component {
-	case componenttype.ContractTemplateRepo.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
-			if err != nil {
-				return fmt.Errorf("could not read log CID: %w", err)
-			}
+	if isResourceDID(event.DID) {
+		resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
+		if err != nil {
+			return fmt.Errorf("could not read log CID: %w", err)
 		}
-	case componenttype.ContractWorkflowEngine.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
-			if err != nil {
-				return fmt.Errorf("could not read log CID: %w", err)
-			}
-		}
-	case componenttype.System.String():
+	} else if event.Component == componenttype.System.String() {
 		if event.DID != nil && len(*event.DID) > 1 {
 			resLogPredCID, err = j.ARepo.ReadLogCID(ctx, tx, event.Component, *event.DID)
 			if err != nil {
@@ -174,20 +171,11 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
 	}
 
-	switch event.Component {
-	case componenttype.ContractTemplateRepo.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
-				return fmt.Errorf("could not update log CID: %w", err)
-			}
+	if isResourceDID(event.DID) {
+		if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
+			return fmt.Errorf("could not update log CID: %w", err)
 		}
-	case componenttype.ContractWorkflowEngine.String():
-		if event.DID != nil && len(*event.DID) > 1 {
-			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
-				return fmt.Errorf("could not update log CID: %w", err)
-			}
-		}
-	case componenttype.System.String():
+	} else if event.Component == componenttype.System.String() {
 		if event.DID != nil && len(*event.DID) > 1 {
 			if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
 				return fmt.Errorf("could not update log CID: %w", err)
@@ -209,4 +197,8 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 	}
 
 	return tx.Commit()
+}
+
+func isResourceDID(did *string) bool {
+	return did != nil && len(*did) > 1 && *did != "*"
 }

@@ -57,10 +57,10 @@ func (v verifier) Verify(vpToken string, ctx PresentationContext) (*VerifiedLogi
 		return nil, err
 	}
 
-	//err = checkStatusList(verified.RawClaims)
-	//if err != nil {
-	//	return nil, err
-	//}
+	err = checkStatusList(verified.RawClaims)
+	if err != nil {
+		return nil, err
+	}
 
 	granted, err := evaluateLoginRoles(verified.Roles)
 	if err != nil {

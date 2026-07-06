@@ -1,3 +1,8 @@
+// Package query implements the read-side CQRS use cases for the contract
+// workflow engine that operate across tasks/DIDs directly (contract- and
+// template-scoped queries live in the contract/ and contracttemplate/
+// subpackages). Like the command package, most handlers also emit an
+// audit-trail event for the read via base/event.Create.
 package query
 
 import (

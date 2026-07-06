@@ -12,7 +12,7 @@ const PoAVCT = "urn:dcs:poa:v1"
 // CredentialJWTTyp is the JWT typ for issued dc+sd-jwt PoA credentials.
 const CredentialJWTTyp = "dc+sd-jwt"
 
-const poaCredentialQueryID = "dcs_poa_credential"
+const PoACredentialQueryID = "dcs_poa_credential"
 
 // DefaultDCQLQuery requests a dc+sd-jwt PoA credential for OpenID4VP presentation.
 // Override the full query via OID4VP_DCQL_QUERY when needed.
@@ -20,7 +20,7 @@ func DefaultDCQLQuery() map[string]any {
 	return map[string]any{
 		"credentials": []any{
 			map[string]any{
-				"id":     poaCredentialQueryID,
+				"id":     PoACredentialQueryID,
 				"format": "dc+sd-jwt",
 				"meta": map[string]any{
 					"vct_values": []string{PoAVCT},

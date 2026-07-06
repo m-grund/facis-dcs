@@ -54,7 +54,7 @@ const showPublishButton = computed(() => {
   return (
     isManager.value &&
     props.template.state === TemplateState.registered &&
-    props.template.template_type === TemplateType.frameContract
+    props.template.template_type === TemplateType.contractTemplate
   )
 })
 
@@ -62,7 +62,7 @@ const showRegisterButton = computed(() => {
   return (
     isManager.value &&
     props.template.state === TemplateState.approved &&
-    props.template.template_type === TemplateType.frameContract
+    props.template.template_type === TemplateType.contractTemplate
   )
 })
 

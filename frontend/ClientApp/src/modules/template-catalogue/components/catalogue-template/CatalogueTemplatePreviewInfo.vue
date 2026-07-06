@@ -3,8 +3,7 @@ import { storeToRefs } from 'pinia'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 
-const { documentOutline, documentBlocks, semanticConditions, subTemplateSnapshots } =
-  storeToRefs(useTemplateDraftStore())
+const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(useTemplateDraftStore())
 </script>
 
 <template>
@@ -18,8 +17,8 @@ const { documentOutline, documentBlocks, semanticConditions, subTemplateSnapshot
       >
         <div class="h-full w-full overflow-auto px-10 py-8">
           <TemplatePreview
-            :document-outline="documentOutline"
-            :document-blocks="documentBlocks"
+            :layout="layout"
+            :blocks="blocks"
             :semantic-conditions="semanticConditions"
             :sub-template-snapshots="subTemplateSnapshots"
           />

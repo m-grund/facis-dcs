@@ -1,3 +1,7 @@
+// Package reviewtaskstate is the per-peer sub-state-machine for a
+// contract's review tasks (OPEN -> APPROVED/REJECTED), gating the
+// SUBMITTED -> REVIEWED transition the same way approvaltaskstate gates
+// REVIEWED -> APPROVED.
 package reviewtaskstate
 
 import (

@@ -1,3 +1,7 @@
+// Package ipfs is the client for the IPFS anchor store used by the
+// tamper-evident audit trail (base/event.OutboxProcessor writes each signed,
+// hash-chained audit entry here) and by C2PA/provenance artifacts
+// (pdfgeneration, signingmanagement).
 package ipfs
 
 import (

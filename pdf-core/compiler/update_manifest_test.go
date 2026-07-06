@@ -48,4 +48,3 @@ func TestExtractManifestStore_SucceedsOnUpdatedPDF(t *testing.T) {
 		t.Fatal("ExtractManifestStore returned empty bytes for updated PDF")
 	}
 }
-

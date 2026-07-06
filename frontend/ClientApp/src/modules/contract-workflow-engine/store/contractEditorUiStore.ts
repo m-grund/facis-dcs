@@ -16,6 +16,7 @@ const defaultState: Readonly<ContractEditorUiState> = {
     { id: 'builder', label: 'Builder' },
     { id: 'diff', label: 'Diff View' },
     { id: 'audit', label: 'Audit History' },
+    { id: 'structure', label: 'Structure' },
   ],
 }
 
@@ -34,11 +35,14 @@ export const useContractEditorUiStore = defineStore(storeId, {
       switch (contractState) {
         case ContractState.negotiation:
           return this.tabs.filter(
-            (tab) => ['details', 'content', 'diff'].includes(tab.id) || (isAuditingAuthorized && tab.id === 'audit'),
+            (tab) =>
+              ['details', 'content', 'diff', 'structure'].includes(tab.id) ||
+              (isAuditingAuthorized && tab.id === 'audit'),
           )
         default:
           return this.tabs.filter(
-            (tab) => ['details', 'content'].includes(tab.id) || (isAuditingAuthorized && tab.id === 'audit'),
+            (tab) =>
+              ['details', 'content', 'structure'].includes(tab.id) || (isAuditingAuthorized && tab.id === 'audit'),
           )
       }
     },

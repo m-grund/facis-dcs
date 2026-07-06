@@ -63,7 +63,8 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 
 	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Not the Origin peer for this contract: forward unchanged instead of
+			mutating locally (single-writer-per-aggregate, see package doc).
 		*/
 
 		err := tx.Commit()
@@ -79,6 +80,8 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 		return nil
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the contract is
+	// older than what's stored (see package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		if localPeer != cmd.CauserDID {
 			return errors.New("contract was updated elsewhere, please force synchronisation and reload")
@@ -89,6 +92,9 @@ func (h *EvidenceRecorder) Handle(ctx context.Context, cmd RecordEvidenceCmd) er
 	if processData.State == contractstate.Terminated.String() {
 		return errors.New("current contract state is invalid")
 	}
+
+	// RecordEvidence never mutates contract state — it only appends an
+	// evidence event to the audit trail.
 
 	evt := contractevents.RecordEvidenceEvent{
 		DID:             cmd.DID,

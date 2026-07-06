@@ -6,73 +6,76 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import {
-  parseSegments,
+  parseSegmentsFromContent,
   getPlaceholderLabelFromConditions,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
-import {
-  DocumentBlockType,
-  TemplateType,
-  isApprovedTemplateBlock,
-  type ClauseBlock,
-  isClauseBlock,
-} from '../../models/contract-template.ts'
+import { TemplateType } from '../../models/contract-template.ts'
+import type { DcsClause } from '@/models/dcs-jsonld'
+import type { NewBlockType } from '@template-repository/models/template-draft-store'
 
 const draftStore = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { addBlockModalContext } = storeToRefs(uiStore)
-const { documentBlocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
+const { addBlockModalContext, pendingPlacementClauseBlockId } = storeToRefs(uiStore)
+const { blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
 
 const isContractWorkflow = computed(() => uiStore.workflow === 'contract')
-const paletteBlockTypes = [
-  { blockType: DocumentBlockType.Section, label: 'Section' },
-  { blockType: DocumentBlockType.Text, label: 'Text' },
-  { blockType: DocumentBlockType.Clause, label: 'Clause' },
-] as const
+const paletteBlockTypes: { blockType: NewBlockType; label: string }[] = [
+  { blockType: 'dcs:Section', label: 'Section' },
+  { blockType: 'dcs:TextBlock', label: 'Text' },
+  { blockType: 'dcs:Clause', label: 'Clause' },
+]
 
-const isFrameContract = computed(() => draftStore.templateType === TemplateType.frameContract)
+const isContractTemplate = computed(() => draftStore.templateType === TemplateType.contractTemplate)
 
-// For each template did, number of ApprovedTemplate blocks in the outline that reference it.
 const referenceCountByDid = computed(() => {
   const inOutline = draftStore.blockIdsInOutline
   const count: Record<string, number> = {}
-  for (const b of documentBlocks.value) {
-    if (!isApprovedTemplateBlock(b) || !inOutline.has(b.blockId)) continue
-    count[b.templateId] = (count[b.templateId] ?? 0) + 1
+  for (const b of blocks.value) {
+    if (b['@type'] !== 'dcs:ApprovedTemplate' || !inOutline.has(b['@id'])) continue
+    const did = b['dcs:templateDid']
+    count[did] = (count[did] ?? 0) + 1
   }
   return count
 })
 
-/** Clause blocks that are not referenced in the document outline, sorted by title. */
-const unusedClauses = computed((): ClauseBlock[] => {
+const unusedClauses = computed((): DcsClause[] => {
   const inOutline = draftStore.blockIdsInOutline
-  const clauses = documentBlocks.value.filter((b): b is ClauseBlock => isClauseBlock(b))
-  const unused = clauses.filter((c) => !inOutline.has(c.blockId))
-  return [...unused].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''))
+  const clauses = blocks.value.filter((b): b is DcsClause => b['@type'] === 'dcs:Clause')
+  const unused = clauses.filter((c) => !inOutline.has(c['@id']))
+  return [...unused].sort((a, b) => (a['dcs:title'] ?? '').localeCompare(b['dcs:title'] ?? ''))
 })
+
+const pendingPlacementClause = computed(() =>
+  unusedClauses.value.find((clause) => clause['@id'] === pendingPlacementClauseBlockId.value),
+)
 const clauseSearch = ref('')
-const filteredUnusedClauses = computed((): ClauseBlock[] => {
+const filteredUnusedClauses = computed((): DcsClause[] => {
   const query = clauseSearch.value.trim().toLowerCase()
-  if (!query) return unusedClauses.value
-  return unusedClauses.value.filter((clause) =>
-    [
-      clause.title ?? '',
-      clause.text ?? '',
-      clause.conditionIds.join(' '),
-      clause.semanticPath ?? '',
-      clause.schemaRef ?? '',
-    ].some((value) => value.toLowerCase().includes(query)),
-  )
+  const clauses = unusedClauses.value.filter((clause) => clause['@id'] !== pendingPlacementClauseBlockId.value)
+  if (!query) return clauses
+  return clauses.filter((clause) => {
+    const contentText = clauseContentText(clause)
+    return [clause['dcs:title'] ?? '', contentText].some((v) => v.toLowerCase().includes(query))
+  })
 })
+
+function clauseContentText(clause: DcsClause): string {
+  const content = clause['dcs:content']
+  if (typeof content === 'string') return content
+  return content['@list'].map((seg) => (typeof seg === 'string' ? seg : '')).join(' ')
+}
 
 watch(addBlockModalContext, () => {
   clauseSearch.value = ''
 })
 
-function getSegments(clause: ClauseBlock): Segment[] {
-  return parseSegments(clause.text ?? '', semanticConditions.value)
+function getSegments(clause: DcsClause): Segment[] {
+  const content = clause['dcs:content']
+  if (typeof content === 'string') return []
+  return parseSegmentsFromContent(content['@list'], semanticConditions.value)
 }
 
 function getPlaceholderLabel(seg: Segment): string {
@@ -83,10 +86,10 @@ function handleCancel() {
   uiStore.closeAddBlockModal()
 }
 
-function handleAddBlock(blockType: DocumentBlockType) {
+function handleAddBlock(blockType: NewBlockType) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
-  draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, { blockType, text: '' })
+  draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, { blockType })
   uiStore.closeAddBlockModal()
 }
 
@@ -94,8 +97,7 @@ function handleAddApprovedTemplate(template: SubTemplateSnapshot) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
-    blockType: DocumentBlockType.ApprovedTemplate,
-    text: '',
+    blockType: 'dcs:ApprovedTemplate',
     templateId: template.did,
     version: template.version,
     document_number: template.document_number,
@@ -107,9 +109,7 @@ function handleAddClause(clauseBlockId: string) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
-    blockType: DocumentBlockType.Clause,
-    // Don't set text here, clauseBlockId is enough to link to the document outline.
-    text: '',
+    blockType: 'dcs:Clause',
     clauseBlockId,
   })
   uiStore.closeAddBlockModal()
@@ -131,7 +131,7 @@ function handleAddClause(clauseBlockId: string) {
         @click.stop
       >
         <h2 id="add-block-title" class="text-lg font-bold">Add block</h2>
-        <template v-if="!isContractWorkflow && isFrameContract">
+        <template v-if="!isContractWorkflow && isContractTemplate">
           <ApprovedSubTemplatePicker
             :templates="subTemplateSnapshots"
             :reference-count-by-did="referenceCountByDid"
@@ -152,6 +152,24 @@ function handleAddClause(clauseBlockId: string) {
           </div>
 
           <div class="border-t border-base-300 pt-4">
+            <div v-if="pendingPlacementClause" class="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <p class="mb-2 text-xs font-semibold text-primary">Selected clause</p>
+              <button
+                type="button"
+                class="flex min-h-[44px] w-full cursor-pointer flex-col justify-center rounded-lg border border-primary/40 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+                @click="handleAddClause(pendingPlacementClause['@id'])"
+              >
+                <span class="text-sm font-medium text-base-content">
+                  {{ pendingPlacementClause['dcs:title'] || 'Untitled clause' }}
+                </span>
+                <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
+                  <ClauseSegmentsPreview
+                    :segments="getSegments(pendingPlacementClause)"
+                    :get-placeholder-label="getPlaceholderLabel"
+                  />
+                </p>
+              </button>
+            </div>
             <div class="mb-2 flex flex-col gap-2">
               <p class="text-sm text-base-content/70">Defined clauses:</p>
               <input
@@ -165,12 +183,14 @@ function handleAddClause(clauseBlockId: string) {
             <div class="flex max-h-64 flex-col gap-2 overflow-y-auto">
               <button
                 v-for="clause in filteredUnusedClauses"
-                :key="clause.blockId"
+                :key="clause['@id']"
                 type="button"
                 class="flex min-h-[44px] cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
-                @click="handleAddClause(clause.blockId)"
+                @click="handleAddClause(clause['@id'])"
               >
-                <span class="text-sm font-medium text-base-content">{{ clause.title || 'Untitled clause' }}</span>
+                <span class="text-sm font-medium text-base-content">
+                  {{ clause['dcs:title'] || 'Untitled clause' }}
+                </span>
                 <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
                   <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
                 </p>

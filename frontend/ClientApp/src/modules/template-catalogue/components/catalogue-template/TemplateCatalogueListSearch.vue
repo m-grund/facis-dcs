@@ -32,7 +32,7 @@ const emptyTemplate: TemplateResourcesItem = {
   updated_at: '',
 }
 
-const responseMapper = (response: TemplateCatalogueRetrieveResponse) => response.items ?? []
+const searchResponseMapper = (response: TemplateCatalogueRetrieveResponse) => response.items ?? []
 
 const searchFn = async (request: Record<string, unknown>) => {
   const params: Record<string, unknown> = {
@@ -55,7 +55,7 @@ const searchFn = async (request: Record<string, unknown>) => {
   if (request.description) {
     params.description = request.description
   }
-  return responseMapper(await templateCatalogueIntegrationService.search_template(params as never))
+  return searchResponseMapper(await templateCatalogueIntegrationService.search_template(params as never))
 }
 </script>
 
@@ -66,6 +66,6 @@ const searchFn = async (request: Record<string, unknown>) => {
     :empty-item="emptyTemplate"
     :search-fn="searchFn"
     placeholder="Search catalogue templates"
-    @search-result="(result) => emit('searchResult', result)"
+    @search-result="(result) => emit('searchResult', result ?? [])"
   />
 </template>

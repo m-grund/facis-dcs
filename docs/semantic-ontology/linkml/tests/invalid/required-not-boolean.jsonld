@@ -1,0 +1,21 @@
+{
+    "@context": {
+        "dcs": "https://w3id.org/facis/dcs/ontology/v1#"
+    },
+    "@id": "did:web:localhost:template:test-required-not-boolean",
+    "@type": "dcs:ContractTemplate",
+    "dcs:contractData": [
+        {
+            "@id": "did:web:localhost:template:test-required-not-boolean#req-1",
+            "@type": "dcs:DataRequirement",
+            "dcs:fields": [
+                {
+                    "@id": "did:web:localhost:template:test-required-not-boolean#field-1",
+                    "@type": "dcs:RequirementField",
+                    "dcs:parameterName": "some.field",
+                    "dcs:required": "yes"
+                }
+            ]
+        }
+    ]
+}

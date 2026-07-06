@@ -1,5 +1,5 @@
 import http from '@/api/http'
-import type { AuditRequest } from '@/models/requests/auditing-request'
+import type { AuditReportRequest, AuditRequest, AuditScope } from '@/models/requests/auditing-request'
 import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/responses/auditing-response'
 import type { AuditingService } from '@/models/services/auditing-service'
 import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
@@ -28,33 +28,41 @@ interface RawPACAuditResource {
   auditTrail?: RawAuditTrailEntry[]
 }
 
-const normalizeAuditResponse = (data: AuditResponse | string): AuditResponse => {
+const normalizeAuditResponse = (data: AuditResponse | string, scope: AuditScope): AuditResponse => {
   if (!Array.isArray(data)) {
     return []
   }
 
-  return data.flatMap((item, index) => normalizeAuditItem(item as AuditFinding & RawPACAuditResource, index))
+  return data.flatMap((item, index) => normalizeAuditItem(item as AuditFinding & RawPACAuditResource, index, scope))
 }
 
-function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: number): AuditFinding[] {
+function normalizeAuditItem(
+  item: AuditFinding & RawPACAuditResource,
+  index: number,
+  scope: AuditScope,
+): AuditFinding[] {
   const trail = item.audit_trail ?? item.auditTrail
   if (!Array.isArray(trail)) {
+    if (!hasAuditPayload(item)) {
+      return []
+    }
     if (!isVisibleAuditEvent(item.event_type ?? item.eventType)) {
       return []
     }
-    return [normalizeFinding(item, index, item.did, item.component, item.created_at ?? item.createdAt)]
+    return [normalizeFinding(item, index, scope, item.did, item.created_at ?? item.createdAt)]
   }
   if (trail.length === 0) {
     return []
   }
   return trail
+    .filter(hasAuditPayload)
     .filter((entry) => isVisibleAuditEvent(entry.event_type ?? entry.eventType))
     .map((entry, entryIndex) =>
       normalizeFinding(
         entry as AuditFinding & RawAuditTrailEntry,
         `${index}-${entry.id ?? entryIndex}`,
+        scope,
         entry.did ?? item.did,
-        entry.component ?? item.component,
         entry.created_at ?? entry.createdAt ?? item.created_at ?? item.createdAt,
         true,
       ),
@@ -64,8 +72,8 @@ function normalizeAuditItem(item: AuditFinding & RawPACAuditResource, index: num
 function normalizeFinding(
   item: AuditFinding & RawAuditTrailEntry,
   fallbackId: number | string,
+  scope: AuditScope,
   fallbackDid?: string,
-  fallbackComponent?: string,
   fallbackCreatedAt?: string,
   useFallbackId = false,
 ): AuditFinding {
@@ -81,7 +89,7 @@ function normalizeFinding(
     category,
     title: item.title ?? stringValue(policyData?.title) ?? contractAuditEventDisplayText(eventType, eventData),
     description: item.description ?? descriptionFromEventData(eventData),
-    component: item.component ?? fallbackComponent,
+    component: item.component ?? auditComponentLabel(scope),
     status,
     did: item.did ?? objectDid ?? fallbackDid,
     object_name: stringValue(policyData?.objectName),
@@ -89,6 +97,19 @@ function normalizeFinding(
     created_at: item.created_at ?? item.createdAt ?? fallbackCreatedAt ?? new Date().toISOString(),
     details: item.details ?? item,
   }
+}
+
+type RawAuditPayload = RawAuditTrailEntry & Pick<Partial<AuditFinding>, 'description' | 'status' | 'title'>
+
+function hasAuditPayload(item: RawAuditPayload): boolean {
+  return (
+    Boolean(stringValue(item.event_type ?? item.eventType)) ||
+    item.event_data != null ||
+    item.eventData != null ||
+    Boolean(stringValue(item.title)) ||
+    Boolean(stringValue(item.description)) ||
+    Boolean(stringValue(item.status))
+  )
 }
 
 function categoryFromEvent(eventType?: string, severity?: string): AuditFinding['category'] {
@@ -123,6 +144,10 @@ function descriptionFromEventData(eventData: unknown): string {
   const ruleId = stringValue(eventData.ruleId)
   const semanticPath = stringValue(eventData.semanticPath)
   const requirement = stringValue(eventData.requirement)
+  const actualValue = detailValue(eventData.actualValue)
+  const expectedValue = detailValue(eventData.expectedValue)
+  const expectedValues = detailValue(eventData.expectedValues)
+  const operator = stringValue(eventData.operator)
   const objectName = stringValue(eventData.objectName)
   const objectDid = stringValue(eventData.objectDid)
   const state = stringValue(eventData.state)
@@ -140,9 +165,13 @@ function descriptionFromEventData(eventData: unknown): string {
       .filter(Boolean)
       .join(' · '),
     message,
+    requirement ? `Requirement: ${requirement}` : '',
+    actualValue ? `Actual value: ${actualValue}` : '',
+    expectedValue ? `Expected value: ${expectedValue}` : '',
+    expectedValues ? `Expected values: ${expectedValues}` : '',
+    operator ? `Operator: ${operator}` : '',
     ruleId ? `Rule: ${ruleId}` : '',
     semanticPath ? `Semantic path: ${semanticPath}` : '',
-    requirement ? `Requirement: ${requirement}` : '',
   ].filter(Boolean)
   if (parts.length) return parts.join('\n')
   return JSON.stringify(eventData, null, 2)
@@ -156,12 +185,38 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
 
+function detailValue(value: unknown): string | undefined {
+  if (typeof value === 'string') return value.trim() ? value : undefined
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const values = value.map((item) => detailValue(item)).filter(Boolean)
+    return values.length ? values.join(', ') : undefined
+  }
+  if (isObjectRecord(value)) return JSON.stringify(value)
+  return undefined
+}
+
+function auditComponentLabel(scope: AuditScope): string {
+  switch (scope) {
+    case 'templates':
+      return 'Templates'
+    case 'contracts':
+      return 'Contracts'
+    case 'archive':
+      return 'Archive'
+    case 'signatures':
+      return 'Signatures'
+  }
+}
+
 export const auditingService: AuditingService = {
   async audit(request: AuditRequest) {
-    return http.post<AuditResponse | string>('/pac/audit', request).then((res) => normalizeAuditResponse(res.data))
+    return http
+      .post<AuditResponse | string>('/pac/audit', request)
+      .then((res) => normalizeAuditResponse(res.data, request.scope))
   },
 
-  async report(request: AuditRequest) {
+  async report(request: AuditReportRequest) {
     return http.get<AuditReportResponse>('/pac/report', { params: request }).then((res) => res.data)
   },
 }

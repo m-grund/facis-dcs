@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
-import type { ContractData } from '@/models/contract-data'
 import type { Contract } from '@/models/contract/contract'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
@@ -14,6 +13,7 @@ import TemplatePreview from '@/modules/template-repository/components/builder-ed
 import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
 import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
+import { getSemanticConditionsFromTemplateData } from '@/modules/template-repository/store/dcsDraftStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
@@ -63,15 +63,14 @@ const verificationResult = computed(() => {
     templateId: subTemplate.did,
     version: subTemplate.version,
     document_number: subTemplate.document_number,
-    semanticConditions: subTemplate.template_data?.semanticConditions ?? [],
+    semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
   }))
-  const result = verifySemanticValue(
+  return verifySemanticValue(
     templateDraftStore.semanticConditions,
     subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.documentBlocks,
+    templateDraftStore.blocks,
   )
-  return result
 })
 
 const contract: Ref<Contract | null> = ref(null)
@@ -95,17 +94,13 @@ watch(
 )
 
 watch(
-  () => [
-    templateDraftStore.documentBlocks,
-    templateDraftStore.semanticConditions,
-    templateDraftStore.subTemplateSnapshots,
-  ],
+  () => [templateDraftStore.blocks, templateDraftStore.semanticConditions, templateDraftStore.subTemplateSnapshots],
   () => {
     const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
       (conditionValue) =>
         !hasConditionParameterForValue(
           conditionValue,
-          templateDraftStore.documentBlocks,
+          templateDraftStore.blocks,
           templateDraftStore.semanticConditions,
           templateDraftStore.subTemplateSnapshots,
         ),
@@ -201,21 +196,21 @@ function applyContractDataToDraft(contractData?: unknown) {
     contractContentValuesStore.reset()
     return
   }
-  const cd = preprocessContractData(contractData as ContractData)
-  templateDraftStore.reset({
-    workflow: 'contract',
-    documentOutline: cd.documentOutline ?? [],
-    documentBlocks: cd.documentBlocks ?? [],
-    semanticConditions: cd.semanticConditions ?? [],
-    subTemplateSnapshots: cd.subTemplateSnapshots ?? [],
-    templateDataVersion: cd.templateDataVersion,
-    semanticProfile: cd.semanticProfile,
-    templateVariables: cd.templateVariables ?? [],
-    placeholderBindings: cd.placeholderBindings ?? [],
-    semanticRules: cd.semanticRules ?? [],
-    sla: cd.sla ?? null,
-  })
-  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  const cd = preprocessContractData(contractData)
+  if (cd) {
+    templateDraftStore.reset({
+      workflow: 'contract',
+      blocks: cd.blocks,
+      layout: cd.layout,
+      contractData: cd.contractData,
+      policies: cd.policies,
+      subTemplateSnapshots: cd.subTemplateSnapshots,
+    })
+    contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  } else {
+    templateDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+  }
 }
 
 const exportPDF = async () => {
@@ -234,8 +229,8 @@ const exportPDF = async () => {
 </script>
 
 <template>
-  <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <div v-if="!!contract">
+  <div class="flex h-full flex-col">
+    <div v-if="!!contract" class="flex flex-1 flex-col">
       <div class="flex flex-1 flex-col">
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
@@ -268,8 +263,8 @@ const exportPDF = async () => {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :document-outline="templateDraftStore.documentOutline"
-                        :document-blocks="templateDraftStore.documentBlocks"
+                        :layout="templateDraftStore.layout"
+                        :blocks="templateDraftStore.blocks"
                         :semantic-conditions="templateDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"

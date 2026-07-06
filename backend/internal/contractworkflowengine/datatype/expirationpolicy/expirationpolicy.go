@@ -1,3 +1,7 @@
+// Package expirationpolicy declares what should happen when a contract's
+// exp_date passes. The cron job in contractworkflowengine.CronJob currently
+// only logs a placeholder action for each policy (Renewal/Archiving/
+// Termination are not yet implemented beyond setting the EXPIRED state).
 package expirationpolicy
 
 import (

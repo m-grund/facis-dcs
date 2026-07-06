@@ -123,11 +123,12 @@ func buildOntologyRuntime() ontologyRuntimeMetadata {
 }
 
 func entityRoleAllowedValues() []string {
+	valueOptions := parseOntologyValueOptions(ontologyStatementsFromConfiguredFile())
 	for _, statement := range ontologyStatementsFromConfiguredFile() {
 		if ontologySubject(statement) != "dcst:constraint-contract-party-role" {
 			continue
 		}
-		constraint := parseOntologyValueConstraint(statement)
+		constraint := parseOntologyValueConstraint(statement, valueOptions)
 		return append([]string(nil), constraint.AllowedValues...)
 	}
 	return nil
@@ -177,15 +178,6 @@ func ontologyStatementsFromConfiguredFile() []string {
 	return nil
 }
 
-//nolint:unused
-func statementLeaf(statementField string) string {
-	_, leaf, ok := splitStatementField(statementField)
-	if !ok {
-		return statementField
-	}
-	return leaf
-}
-
 func loadOntologyDomainFields() (map[string]domainField, error) {
 	var failures []string
 	for _, path := range ontologyPathCandidates() {
@@ -219,12 +211,13 @@ func ontologyPathCandidates() []string {
 func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 	statements := ontologyStatements(content)
 	constraints := map[string]*valueConstraint{}
+	valueOptions := parseOntologyValueOptions(statements)
 	for _, statement := range statements {
 		if !strings.Contains(statement, " a dcs:ValueConstraint") {
 			continue
 		}
 		subject := ontologySubject(statement)
-		constraints[subject] = parseOntologyValueConstraint(statement)
+		constraints[subject] = parseOntologyValueConstraint(statement, valueOptions)
 	}
 
 	fields := map[string]domainField{}
@@ -256,6 +249,7 @@ func parseOntologyDomainFields(content string) (map[string]domainField, error) {
 			}
 			copy := *constraint
 			copy.AllowedValues = append([]string(nil), constraint.AllowedValues...)
+			copy.ValueOptions = append([]valueOption(nil), constraint.ValueOptions...)
 			field.Constraint = &copy
 		}
 		fields[semanticPath] = field
@@ -356,21 +350,6 @@ func entityRoleFromEntityType(value string) string {
 	return ""
 }
 
-func applyStatementEntityRole(statement map[string]any, role string) {
-	if role != "" {
-		statement[ontologyRuntime.EntityRoleStatementField] = role
-	}
-}
-
-func normalizeStatementValue(record semanticValueRecord) any {
-	if record.OntologyTerm == ontologyRuntime.EntityRoleField {
-		if role, ok := record.Value.(string); ok {
-			return canonicalEntityRole(role)
-		}
-	}
-	return record.Value
-}
-
 func validateOntologyRoleEntity(entity map[string]any) error {
 	entityType, _ := entity["@type"].(string)
 	if ontologyIdentifier(entityType) != ontologyRuntime.RoleEntityType {
@@ -441,34 +420,43 @@ func ontologySubject(statement string) string {
 	return fields[0]
 }
 
-func ontologyStatementHasType(statement string, class string) bool {
-	expandedClass := expandOntologyResource(class)
-	for _, line := range strings.Split(statement, "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) < 3 || fields[1] != "a" {
-			continue
-		}
-		for _, rawClass := range fields[2:] {
-			candidate := strings.TrimSuffix(strings.TrimSuffix(rawClass, ";"), ",")
-			if expandOntologyResource(candidate) == expandedClass {
-				return true
-			}
+func parseOntologyValueConstraint(statement string, catalogOptions map[string]valueOption) *valueConstraint {
+	allowedValues := ontologyStrings(statement, "dcs:allowedValue")
+	valueOptions := make([]valueOption, 0, len(allowedValues))
+	for _, value := range allowedValues {
+		if option, ok := catalogOptions[value]; ok {
+			valueOptions = append(valueOptions, option)
 		}
 	}
-	return false
-}
-
-func parseOntologyValueConstraint(statement string) *valueConstraint {
 	constraint := &valueConstraint{
 		Format:           ontologyString(statement, "dcs:format"),
 		Pattern:          ontologyString(statement, "dcs:pattern"),
-		AllowedValues:    ontologyStrings(statement, "dcs:allowedValue"),
+		ValueType:        expandOntologyResource(ontologyResource(statement, "dcs:valueType")),
+		AllowedValues:    allowedValues,
+		ValueOptions:     valueOptions,
 		AllowedValuesRef: ontologyString(statement, "dcs:allowedValuesRef"),
 		Description:      ontologyString(statement, "rdfs:label"),
 	}
 	constraint.Min = ontologyNumber(statement, "dcs:minInclusive")
 	constraint.Max = ontologyNumber(statement, "dcs:maxInclusive")
 	return constraint
+}
+
+func parseOntologyValueOptions(statements []string) map[string]valueOption {
+	options := map[string]valueOption{}
+	for _, statement := range statements {
+		value := ontologyString(statement, "skos:notation")
+		if value == "" {
+			continue
+		}
+		options[value] = valueOption{
+			Value:  value,
+			Label:  ontologyString(statement, "skos:prefLabel"),
+			Symbol: ontologyString(statement, "dcs:valueSymbol"),
+			IRI:    expandOntologyResource(ontologySubject(statement)),
+		}
+	}
+	return options
 }
 
 func allowedValuesForConstraint(constraint *valueConstraint) []string {
@@ -488,6 +476,28 @@ func allowedValuesForConstraint(constraint *valueConstraint) []string {
 		}
 		if len(field.Constraint.AllowedValues) > 0 {
 			return append([]string(nil), field.Constraint.AllowedValues...)
+		}
+	}
+	return nil
+}
+
+func valueOptionsForConstraint(constraint *valueConstraint) []valueOption {
+	if constraint == nil {
+		return nil
+	}
+	if len(constraint.ValueOptions) > 0 {
+		return append([]valueOption(nil), constraint.ValueOptions...)
+	}
+	ref := normalizedAllowedValuesRef(constraint.AllowedValuesRef)
+	if ref == "" {
+		return nil
+	}
+	for _, field := range ontologyDomainFieldIndex {
+		if field.Constraint == nil || normalizedAllowedValuesRef(field.Constraint.AllowedValuesRef) != ref {
+			continue
+		}
+		if len(field.Constraint.ValueOptions) > 0 {
+			return append([]valueOption(nil), field.Constraint.ValueOptions...)
 		}
 	}
 	return nil

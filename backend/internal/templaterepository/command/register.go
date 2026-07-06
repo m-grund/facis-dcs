@@ -40,6 +40,11 @@ type Registrar struct {
 	DIDDocument identity.DIDDocument
 }
 
+// Handle has two unrelated modes gated by whether cmd.DID already exists
+// locally: if it does, this only flips its state to REGISTERED; if it does
+// not, it pulls the template (identified by did + version) from the
+// Federated Catalogue via FCClient and imports it as a brand-new local DID
+// in state DRAFT. The two branches below share nothing but the method name.
 func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error) {
 
 	if cmd.DID == "" {

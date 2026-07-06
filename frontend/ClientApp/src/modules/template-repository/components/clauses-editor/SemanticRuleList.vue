@@ -41,8 +41,7 @@ function onParamEnter(conditionId: string, parameterName: string) {
   emit('highlightParam', conditionId, parameterName)
 }
 
-function onParamClick(conditionId: string, parameterName: string, isFixed: boolean) {
-  if (isFixed) return
+function onParamClick(conditionId: string, parameterName: string) {
   emit('insertPlaceholder', conditionId, parameterName)
 }
 </script>
@@ -70,7 +69,7 @@ function onParamClick(conditionId: string, parameterName: string, isFixed: boole
             :is-required-and-unused="isParamRequiredAndUnused(c.conditionId, p.parameterName)"
             @mouseenter="onParamEnter(c.conditionId, p.parameterName)"
             @mouseleave="onParamLeave"
-            @click="onParamClick(c.conditionId, p.parameterName, p.fixedValue !== undefined)"
+            @click="onParamClick(c.conditionId, p.parameterName)"
           />
         </ul>
       </li>

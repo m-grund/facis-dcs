@@ -1,3 +1,5 @@
+// Package pq is the Postgres implementation of dcstodcs's sync repository
+// (trusted-peer allowlist + sync-fail retry queue).
 package pq
 
 import (

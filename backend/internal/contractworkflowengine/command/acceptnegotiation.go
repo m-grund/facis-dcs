@@ -1,3 +1,19 @@
+// Package command implements the write-side CQRS use cases for the contract
+// workflow engine: one file per Goa endpoint, each following the same shape
+// (BeginTx -> forward-if-not-origin -> validate -> mutate -> event.Create ->
+// Commit). Two cross-cutting rules recur across most handlers here:
+//
+//  1. Single-writer-per-aggregate: a contract's Origin peer is its sole
+//     writer. A handler that finds it is not running on the Origin peer
+//     forwards the exact same command, unmutated, to the Origin via a
+//     signed did:web RPC (contractworkflowengine/remotesync/remoteaction)
+//     instead of applying the change locally (see ADR-0005).
+//  2. Optimistic concurrency: state-mutating commands carry a client-supplied
+//     UpdatedAt that is compared against the stored value before any
+//     mutation, rejecting stale writes (see ADR-0007). Not every handler in
+//     this package requires it (e.g. AcceptNegotiation/RejectNegotiation
+//     currently don't), which is a known inconsistency, not an oversight to
+//     replicate elsewhere.
 package command
 
 import (
@@ -65,7 +81,10 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 
 	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Not the Origin peer for this contract: forward unchanged to the peer
+			that is (single-writer-per-aggregate, see package doc / ADR-0005).
+			Note this command carries no UpdatedAt, so it skips the optimistic-
+			concurrency check that most other handlers in this package apply.
 		*/
 
 		err := tx.Commit()

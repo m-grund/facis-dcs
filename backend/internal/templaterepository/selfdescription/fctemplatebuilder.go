@@ -1,3 +1,6 @@
+// Package selfdescription builds the Gaia-X self-description payload for a
+// template so it can be registered/published to the Federated Catalogue
+// (see templatecatalogueintegration and command/register.go, publish.go).
 package selfdescription
 
 import (

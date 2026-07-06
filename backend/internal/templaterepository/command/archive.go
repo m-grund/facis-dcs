@@ -50,6 +50,7 @@ func (h *Archiver) Handle(ctx context.Context, cmd ArchiveCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
+	// Optimistic concurrency (see command package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}

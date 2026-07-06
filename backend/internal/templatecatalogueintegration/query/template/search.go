@@ -8,7 +8,6 @@ import (
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
-	"digital-contracting-service/internal/templatecatalogueintegration/internal/ptr"
 )
 
 type SearchQry struct {
@@ -28,12 +27,17 @@ type SearchHandler struct {
 
 const searchTemplatesCountStatementTemplate = `
 MATCH (ct:ContractTemplate)
+WHERE head(ct.claimsGraphUri) IS NOT NULL
+OPTIONAL MATCH (m:TemplateMetadata {did: head(ct.claimsGraphUri)})
 %s
 RETURN count(ct) AS total
 `
 
+// TODO: fix FC GraphDB issue
 const searchTemplatesStatementTemplate = `
 MATCH (ct:ContractTemplate)
+WHERE head(ct.claimsGraphUri) IS NOT NULL
+OPTIONAL MATCH (m:TemplateMetadata {did: head(ct.claimsGraphUri)})
 %s
 RETURN {
   did: ct.did,
@@ -89,29 +93,11 @@ func (h *SearchHandler) Handle(qry SearchQry) (*templatecatalogueintegration.Tem
 
 	items := make([]*templatecatalogueintegration.TemplateCatalogueItem, 0, len(dataResp.Items))
 	for _, item := range dataResp.Items {
-		var ct map[string]interface{}
-		// Extract the template projection map from the item
-		for _, v := range item {
-			if m, ok := v.(map[string]interface{}); ok {
-				ct = m
-				break
+		if ct := projectionMap(item); ct != nil {
+			if mapped := mapCatalogueItem(ct); mapped != nil {
+				items = append(items, mapped)
 			}
 		}
-		if ct == nil {
-			continue
-		}
-		items = append(items, &templatecatalogueintegration.TemplateCatalogueItem{
-			Did:            ptr.StringFromMap(ct, "did"),
-			DocumentNumber: ptr.Ref(ptr.StringFromMap(ct, "document_number")),
-			Version:        ptr.Ref(ptr.IntFromMap(ct, "version")),
-			SchemaVersion:  ptr.Ref(ptr.IntFromMap(ct, "schema_version")),
-			Name:           ptr.Ref(ptr.StringFromMap(ct, "name")),
-			Description:    ptr.Ref(ptr.StringFromMap(ct, "description")),
-			TemplateType:   ptr.Ref(ptr.StringFromMap(ct, "template_type")),
-			ParticipantID:  ptr.Ref(ptr.StringFromMap(ct, "participant_id")),
-			CreatedAt:      ptr.Ref(ptr.StringFromMap(ct, "created_at")),
-			UpdatedAt:      ptr.Ref(ptr.StringFromMap(ct, "updated_at")),
-		})
 	}
 
 	return &templatecatalogueintegration.TemplateCatalogueRetrieveResponse{
@@ -132,23 +118,23 @@ func buildSearchWhereClause(qry SearchQry) (string, map[string]string) {
 	params := make(map[string]string)
 
 	if value := strings.TrimSpace(qry.DID); value != "" {
-		conditions = append(conditions, "toLower(ct.did) CONTAINS toLower($did)")
+		conditions = append(conditions, "toLower(coalesce(m.did, head(ct.claimsGraphUri))) CONTAINS toLower($did)")
 		params["did"] = value
 	}
 	if value := strings.TrimSpace(qry.DocumentNumber); value != "" {
-		conditions = append(conditions, "toLower(ct.documentNumber) CONTAINS toLower($document_number)")
+		conditions = append(conditions, "toLower(coalesce(m.documentNumber, ct.documentNumber)) CONTAINS toLower($document_number)")
 		params["document_number"] = value
 	}
 	if qry.Version > 0 {
-		conditions = append(conditions, "ct.version = $version")
+		conditions = append(conditions, "toInteger(coalesce(m.templateVersion, ct.templateVersion, ct.version)) = toInteger($version)")
 		params["version"] = strconv.Itoa(qry.Version)
 	}
 	if value := strings.TrimSpace(qry.Name); value != "" {
-		conditions = append(conditions, "toLower(ct.name) CONTAINS toLower($name)")
+		conditions = append(conditions, "toLower(coalesce(m.name, m.title, ct.name)) CONTAINS toLower($name)")
 		params["name"] = value
 	}
 	if value := strings.TrimSpace(qry.Description); value != "" {
-		conditions = append(conditions, "toLower(ct.description) CONTAINS toLower($description)")
+		conditions = append(conditions, "toLower(coalesce(m.description, ct.description)) CONTAINS toLower($description)")
 		params["description"] = value
 	}
 

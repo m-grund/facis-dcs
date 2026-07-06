@@ -42,10 +42,9 @@ type TrustConfig interface {
 // Trust and key material are resolved inside the JWT keyfunc so verification never proceeds
 // with an untrusted or unknown issuer key. Resolution order:
 //
-//  1. header.jwk — embedded JWK matched against the issuer entry in trust configuration (implemented).
-//  2. header.x5c — certificate chain validated against eIDAS LOTL (not implemented).
-//  3. header.kid — lookup in the issuer JWKS bundled in trust configuration (implemented).
-//  4. issuer JWKS URI — fetch keys dynamically from the issuer metadata (not implemented).
+//  1. header.jwk — embedded JWK matched against the issuer entry in trust configuration.
+//  2. header.x5c — rejected until chain validation lands with the trust migration.
+//  3. header.kid — lookup in the issuer JWKS bundled in trust configuration.
 func ResolveIssuerVerificationKey(cfg TrustConfig, token *jwt.Token) (any, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("trust config is not configured")
@@ -74,17 +73,11 @@ func ResolveIssuerVerificationKey(cfg TrustConfig, token *jwt.Token) (any, error
 	}
 
 	if _, ok := token.Header["x5c"]; ok {
-		// TODO: validate the x5c chain and map the leaf certificate to a trusted eIDAS LOTL entry.
+		// x5c chain validation lands with the trust migration (docs/openid4vp-trust-migration-plan.md).
 		return nil, fmt.Errorf("x5c issuer key resolution is not implemented yet")
 	}
 
-	key, err := verificationKeyFromTrustedJWKS(jwksRaw, token)
-	if err == nil {
-		return key, nil
-	}
-
-	// TODO: resolve signing keys from the issuer's JWKS URI when not present in trust configuration.
-	return nil, err
+	return verificationKeyFromTrustedJWKS(jwksRaw, token)
 }
 
 func verificationKeyFromHeaderJWK(jwksRaw json.RawMessage, rawJWK any) (any, error) {
@@ -110,17 +103,29 @@ func verificationKeyFromTrustedJWKS(jwksRaw json.RawMessage, token *jwt.Token) (
 	}
 
 	kid, _ := token.Header["kid"].(string)
-	for _, key := range doc.Keys {
-		if kid != "" && key.Kid != kid {
-			continue
+	if kid == "" {
+		// Without a kid the key choice must be unambiguous.
+		if len(doc.Keys) != 1 {
+			return nil, fmt.Errorf("credential jwt has no kid and issuer jwks has %d keys", len(doc.Keys))
 		}
+		return trustedECKey(doc.Keys[0])
+	}
 
-		if key.Kty == "EC" && key.Crv == "P-256" {
-			return ecPublicKey(key.X, key.Y)
+	for _, key := range doc.Keys {
+		if key.Kid == kid {
+			return trustedECKey(key)
 		}
 	}
 
 	return nil, fmt.Errorf("no matching issuer jwk for kid %q", kid)
+}
+
+func trustedECKey(key JWK) (any, error) {
+	if key.Kty != "EC" || key.Crv != "P-256" {
+		return nil, fmt.Errorf("issuer jwk %q is not an EC P-256 key", key.Kid)
+	}
+
+	return ecPublicKey(key.X, key.Y)
 }
 
 func assertJWKTrusted(jwksRaw json.RawMessage, candidate JWK) error {

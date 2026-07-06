@@ -1,34 +1,27 @@
 package compiler
 
 import (
-	"context"
 	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
-// mustExtractFromPayload runs a raw JSON-LD payload through NormalizePayload
-// and extractDocumentModel, failing the test on any error.
-// This helper ensures tests exercise the full IRI-based extraction pipeline
-// rather than bypassing it by constructing raw Go maps.
+// mustExtractFromPayload canonicalizes a raw JSON-LD payload and extracts the
+// document model via extractDocumentModelFromCanonical, failing the test on any
+// error. Canonicalization ensures all input flavors (prefixed, @vocab, expanded)
+// are normalized before extraction.
 func mustExtractFromPayload(t *testing.T, payload []byte) documentModel {
 	t.Helper()
-	_, expanded, err := NormalizePayload(payload)
+	canonical, err := CanonicalizePayload(payload)
 	if err != nil {
-		t.Fatalf("NormalizePayload: %v", err)
+		t.Fatalf("CanonicalizePayload: %v", err)
 	}
-	var rawRoot map[string]any
-	if err := json.Unmarshal(payload, &rawRoot); err != nil {
-		t.Fatalf("json.Unmarshal: %v", err)
-	}
-	rawCtx, _ := rawRoot["@context"].(map[string]any)
-	rootID, _ := rawRoot["@id"].(string)
-	doc, err := extractDocumentModel(expanded, rootID, rawCtx, payload, strings.Repeat("0", 64))
+	doc, err := extractDocumentModelFromCanonical(canonical, strings.Repeat("0", 64))
 	if err != nil {
-		t.Fatalf("extractDocumentModel: %v", err)
+		t.Fatalf("extractDocumentModelFromCanonical: %v", err)
 	}
 	return doc
 }
@@ -64,6 +57,59 @@ func TestSectionHeadingsAppearInPDF(t *testing.T) {
 		if !bytes.Contains(pdf, []byte(heading)) {
 			t.Errorf("PDF must contain section heading %q", heading)
 		}
+	}
+}
+
+func TestLayoutDocumentPreservesExplicitNewlinesInClauses(t *testing.T) {
+	doc := sectionDoc([]sectionData{
+		{Heading: "1. Terms", Clauses: []clauseData{
+			{Segments: []clauseSegment{
+				{Type: "prose", Text: "Dispute Resolution Method: "},
+				{Type: "prose", Text: "_____"},
+				{Type: "prose", Text: "\nDispute Venue: "},
+				{Type: "prose", Text: "_____"},
+				{Type: "prose", Text: "\n\nGoverning Law: _____"},
+			}},
+		}},
+	})
+
+	pages := layoutDocumentPages(doc)
+	var bodyLines []string
+	for _, page := range pages {
+		for _, line := range page.Lines {
+			if line.Kind == "body" {
+				bodyLines = append(bodyLines, line.Text)
+			}
+		}
+	}
+
+	want := []string{
+		"Dispute Resolution Method: _____",
+		"Dispute Venue: _____",
+		"",
+		"Governing Law: _____",
+	}
+	if len(bodyLines) != len(want) {
+		t.Fatalf("body line count = %d, want %d (%q)", len(bodyLines), len(want), bodyLines)
+	}
+	for i := range want {
+		if bodyLines[i] != want[i] {
+			t.Fatalf("body line %d = %q, want %q", i, bodyLines[i], want[i])
+		}
+	}
+}
+
+func TestRenderContentStreamUsesBoldTextModeForSectionHeadings(t *testing.T) {
+	content := renderContentStream(pageLayout{Lines: []positionedLine{
+		{Text: "Section Heading", FontSize: 14, Kind: "section-heading"},
+		{Text: "Body text", FontSize: 11, Kind: "body"},
+	}})
+
+	if !strings.Contains(content, "/F1 14.00 Tf\n0 g\n0 G\n0.35 w\n2 Tr\n") {
+		t.Fatalf("section heading was not rendered with bold text mode:\n%s", content)
+	}
+	if !strings.Contains(content, "/F1 11.00 Tf\n0 g\n0 Tr\n") {
+		t.Fatalf("body line did not reset to normal text mode:\n%s", content)
 	}
 }
 
@@ -146,19 +192,30 @@ func TestLargePDFSpansMultiplePages(t *testing.T) {
 }
 
 // TestExtractDocumentModelParsesSectionsFormat verifies IRI-based parsing of the
-// sections array. Properties are found by their expanded IRIs (local-name matching),
-// not by verbatim JSON key names.
+// documentStructure. Properties are found by their expanded IRIs, not verbatim JSON keys.
 func TestExtractDocumentModelParsesSectionsFormat(t *testing.T) {
 	payload := []byte(`{
-		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
-		},
+		"@context": {"@vocab": "https://w3id.org/facis/dcs/ontology/v1#"},
 		"@id": "urn:doc:sections-format-test",
-		"title": "Contract",
-		"sections": [
-			{"heading": "1. Parties", "clauses": ["Plain prose clause."]},
-			{"heading": "2. Terms", "clauses": [{"content": ["Structured content."]}]}
-		]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Contract"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true,
+					"children": ["urn:doc:sections-format-test#s1", "urn:doc:sections-format-test#s2"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:sections-format-test#s1",
+					"children": ["urn:doc:sections-format-test#c1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:sections-format-test#s2",
+					"children": ["urn:doc:sections-format-test#c2"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:sections-format-test#s1", "title": "1. Parties"},
+				{"@type": "Clause", "@id": "urn:doc:sections-format-test#c1", "content": ["Plain prose clause."]},
+				{"@type": "Section", "@id": "urn:doc:sections-format-test#s2", "title": "2. Terms"},
+				{"@type": "Clause", "@id": "urn:doc:sections-format-test#c2", "content": ["Structured content."]}
+			]
+		}
 	}`)
 	model := mustExtractFromPayload(t, payload)
 	if len(model.Sections) != 2 {
@@ -184,17 +241,28 @@ func TestExtractDocumentModelParsesSectionsFormat(t *testing.T) {
 func TestExtractDocumentModelParsesAtIdContentItem(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
 			"prov": "http://www.w3.org/ns/prov#",
 			"schema": "https://schema.org/"
 		},
 		"@id": "urn:doc:content-id-test",
-		"title": "Content ID Test",
-		"sections": [{"heading": "1. Section", "clauses": [{"content": [
-			"prefix text ",
-			{"@id": "prov:Entity", "schema:name": "entity"},
-			" suffix text"
-		]}]}]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Content ID Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:content-id-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:content-id-test#s1", "children": ["urn:doc:content-id-test#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:content-id-test#s1", "title": "1. Section"},
+				{"@type": "Clause", "@id": "urn:doc:content-id-test#c1", "content": [
+					"prefix text ",
+					{"@id": "prov:Entity", "schema:name": "entity"},
+					" suffix text"
+				]}
+			]
+		}
 	}`)
 	model := mustExtractFromPayload(t, payload)
 	if len(model.Sections) != 1 || len(model.Sections[0].Clauses) != 1 {
@@ -218,14 +286,25 @@ func TestExtractDocumentModelParsesAtIdContentItem(t *testing.T) {
 func TestExtractDocumentModelParsesSchemaUrlContentItem(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
 			"schema": "https://schema.org/"
 		},
 		"@id": "urn:doc:url-test",
-		"title": "URL Test",
-		"sections": [{"heading": "1. Section", "clauses": [{"content": [
-			{"schema:url": "https://example.com", "schema:name": "Example Site"}
-		]}]}]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "URL Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:url-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:url-test#s1", "children": ["urn:doc:url-test#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:url-test#s1", "title": "1. Section"},
+				{"@type": "Clause", "@id": "urn:doc:url-test#c1", "content": [
+					{"schema:url": "https://example.com", "schema:name": "Example Site"}
+				]}
+			]
+		}
 	}`)
 	model := mustExtractFromPayload(t, payload)
 	clause := model.Sections[0].Clauses[0]
@@ -248,14 +327,25 @@ func TestExtractDocumentModelParsesSchemaUrlContentItem(t *testing.T) {
 func TestExtractDocumentModelParsesAtValueContentItem(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
 			"xsd": "http://www.w3.org/2001/XMLSchema#"
 		},
 		"@id": "urn:doc:value-test",
-		"title": "Value Test",
-		"sections": [{"heading": "1. Section", "clauses": [{"content": [
-			{"@value": "500", "@type": "xsd:decimal"}
-		]}]}]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Value Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:value-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:value-test#s1", "children": ["urn:doc:value-test#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:value-test#s1", "title": "1. Section"},
+				{"@type": "Clause", "@id": "urn:doc:value-test#c1", "content": [
+					{"@value": "500", "@type": "xsd:decimal"}
+				]}
+			]
+		}
 	}`)
 	model := mustExtractFromPayload(t, payload)
 	clause := model.Sections[0].Clauses[0]
@@ -273,39 +363,59 @@ func TestExtractDocumentModelParsesAtValueContentItem(t *testing.T) {
 }
 
 // TestExtractDocumentModelIgnoresUnknownNamespaceTitle verifies that a
-// property whose local name is "title" in an unrelated namespace does not
-// drive the rendered document title. Only disambiguated title IRIs are valid.
-// Because no dcs-pdf-core title is present, CompilePDF must return an error.
+// property in an unrelated namespace does not supply the required dcs:metadata.
+// Only dcs:metadata satisfies the metadata requirement.
 func TestExtractDocumentModelIgnoresUnknownNamespaceTitle(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"dcs": "https://w3id.org/facis/dcs/ontology/v1#",
 			"evil": "https://example.com/evil#"
 		},
 		"@id": "urn:doc:unknown-title-ns",
-		"evil:title": "Do Not Use This",
-		"sections": [{"heading": "1. Terms", "clauses": ["A clause."]}]
+		"@type": "dcs:ContractTemplate",
+		"evil:metadata": {"evil:title": "Do Not Use This"},
+		"dcs:documentStructure": {
+			"@type": "dcs:DocumentStructure",
+			"dcs:layout": [
+				{"@type": "dcs:LayoutNode", "dcs:isRoot": true, "dcs:children": ["urn:doc:unknown-title-ns#s1"]},
+				{"@type": "dcs:LayoutNode", "@id": "urn:doc:unknown-title-ns#s1", "dcs:children": ["urn:doc:unknown-title-ns#c1"]}
+			],
+			"dcs:blocks": [
+				{"@type": "dcs:Section", "@id": "urn:doc:unknown-title-ns#s1", "dcs:title": "1. Terms"},
+				{"@type": "dcs:Clause", "@id": "urn:doc:unknown-title-ns#c1", "dcs:content": ["A clause."]}
+			]
+		}
 	}`)
 
 	_, err := CompilePDF(context.Background(), payload, time.Now())
 	if err == nil {
-		t.Fatal("CompilePDF must return an error when no dcs-pdf-core title is present (evil:title must be ignored)")
+		t.Fatal("CompilePDF must return an error when dcs:metadata is absent (evil:metadata must be ignored)")
 	}
 }
 
-// TestExtractDocumentModelIgnoresUnknownNamespaceSections verifies that a
-// property whose local name is "sections" in an unrelated namespace is ignored.
-// Extraction must use disambiguated field IRIs only.
+// TestExtractDocumentModelIgnoresUnknownNamespaceSections verifies that blocks
+// in an unrelated namespace are ignored; extraction uses only dcs:documentStructure.
 func TestExtractDocumentModelIgnoresUnknownNamespaceSections(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"dcs": "https://w3id.org/facis/dcs/ontology/v1#",
 			"evil": "https://example.com/evil#"
 		},
 		"@id": "urn:doc:unknown-sections-ns",
-		"title": "Unknown Sections NS Test",
-		"evil:sections": [{"evil:heading": "Wrong Heading", "evil:clauses": ["Wrong clause."]}],
-		"sections": [{"heading": "Correct Heading", "clauses": ["Correct clause."]}]
+		"@type": "dcs:ContractTemplate",
+		"dcs:metadata": {"@type": "dcs:TemplateMetadata", "dcs:title": "Unknown Sections NS Test"},
+		"evil:documentStructure": {"evil:blocks": [{"evil:title": "Wrong Heading"}]},
+		"dcs:documentStructure": {
+			"@type": "dcs:DocumentStructure",
+			"dcs:layout": [
+				{"@type": "dcs:LayoutNode", "dcs:isRoot": true, "dcs:children": ["urn:doc:unknown-sections-ns#s1"]},
+				{"@type": "dcs:LayoutNode", "@id": "urn:doc:unknown-sections-ns#s1", "dcs:children": ["urn:doc:unknown-sections-ns#c1"]}
+			],
+			"dcs:blocks": [
+				{"@type": "dcs:Section", "@id": "urn:doc:unknown-sections-ns#s1", "dcs:title": "Correct Heading"},
+				{"@type": "dcs:Clause", "@id": "urn:doc:unknown-sections-ns#c1", "dcs:content": ["Correct clause."]}
+			]
+		}
 	}`)
 
 	model := mustExtractFromPayload(t, payload)
@@ -317,48 +427,6 @@ func TestExtractDocumentModelIgnoresUnknownNamespaceSections(t *testing.T) {
 	}
 }
 
-// TestSignatureFieldSchemaName verifies that {"schema:name": "..."} is accepted
-// as the field name in a signatureFields entry.
-func TestSignatureFieldSchemaName(t *testing.T) {
-	payload := []byte(`{
-		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-			"schema": "https://schema.org/"
-		},
-		"@id": "urn:doc:sig-schema-name-test",
-		"title": "Sig Schema Name Test",
-		"signatureFields": [{"schema:name": "SignerOne"}]
-	}`)
-	model := mustExtractFromPayload(t, payload)
-	if len(model.SignatureFields) != 1 {
-		t.Fatalf("expected 1 sig field, got %d", len(model.SignatureFields))
-	}
-	if model.SignatureFields[0].Name != "SignerOne" {
-		t.Errorf("sig field name = %q, want 'SignerOne'", model.SignatureFields[0].Name)
-	}
-}
-
-// TestTopLevelClausesCreateUnnamedSection verifies that a top-level "clauses"
-// key (without "sections") is still accepted and produces one unnamed section.
-// This preserves backward compatibility for payloads that do not use sections.
-func TestTopLevelClausesCreateUnnamedSection(t *testing.T) {
-	payload := []byte(`{
-		"@context": {"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"},
-		"@id": "urn:doc:top-clauses-test",
-		"title": "Top Clauses Test",
-		"clauses": ["First clause.", "Second clause."]
-	}`)
-	model := mustExtractFromPayload(t, payload)
-	if len(model.Sections) != 1 {
-		t.Fatalf("top-level clauses should produce 1 section, got %d", len(model.Sections))
-	}
-	if len(model.Sections[0].Clauses) != 2 {
-		t.Errorf("section should have 2 clauses, got %d", len(model.Sections[0].Clauses))
-	}
-	if model.Sections[0].Heading != "" {
-		t.Errorf("top-level clauses fallback should produce unnamed section, got heading %q", model.Sections[0].Heading)
-	}
-}
 
 // TestH1TagInContentStream verifies that section headings are tagged /H1 in the
 // PDF content stream rather than /P.
@@ -783,22 +851,29 @@ func TestGlossaryLinkAnnotationUsesExplicitDestination(t *testing.T) {
 // TestOntologyLinkWithoutSchemaNameUsesCompactedIRI verifies that when a content
 // node has only @id (no schema:name), the segment Text is the compacted prefix
 // form (e.g. "prov:Entity") rather than the raw full IRI.
-//
-// Failure mode before fix: seg.Text = "http://www.w3.org/ns/prov#Entity" because
-// parseExpandedSegment falls back to the unexpanded @id string and extractDocumentModel
-// never compacts it.
 func TestOntologyLinkWithoutSchemaNameUsesCompactedIRI(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
 			"prov": "http://www.w3.org/ns/prov#"
 		},
 		"@id": "urn:doc:compact-iri-test",
-		"title": "Compact IRI Test",
-		"sections": [{"heading": "1. Test", "clauses": [{"content": [
-			"A term: ",
-			{"@id": "prov:Entity"}
-		]}]}]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Compact IRI Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:compact-iri-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:compact-iri-test#s1", "children": ["urn:doc:compact-iri-test#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:compact-iri-test#s1", "title": "1. Test"},
+				{"@type": "Clause", "@id": "urn:doc:compact-iri-test#c1", "content": [
+					"A term: ",
+					{"@id": "prov:Entity"}
+				]}
+			]
+		}
 	}`)
 	model := mustExtractFromPayload(t, payload)
 	if len(model.Sections) != 1 || len(model.Sections[0].Clauses) != 1 {
@@ -819,23 +894,30 @@ func TestOntologyLinkWithoutSchemaNameUsesCompactedIRI(t *testing.T) {
 // TestGlossaryAnnotationCreatedForBodyTextTerm verifies that an ontology-link
 // segment in body text produces a clickable /Dest annotation pointing at the
 // corresponding glossary entry.
-//
-// Failure mode before fix: termToGlossaryIndex is keyed by term.Term (compact
-// name) but the lookup uses seg.Ref (full IRI), so no match is found and no
-// annotation is emitted.
 func TestGlossaryAnnotationCreatedForBodyTextTerm(t *testing.T) {
 	payload := []byte(`{
 		"@context": {
-			"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
+			"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
 			"prov": "http://www.w3.org/ns/prov#"
 		},
 		"@id": "urn:doc:glossary-link-test",
-		"title": "Glossary Link Test",
-		"sections": [{"heading": "1. Test", "clauses": [{"content": [
-			"A term: ",
-			{"@id": "prov:Entity"},
-			" defined here."
-		]}]}]
+		"@type": "ContractTemplate",
+		"metadata": {"@type": "TemplateMetadata", "title": "Glossary Link Test"},
+		"documentStructure": {
+			"@type": "DocumentStructure",
+			"layout": [
+				{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:glossary-link-test#s1"]},
+				{"@type": "LayoutNode", "@id": "urn:doc:glossary-link-test#s1", "children": ["urn:doc:glossary-link-test#c1"]}
+			],
+			"blocks": [
+				{"@type": "Section", "@id": "urn:doc:glossary-link-test#s1", "title": "1. Test"},
+				{"@type": "Clause", "@id": "urn:doc:glossary-link-test#c1", "content": [
+					"A term: ",
+					{"@id": "prov:Entity"},
+					" defined here."
+				]}
+			]
+		}
 	}`)
 	model := mustExtractFromPayload(t, payload)
 	if len(model.Glossary) == 0 {

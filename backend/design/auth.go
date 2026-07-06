@@ -84,7 +84,7 @@ var _ = Service("Auth", func() {
 	})
 
 	Method("callback", func() {
-		Description("Handles the Hydra OIDC callback, exchanges the authorization code for tokens, and redirects to auth success.")
+		Description("Handles the Hydra OIDC callback: if Hydra returned an OAuth2 error (error/error_description params), clears the session cookies and redirects to the UI with the error details attached as query params; otherwise exchanges the authorization code for tokens, sets the refresh_token and id_token session cookies, and redirects to auth success.")
 		NoSecurity()
 		Payload(func() {
 			Attribute("code", String, "Authorization code from Hydra")
@@ -125,7 +125,7 @@ var _ = Service("Auth", func() {
 	})
 
 	Method("logout", func() {
-		Description("Returns the Hydra OIDC logout URL for ending the current session.")
+		Description("Revokes the current refresh token at Hydra, clears the refresh_token and id_token session cookies, and returns the Hydra OIDC end-session (logout) URL for the client to redirect to.")
 		NoSecurity()
 		Result(func() {
 			Attribute("logout_url", String, "Hydra OIDC logout URL")
@@ -172,10 +172,13 @@ var _ = Service("Auth", func() {
 		NoSecurity()
 		Payload(func() {
 			Attribute("state", String, "Login state identifier from the login response")
+			Attribute("wallet_nonce", String, "Wallet-provided nonce echoed in the authorization request object when request_uri_method=post")
+			Attribute("wallet_metadata", String, "Wallet metadata JSON submitted with request_uri_method=post")
 			Required("state")
 		})
 		HTTP(func() {
 			POST("/auth/presentation/request/{state}")
+			GET("/auth/presentation/request/{state}")
 			SkipResponseBodyEncodeDecode()
 			Response(StatusOK, func() {
 				ContentType("application/oauth-authz-req+jwt")
@@ -189,7 +192,6 @@ var _ = Service("Auth", func() {
 		Payload(PresentationCallbackPayload)
 		Result(func() {
 			Attribute("redirect_uri", String, "Redirect URI used by the frontend to continue the Hydra OIDC flow after presentation handling")
-			Required("redirect_uri")
 		})
 		HTTP(func() {
 			POST("/auth/presentation/callback")
@@ -202,8 +204,9 @@ var _ = Service("Auth", func() {
 var PresentationCallbackPayload = Type("PresentationCallbackPayload", func() {
 	Description("Wallet direct-post of a verifiable presentation.")
 	Attribute("state", String, "Login state identifier from the OpenID4VP request")
-	Attribute("vp_token", String, "Verifiable presentation token submitted by the wallet")
-	Attribute("presentation_submission", Any, "Presentation submission metadata returned by the wallet")
+	Attribute("vp_token", String, "JSON object serialization keyed by DCQL credential-query id containing arrays of verifiable presentations")
+	Attribute("error", String, "Error code when wallet could not return a verifiable presentation")
+	Attribute("error_description", String, "Optional wallet-provided details for the error")
 	Required("state")
 })
 

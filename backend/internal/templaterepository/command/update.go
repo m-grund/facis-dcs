@@ -43,7 +43,7 @@ type Updater struct {
 
 func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 	if cmd.TemplateData != nil && cmd.TemplateData.IsNotNullValue() {
-		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID, cmd.Name)
+		normalizedTemplateData, err := validation.NormalizeTemplateDataForPersistence(cmd.TemplateData, cmd.DID)
 		if err != nil {
 			return fmt.Errorf("template data validation failed: %w", err)
 		}
@@ -65,6 +65,7 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return fmt.Errorf("could not read template data: %w", err)
 	}
 
+	// Optimistic concurrency (see command package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < oldData.UpdatedAt.Unix() {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}

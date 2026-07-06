@@ -12,8 +12,6 @@ const (
 	SchemaJSONLDContextV1     = "https://w3id.org/facis/dcs/context/v1"
 	SchemaOntologyV1          = "https://w3id.org/facis/sla/ontology"
 	SchemaSHACLShapesV1       = "https://w3id.org/facis/dcs/shapes/v1"
-	SemanticProfileName       = "FACIS DCS Semantic Contract Profile"
-	SemanticProfileVersionV1  = "v1"
 
 	PolicyTemplateStructureV1          = "facis.dcs.template.structure"
 	PolicyTemplateSemanticConditionsV1 = "facis.dcs.template.semantic-conditions"
@@ -29,10 +27,6 @@ const (
 )
 
 var (
-	templatePolicyRefs = []map[string]any{
-		{"policyId": PolicyTemplateStructureV1, "version": "v1", "enforcementPoint": "template:create"},
-		{"policyId": PolicyTemplateSemanticConditionsV1, "version": "v1", "enforcementPoint": "template:verify"},
-	}
 	contractPolicyRefs = []map[string]any{
 		{"policyId": PolicyContractStructureV1, "version": "v1", "enforcementPoint": "contract:create"},
 		{"policyId": PolicyContractSemanticValuesV1, "version": "v1", "enforcementPoint": "contract:update"},

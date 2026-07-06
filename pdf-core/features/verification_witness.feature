@@ -5,54 +5,78 @@ Feature: Verification witness
       """
       {
         "@context": {
-          "@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-          "prov": "http://www.w3.org/ns/prov#",
-          "schema": "https://schema.org/",
-          "dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
         },
         "@id": "urn:doc:verify",
-        "@type": ["dcs-pdf-core:Document", "prov:Bundle"],
-        "title": "Verification Witness",
-        "sections": [
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "1. Verification",
-            "clauses": [
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "Verification re-renders the ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:Entity"},
-                  " extracted from the embedded JSON-LD payload."
-                ]
-              },
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "The ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:Activity"},
-                  " sealing this witness was performed by a ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:SoftwareAgent"},
-                  " acting as the compiler runtime."
-                ]
-              }
-            ]
-          },
-          {
-            "@type": "dcs-pdf-core:Section",
-            "heading": "2. Integrity",
-            "clauses": [
-              {
-                "@type": "dcs-pdf-core:Clause",
-                "content": [
-                  "Witness bytes are appended without disturbing the original prefix, preserving the ",
-                  {"@type": "dcs-pdf-core:ContentNode", "@id": "prov:Bundle"},
-                  " integrity."
-                ]
-              }
-            ]
-          }
-        ]
+        "@type": "ContractTemplate",
+        "documentTitle": "Verification Witness",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Verification Witness"
+        },
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:verify#s1", "urn:doc:verify#s2"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:verify#s1",
+              "children": ["urn:doc:verify#c1", "urn:doc:verify#c2"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:verify#s2",
+              "children": ["urn:doc:verify#c3"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:verify#s1",
+              "title": "1. Verification"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:verify#c1",
+              "content": [
+                "Verification re-renders the ",
+                "prov:Entity",
+                " extracted from the embedded JSON-LD payload."
+              ]
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:verify#c2",
+              "content": [
+                "The ",
+                "prov:Activity",
+                " sealing this witness was performed by a ",
+                "prov:SoftwareAgent",
+                " acting as the compiler runtime."
+              ]
+            },
+            {
+              "@type": "Section",
+              "@id": "urn:doc:verify#s2",
+              "title": "2. Integrity"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:verify#c3",
+              "content": [
+                "Witness bytes are appended without disturbing the original prefix, preserving the ",
+                "prov:Bundle",
+                " integrity."
+              ]
+            }
+          ]
+        }
       }
       """
     And I compile the payload through /download

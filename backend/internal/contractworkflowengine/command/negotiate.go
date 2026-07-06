@@ -72,7 +72,8 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 
 	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
 		/*
-			Forwards the action to contract owner peer
+			Not the Origin peer for this contract: forward unchanged instead of
+			mutating locally (single-writer-per-aggregate, see package doc).
 		*/
 
 		err := tx.Commit()
@@ -88,6 +89,8 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return nil
 	}
 
+	// Optimistic concurrency: reject if the caller's view of the contract is
+	// older than what's stored (see package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		if localPeer != cmd.CauserDID {
 			return errors.New("contract was updated elsewhere, please force synchronisation and reload")

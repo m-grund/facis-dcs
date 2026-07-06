@@ -3,6 +3,7 @@ package sdjwt
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -33,7 +34,6 @@ func CNFJWKFromClaims(claims jwt.MapClaims) (JWK, error) {
 // VerifyKB validates the holder KB-JWT against cnf.jwk and the presentation context.
 func VerifyKB(token, expectedSDHash string, cnfJWK JWK, holderSub, nonce, clientID string) error {
 	parsed, err := jwt.NewParser(
-		jwt.WithIssuedAt(),
 		jwt.WithValidMethods([]string{"ES256"}),
 	).Parse(token, func(t *jwt.Token) (any, error) {
 		return holderVerificationKey(cnfJWK, t)
@@ -51,6 +51,10 @@ func VerifyKB(token, expectedSDHash string, cnfJWK JWK, holderSub, nonce, client
 	claims, ok := parsed.Claims.(jwt.MapClaims)
 	if !ok {
 		return fmt.Errorf("kb jwt claims are invalid")
+	}
+
+	if err := validateKBIssuedAt(claims); err != nil {
+		return err
 	}
 
 	claimNonce, _ := claims["nonce"].(string)
@@ -81,6 +85,24 @@ func VerifyKB(token, expectedSDHash string, cnfJWK JWK, holderSub, nonce, client
 		}
 	}
 
+	return nil
+}
+
+// validateKBIssuedAt checks that iat is present and within an acceptable window.
+// jwt.WithIssuedAt() is intentionally not used because it rejects tokens whose iat
+// is even slightly in the future, which breaks wallets with minor clock skew.
+func validateKBIssuedAt(claims jwt.MapClaims) error {
+	iat, err := claims.GetIssuedAt()
+	if err != nil || iat == nil {
+		return fmt.Errorf("kb jwt missing iat")
+	}
+	now := time.Now().UTC()
+	if iat.After(now.Add(10 * time.Minute)) {
+		return fmt.Errorf("kb jwt iat is too far in the future")
+	}
+	if iat.Before(now.Add(-5 * time.Minute)) {
+		return fmt.Errorf("kb jwt iat is too old")
+	}
 	return nil
 }
 

@@ -9,28 +9,30 @@ import (
 )
 
 // referencePayload is a self-contained JSON-LD payload used across determinism
-// tests. It uses @vocab so all terms expand to dcs-pdf-core IRIs and does not
+// tests. It uses @vocab so all terms expand to dcs ontology IRIs and does not
 // reference any external namespace URIs that would trigger HTTP fetches.
 const referencePayload = `{
 	"@context": {
-		"@vocab": "http://127.0.0.1:8080/ontology/dcs-pdf-core#",
-		"dcs-pdf-core": "http://127.0.0.1:8080/ontology/dcs-pdf-core#"
+		"@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+		"dcs": "https://w3id.org/facis/dcs/ontology/v1#"
 	},
 	"@id": "urn:doc:determinism-ref",
-	"@type": "dcs-pdf-core:Document",
-	"title": "Determinism Reference Document",
-	"sections": [
-		{
-			"@type": "dcs-pdf-core:Section",
-			"heading": "1. Introduction",
-			"clauses": ["This is the first clause of the introduction section."]
-		},
-		{
-			"@type": "dcs-pdf-core:Section",
-			"heading": "2. Background",
-			"clauses": ["Background material is provided in this section."]
-		}
-	]
+	"@type": "ContractTemplate",
+	"metadata": {"@type": "TemplateMetadata", "title": "Determinism Reference Document"},
+	"documentStructure": {
+		"@type": "DocumentStructure",
+		"layout": [
+			{"@type": "LayoutNode", "isRoot": true, "children": ["urn:doc:determinism-ref#s1", "urn:doc:determinism-ref#s2"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:determinism-ref#s1", "children": ["urn:doc:determinism-ref#c1"]},
+			{"@type": "LayoutNode", "@id": "urn:doc:determinism-ref#s2", "children": ["urn:doc:determinism-ref#c2"]}
+		],
+		"blocks": [
+			{"@type": "Section", "@id": "urn:doc:determinism-ref#s1", "title": "1. Introduction"},
+			{"@type": "Clause", "@id": "urn:doc:determinism-ref#c1", "content": ["This is the first clause of the introduction section."]},
+			{"@type": "Section", "@id": "urn:doc:determinism-ref#s2", "title": "2. Background"},
+			{"@type": "Clause", "@id": "urn:doc:determinism-ref#c2", "content": ["Background material is provided in this section."]}
+		]
+	}
 }`
 
 // extractBTETBlocks returns all BT...ET text-rendering blocks from pdf in
@@ -212,12 +214,12 @@ func TestDeterministicClauseOrder(t *testing.T) {
 // hash is the payload's canonical identity and must be stable.
 func TestDeterministicPayloadHashStable(t *testing.T) {
 	payload := []byte(referencePayload)
-	nquads0, _, err := NormalizePayload(payload)
+	nquads0, err := NormalizePayload(payload)
 	if err != nil {
 		t.Fatalf("NormalizePayload: %v", err)
 	}
 	for i := 2; i <= 10; i++ {
-		nquads, _, err := NormalizePayload(payload)
+		nquads, err := NormalizePayload(payload)
 		if err != nil {
 			t.Fatalf("iteration %d: NormalizePayload: %v", i, err)
 		}
