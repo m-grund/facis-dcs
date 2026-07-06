@@ -57,6 +57,7 @@ export default defineConfig(({ mode, command }) => {
     },
     server: {
       port: Number(env.DCS_FRONTEND_PORT) || 5173,
+      strictPort: true,
       proxy: {
         '/api': {
           target: env.DCS_API_TARGET || 'http://localhost:8991',
