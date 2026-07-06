@@ -135,6 +135,8 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	if contract.ContractData != nil {
 		jsonldBytes = []byte(*contract.ContractData)
 	}
+	payloadHashSum := sha256.Sum256(jsonldBytes)
+	currentPayloadHash := hex.EncodeToString(payloadHashSum[:])
 
 	state := cweEvt.NewState
 	effectiveAt := cweEvt.OccurredAt
@@ -187,7 +189,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("store updated PDF in IPFS for contract %s: %w", cweEvt.DID, err)
 	}
 
-	if err = s.CRepo.UpdatePDFState(ctx, tx, cweEvt.DID, cwedb.ContractPDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState}); err != nil {
+	if err = s.CRepo.UpdatePDFState(ctx, tx, cweEvt.DID, cwedb.ContractPDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState, PayloadHash: currentPayloadHash}); err != nil {
 		return fmt.Errorf("update pdf_ipfs_cid for %s: %w", cweEvt.DID, err)
 	}
 
@@ -281,6 +283,8 @@ func (s *Subscriber) appendOneTemplateManifest(
 
 	h := sha256.Sum256(pdfBytes)
 	fileHash := hex.EncodeToString(h[:])
+	payloadHashSum := sha256.Sum256(jsonldBytes)
+	currentPayloadHash := hex.EncodeToString(payloadHashSum[:])
 
 	_, vcBytes, err := s.VCIssuer.IssueContractLifecycleVC(
 		ctx, did, fileHash, c2paState, "", s.IssuerDID, effectiveAt,
@@ -301,7 +305,7 @@ func (s *Subscriber) appendOneTemplateManifest(
 		return nil, fmt.Errorf("store updated PDF in IPFS for template %s: %w", did, err)
 	}
 
-	if err := s.TRepo.UpdatePDFState(ctx, tx, did, tpldb.ContractTemplatePDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState}); err != nil {
+	if err := s.TRepo.UpdatePDFState(ctx, tx, did, tpldb.ContractTemplatePDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState, PayloadHash: currentPayloadHash}); err != nil {
 		return nil, fmt.Errorf("update contract_templates pdf_ipfs_cid: %w", err)
 	}
 

@@ -76,6 +76,7 @@ func (h *VerifyContractPdfHandler) Handle(ctx context.Context, qry VerifyContrac
 				IPFSCID:         state.IPFSCID,
 				RendererVersion: state.RendererVersion,
 				C2PAState:       state.C2PAState,
+				PayloadHash:     state.PayloadHash,
 			})
 		}
 
