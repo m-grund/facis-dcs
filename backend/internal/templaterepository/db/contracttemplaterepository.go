@@ -93,6 +93,7 @@ type ContractTemplatePDFState struct {
 	IPFSCID         string `db:"pdf_ipfs_cid"`
 	RendererVersion string `db:"pdf_renderer_version"`
 	C2PAState       string `db:"pdf_c2pa_state"`
+	PayloadHash     string `db:"pdf_payload_hash"`
 }
 
 type ContractTemplateRepo interface {

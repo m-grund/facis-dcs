@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "predev": "node scripts/predev.js",
+    "predev-dcs1": "node scripts/predev.js",
+    "predev-dcs2": "node scripts/predev.js",
     "dev": "vite",
     "dev-dcs1": "vite --mode dev1",
     "dev-dcs2": "vite --mode dev2",
