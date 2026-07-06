@@ -76,6 +76,7 @@ func (h *VerifyTemplatePdfHandler) Handle(ctx context.Context, qry VerifyTemplat
 				IPFSCID:         state.IPFSCID,
 				RendererVersion: state.RendererVersion,
 				C2PAState:       state.C2PAState,
+				PayloadHash:     state.PayloadHash,
 			})
 		}
 
