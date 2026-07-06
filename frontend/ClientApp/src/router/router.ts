@@ -88,7 +88,6 @@ const routes: RouteRecordRaw[] = [
     component: FrontPageView,
     meta: {
       name: 'DCS',
-      icon: SquaresPlusIcon,
       hideInSidebar: true,
       requiresAuth: true,
       title: 'DCS',
