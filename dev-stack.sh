@@ -95,7 +95,7 @@ done
 echo ""
 echo "=== Starting Vite dev server ==="
 cd frontend/ClientApp
-npm run dev-dcs1 &
+npm run dev &
 VITE_PID=$!
 cd ../..
 
