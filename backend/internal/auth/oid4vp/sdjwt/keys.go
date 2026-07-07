@@ -3,6 +3,7 @@ package sdjwt
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -73,11 +74,52 @@ func ResolveIssuerVerificationKey(cfg TrustConfig, token *jwt.Token) (any, error
 	}
 
 	if _, ok := token.Header["x5c"]; ok {
-		// x5c chain validation lands with the trust migration (docs/openid4vp-trust-migration-plan.md).
-		return nil, fmt.Errorf("x5c issuer key resolution is not implemented yet")
+		return verificationKeyFromX5C(token.Header["x5c"])
 	}
 
 	return verificationKeyFromTrustedJWKS(jwksRaw, token)
+}
+
+// ResolveIssuerVerificationKeyForPID resolves the issuer key for PID credentials signed with x5c.
+func ResolveIssuerVerificationKeyForPID(token *jwt.Token) (any, error) {
+	rawX5C, ok := token.Header["x5c"]
+	if !ok {
+		return nil, fmt.Errorf("pid credential jwt requires x5c")
+	}
+
+	return verificationKeyFromX5C(rawX5C)
+}
+
+func verificationKeyFromX5C(raw any) (any, error) {
+	certs, ok := raw.([]any)
+	if !ok || len(certs) == 0 {
+		return nil, fmt.Errorf("x5c header is empty")
+	}
+
+	leafB64, ok := certs[0].(string)
+	if !ok || strings.TrimSpace(leafB64) == "" {
+		return nil, fmt.Errorf("x5c leaf certificate is invalid")
+	}
+
+	der, err := base64.StdEncoding.DecodeString(leafB64)
+	if err != nil {
+		return nil, fmt.Errorf("decode x5c leaf certificate: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("parse x5c leaf certificate: %w", err)
+	}
+
+	switch pk := cert.PublicKey.(type) {
+	case *ecdsa.PublicKey:
+		if pk.Curve != elliptic.P256() {
+			return nil, fmt.Errorf("x5c leaf certificate is not P-256")
+		}
+		return pk, nil
+	default:
+		return nil, fmt.Errorf("x5c leaf certificate public key is not ECDSA")
+	}
 }
 
 func verificationKeyFromHeaderJWK(jwksRaw json.RawMessage, rawJWK any) (any, error) {
