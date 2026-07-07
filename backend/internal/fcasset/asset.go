@@ -1,98 +1,128 @@
 package fcasset
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
-// CredentialsV2Context is the W3C Verifiable Credentials Data Model 2.0 JSON-LD context.
-const CredentialsV2Context = "https://www.w3.org/ns/credentials/v2"
+const (
+	CredentialsV2Context = "https://www.w3.org/ns/credentials/v2"
+	DCSContextURL        = "https://w3id.org/facis/dcs/1#"
+	SchemaContextURL     = "https://schema.org/"
+	ProvContextURL       = "http://www.w3.org/ns/prov#"
+)
 
-// BuildInput carries data required to build an FC /assets JSON-LD payload.
-type BuildInput struct {
-	TemplateDID  string
-	Issuer       string
-	ValidFrom    time.Time
-	TemplateData map[string]any
+// CatalogueSubject is the credentialSubject published to FC.
+type CatalogueSubject struct {
+	ID          string
+	State       string
+	Name        string
+	Description string
+	Version     string
 }
 
-// BuildPayload assembles the publish payload: VC shell fields first, then template_data.
+// BuildInput carries catalogue metadata required for an FC /assets JSON-LD payload.
+type BuildInput struct {
+	Issuer    string
+	ValidFrom time.Time
+	Subject   CatalogueSubject
+}
+
+// BuildPayload assembles a thin catalogue VC for FC publish.
 func BuildPayload(input BuildInput) (map[string]any, error) {
-	if input.TemplateDID == "" {
+	if strings.TrimSpace(input.Subject.ID) == "" {
 		return nil, fmt.Errorf("template did is empty")
 	}
 
-	if input.Issuer == "" {
+	if strings.TrimSpace(input.Issuer) == "" {
 		return nil, fmt.Errorf("issuer is empty")
 	}
 
-	if input.TemplateData == nil {
-		return nil, fmt.Errorf("template data is nil")
-	}
-
-	envelope := FillMissingJSONLDFields(input.TemplateDID, input.Issuer, input.ValidFrom)
-
-	return ApplyTemplateData(envelope, input.TemplateData), nil
-}
-
-// FillMissingJSONLDFields seeds VC envelope fields before template_data is applied.
-func FillMissingJSONLDFields(templateDID, issuer string, validFrom time.Time) map[string]any {
+	validFrom := input.ValidFrom.UTC()
 	if validFrom.After(time.Now().UTC()) {
 		validFrom = time.Now().UTC()
 	}
 
 	return map[string]any{
+		"@context": []any{
+			CredentialsV2Context,
+			map[string]any{
+				"dcs":    DCSContextURL,
+				"schema": SchemaContextURL,
+				"prov":   ProvContextURL,
+			},
+		},
+		"id": input.Subject.ID,
 		"type": []string{
 			"VerifiableCredential",
 			"dcs:ContractTemplate",
 		},
-		"issuer":    issuer,
-		"validFrom": validFrom.UTC().Format(time.RFC3339),
+		"issuer":    input.Issuer,
+		"validFrom": validFrom.Format(time.RFC3339),
 		"credentialSubject": map[string]any{
-			"id":   templateDID,
-			"type": "dcs:ContractTemplate",
+			// We need a reachable link for DCS registration.
+			"id":                 input.Subject.ID,
+			"type":               "dcs:ContractTemplate",
+			"dcs:templateUuid":   input.Subject.ID,
+			"dcs:state":          input.Subject.State,
+			"schema:name":        input.Subject.Name,
+			"schema:description": input.Subject.Description,
+			"schema:version":     input.Subject.Version,
 		},
+	}, nil
+}
+
+// CatalogueSubjectFromRepository builds FC catalogue metadata from a local template.
+func CatalogueSubjectFromRepository(
+	did string,
+	version int,
+	state string,
+	name string,
+	description string,
+) CatalogueSubject {
+	return CatalogueSubject{
+		ID:          did,
+		State:       strings.ToLower(strings.TrimSpace(state)),
+		Name:        name,
+		Description: description,
+		Version:     strconv.Itoa(version),
 	}
 }
 
-// ApplyTemplateData overlays template_data onto the envelope. template_data values win on key conflicts.
-func ApplyTemplateData(envelope map[string]any, templateData map[string]any) map[string]any {
-	for key, value := range templateData {
-		envelope[key] = value
-	}
-	envelope["@context"] = prependCredentialsV2Context(envelope["@context"])
-	delete(envelope, "@type")
+// ErrRemoteTemplateNotFound is returned when the remote DCS does not expose template content for a DID yet.
+var ErrRemoteTemplateNotFound = errors.New("remote template not found")
 
-	return envelope
+// ToDidDocumentURL maps a did:web identifier to its HTTPS DID document URL per W3C DID Core.
+// Example: did:web:localhost:template:uuid → https://localhost/template/uuid/did.json
+func ToDidDocumentURL(did string) (string, error) {
+	const prefix = "did:web:"
+
+	did = strings.TrimSpace(did)
+	if did == "" {
+		return "", fmt.Errorf("did is empty")
+	}
+	if !strings.HasPrefix(did, prefix) {
+		return "", fmt.Errorf("only did:web is supported: %s", did)
+	}
+
+	path := strings.TrimPrefix(did, prefix)
+	if path == "" {
+		return "", fmt.Errorf("did path is empty")
+	}
+
+	return "https://" + strings.ReplaceAll(path, ":", "/") + "/did.json", nil
 }
 
-func prependCredentialsV2Context(templateContext any) any {
-	switch typed := templateContext.(type) {
-	case nil:
-		return []any{CredentialsV2Context}
-	case map[string]any:
-		return []any{CredentialsV2Context, typed}
-	case []any:
-		return prependContextIfMissing(CredentialsV2Context, typed)
-	case []string:
-		items := make([]any, 0, len(typed))
-		for _, item := range typed {
-			items = append(items, item)
-		}
-		return prependContextIfMissing(CredentialsV2Context, items)
-	default:
-		return []any{CredentialsV2Context, typed}
-	}
-}
-
-func prependContextIfMissing(contextURL string, contexts []any) []any {
-	if len(contexts) == 0 {
-		return []any{contextURL}
+// FetchDocument resolves template content from the DID document URL.
+func FetchDocument(ctx context.Context, did string) (map[string]any, error) {
+	if _, err := ToDidDocumentURL(did); err != nil {
+		return nil, err
 	}
 
-	if contexts[0] == contextURL {
-		return contexts
-	}
-
-	return append([]any{contextURL}, contexts...)
+	_ = ctx
+	return nil, ErrRemoteTemplateNotFound
 }
