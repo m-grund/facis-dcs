@@ -60,6 +60,72 @@ func VerifyCredential(token string, disclosures []string, cfg TrustConfig) (jwt.
 	return MergeDisclosedClaims(issuerClaims, disclosures)
 }
 
+// VerifyCredentialForPID validates PID issuer JWTs, including playground credentials
+// that sign with x5c.
+func VerifyCredentialForPID(token string, disclosures []string, cfg TrustConfig) (jwt.MapClaims, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("issuer trust is not configured")
+	}
+
+	parsed, err := jwt.NewParser(
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
+		jwt.WithValidMethods([]string{"ES256"}),
+	).Parse(token, func(t *jwt.Token) (any, error) {
+		return ResolveIssuerVerificationKeyForPID(t)
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("credential jwt: %w", err)
+	}
+
+	err = validateCredentialHeader(parsed)
+	if err != nil {
+		return nil, err
+	}
+
+	issuerClaims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("credential jwt claims are invalid")
+	}
+
+	vct, _ := issuerClaims["vct"].(string)
+	if !cfg.VCTAllowed(strings.TrimSpace(vct)) {
+		return nil, fmt.Errorf("vct %q is not allowed", vct)
+	}
+
+	err = validateNotBeforeIfPresent(issuerClaims)
+	if err != nil {
+		return nil, err
+	}
+
+	err = VerifyDisclosures(issuerClaims, disclosures)
+	if err != nil {
+		return nil, err
+	}
+
+	merged, err := MergeDisclosedClaims(issuerClaims, disclosures)
+	if err != nil {
+		return nil, err
+	}
+
+	sub, _ := merged["sub"].(string)
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		cnfJWK, cnfErr := CNFJWKFromClaims(merged)
+		if cnfErr != nil {
+			return nil, fmt.Errorf("credential missing sub")
+		}
+		sub, err = DIDJWKFromPublicJWK(cnfJWK)
+		if err != nil {
+			return nil, err
+		}
+		merged["sub"] = sub
+	}
+
+	return merged, nil
+}
+
 func validateNotBeforeIfPresent(claims jwt.MapClaims) error {
 	nbfVal, ok := claims["nbf"]
 	if !ok {

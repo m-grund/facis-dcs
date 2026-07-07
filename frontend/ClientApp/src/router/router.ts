@@ -12,6 +12,7 @@ import AuditView from '@/views/audit/AuditView.vue'
 import AuthSuccessView from '@/views/auth/AuthSuccessView.vue'
 import SigningDashboardView from '@/views/signing/SigningDashboardView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
+import PidPresentationView from '@/views/auth/PidPresentationView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import ApproveContractView from '@/views/contract/ApproveContractView.vue'
 import ContractListView from '@/views/contract/ContractListView.vue'
@@ -60,6 +61,7 @@ const ROUTES = {
   },
   AUTH: {
     SUCCESS: 'auth.success',
+    PID_VERIFY: 'auth.pid_verify',
   },
   CONTRACTS: {
     LIST: 'contracts.list',
@@ -384,6 +386,12 @@ const routes: RouteRecordRaw[] = [
     name: ROUTES.AUTH.SUCCESS,
     meta: { hideInSidebar: true, requiresAuth: false, layout: 'blank', title: 'DCS - Auth Success' },
     component: AuthSuccessView,
+  },
+  {
+    path: '/pid-verify',
+    name: ROUTES.AUTH.PID_VERIFY,
+    meta: { hideInSidebar: true, requiresAuth: false, layout: 'blank', title: 'DCS - PID Verify' },
+    component: PidPresentationView,
   },
 ]
 

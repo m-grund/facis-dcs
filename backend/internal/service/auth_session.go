@@ -29,6 +29,7 @@ type AuthConfig struct {
 	Hydra             *hydra.Client
 	Trust             *oid4vp.TrustConfig
 	DCQLQuery         any
+	PIDDCQLQuery      any
 	RequestSigner     oid4vprequest.Signer
 	PublicAPIBase     string
 	LogoutRedirectURI string
@@ -40,6 +41,7 @@ type authSvc struct {
 	hydra             *hydra.Client
 	trust             *oid4vp.TrustConfig
 	dcqlQuery         any
+	pidDCQLQuery      any
 	logoutRedirectURI string
 	uiBasePath        string
 	publicAPIBase     string
@@ -65,6 +67,10 @@ func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo, cfg Auth
 		return nil, fmt.Errorf("oid4vp DCQL query is required")
 	}
 
+	if cfg.PIDDCQLQuery == nil {
+		return nil, fmt.Errorf("oid4vp PID DCQL query is required")
+	}
+
 	if db != nil {
 		oid4vp.ConfigurePresentationAuditRecorder(&authaudit.Recorder{DB: db})
 	}
@@ -78,6 +84,7 @@ func NewAuth(db *sqlx.DB, presentations authdb.PresentationAttemptRepo, cfg Auth
 		hydra:             cfg.Hydra,
 		trust:             cfg.Trust,
 		dcqlQuery:         cfg.DCQLQuery,
+		pidDCQLQuery:      cfg.PIDDCQLQuery,
 		logoutRedirectURI: cfg.LogoutRedirectURI,
 		uiBasePath:        cfg.UIPath,
 		publicAPIBase:     cfg.PublicAPIBase,

@@ -358,7 +358,7 @@ func extractSinglePresentation(rawVPToken, queryID string) (string, error) {
 	return presentation, nil
 }
 
-func (s *authSvc) LoginStatus(ctx context.Context, p *genauth.LoginStatusPayload) (*genauth.LoginStatusResult, error) {
+func (s *authSvc) LoginStatus(ctx context.Context, p *genauth.PresentationStatePayload) (*genauth.PresentationStatusResult, error) {
 	attempt, err := s.presentations.FindByPresentationState(ctx, p.State)
 	if err != nil {
 		return nil, err
@@ -382,7 +382,7 @@ func (s *authSvc) LoginStatus(ctx context.Context, p *genauth.LoginStatusPayload
 		}
 	}
 
-	out := &genauth.LoginStatusResult{
+	out := &genauth.PresentationStatusResult{
 		State:     attempt.PresentationState,
 		Status:    status,
 		ExpiresIn: expiresIn,

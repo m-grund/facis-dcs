@@ -2,12 +2,22 @@ package template
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/jmoiron/sqlx"
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
+	catalogueevents "digital-contracting-service/internal/templatecatalogueintegration/event"
 )
 
 type SearchQry struct {
@@ -18,44 +28,42 @@ type SearchQry struct {
 	Description    string
 	Offset         int
 	Limit          int
+	RetrievedBy    string
+	HolderDID      string
+	UserRoles      userrole.UserRoles
 }
 
 type SearchHandler struct {
-	Ctx      context.Context
+	DB       *sqlx.DB
 	FCClient *client.FederatedCatalogueClient
 }
 
 const searchTemplatesCountStatementTemplate = `
-MATCH (ct:ContractTemplate)
-WHERE head(ct.claimsGraphUri) IS NOT NULL
-OPTIONAL MATCH (m:TemplateMetadata {did: head(ct.claimsGraphUri)})
+MATCH (ct)
+WHERE ct.templateUuid IS NOT NULL
+  AND head(ct.claimsGraphUri) IS NOT NULL
 %s
 RETURN count(ct) AS total
 `
 
-// TODO: fix FC GraphDB issue
 const searchTemplatesStatementTemplate = `
-MATCH (ct:ContractTemplate)
-WHERE head(ct.claimsGraphUri) IS NOT NULL
-OPTIONAL MATCH (m:TemplateMetadata {did: head(ct.claimsGraphUri)})
+MATCH (ct)
+WHERE ct.templateUuid IS NOT NULL
+  AND head(ct.claimsGraphUri) IS NOT NULL
 %s
 RETURN {
-  did: ct.did,
-  document_number: ct.documentNumber,
-  version: ct.version,
-  schema_version: ct.schemaVersion,
+  did: head(ct.claimsGraphUri),
   name: ct.name,
   description: ct.description,
-  template_type: ct.templateType,
-  participant_id: ct.participantId,
-  created_at: ct.createdAt,
-  updated_at: ct.updatedAt
+  version: ct.version,
+  state: ct.state,
+  template_uuid: ct.templateUuid
 } AS n
 SKIP %d
 LIMIT %d
 `
 
-func (h *SearchHandler) Handle(qry SearchQry) (*templatecatalogueintegration.TemplateCatalogueRetrieveResponse, error) {
+func (h *SearchHandler) Handle(ctx context.Context, qry SearchQry) (*templatecatalogueintegration.TemplateCatalogueRetrieveResponse, error) {
 	if h.FCClient == nil {
 		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
@@ -67,7 +75,7 @@ func (h *SearchHandler) Handle(qry SearchQry) (*templatecatalogueintegration.Tem
 	where := formatSearchWhereSection(whereClause)
 
 	countStatement := fmt.Sprintf(searchTemplatesCountStatementTemplate, where)
-	countResp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
+	countResp, err := h.FCClient.Query(ctx, client.QueryRequest{
 		Statement:  countStatement,
 		Parameters: params,
 	})
@@ -83,12 +91,39 @@ func (h *SearchHandler) Handle(qry SearchQry) (*templatecatalogueintegration.Tem
 	}
 
 	statement := fmt.Sprintf(searchTemplatesStatementTemplate, where, qry.Offset, limit)
-	dataResp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
+	dataResp, err := h.FCClient.Query(ctx, client.QueryRequest{
 		Statement:  statement,
 		Parameters: params,
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if h.DB != nil {
+		tx, err := h.DB.BeginTxx(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("could not create transaction: %w", err)
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
+			}
+		}(tx)
+
+		evt := catalogueevents.SearchEvent{
+			RetrievedBy: qry.RetrievedBy,
+			OccurredAt:  time.Now().UTC(),
+			HolderDID:   qry.HolderDID,
+			UserRoles:   qry.UserRoles,
+		}
+		err = event.Create(ctx, tx, evt, componenttype.TemplateCatalogueIntegration)
+		if err != nil {
+			return nil, fmt.Errorf("could not create event: %w", err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("could not commit transaction: %w", err)
+		}
 	}
 
 	items := make([]*templatecatalogueintegration.TemplateCatalogueItem, 0, len(dataResp.Items))
@@ -110,31 +145,27 @@ func formatSearchWhereSection(whereClause string) string {
 	if whereClause == "" {
 		return ""
 	}
-	return "WHERE " + whereClause + "\n"
+	return "AND " + whereClause
 }
 
 func buildSearchWhereClause(qry SearchQry) (string, map[string]string) {
-	conditions := make([]string, 0, 5)
+	conditions := make([]string, 0, 4)
 	params := make(map[string]string)
 
 	if value := strings.TrimSpace(qry.DID); value != "" {
-		conditions = append(conditions, "toLower(coalesce(m.did, head(ct.claimsGraphUri))) CONTAINS toLower($did)")
+		conditions = append(conditions, "toLower(head(ct.claimsGraphUri)) CONTAINS toLower($did)")
 		params["did"] = value
 	}
-	if value := strings.TrimSpace(qry.DocumentNumber); value != "" {
-		conditions = append(conditions, "toLower(coalesce(m.documentNumber, ct.documentNumber)) CONTAINS toLower($document_number)")
-		params["document_number"] = value
-	}
 	if qry.Version > 0 {
-		conditions = append(conditions, "toInteger(coalesce(m.templateVersion, ct.templateVersion, ct.version)) = toInteger($version)")
+		conditions = append(conditions, "ct.version = toString($version)")
 		params["version"] = strconv.Itoa(qry.Version)
 	}
 	if value := strings.TrimSpace(qry.Name); value != "" {
-		conditions = append(conditions, "toLower(coalesce(m.name, m.title, ct.name)) CONTAINS toLower($name)")
+		conditions = append(conditions, "toLower(coalesce(ct.name, '')) CONTAINS toLower($name)")
 		params["name"] = value
 	}
 	if value := strings.TrimSpace(qry.Description); value != "" {
-		conditions = append(conditions, "toLower(coalesce(m.description, ct.description)) CONTAINS toLower($description)")
+		conditions = append(conditions, "toLower(coalesce(ct.description, '')) CONTAINS toLower($description)")
 		params["description"] = value
 	}
 
