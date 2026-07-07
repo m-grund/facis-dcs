@@ -116,7 +116,7 @@ build_dcs_image:
 	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
 build_pdf_core_image:
-	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../../pdf-core
+	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../..
 
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
@@ -169,6 +169,13 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
+	@# DID identity for DCS (DCS_DID/DCS_PRIVATE_KEY are fatal on startup);
+	@# mounted via volumes/volumeMounts in values.bdd.yml.
+	@"$(KUBECTL_BIN)" create namespace "$(KIND_NAMESPACE)" --dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
+	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" create secret generic dcs-identity \
+		--from-file=did.json=../../backend/certs/dev/did-8991.json \
+		--from-file=key.pem=../../backend/certs/dev/signing-8991.key \
+		--dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
 	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
 	@# ready, but DCS can't become ready until the devCertChain post-install hook has
 	@# created its Secret — a deadlock. We break the cycle by letting helm return as
