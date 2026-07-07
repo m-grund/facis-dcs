@@ -33,6 +33,8 @@ spec:
           env:
             - name: DCS_PDF_CORE_ADDR
               value: {{ printf "0.0.0.0:%v" .Values.pdfCore.service.port | quote }}
+            - name: DCS_PDF_CORE_ONTOLOGY_BASE_URL
+              value: {{ .Values.pdfCore.ontologyBaseURL | default (include "digital-contracting-service.pdfCoreURL" .) | quote }}
             {{- $cpURL := include "digital-contracting-service.pdfCoreCryptoProviderURL" . }}
             {{- if $cpURL }}
             - name: DCS_PDF_CORE_CRYPTO_PROVIDER_URL
