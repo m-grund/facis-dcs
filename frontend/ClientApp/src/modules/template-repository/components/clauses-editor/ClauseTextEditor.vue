@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { SemanticCondition } from '@template-repository/models/contract-template'
+import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import SemanticRuleList from '@template-repository/components/clauses-editor/SemanticRuleList.vue'
 import {
-  useClauseTextChips,
   conditionIdsInContent,
-  usedPlaceholderKeysInContent,
-  parseSegmentsFromContent,
   contentToString,
-  stringToContent,
   isPlaceholder,
+  parseSegmentsFromContent,
+  stringToContent,
+  useClauseTextChips,
+  usedPlaceholderKeysInContent,
 } from '@template-repository/composables/useClauseTextChips'
 import {
   usePlaceholderDropdownPosition,
   type PlaceholderDropdownMode,
 } from '@template-repository/composables/usePlaceholderDropdownPosition'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
+import { getBlocksFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import SemanticRuleList from '@template-repository/components/clauses-editor/SemanticRuleList.vue'
-import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import { storeToRefs } from 'pinia'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const PLACEHOLDER_DROPDOWN_MODE: PlaceholderDropdownMode = 'caret'
 
@@ -33,7 +35,9 @@ const emit = defineEmits<{
 }>()
 
 const uiStore = useTemplateEditorUiStore()
+const draftStore = useTemplateDraftStore()
 const { clausePlaceholderHighlight } = storeToRefs(uiStore)
+const { blocks, subTemplateSnapshots } = storeToRefs(draftStore)
 
 const editorRef = ref<HTMLDivElement | null>(null)
 let valueFromEditor = false
@@ -74,6 +78,26 @@ const usedConditions = computed(() => props.semanticConditions.filter((c) => use
 const unusedConditions = computed(() =>
   props.semanticConditions.filter((c) => !usedConditionIds.value.has(c.conditionId)),
 )
+const existingClauseConditionIds = computed(() => {
+  const ids = new Set<string>()
+  const clauseBlocks = [
+    ...blocks.value,
+    ...subTemplateSnapshots.value.flatMap((subTemplate) => getBlocksFromTemplateData(subTemplate.template_data)),
+  ]
+
+  for (const block of clauseBlocks) {
+    if (block['@type'] !== 'dcs:Clause') continue
+    const content = block['dcs:content']
+    if (typeof content === 'string') continue
+    for (const id of conditionIdsInContent(content['@list'], props.semanticConditions)) ids.add(id)
+  }
+
+  return ids
+})
+
+function isConditionUsedInOtherClauses(conditionId: string): boolean {
+  return existingClauseConditionIds.value.has(conditionId)
+}
 
 /** Check if a condition parameter is used in the clause content (via a placeholder) */
 function isParamUsedInText(conditionId: string, parameterName: string): boolean {
@@ -410,6 +434,7 @@ onBeforeUnmount(() => {
         title="Available requirements"
         empty-message="All requirements used or none defined."
         :conditions="unusedConditions"
+        :is-condition-used-in-other-clauses="isConditionUsedInOtherClauses"
         @highlight-rule="(id) => setHighlight({ conditionId: id })"
         @highlight-param="(id, name) => setHighlight({ conditionId: id, parameterName: name })"
         @clear-highlight="clearHighlight"
