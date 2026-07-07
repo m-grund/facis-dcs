@@ -15,6 +15,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	templateevents "digital-contracting-service/internal/templaterepository/event"
 )
 
@@ -29,6 +30,31 @@ type GetAuditLogByDIDQry struct {
 type AuditLogByDIDAuditor struct {
 	DB           *sqlx.DB
 	ATrailReader base.AuditTrailReader
+}
+
+func buildAuditEvent(query GetAuditLogByDIDQry) (event.Event, error) {
+	switch query.Scope {
+	case componenttype.ContractWorkflowEngine:
+		return contractevents.AuditEvent{
+			DID:           query.DID,
+			HolderDID:     query.HolderDID,
+			AuditedBy:     query.AuditedBy,
+			OccurredAt:    time.Now().UTC(),
+			ComponentType: query.Scope,
+			UserRoles:     query.UserRoles,
+		}, nil
+	case componenttype.ContractTemplateRepo:
+		return templateevents.AuditEvt{
+			DID:           query.DID,
+			ComponentType: query.Scope,
+			AuditedBy:     query.AuditedBy,
+			OccurredAt:    time.Now().UTC(),
+			HolderDID:     query.HolderDID,
+			UserRoles:     query.UserRoles,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported audit scope: %s", query.Scope)
+	}
 }
 
 func (h *AuditLogByDIDAuditor) Handle(ctx context.Context, query GetAuditLogByDIDQry) ([]datatype.AuditLogEntry, error) {
@@ -47,15 +73,11 @@ func (h *AuditLogByDIDAuditor) Handle(ctx context.Context, query GetAuditLogByDI
 	if err != nil {
 		return nil, fmt.Errorf("could not read audit log entries: %w", err)
 	}
-
-	evt := templateevents.AuditEvt{
-		DID:           query.DID,
-		ComponentType: query.Scope,
-		AuditedBy:     query.AuditedBy,
-		OccurredAt:    time.Now().UTC(),
-		HolderDID:     query.HolderDID,
-		UserRoles:     query.UserRoles,
+	evt, err := buildAuditEvent(query)
+	if err != nil {
+		return nil, fmt.Errorf("could not build audit event: %w", err)
 	}
+
 	err = event.Create(ctx, tx, evt, query.Scope)
 	if err != nil {
 		return nil, fmt.Errorf("could not create event: %w", err)
