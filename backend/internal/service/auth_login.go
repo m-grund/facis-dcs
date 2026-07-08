@@ -285,7 +285,7 @@ func (s *authSvc) PresentationCallback(ctx context.Context, p *genauth.Presentat
 		Roles:             grantedRoles,
 	})
 
-	return &genauth.PresentationCallbackResult{RedirectURI: &redirectTo}, nil
+	return &genauth.PresentationCallbackResult{}, nil
 }
 
 func pointerString(v *string) string {
