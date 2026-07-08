@@ -424,7 +424,6 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		// subquery so it composes with any outer metadata/archive table.
 		conditions += ` did IN (SELECT did FROM contracts_effective WHERE contract_data->'dcs:parentContract'->>'@id' = $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.ParentDID)
-		paramIndex++
 	}
 	l := len(" AND")
 	if len(conditions) > l {
