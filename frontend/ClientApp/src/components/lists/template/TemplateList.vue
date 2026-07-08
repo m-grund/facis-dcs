@@ -18,7 +18,7 @@ const { loading, error } = storeToRefs(templatesStore)
 const templates: Ref<PartialContractTemplate[]> = ref([])
 
 const pageLimits = ref([25, 50, 100])
-const limit = computed(() => pageLimits.value[0] ?? 25)
+const limit = ref(pageLimits.value[0] ?? 25)
 const currentPage = ref(1)
 const hasNextPage = ref(true)
 
