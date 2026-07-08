@@ -138,7 +138,8 @@ def issue_stored_credential(
 ) -> str:
     """Issuer-signed SD-JWT for wallet storage (no KB-JWT; aud/nonce belong to presentation)."""
     holder_public = public_jwk(wallet_private)
-    holder_did = did_jwk_from_public_jwk(holder_public)
+    holder_did_value = did_jwk_from_public_jwk(holder_public)
+    holder_jwk = cnf_jwk(holder_public)
     status_base = (
         statuslist_service_base.strip()
         if statuslist_service_base and statuslist_service_base.strip()
@@ -151,14 +152,14 @@ def issue_stored_credential(
     )
     visible_claims = {
         "iss": issuer_did,
-        "sub": holder_did,
+        "sub": holder_did_value,
         "vct": POA_VCT,
         "iat": CREDENTIAL_IAT,
         "exp": CREDENTIAL_EXP,
-        "cnf": {"jwk": cnf_jwk(holder_public)},
+        "cnf": {"jwk": holder_jwk},
         "credentialStatus": credential_status
         or build_credential_status(
-            sub=holder_did,
+            sub=holder_did_value,
             organization=organization,
             roles=roles,
             service_base=status_base,
