@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { onClickOutside } from '@vueuse/core'
 import { useAuthStore } from '@/stores/auth-store'
+import { toProperCase } from '@/utils/string'
+import { onClickOutside } from '@vueuse/core'
+import { computed, ref } from 'vue'
 
 const authStore = useAuthStore()
 const roles = computed(() => [...(authStore.user?.roles ?? [])].sort())
@@ -9,12 +10,7 @@ const roles = computed(() => [...(authStore.user?.roles ?? [])].sort())
 const isOpen = ref(false)
 const panelRef = ref(null)
 
-function formatRole(role: string): string {
-  return role
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-}
+const formatRole = (role: string): string => toProperCase(role)
 
 onClickOutside(panelRef, () => {
   isOpen.value = false
