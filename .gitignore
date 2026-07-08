@@ -46,3 +46,5 @@ tests/bdd/.coverage.*
 # Root coverage artifacts
 .coverage
 .coverage.*
+.claude/*
+docs/anforderung.md

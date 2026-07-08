@@ -23,6 +23,7 @@ import (
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/actionflag"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -93,7 +94,9 @@ func mapContractCommandError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, contractstate.ErrInvalidTransition) {
+	if errors.Is(err, contractstate.ErrInvalidTransition) ||
+		errors.Is(err, validation.ErrContractHierarchyInvalid) ||
+		errors.Is(err, command.ErrContractHierarchyCycle) {
 		return contractworkflowengine.MakeBadRequest(err)
 	}
 	return contractworkflowengine.MakeInternalError(err)
@@ -352,6 +355,7 @@ func (s *contractWorkflowEnginesrvc) Retrieve(ctx context.Context, req *contract
 		RetrievedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
+		ParentDID:   base.DerefString(req.ParentDid),
 		Pagination:  pagination,
 		DIDDocument: s.DIDDocument,
 	}
@@ -784,6 +788,7 @@ func (s *contractWorkflowEnginesrvc) Search(ctx context.Context, req *contractwo
 		Name:            base.DerefString(req.Name),
 		Description:     base.DerefString(req.Description),
 		ContractData:    base.DerefString(req.ContractData),
+		ParentDID:       base.DerefString(req.ParentDid),
 		Pagination:      pagination,
 	}
 	qryHandler := contract.GetAllMetaDataByFilterHandler{

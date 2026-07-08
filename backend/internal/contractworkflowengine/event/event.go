@@ -573,6 +573,28 @@ func (e AuditEvent) GetDID() string {
 	return e.DID
 }
 
+// ExportEvent is emitted when a contract bundle (ZIP) is exported.
+// FR-CSA-18: an export is a retrieval-class action and is recorded in the
+// contract's audit trail.
+type ExportEvent struct {
+	DID        string             `json:"did"`
+	HolderDID  string             `json:"holder_did"`
+	ExportedBy string             `json:"exported_by"`
+	Format     string             `json:"format"`
+	OccurredAt time.Time          `json:"occurred_at"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e ExportEvent) EventType() string {
+	return eventtype.Export.String()
+}
+
+// GetDID implements the Event interface.
+func (e ExportEvent) GetDID() string {
+	return e.DID
+}
+
 // ReviewEvent is emitted when contract is reviewed.
 type ReviewEvent struct {
 	DID        string             `json:"did"`

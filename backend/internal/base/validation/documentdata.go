@@ -109,6 +109,50 @@ func (constraint *valueConstraint) asMap() map[string]any {
 
 type documentData map[string]any
 
+// ErrContractHierarchyInvalid is the sentinel wrapped by every hierarchy
+// invariant violation (FR-TR-02/FR-CWE-02). The HTTP layer
+// (service.mapContractCommandError) maps it to a 4xx client error rather than
+// a 500, since it is caused by malformed client-supplied contract data.
+var ErrContractHierarchyInvalid = errors.New("contract hierarchy invariant violated")
+
+// childEnumeratingProperties are top-level document properties that would
+// enumerate child contracts from a parent document. The hierarchy is
+// child→parent only: a document may never list its children (that would leak
+// siblings to every receiver of the parent and force a document rewrite on
+// every new child). Note dcs:children is deliberately NOT listed here — it is
+// a legitimate documentStructure layout term, checked only at the top level.
+var childEnumeratingProperties = []string{
+	"dcs:childContracts", "childContracts",
+	"dcs:subContracts", "subContracts",
+	"dcs:hasPart", "hasPart",
+}
+
+// validateContractHierarchyInvariants enforces the structural hierarchy rules
+// on a decoded contract document (no DB access — the cycle check that needs
+// the parent chain lives in the command handler):
+//
+//   - at most one dcs:parentContract reference;
+//   - no child-enumerating top-level property.
+func validateContractHierarchyInvariants(data documentData) error {
+	for _, key := range []string{"dcs:parentContract", "parentContract"} {
+		value, ok := data[key]
+		if !ok {
+			continue
+		}
+		if list, isList := value.([]any); isList && len(list) > 1 {
+			return fmt.Errorf("%w: a contract may reference at most one dcs:parentContract, got %d",
+				ErrContractHierarchyInvalid, len(list))
+		}
+	}
+	for _, key := range childEnumeratingProperties {
+		if _, ok := data[key]; ok {
+			return fmt.Errorf("%w: contract documents must not enumerate children (found %q); the hierarchy is child→parent only",
+				ErrContractHierarchyInvalid, key)
+		}
+	}
+	return nil
+}
+
 // NormalizeTemplateData validates and normalizes template JSON-LD data.
 func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
@@ -140,6 +184,9 @@ func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datat
 func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateContractHierarchyInvariants(data); err != nil {
 		return nil, err
 	}
 	if isCanonicalEnvelope(data) {
@@ -497,13 +544,13 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 }
 
 // odrlRuleBucketKeys are the ODRL 2.2 rule-bucket properties an enclosing
-// odrl:Set may carry (dcs:policies target shape, Workstream F1).
+// odrl:Set may carry.
 var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"}
 
 // collectODRLPolicyRules flattens dcs:policies into a plain list of rule
-// nodes, supporting both the legacy flat-array shape and the target
-// enclosing-odrl:Set shape (see extractContractODRLPolicies for the
-// server-side-enforcement-critical rationale).
+// nodes, reading both a bare rule array and the enclosing-odrl:Set shape
+// (see extractContractODRLPolicies for the server-side-enforcement-critical
+// rationale).
 func collectODRLPolicyRules(policies any) []map[string]any {
 	switch typed := policies.(type) {
 	case []any:
@@ -543,26 +590,25 @@ func collectODRLSetRules(set map[string]any) []map[string]any {
 	return rules
 }
 
-// validateODRLPoliciesShape enforces the Workstream-F1/F3 structural
-// contract for dcs:policies:
+// validateODRLPoliciesShape enforces the structural contract for
+// dcs:policies:
 //
 //   - An empty array is accepted (no policies declared yet — the default
 //     normalizeCanonicalEnvelope produces for a brand-new document).
-//   - A non-empty flat array (the legacy bare-Duty/Permission/Prohibition
-//     shape with no odrl:action, no enclosing odrl:Set, no parties/target) is
-//     explicitly REJECTED — greenfield, no legacy acceptance (AC8).
+//   - A non-empty bare rule array (Duty/Permission/Prohibition nodes with no
+//     odrl:action, no enclosing odrl:Set, no parties/target) is explicitly
+//     REJECTED — such a shape is not consumable by a standard ODRL processor.
 //   - A single enclosing odrl:Set object is validated structurally: it must
 //     declare odrl:profile and a uid, and every contained rule must declare
-//     exactly one odrl:action plus odrl:assigner/odrl:assignee/odrl:target
-//     (AC1/AC2/AC3).
+//     exactly one odrl:action plus odrl:assigner/odrl:assignee/odrl:target.
 func validateODRLPoliciesShape(policies any) error {
 	switch typed := policies.(type) {
 	case []any:
 		if len(typed) == 0 {
 			return nil
 		}
-		return errors.New("dcs:policies uses the legacy bare-Duty form (a flat array with no enclosing odrl:Set, " +
-			"no odrl:action, and no odrl:assigner/odrl:assignee/odrl:target) which is no longer accepted; " +
+		return errors.New("dcs:policies is a bare rule array (no enclosing odrl:Set, " +
+			"no odrl:action, and no odrl:assigner/odrl:assignee/odrl:target), which is not accepted; " +
 			"policies must form a single enclosing odrl:Set declaring odrl:profile, whose rules each carry " +
 			"exactly one odrl:action plus odrl:assigner, odrl:assignee, and odrl:target")
 	case map[string]any:

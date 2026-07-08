@@ -162,6 +162,8 @@ var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
 
 	Attribute("offset", Int, "Start index of results")
 	Attribute("limit", Int, "Page size of results")
+
+	Attribute("parent_did", String, "Full-scope hierarchy filter: return only contracts whose dcs:parentContract references this DID (DCS-FR-CWE-29)")
 })
 
 var ContractItem = Type("ContractItem", func() {
@@ -319,6 +321,8 @@ var ContractSearchRequest = Type("ContractSearchRequest", func() {
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
 	Attribute("contract_data", String, "Search value for full text search in contract data")
+
+	Attribute("parent_did", String, "Full-scope hierarchy filter: return only contracts whose dcs:parentContract references this DID (DCS-FR-CWE-29)")
 })
 
 var ContractSearchResponse = Type("ContractSearchResponse", func() {
@@ -769,6 +773,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			GET("/contract/retrieve")
 			Param("offset")
 			Param("limit")
+			Param("parent_did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -881,6 +886,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Param("name")
 			Param("description")
 			Param("contract_data")
+			Param("parent_did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

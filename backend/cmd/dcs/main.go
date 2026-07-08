@@ -446,7 +446,7 @@ func main() {
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo, *didDocument)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient)
 		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument, ipfsAPIClient)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
@@ -595,9 +595,9 @@ func main() {
 }
 
 // seedTrustedPeersFromEnv upserts every comma-separated peer DID listed in
-// DCS_TRUSTED_PEERS into the trusted_peers allowlist at startup (Workstream
-// C1, docs/anforderung.md, AC1). Idempotent: re-running with the same env
-// var value is a no-op thanks to UpsertTrustedPeer's
+// DCS_TRUSTED_PEERS into the trusted_peers allowlist at startup (NFR-BR-08:
+// exchanges only between verified parties). Idempotent: re-running with the
+// same env var value is a no-op thanks to UpsertTrustedPeer's
 // ON CONFLICT (peer_did) DO NOTHING. A no-op (nothing logged/inserted) when
 // the env var is unset or empty.
 func seedTrustedPeersFromEnv(ctx context.Context, database *sqlx.DB, sRepo dcstodcsdb.SyncRepository) error {

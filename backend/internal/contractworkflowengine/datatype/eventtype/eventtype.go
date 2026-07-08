@@ -41,9 +41,13 @@ const (
 	RemoteActionRequestEvent EventType = "REMOTE_ACTION_REQUEST"
 	Offer                    EventType = "OFFER_CONTRACT"
 	Withdraw                 EventType = "WITHDRAW_CONTRACT"
-	// Revoke has no trigger yet in this scope (Workstream C4 excludes
-	// REVOKED-entry via signature revocation) — the type exists for later
-	// workstreams to use.
+	// Export is emitted when a contract bundle (ZIP) is exported. An export
+	// is a retrieval-class action and is recorded in the audit log
+	// (FR-CSA-18). Kept as the bare "EXPORT" token so the audit trail
+	// surfaces it verbatim.
+	Export EventType = "EXPORT"
+	// Revoke marks the invalidation of a signed contract via signature
+	// revocation (FR-SM-20); no command emits it yet.
 	Revoke EventType = "REVOKE_CONTRACT"
 )
 
@@ -77,6 +81,7 @@ var validStates = map[EventType]bool{
 	Offer:                    true,
 	Withdraw:                 true,
 	Revoke:                   true,
+	Export:                   true,
 }
 
 func NewEventType(s string) (EventType, error) {

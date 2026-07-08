@@ -178,12 +178,19 @@ def template_verify_pdf_url(context, did: str) -> str:
     return f"{context.base_url}/pdf/verify/template/{did}"
 
 
-# C2PA remote-manifest URL builder (DCS-OR-C2PA-008, Workstream D1).
-# NOTE: /c2pa/manifest/{did} does not exist in backend/design/ yet (as of
-# writing this BDD pack) — this builder documents the endpoint contract the
-# analyst/architect settled on (a public, unauthenticated sibling of
-# GET /.well-known/did.json, see backend/design/did.go), for the implementer
-# to add.
+# C2PA remote-manifest URL: a public, unauthenticated sibling of
+# GET /.well-known/did.json (DCS-OR-C2PA-008).
 
 def c2pa_manifest_url(context, did: str) -> str:
     return f"{context.base_url}/c2pa/manifest/{did}"
+
+
+# Bundle export URLs: one ZIP per contract/template with an integrity
+# manifest (FR-TR-24, FR-CWE-30).
+
+def contract_export_url(context, did: str) -> str:
+    return f"{context.base_url}/contract/export/{did}"
+
+
+def template_export_url(context, did: str) -> str:
+    return f"{context.base_url}/template/export/{did}"

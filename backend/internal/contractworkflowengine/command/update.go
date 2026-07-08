@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -25,6 +26,11 @@ import (
 
 	"github.com/jmoiron/sqlx"
 )
+
+// ErrContractHierarchyCycle is returned when an update would make a contract's
+// locally resolvable parent chain point back at the contract itself. It is
+// mapped to a 4xx client error by the HTTP layer.
+var ErrContractHierarchyCycle = errors.New("contract parent chain contains a cycle")
 
 type UpdateCmd struct {
 	DID             string                             `json:"did"`
@@ -111,6 +117,15 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return err
 	}
 
+	// Reject an update whose (locally resolvable) parent chain would loop
+	// back to this contract. Non-local parents are simply not walked further —
+	// cross-instance parents are legitimate and unresolvable here by design.
+	if parentDID := extractParentContractDID(cmd.ContractData); parentDID != "" {
+		if err := h.checkNoParentCycle(ctx, tx, cmd.DID, parentDID); err != nil {
+			return err
+		}
+	}
+
 	if cmd.ExpDate != nil {
 		tomorrow := time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour)
 		if cmd.ExpDate.Before(tomorrow) {
@@ -188,4 +203,62 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 	}
 
 	return tx.Commit()
+}
+
+// checkNoParentCycle walks the parent chain starting at proposedParentDID and
+// rejects if it reaches selfDID. Parents that do not resolve locally end the
+// walk (cross-instance parents are legitimate and unresolvable here). A visited
+// set guards against any pre-existing loop in stored data.
+func (h *Updater) checkNoParentCycle(ctx context.Context, tx *sqlx.Tx, selfDID, proposedParentDID string) error {
+	visited := map[string]bool{}
+	current := proposedParentDID
+	for current != "" {
+		if current == selfDID {
+			return fmt.Errorf("%w: updating %s to reference %s would loop the parent chain back to itself",
+				ErrContractHierarchyCycle, selfDID, proposedParentDID)
+		}
+		if visited[current] {
+			return nil
+		}
+		visited[current] = true
+
+		parent, err := h.CRepo.ReadDataByDID(ctx, tx, current)
+		if err != nil {
+			// Parent not resolvable locally (e.g. a cross-instance frame): stop.
+			return nil
+		}
+		current = extractParentContractDID(parent.ContractData)
+	}
+	return nil
+}
+
+// extractParentContractDID returns the single dcs:parentContract @id from a
+// contract document, or "" when none is present. Accepts both the object form
+// ({"@id": "..."}) and a one-element array form.
+func extractParentContractDID(data *datatype.JSON) string {
+	if data == nil || !data.IsNotNullValue() {
+		return ""
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(*data, &doc); err != nil {
+		return ""
+	}
+	value, ok := doc["dcs:parentContract"]
+	if !ok {
+		value = doc["parentContract"]
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		id, _ := typed["@id"].(string)
+		return id
+	case []any:
+		if len(typed) == 0 {
+			return ""
+		}
+		if first, ok := typed[0].(map[string]any); ok {
+			id, _ := first["@id"].(string)
+			return id
+		}
+	}
+	return ""
 }

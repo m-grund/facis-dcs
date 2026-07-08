@@ -289,9 +289,42 @@ type errorResponse struct {
 
 func (e *errorResponse) StatusCode() int { return e.statusCode }
 
+// bundleExportRefusedResponse preserves the structural-integrity findings of a
+// *pdfgeneration.BundleExportRefusedError in the HTTP body. The default Goa
+// error heuristic (goahttp.NewErrorResponse) only understands *goa.ServiceError
+// and would otherwise collapse the refusal into the generic
+// {name,id,message,temporary,timeout,fault} hull, dropping the findings array
+// clients rely on. The explicit lowercase JSON tags match the
+// generated ExportContractBundleRefusedResponseBody so the wire format is
+// identical to the design's "refused" response body.
+type bundleExportRefusedResponse struct {
+	Name     string   `json:"name"`
+	Message  string   `json:"message"`
+	Findings []string `json:"findings"`
+}
+
+func (e *bundleExportRefusedResponse) StatusCode() int { return http.StatusUnprocessableEntity }
+
 // errorFormatter maps named ServiceErrors to the correct HTTP status codes.
 // All other errors fall through to the default Goa heuristic.
 func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
+	// A bundle-export refusal is its own error type (not a *goa.ServiceError),
+	// so it must be handled before the generic heuristic that would discard its
+	// findings. This covers both ExportContractBundle and ExportTemplateBundle,
+	// which share the type.
+	var refused *pdfgeneration.BundleExportRefusedError
+	if errors.As(err, &refused) {
+		findings := refused.Findings
+		if findings == nil {
+			findings = []string{}
+		}
+		return &bundleExportRefusedResponse{
+			Name:     refused.Name,
+			Message:  refused.Message,
+			Findings: findings,
+		}
+	}
+
 	resp := goahttp.NewErrorResponse(ctx, err)
 
 	var gerr *goa.ServiceError
