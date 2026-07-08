@@ -36,7 +36,12 @@ const constraintLabel = computed(() => {
 </script>
 
 <template>
-  <li class="-mx-1 flex items-center gap-1.5 rounded px-1 py-0.5" :class="rowClass" @click="$emit('click')">
+  <li
+    v-if="param.isRequired"
+    class="-mx-1 flex items-center gap-1.5 rounded px-1 py-0.5"
+    :class="rowClass"
+    @click="$emit('click')"
+  >
     <span
       class="rounded border border-base-300 px-1"
       @mouseenter="$emit('mouseenter')"

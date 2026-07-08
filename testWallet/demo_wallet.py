@@ -43,7 +43,17 @@ from dcs_wallet.sdjwt import split_sd_jwt
 
 DEFAULT_API_BASE = os.environ.get("DCS_API_BASE", "http://localhost:8991/api")
 DEFAULT_CREDENTIAL = os.environ.get("DCS_WALLET_CREDENTIAL", "test")
-REQUEST_URI_MARKER = "/auth/presentation/request/"
+REQUEST_URI_MARKERS = (
+    "/auth/pid/presentation/request/",
+    "/auth/presentation/request/",
+)
+
+
+def _request_uri_marker(path: str) -> str | None:
+    for marker in REQUEST_URI_MARKERS:
+        if marker in path:
+            return marker
+    return None
 _CREDENTIALS_DIR = Path(__file__).resolve().parent / "credentials"
 _KEYS_DIR = Path(__file__).resolve().parent / "keys"
 _REQUIRED_KEYS = ("issuer-dev.jwk", "wallet.jwk")
@@ -171,9 +181,10 @@ def rebase_callback_url(redirect_uri: str, api_base: str) -> str:
 def api_base_from_request_uri(request_uri: str) -> str:
     parsed = urlparse(request_uri)
     path = parsed.path
-    idx = path.find(REQUEST_URI_MARKER)
-    if idx < 0:
-        raise ValueError(f"request_uri missing {REQUEST_URI_MARKER}")
+    marker = _request_uri_marker(path)
+    if marker is None:
+        raise ValueError(f"request_uri missing one of {REQUEST_URI_MARKERS}")
+    idx = path.find(marker)
     return f"{parsed.scheme}://{parsed.netloc}{path[:idx]}"
 
 
@@ -204,8 +215,8 @@ def resolve_https_request_uri(raw: str) -> str:
     parsed = urlparse(value)
     if parsed.scheme not in ("http", "https"):
         raise ValueError("request_uri must be an http(s) URL")
-    if REQUEST_URI_MARKER not in parsed.path:
-        raise ValueError(f"request_uri must contain {REQUEST_URI_MARKER}")
+    if _request_uri_marker(parsed.path) is None:
+        raise ValueError(f"request_uri must contain one of {REQUEST_URI_MARKERS}")
     return value
 
 
@@ -311,16 +322,18 @@ def parse_single_dcql_credential_query(dcql_query: object) -> tuple[str, list[st
     return query_id, vct_values, claim_paths
 
 
-def list_available_credentials() -> list[CredentialOption]:
+def list_available_credentials(*, include_pid: bool = False) -> list[CredentialOption]:
     options: list[CredentialOption] = []
     for path in sorted(_CREDENTIALS_DIR.glob(f"*{CREDENTIAL_EXT}")):
+        if not include_pid and path.name.endswith(".pid.jwt"):
+            continue
         data = load_credential_claims(path.stem)
         roles_raw = data.get("roles") or []
         roles = [r for r in roles_raw if isinstance(r, str)]
         options.append(
             CredentialOption(
                 stem=path.stem,
-                organization=str(data.get("organization") or "?"),
+                organization=str(data.get("organization") or data.get("organization_name") or "?"),
                 roles=roles,
             )
         )
@@ -399,7 +412,7 @@ def resolve_credential_name(credential_name: str | None, *, vct_values: list[str
                 return None
         return credential_name
 
-    options = list_available_credentials()
+    options = list_available_credentials(include_pid=bool(vct_values))
     if vct_values:
         filtered: list[CredentialOption] = []
         for option in options:

@@ -140,11 +140,8 @@ var _ = Service("Auth", func() {
 	Method("loginStatus", func() {
 		Description("Returns the current OpenID4VP login status for frontend polling.")
 		NoSecurity()
-		Payload(func() {
-			Attribute("state", String, "Login state identifier from the login response")
-			Required("state")
-		})
-		Result(LoginStatusResult)
+		Payload(PresentationStatePayload)
+		Result(PresentationStatusResult)
 		HTTP(func() {
 			GET("/auth/login/status")
 			Param("state")
@@ -199,6 +196,77 @@ var _ = Service("Auth", func() {
 		})
 	})
 
+	Method("pidPresentation", func() {
+		Description("Starts a one-shot OpenID4VP PID presentation flow (no Hydra session).")
+		NoSecurity()
+		Result(PidPresentationResult)
+		HTTP(func() {
+			POST("/auth/pid/presentation")
+			Response(StatusOK)
+		})
+	})
+
+	Method("pidPresentationRenew", func() {
+		Description("Extends an existing PID presentation state and returns an updated wallet link.")
+		NoSecurity()
+		Payload(func() {
+			Attribute("state", String, "PID presentation state identifier")
+			Required("state")
+		})
+		Result(PidPresentationResult)
+		HTTP(func() {
+			POST("/auth/pid/presentation/renew")
+			Response(StatusOK)
+		})
+	})
+
+	Method("pidPresentationRequest", func() {
+		Description("Returns a signed OpenID4VP authorization request JWT for PID presentation.")
+		NoSecurity()
+		Payload(func() {
+			Attribute("state", String, "PID presentation state identifier")
+			Attribute("wallet_nonce", String, "Wallet-provided nonce echoed in the authorization request object when request_uri_method=post")
+			Attribute("wallet_metadata", String, "Wallet metadata JSON submitted with request_uri_method=post")
+			Required("state")
+		})
+		HTTP(func() {
+			POST("/auth/pid/presentation/request/{state}")
+			GET("/auth/pid/presentation/request/{state}")
+			SkipResponseBodyEncodeDecode()
+			Response(StatusOK, func() {
+				ContentType("application/oauth-authz-req+jwt")
+			})
+		})
+	})
+
+	Method("pidPresentationCallback", func() {
+		Description("Handles the wallet direct-post response for PID presentation verification.")
+		NoSecurity()
+		Payload(PresentationCallbackPayload)
+		HTTP(func() {
+			POST("/auth/pid/presentation/callback")
+			Response(StatusNoContent)
+		})
+	})
+
+	Method("pidPresentationStatus", func() {
+		Description("Returns the current PID presentation status for frontend polling.")
+		NoSecurity()
+		Payload(PresentationStatePayload)
+		Result(PresentationStatusResult)
+		HTTP(func() {
+			GET("/auth/pid/presentation/status")
+			Param("state")
+			Response(StatusOK)
+		})
+	})
+
+})
+
+var PresentationStatePayload = Type("PresentationStatePayload", func() {
+	Description("OpenID4VP presentation state for status polling.")
+	Attribute("state", String, "Presentation state identifier from the presentation response")
+	Required("state")
 })
 
 var PresentationCallbackPayload = Type("PresentationCallbackPayload", func() {
@@ -210,11 +278,18 @@ var PresentationCallbackPayload = Type("PresentationCallbackPayload", func() {
 	Required("state")
 })
 
-var LoginStatusResult = Type("LoginStatusResult", func() {
-	Attribute("state", String, "Login state identifier")
-	Attribute("status", String, "Current login status: pending, complete, failed, or expired")
-	Attribute("expires_in", Int, "Number of seconds remaining before the login state expires")
-	Attribute("redirect_uri", String, "Redirect URI returned when the login status is complete")
-	Attribute("error_message", String, "Error message returned when the login status is failed")
+var PresentationStatusResult = Type("PresentationStatusResult", func() {
+	Attribute("state", String, "Presentation state identifier")
+	Attribute("status", String, "Current presentation status: pending, complete, failed, or expired")
+	Attribute("expires_in", Int, "Number of seconds remaining before the presentation state expires")
+	Attribute("redirect_uri", String, "Redirect URI returned when the presentation status is complete")
+	Attribute("error_message", String, "Error message returned when the presentation status is failed")
 	Required("state", "status", "expires_in")
+})
+
+var PidPresentationResult = Type("PidPresentationResult", func() {
+	Attribute("presentation_url", String, "Wallet deep link (openid4vp://) for QR code generation")
+	Attribute("state", String, "PID presentation state identifier")
+	Attribute("expires_in", Int, "Seconds until this presentation state expires")
+	Required("presentation_url", "state", "expires_in")
 })

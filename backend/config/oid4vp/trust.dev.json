@@ -1,6 +1,8 @@
 {
   "vcts": [
-    "urn:dcs:poa:v1"
+    "urn:dcs:poa:v1",
+    "urn:eudi:pid:de:1",
+    "urn:eudi:eaa:loyalty-card:1"
   ],
   "issuers": {
     "did:web:dev.example:issuer:poa": {

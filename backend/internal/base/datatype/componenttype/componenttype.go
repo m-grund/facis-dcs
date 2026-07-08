@@ -12,21 +12,23 @@ import (
 type ComponentType string
 
 const (
-	ContractTemplateRepo      ComponentType = "CONTRACT_TEMPLATE_REPOSITORY"
-	ContractWorkflowEngine    ComponentType = "CONTRACT_WORKFLOW_ENGINE"
-	ContractStorageArchive    ComponentType = "CONTRACT_STORAGE_ARCHIVE"
-	ProcessAuditAndCompliance ComponentType = "PROCESS_AUDIT_AND_COMPLIANCE"
-	SignatureManagement       ComponentType = "SIGNATURE_MANAGEMENT"
-	System                    ComponentType = "SYSTEM"
+	ContractTemplateRepo         ComponentType = "CONTRACT_TEMPLATE_REPOSITORY"
+	ContractWorkflowEngine       ComponentType = "CONTRACT_WORKFLOW_ENGINE"
+	ContractStorageArchive       ComponentType = "CONTRACT_STORAGE_ARCHIVE"
+	ProcessAuditAndCompliance    ComponentType = "PROCESS_AUDIT_AND_COMPLIANCE"
+	SignatureManagement          ComponentType = "SIGNATURE_MANAGEMENT"
+	TemplateCatalogueIntegration ComponentType = "TEMPLATE_CATALOGUE_INTEGRATION"
+	System                       ComponentType = "SYSTEM"
 )
 
 var validType = map[ComponentType]bool{
-	ContractTemplateRepo:      true,
-	ContractWorkflowEngine:    true,
-	ContractStorageArchive:    true,
-	ProcessAuditAndCompliance: true,
-	SignatureManagement:       true,
-	System:                    true,
+	ContractTemplateRepo:         true,
+	ContractWorkflowEngine:       true,
+	ContractStorageArchive:       true,
+	ProcessAuditAndCompliance:    true,
+	SignatureManagement:          true,
+	TemplateCatalogueIntegration: true,
+	System:                       true,
 }
 
 func NewComponentType(s string) (ComponentType, error) {

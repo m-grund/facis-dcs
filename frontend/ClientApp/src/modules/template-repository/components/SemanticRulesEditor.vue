@@ -29,6 +29,7 @@ import {
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { MinusIcon, PlusIcon } from '@heroicons/vue/20/solid'
 
 interface RequirementItem {
   condition: SemanticCondition
@@ -67,6 +68,7 @@ const canAddRequirementDraft = computed(() => {
   if (!draft.name.trim()) return false
   if (draft.action.roleRequired && !draft.role) return false
   if (!draft.parameters.length) return false
+  if (!draft.parameters.some((parameter) => parameter.isRequired)) return false
   return Object.values(draft.parameterValidity).every((isValid) => isValid)
 })
 
@@ -130,9 +132,10 @@ const conditionItems = computed<RequirementItem[]>(() => {
 })
 
 function startRequirementDraft(action: RequirementAction) {
-  const parameters = action.domainType
+  const rawParameters = action.domainType
     ? buildOntologyDomainTypeParameters(action.domainType)
     : action.fields.map((field) => parameterFromField(field))
+  const parameters = rawParameters.map((p) => ({ ...p, isRequired: false }))
   requirementDraft.value = {
     action,
     name: defaultRequirementName(action, ''),
@@ -173,7 +176,7 @@ function parameterFromField(field: DomainFieldDefinition): SemanticCondition['pa
     semanticPath: field.semanticPath,
     valueConstraint: cloneValueConstraint(field.valueConstraint),
     uiMetadata: { label: field.label },
-    isRequired: true,
+    isRequired: false,
     operators: [],
     value: undefined,
   }
@@ -233,6 +236,10 @@ function createClauseFromRequirement(item: RequirementItem) {
     conditionIds: [condition.conditionId],
     sourceConditionName: condition.conditionName,
   })
+}
+
+function hasClauseForRequirement(item: RequirementItem): boolean {
+  return (placedClauseCountByConditionId.value[item.condition.conditionId] ?? 0) > 0 || item.usedInClauseCount > 0
 }
 
 function requirementStatusLabel(item: RequirementItem) {
@@ -396,19 +403,23 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
                 {{ formatValueConstraint(parameter.valueConstraint) }}
               </p>
             </div>
-            <label class="flex flex-col gap-1 md:col-span-2">
-              <span class="label-text text-xs text-base-content/60">Required</span>
-              <span class="flex h-9 items-center gap-2">
-                <input v-model="parameter.isRequired" type="checkbox" class="checkbox checkbox-sm checkbox-primary" />
-                <span class="text-xs text-base-content/60">{{ parameter.isRequired ? 'Required' : 'Optional' }}</span>
-              </span>
-            </label>
             <ParameterObligationEditor
               :parameter="parameter"
               :operators="parameter.operators"
               @update:operators="updateDraftParameterOperators(index, $event)"
               @validity-change="updateDraftParameterValidity(parameter.semanticPath, $event)"
             />
+            <button
+              type="button"
+              class="btn btn-circle self-center justify-self-end btn-xs md:col-span-1 md:col-start-12"
+              :class="[parameter.isRequired ? 'btn-error' : 'btn-secondary']"
+              :title="parameter.isRequired ? 'Mark optional' : 'Mark required'"
+              :aria-label="parameter.isRequired ? 'Mark optional' : 'Mark required'"
+              @click="parameter.isRequired = !parameter.isRequired"
+            >
+              <PlusIcon v-if="!parameter.isRequired" class="h-5 w-5" />
+              <MinusIcon v-else class="h-5 w-5" />
+            </button>
           </div>
         </div>
       </div>
@@ -441,7 +452,15 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
               </div>
             </div>
             <div v-if="uiStore.isTemplateEditable && !item.subTemplateRef" class="flex shrink-0 gap-1">
-              <button type="button" class="btn btn-xs btn-secondary" @click="createClauseFromRequirement(item)">
+              <button
+                type="button"
+                class="btn btn-xs btn-secondary"
+                :disabled="hasClauseForRequirement(item)"
+                :title="
+                  hasClauseForRequirement(item) ? 'A clause for this requirement already exists' : 'Create clause'
+                "
+                @click="createClauseFromRequirement(item)"
+              >
                 Create clause
               </button>
               <button type="button" class="btn text-error btn-ghost btn-xs" @click="deleteRequirement(item)">
@@ -451,36 +470,25 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
           </div>
 
           <div class="space-y-3">
-            <div
-              v-for="(parameter, index) in item.condition.parameters"
-              :key="parameter.semanticPath"
-              class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
-            >
-              <div class="min-w-0 md:col-span-4">
-                <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
-                <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
-                <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
-                  {{ formatValueConstraint(parameter.valueConstraint) }}
-                </p>
+            <template v-for="(parameter, index) in item.condition.parameters" :key="parameter.semanticPath">
+              <div
+                v-if="parameter.isRequired"
+                class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
+              >
+                <div class="min-w-0 md:col-span-4">
+                  <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
+                  <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
+                  <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
+                    {{ formatValueConstraint(parameter.valueConstraint) }}
+                  </p>
+                </div>
+                <ParameterObligationEditor
+                  :parameter="parameter"
+                  :operators="parameter.operators"
+                  @update:operators="updateParameterOperators(item.condition, index, $event)"
+                />
               </div>
-              <label class="flex flex-col gap-1 md:col-span-2">
-                <span class="label-text text-xs text-base-content/60">Required</span>
-                <span class="flex h-9 items-center gap-2">
-                  <input
-                    v-model="parameter.isRequired"
-                    type="checkbox"
-                    class="checkbox checkbox-sm checkbox-primary"
-                    :disabled="!uiStore.isTemplateEditable || !!item.subTemplateRef"
-                  />
-                  <span class="text-xs text-base-content/60">{{ parameter.isRequired ? 'Required' : 'Optional' }}</span>
-                </span>
-              </label>
-              <ParameterObligationEditor
-                :parameter="parameter"
-                :operators="parameter.operators"
-                @update:operators="updateParameterOperators(item.condition, index, $event)"
-              />
-            </div>
+            </template>
           </div>
         </article>
       </div>

@@ -64,6 +64,11 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 		return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: %w", err)
 	}
 
+	pidDCQLQuery, err := oid4vp.LoadPIDDCQLQuery(os.Getenv("OID4VP_PID_DCQL_QUERY"))
+	if err != nil {
+		return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: %w", err)
+	}
+
 	var requestSigner oid4vprequest.Signer
 	vaultAddr := strings.TrimRight(strings.TrimSpace(os.Getenv("VAULT_ADDR")), "/")
 
@@ -110,6 +115,7 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 		}),
 		Trust:             trustCfg,
 		DCQLQuery:         dcqlQuery,
+		PIDDCQLQuery:      pidDCQLQuery,
 		RequestSigner:     requestSigner,
 		PublicAPIBase:     publicAPIBase,
 		LogoutRedirectURI: logoutRedirectURI,
