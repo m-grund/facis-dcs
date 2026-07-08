@@ -124,7 +124,7 @@ func parseCurrentPagesKids(pdf []byte) ([]int, error) {
 // The original PDF bytes are preserved unchanged as a prefix so existing
 // C2PA hard-binding signatures remain verifiable over the original byte range.
 func UpdatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, compiledAt time.Time) ([]byte, error) {
-	return updatePDF(ctx, oldPDF, newPayload, nil, compiledAt)
+	return updatePDF(ctx, oldPDF, newPayload, nil, "", compiledAt)
 }
 
 // UpdatePDFWithVC appends a PDF incremental update that replaces visible page
@@ -141,7 +141,16 @@ func UpdatePDFWithVC(ctx context.Context, oldPDF []byte, newPayload []byte, vcBy
 	if len(vcBytes) == 0 {
 		return UpdatePDF(ctx, oldPDF, newPayload, compiledAt)
 	}
-	return updatePDF(ctx, oldPDF, newPayload, vcBytes, compiledAt)
+	return updatePDF(ctx, oldPDF, newPayload, vcBytes, "", compiledAt)
+}
+
+// UpdatePDFWithOptions is the full-control entry point used by the DCS backend.
+// It behaves like UpdatePDFWithVC (vcBytes may be nil) but additionally accepts
+// a remoteManifestURL that, when non-empty, is embedded as the C2PA claim's
+// remote_manifests field (DCS-OR-C2PA-008 AC3). When remoteManifestURL is empty
+// the output is identical to UpdatePDF / UpdatePDFWithVC.
+func UpdatePDFWithOptions(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []byte, remoteManifestURL string, compiledAt time.Time) ([]byte, error) {
+	return updatePDF(ctx, oldPDF, newPayload, vcBytes, remoteManifestURL, compiledAt)
 }
 
 // ExtractManifestStore returns the raw JUMBF C2PA manifest store bytes
@@ -152,7 +161,7 @@ func ExtractManifestStore(pdf []byte) ([]byte, error) {
 
 // updatePDF is the shared implementation used by UpdatePDF and UpdatePDFWithVC.
 // The "no changes" guard is bypassed when vcBytes is non-nil.
-func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []byte, compiledAt time.Time) ([]byte, error) {
+func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []byte, remoteManifestURL string, compiledAt time.Time) ([]byte, error) {
 	oldPayload, err := ExtractEmbeddedJSONLD(oldPDF)
 	if err != nil {
 		return nil, fmt.Errorf("extract embedded JSON-LD: %w", err)
@@ -239,7 +248,7 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 	var result []byte
 
 	for range 6 {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(newHashHex), newDoc.ContractID, newHashHex, hardBindingHash, exclusions, compiledAt)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(newHashHex), newDoc.ContractID, newHashHex, hardBindingHash, exclusions, compiledAt, remoteManifestURL)
 		if err != nil {
 			return nil, fmt.Errorf("render update manifest: %w", err)
 		}
@@ -553,11 +562,16 @@ func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
 	// Re-use any VC from the existing PDF so the deterministic output is
 	// byte-for-byte identical.
 	embeddedVC, vcPresent, _ := ExtractEmbeddedVC(pdf)
+	// The stored update manifest may carry a remote_manifests reference
+	// (DCS-OR-C2PA-008 AC3). Recover it from the stored claim so the
+	// deterministic re-render reproduces the same claim bytes; otherwise the
+	// byte-for-byte prefix check below would fail for PDFs that embed it.
+	remoteManifestURL := extractRemoteManifestURL(fullC2PA)
 	var freshUpdated []byte
 	if vcPresent && len(embeddedVC) > 0 {
-		freshUpdated, err = UpdatePDFWithVC(ctx, original, newPayload, embeddedVC, updateCompiledAt)
+		freshUpdated, err = UpdatePDFWithOptions(ctx, original, newPayload, embeddedVC, remoteManifestURL, updateCompiledAt)
 	} else {
-		freshUpdated, err = UpdatePDF(ctx, original, newPayload, updateCompiledAt)
+		freshUpdated, err = UpdatePDFWithOptions(ctx, original, newPayload, nil, remoteManifestURL, updateCompiledAt)
 	}
 	if err != nil {
 		return fmt.Errorf("re-apply amendment: %w", err)

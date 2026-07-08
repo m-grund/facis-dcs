@@ -894,19 +894,26 @@ func shaclPropertyFindingWithDetails(policy ContractContentPolicy, shape Contrac
 	return finding
 }
 
+// extractContractODRLPolicies reads dcs:policies and flattens it into a plain
+// list of rule nodes for the ODRL enforcement/audit pipeline. Two shapes are
+// supported:
+//
+//   - The current/legacy flat array of bare odrl:Duty/Permission/Prohibition
+//     nodes (kept for backward-compatible auditing of already-persisted data
+//     and for the operator-matrix Go unit tests / AC6 BDD fixtures, which
+//     deliberately exercise this shape).
+//   - The target Workstream-F1 shape: a single enclosing odrl:Set object
+//     (dcs:policies is a map, not an array), whose rules live in the
+//     odrl:duty/odrl:permission/odrl:prohibition/odrl:obligation bucket
+//     properties.
+//
+// This is the extraction fix the architect flagged as security-critical: if
+// dcs:policies is migrated to the enclosing odrl:Set shape but this function
+// is not updated to descend into it, ValidateContractPolicySatisfaction would
+// silently see zero policies and let every contract through unchecked.
 func extractContractODRLPolicies(contract map[string]any) []map[string]any {
 	raw := topLevelValue(documentData(contract), "policies")
-	items, ok := asArray(raw)
-	if !ok {
-		return nil
-	}
-	result := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		if policy, ok := item.(map[string]any); ok {
-			result = append(result, policy)
-		}
-	}
-	return result
+	return collectODRLPolicyRules(raw)
 }
 
 func externalODRLPolicies(raw []any) []map[string]any {

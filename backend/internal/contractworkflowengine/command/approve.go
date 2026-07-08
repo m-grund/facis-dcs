@@ -108,8 +108,8 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	if processData.State != contractstate.Reviewed.String() || processData.State == contractstate.Terminated.String() {
-		return errors.New("invalid contract state")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventApprove); err != nil {
+		return err
 	}
 
 	// IsValidApprover checks CauserDID (a peer DID) against the task's assigned

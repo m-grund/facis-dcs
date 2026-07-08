@@ -64,12 +64,15 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 	return cts, nil
 }
 
+// ReadProcessDataByDID reads the contract's current state regardless of what
+// that state is — the SIGNED transition gate is decided in Go by
+// contractstate.ValidateTransition (the single-source-of-truth transition
+// table), not by a hardcoded SQL state literal (see command/apply.go).
 func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
         SELECT did, state, updated_at, created_by, contract_version
         FROM contracts
         WHERE did = $1
-         AND  state = 'APPROVED'
     `
 	var processData db.ContractProcessData
 	err := tx.GetContext(ctx, &processData, query, did)
@@ -82,11 +85,13 @@ func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sql
 	return &processData, nil
 }
 
+// UpdateState is unconditional: the caller (command/apply.go) already
+// validated the transition against contractstate.Transitions before calling
+// this, so no hardcoded SQL state guard is needed here anymore.
 func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error {
 	statement := `
         UPDATE contracts SET state = $2
         WHERE did = $1
-         AND  state = 'APPROVED'
     `
 	_, err := tx.ExecContext(ctx, statement, did, state)
 	return err

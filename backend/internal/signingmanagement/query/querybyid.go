@@ -21,7 +21,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 )

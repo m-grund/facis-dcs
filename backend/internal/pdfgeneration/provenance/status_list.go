@@ -2,7 +2,7 @@ package provenance
 
 import (
 	"bytes"
-	"compress/zlib"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -102,7 +102,7 @@ func (p *OCMWStatusListPublisher) setRevoked(ctx context.Context, contractID str
 		return fmt.Errorf("status list ServiceURL must not be empty: required for revocation of %s", contractID)
 	}
 	index := StatusListIndex(contractID)
-	url := fmt.Sprintf("%s/v1/tenants/%s/status/revoke/%d/%d", p.ServiceURL, p.TenantID, defaultListID, index)
+	url := fmt.Sprintf("%s/v1/tenants/%s/status/%d/revoke/%d", p.ServiceURL, p.TenantID, defaultListID, index)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(nil))
 	if err != nil {
@@ -155,10 +155,24 @@ func (p *OCMWStatusListPublisher) PublishStatus(
 	return p.statusListURI(), nil
 }
 
-// QueryStatusListStatus fetches the BitstringStatusListCredential (or StatusList2021Credential)
-// at statusListCredential and returns "revoked" if the bit at index is set, "active" otherwise
-// (DCS-OR-C2PA-006). The credential's credentialSubject.encodedList must be a base64url-encoded,
-// zlib-compressed bitstring per W3C StatusList2021 / BitstringStatusList specification.
+// statusListResponse is the JSON shape actually returned by the deployed XFSC
+// statuslist-service for GET /v1/tenants/{tenant}/status/{listId}:
+//
+//	{"list": "<base64, gzip-compressed bitstring>", "listId": 1, "tenantId": "default"}
+//
+// This is NOT a W3C VC (no credentialSubject wrapper).
+type statusListResponse struct {
+	List string `json:"list"`
+}
+
+// QueryStatusListStatus fetches the status list at statusListCredential and returns
+// "revoked" if the entry at index is set, "active" otherwise (DCS-OR-C2PA-006).
+//
+// The XFSC statuslist-service (deployment/helm/charts/statuslist-service) returns a
+// plain {"list": "...", "listId": ..., "tenantId": "..."} JSON object rather than a
+// W3C VC; "list" is a base64-encoded, gzip-compressed bitstring. Bit packing
+// follows the IETF Token Status List / XFSC convention (LSB-first), matching the
+// parsing already established for status list checks in internal/auth/oid4vp.
 func QueryStatusListStatus(ctx context.Context, client *http.Client, statusListCredential string, index uint32) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusListCredential, nil)
 	if err != nil {
@@ -185,49 +199,77 @@ func QueryStatusListStatus(ctx context.Context, client *http.Client, statusListC
 		return "", fmt.Errorf("read status list response: %w", err)
 	}
 
-	var slVC struct {
-		CredentialSubject struct {
-			EncodedList string `json:"encodedList"`
-		} `json:"credentialSubject"`
-	}
-	if err := json.Unmarshal(body, &slVC); err != nil {
-		return "", fmt.Errorf("parse status list VC: %w", err)
-	}
-	if slVC.CredentialSubject.EncodedList == "" {
-		return "", fmt.Errorf("encodedList absent from status list VC")
+	var sl statusListResponse
+	if err := json.Unmarshal(body, &sl); err != nil {
+		return "", fmt.Errorf("parse status list response: %w", err)
 	}
 
-	// StatusList2021 uses base64url without padding.
-	compressed, err := base64.RawURLEncoding.DecodeString(slVC.CredentialSubject.EncodedList)
-	if err != nil {
-		return "", fmt.Errorf("base64url decode encodedList: %w", err)
+	encoded := strings.TrimSpace(sl.List)
+	if encoded == "" {
+		return "", fmt.Errorf("status list response has no list field")
 	}
 
-	r, err := zlib.NewReader(bytes.NewReader(compressed))
+	bitstring, err := decodeAndDecompressStatusList(encoded)
 	if err != nil {
-		return "", fmt.Errorf("create zlib reader for bitstring: %w", err)
-	}
-	defer func(r io.ReadCloser) {
-		err := r.Close()
-		if err != nil {
-			log.Printf("close zlib reader for bitstring: %v", err)
-		}
-	}(r)
-	bitstring, err := io.ReadAll(r)
-	if err != nil {
-		return "", fmt.Errorf("decompress bitstring: %w", err)
+		return "", err
 	}
 
 	byteIdx := index / 8
-	// StatusList2021 §4: index 0 = MSB of byte 0; bit N is at bit 7-(N%8) of byte N/8.
-	bitIdx := uint(7 - (index % 8))
 	if int(byteIdx) >= len(bitstring) {
 		return "", fmt.Errorf("index %d out of range for bitstring of %d bytes", index, len(bitstring))
 	}
+	// IETF Token Status List / XFSC statuslist-service convention: LSB-first —
+	// bit N is at bit (N%8) of byte N/8.
+	bitIdx := uint(index % 8)
 	if bitstring[byteIdx]&(1<<bitIdx) != 0 {
 		return "revoked", nil
 	}
 	return "active", nil
+}
+
+// decodeAndDecompressStatusList base64-decodes encoded (accepting both padded/
+// unpadded and standard/url-safe alphabets, since deployments have been
+// observed to disagree on this detail) and gzip-decompresses the result
+// (the XFSC statuslist-service's only compression format).
+func decodeAndDecompressStatusList(encoded string) ([]byte, error) {
+	compressed, err := decodeStatusListBase64(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode status list: %w", err)
+	}
+
+	r, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return nil, fmt.Errorf("create gzip reader for bitstring: %w", err)
+	}
+	defer func(r io.ReadCloser) {
+		if err := r.Close(); err != nil {
+			log.Printf("close gzip reader for bitstring: %v", err)
+		}
+	}(r)
+	out, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("decompress gzip bitstring: %w", err)
+	}
+	return out, nil
+}
+
+// decodeStatusListBase64 tries the base64 variants seen across StatusList2021
+// (base64url, unpadded) and the XFSC statuslist-service (standard, padded).
+func decodeStatusListBase64(s string) ([]byte, error) {
+	var lastErr error
+	for _, enc := range []*base64.Encoding{
+		base64.RawURLEncoding,
+		base64.StdEncoding,
+		base64.URLEncoding,
+		base64.RawStdEncoding,
+	} {
+		if b, err := enc.DecodeString(s); err == nil {
+			return b, nil
+		} else {
+			lastErr = err
+		}
+	}
+	return nil, lastErr
 }
 
 // RevokeStatus marks the contract as revoked in the status list (DCS-OR-C2PA-005).

@@ -100,8 +100,8 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return nil
 	}
 
-	if processData.State != contractstate.Negotiation.String() || processData.State == contractstate.Terminated.String() {
-		return errors.New("current contract state is invalid")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventAcceptNegotiation); err != nil {
+		return err
 	}
 
 	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)

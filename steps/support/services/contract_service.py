@@ -1,15 +1,18 @@
 """Contract service API client for test steps."""
 
+import requests
+
 from steps.support.api_client import (
     contract_create_url,
-    contract_retrieve_by_id_url, 
-    contract_submit_url, 
-    contract_verify_url, 
-    get_with_headers, 
-    post_json, 
-    template_approve_url, 
-    template_create_url, 
-    template_submit_url, 
+    contract_retrieve_by_id_url,
+    contract_submit_url,
+    contract_verify_url,
+    get_with_headers,
+    post_json,
+    template_approve_url,
+    template_create_url,
+    template_register_url,
+    template_submit_url,
     template_verify_url
 )
 from steps.support.services.auth_service import AuthService
@@ -22,6 +25,30 @@ class ContractService:
     def _ensure_store(context, name, value):
         if not hasattr(context, name) or getattr(context, name) is None:
             setattr(context, name, value)
+
+    @staticmethod
+    def _local_peer_did(context):
+        """Reviewers/Negotiators/Approvers on contract/create and
+        contract/submit are peer DIDs (other DCS instances), not usernames
+        — see backend/internal/contractworkflowengine/command/create.go and
+        the CauserDID-based IsValidReviewer/IsValidNegotiator checks in
+        submit.go. For a single-instance BDD run the only peer that can ever
+        act (CauserDID is always this instance's own DID server-side) is
+        this instance itself, fetched from its own did:web document.
+        """
+        if not hasattr(context, "local_peer_did_cache"):
+            resp = requests.get(
+                f"{context.base_url}/.well-known/did.json",
+                timeout=context.http_timeout_seconds,
+            )
+            assert resp.status_code == 200, (
+                f"could not fetch this instance's own did:web document: "
+                f"{resp.status_code} {resp.text}"
+            )
+            did = resp.json().get("id")
+            assert did, f"own did.json response has no 'id' field: {resp.text}"
+            context.local_peer_did_cache = did
+        return context.local_peer_did_cache
 
     @staticmethod
     def _template_submit_payload(context, did: str, updated_at: str) -> dict:
@@ -46,14 +73,13 @@ class ContractService:
 
     @staticmethod
     def _contract_submit_payload(context, did: str, updated_at: str) -> dict:
-        AuthService.get_headers_for_roles(["Contract Reviewer"])
-        AuthService.get_headers_for_roles(["Contract Approver"])
+        peer_did = ContractService._local_peer_did(context)
         return {
             "did": did,
             "updated_at": updated_at,
-            "reviewers": [AuthService.username_for_roles(["Contract Reviewer"])],
-            "approvers": [AuthService.username_for_roles(["Contract Approvers"])],
-            "negotiators": [AuthService.username_for_roles(["Contract Reviewer"])],
+            "reviewers": [peer_did],
+            "approvers": [peer_did],
+            "negotiators": [peer_did],
         }
 
     @staticmethod
@@ -75,7 +101,33 @@ class ContractService:
                 "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Contract Source Template",
                 "description": "BDD template for contract workflows",
-                "template_data": {"title": "BDD Template", "clauses": [{"id": "c1", "text": "Base clause"}]},
+                "template_data": {
+                    "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
+                    "@type": "dcs:ContractTemplate",
+                    "dcs:metadata": {
+                        "@type": "dcs:TemplateMetadata",
+                        "dcs:title": "BDD Contract Source Template",
+                    },
+                    "dcs:documentStructure": {
+                        "@type": "dcs:DocumentStructure",
+                        "dcs:blocks": {
+                            "@list": [
+                                {
+                                    "@id": "urn:uuid:block-clause-1",
+                                    "@type": "dcs:Clause",
+                                    "dcs:content": {"@list": ["Base clause"]},
+                                }
+                            ]
+                        },
+                        "dcs:layout": [
+                            {
+                                "@id": "urn:uuid:block-root",
+                                "dcs:isRoot": True,
+                                "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
+                            }
+                        ],
+                    },
+                },
             },
             headers=creator_h,
         )
@@ -127,6 +179,18 @@ class ContractService:
             headers=approver_h,
         )
         assert approve_resp.status_code == 200, approve_resp.text
+
+        # contract/create only accepts templates in state REGISTERED or
+        # PUBLISHED (see ReadContractTemplateDataByID) — APPROVED alone is
+        # not enough, register is a distinct step after approval.
+        manager_h = AuthService.get_headers_for_roles(["Template Manager"])
+        register_resp = post_json(
+            context,
+            template_register_url(context),
+            {"did": t_did},
+            headers=manager_h,
+        )
+        assert register_resp.status_code == 200, register_resp.text
         return t_did
 
 
@@ -134,7 +198,14 @@ class ContractService:
     def _create_contract_in_draft(context, contract_name: str):
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
-        create_resp = post_json(context, contract_create_url(context), {"did": t_did}, headers=creator_h)
+        peer_did = ContractService._local_peer_did(context)
+        create_payload = {
+            "template_did": t_did,
+            "reviewers": [peer_did],
+            "negotiators": [peer_did],
+            "approvers": [peer_did],
+        }
+        create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text
         c_did = create_resp.json().get("did")
         retrieve_resp = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
@@ -152,7 +223,14 @@ class ContractService:
     def _create_contract_in_negotiation(context, contract_name: str):
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
-        create_resp = post_json(context, contract_create_url(context), {"did": t_did}, headers=creator_h)
+        peer_did = ContractService._local_peer_did(context)
+        create_payload = {
+            "template_did": t_did,
+            "reviewers": [peer_did],
+            "negotiators": [peer_did],
+            "approvers": [peer_did],
+        }
+        create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text
         c_did = create_resp.json().get("did")
 

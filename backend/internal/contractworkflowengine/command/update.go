@@ -18,10 +18,10 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/validation"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/expirationpolicy"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -107,8 +107,8 @@ func (h *Updater) Handle(ctx context.Context, cmd UpdateCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	if oldData.State != contracttemplatestate.Draft.String() {
-		return errors.New("invalid contract state")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(oldData.State), contractstate.EventUpdate); err != nil {
+		return err
 	}
 
 	if cmd.ExpDate != nil {

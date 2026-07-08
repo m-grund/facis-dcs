@@ -39,6 +39,12 @@ const (
 	ContractExpired          EventType = "CONTRACT_EXPIRED"
 	RetrieveAllTemplates     EventType = "RETRIEVE_ALL_TEMPLATES"
 	RemoteActionRequestEvent EventType = "REMOTE_ACTION_REQUEST"
+	Offer                    EventType = "OFFER_CONTRACT"
+	Withdraw                 EventType = "WITHDRAW_CONTRACT"
+	// Revoke has no trigger yet in this scope (Workstream C4 excludes
+	// REVOKED-entry via signature revocation) — the type exists for later
+	// workstreams to use.
+	Revoke EventType = "REVOKE_CONTRACT"
 )
 
 var validStates = map[EventType]bool{
@@ -68,6 +74,9 @@ var validStates = map[EventType]bool{
 	RemoteSyncRequest:        true,
 	OutdatedPeer:             true,
 	RemoteActionRequestEvent: true,
+	Offer:                    true,
+	Withdraw:                 true,
+	Revoke:                   true,
 }
 
 func NewEventType(s string) (EventType, error) {

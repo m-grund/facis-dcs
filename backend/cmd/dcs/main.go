@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 
 	dcstodcs2 "digital-contracting-service/internal/dcstodcs"
+	dcstodcsdb "digital-contracting-service/internal/dcstodcs/db"
 	pq2 "digital-contracting-service/internal/dcstodcs/db/pg"
 
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -21,6 +23,7 @@ import (
 	didservice "digital-contracting-service/gen/did_service"
 
 	genauth "digital-contracting-service/gen/auth"
+	c2paservice "digital-contracting-service/gen/c2_pa_service"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
@@ -268,6 +271,9 @@ func main() {
 	}(cepSubClient)
 
 	syncRepo := pq2.PostgresSyncRepository{}
+	if err := seedTrustedPeersFromEnv(ctx, db, &syncRepo); err != nil {
+		log.Fatalf(ctx, err, "failed to seed trusted peers from DCS_TRUSTED_PEERS")
+	}
 	dcsToDcsSynchronizer := dcstodcs2.DCSToDCSSynchronizer{
 		DB:          db,
 		CRepo:       &cweRepo,
@@ -418,6 +424,7 @@ func main() {
 		templateCatalogueIntegrationSvc templatecatalogueintegration.Service
 		templateRepositorySvc           templaterepository.Service
 		didSrv                          didservice.Service
+		c2paSvc                         c2paservice.Service
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
@@ -438,8 +445,9 @@ func main() {
 
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo, *didDocument)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient)
-		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument)
+		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument, ipfsAPIClient)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
+		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
@@ -491,6 +499,7 @@ func main() {
 		templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints
 		templateRepositoryEndpoints           *templaterepository.Endpoints
 		didEntpoints                          *didservice.Endpoints
+		c2paEndpoints                         *c2paservice.Endpoints
 	)
 	{
 		authEndpoints = genauth.NewEndpoints(authSvc)
@@ -523,6 +532,9 @@ func main() {
 		didEntpoints = didservice.NewEndpoints(didSrv)
 		didEntpoints.Use(debug.LogPayloads())
 		didEntpoints.Use(log.Endpoint)
+		c2paEndpoints = c2paservice.NewEndpoints(c2paSvc)
+		c2paEndpoints.Use(debug.LogPayloads())
+		c2paEndpoints.Use(log.Endpoint)
 	}
 
 	// Setup interrupt handler. This optional step configures the process so
@@ -565,7 +577,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:
@@ -580,4 +592,49 @@ func main() {
 
 	wg.Wait()
 	log.Printf(ctx, "exited")
+}
+
+// seedTrustedPeersFromEnv upserts every comma-separated peer DID listed in
+// DCS_TRUSTED_PEERS into the trusted_peers allowlist at startup (Workstream
+// C1, docs/anforderung.md, AC1). Idempotent: re-running with the same env
+// var value is a no-op thanks to UpsertTrustedPeer's
+// ON CONFLICT (peer_did) DO NOTHING. A no-op (nothing logged/inserted) when
+// the env var is unset or empty.
+func seedTrustedPeersFromEnv(ctx context.Context, database *sqlx.DB, sRepo dcstodcsdb.SyncRepository) error {
+	raw := os.Getenv("DCS_TRUSTED_PEERS")
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+
+	var seeded []string
+	tx, err := database.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Errorf(ctx, err, "could not rollback trusted-peer seeding transaction")
+		}
+	}()
+
+	for _, part := range strings.Split(raw, ",") {
+		peerDID := strings.TrimSpace(part)
+		if peerDID == "" {
+			continue
+		}
+		if err := sRepo.UpsertTrustedPeer(ctx, tx, peerDID); err != nil {
+			return fmt.Errorf("could not seed trusted peer %q: %w", peerDID, err)
+		}
+		seeded = append(seeded, peerDID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("could not commit trusted-peer seeding transaction: %w", err)
+	}
+
+	if len(seeded) > 0 {
+		log.Printf(ctx, "seeded %d trusted peer(s) from DCS_TRUSTED_PEERS: %v", len(seeded), seeded)
+	}
+
+	return nil
 }

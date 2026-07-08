@@ -29,6 +29,12 @@ go mod tidy                                    # Required before every commit
 ```bash
 npm install          # Project root — installs Husky pre-commit hooks (run once)
 bash dev-stack.sh    # One-command local stack: Helm (K8s), backend air, frontend Vite
+bash dev-stack2.sh   # Optional second instance ("instance B") for the two-instance inter-org
+                     # demo (Workstream C1-C3, docs/anforderung.md): its own Helm release
+                     # ("dcs2", deployment/helm/values.dev2.yml), backend on :8992
+                     # (backend/.env.dev2, built and run directly rather than via `air`),
+                     # frontend on :5174 (`npm run dev-dcs2`). Run dev-stack.sh first — pdf-core
+                     # is shared between both instances.
 ```
 
 ## Architecture Overview

@@ -88,7 +88,7 @@ func (h *VerifyTemplatePdfHandler) Handle(ctx context.Context, qry VerifyTemplat
 			return nil, fmt.Errorf("commit pre-verify append tx for template %s: %w", qry.DID, err)
 		}
 
-		return runVerify(ctx, updatedPDF, h.PDFCore)
+		return runVerify(ctx, updatedPDF, h.PDFCore, currentC2PAState)
 	}
 
 	if latestCID == "" {
@@ -100,5 +100,5 @@ func (h *VerifyTemplatePdfHandler) Handle(ctx context.Context, qry VerifyTemplat
 		return nil, fmt.Errorf("fetch template PDF %s from IPFS for verify: %w", qry.DID, err)
 	}
 
-	return runVerify(ctx, r.Data, h.PDFCore)
+	return runVerify(ctx, r.Data, h.PDFCore, currentC2PAState)
 }

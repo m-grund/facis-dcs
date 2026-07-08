@@ -13,10 +13,12 @@ import (
 	didservice "digital-contracting-service/gen/did_service"
 
 	genauth "digital-contracting-service/gen/auth"
+	c2paservice "digital-contracting-service/gen/c2_pa_service"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	authsvr "digital-contracting-service/gen/http/auth/server"
+	c2pasvr "digital-contracting-service/gen/http/c2_pa_service/server"
 	contractstoragearchivesvr "digital-contracting-service/gen/http/contract_storage_archive/server"
 	contractworkflowenginesvr "digital-contracting-service/gen/http/contract_workflow_engine/server"
 	dcstodcssvr "digital-contracting-service/gen/http/dcs_to_dcs/server"
@@ -113,7 +115,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints,
 	dcsToDcsEndpoints *dcstodcs.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints,
 	signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints,
-	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
+	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, c2paEndpoints *c2paservice.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
 	errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
@@ -155,6 +157,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		templateCatalogueIntegrationServer *templatecatalogueintegrationsvr.Server
 		templateRepositoryServer           *templaterepositorysvr.Server
 		didServer                          *didsvr.Server
+		c2paServer                         *c2pasvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
@@ -169,9 +172,11 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		templateCatalogueIntegrationServer = templatecatalogueintegrationsvr.New(templateCatalogueIntegrationEndpoints, apiMux, dec, enc, eh, ef)
 		templateRepositoryServer = templaterepositorysvr.New(templateRepositoryEndpoints, apiMux, dec, enc, eh, ef)
 		didServer = didsvr.New(didEnpoints, apiMux, dec, enc, eh, ef)
+		c2paServer = c2pasvr.New(c2paEndpoints, apiMux, dec, enc, eh, ef)
 	}
 
 	didsvr.Mount(mux, didServer)
+	c2pasvr.Mount(apiMux, c2paServer)
 
 	// Configure the mux.
 	authsvr.Mount(apiMux, authServer)
@@ -237,6 +242,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range didServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range c2paServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 

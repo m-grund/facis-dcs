@@ -64,15 +64,25 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 				},
 			},
 		},
-		"dcs:policies": []any{
-			map[string]any{
-				"@id":   "did:web:facis.example:template:1#policy-cond-1-percent-0",
-				"@type": "odrl:Duty",
-				"odrl:constraint": map[string]any{
-					"@type":             "odrl:Constraint",
-					"odrl:leftOperand":  map[string]any{"@id": "did:web:facis.example:template:1#field-cond-1-percent"},
-					"odrl:operator":     map[string]any{"@id": "odrl:gteq"},
-					"odrl:rightOperand": map[string]any{"@value": "99.95", "@type": "xsd:decimal"},
+		"dcs:policies": map[string]any{
+			"@id":          "did:web:facis.example:template:1#policy-set-1",
+			"@type":        "odrl:Set",
+			"uid":          "did:web:facis.example:template:1",
+			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+			"odrl:duty": []any{
+				map[string]any{
+					"@id":           "did:web:facis.example:template:1#policy-cond-1-percent-0",
+					"@type":         "odrl:Duty",
+					"odrl:action":   map[string]any{"@id": "dcs:provideCompliantValue"},
+					"odrl:assigner": map[string]any{"@id": "did:web:facis.example:template:1#provider"},
+					"odrl:assignee": map[string]any{"@id": "did:web:facis.example:template:1#customer"},
+					"odrl:target":   map[string]any{"@id": "did:web:facis.example:template:1"},
+					"odrl:constraint": map[string]any{
+						"@type":             "odrl:Constraint",
+						"odrl:leftOperand":  map[string]any{"@id": "did:web:facis.example:template:1#field-cond-1-percent"},
+						"odrl:operator":     map[string]any{"@id": "odrl:gteq"},
+						"odrl:rightOperand": map[string]any{"@value": "99.95", "@type": "xsd:decimal"},
+					},
 				},
 			},
 		},
@@ -110,7 +120,8 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		"did:web:facis.example:contract:1#field-cond-1-percent",
 		placeholder["dcs:bindsTo"].(map[string]any)["@id"],
 	)
-	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	policySet := data["dcs:policies"].(map[string]any)
+	policy := policySet["odrl:duty"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	require.Equal(
 		t,

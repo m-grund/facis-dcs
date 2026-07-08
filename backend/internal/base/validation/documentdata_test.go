@@ -105,21 +105,39 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 				},
 			},
 		},
-		"dcs:policies": []any{
-			map[string]any{
-				"@id":   "urn:uuid:policy-provider-country-0",
-				"@type": "odrl:Duty",
-				"odrl:constraint": map[string]any{
-					"@type":             "odrl:Constraint",
-					"odrl:leftOperand":  map[string]any{"@id": "urn:uuid:field-provider-country"},
-					"odrl:operator":     map[string]any{"@id": "odrl:isAnyOf"},
-					"odrl:rightOperand": []any{"DEU", "AUT", "CHE"},
+		"dcs:policies": map[string]any{
+			"@id":           "urn:uuid:policy-set-1",
+			"@type":         "odrl:Set",
+			"uid":           "urn:uuid:policy-set-1",
+			"odrl:profile":  map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+			"odrl:duty": []any{
+				map[string]any{
+					"@id":           "urn:uuid:policy-provider-country-0",
+					"@type":         "odrl:Duty",
+					"odrl:action":   map[string]any{"@id": "dcs:provideCompliantValue"},
+					"odrl:assigner": map[string]any{"@id": "urn:uuid:party-provider"},
+					"odrl:assignee": map[string]any{"@id": "urn:uuid:party-customer"},
+					"odrl:target":   map[string]any{"@id": "urn:uuid:policy-target"},
+					"odrl:constraint": map[string]any{
+						"@type":             "odrl:Constraint",
+						"odrl:leftOperand":  map[string]any{"@id": "urn:uuid:field-provider-country"},
+						"odrl:operator":     map[string]any{"@id": "odrl:isAnyOf"},
+						"odrl:rightOperand": []any{"DEU", "AUT", "CHE"},
+					},
 				},
 			},
 		},
 	})
 	require.NoError(t, err)
 	return &data
+}
+
+// firstPolicyDuty returns the first odrl:duty rule node from the canonical
+// dcs:policies odrl:Set structure produced by canonicalTemplateData.
+func firstPolicyDuty(data map[string]any) map[string]any {
+	set := data["dcs:policies"].(map[string]any)
+	duties := set["odrl:duty"].([]any)
+	return duties[0].(map[string]any)
 }
 
 func validSemanticContractData(t *testing.T) *datatype.JSON {
@@ -299,7 +317,7 @@ func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 	require.Equal(t, "did:web:facis.example:template:1#block-clause-1", block["@id"])
 	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", placeholder["dcs:bindsTo"].(map[string]any)["@id"])
-	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	policy := firstPolicyDuty(data)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", constraint["odrl:leftOperand"].(map[string]any)["@id"])
 }
@@ -315,7 +333,7 @@ func TestNormalizeTemplateDataForPersistenceRebasesCopiedTemplateIDs(t *testing.
 	structure := data["dcs:documentStructure"].(map[string]any)
 	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:copy#block-clause-1", block["@id"])
-	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	policy := firstPolicyDuty(data)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:copy#field-provider-country", constraint["odrl:leftOperand"].(map[string]any)["@id"])
 }
@@ -339,7 +357,7 @@ func TestNormalizeTemplateDataRejectsMissingPolicyField(t *testing.T) {
 	raw := canonicalTemplateData(t)
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
-	policy := data["dcs:policies"].([]any)[0].(map[string]any)
+	policy := firstPolicyDuty(data)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:field-missing"}
 	invalid, err := datatype.NewJSON(data)

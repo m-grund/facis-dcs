@@ -333,8 +333,8 @@ func validateCanonicalEnvelope(data documentData) error {
 		}
 	}
 	if policies, exists := topLevelValueExists(data, "policies"); exists {
-		if _, ok := policies.([]any); !ok {
-			return errors.New("policies must be an array")
+		if err := validateODRLPoliciesShape(policies); err != nil {
+			return err
 		}
 	}
 	return validateCanonicalReferences(data, documentStructure)
@@ -475,14 +475,11 @@ func validateBlockPlaceholders(block map[string]any, fieldIDs map[string]bool) e
 }
 
 func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
-	policies, _ := topLevelValue(data, "policies").([]any)
-	for index, rawPolicy := range policies {
-		policy, ok := rawPolicy.(map[string]any)
-		if !ok {
-			return fmt.Errorf("policies.%d must be an object", index)
-		}
-		switch policy["@type"] {
-		case "odrl:Duty", "odrl:Permission", "odrl:Prohibition":
+	policies := topLevelValue(data, "policies")
+	rules := collectODRLPolicyRules(policies)
+	for index, policy := range rules {
+		switch compactTerm(fmt.Sprint(policy["@type"])) {
+		case "Duty", "Permission", "Prohibition":
 		default:
 			return fmt.Errorf("policies.%d has unsupported @type %q", index, policy["@type"])
 		}
@@ -494,6 +491,122 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 		fieldID, _ := leftOperand["@id"].(string)
 		if !fieldIDs[fieldID] {
 			return fmt.Errorf("policy references nonexistent contract data field %q", fieldID)
+		}
+	}
+	return nil
+}
+
+// odrlRuleBucketKeys are the ODRL 2.2 rule-bucket properties an enclosing
+// odrl:Set may carry (dcs:policies target shape, Workstream F1).
+var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"}
+
+// collectODRLPolicyRules flattens dcs:policies into a plain list of rule
+// nodes, supporting both the legacy flat-array shape and the target
+// enclosing-odrl:Set shape (see extractContractODRLPolicies for the
+// server-side-enforcement-critical rationale).
+func collectODRLPolicyRules(policies any) []map[string]any {
+	switch typed := policies.(type) {
+	case []any:
+		result := make([]map[string]any, 0, len(typed))
+		for _, item := range typed {
+			if rule, ok := item.(map[string]any); ok {
+				result = append(result, rule)
+			}
+		}
+		return result
+	case map[string]any:
+		return collectODRLSetRules(typed)
+	default:
+		return nil
+	}
+}
+
+func collectODRLSetRules(set map[string]any) []map[string]any {
+	rules := []map[string]any{}
+	for _, key := range odrlRuleBucketKeys {
+		bucket, ok := set[key]
+		if !ok {
+			continue
+		}
+		if items, ok := asArray(bucket); ok {
+			for _, item := range items {
+				if rule, ok := item.(map[string]any); ok {
+					rules = append(rules, rule)
+				}
+			}
+			continue
+		}
+		if rule, ok := bucket.(map[string]any); ok {
+			rules = append(rules, rule)
+		}
+	}
+	return rules
+}
+
+// validateODRLPoliciesShape enforces the Workstream-F1/F3 structural
+// contract for dcs:policies:
+//
+//   - An empty array is accepted (no policies declared yet — the default
+//     normalizeCanonicalEnvelope produces for a brand-new document).
+//   - A non-empty flat array (the legacy bare-Duty/Permission/Prohibition
+//     shape with no odrl:action, no enclosing odrl:Set, no parties/target) is
+//     explicitly REJECTED — greenfield, no legacy acceptance (AC8).
+//   - A single enclosing odrl:Set object is validated structurally: it must
+//     declare odrl:profile and a uid, and every contained rule must declare
+//     exactly one odrl:action plus odrl:assigner/odrl:assignee/odrl:target
+//     (AC1/AC2/AC3).
+func validateODRLPoliciesShape(policies any) error {
+	switch typed := policies.(type) {
+	case []any:
+		if len(typed) == 0 {
+			return nil
+		}
+		return errors.New("dcs:policies uses the legacy bare-Duty form (a flat array with no enclosing odrl:Set, " +
+			"no odrl:action, and no odrl:assigner/odrl:assignee/odrl:target) which is no longer accepted; " +
+			"policies must form a single enclosing odrl:Set declaring odrl:profile, whose rules each carry " +
+			"exactly one odrl:action plus odrl:assigner, odrl:assignee, and odrl:target")
+	case map[string]any:
+		return validateODRLPolicySet(typed)
+	default:
+		return fmt.Errorf("dcs:policies must be an odrl:Set object (or an empty array), got %T", policies)
+	}
+}
+
+func validateODRLPolicySet(set map[string]any) error {
+	if compactTerm(fmt.Sprint(set["@type"])) != "Set" {
+		return fmt.Errorf("dcs:policies enclosing node @type must be odrl:Set, got %v", set["@type"])
+	}
+	if uid, _ := set["uid"].(string); strings.TrimSpace(uid) == "" {
+		return errors.New("dcs:policies odrl:Set requires a uid")
+	}
+	if _, hasProfile := set["odrl:profile"]; !hasProfile {
+		return errors.New("dcs:policies odrl:Set must declare odrl:profile")
+	}
+	rules := collectODRLSetRules(set)
+	for index, rule := range rules {
+		if err := validateODRLRuleShape(rule); err != nil {
+			return fmt.Errorf("dcs:policies rule %d: %w", index, err)
+		}
+	}
+	return nil
+}
+
+func validateODRLRuleShape(rule map[string]any) error {
+	switch compactTerm(fmt.Sprint(rule["@type"])) {
+	case "Duty", "Permission", "Prohibition":
+	default:
+		return fmt.Errorf("unsupported rule @type %v", rule["@type"])
+	}
+	action, hasAction := rule["odrl:action"]
+	if !hasAction {
+		return errors.New("rule is missing odrl:action")
+	}
+	if items, ok := action.([]any); ok && len(items) != 1 {
+		return errors.New("rule must declare exactly one odrl:action")
+	}
+	for _, key := range []string{"odrl:assigner", "odrl:assignee", "odrl:target"} {
+		if _, ok := rule[key]; !ok {
+			return fmt.Errorf("rule is missing %s", key)
 		}
 	}
 	return nil

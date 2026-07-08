@@ -3,6 +3,7 @@
 # Import all step modules to register them with behave
 from . import contract_api_steps  # noqa: F401
 from . import contract_workflow_steps  # noqa: F401
+from . import contract_state_machine_steps  # noqa: F401
 from . import template_api_steps  # noqa: F401
 from . import template_workflow_steps  # noqa: F401
 from . import schema_api_steps  # noqa: F401

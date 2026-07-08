@@ -226,6 +226,47 @@ func (e SubmitEvent) GetDID() string {
 	return e.DID
 }
 
+// OfferEvent is emitted when a draft contract is offered to the counterparty.
+type OfferEvent struct {
+	DID             string             `json:"did"`
+	HolderDID       string             `json:"holder_did"`
+	ContractVersion int                `json:"contract_version"`
+	OfferedBy       string             `json:"offered_by"`
+	OccurredAt      time.Time          `json:"occurred_at"`
+	UserRoles       userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e OfferEvent) EventType() string {
+	return eventtype.Offer.String()
+}
+
+// GetDID implements the Event interface.
+func (e OfferEvent) GetDID() string {
+	return e.DID
+}
+
+// WithdrawEvent is emitted when the initiator withdraws a contract before
+// approval.
+type WithdrawEvent struct {
+	DID             string             `json:"did"`
+	HolderDID       string             `json:"holder_did"`
+	ContractVersion int                `json:"contract_version"`
+	WithdrawnBy     string             `json:"withdrawn_by"`
+	OccurredAt      time.Time          `json:"occurred_at"`
+	UserRoles       userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e WithdrawEvent) EventType() string {
+	return eventtype.Withdraw.String()
+}
+
+// GetDID implements the Event interface.
+func (e WithdrawEvent) GetDID() string {
+	return e.DID
+}
+
 // RetrieveByIDEvent is emitted when contract data is retrieved.
 type RetrieveByIDEvent struct {
 	DID         string             `json:"did"`

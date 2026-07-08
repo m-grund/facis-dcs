@@ -21,7 +21,13 @@ var PDFVerifyResult = Type("PDFVerifyResult", func() {
 	Attribute("lifecycle_status", String, "Contract lifecycle state from the latest C2PA assertion (DCS-OR-C2PA-006 banner: draft, active, amended, suspended, terminated, expired, replaced)")
 	Attribute("status_list_status", String, "Live revocation state queried from the XFSC status list service: active or revoked (DCS-OR-C2PA-006)")
 
-	Required("match", "jsonld_hash", "base_pdf_hash", "stored_base_pdf_hash", "c2pa_manifest_found", "c2pa_signature_valid", "vc_proof_valid")
+	// PDF signature check (DCS-OR-C2PA-006 AC6). This is an independently named
+	// check distinct from the C2PA COSE signature check. Workstream B/PAdES has
+	// not landed yet, so the verifier honestly reports "not_available" (or
+	// "pending") rather than faking a passed PDF-signature verification.
+	Attribute("pdf_signature_status", String, "PAdES/PDF signature verification status (DCS-OR-C2PA-006 AC6): 'not_available' until Workstream B/PAdES lands, then 'valid'/'invalid'. Never falsely reports a passed PDF signature check.")
+
+	Required("match", "jsonld_hash", "base_pdf_hash", "stored_base_pdf_hash", "c2pa_manifest_found", "c2pa_signature_valid", "vc_proof_valid", "pdf_signature_status")
 })
 
 // PDFGeneration Service  (/pdf/...)

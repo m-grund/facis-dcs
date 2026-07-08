@@ -45,6 +45,42 @@ def contract_verify_url(context) -> str:
     return f"{context.base_url}/contract/verify"
 
 
+def contract_offer_url(context) -> str:
+    return f"{context.base_url}/contract/offer"
+
+
+def contract_withdraw_url(context) -> str:
+    return f"{context.base_url}/contract/withdraw"
+
+
+def contract_terminate_url(context) -> str:
+    return f"{context.base_url}/contract/terminate"
+
+
+def contract_search_url(context) -> str:
+    return f"{context.base_url}/contract/search"
+
+
+def contract_audit_url(context) -> str:
+    return f"{context.base_url}/contract/audit"
+
+
+def contract_peer_action_url(context) -> str:
+    return f"{context.base_url}/peer/contracts/action"
+
+
+def contract_peer_post_sync_url(context) -> str:
+    return f"{context.base_url}/peer/contracts/"
+
+
+def signature_apply_url(context) -> str:
+    return f"{context.base_url}/signature/apply"
+
+
+def signature_revoke_url(context) -> str:
+    return f"{context.base_url}/signature/revoke"
+
+
 def template_create_url(context) -> str:
     return f"{context.base_url}/template/create"
 
@@ -140,3 +176,14 @@ def contract_verify_pdf_url(context, did: str) -> str:
 
 def template_verify_pdf_url(context, did: str) -> str:
     return f"{context.base_url}/pdf/verify/template/{did}"
+
+
+# C2PA remote-manifest URL builder (DCS-OR-C2PA-008, Workstream D1).
+# NOTE: /c2pa/manifest/{did} does not exist in backend/design/ yet (as of
+# writing this BDD pack) — this builder documents the endpoint contract the
+# analyst/architect settled on (a public, unauthenticated sibling of
+# GET /.well-known/did.json, see backend/design/did.go), for the implementer
+# to add.
+
+def c2pa_manifest_url(context, did: str) -> str:
+    return f"{context.base_url}/c2pa/manifest/{did}"

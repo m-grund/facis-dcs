@@ -11,6 +11,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"strings"
 
 	compiler "example.com/m/V2/compiler"
 
@@ -289,14 +290,13 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vcBytes := parts["vc"] // optional
+	// manifest_url (DCS-OR-C2PA-008 AC3): when the DCS hosting layer supplies a
+	// public manifest URL, it is embedded as the C2PA claim's remote_manifests
+	// field. Absent (the default) => no remote_manifests entry is emitted.
+	manifestURL := strings.TrimSpace(string(parts["manifest_url"]))
 
-	var updated []byte
 	now := time.Now()
-	if len(vcBytes) > 0 {
-		updated, err = compiler.UpdatePDFWithVC(r.Context(), oldPDF, canonical, vcBytes, now)
-	} else {
-		updated, err = compiler.UpdatePDF(r.Context(), oldPDF, canonical, now)
-	}
+	updated, err := compiler.UpdatePDFWithOptions(r.Context(), oldPDF, canonical, vcBytes, manifestURL, now)
 	if err != nil {
 		if errors.Is(err, compiler.ErrNoChanges) {
 			writeError(w, errConflict(err))

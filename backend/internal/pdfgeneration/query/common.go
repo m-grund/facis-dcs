@@ -26,6 +26,12 @@ type PDFStateData struct {
 
 type pdfStateUpdater func(ctx context.Context, tx *sqlx.Tx, did string, state PDFStateData) error
 
+// pdfSignatureNotAvailable is the honest PDF-signature check status reported by
+// the verify endpoint while Workstream B/PAdES is not implemented yet
+// (DCS-OR-C2PA-006 AC6). The verifier must never falsely report a passed PDF
+// signature check for a capability that does not exist.
+const pdfSignatureNotAvailable = "not_available"
+
 func appendAndCache(
 	ctx context.Context,
 	tx *sqlx.Tx,
@@ -57,7 +63,7 @@ func appendAndCache(
 		return pdfBytes, fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
 	}
 
-	updatedPDF, rendererVersion, err := pdfCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes)
+	updatedPDF, rendererVersion, err := pdfCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, provenance.RemoteManifestURL(did))
 	if err != nil {
 		return pdfBytes, fmt.Errorf("pdf-core update for %s: %w", did, err)
 	}
@@ -80,7 +86,7 @@ func appendAndCache(
 	return updatedPDF, nil
 }
 
-func runVerify(ctx context.Context, pdfBytes []byte, pdfCore *pdfcore.Client) (*pdfgen.PDFVerifyResult, error) {
+func runVerify(ctx context.Context, pdfBytes []byte, pdfCore *pdfcore.Client, lifecycleStatus string) (*pdfgen.PDFVerifyResult, error) {
 	result, verifyErr := pdfCore.Verify(ctx, pdfBytes)
 	match := verifyErr == nil
 	c2paManifestFound := verifyErr == nil || (verifyErr != nil && strings.Contains(verifyErr.Error(), "status 409"))
@@ -105,6 +111,12 @@ func runVerify(ctx context.Context, pdfBytes []byte, pdfCore *pdfcore.Client) (*
 		VcProofValid:       result.VCProofValid,
 		StatusListURI:      ptrToString(statusListURI),
 		StatusListStatus:   ptrToString(statusListStatus),
+		LifecycleStatus:    ptrToString(lifecycleStatus),
+		// DCS-OR-C2PA-006 AC6: the PDF-signature check is an independently named
+		// check, distinct from the C2PA COSE signature check. Workstream B/PAdES
+		// has not landed yet, so we honestly report "not_available" rather than
+		// faking a passed PDF-signature verification.
+		PdfSignatureStatus: pdfSignatureNotAvailable,
 	}, nil
 }
 

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -81,6 +82,21 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		ArchiveNotary:    archiveNotary,
 		ArchiveTSA:       archiveTSA,
 	}
+}
+
+// mapContractCommandError classifies a contract command handler error for
+// the HTTP layer: state-machine transition failures (contractstate.
+// ErrInvalidTransition, the single source of truth introduced by the
+// contract-state-machine-refactor) are client errors (400), everything else
+// remains an internal error (500).
+func mapContractCommandError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, contractstate.ErrInvalidTransition) {
+		return contractworkflowengine.MakeBadRequest(err)
+	}
+	return contractworkflowengine.MakeInternalError(err)
 }
 
 func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractworkflowengine.ContractCreateRequest) (res *contractworkflowengine.ContractCreateResponse, err error) {
@@ -227,7 +243,7 @@ func (s *contractWorkflowEnginesrvc) Update(ctx context.Context, req *contractwo
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+		return nil, mapContractCommandError(err)
 	}
 
 	return &contractworkflowengine.ContractUpdateResponse{
@@ -299,7 +315,7 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+		return nil, mapContractCommandError(err)
 	}
 
 	qry := contract.GetProcessDataByIDQry{
@@ -637,7 +653,7 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+		return nil, mapContractCommandError(err)
 	}
 
 	return &contractworkflowengine.ContractNegotiationResponse{
@@ -683,7 +699,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		}
 		err = handler.Handle(ctx, cmd)
 		if err != nil {
-			return nil, contractworkflowengine.MakeInternalError(err)
+			return nil, mapContractCommandError(err)
 		}
 	case negotiationactionflag.Rejecting:
 		cmd := command.RejectNegotiationCmd{
@@ -704,7 +720,7 @@ func (s *contractWorkflowEnginesrvc) Respond(ctx context.Context, req *contractw
 		}
 		err = handler.Handle(ctx, cmd)
 		if err != nil {
-			return nil, contractworkflowengine.MakeInternalError(err)
+			return nil, mapContractCommandError(err)
 		}
 	}
 
@@ -852,7 +868,7 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+		return nil, mapContractCommandError(err)
 	}
 
 	return &contractworkflowengine.ContractApproveResponse{
@@ -899,7 +915,7 @@ func (s *contractWorkflowEnginesrvc) Reject(ctx context.Context, req *contractwo
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+		return nil, mapContractCommandError(err)
 	}
 
 	return &contractworkflowengine.ContractRejectResponse{
@@ -985,10 +1001,96 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+		return nil, mapContractCommandError(err)
 	}
 
 	return &contractworkflowengine.ContractTerminateResponse{
+		Did: req.Did,
+	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) Offer(ctx context.Context, req *contractworkflowengine.ContractOfferRequest) (res *contractworkflowengine.ContractOfferResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	cmd := command.OfferCmd{
+		DID:       req.Did,
+		UpdatedAt: updatedAt,
+		OfferedBy: middleware.GetParticipantID(ctx),
+		HolderDID: middleware.GetHolderDID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+		CauserDID: localPeer,
+	}
+	handler := command.Offerer{
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		DIDDocument: s.DIDDocument,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, mapContractCommandError(err)
+	}
+
+	return &contractworkflowengine.ContractOfferResponse{
+		Did: req.Did,
+	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) Withdraw(ctx context.Context, req *contractworkflowengine.ContractWithdrawRequest) (res *contractworkflowengine.ContractWithdrawResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	cmd := command.WithdrawCmd{
+		DID:         req.Did,
+		UpdatedAt:   updatedAt,
+		WithdrawnBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+		CauserDID:   localPeer,
+	}
+	handler := command.Withdrawer{
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		DIDDocument: s.DIDDocument,
+	}
+	err = handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, mapContractCommandError(err)
+	}
+
+	return &contractworkflowengine.ContractWithdrawResponse{
 		Did: req.Did,
 	}, nil
 }

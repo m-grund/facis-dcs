@@ -83,8 +83,11 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 // Update posts a multipart request to POST /update containing existingPDF as
 // "pdf", jsonld as "payload", and optionally vcBytes as "vc". When vcBytes is
 // non-nil the request proceeds even if the JSON-LD payload is unchanged.
-// Returns the updated PDF bytes and the renderer version header.
-func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte) (pdf []byte, version string, err error) {
+// When manifestURL is non-empty it is sent as the "manifest_url" field so
+// pdf-core embeds it as the C2PA claim's remote_manifests field
+// (DCS-OR-C2PA-008 AC3). Returns the updated PDF bytes and the renderer version
+// header.
+func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte, manifestURL string) (pdf []byte, version string, err error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 
@@ -97,6 +100,11 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 	if len(vcBytes) > 0 {
 		if err := writeField(mw, "vc", vcBytes); err != nil {
 			return nil, "", fmt.Errorf("pdf-core update: write vc field: %w", err)
+		}
+	}
+	if manifestURL != "" {
+		if err := writeField(mw, "manifest_url", []byte(manifestURL)); err != nil {
+			return nil, "", fmt.Errorf("pdf-core update: write manifest_url field: %w", err)
 		}
 	}
 	if err := mw.Close(); err != nil {

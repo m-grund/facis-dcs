@@ -239,13 +239,17 @@ func (r *PostgresContractRepo) ReadProcessDataByDIDOrNil(ctx context.Context, tx
 }
 
 func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	// WITHDRAWN and REVOKED are excluded alongside the pre-existing terminal
+	// states (Workstream C4): both are already-final/frozen states, so the
+	// expiry cron must not force-flip them to EXPIRED (see
+	// contracts_effective's matching exclusion list).
 	query := `
     SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
            exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
     FROM contracts
     WHERE exp_date IS NOT NULL
     AND exp_date < NOW()
-    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED')
+    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED', 'WITHDRAWN', 'REVOKED')
 `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
