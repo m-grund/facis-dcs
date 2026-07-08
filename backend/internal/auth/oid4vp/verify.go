@@ -122,13 +122,9 @@ func verifyTrustAndWalletForPID(vpToken string, ctx PresentationContext, trust *
 		return nil, fmt.Errorf("credential missing sub")
 	}
 
-	expectedSub, err := sdjwt.DIDJWKFromPublicJWK(cnfJWK)
+	err = sdjwt.HolderSubjectMatches(sub, cnfJWK)
 	if err != nil {
-		return nil, fmt.Errorf("credential cnf.jwk: %w", err)
-	}
-
-	if sub != expectedSub {
-		return nil, fmt.Errorf("credential sub does not match cnf.jwk holder binding")
+		return nil, err
 	}
 
 	err = sdjwt.VerifyKB(presentation.KBJWT, presentation.SDHash, cnfJWK, sub, ctx.Nonce, ctx.ClientID)
@@ -177,13 +173,9 @@ func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustC
 		return nil, fmt.Errorf("credential missing sub")
 	}
 
-	expectedSub, err := sdjwt.DIDJWKFromPublicJWK(cnfJWK)
+	err = sdjwt.HolderSubjectMatches(sub, cnfJWK)
 	if err != nil {
-		return nil, fmt.Errorf("credential cnf.jwk: %w", err)
-	}
-
-	if sub != expectedSub {
-		return nil, fmt.Errorf("credential sub does not match cnf.jwk holder binding")
+		return nil, err
 	}
 
 	// KB-JWT: signature via cnf.jwk; payload aud, nonce, sd_hash.
