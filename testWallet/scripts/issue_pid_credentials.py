@@ -27,6 +27,7 @@ from dcs_wallet.keys import load_json, private_key_material, public_key_material
 
 DEFAULT_CREDENTIALS_DIR = WALLET_ROOT / "credentials"
 ISSUE_URL = "https://playground.eudi-wallet.org/api/issue"
+PID_VCT = "urn:eudi:pid:de:1"
 
 
 def _fetch_json(url: str, *, method: str = "GET", body: bytes | None = None, headers: dict | None = None) -> dict:
@@ -42,6 +43,36 @@ def _decode_credential_offer_uri(uri: str) -> dict:
     if not raw_offer:
         raise ValueError("credential_offer missing in URI")
     return json.loads(raw_offer)
+
+
+def _resolve_credential_offer(offer_url: str) -> dict:
+    parsed = urllib.parse.urlparse(offer_url.strip())
+    if parsed.scheme not in ("openid-credential-offer", "https", "http"):
+        raise ValueError("offer URL must be openid-credential-offer:// or https://")
+
+    query = urllib.parse.parse_qs(parsed.query)
+    raw_offer = query.get("credential_offer", [None])[0]
+    raw_offer_uri = query.get("credential_offer_uri", [None])[0]
+    if raw_offer and raw_offer_uri:
+        raise ValueError("ambiguous offer URL: both credential_offer and credential_offer_uri are present")
+
+    if raw_offer:
+        return json.loads(raw_offer)
+
+    if raw_offer_uri:
+        offer_uri = str(raw_offer_uri).strip()
+        if not offer_uri:
+            raise ValueError("credential_offer_uri is empty")
+        offer_uri_parsed = urllib.parse.urlparse(offer_uri)
+        if offer_uri_parsed.scheme != "https":
+            raise ValueError("credential_offer_uri must use HTTPS")
+        return _fetch_json(offer_uri)
+
+    if parsed.scheme in ("https", "http"):
+        # Accept direct JSON endpoint URL as a convenience.
+        return _fetch_json(offer_url)
+
+    raise ValueError("credential_offer or credential_offer_uri missing in offer URL")
 
 
 def _issuer_well_known_url(issuer_url: str, kind: str) -> str:
@@ -99,6 +130,32 @@ def issue_from_template(template_payload: dict, *, wallet_private_jwk: dict, wal
     if not offer_uri:
         raise ValueError(f"issue response missing uri: {issue_data}")
     offer = _decode_credential_offer_uri(offer_uri)
+    return issue_from_offer(
+        offer,
+        wallet_private_jwk=wallet_private_jwk,
+        wallet_public_jwk=wallet_public_jwk,
+    )
+
+
+def _select_config_id(offer: dict, issuer_meta: dict, *, preferred_vct: str = PID_VCT) -> str:
+    config_ids = offer.get("credential_configuration_ids") or []
+    if not isinstance(config_ids, list) or not config_ids:
+        raise ValueError("credential offer missing credential_configuration_ids")
+
+    cfgs = issuer_meta.get("credential_configurations_supported") or {}
+    if not isinstance(cfgs, dict):
+        raise ValueError("issuer metadata missing credential_configurations_supported")
+
+    # Prefer a true PID configuration when available.
+    for cid in config_ids:
+        cfg = cfgs.get(str(cid)) or {}
+        if isinstance(cfg, dict) and str(cfg.get("vct") or "") == preferred_vct:
+            return str(cid)
+
+    return str(config_ids[0])
+
+
+def issue_from_offer(offer: dict, *, wallet_private_jwk: dict, wallet_public_jwk: dict) -> str:
 
     issuer_url = str(offer.get("credential_issuer") or "").strip()
     pre_auth = (
@@ -106,10 +163,8 @@ def issue_from_template(template_payload: dict, *, wallet_private_jwk: dict, wal
         .get("urn:ietf:params:oauth:grant-type:pre-authorized_code", {})
         .get("pre-authorized_code")
     )
-    config_ids = offer.get("credential_configuration_ids") or []
-    if not issuer_url or not isinstance(pre_auth, str) or not pre_auth or not config_ids:
+    if not issuer_url or not isinstance(pre_auth, str) or not pre_auth:
         raise ValueError("credential offer missing required fields")
-    config_id = str(config_ids[0])
 
     issuer_meta = _fetch_json(_issuer_well_known_url(issuer_url, "openid-credential-issuer"))
     auth_meta = _fetch_json(_issuer_well_known_url(issuer_url, "oauth-authorization-server"))
@@ -144,10 +199,11 @@ def issue_from_template(template_payload: dict, *, wallet_private_jwk: dict, wal
     if not c_nonce:
         raise ValueError("nonce response missing c_nonce")
 
+    config_id = _select_config_id(offer, issuer_meta, preferred_vct=PID_VCT)
     cfg = (issuer_meta.get("credential_configurations_supported") or {}).get(config_id) or {}
-    vct = cfg.get("vct")
-    if not isinstance(vct, str) or not vct:
-        raise ValueError(f"issuer config {config_id!r} has no vct")
+    fmt = cfg.get("format")
+    if not isinstance(fmt, str) or not fmt:
+        raise ValueError(f"issuer config {config_id!r} has no format")
 
     proof_jwt = _build_proof_jwt(
         issuer_url=issuer_url,
@@ -155,10 +211,11 @@ def issue_from_template(template_payload: dict, *, wallet_private_jwk: dict, wal
         wallet_private_jwk=wallet_private_jwk,
         wallet_public_jwk=wallet_public_jwk,
     )
+    # Match OID4VCI + browser-based-ssi: select credential by configuration id, not vct.
     credential_request = {
-        "format": "dc+sd-jwt",
-        "vct": vct,
-        "proof": {"proof_type": "jwt", "jwt": proof_jwt},
+        "credential_configuration_id": config_id,
+        "format": fmt,
+        "proofs": {"jwt": [proof_jwt]},
     }
     credential_data = _fetch_json(
         credential_endpoint,
@@ -167,6 +224,15 @@ def issue_from_template(template_payload: dict, *, wallet_private_jwk: dict, wal
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {access_token}"},
     )
     return _extract_credential_jwt(credential_data)
+
+
+def issue_from_offer_url(offer_url: str, *, wallet_private_jwk: dict, wallet_public_jwk: dict) -> str:
+    offer = _resolve_credential_offer(offer_url)
+    return issue_from_offer(
+        offer,
+        wallet_private_jwk=wallet_private_jwk,
+        wallet_public_jwk=wallet_public_jwk,
+    )
 
 
 def _template_stem(path: Path) -> str:
@@ -214,13 +280,36 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Issue *.pid.jwt from *.pid.template.json")
     parser.add_argument("--credentials-dir", type=Path, default=DEFAULT_CREDENTIALS_DIR)
     parser.add_argument("--credential", action="append", help="base credential stem to issue, e.g. johndoe")
+    parser.add_argument(
+        "--offer-url",
+        help="openid-credential-offer://... (or credential_offer_uri HTTPS URL) copied from get-pid page",
+    )
+    parser.add_argument(
+        "--output-name",
+        default="from_offer",
+        help="output stem when --offer-url is used (default: from_offer)",
+    )
     parser.add_argument("--keys-dir", type=Path, default=WALLET_ROOT / "keys")
     args = parser.parse_args()
 
     wallet_private_jwk = private_key_material(load_json(args.keys_dir / "wallet.jwk"))
+    wallet_public_jwk = public_key_material(wallet_private_jwk)
+
+    if args.offer_url:
+        jwt_value = issue_from_offer_url(
+            args.offer_url,
+            wallet_private_jwk=wallet_private_jwk,
+            wallet_public_jwk=wallet_public_jwk,
+        )
+        out_path = args.credentials_dir / f"{args.output_name}.pid.jwt"
+        out_path.write_text(jwt_value + "\n", encoding="utf-8")
+        print(f"issued from offer: {out_path}")
+        return 0
+
     for path in issue_pid_credentials(
         credentials_dir=args.credentials_dir,
         wallet_private_jwk=wallet_private_jwk,
+        wallet_public_jwk=wallet_public_jwk,
         credential_names=args.credential,
     ):
         print(f"issued: {path}")
