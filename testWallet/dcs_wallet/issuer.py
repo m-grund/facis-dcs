@@ -46,6 +46,9 @@ def sign_credential_sd_jwt(
     selective_claims: dict[str, Any],
     issuer_private: dict[str, Any],
 ) -> str:
+    ADD_HEADER_KID = True
+    ADD_HEADER_JWK = True
+
     disclosures: list[str] = []
     sd_digests: list[str] = []
     for claim_name, claim_value in selective_claims.items():
@@ -54,15 +57,22 @@ def sign_credential_sd_jwt(
         sd_digests.append(digest)
 
     payload = {**visible_claims, "_sd": sd_digests, "_sd_alg": DEFAULT_SD_ALG}
+
+    issuer_public = public_key_material(issuer_private)
+    headers: dict[str, Any] = {
+        "typ": CREDENTIAL_JWT_TYP,
+        "alg": "ES256",
+    }
+    if ADD_HEADER_JWK:
+        headers["jwk"] = issuer_public
+    if ADD_HEADER_KID:
+        headers["kid"] = did_jwk_from_public_jwk(issuer_public)
+
     issuer_jwt = jwt.encode(
         payload,
         _jwt_private_key(issuer_private),
         algorithm="ES256",
-        headers={
-            "typ": CREDENTIAL_JWT_TYP,
-            "alg": "ES256",
-            "jwk": public_key_material(issuer_private),
-        },
+        headers=headers,
     )
     return join_sd_jwt(issuer_jwt, disclosures)
 
