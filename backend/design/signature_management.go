@@ -129,7 +129,7 @@ var SMContractApplyRequest = Type("SMContractApplyRequest", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("signer_did", String, "DID of the signer")
-	Attribute("credential_type", String, "Type of credential to use (default: stub)")
+	Attribute("credential_type", String, "Type of credential to use (default: AES)")
 	Attribute("updated_at", String, "The timestamp when the contract was updated")
 
 	Required("did", "signer_did", "updated_at")
@@ -224,6 +224,71 @@ var SMContractComplianceResponse = Type("SMContractComplianceResponse", func() {
 	Attribute("findings", ArrayOf(String), "A list of findings")
 
 	Required("did")
+})
+
+var SMSignatureRequestStartRequest = Type("SMSignatureRequestStartRequest", func() {
+	Description("Start a signing ceremony: request a PID presentation from the signer's wallet (FR-SM-14, UC-04-02)")
+
+	Token("token", String, "JWT token")
+
+	Attribute("contract_did", String, "DID of the contract to be signed")
+	Attribute("field_name", String, "Name of the AcroForm signature field the ceremony binds")
+
+	Required("contract_did", "field_name")
+})
+
+var SMSignatureRequestStartResponse = Type("SMSignatureRequestStartResponse", func() {
+	Description("The started signing ceremony (FR-SM-14)")
+
+	Attribute("ceremony_id", String, "Identifier of the started ceremony")
+	Attribute("wallet_uri", String, "OID4VP request URI the signer's wallet opens to present the PID")
+	Attribute("expires_at", String, "ISO-8601 timestamp when the ceremony expires")
+	Attribute("status", String, "Ceremony lifecycle status")
+
+	Required("ceremony_id", "wallet_uri", "expires_at", "status")
+})
+
+var SMSignatureRequestStatusRequest = Type("SMSignatureRequestStatusRequest", func() {
+	Description("Poll a signing ceremony's lifecycle status (FR-SM-14)")
+
+	Token("token", String, "JWT token")
+
+	Attribute("ceremony_id", String, "Identifier of the ceremony")
+
+	Required("ceremony_id")
+})
+
+var SMSignatureRequestStatusResponse = Type("SMSignatureRequestStatusResponse", func() {
+	Description("A signing ceremony's current lifecycle status (FR-SM-14)")
+
+	Attribute("ceremony_id", String, "Identifier of the ceremony")
+	Attribute("contract_did", String, "DID of the contract the ceremony binds")
+	Attribute("field_name", String, "Name of the AcroForm signature field")
+	Attribute("status", String, "Ceremony lifecycle status: pending, verified, expired, failed")
+	Attribute("signer_did", String, "DID of the signer resolved from the presented PID, once verified")
+	Attribute("expires_at", String, "ISO-8601 timestamp when the ceremony expires")
+
+	Required("ceremony_id", "status")
+})
+
+var SMSignatureWebhookRequest = Type("SMSignatureWebhookRequest", func() {
+	Description("EUDIPLO OID4VP webhook: a completed PID presentation for a ceremony (NFR-SEC-18, FR-SM-14)")
+
+	Attribute("webhook_secret", String, "Shared secret authenticating the webhook caller")
+	Attribute("ceremony_id", String, "Identifier of the ceremony the presentation completes")
+	Attribute("vp_token", String, "The SD-JWT VC + KB-JWT compact PID presentation")
+	Attribute("pid_claims", Any, "The disclosed PID claims (sub, given_name, family_name)")
+
+	Required("ceremony_id", "vp_token")
+})
+
+var SMSignatureWebhookResponse = Type("SMSignatureWebhookResponse", func() {
+	Description("Result of accepting a EUDIPLO webhook presentation")
+
+	Attribute("ceremony_id", String, "Identifier of the ceremony")
+	Attribute("status", String, "Ceremony lifecycle status after processing the presentation")
+
+	Required("ceremony_id", "status")
 })
 
 // Signature Management Service  (/signature/...)
@@ -326,12 +391,89 @@ var _ = Service("SignatureManagement", func() {
 		Result(SMContractApplyResponse)
 
 		Error("bad_request", ErrorResult, "Bad request")
+		Error("ceremony_required", ErrorResult, "No completed PID presentation ceremony exists for this signer and contract")
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
 			POST("/signature/apply")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
+			Response("ceremony_required", StatusUnprocessableEntity)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("startCeremony", func() {
+		Description("start a signing ceremony that requests a PID presentation from the signer's wallet (FR-SM-14, UC-04-02).")
+		Meta("dcs:requirements", "DCS-FR-SM-16")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+		})
+
+		Payload(SMSignatureRequestStartRequest)
+		Result(SMSignatureRequestStartResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/signature/request")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("ceremonyStatus", func() {
+		Description("report a signing ceremony's lifecycle status (FR-SM-14).")
+		Meta("dcs:requirements", "DCS-FR-SM-16")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+			Scope("Contract Manager")
+			Scope("Contract Observer")
+		})
+
+		Payload(SMSignatureRequestStatusRequest)
+		Result(SMSignatureRequestStatusResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("not_found", ErrorResult, "Ceremony not found")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/signature/request/{ceremony_id}")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("ceremonyWebhook", func() {
+		Description("accept a EUDIPLO OID4VP webhook carrying a completed PID presentation for a ceremony; authenticated by a shared-secret header, not a JWT (NFR-SEC-18, FR-SM-14).")
+		Meta("dcs:requirements", "DCS-FR-SM-16")
+
+		NoSecurity()
+
+		Payload(SMSignatureWebhookRequest)
+		Result(SMSignatureWebhookResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("unauthorized", ErrorResult, "Missing or incorrect webhook shared secret")
+		Error("not_found", ErrorResult, "Ceremony not found")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/signature/request/webhook")
+			Header("webhook_secret:X-EUDIPLO-Webhook-Secret")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("unauthorized", StatusUnauthorized)
+			Response("not_found", StatusNotFound)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

@@ -65,9 +65,6 @@ oid4vp:
     enabled: true
     # Baked into the container image (see deployment/docker/Dockerfile).
     dataPath: /app/config/oid4vp/trust.dev.json
-    vaultAddr: ""
-    verifierSigningVaultMount: transit
-    verifierSigningVaultKey: dcs-oid4vp-verifier-signing
     statusListSkipJWSVerify: false
 
 customCA:
@@ -134,8 +131,8 @@ serviceDiscovery:
   keycloakPort: ""
 
 # ---- Signing / C2PA provenance ----------------------------------------
-# DCS never holds private keys (DCS-IR-HI-01). Set these when connecting to
-# an external Crypto Provider Service or relying on the co-deployed one below.
+# DCS never holds raw private keys (DCS-IR-HI-01): every key lives in the
+# PKCS#11 token configured under `pkcs11` below.
 
 signing:
   # DID of this DCS instance (embedded in C2PA lifecycle assertions as authority).
@@ -147,34 +144,36 @@ signing:
   # RFC 3161 Timestamp Authority (optional; activates real timestamps on C2PA manifests).
   tsaURL: ""
 
-  # XFSC Crypto Provider Service URL. Leave empty when cryptoProvider.enabled=true
-  # (auto-derived from the co-deployed signer service).
-  cryptoProviderURL: ""
-  cryptoProviderURLSecretRef:
+# ---- PKCS#11 signing token (DCS-IR-HI-01) -----------------------------
+# Every private key is held in a PKCS#11 token. With provisioning.enabled a
+# SoftHSM2 software token is co-deployed and provisioned in-cluster — this is a
+# dev/staging/CI convenience ONLY and is NOT a production HSM. For production,
+# set provisioning.enabled=false and point modulePath/tokenLabel/pinSecretRef at
+# a real external PKCS#11 module (its keys must already exist in the token).
+pkcs11:
+  modulePath: "/usr/lib/softhsm/libsofthsm2.so"
+  tokenLabel: "dcs"
+  # PIN for the auto-created Secret. Ignored when pinSecretRef.name is set.
+  pin: "1234"
+  pinSecretRef:
     name: ""
-    key: "CRYPTO_PROVIDER_URL"
-
-  # Vault transit mount path and key name.
-  # Taken from cryptoProvider.transit.* when co-deploying.
-  cryptoProviderNamespace: ""
-  cryptoProviderKey: ""
-  cryptoProviderVCKey: ""
-
-  # VC proof suite used by the local Ed25519Signature2020 proof path.
-  vcSignatureType: "ed25519signature2020"
-
-  # Signer certificate chain (PEM) used for C2PA x5chain headers.
-  # When enabled, the chart mounts the secret and sets
-  # CRYPTO_PROVIDER_CERT_CHAIN_FILE automatically.
-  # With cryptoProvider.devCertChain.enabled=true, this is auto-wired even when
-  # certChain.enabled=false.
-  certChain:
-    enabled: false
-    existingSecret:
-      name: ""
-      key: "chain.pem"
-    mountPath: "/var/run/secrets/dcs"
-    fileName: "crypto-provider-cert-chain.pem"
+    key: "PKCS11_PIN"
+  provisioning:
+    enabled: true
+    # Volume path holding the SoftHSM2 token directory + softhsm2.conf.
+    tokenDir: "/var/lib/softhsm"
+    # SO (security officer) PIN used only during token initialization.
+    soPin: "12345678"
+    persistence:
+      size: "128Mi"
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: ""
+    # Provisioning job image; defaults to the DCS image, which bundles
+    # softhsm2/opensc/openssl and the provisioning scripts.
+    image:
+      repository: ""
+      tag: ""
+      pullPolicy: IfNotPresent
 
 # ---- Co-deployed dependencies ----------------------------------------
 # Each sub-chart owns its full set of configurable values.
@@ -205,38 +204,6 @@ nats:
 
 neo4j:
   enabled: false
-
-# XFSC Crypto Provider Service + HashiCorp Vault (transit engine).
-# When enabled, CRYPTO_PROVIDER_URL is auto-derived and wired into DCS.
-# See charts/crypto-provider/values.yaml for the full set of options.
-cryptoProvider:
-  enabled: false
-  vault:
-    dev:
-      enabled: true
-      rootToken: "root"
-    service:
-      port: 8200
-  transit:
-    mount: "transit"
-    key: "dcs-signing-key-p256"
-    keyType: "ecdsa-p256"
-    vcKey: "dcs-vc-signing-key"
-    vcKeyType: "ed25519"
-    c2paKey: "dcs-vc-signing-key"
-  devCertChain:
-    enabled: false
-    secretName: ""
-    secretKey: "chain.pem"
-    caCertKey: "ca.pem"
-    leafCommonName: "dcs-dev-signer"
-    caCommonName: "dcs-dev-local-ca"
-    validityDays: 3650
-    overwrite: true
-    image:
-      repository: alpine
-      tag: "3.20"
-      pullPolicy: IfNotPresent
 
 # BDD only: loopback proxy so DCS Pod fetches localhost statusListCredential via Traefik ingress.
 statusListLocalhostProxy:
@@ -352,9 +319,6 @@ pdfCore:
     existingSecret: ""
     existingSecretSignerKeyKey: "signer-key-pem"
     existingSecretX5ChainKey: "x5chain-pem"
-    cryptoProviderURL: ""
-    cryptoProviderNamespace: ""
-    cryptoProviderKey: ""
 
 ipfs:
   enabled: false

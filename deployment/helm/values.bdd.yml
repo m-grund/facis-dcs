@@ -43,8 +43,6 @@ extraEnv:
   # created from backend/certs/dev/ by the kind_deploy make target.
   - name: DCS_DID
     value: /app/identity/did.json
-  - name: DCS_PRIVATE_KEY
-    value: /app/identity/key.pem
 
 volumeMounts:
   - name: identity
@@ -141,26 +139,16 @@ federatedCatalogue:
 fcKeycloak:
   realmURL: "http://dcs-keycloak:8080/realms/gaia-x"
 
-# XFSC Crypto Provider: required for CRYPTO_PROVIDER_URL, CRYPTO_PROVIDER_CERT_CHAIN_FILE
-# (both fatal on startup). devCertChain generates the signing cert in-cluster.
-cryptoProvider:
-  enabled: true
-  vault:
-    dev:
-      enabled: true
-      rootToken: "root"
-    service:
-      type: ClusterIP
-      port: 8200
-  transit:
-    mount: "transit"
-    key: "dcs-signing-key-p256"
-    keyType: "ecdsa-p256"
-    vcKey: "dcs-vc-signing-key"
-    vcKeyType: "ed25519"
-  devCertChain:
+# SoftHSM2 software token holding every private key (DCS-IR-HI-01), provisioned
+# in-cluster with all five ECDSA P-256 keys and the C2PA x5chain. hsm.Open is
+# fatal on startup, so the backend waits for the provisioning job's token via an
+# initContainer. SoftHSM2 is a software token for CI only, never a production HSM.
+pkcs11:
+  tokenLabel: dcs
+  pin: "1234"
+  provisioning:
     enabled: true
-    overwrite: true
+    soPin: "12345678"
 
 # XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
 statuslistService:

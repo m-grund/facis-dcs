@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestCreateFileUsesKuboWhenTenantBaseURLIsEmpty(t *testing.T) {
@@ -168,6 +169,46 @@ func TestCreateFetchFileTenantAPI_BinaryRoundTrip(t *testing.T) {
 			payload[:min(20, len(payload))],
 			result.Data[:min(20, len(result.Data))],
 		)
+	}
+}
+
+func TestFetchFileTenantAPI_RetriesUntilResolvable(t *testing.T) {
+	payload := []byte("%PDF-1.7\nresolvable after propagation")
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/ipfs/tenant-cid" {
+			http.NotFound(w, r)
+			return
+		}
+		calls++
+		// The tenant store reports the CID unresolvable for the first two GETs
+		// (the observed read-after-write race) before it propagates.
+		if calls == 1 {
+			http.Error(w, `{"error":"DataIdentifier not found"}`, http.StatusNotFound)
+			return
+		}
+		if calls == 2 {
+			http.Error(w, `{"error":"api call failed"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":"tenant-cid"},"data":%q}`,
+			base64.StdEncoding.EncodeToString(payload))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "")
+	client.fetchBackoff = time.Millisecond
+
+	result, err := client.FetchFile("tenant-cid")
+	if err != nil {
+		t.Fatalf("FetchFile should retry past the transient race, got: %v", err)
+	}
+	if string(result.Data) != string(payload) {
+		t.Fatalf("unexpected payload %q", result.Data)
+	}
+	if calls < 3 {
+		t.Fatalf("expected retries until resolvable, server saw %d calls", calls)
 	}
 }
 

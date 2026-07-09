@@ -45,11 +45,6 @@ dependencies:
     repository: "file://charts/ipfs-document-manager"
     condition: ipfsDocumentManager.enabled
     alias: ipfsDocumentManager
-  - name: crypto-provider
-    version: "0.1.0"
-    repository: "file://charts/crypto-provider"
-    condition: cryptoProvider.enabled
-    alias: cryptoProvider
   - name: statuslist-service
     version: "0.1.0"
     repository: "file://charts/statuslist-service"

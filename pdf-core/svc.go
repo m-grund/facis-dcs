@@ -223,7 +223,13 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 			writeError(w, errUnprocessableEntity(err))
 			return
 		}
-		if !bytes.Equal(compiler.ZeroCOSESignatures(raw), compiler.ZeroCOSESignatures(recompiled)) {
+		// The compiled base must reproduce the leading bytes of the submitted
+		// PDF. A PAdES signature (and the signing evidence embedded before it)
+		// is an append-only incremental update written after the base's %%EOF —
+		// it leaves the base bytes untouched and is itself covered by its own
+		// /ByteRange — so the base is a byte-prefix of a signed PDF rather than
+		// byte-equal to it (DCS-OR-C2PA-010).
+		if !bytes.HasPrefix(compiler.ZeroCOSESignatures(raw), compiler.ZeroCOSESignatures(recompiled)) {
 			writeError(w, errConflict(errors.New("embedded payload does not reproduce the submitted PDF")))
 			return
 		}
@@ -329,6 +335,89 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 	setPDFCoreVersionHeader(w)
 	w.Header().Set("Content-Type", "application/pdf")
 	_, _ = w.Write(updated)
+}
+
+func (s *service) sign(w http.ResponseWriter, r *http.Request) {
+	ct := r.Header.Get("Content-Type")
+	if err := checkMediaType(ct, "multipart/form-data"); err != nil {
+		writeError(w, err)
+		return
+	}
+	defer r.Body.Close()
+
+	_, params, err := mime.ParseMediaType(ct)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("invalid multipart content type: %w", err)))
+		return
+	}
+	boundary, ok := params["boundary"]
+	if !ok {
+		writeError(w, errBadRequest(errors.New("multipart boundary missing from Content-Type")))
+		return
+	}
+
+	parts, err := readMultipartParts(r.Body, boundary)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+
+	pdfBytes, ok := parts["pdf"]
+	if !ok || len(pdfBytes) == 0 {
+		writeError(w, errBadRequest(errors.New("pdf field required")))
+		return
+	}
+	fieldName := strings.TrimSpace(string(parts["field_name"]))
+	if fieldName == "" {
+		writeError(w, errBadRequest(errors.New("field_name field required")))
+		return
+	}
+	signatoryName := strings.TrimSpace(string(parts["signatory_name"]))
+	if signatoryName == "" {
+		signatoryName = fieldName
+	}
+	evidence := parts["evidence"] // optional
+
+	// Embed-first-sign-second: the identity evidence is attached before signing
+	// so the PAdES ByteRange covers it (DCS-FR-SM-08).
+	embedded, err := compiler.EmbedSigningEvidence(pdfBytes, evidence)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("embed signing evidence: %w", err)))
+		return
+	}
+
+	signed, err := compiler.SignPAdES(signingContext(r), embedded, fieldName, signatoryName)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("pades sign: %w", err)))
+		return
+	}
+
+	setPDFCoreVersionHeader(w)
+	w.Header().Set("Content-Type", "application/pdf")
+	_, _ = w.Write(signed)
+}
+
+func (s *service) extractEvidence(w http.ResponseWriter, r *http.Request) {
+	if err := checkMediaType(r.Header.Get("Content-Type"), "application/pdf"); err != nil {
+		writeError(w, err)
+		return
+	}
+	raw, err := limitRead(r.Body, 32<<20)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	evidence, found, err := compiler.ExtractSigningEvidence(raw)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	if !found {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(evidence)
 }
 
 func (s *service) claim(w http.ResponseWriter, r *http.Request) {

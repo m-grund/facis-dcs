@@ -50,7 +50,7 @@ KIND_BIN ?= kind
 KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
-CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
+CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
 
 .PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
@@ -169,12 +169,13 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
-	@# DID identity for DCS (DCS_DID/DCS_PRIVATE_KEY are fatal on startup);
-	@# mounted via volumes/volumeMounts in values.bdd.yml.
+	@# DID identity for DCS (DCS_DID is fatal on startup when missing);
+	@# mounted via volumes/volumeMounts in values.bdd.yml. The signing key itself
+	@# lives in the co-deployed SoftHSM token (hsm-provision-job.yaml), not in
+	@# this secret, since Workstream A moved signing off file-based private keys.
 	@"$(KUBECTL_BIN)" create namespace "$(KIND_NAMESPACE)" --dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
 	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" create secret generic dcs-identity \
 		--from-file=did.json=../../backend/certs/dev/did-8991.json \
-		--from-file=key.pem=../../backend/certs/dev/signing-8991.key \
 		--dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
 	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
 	@# ready, but DCS can't become ready until the devCertChain post-install hook has

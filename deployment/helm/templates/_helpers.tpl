@@ -243,44 +243,6 @@ IPFS Document Manager tenant base URL (auto-wired when ipfsDocumentManager sub-c
 {{- end }}
 
 {{/*
-CRYPTO_PROVIDER_URL: explicit override, or derived from the co-deployed signer service.
-VAULT_ADDR: explicit override, or derived from the co-deployed Vault instance.
-*/}}
-{{- define "digital-contracting-service.cryptoProviderURL" -}}
-{{- if .Values.signing.cryptoProviderURL -}}
-{{- .Values.signing.cryptoProviderURL -}}
-{{- else if .Values.cryptoProvider.enabled -}}
-{{- printf "http://%s-crypto-provider-signer:%v" .Release.Name .Values.cryptoProvider.signer.port -}}
-{{- else -}}
-{{- "" -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-CRYPTO_PROVIDER_NAMESPACE: explicit override or taken from subchart transit.mount.
-*/}}
-{{- define "digital-contracting-service.cryptoProviderNamespace" -}}
-{{- if .Values.signing.cryptoProviderNamespace -}}
-{{- .Values.signing.cryptoProviderNamespace -}}
-{{- else if .Values.cryptoProvider.enabled -}}
-{{- .Values.cryptoProvider.transit.mount -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-VAULT_ADDR for OID4VP authorization request signing (transit engine).
-*/}}
-{{- define "digital-contracting-service.vaultAddr" -}}
-{{- if .Values.oid4vp.trust.vaultAddr -}}
-{{- .Values.oid4vp.trust.vaultAddr -}}
-{{- else if .Values.cryptoProvider.enabled -}}
-{{- printf "http://%s-crypto-provider-vault:%v" .Release.Name .Values.cryptoProvider.vault.service.port -}}
-{{- else -}}
-{{- "" -}}
-{{- end -}}
-{{- end }}
-
-{{/*
 IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
 */}}
 {{- define "digital-contracting-service.ipfsMfsBaseURL" -}}
@@ -296,28 +258,6 @@ IPFS MFS base URL - Kubo RPC API (auto-wired when ipfs sub-chart is enabled).
 {{- end }}
 
 {{/*
-CRYPTO_PROVIDER_KEY: explicit override or taken from subchart transit.key.
-*/}}
-{{- define "digital-contracting-service.cryptoProviderKey" -}}
-{{- if .Values.signing.cryptoProviderKey -}}
-{{- .Values.signing.cryptoProviderKey -}}
-{{- else if .Values.cryptoProvider.enabled -}}
-{{- .Values.cryptoProvider.transit.key -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-CRYPTO_PROVIDER_VC_KEY: explicit override or taken from subchart transit.vcKey.
-*/}}
-{{- define "digital-contracting-service.cryptoProviderVCKey" -}}
-{{- if .Values.signing.cryptoProviderVCKey -}}
-{{- .Values.signing.cryptoProviderVCKey -}}
-{{- else if .Values.cryptoProvider.enabled -}}
-{{- .Values.cryptoProvider.transit.vcKey -}}
-{{- end -}}
-{{- end }}
-
-{{/*
 ISSUER_DID: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.issuerDID" -}}
@@ -325,31 +265,19 @@ ISSUER_DID: explicit value or secret ref.
 {{- end }}
 
 {{/*
-Resolve signer cert-chain secret name:
-1) explicit signing.certChain existingSecret
-2) auto-generated dev cert-chain from co-deployed crypto-provider
+Name of the Kubernetes Secret holding the SoftHSM2 token PIN (PKCS11_PIN).
+Auto-created by the chart when pkcs11.pinSecretRef.name is unset.
 */}}
-{{- define "digital-contracting-service.signingCertChainSecretName" -}}
-{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
-{{- .Values.signing.certChain.existingSecret.name -}}
-{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
-{{- default (printf "%s-crypto-provider-dev-cert-chain" .Release.Name) .Values.cryptoProvider.devCertChain.secretName -}}
-{{- else -}}
-{{- "" -}}
-{{- end -}}
+{{- define "digital-contracting-service.hsmPinSecretName" -}}
+{{- default (printf "%s-hsm-pin" (include "digital-contracting-service.fullname" .)) .Values.pkcs11.pinSecretRef.name -}}
 {{- end }}
 
 {{/*
-Resolve signer cert-chain secret key.
+Name of the Secret the provisioning job writes the C2PA x5chain PEM into and
+that pdf-core mounts. SoftHSM2 is a software token for dev/staging/CI only.
 */}}
-{{- define "digital-contracting-service.signingCertChainSecretKey" -}}
-{{- if and .Values.signing.certChain.enabled .Values.signing.certChain.existingSecret.name -}}
-{{- .Values.signing.certChain.existingSecret.key -}}
-{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
-{{- default "chain.pem" .Values.cryptoProvider.devCertChain.secretKey -}}
-{{- else -}}
-{{- "chain.pem" -}}
-{{- end -}}
+{{- define "digital-contracting-service.hsmX5ChainSecretName" -}}
+{{- printf "%s-hsm-c2pa-x5chain" (include "digital-contracting-service.fullname" .) -}}
 {{- end }}
 
 {{/*
@@ -402,13 +330,14 @@ Name of the Secret that holds the pdf-core C2PA signing material.
 
 {{/*
 Name of the Secret that holds the x5chain PEM for pdf-core C2PA signing.
-Falls back to the devCertChain secret when the crypto provider is co-deployed.
+When pkcs11.provisioning is enabled the chain is derived from the SoftHSM2
+dcs-c2pa token key by the provisioning job; otherwise the inline dev secret.
 */}}
 {{- define "digital-contracting-service.pdfCoreX5ChainSecretName" -}}
 {{- if .Values.pdfCore.signing.existingSecret -}}
 {{- .Values.pdfCore.signing.existingSecret -}}
-{{- else if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
-{{- include "digital-contracting-service.signingCertChainSecretName" . -}}
+{{- else if .Values.pkcs11.provisioning.enabled -}}
+{{- include "digital-contracting-service.hsmX5ChainSecretName" . -}}
 {{- else -}}
 {{- include "digital-contracting-service.pdfCoreSigningSecretName" . -}}
 {{- end -}}
@@ -418,8 +347,8 @@ Falls back to the devCertChain secret when the crypto provider is co-deployed.
 Key within the x5chain Secret for pdf-core C2PA signing.
 */}}
 {{- define "digital-contracting-service.pdfCoreX5ChainSecretKey" -}}
-{{- if and .Values.cryptoProvider.enabled .Values.cryptoProvider.devCertChain.enabled -}}
-{{- include "digital-contracting-service.signingCertChainSecretKey" . -}}
+{{- if and (not .Values.pdfCore.signing.existingSecret) .Values.pkcs11.provisioning.enabled -}}
+{{- "x5chain-pem" -}}
 {{- else if .Values.pdfCore.signing.existingSecretX5ChainKey -}}
 {{- .Values.pdfCore.signing.existingSecretX5ChainKey -}}
 {{- else -}}

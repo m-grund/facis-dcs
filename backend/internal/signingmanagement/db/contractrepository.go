@@ -104,6 +104,9 @@ type ContractSignature struct {
 	IpfsCID        *string    `db:"ipfs_cid"`
 	SignatureBytes []byte     `db:"signature_bytes"`
 	KeyVersion     int        `db:"key_version"`
+	CeremonyID     *string    `db:"ceremony_id"`
+	PDFHash        *string    `db:"pdf_hash"`
+	ContentHash    *string    `db:"content_hash"`
 }
 
 type ContractSignatureEnvelope struct {
@@ -141,6 +144,9 @@ type ContractRepo interface {
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 
 	CreateSignature(ctx context.Context, tx *sqlx.Tx, signature ContractSignature) error
+	// SetSignedPDF points the contract at the PAdES-signed PDF artefact in IPFS
+	// and records its C2PA lifecycle state so the export endpoint serves it.
+	SetSignedPDF(ctx context.Context, tx *sqlx.Tx, did, ipfsCID, rendererVersion, c2paState string) error
 	RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error
 	ActiveKeyVersion(ctx context.Context, tx *sqlx.Tx, label string) (int, error)
 	ReadLatestEnvelopeByContractDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractSignatureEnvelope, error)

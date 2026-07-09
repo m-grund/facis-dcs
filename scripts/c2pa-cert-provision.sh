@@ -19,9 +19,9 @@ X5CHAIN_OUT="$4"
 MODULE="${5:-/usr/lib/softhsm/libsofthsm2.so}"
 CRL_URL="${6:-http://localhost:8991/crl/dcs-c2pa.crl}"
 
-KEY_LABEL="dcs-c2pa"
+KEY_LABEL="${KEY_LABEL:-dcs-c2pa}"
 CA_CN="DCS Dev C2PA CA"
-LEAF_CN="DCS Dev C2PA Signer"
+LEAF_CN="DCS Dev ${KEY_LABEL} Signer"
 VALIDITY_DAYS="825"
 
 export SOFTHSM2_CONF="$TOKEN_DIR/softhsm2.conf"

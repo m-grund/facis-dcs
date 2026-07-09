@@ -20,7 +20,9 @@ RUN npm run build:docker
 
 
 #-- Go Build Stage --
-FROM golang:1.25-alpine AS go-builder
+# glibc (Debian) toolchain with cgo: the PKCS#11 layer (ThalesGroup/crypto11 →
+# miekg/pkcs11) is cgo-only, so a static CGO_ENABLED=0 build cannot link it.
+FROM golang:1.25 AS go-builder
 
 WORKDIR /build
 
@@ -36,8 +38,8 @@ COPY backend/ ./
 # Generate Goa transport/types from the design package.
 RUN go run goa.design/goa/v3/cmd/goa@v3.24.2 gen digital-contracting-service/design
 
-# Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o dcs ./cmd/dcs
+# Build binary (cgo enabled so the PKCS#11 signing path links).
+RUN CGO_ENABLED=1 GOOS=linux go build -o dcs ./cmd/dcs
 
 
 #-- Runtime Stage --
@@ -47,11 +49,20 @@ ARG DOCKER_USER=default_user
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# softhsm2 provides libsofthsm2.so (the PKCS#11 module the backend dlopens) and
+# softhsm2-util. opensc provides pkcs11-tool, openssl issues the dev x5chain,
+# curl+jq let the provisioning job write the x5chain into a Kubernetes Secret.
+# SoftHSM2 is a software token for dev/staging/CI only, never a production HSM.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
     wget \
-    gnupg && \
+    gnupg \
+    softhsm2 \
+    opensc \
+    openssl \
+    curl \
+    jq && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r "${DOCKER_USER}" && useradd -r -g "${DOCKER_USER}" "${DOCKER_USER}"
@@ -88,6 +99,10 @@ COPY --from=frontend-builder --chown=$DOCKER_USER:$DOCKER_USER /frontend/dist /a
 # Copy frontend config injection script
 COPY --chown=$DOCKER_USER:$DOCKER_USER frontend/ClientApp/inject-config.sh /app/web/
 RUN chmod +x /app/web/inject-config.sh
+
+# Copy SoftHSM2 token + x5chain provisioning scripts used by the Helm hook Job.
+COPY --chown=$DOCKER_USER:$DOCKER_USER scripts/hsm-provision.sh scripts/c2pa-cert-provision.sh /app/scripts/
+RUN chmod +x /app/scripts/hsm-provision.sh /app/scripts/c2pa-cert-provision.sh
 
 # Copy entrypoint script
 COPY --chown=$DOCKER_USER:$DOCKER_USER backend/docker-entrypoint.sh /app/

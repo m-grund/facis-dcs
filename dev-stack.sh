@@ -15,10 +15,6 @@ trap 'kill $(jobs -p) 2>/dev/null; exit' INT TERM
 HELM_RELEASE="dcs"
 HELM_CHART_PATH="deployment/helm"
 HELM_VALUES_FILE="deployment/helm/values.dev.yml"
-K8S_NAMESPACE="default"
-K8S_SECRET_NAME="dcs-crypto-provider-dev-cert-chain"
-K8S_SECRET_KEY="chain.pem"
-CERT_FILE="backend/certs/dev/chain.pem"
 PDF_CORE_DIR="pdf-core"
 PDF_CORE_DEV_ENV="$PDF_CORE_DIR/.dev.env"
 PDF_CORE_ENV="$PDF_CORE_DIR/.env"
@@ -72,31 +68,19 @@ bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
   "$PDF_CORE_DIR/certs/dev/c2pa-x5chain-8991.pem"
 echo "✓ C2PA x5chain provisioned for pdf-core"
 
+# Issue the PAdES x5chain binding the dcs-contract-pades token key so pdf-core
+# can embed it as the CMS signing certificate of a PAdES contract signature
+# (the ECDSA operation itself runs in the backend, DCS-IR-HI-01).
+KEY_LABEL=dcs-contract-pades bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
+  "$PDF_CORE_DIR/certs/dev/pades-x5chain-8991.pem"
+echo "✓ PAdES x5chain provisioned for pdf-core"
+
 # Publish an initial (empty) CRL for the dev signing CA so the leaf's
 # crlDistributionPoints resolves to a fresh, valid list. crlcheck (ops) or the
 # AC11 test path can later revoke the signing cert against this CA.
 bash scripts/crl-provision.sh "$PDF_CORE_DIR/certs/dev" \
   "$PDF_CORE_DIR/certs/dev/dcs-c2pa.crl"
 echo "✓ Dev CRL published"
-
-# Fetch cert-chain from K8s secret
-mkdir -p "$(dirname "$CERT_FILE")"
-echo "Fetching cert-chain from K8s secret..."
-tmp_cert_file="${CERT_FILE}.tmp"
-b64_cert_chain="$(kubectl -n "$K8S_NAMESPACE" get secret "$K8S_SECRET_NAME" \
-  -o "go-template={{ index .data \"$K8S_SECRET_KEY\" }}")"
-if [ -z "$b64_cert_chain" ]; then
-  echo "error: secret $K8S_SECRET_NAME key $K8S_SECRET_KEY is missing or empty" >&2
-  exit 1
-fi
-printf '%s' "$b64_cert_chain" | base64 -d > "$tmp_cert_file"
-if [ ! -s "$tmp_cert_file" ]; then
-  rm -f "$tmp_cert_file"
-  echo "error: fetched cert-chain is empty" >&2
-  exit 1
-fi
-mv "$tmp_cert_file" "$CERT_FILE"
-echo "✓ Cert-chain ready at $CERT_FILE"
 
 # Copy .dev.env → .env so pdf-core main.go picks it up at startup.
 cp "$PDF_CORE_DEV_ENV" "$PDF_CORE_ENV"

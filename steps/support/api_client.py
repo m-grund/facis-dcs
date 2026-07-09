@@ -89,6 +89,25 @@ def signature_retrieve_url(context, did: str) -> str:
     return f"{context.base_url}/signature/retrieve/{did}"
 
 
+# Signing-ceremony endpoints (Workstream B3, docs/anforderung.md B3): an
+# ASSUMED endpoint contract — none of these exist in backend/design/*.go yet
+# (grep backend/design -rn "signature/request" returns nothing at the time
+# this pack was written). Path/shape taken verbatim from the anforderung.md
+# B3 section ("name the start endpoint POST /signature/request: that is the
+# SRS's own vocabulary").
+
+def signature_request_url(context) -> str:
+    return f"{context.base_url}/signature/request"
+
+
+def signature_request_by_id_url(context, ceremony_id: str) -> str:
+    return f"{context.base_url}/signature/request/{ceremony_id}"
+
+
+def signature_request_webhook_url(context) -> str:
+    return f"{context.base_url}/signature/request/webhook"
+
+
 # ASSUMED endpoint contract for the PKI-consolidation refactor (Workstream A,
 # docs/anforderung.md AC6 / A2.3): a NEW, authenticated, non-public backend
 # endpoint that signs a COSE Sig_structure via hsm.Signer("dcs-c2pa") for

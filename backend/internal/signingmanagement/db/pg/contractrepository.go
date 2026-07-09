@@ -102,14 +102,31 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx, signature db.ContractSignature) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO contract_signatures
-			(contract_did, signer_did, credential_type, signature_bytes, status, key_version)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
+			(contract_did, signer_did, credential_type, signature_bytes, status, key_version,
+			 ipfs_cid, ceremony_id, pdf_hash, content_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		signature.ContractDID, signature.SignerDID, signature.CredentialType, signature.SignatureBytes, signature.Status, signature.KeyVersion,
+		signature.IpfsCID, signature.CeremonyID, signature.PDFHash, signature.ContentHash,
 	)
 	if err != nil {
 		return fmt.Errorf("could not create contract signature: %w", err)
 	}
 
+	return nil
+}
+
+// SetSignedPDF records the PAdES-signed PDF artefact CID and its C2PA lifecycle
+// state on the contract so ExportContractPdf serves the signed document.
+func (r *PostgresContractRepo) SetSignedPDF(ctx context.Context, tx *sqlx.Tx, did, ipfsCID, rendererVersion, c2paState string) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE contracts
+		   SET pdf_ipfs_cid = $2, pdf_renderer_version = $3, pdf_c2pa_state = $4
+		 WHERE did = $1`,
+		did, ipfsCID, rendererVersion, c2paState,
+	)
+	if err != nil {
+		return fmt.Errorf("could not set signed PDF for %s: %w", did, err)
+	}
 	return nil
 }
 

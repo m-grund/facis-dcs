@@ -177,7 +177,12 @@ var (
 	signingMaterialErr    error
 )
 
-var startXrefPattern = regexp.MustCompile(`startxref\n([0-9]+)\n%%EOF`)
+// startXrefPattern captures the byte offset in a trailer's startxref keyword.
+// The whitespace between "startxref", the offset and "%%EOF" is matched
+// permissively: PDF producers append the incremental-update trailer with
+// varying end-of-line runs (digitorus/pdfsign, for one, emits a blank line
+// between "startxref" and the offset), all of which are valid per ISO 32000.
+var startXrefPattern = regexp.MustCompile(`startxref\s+([0-9]+)\s*%%EOF`)
 
 // srgbICCProfile is a minimal 308-byte ICC v2 profile for an sRGB monitor
 // device. It satisfies the structural requirements that strict PDF viewers such

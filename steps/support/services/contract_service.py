@@ -257,6 +257,151 @@ class ContractService:
 
 
     @staticmethod
+    def _create_approved_template_with_signature_field(context, signatory_name: str) -> str:
+        """Like _create_approved_template_for_contract, but the template
+        declares a named `dcs:signatureFields` entry (dcs:SignatureField,
+        dcs:signatoryName) — the field pdf-core's PAdES signer is expected to
+        bind its /T AcroForm field name to (docs/anforderung.md B1: "existing
+        signature field by name (/T == signatoryName from the JSON-LD)").
+        See docs/semantic-ontology/linkml/tests/valid/signature-fields.jsonld
+        for the schema shape this mirrors.
+        """
+        creator_h = AuthService.get_headers_for_roles(["Template Creator"])
+        create_resp = post_json(
+            context,
+            template_create_url(context),
+            {
+                "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
+                "name": "BDD Signature-Field Source Template",
+                "description": "BDD template for real-signing-vertical scenarios",
+                "template_data": {
+                    "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
+                    "@type": "dcs:ContractTemplate",
+                    "dcs:metadata": {
+                        "@type": "dcs:TemplateMetadata",
+                        "dcs:title": "BDD Signature-Field Source Template",
+                    },
+                    "dcs:signatureFields": [
+                        {
+                            "@id": "urn:uuid:sig-field-1",
+                            "@type": "dcs:SignatureField",
+                            "dcs:signatoryName": signatory_name,
+                        }
+                    ],
+                    "dcs:documentStructure": {
+                        "@type": "dcs:DocumentStructure",
+                        "dcs:blocks": {
+                            "@list": [
+                                {
+                                    "@id": "urn:uuid:block-clause-1",
+                                    "@type": "dcs:Clause",
+                                    "dcs:content": {"@list": ["Base clause"]},
+                                }
+                            ]
+                        },
+                        "dcs:layout": [
+                            {
+                                "@id": "urn:uuid:block-root",
+                                "dcs:isRoot": True,
+                                "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
+                            }
+                        ],
+                    },
+                },
+            },
+            headers=creator_h,
+        )
+        assert create_resp.status_code == 200, create_resp.text
+        t_did = create_resp.json().get("did")
+
+        retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=creator_h)
+        assert retrieve_resp.status_code == 200, retrieve_resp.text
+        updated_at = retrieve_resp.json().get("updated_at")
+
+        submit_resp = post_json(
+            context,
+            template_submit_url(context),
+            ContractService._template_submit_payload(context, t_did, updated_at),
+            headers=creator_h,
+        )
+        assert submit_resp.status_code == 200, submit_resp.text
+
+        reviewer_h = AuthService.get_headers_for_roles(["Template Reviewer"])
+        retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=reviewer_h)
+        updated_at = retrieve_resp.json().get("updated_at")
+
+        verify_resp = post_json(
+            context,
+            template_verify_url(context),
+            {"did": t_did, "updated_at": updated_at},
+            headers=reviewer_h,
+        )
+        assert verify_resp.status_code == 200, verify_resp.text
+
+        retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=reviewer_h)
+        updated_at = retrieve_resp.json().get("updated_at")
+
+        review_submit_resp = post_json(
+            context,
+            template_submit_url(context),
+            ContractService._template_reviewer_submit_payload(context, t_did, updated_at),
+            headers=reviewer_h,
+        )
+        assert review_submit_resp.status_code == 200, review_submit_resp.text
+
+        approver_h = AuthService.get_headers_for_roles(["Template Approver"])
+        retrieve_resp = get_with_headers(context, f"{context.base_url}/template/retrieve/{t_did}", headers=approver_h)
+        updated_at = retrieve_resp.json().get("updated_at")
+        approve_resp = post_json(
+            context,
+            template_approve_url(context),
+            {"did": t_did, "updated_at": updated_at},
+            headers=approver_h,
+        )
+        assert approve_resp.status_code == 200, approve_resp.text
+
+        manager_h = AuthService.get_headers_for_roles(["Template Manager"])
+        register_resp = post_json(
+            context,
+            template_register_url(context),
+            {"did": t_did},
+            headers=manager_h,
+        )
+        assert register_resp.status_code == 200, register_resp.text
+        return t_did
+
+    @staticmethod
+    def _create_contract_in_draft_with_signature_field(context, contract_name: str, signatory_name: str):
+        """Like _create_contract_in_draft, but sourced from a template that
+        carries a named dcs:SignatureField (see
+        _create_approved_template_with_signature_field) — used by the
+        real-signing-vertical (Workstream B) scenarios that assert on the
+        PAdES-signed PDF's AcroForm /T field name.
+        """
+        t_did = ContractService._create_approved_template_with_signature_field(context, signatory_name)
+        creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
+        peer_did = ContractService._local_peer_did(context)
+        create_payload = {
+            "template_did": t_did,
+            "reviewers": [peer_did],
+            "negotiators": [peer_did],
+            "approvers": [peer_did],
+        }
+        create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
+        assert create_resp.status_code == 200, create_resp.text
+        c_did = create_resp.json().get("did")
+        retrieve_resp = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
+        assert retrieve_resp.status_code == 200, retrieve_resp.text
+        updated_at = retrieve_resp.json().get("updated_at")
+
+        ContractService._ensure_store(context, "contract_dids", {})
+        ContractService._ensure_store(context, "contract_updated_at", {})
+        ContractService._ensure_store(context, "contract_seed_headers", {})
+        context.contract_dids[contract_name] = c_did
+        context.contract_updated_at[contract_name] = updated_at
+        context.contract_seed_headers[contract_name] = creator_h
+
+    @staticmethod
     def _contract_data(context, contract_name: str):
         did = context.contract_dids[contract_name]
         updated_at = context.contract_updated_at[contract_name]

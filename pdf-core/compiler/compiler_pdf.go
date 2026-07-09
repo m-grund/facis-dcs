@@ -782,7 +782,7 @@ func serializePDF(objects []pdfObject, rootID int, fileID string) []byte {
 }
 
 func previousStartXref(pdf []byte) (int, error) {
-	idx := bytes.LastIndex(pdf, []byte("startxref\n"))
+	idx := bytes.LastIndex(pdf, []byte("startxref"))
 	if idx < 0 {
 		return 0, fmt.Errorf("startxref marker not found")
 	}
