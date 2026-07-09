@@ -106,10 +106,10 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 			},
 		},
 		"dcs:policies": map[string]any{
-			"@id":           "urn:uuid:policy-set-1",
-			"@type":         "odrl:Set",
-			"uid":           "urn:uuid:policy-set-1",
-			"odrl:profile":  map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+			"@id":          "urn:uuid:policy-set-1",
+			"@type":        "odrl:Set",
+			"uid":          "urn:uuid:policy-set-1",
+			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
 			"odrl:duty": []any{
 				map[string]any{
 					"@id":           "urn:uuid:policy-provider-country-0",
@@ -230,52 +230,6 @@ func semanticValue(blockID string, conditionID string, parameterName string, val
 		"parameterName":  parameterName,
 		"parameterValue": value,
 	}
-}
-
-func mutateSemanticValue(t *testing.T, raw *datatype.JSON, conditionID string, parameterName string, value any) *datatype.JSON {
-	t.Helper()
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*raw, &decoded))
-	values := decoded["semanticConditionValues"].([]any)
-	for _, item := range values {
-		semanticValue := item.(map[string]any)
-		if semanticValue["conditionId"] == conditionID && semanticValue["parameterName"] == parameterName {
-			semanticValue["parameterValue"] = value
-			break
-		}
-	}
-	result, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-	return &result
-}
-
-func removeSemanticValue(t *testing.T, raw *datatype.JSON, conditionID string, parameterName string) *datatype.JSON {
-	t.Helper()
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(*raw, &decoded))
-	values := decoded["semanticConditionValues"].([]any)
-	filtered := []any{}
-	for _, item := range values {
-		semanticValue := item.(map[string]any)
-		if semanticValue["conditionId"] == conditionID && semanticValue["parameterName"] == parameterName {
-			continue
-		}
-		filtered = append(filtered, item)
-	}
-	decoded["semanticConditionValues"] = filtered
-	result, err := datatype.NewJSON(decoded)
-	require.NoError(t, err)
-	return &result
-}
-
-func ruleIDs(rules []any) []string {
-	result := []string{}
-	for _, item := range rules {
-		rule := item.(map[string]any)
-		ruleID, _ := rule["ruleId"].(string)
-		result = append(result, ruleID)
-	}
-	return result
 }
 
 func TestNormalizeTemplateDataRejectsLegacyStructure(t *testing.T) {

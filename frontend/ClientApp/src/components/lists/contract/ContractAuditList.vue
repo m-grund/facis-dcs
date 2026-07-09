@@ -44,6 +44,9 @@ const eventType = useContractEventType()
         <div v-else-if="eventType.isRetrieveByIDEvent(audit)">
           <div>Retrieved by: {{ audit.event_data.retrieved_by }}</div>
         </div>
+        <div v-else-if="eventType.isRetrieveHistoryByDIDEvent(audit)">
+          <div>Retrieved by: {{ audit.event_data.retrieved_by }}</div>
+        </div>
         <div v-else-if="eventType.isRetrieveAllEvent(audit)">
           <div>Retrieved by: {{ audit.event_data.retrieved_by }}</div>
         </div>

@@ -1,160 +1,3 @@
-<template>
-  <div class="space-y-6">
-    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Add data requirement</h3>
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <button
-          v-for="action in requirementActions"
-          :key="action.id"
-          type="button"
-          class="btn h-auto min-h-0 justify-start px-3 py-2 text-left btn-outline"
-          :class="{ 'btn-primary': requirementDraft?.action.id === action.id }"
-          @click="startRequirementDraft(action)"
-        >
-          <span class="flex min-w-0 flex-col items-start">
-            <span class="truncate text-sm font-medium">{{ action.label }}</span>
-            <span class="truncate text-xs font-normal opacity-60">{{ actionSummary(action) }}</span>
-          </span>
-        </button>
-      </div>
-
-      <div v-if="requirementDraft" class="mt-4 rounded-lg border border-base-300 bg-base-200/30 p-3">
-        <div class="mb-3 flex flex-wrap items-end gap-3">
-          <label class="flex min-w-56 flex-1 flex-col gap-1">
-            <span class="label-text text-xs text-base-content/60">Requirement</span>
-            <input v-model="requirementDraft.name" type="text" class="input-bordered input input-sm w-full" />
-          </label>
-          <label v-if="requirementDraft.action.roleRequired" class="flex min-w-44 flex-col gap-1">
-            <span class="label-text text-xs text-base-content/60">Role *</span>
-            <select
-              v-model="requirementDraft.role"
-              class="select-bordered select w-full select-sm"
-              @change="syncDraftNameWithRole"
-            >
-              <option value="">Select role</option>
-              <option v-for="role in roleOptions" :key="role.value" :value="role.value">
-                {{ role.label }}
-              </option>
-            </select>
-          </label>
-          <div class="ml-auto flex gap-2">
-            <button type="button" class="btn btn-ghost btn-sm" @click="cancelRequirementDraft">Cancel</button>
-            <button
-              type="button"
-              class="btn btn-sm btn-secondary"
-              :disabled="!canAddRequirementDraft"
-              @click="addRequirementDraft"
-            >
-              Add requirement
-            </button>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <div
-            v-for="(parameter, index) in requirementDraft.parameters"
-            :key="parameter.semanticPath"
-            class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
-          >
-            <div class="min-w-0 md:col-span-4">
-              <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
-              <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
-              <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
-                {{ formatValueConstraint(parameter.valueConstraint) }}
-              </p>
-            </div>
-            <label class="flex flex-col gap-1 md:col-span-2">
-              <span class="label-text text-xs text-base-content/60">Required</span>
-              <span class="flex h-9 items-center gap-2">
-                <input v-model="parameter.isRequired" type="checkbox" class="checkbox checkbox-sm checkbox-primary" />
-                <span class="text-xs text-base-content/60">{{ parameter.isRequired ? 'Required' : 'Optional' }}</span>
-              </span>
-            </label>
-            <ParameterObligationEditor
-              :parameter="parameter"
-              :operators="parameter.operators"
-              @update:operators="updateDraftParameterOperators(index, $event)"
-              @validity-change="updateDraftParameterValidity(parameter.semanticPath, $event)"
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
-      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Data requirements</h3>
-      <p v-if="!conditionItems.length" class="py-6 text-center text-xs text-base-content/40 italic">
-        No data requirements defined yet.
-      </p>
-      <div v-else class="space-y-4">
-        <article
-          v-for="item in conditionItems"
-          :key="item.condition.conditionId"
-          class="rounded-lg border border-base-300 bg-base-200/30 p-3"
-        >
-          <div class="mb-3 flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <h4 class="truncate text-sm font-semibold text-base-content">{{ item.condition.conditionName }}</h4>
-              <div class="mt-1 flex flex-wrap gap-1">
-                <span v-if="item.condition.entityType" class="badge badge-outline badge-sm">
-                  {{ item.condition.entityType }}
-                </span>
-                <span v-if="item.condition.entityRole" class="badge badge-outline badge-sm">
-                  {{ item.condition.entityRole }}
-                </span>
-                <span class="badge badge-sm" :class="requirementStatusClass(item)">
-                  {{ requirementStatusLabel(item) }}
-                </span>
-              </div>
-            </div>
-            <div v-if="uiStore.isTemplateEditable && !item.subTemplateRef" class="flex shrink-0 gap-1">
-              <button type="button" class="btn btn-xs btn-secondary" @click="createClauseFromRequirement(item)">
-                Create clause
-              </button>
-              <button type="button" class="btn text-error btn-ghost btn-xs" @click="deleteRequirement(item)">
-                Delete
-              </button>
-            </div>
-          </div>
-
-          <div class="space-y-3">
-            <div
-              v-for="(parameter, index) in item.condition.parameters"
-              :key="parameter.semanticPath"
-              class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
-            >
-              <div class="min-w-0 md:col-span-4">
-                <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
-                <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
-                <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
-                  {{ formatValueConstraint(parameter.valueConstraint) }}
-                </p>
-              </div>
-              <label class="flex flex-col gap-1 md:col-span-2">
-                <span class="label-text text-xs text-base-content/60">Required</span>
-                <span class="flex h-9 items-center gap-2">
-                  <input
-                    v-model="parameter.isRequired"
-                    type="checkbox"
-                    class="checkbox checkbox-sm checkbox-primary"
-                    :disabled="!uiStore.isTemplateEditable || !!item.subTemplateRef"
-                  />
-                  <span class="text-xs text-base-content/60">{{ parameter.isRequired ? 'Required' : 'Optional' }}</span>
-                </span>
-              </label>
-              <ParameterObligationEditor
-                :parameter="parameter"
-                :operators="parameter.operators"
-                @update:operators="updateParameterOperators(item.condition, index, $event)"
-              />
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -186,6 +29,7 @@ import {
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { MinusIcon, PlusIcon } from '@heroicons/vue/20/solid'
 
 interface RequirementItem {
   condition: SemanticCondition
@@ -224,6 +68,7 @@ const canAddRequirementDraft = computed(() => {
   if (!draft.name.trim()) return false
   if (draft.action.roleRequired && !draft.role) return false
   if (!draft.parameters.length) return false
+  if (!draft.parameters.some((parameter) => parameter.isRequired)) return false
   return Object.values(draft.parameterValidity).every((isValid) => isValid)
 })
 
@@ -251,7 +96,7 @@ const clauseCountByConditionId = computed(() => {
   const counts: Record<string, number> = {}
   for (const block of allBlocks.value) {
     if (block['@type'] !== 'dcs:Clause') continue
-    for (const id of clauseConditionIds(block as DcsClause)) counts[id] = (counts[id] ?? 0) + 1
+    for (const id of clauseConditionIds(block)) counts[id] = (counts[id] ?? 0) + 1
   }
   return counts
 })
@@ -261,7 +106,7 @@ const placedClauseCountByConditionId = computed(() => {
   const inOutline = store.blockIdsInOutline
   for (const block of allBlocks.value) {
     if (block['@type'] !== 'dcs:Clause' || !inOutline.has(block['@id'])) continue
-    for (const id of clauseConditionIds(block as DcsClause)) counts[id] = (counts[id] ?? 0) + 1
+    for (const id of clauseConditionIds(block)) counts[id] = (counts[id] ?? 0) + 1
   }
   return counts
 })
@@ -287,9 +132,10 @@ const conditionItems = computed<RequirementItem[]>(() => {
 })
 
 function startRequirementDraft(action: RequirementAction) {
-  const parameters = action.domainType
+  const rawParameters = action.domainType
     ? buildOntologyDomainTypeParameters(action.domainType)
     : action.fields.map((field) => parameterFromField(field))
+  const parameters = rawParameters.map((p) => ({ ...p, isRequired: false }))
   requirementDraft.value = {
     action,
     name: defaultRequirementName(action, ''),
@@ -330,7 +176,7 @@ function parameterFromField(field: DomainFieldDefinition): SemanticCondition['pa
     semanticPath: field.semanticPath,
     valueConstraint: cloneValueConstraint(field.valueConstraint),
     uiMetadata: { label: field.label },
-    isRequired: true,
+    isRequired: false,
     operators: [],
     value: undefined,
   }
@@ -365,7 +211,13 @@ function updateDraftParameterValidity(semanticPath: string, isValid: boolean) {
 function updateParameterOperators(condition: SemanticCondition, index: number, operators: SemanticParameterOperator[]) {
   const parameter = condition.parameters[index]
   if (!parameter?.fieldId) return
-  store.updateFieldPolicies(parameter.fieldId, condition.conditionId, parameter.parameterName, parameter.type, operators)
+  store.updateFieldPolicies(
+    parameter.fieldId,
+    condition.conditionId,
+    parameter.parameterName,
+    parameter.type,
+    operators,
+  )
 }
 
 function deleteRequirement(item: RequirementItem) {
@@ -384,6 +236,10 @@ function createClauseFromRequirement(item: RequirementItem) {
     conditionIds: [condition.conditionId],
     sourceConditionName: condition.conditionName,
   })
+}
+
+function hasClauseForRequirement(item: RequirementItem): boolean {
+  return (placedClauseCountByConditionId.value[item.condition.conditionId] ?? 0) > 0 || item.usedInClauseCount > 0
 }
 
 function requirementStatusLabel(item: RequirementItem) {
@@ -481,3 +337,161 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
   return constraint.description ?? 'Constrained value'
 }
 </script>
+
+<template>
+  <div class="space-y-6">
+    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Add data requirement</h3>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <button
+          v-for="action in requirementActions"
+          :key="action.id"
+          type="button"
+          class="btn h-auto min-h-0 justify-start px-3 py-2 text-left btn-outline"
+          :class="{ 'btn-primary': requirementDraft?.action.id === action.id }"
+          @click="startRequirementDraft(action)"
+        >
+          <span class="flex min-w-0 flex-col items-start">
+            <span class="truncate text-sm font-medium">{{ action.label }}</span>
+            <span class="truncate text-xs font-normal opacity-60">{{ actionSummary(action) }}</span>
+          </span>
+        </button>
+      </div>
+
+      <div v-if="requirementDraft" class="mt-4 rounded-lg border border-base-300 bg-base-200/30 p-3">
+        <div class="mb-3 flex flex-wrap items-end gap-3">
+          <label class="flex min-w-56 flex-1 flex-col gap-1">
+            <span class="label-text text-xs text-base-content/60">Requirement</span>
+            <input v-model="requirementDraft.name" type="text" class="input-bordered input input-sm w-full" />
+          </label>
+          <label v-if="requirementDraft.action.roleRequired" class="flex min-w-44 flex-col gap-1">
+            <span class="label-text text-xs text-base-content/60">Role *</span>
+            <select
+              v-model="requirementDraft.role"
+              class="select-bordered select w-full select-sm"
+              @change="syncDraftNameWithRole"
+            >
+              <option value="">Select role</option>
+              <option v-for="role in roleOptions" :key="role.value" :value="role.value">
+                {{ role.label }}
+              </option>
+            </select>
+          </label>
+          <div class="ml-auto flex gap-2">
+            <button type="button" class="btn btn-ghost btn-sm" @click="cancelRequirementDraft">Cancel</button>
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              :disabled="!canAddRequirementDraft"
+              @click="addRequirementDraft"
+            >
+              Add requirement
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div
+            v-for="(parameter, index) in requirementDraft.parameters"
+            :key="parameter.semanticPath"
+            class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
+          >
+            <div class="min-w-0 md:col-span-4">
+              <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
+              <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
+              <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
+                {{ formatValueConstraint(parameter.valueConstraint) }}
+              </p>
+            </div>
+            <ParameterObligationEditor
+              :parameter="parameter"
+              :operators="parameter.operators"
+              @update:operators="updateDraftParameterOperators(index, $event)"
+              @validity-change="updateDraftParameterValidity(parameter.semanticPath, $event)"
+            />
+            <button
+              type="button"
+              class="btn btn-circle self-center justify-self-end btn-xs md:col-span-1 md:col-start-12"
+              :class="[parameter.isRequired ? 'btn-error' : 'btn-secondary']"
+              :title="parameter.isRequired ? 'Mark optional' : 'Mark required'"
+              :aria-label="parameter.isRequired ? 'Mark optional' : 'Mark required'"
+              @click="parameter.isRequired = !parameter.isRequired"
+            >
+              <PlusIcon v-if="!parameter.isRequired" class="h-5 w-5" />
+              <MinusIcon v-else class="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Data requirements</h3>
+      <p v-if="!conditionItems.length" class="py-6 text-center text-xs text-base-content/40 italic">
+        No data requirements defined yet.
+      </p>
+      <div v-else class="space-y-4">
+        <article
+          v-for="item in conditionItems"
+          :key="item.condition.conditionId"
+          class="rounded-lg border border-base-300 bg-base-200/30 p-3"
+        >
+          <div class="mb-3 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h4 class="truncate text-sm font-semibold text-base-content">{{ item.condition.conditionName }}</h4>
+              <div class="mt-1 flex flex-wrap gap-1">
+                <span v-if="item.condition.entityType" class="badge badge-outline badge-sm">
+                  {{ item.condition.entityType }}
+                </span>
+                <span v-if="item.condition.entityRole" class="badge badge-outline badge-sm">
+                  {{ item.condition.entityRole }}
+                </span>
+                <span class="badge badge-sm" :class="requirementStatusClass(item)">
+                  {{ requirementStatusLabel(item) }}
+                </span>
+              </div>
+            </div>
+            <div v-if="uiStore.isTemplateEditable && !item.subTemplateRef" class="flex shrink-0 gap-1">
+              <button
+                type="button"
+                class="btn btn-xs btn-secondary"
+                :disabled="hasClauseForRequirement(item)"
+                :title="
+                  hasClauseForRequirement(item) ? 'A clause for this requirement already exists' : 'Create clause'
+                "
+                @click="createClauseFromRequirement(item)"
+              >
+                Create clause
+              </button>
+              <button type="button" class="btn text-error btn-ghost btn-xs" @click="deleteRequirement(item)">
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <template v-for="(parameter, index) in item.condition.parameters" :key="parameter.semanticPath">
+              <div
+                v-if="parameter.isRequired"
+                class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
+              >
+                <div class="min-w-0 md:col-span-4">
+                  <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
+                  <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
+                  <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
+                    {{ formatValueConstraint(parameter.valueConstraint) }}
+                  </p>
+                </div>
+                <ParameterObligationEditor
+                  :parameter="parameter"
+                  :operators="parameter.operators"
+                  @update:operators="updateParameterOperators(item.condition, index, $event)"
+                />
+              </div>
+            </template>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</template>

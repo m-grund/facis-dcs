@@ -1,4 +1,5 @@
 import authHttp from '@/api/auth-http'
+import { clearOid4vpBrowserSession } from '@/hydra-login-guard'
 import {
   LOGIN_POLL_ERROR,
   type AuthCallbackResponse,
@@ -89,6 +90,7 @@ export const authenticationService: AuthenticationService = {
     const clearLocalAuth = () => {
       useAuthStore().remove()
       useAuthTokenStore().remove()
+      clearOid4vpBrowserSession()
     }
 
     const doLogout = (retried: boolean) => {

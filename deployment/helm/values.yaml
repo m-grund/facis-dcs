@@ -281,6 +281,11 @@ pdfCore:
   # Default: auto-derived as <pdfCoreURL>/ontology/dcs-pdf-core.
   # Set to a registered w3id IRI once available.
   contextIRI: ""
+  # ontologyBaseURL is the base URL pdf-core uses for ontology IRIs in payloads
+  # and the served JSON-LD context (DCS_PDF_CORE_ONTOLOGY_BASE_URL, required by
+  # pdf-core at startup). Default: auto-derived from the pdf-core service URL,
+  # keeping it consistent with the contextIRI default above.
+  ontologyBaseURL: ""
   signing:
     # Dev self-signed Ed25519 key and cert chain — safe for testing, replace for production.
     signerKeyPEM: |

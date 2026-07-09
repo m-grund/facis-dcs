@@ -767,12 +767,11 @@ func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepos
 	}
 
 	cmd := command.PublishCmd{
-		DID:           req.Did,
-		UpdatedAt:     updatedAt,
-		PublishedBy:   middleware.GetParticipantID(ctx),
-		HolderDID:     middleware.GetHolderDID(ctx),
-		UserRoles:     middleware.GetUserRoles(ctx),
-		ParticipantID: middleware.GetParticipantID(ctx),
+		DID:         req.Did,
+		UpdatedAt:   updatedAt,
+		PublishedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	handler := command.Publisher{
 		DB:       s.DB,

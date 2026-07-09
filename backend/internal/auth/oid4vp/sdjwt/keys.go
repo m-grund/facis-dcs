@@ -3,6 +3,7 @@ package sdjwt
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -73,11 +74,52 @@ func ResolveIssuerVerificationKey(cfg TrustConfig, token *jwt.Token) (any, error
 	}
 
 	if _, ok := token.Header["x5c"]; ok {
-		// x5c chain validation lands with the trust migration (docs/openid4vp-trust-migration-plan.md).
-		return nil, fmt.Errorf("x5c issuer key resolution is not implemented yet")
+		return verificationKeyFromX5C(token.Header["x5c"])
 	}
 
 	return verificationKeyFromTrustedJWKS(jwksRaw, token)
+}
+
+// ResolveIssuerVerificationKeyForPID resolves the issuer key for PID credentials signed with x5c.
+func ResolveIssuerVerificationKeyForPID(token *jwt.Token) (any, error) {
+	rawX5C, ok := token.Header["x5c"]
+	if !ok {
+		return nil, fmt.Errorf("pid credential jwt requires x5c")
+	}
+
+	return verificationKeyFromX5C(rawX5C)
+}
+
+func verificationKeyFromX5C(raw any) (any, error) {
+	certs, ok := raw.([]any)
+	if !ok || len(certs) == 0 {
+		return nil, fmt.Errorf("x5c header is empty")
+	}
+
+	leafB64, ok := certs[0].(string)
+	if !ok || strings.TrimSpace(leafB64) == "" {
+		return nil, fmt.Errorf("x5c leaf certificate is invalid")
+	}
+
+	der, err := base64.StdEncoding.DecodeString(leafB64)
+	if err != nil {
+		return nil, fmt.Errorf("decode x5c leaf certificate: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("parse x5c leaf certificate: %w", err)
+	}
+
+	switch pk := cert.PublicKey.(type) {
+	case *ecdsa.PublicKey:
+		if pk.Curve != elliptic.P256() {
+			return nil, fmt.Errorf("x5c leaf certificate is not P-256")
+		}
+		return pk, nil
+	default:
+		return nil, fmt.Errorf("x5c leaf certificate public key is not ECDSA")
+	}
 }
 
 func verificationKeyFromHeaderJWK(jwksRaw json.RawMessage, rawJWK any) (any, error) {
@@ -159,18 +201,9 @@ func holderVerificationKey(cnfJWK JWK, token *jwt.Token) (any, error) {
 func JWKFromAny(raw any) (JWK, error) {
 	switch v := raw.(type) {
 	case map[string]any:
-		key := JWK{
-			Kty: stringValue(v["kty"]),
-			Crv: stringValue(v["crv"]),
-			X:   stringValue(v["x"]),
-			Y:   stringValue(v["y"]),
-		}
-		if key.Kty == "" || key.X == "" || key.Y == "" {
-			return JWK{}, fmt.Errorf("jwk is missing public key material")
-		}
-		return key, nil
+		return ecP256PublicKeyFromMap(v)
 	case JWK:
-		return v, nil
+		return ecP256PublicKeyFromJWK(v)
 	default:
 		return JWK{}, fmt.Errorf("unsupported jwk value")
 	}
@@ -178,15 +211,20 @@ func JWKFromAny(raw any) (JWK, error) {
 
 // DIDJWKFromPublicJWK builds a did:jwk identifier from an EC public JWK.
 func DIDJWKFromPublicJWK(key JWK) (string, error) {
-	if key.D != "" {
+	if strings.TrimSpace(key.D) != "" {
 		return "", fmt.Errorf("did:jwk must not include private key")
 	}
 
+	public, err := ecP256PublicKeyFromJWK(key)
+	if err != nil {
+		return "", err
+	}
+
 	payload, err := json.Marshal(map[string]string{
-		"crv": key.Crv,
-		"kty": key.Kty,
-		"x":   key.X,
-		"y":   key.Y,
+		"crv": public.Crv,
+		"kty": public.Kty,
+		"x":   public.X,
+		"y":   public.Y,
 	})
 	if err != nil {
 		return "", err
@@ -195,15 +233,98 @@ func DIDJWKFromPublicJWK(key JWK) (string, error) {
 	return "did:jwk:" + base64.RawURLEncoding.EncodeToString(payload), nil
 }
 
+// JWKFromDIDJWK decodes a did:jwk identifier into public-key material.
+func JWKFromDIDJWK(did string) (JWK, error) {
+	did = strings.TrimSpace(did)
+	if !strings.HasPrefix(did, "did:jwk:") {
+		return JWK{}, fmt.Errorf("subject is not a did:jwk identifier")
+	}
+
+	encoded := strings.TrimPrefix(did, "did:jwk:")
+	if encoded == "" {
+		return JWK{}, fmt.Errorf("did:jwk payload is empty")
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return JWK{}, fmt.Errorf("decode did:jwk payload: %w", err)
+	}
+
+	var payload map[string]any
+	err = json.Unmarshal(raw, &payload)
+	if err != nil {
+		return JWK{}, fmt.Errorf("parse did:jwk payload: %w", err)
+	}
+
+	return ecP256PublicKeyFromMap(payload)
+}
+
+// HolderSubjectMatches reports whether credential sub and cnf.jwk identify the same holder key.
+func HolderSubjectMatches(sub string, cnfJWK JWK) error {
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		return fmt.Errorf("credential missing sub")
+	}
+
+	cnf, err := ecP256PublicKeyFromJWK(cnfJWK)
+	if err != nil {
+		return fmt.Errorf("credential cnf.jwk: %w", err)
+	}
+
+	subject, err := JWKFromDIDJWK(sub)
+	if err != nil {
+		return fmt.Errorf("credential sub: %w", err)
+	}
+
+	if !publicJWKsEqual(subject, cnf) {
+		return fmt.Errorf("credential sub does not match cnf.jwk holder binding")
+	}
+
+	return nil
+}
+
+func ecP256PublicKeyFromMap(raw map[string]any) (JWK, error) {
+	return ecP256PublicKeyFromJWK(JWK{
+		Kty: stringValue(raw["kty"]),
+		Crv: stringValue(raw["crv"]),
+		X:   stringValue(raw["x"]),
+		Y:   stringValue(raw["y"]),
+	})
+}
+
+func ecP256PublicKeyFromJWK(key JWK) (JWK, error) {
+	key.Kty = strings.TrimSpace(key.Kty)
+	key.Crv = strings.TrimSpace(key.Crv)
+	key.X = strings.TrimSpace(key.X)
+	key.Y = strings.TrimSpace(key.Y)
+
+	if key.Kty != "EC" {
+		return JWK{}, fmt.Errorf("unsupported jwk kty %q", key.Kty)
+	}
+	if key.Crv == "" {
+		key.Crv = "P-256"
+	}
+	if key.Crv != "P-256" {
+		return JWK{}, fmt.Errorf("unsupported jwk crv %q", key.Crv)
+	}
+	if key.X == "" || key.Y == "" {
+		return JWK{}, fmt.Errorf("jwk is missing public key material")
+	}
+
+	return key, nil
+}
+
 func publicJWKsEqual(a, b JWK) bool {
-	return a.Kty == b.Kty &&
-		a.Crv == b.Crv &&
-		a.X == b.X &&
-		a.Y == b.Y &&
-		a.Kty == "EC" &&
-		a.Crv == "P-256" &&
-		strings.TrimSpace(a.X) != "" &&
-		strings.TrimSpace(a.Y) != ""
+	aNorm, errA := ecP256PublicKeyFromJWK(a)
+	bNorm, errB := ecP256PublicKeyFromJWK(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+
+	return aNorm.Kty == bNorm.Kty &&
+		aNorm.Crv == bNorm.Crv &&
+		aNorm.X == bNorm.X &&
+		aNorm.Y == bNorm.Y
 }
 
 func stringValue(v any) string {

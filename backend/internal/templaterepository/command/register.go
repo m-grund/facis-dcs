@@ -3,18 +3,18 @@ package command
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"time"
-
-	"digital-contracting-service/internal/base/identity"
 
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/fcasset"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	templatequery "digital-contracting-service/internal/templatecatalogueintegration/query/template"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
@@ -34,17 +34,11 @@ type RegisterCmd struct {
 }
 
 type Registrar struct {
-	DB          *sqlx.DB
-	CTRepo      db.ContractTemplateRepo
-	FCClient    *fcclient.FederatedCatalogueClient
-	DIDDocument identity.DIDDocument
+	DB       *sqlx.DB
+	CTRepo   db.ContractTemplateRepo
+	FCClient *fcclient.FederatedCatalogueClient
 }
 
-// Handle has two unrelated modes gated by whether cmd.DID already exists
-// locally: if it does, this only flips its state to REGISTERED; if it does
-// not, it pulls the template (identified by did + version) from the
-// Federated Catalogue via FCClient and imports it as a brand-new local DID
-// in state DRAFT. The two branches below share nothing but the method name.
 func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error) {
 
 	if cmd.DID == "" {
@@ -132,10 +126,9 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error
 		}
 
 		queryHandler := templatequery.GetByIDHandler{
-			Ctx:      ctx,
 			FCClient: h.FCClient,
 		}
-		fcTemplate, err := queryHandler.Handle(templatequery.GetByIDQry{
+		fcTemplate, err := queryHandler.Handle(ctx, templatequery.GetByIDQry{
 			DID:     cmd.DID,
 			Version: cmd.Version,
 		})
@@ -146,14 +139,34 @@ func (h *Registrar) Handle(ctx context.Context, cmd RegisterCmd) (*string, error
 			return nil, fcclient.ErrTemplateNotFoundInFederatedCatalogue
 		}
 
-		templateData, err := templateDataFromAny(fcTemplate.TemplateData)
-		if err != nil {
-			return nil, err
+		var templateData *datatype.JSON
+		if fcTemplate.TemplateData != nil {
+			templateData, err = templateDataFromAny(fcTemplate.TemplateData)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			templateDataMap, fetchErr := fcasset.FetchDocument(ctx, cmd.DID)
+			if fetchErr != nil && !errors.Is(fetchErr, fcasset.ErrRemoteTemplateNotFound) {
+				return nil, fmt.Errorf("could not fetch remote template data: %w", fetchErr)
+			}
+			if templateDataMap != nil {
+				templateData, err = templateDataFromAny(templateDataMap)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		if templateData == nil {
+			return nil, errors.New("template data is missing from Federated Catalogue")
 		}
 
 		templateTypeValue := ""
 		if fcTemplate.TemplateType != nil {
 			templateTypeValue = *fcTemplate.TemplateType
+		}
+		if templateTypeValue == "" {
+			templateTypeValue = resolveTemplateTypeFromData(templateData)
 		}
 		templateType, err := contracttemplatetype.NewContractTemplateType(templateTypeValue)
 		if err != nil {
@@ -227,4 +240,23 @@ func templateDataFromAny(raw any) (*datatype.JSON, error) {
 	}
 
 	return &templateData, nil
+}
+
+func resolveTemplateTypeFromData(templateData *datatype.JSON) string {
+	if templateData == nil || !templateData.IsNotNullValue() {
+		return ""
+	}
+
+	var templateDataMap map[string]interface{}
+	if err := json.Unmarshal(*templateData, &templateDataMap); err != nil {
+		return ""
+	}
+
+	if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {
+		if value, ok := metadata["dcs:templateType"].(string); ok {
+			return value
+		}
+	}
+
+	return ""
 }

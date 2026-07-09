@@ -107,7 +107,7 @@ done
 echo ""
 echo "=== Starting Vite dev server ==="
 cd frontend/ClientApp
-DCS_API_TARGET=http://localhost:8991 DCS_HYDRA_TARGET=http://localhost:30444 npm run dev &
+npm run dev &
 VITE_PID=$!
 cd ../..
 

@@ -1,11 +1,7 @@
-// Package testutil provides a fake/stub Federated Catalogue HTTP server for
-// templaterepository's tests (register/publish flows that would otherwise
-// require a real FCClient).
 package testutil
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,16 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"digital-contracting-service/internal/base/datatype"
-	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/fcasset"
-	semanticmapper "digital-contracting-service/internal/semantic/mapper"
-	templatedb "digital-contracting-service/internal/templaterepository/db"
+	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/migrations/fcschemas"
 )
-
-//go:embed testdata/template_resource_sd.jsonld
-var templateResourceSDExample []byte
 
 const DefaultParticipantID = "did:web:argo.asd-stack.eu:facis:participant:cfc9d0a5-cd79-4807-8eef-e245ab0ffee8"
 
@@ -120,39 +110,6 @@ func CleanupAllAssets(t *testing.T, ctx context.Context, fc *fcclient.FederatedC
 	}
 }
 
-// LoadExampleTemplateData parses template_data from the embedded template_resource_sd.jsonld example.
-func LoadExampleTemplateData(t *testing.T) *datatype.JSON {
-	t.Helper()
-
-	var presentation map[string]interface{}
-	if err := json.Unmarshal(templateResourceSDExample, &presentation); err != nil {
-		t.Fatalf("unmarshal template_resource_sd.jsonld failed: %v", err)
-	}
-
-	vcs, ok := presentation["verifiableCredential"].([]interface{})
-	if !ok || len(vcs) == 0 {
-		t.Fatalf("template_resource_sd.jsonld: missing verifiableCredential")
-	}
-	vc, ok := vcs[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("template_resource_sd.jsonld: invalid verifiableCredential entry")
-	}
-	subject, ok := vc["credentialSubject"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("template_resource_sd.jsonld: missing credentialSubject")
-	}
-	rawTemplateData, ok := subject["dcs-template:templateData"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("template_resource_sd.jsonld: missing dcs-template:templateData")
-	}
-
-	templateData, err := datatype.NewJSON(rawTemplateData)
-	if err != nil {
-		t.Fatalf("marshal example template data failed: %v", err)
-	}
-	return &templateData
-}
-
 // TemplateSeed describes a template resource posted to the Federated Catalogue.
 type TemplateSeed struct {
 	DID            string
@@ -160,40 +117,31 @@ type TemplateSeed struct {
 	DocumentNumber string
 }
 
-// SeedTemplateResource posts a template asset to the Federated Catalogue.
+// SeedTemplateResource posts a thin catalogue template asset to the Federated Catalogue.
 func SeedTemplateResource(
 	t *testing.T,
 	ctx context.Context,
 	fc *fcclient.FederatedCatalogueClient,
-	participantID string,
+	issuer string,
 	did string,
 	version int,
-	documentNumber string,
-	templateType string,
+	state string,
 	name string,
-	templateData *datatype.JSON,
+	description string,
 ) TemplateSeed {
 	t.Helper()
 
 	now := time.Now().UTC()
-	templateJSONLD, err := semanticmapper.BuildTemplateJSONLD(templatedb.ContractTemplate{
-		DID:          did,
-		Version:      version,
-		TemplateType: templateType,
-		Name:         &name,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-		TemplateData: templateData,
-	}, semanticmapper.DefaultProfile())
-	if err != nil {
-		t.Fatalf("build template json-ld failed: %v", err)
-	}
-
 	payload, err := fcasset.BuildPayload(fcasset.BuildInput{
-		TemplateDID:  did,
-		Issuer:       participantID,
-		ValidFrom:    now,
-		TemplateData: templateJSONLD,
+		Issuer:    issuer,
+		ValidFrom: now,
+		Subject: fcasset.CatalogueSubjectFromRepository(
+			did,
+			version,
+			state,
+			name,
+			description,
+		),
 	})
 	if err != nil {
 		t.Fatalf("build template asset payload failed: %v", err)
@@ -217,8 +165,7 @@ func SeedTemplateResource(
 	}
 
 	return TemplateSeed{
-		DID:            did,
-		Version:        version,
-		DocumentNumber: documentNumber,
+		DID:     did,
+		Version: version,
 	}
 }

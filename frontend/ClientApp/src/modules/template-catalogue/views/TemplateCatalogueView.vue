@@ -14,7 +14,7 @@ import { ROUTES } from '@/router/router'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useContractPermissions } from '@/modules/template-repository/composables/useContractPermissions'
+import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 
 const router = useRouter()
 const route = useRoute()
@@ -28,6 +28,7 @@ const version = computed(() => {
 
 const loading = ref(false)
 const error = ref<string | null>(null)
+const remoteTemplateUnreachable = ref(false)
 const catalogue = ref<TemplateCatalogueRetrieveByIdResponse | null>(null)
 
 const registerLoading = ref(false)
@@ -81,6 +82,7 @@ watch(
     }
     loading.value = true
     error.value = null
+    remoteTemplateUnreachable.value = false
     activeTab.value = 'details'
 
     try {
@@ -97,11 +99,10 @@ watch(
 
       const templateData = data.template_data
       if (!templateData) {
-        error.value = 'Template data is missing from catalogue response'
-        return
+        remoteTemplateUnreachable.value = true
       }
 
-      draftStore.loadDocument(templateData, {
+      draftStore.loadDocument(templateData ?? {}, {
         did: data.did,
         name: data.name ?? '',
         description: data.description ?? '',
@@ -183,6 +184,12 @@ async function registerTemplate() {
         <div v-if="loading" class="px-4">Loading Template Catalogue...</div>
         <div v-else-if="error" class="px-4">{{ error }}</div>
         <div v-else>
+          <p
+            v-if="remoteTemplateUnreachable"
+            class="mb-4 rounded-lg border border-base-300 bg-base-100 p-4 text-base-content"
+          >
+            Remote template source is currently unreachable.
+          </p>
           <CatalogueTemplateDetailsInfo v-show="activeTab === 'details'" />
           <CatalogueTemplateMetaDataInfo v-show="activeTab === 'meta'" />
           <CatalogueTemplatePreviewInfo v-show="activeTab === 'preview'" />

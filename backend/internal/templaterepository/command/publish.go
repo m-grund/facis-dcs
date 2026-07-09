@@ -14,7 +14,6 @@ import (
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/fcasset"
-	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/contracttemplatestate"
 	"digital-contracting-service/internal/templaterepository/db"
@@ -24,12 +23,11 @@ import (
 )
 
 type PublishCmd struct {
-	DID           string
-	UpdatedAt     time.Time
-	PublishedBy   string
-	HolderDID     string
-	ParticipantID string
-	UserRoles     userrole.UserRoles
+	DID         string
+	UpdatedAt   time.Time
+	PublishedBy string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
 }
 
 type Publisher struct {
@@ -64,7 +62,6 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 		}
 	}
 
-	// Optimistic concurrency (see command package doc / ADR-0007).
 	if cmd.UpdatedAt.Unix() < processData.UpdatedAt.Unix() {
 		return errors.New("contract template was updated elsewhere, please reload")
 	}
@@ -129,19 +126,29 @@ func (h *Publisher) Handle(ctx context.Context, cmd PublishCmd) error {
 }
 
 func (h *Publisher) publishTemplateResourceToFC(ctx context.Context, cmd PublishCmd, processData *db.ContractTemplateProcessData, fullTemplate *db.ContractTemplate) error {
-	if cmd.ParticipantID == "" {
-		return fmt.Errorf("participant id is empty")
+	if cmd.HolderDID == "" {
+		return fmt.Errorf("holder did is empty")
 	}
-	templateJSONLD, err := semanticmapper.BuildTemplateJSONLD(*fullTemplate, semanticmapper.DefaultProfile())
-	if err != nil {
-		return fmt.Errorf("build template json-ld failed: %w", err)
+
+	name := ""
+	description := ""
+	if fullTemplate.Name != nil {
+		name = *fullTemplate.Name
+	}
+	if fullTemplate.Description != nil {
+		description = *fullTemplate.Description
 	}
 
 	payload, err := fcasset.BuildPayload(fcasset.BuildInput{
-		TemplateDID:  cmd.DID,
-		Issuer:       cmd.ParticipantID,
-		ValidFrom:    fullTemplate.UpdatedAt,
-		TemplateData: templateJSONLD,
+		Issuer:    cmd.HolderDID,
+		ValidFrom: fullTemplate.UpdatedAt,
+		Subject: fcasset.CatalogueSubjectFromRepository(
+			cmd.DID,
+			processData.Version,
+			processData.State,
+			name,
+			description,
+		),
 	})
 
 	if err != nil {

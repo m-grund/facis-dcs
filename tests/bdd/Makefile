@@ -165,7 +165,7 @@ kind_load_pdf_core_image: kind_create
 
 kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
-	@"$(HELM_BIN)" repo add hashicorp https://helm.releases.hashicorp.com --force-update
+	@"$(HELM_BIN)" repo add traefik https://traefik.github.io/charts --force-update
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -

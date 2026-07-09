@@ -2,47 +2,54 @@ package template
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
-	"strconv"
+	"log"
+	"strings"
+	"time"
+
+	"github.com/jmoiron/sqlx"
 
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
+	"digital-contracting-service/internal/base/datatype/componenttype"
+	"digital-contracting-service/internal/base/datatype/userrole"
+	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/fcasset"
 	"digital-contracting-service/internal/templatecatalogueintegration/client"
+	catalogueevents "digital-contracting-service/internal/templatecatalogueintegration/event"
 	"digital-contracting-service/internal/templatecatalogueintegration/internal/ptr"
 )
 
 type GetByIDQry struct {
-	DID     string
-	Version int
+	DID         string
+	Version     int
+	RetrievedBy string
+	HolderDID   string
+	UserRoles   userrole.UserRoles
 }
 
 type GetByIDHandler struct {
-	Ctx      context.Context
+	DB       *sqlx.DB
 	FCClient *client.FederatedCatalogueClient
 }
 
-// TODO: fix FC GraphDB issue
 const retrieveTemplateByIDStatement = `
-MATCH (ct:ContractTemplate)
-WHERE head(ct.claimsGraphUri) = $did
-OPTIONAL MATCH (m:TemplateMetadata {did: head(ct.claimsGraphUri)})
-WHERE toInteger(coalesce(m.templateVersion, ct.templateVersion, ct.version, $version)) = toInteger($version)
+MATCH (ct)
+WHERE ct.templateUuid IS NOT NULL
+  AND head(ct.claimsGraphUri) = $did
 RETURN {
-  did: head(ct.claimsGraphUri)),
-  document_number: ct.documentNumber,
-  version: ct.version,
-  schema_version: ct.schemaVersion,
-  template_data_json: ct.templateDataJSON,
+  did: head(ct.claimsGraphUri),
   name: ct.name,
   description: ct.description,
-  template_type: ct.templateType,
-  participant_id: ct.participantId,
-  created_at: ct.createdAt,
-  updated_at: ct.updatedAt
+  version: ct.version,
+  state: ct.state,
+  template_uuid: ct.templateUuid
 } AS n
 LIMIT 1
 `
 
-func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.TemplateCatalogueRetrieveByIDResponse, error) {
+func (h *GetByIDHandler) Handle(ctx context.Context, qry GetByIDQry) (*templatecatalogueintegration.TemplateCatalogueRetrieveByIDResponse, error) {
 	if h.FCClient == nil {
 		return nil, client.ErrFederatedCatalogueNotConfigured
 	}
@@ -53,11 +60,10 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		return nil, fmt.Errorf("version must be greater than 0")
 	}
 
-	resp, err := h.FCClient.Query(h.Ctx, client.QueryRequest{
+	resp, err := h.FCClient.Query(ctx, client.QueryRequest{
 		Statement: retrieveTemplateByIDStatement,
 		Parameters: map[string]string{
-			"did":     qry.DID,
-			"version": strconv.Itoa(qry.Version),
+			"did": qry.DID,
 		},
 	})
 	if err != nil {
@@ -72,21 +78,70 @@ func (h *GetByIDHandler) Handle(qry GetByIDQry) (*templatecatalogueintegration.T
 		return nil, fmt.Errorf("query projection missing projected map for did=%s", qry.DID)
 	}
 
-	templateData, err := parseTemplateDataJSON(ptr.StringFromMap(n, "template_data_json"))
+	result := mapCatalogueDetail(n)
+	if result == nil {
+		return nil, nil
+	}
+
+	if result.Version == nil || *result.Version != qry.Version {
+		return nil, nil
+	}
+
+	if h.DB != nil {
+		tx, err := h.DB.BeginTxx(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("could not create transaction: %w", err)
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
+			}
+		}(tx)
+
+		evt := catalogueevents.RetrieveByIDEvent{
+			DID:         qry.DID,
+			Version:     qry.Version,
+			RetrievedBy: qry.RetrievedBy,
+			OccurredAt:  time.Now().UTC(),
+			HolderDID:   qry.HolderDID,
+			UserRoles:   qry.UserRoles,
+		}
+		err = event.Create(ctx, tx, evt, componenttype.TemplateCatalogueIntegration)
+		if err != nil {
+			return nil, fmt.Errorf("could not create event: %w", err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("could not commit transaction: %w", err)
+		}
+	}
+
+	templateData, err := fcasset.FetchDocument(ctx, qry.DID)
+	if errors.Is(err, fcasset.ErrRemoteTemplateNotFound) {
+		return result, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 
+	result.TemplateData = templateData
+	return result, nil
+}
+
+func mapCatalogueDetail(n map[string]interface{}) *templatecatalogueintegration.TemplateCatalogueRetrieveByIDResponse {
+	if n == nil {
+		return nil
+	}
+
+	did := ptr.StringFromMap(n, "did")
+	if strings.TrimSpace(did) == "" {
+		return nil
+	}
+
 	return &templatecatalogueintegration.TemplateCatalogueRetrieveByIDResponse{
-		Did:            ptr.StringFromMap(n, "did"),
-		DocumentNumber: ptr.Ref(ptr.StringFromMap(n, "document_number")),
-		Version:        ptr.Ref(ptr.IntFromMap(n, "version")),
-		SchemaVersion:  ptr.Ref(ptr.IntFromMap(n, "schema_version")),
-		TemplateData:   templateData,
-		Name:           ptr.Ref(ptr.StringFromMap(n, "name")),
-		Description:    ptr.Ref(ptr.StringFromMap(n, "description")),
-		TemplateType:   ptr.Ref(ptr.StringFromMap(n, "template_type")),
-		CreatedAt:      ptr.Ref(ptr.StringFromMap(n, "created_at")),
-		UpdatedAt:      ptr.Ref(ptr.StringFromMap(n, "updated_at")),
-	}, nil
+		Did:         did,
+		Version:     ptr.Ref(ptr.IntFromMap(n, "version")),
+		Name:        ptr.Ref(ptr.StringFromMap(n, "name")),
+		Description: ptr.Ref(ptr.StringFromMap(n, "description")),
+	}
 }

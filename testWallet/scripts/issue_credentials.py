@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 
 WALLET_ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(WALLET_ROOT))
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 from dcs_wallet.issuer import (
     DEFAULT_ISSUER_DID,
@@ -25,6 +27,7 @@ from dcs_wallet.issuer import (
     issue_stored_credential,
 )
 from dcs_wallet.keys import load_json, private_key_material, write_text
+from issue_pid_credentials import issue_pid_credentials
 
 
 def _load_private_keys(keys_dir: Path) -> tuple[dict, dict]:
@@ -42,6 +45,10 @@ def _parse_roles(raw: str) -> list[str]:
     if not roles:
         raise ValueError("--roles must contain at least one role")
     return roles
+
+
+def _is_role_template(path: Path) -> bool:
+    return path.name.endswith(".template.json") and not path.name.endswith(".pid.template.json")
 
 
 def main() -> int:
@@ -90,6 +97,8 @@ def main() -> int:
     else:
         paths = []
         for template_path in sorted(args.credentials_dir.glob("*.template.json")):
+            if not _is_role_template(template_path):
+                continue
             stem = template_path.name.replace(".template.json", "")
             paths.append(
                 issue_credential_file(
@@ -102,9 +111,20 @@ def main() -> int:
             )
 
     if not paths:
-        raise FileNotFoundError(f"no *.template.json files found in {args.credentials_dir}")
+        raise FileNotFoundError(f"no role *.template.json files found in {args.credentials_dir}")
     for path in paths:
         print(f"issued: {path}")
+
+    pid_names = args.credential if args.credential else None
+    try:
+        for path in issue_pid_credentials(
+            credentials_dir=args.credentials_dir,
+            wallet_private_jwk=wallet_private,
+            credential_names=pid_names,
+        ):
+            print(f"issued: {path}")
+    except Exception as exc:
+        print(f"PID issuance skipped (network/EUDIPLO failure): {exc}")
     return 0
 
 

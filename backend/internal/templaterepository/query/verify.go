@@ -17,7 +17,6 @@ import (
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/fcasset"
-	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/datatype/reviewtaskstate"
 	"digital-contracting-service/internal/templaterepository/db"
@@ -71,14 +70,17 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyQry) (*VerifyResult, er
 		return nil, fmt.Errorf("template data validation failed: %w", err)
 	}
 
+	var findings []string
 	if h.FCClient != nil {
-		findings, err := h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate)
+		findings, err = h.verifyTemplateResourceSelfDescription(ctx, cmd, processData, fullTemplate)
 		if err != nil {
 			return nil, err
 		}
-		return &VerifyResult{
-			Findings: findings,
-		}, nil
+		if len(findings) > 0 {
+			return &VerifyResult{
+				Findings: findings,
+			}, nil
+		}
 	}
 
 	hasTask, err := h.RTRepo.TaskExistsInState(ctx, tx, cmd.DID, cmd.VerifiedBy, reviewtaskstate.Open.String())
@@ -112,7 +114,9 @@ func (h *Verifier) Handle(ctx context.Context, cmd VerifyQry) (*VerifyResult, er
 		return nil, fmt.Errorf("could not commit transaction: %w", err)
 	}
 
-	return &VerifyResult{}, nil
+	return &VerifyResult{
+		Findings: findings,
+	}, nil
 }
 
 func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cmd VerifyQry, processData *db.ContractTemplateProcessData, fullTemplate *db.ContractTemplate) ([]string, error) {
@@ -128,46 +132,24 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 	}
 
 	findings := []string{}
-	if cmd.ParticipantID == "" {
-		findings = append(findings, "participantID is empty")
+	if cmd.HolderDID == "" {
+		findings = append(findings, "holder did is empty")
 	}
 
-	documentNumber := ""
-	if processData.DocumentNumber != nil {
-		documentNumber = *processData.DocumentNumber
-		if documentNumber == "" {
-			findings = append(findings, "documentNumber is empty")
-		}
+	if processData.DocumentNumber != nil && *processData.DocumentNumber == "" {
+		findings = append(findings, "documentNumber is empty")
 	}
 
-	name := ""
-	description := ""
-	if fullTemplate.Name != nil {
-		name = *fullTemplate.Name
-		if name == "" {
-			findings = append(findings, "name is empty")
-		}
+	if fullTemplate.Name != nil && *fullTemplate.Name == "" {
+		findings = append(findings, "name is empty")
 	}
-	if fullTemplate.Description != nil {
-		description = *fullTemplate.Description
-		if description == "" {
-			findings = append(findings, "description is empty")
-		}
+	if fullTemplate.Description != nil && *fullTemplate.Description == "" {
+		findings = append(findings, "description is empty")
 	}
 
-	templateJSONLD, err := semanticmapper.BuildTemplateJSONLD(*fullTemplate, semanticmapper.DefaultProfile())
+	payload, err := buildCatalogueVerificationPayload(cmd.DID, cmd.HolderDID, processData, fullTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("build template json-ld failed: %w", err)
-	}
-
-	payload, err := fcasset.BuildPayload(fcasset.BuildInput{
-		TemplateDID:  cmd.DID,
-		Issuer:       cmd.ParticipantID,
-		ValidFrom:    fullTemplate.UpdatedAt,
-		TemplateData: templateJSONLD,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("build template asset payload failed: %w", err)
+		return nil, err
 	}
 
 	body, err := json.Marshal(payload)
@@ -189,13 +171,39 @@ func (h *Verifier) verifyTemplateResourceSelfDescription(ctx context.Context, cm
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		if message := h.FCClient.ExtractErrorMessage(resp.Body); message != "" {
-			msg := fmt.Errorf("verify template resource self-description failed: %s", message)
-			findings = append(findings, msg.Error())
+			findings = append(findings, fmt.Sprintf("verify template resource self-description failed: %s", message))
 		} else {
-			msg := fmt.Errorf("verify template resource self-description failed with status %d", resp.StatusCode)
-			findings = append(findings, msg.Error())
+			findings = append(findings, fmt.Sprintf("verify template resource self-description failed with status %d", resp.StatusCode))
 		}
 	}
 
 	return findings, nil
+}
+
+func buildCatalogueVerificationPayload(
+	did string,
+	issuer string,
+	processData *db.ContractTemplateProcessData,
+	fullTemplate *db.ContractTemplate,
+) (map[string]any, error) {
+	name := ""
+	description := ""
+	if fullTemplate.Name != nil {
+		name = *fullTemplate.Name
+	}
+	if fullTemplate.Description != nil {
+		description = *fullTemplate.Description
+	}
+
+	return fcasset.BuildPayload(fcasset.BuildInput{
+		Issuer:    issuer,
+		ValidFrom: fullTemplate.UpdatedAt,
+		Subject: fcasset.CatalogueSubjectFromRepository(
+			did,
+			processData.Version,
+			processData.State,
+			name,
+			description,
+		),
+	})
 }

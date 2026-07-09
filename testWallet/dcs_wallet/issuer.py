@@ -46,6 +46,9 @@ def sign_credential_sd_jwt(
     selective_claims: dict[str, Any],
     issuer_private: dict[str, Any],
 ) -> str:
+    ADD_HEADER_KID = True
+    ADD_HEADER_JWK = True
+
     disclosures: list[str] = []
     sd_digests: list[str] = []
     for claim_name, claim_value in selective_claims.items():
@@ -54,15 +57,22 @@ def sign_credential_sd_jwt(
         sd_digests.append(digest)
 
     payload = {**visible_claims, "_sd": sd_digests, "_sd_alg": DEFAULT_SD_ALG}
+
+    issuer_public = public_key_material(issuer_private)
+    headers: dict[str, Any] = {
+        "typ": CREDENTIAL_JWT_TYP,
+        "alg": "ES256",
+    }
+    if ADD_HEADER_JWK:
+        headers["jwk"] = issuer_public
+    if ADD_HEADER_KID:
+        headers["kid"] = did_jwk_from_public_jwk(issuer_public)
+
     issuer_jwt = jwt.encode(
         payload,
         _jwt_private_key(issuer_private),
         algorithm="ES256",
-        headers={
-            "typ": CREDENTIAL_JWT_TYP,
-            "alg": "ES256",
-            "jwk": public_key_material(issuer_private),
-        },
+        headers=headers,
     )
     return join_sd_jwt(issuer_jwt, disclosures)
 
@@ -128,7 +138,8 @@ def issue_stored_credential(
 ) -> str:
     """Issuer-signed SD-JWT for wallet storage (no KB-JWT; aud/nonce belong to presentation)."""
     holder_public = public_jwk(wallet_private)
-    holder_did = did_jwk_from_public_jwk(holder_public)
+    holder_did_value = did_jwk_from_public_jwk(holder_public)
+    holder_jwk = cnf_jwk(holder_public)
     status_base = (
         statuslist_service_base.strip()
         if statuslist_service_base and statuslist_service_base.strip()
@@ -141,14 +152,14 @@ def issue_stored_credential(
     )
     visible_claims = {
         "iss": issuer_did,
-        "sub": holder_did,
+        "sub": holder_did_value,
         "vct": POA_VCT,
         "iat": CREDENTIAL_IAT,
         "exp": CREDENTIAL_EXP,
-        "cnf": {"jwk": cnf_jwk(holder_public)},
+        "cnf": {"jwk": holder_jwk},
         "credentialStatus": credential_status
         or build_credential_status(
-            sub=holder_did,
+            sub=holder_did_value,
             organization=organization,
             roles=roles,
             service_base=status_base,

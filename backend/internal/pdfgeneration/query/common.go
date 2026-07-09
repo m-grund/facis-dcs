@@ -22,6 +22,7 @@ type PDFStateData struct {
 	IPFSCID         string
 	RendererVersion string
 	C2PAState       string
+	PayloadHash     string
 }
 
 type pdfStateUpdater func(ctx context.Context, tx *sqlx.Tx, did string, state PDFStateData) error
@@ -78,6 +79,7 @@ func appendAndCache(
 		IPFSCID:         pdfCID,
 		RendererVersion: rendererVersion,
 		C2PAState:       c2paState,
+		PayloadHash:     payloadHash(jsonldBytes),
 	}); err != nil {
 		return nil, fmt.Errorf("persist PDF state for %s: %w", did, err)
 	}
@@ -89,7 +91,10 @@ func appendAndCache(
 func runVerify(ctx context.Context, pdfBytes []byte, pdfCore *pdfcore.Client, lifecycleStatus string) (*pdfgen.PDFVerifyResult, error) {
 	result, verifyErr := pdfCore.Verify(ctx, pdfBytes)
 	match := verifyErr == nil
-	c2paManifestFound := verifyErr == nil || (verifyErr != nil && strings.Contains(verifyErr.Error(), "status 409"))
+	c2paManifestFound := verifyErr == nil
+	if verifyErr != nil {
+		c2paManifestFound = strings.Contains(verifyErr.Error(), "status 409")
+	}
 	c2paSignatureValid := verifyErr == nil
 
 	statusListURI := ""
@@ -146,4 +151,9 @@ func ptrToString(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func payloadHash(jsonld []byte) string {
+	h := sha256.Sum256(jsonld)
+	return hex.EncodeToString(h[:])
 }

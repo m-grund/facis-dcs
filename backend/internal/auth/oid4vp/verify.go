@@ -24,9 +24,16 @@ type VerifiedLoginClaims struct {
 	RawClaims      json.RawMessage
 }
 
+// VerifiedPIDClaims holds subject data extracted from a verified PID presentation.
+type VerifiedPIDClaims struct {
+	SubjectDID string
+	RawClaims  json.RawMessage
+}
+
 // Verifier validates a wallet presentation and returns login claims.
 type Verifier interface {
 	Verify(vpToken string, ctx PresentationContext) (*VerifiedLoginClaims, error)
+	VerifyPID(vpToken string, ctx PresentationContext) (*VerifiedPIDClaims, error)
 }
 
 // NewVerifier returns a VP verifier backed by the given issuer trust configuration.
@@ -44,6 +51,10 @@ type verifier struct {
 type unconfiguredVerifier struct{}
 
 func (unconfiguredVerifier) Verify(_ string, _ PresentationContext) (*VerifiedLoginClaims, error) {
+	return nil, fmt.Errorf("oid4vp trust config is not loaded (set OID4VP_TRUST_DATA_PATH)")
+}
+
+func (unconfiguredVerifier) VerifyPID(_ string, _ PresentationContext) (*VerifiedPIDClaims, error) {
 	return nil, fmt.Errorf("oid4vp trust config is not loaded (set OID4VP_TRUST_DATA_PATH)")
 }
 
@@ -69,6 +80,67 @@ func (v verifier) Verify(vpToken string, ctx PresentationContext) (*VerifiedLogi
 	verified.GrantedRoles = granted
 
 	return verified, nil
+}
+
+func (v verifier) VerifyPID(vpToken string, ctx PresentationContext) (*VerifiedPIDClaims, error) {
+	verified, err := verifyTrustAndWalletForPID(vpToken, ctx, v.trust)
+	if err != nil {
+		return nil, err
+	}
+
+	err = checkStatusList(verified.RawClaims)
+	if err != nil {
+		return nil, err
+	}
+
+	return verified, nil
+}
+
+func verifyTrustAndWalletForPID(vpToken string, ctx PresentationContext, trust *TrustConfig) (*VerifiedPIDClaims, error) {
+	if trust == nil {
+		return nil, fmt.Errorf("trust config is not configured")
+	}
+
+	presentation, err := sdjwt.ParsePresentation(vpToken)
+	if err != nil {
+		return nil, err
+	}
+
+	issuerClaims, err := sdjwt.VerifyCredentialForPID(presentation.IssuerJWT, presentation.Disclosures, trust)
+	if err != nil {
+		return nil, err
+	}
+
+	cnfJWK, err := sdjwt.CNFJWKFromClaims(issuerClaims)
+	if err != nil {
+		return nil, fmt.Errorf("credential cnf.jwk: %w", err)
+	}
+
+	sub, _ := issuerClaims["sub"].(string)
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		return nil, fmt.Errorf("credential missing sub")
+	}
+
+	err = sdjwt.HolderSubjectMatches(sub, cnfJWK)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sdjwt.VerifyKB(presentation.KBJWT, presentation.SDHash, cnfJWK, sub, ctx.Nonce, ctx.ClientID)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := json.Marshal(issuerClaims)
+	if err != nil {
+		return nil, err
+	}
+
+	return &VerifiedPIDClaims{
+		SubjectDID: sub,
+		RawClaims:  raw,
+	}, nil
 }
 
 func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustConfig) (*VerifiedLoginClaims, error) {
@@ -101,13 +173,9 @@ func verifyTrustAndWallet(vpToken string, ctx PresentationContext, trust *TrustC
 		return nil, fmt.Errorf("credential missing sub")
 	}
 
-	expectedSub, err := sdjwt.DIDJWKFromPublicJWK(cnfJWK)
+	err = sdjwt.HolderSubjectMatches(sub, cnfJWK)
 	if err != nil {
-		return nil, fmt.Errorf("credential cnf.jwk: %w", err)
-	}
-
-	if sub != expectedSub {
-		return nil, fmt.Errorf("credential sub does not match cnf.jwk holder binding")
+		return nil, err
 	}
 
 	// KB-JWT: signature via cnf.jwk; payload aud, nonce, sd_hash.
