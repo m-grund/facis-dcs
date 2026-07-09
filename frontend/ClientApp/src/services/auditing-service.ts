@@ -1,8 +1,8 @@
 import http from '@/api/http'
+import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 import type { AuditReportRequest, AuditRequest, AuditScope } from '@/models/requests/auditing-request'
 import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/responses/auditing-response'
 import type { AuditingService } from '@/models/services/auditing-service'
-import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 
 interface RawAuditTrailEntry {
   id?: number | string

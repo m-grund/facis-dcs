@@ -1,12 +1,12 @@
 <script setup lang="ts">
+import { computed, normalizeClass, useAttrs, useTemplateRef } from 'vue'
+import { useRouter } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import type { Contract } from '@/models/contract/contract'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { ContractState } from '@/types/contract-state'
-import { computed, normalizeClass, useAttrs, useTemplateRef } from 'vue'
-import { useRouter } from 'vue-router'
+import type { Contract } from '@/models/contract/contract'
 
 defineOptions({
   inheritAttrs: false,

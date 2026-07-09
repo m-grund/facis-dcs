@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { storeToRefs } from 'pinia'
 
 const { customMetaData } = storeToRefs(useTemplateDraftStore())
 </script>

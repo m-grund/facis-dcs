@@ -1,4 +1,4 @@
-import { computed, unref, type MaybeRef } from 'vue'
+import { computed, type MaybeRef, unref } from 'vue'
 import type { DcsLayoutNode } from '@/models/dcs-jsonld'
 
 export interface FlattenedOutlineItem {

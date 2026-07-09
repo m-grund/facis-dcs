@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { TextDiffSegmentType } from '@/modules/contract-workflow-engine/composables/useContractBlockDiff'
 import type { TextDiffSegment } from '@/modules/contract-workflow-engine/composables/useContractBlockDiff'
 import type { ContractPlainTextLine } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
-import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{

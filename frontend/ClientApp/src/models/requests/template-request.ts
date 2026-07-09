@@ -1,7 +1,7 @@
-import type { ContractTemplateState } from '@/types/contract-template-state'
-import type { TemplateType } from '@/types/template-type'
 import type { ContractTemplateActionFlag } from '../../types/contract-template-action-flag'
 import type { DcsTemplateData } from '../dcs-jsonld'
+import type { ContractTemplateState } from '@/types/contract-template-state'
+import type { TemplateType } from '@/types/template-type'
 
 export interface ContractTemplateCreateRequest {
   template_type: TemplateType

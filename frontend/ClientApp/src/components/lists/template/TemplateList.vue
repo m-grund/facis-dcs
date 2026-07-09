@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
 import Pagination from '@/components/Pagination.vue'
-import type { PartialContractTemplate } from '@/models/contract-template'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store.ts'
 import { useTemplateStateFilterStore } from '@/stores/state-filter-store'
 import { contractTemplateStates } from '@/types/contract-template-state'
 import { compareValues } from '@/utils/comparison'
-import { storeToRefs } from 'pinia'
-import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
-import ListSort from '../ListSort.vue'
-import ListStateFilter from '../ListStateFilter.vue'
 import TemplateListItem from './TemplateListItem.vue'
 import TemplateListSearch from './TemplateListSearch.vue'
+import ListSort from '../ListSort.vue'
+import ListStateFilter from '../ListStateFilter.vue'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 const templatesStore = useContractTemplatesStore()
 const { loading, error } = storeToRefs(templatesStore)

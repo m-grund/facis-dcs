@@ -12,8 +12,8 @@ import type {
   ContractTemplateRetrieveRequest,
   ContractTemplateSearchRequest,
   ContractTemplateSubmitRequest,
-  ContractTemplateUpdateRequest,
   ContractTemplateUpdateManageRequest,
+  ContractTemplateUpdateRequest,
   ContractTemplateVerifyRequest,
 } from '../requests/template-request'
 import type {
@@ -28,8 +28,8 @@ import type {
   ContractTemplateRetrieveResponse,
   ContractTemplateSearchResponse,
   ContractTemplateSubmitResponse,
-  ContractTemplateUpdateResponse,
   ContractTemplateUpdateManageResponse,
+  ContractTemplateUpdateResponse,
   ContractTemplateVerifyResponse,
 } from '../responses/template-response'
 

@@ -1,9 +1,9 @@
-import type { PartialContractTemplate } from '@/models/contract-template'
+import { storeToRefs } from 'pinia'
+import { onMounted, type Ref, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
+import type { PartialContractTemplate } from '@/models/contract-template'
 import type { UserRole } from '@/types/user-role'
-import { storeToRefs } from 'pinia'
-import { onMounted, ref, type Ref } from 'vue'
 
 export function useTemplateList() {
   const templatesStore = useContractTemplatesStore()

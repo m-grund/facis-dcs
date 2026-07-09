@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useConfirmDialog } from '@vueuse/core'
-import { computed, ref, useTemplateRef, watch, type Ref } from 'vue'
+import { computed, type Ref, ref, useTemplateRef, watch } from 'vue'
 
 interface Editor {
   requiredText: boolean

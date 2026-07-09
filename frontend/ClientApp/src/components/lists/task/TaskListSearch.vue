@@ -1,10 +1,10 @@
 <script setup lang="ts" generic="T extends { did: string; type: 'template' | 'contract' }">
-import type { PartialContractTemplate } from '@/models/contract-template'
-import type { Contract } from '@/models/contract/contract'
+import { computed } from 'vue'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { useContractsStore } from '@/stores/contracts-store'
-import { computed } from 'vue'
 import ListSearch from '../ListSearch.vue'
+import type { Contract } from '@/models/contract/contract'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 type Searchable = PartialContractTemplate | Contract
 

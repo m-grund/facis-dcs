@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import AuthButton from '@/components/AuthButton.vue'
-import PermissionList from '@/components/PermissionList.vue'
 import { usePageStore } from '@core/store/page'
 import { storeToRefs } from 'pinia'
+import AuthButton from '@/components/AuthButton.vue'
+import PermissionList from '@/components/PermissionList.vue'
 
 const pageStore = usePageStore()
 const { isSidebarCollapsed, pageSidebarId } = storeToRefs(pageStore)

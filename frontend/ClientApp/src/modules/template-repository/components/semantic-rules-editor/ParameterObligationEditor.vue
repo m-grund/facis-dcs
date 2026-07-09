@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
+import {
+  formatValueOption,
+  isTokenValueConstraint,
+  resolveValueOptions,
+} from '@template-repository/utils/value-option-catalog'
 import { computed, nextTick, ref, watch } from 'vue'
 import type {
   SemanticConditionParameter,
   SemanticOperateType,
   SemanticParameterOperator,
 } from '@/modules/template-repository/models/contract-template'
-import {
-  formatValueOption,
-  isTokenValueConstraint,
-  resolveValueOptions,
-} from '@template-repository/utils/value-option-catalog'
-import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
 
 const props = defineProps<{
   parameter: SemanticConditionParameter

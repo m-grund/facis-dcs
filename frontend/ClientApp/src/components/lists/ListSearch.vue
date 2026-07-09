@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends { did: string }">
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/vue'
-import { computed, ref, shallowRef, useTemplateRef, type Ref, type ShallowRef } from 'vue'
+import { computed, type Ref, ref, type ShallowRef, shallowRef, useTemplateRef } from 'vue'
 
 type FilterLabelConfig<T> = Partial<Record<keyof T, string>>
 type SearchFunction<T> = (request: Record<string, unknown>) => Promise<T[]>

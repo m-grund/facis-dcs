@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
-import type { PartialContractTemplate } from '@/models/contract-template'
-import { contractTemplateService } from '@/services/contract-template-service'
-import { useNavStore } from '@/stores/nav-store'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
-import { computed, ref, useTemplateRef, watch, type Ref } from 'vue'
+import { computed, type Ref, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ConfirmationModal from '@/components/ConfirmationModal.vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
+import { contractTemplateService } from '@/services/contract-template-service'
+import { useNavStore } from '@/stores/nav-store'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 const router = useRouter()
 const route = useRoute()

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { DcsContentSegment } from '@/models/dcs-jsonld'
 import SemanticRuleList from '@template-repository/components/clauses-editor/SemanticRuleList.vue'
 import {
   conditionIdsInContent,
@@ -11,16 +10,17 @@ import {
   usedPlaceholderKeysInContent,
 } from '@template-repository/composables/useClauseTextChips'
 import {
-  usePlaceholderDropdownPosition,
   type PlaceholderDropdownMode,
+  usePlaceholderDropdownPosition,
 } from '@template-repository/composables/usePlaceholderDropdownPosition'
-import type { SemanticCondition } from '@template-repository/models/contract-template'
 import { getBlocksFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 
 const PLACEHOLDER_DROPDOWN_MODE: PlaceholderDropdownMode = 'caret'
 

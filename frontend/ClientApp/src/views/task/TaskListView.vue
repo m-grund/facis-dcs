@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import ApprovalTaskList from '@/components/lists/task/ApprovalTaskList.vue'
 import NegotiationTaskList from '@/components/lists/task/NegotiationTaskList.vue'
 import ReviewTaskList from '@/components/lists/task/ReviewTaskList.vue'
@@ -7,8 +9,6 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import type { UserRole } from '@/types/user-role'
-import { computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
 
 const route = useRoute()
 

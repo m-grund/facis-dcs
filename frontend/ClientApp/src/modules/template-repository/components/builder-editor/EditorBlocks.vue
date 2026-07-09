@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
-import { useFlattenedOutline, type FlattenedOutlineItem } from '@template-repository/composables/useFlattenedOutline'
-import type { DcsBlock, DcsLayoutNode } from '@/models/dcs-jsonld'
-import { isDcsSection, isDcsApprovedTemplate } from '@/models/dcs-jsonld'
-import { isDcsMergedApprovedTemplate, type MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 import EditorBlock from '@template-repository/components/builder-editor/document-block/EditorBlock.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
+import { type FlattenedOutlineItem, useFlattenedOutline } from '@template-repository/composables/useFlattenedOutline'
+import { isDcsMergedApprovedTemplate, type MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId } from '@template-repository/utils/template-data-ref'
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
+import { isDcsApprovedTemplate, isDcsSection } from '@/models/dcs-jsonld'
+import type { DcsBlock, DcsLayoutNode } from '@/models/dcs-jsonld'
+import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const draftStore = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()

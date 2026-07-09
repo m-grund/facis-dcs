@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
-import type { PartialContractTemplate } from '@/models/contract-template'
-import { contractTemplateService } from '@/services/contract-template-service'
-import { useNavStore } from '@/stores/nav-store'
-import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
-import { ref, watch, type Ref } from 'vue'
+import { type Ref, ref, watch } from 'vue'
+import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
+import { contractTemplateService } from '@/services/contract-template-service'
+import { useNavStore } from '@/stores/nav-store'
+import { TemplateState } from '@/types/contract-template-state'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 const props = defineProps<{
   did: string

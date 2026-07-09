@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { ROUTES } from '@/router/router'
-import { contractTemplateService } from '@/services/contract-template-service'
-import { TemplateState } from '@/types/contract-template-state'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import TemplateTypeSelect from '@template-repository/components/TemplateTypeSelect.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
@@ -10,6 +7,9 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ROUTES } from '@/router/router'
+import { contractTemplateService } from '@/services/contract-template-service'
+import { TemplateState } from '@/types/contract-template-state'
 
 const router = useRouter()
 const route = useRoute()

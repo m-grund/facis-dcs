@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { storeToRefs } from 'pinia'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed, ref } from 'vue'
 import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { TemplateState } from '@/types/contract-template-state'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
 interface ComponentTemplateKey {

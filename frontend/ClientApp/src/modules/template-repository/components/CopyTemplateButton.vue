@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useRouter } from 'vue-router'
-import { useTemplateDraftStore } from '../store/templateDraftStore'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
+import { useTemplateDraftStore } from '../store/templateDraftStore'
 
 const router = useRouter()
 const draftStore = useTemplateDraftStore()

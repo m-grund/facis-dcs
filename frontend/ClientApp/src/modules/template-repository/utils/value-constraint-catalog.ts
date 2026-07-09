@@ -1,5 +1,5 @@
-import type { SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@/modules/template-repository/utils/ontology-domain-fields'
+import type { SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
 
 export function resolveAllowedValues(constraint?: SemanticValueConstraint): readonly string[] {
   if (!constraint) return []

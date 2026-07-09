@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import MetaDataRow from '@template-repository/components/meta-data/MetaDataRow.vue'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed, reactive, ref } from 'vue'
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()

@@ -1,3 +1,4 @@
+import axios from 'axios'
 import authHttp from '@/api/auth-http'
 import {
   PID_POLL_ERROR,
@@ -5,7 +6,6 @@ import {
   type PidPresentationResponse,
   type PidPresentationStatusResponse,
 } from '@/models/responses/pid-presentation-response'
-import axios from 'axios'
 
 export const pidPresentationService = {
   async start() {

@@ -1,24 +1,24 @@
 <script setup lang="ts">
+import {
+  isNewline,
+  isPlaceholder,
+  isText,
+  parseSegmentsFromContent,
+} from '@template-repository/composables/useClauseTextChips'
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import { computed } from 'vue'
+import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
+import PreviewParamInput from './PreviewParamInput.vue'
+import PreviewTextBlock from './PreviewTextBlock.vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
+import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
+import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type {
   SemanticCondition,
   SemanticParameterType,
   SemanticValueConstraint,
 } from '@template-repository/models/contract-template'
-import {
-  parseSegmentsFromContent,
-  isText,
-  isPlaceholder,
-  isNewline,
-} from '@template-repository/composables/useClauseTextChips'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
-import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import PreviewParamInput from './PreviewParamInput.vue'
-import PreviewTextBlock from './PreviewTextBlock.vue'
-import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
-import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import type { DcsContentSegment } from '@/models/dcs-jsonld'
 
 const props = defineProps<{
   blockId: string

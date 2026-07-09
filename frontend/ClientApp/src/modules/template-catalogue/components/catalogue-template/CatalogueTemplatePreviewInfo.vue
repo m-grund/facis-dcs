@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { storeToRefs } from 'pinia'
 
 const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(useTemplateDraftStore())
 </script>

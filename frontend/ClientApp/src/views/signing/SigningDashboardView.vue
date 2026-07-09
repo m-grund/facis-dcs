@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
+import { contractWorkflowService } from '@/services/contract-workflow-service'
 import {
-  signatureManagementService,
   type SignatureComplianceResult,
   type SignatureContract,
   type SignatureEnvelope,
+  signatureManagementService,
   type SignatureValidateResult,
   type SignatureVerifyResult,
 } from '@/services/signature-management-service'
-import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
-import { onMounted, ref } from 'vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 
 const authStore = useAuthStore()
 

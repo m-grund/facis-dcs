@@ -1,8 +1,8 @@
+import type { ContractChangeRequest, ExpirationPolicy } from '../contract/contract'
+import type { ContractData } from '../contract-data'
 import type { ContractActionFlag } from '@/types/contract-action-flag'
 import type { ContractState } from '@/types/contract-state'
 import type { NegotiationActionFlag } from '@/types/negotiation-action-flag'
-import type { ContractData } from '../contract-data'
-import type { ContractChangeRequest, ExpirationPolicy } from '../contract/contract'
 
 export interface ContractCreateRequest {
   template_did: string

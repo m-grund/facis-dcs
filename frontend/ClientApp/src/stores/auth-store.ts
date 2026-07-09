@@ -1,7 +1,7 @@
-import { mapRoleLabelsToUserRoles, rolesFromJwtPayload, type UserRole } from '@/types/user-role'
 import { useJwt } from '@vueuse/integrations/useJwt'
 import { defineStore } from 'pinia'
-import { computed, ref, type Ref } from 'vue'
+import { computed, type Ref, ref } from 'vue'
+import { mapRoleLabelsToUserRoles, rolesFromJwtPayload, type UserRole } from '@/types/user-role'
 import { useAuthTokenStore } from './auth-token-store'
 
 interface User {

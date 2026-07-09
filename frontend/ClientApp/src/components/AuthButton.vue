@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { authenticationService } from '@/services/authentication-service'
-import { useAuthStore } from '@/stores/auth-store'
 import { ArrowLeftStartOnRectangleIcon } from '@heroicons/vue/24/outline'
 import { storeToRefs } from 'pinia'
+import { authenticationService } from '@/services/authentication-service'
+import { useAuthStore } from '@/stores/auth-store'
 
 const authStore = useAuthStore()
 const { isAuthenticated } = storeToRefs(authStore)

@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
-import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
+import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import {
-  parseSegmentsFromContent,
   getPlaceholderLabelFromConditions,
+  parseSegmentsFromContent,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
-import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
-import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed, ref, watch } from 'vue'
+import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { TemplateType } from '../../models/contract-template.ts'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsClause } from '@/models/dcs-jsonld'
 import type { NewBlockType } from '@template-repository/models/template-draft-store'
 

@@ -1,9 +1,9 @@
-import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { DcsBlock, DcsLayoutNode, DcsContractData } from '@/models/dcs-jsonld'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
-import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { getBlocksFromTemplateData, getLayoutFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { DcsBlock, DcsContractData, DcsLayoutNode } from '@/models/dcs-jsonld'
+import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export interface PreprocessedContractData {
   blocks: (DcsBlock | MergedApprovedTemplateBlock)[]

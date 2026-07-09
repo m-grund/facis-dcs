@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   type ContractDiffRow,
   type DiffType,
   type TextDiffSegment,
 } from '@/modules/contract-workflow-engine/composables/useContractBlockDiff'
 import {
-  isSectionPlainTextBlock,
   type ContractPlainTextBlock,
+  isSectionPlainTextBlock,
 } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
-import { computed } from 'vue'
 import DiffSectionBlock from './DiffSectionBlock.vue'
 import DiffTextBlock from './DiffTextBlock.vue'
 

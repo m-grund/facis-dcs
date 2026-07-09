@@ -1,57 +1,57 @@
-import { defineStore } from 'pinia'
-import type {
-  TemplateDraftState,
-  AddBlockPayload,
-  AddBlockOptions,
-  SubTemplateReference,
-} from '@template-repository/models/template-draft-store'
-import type {
-  TemplateTypeValue,
-  SemanticCondition,
-  SemanticConditionParameter,
-  SemanticParameterOperator,
-  MetaData,
-} from '@template-repository/models/contract-template'
 import {
-  TemplateType,
   FACIS_SCHEMA_REFS,
   FACIS_TEMPLATE_POLICY_REFS,
   FACIS_TEMPLATE_VALIDATION_PROFILE,
+  TemplateType,
 } from '@template-repository/models/contract-template'
-import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
+import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
+import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
+import { defineStore } from 'pinia'
+import {
+  DCS_JSONLD_CONTEXT,
+  type DcsApprovedTemplate,
+  type DcsBlock,
+  type DcsClause,
+  type DcsContentSegment,
+  type DcsContractData,
+  type DcsDataRequirement,
+  type DcsDocumentData,
+  type DcsDocumentStructure,
+  type DcsLayoutNode,
+  type DcsRequirementField,
+  type DcsSection,
+  type DcsSubTemplateSnapshot,
+  type DcsTemplateData,
+  type DcsTextBlock,
+  isDcsClause,
+  isDcsDocumentData,
+  isDcsTemplateData,
+  type JsonLdTypedValue,
+  type OdrlRule,
+} from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
+import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
+import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import type {
   ContractTemplateCreateRequest,
   ContractTemplateUpdateManageRequest,
   ContractTemplateUpdateRequest,
 } from '@/models/requests/template-request'
 import type { DcsOperator } from '@/models/semantic/facis-dcs-semantic'
-import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
-import {
-  isDcsDocumentData,
-  isDcsTemplateData,
-  isDcsClause,
-  DCS_JSONLD_CONTEXT,
-  type DcsContractData,
-  type DcsDocumentData,
-  type DcsTemplateData,
-  type DcsBlock,
-  type DcsApprovedTemplate,
-  type DcsDocumentStructure,
-  type DcsClause,
-  type DcsSection,
-  type DcsTextBlock,
-  type DcsLayoutNode,
-  type DcsContentSegment,
-  type DcsDataRequirement,
-  type DcsRequirementField,
-  type DcsSubTemplateSnapshot,
-  type JsonLdTypedValue,
-  type OdrlRule,
-} from '@/models/dcs-jsonld'
 import type { ContractTemplateState } from '@/types/contract-template-state'
-import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
-import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
+import type {
+  MetaData,
+  SemanticCondition,
+  SemanticConditionParameter,
+  SemanticParameterOperator,
+  TemplateTypeValue,
+} from '@template-repository/models/contract-template'
+import type {
+  AddBlockOptions,
+  AddBlockPayload,
+  SubTemplateReference,
+  TemplateDraftState,
+} from '@template-repository/models/template-draft-store'
 
 // ---- MergedApprovedTemplateBlock (UI-only virtual block for composed contract templates) ----
 

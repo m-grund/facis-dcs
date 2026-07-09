@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import facisLogo from '@/assets/FACIS_color.svg'
-import { ROUTES } from '@/router/router'
-import { useAuthStore } from '@/stores/auth-store'
 import { usePageStore } from '@core/store/page'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import facisLogo from '@/assets/FACIS_color.svg'
+import { ROUTES } from '@/router/router'
+import { useAuthStore } from '@/stores/auth-store'
 
 const router = useRouter()
 

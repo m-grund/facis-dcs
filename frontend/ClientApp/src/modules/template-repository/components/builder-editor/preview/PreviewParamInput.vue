@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
+import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
 import { computed, ref, watch } from 'vue'
 import type {
   SemanticParameterType,
   SemanticValueConstraint,
 } from '@/modules/template-repository/models/contract-template'
-import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
-import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
 
 const props = defineProps<{
   type: SemanticParameterType

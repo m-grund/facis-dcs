@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
 
 const uiStore = useTemplateEditorUiStore()
 const draftStore = useTemplateDraftStore()

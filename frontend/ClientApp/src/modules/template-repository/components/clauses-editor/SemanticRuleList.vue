@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import { computed } from 'vue'
 import RuleParamRow from './RuleParamRow.vue'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 
 const props = withDefaults(
   defineProps<{
