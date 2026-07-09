@@ -194,6 +194,7 @@ log "✅ Placeholders replaced in $TMP_VALUES"
 # Helm dependency build & install
 log "ℹ️ Adding required Helm repos"
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+helm repo add traefik https://traefik.github.io/charts --force-update
 helm repo update
 
 log "ℹ️ Running: helm dependency build"
