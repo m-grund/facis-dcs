@@ -237,6 +237,50 @@ func decodeContentsHex(t *testing.T, h []byte) []byte {
 	return out
 }
 
+// TestPAdESSignedPDFRecompilesAsPrefix asserts the invariant the /verify plain
+// path relies on: a deterministic recompilation of the embedded payload
+// reproduces the leading bytes of a PAdES-signed PDF (the base), with the
+// signature and evidence appended after it as an append-only revision.
+func TestPAdESSignedPDFRecompilesAsPrefix(t *testing.T) {
+	ensurePAdESTestServer(t)
+	ctx := context.Background()
+	compiledAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	base, err := CompilePDF(ctx, []byte(padesTestPayload), compiledAt)
+	if err != nil {
+		t.Fatalf("CompilePDF: %v", err)
+	}
+	evidence := []byte(`{"type":["VerifiableCredential","ContractSigningSummaryCredential"],"pid":"eyJ.aaa~bbb~ccc"}`)
+	embedded, err := EmbedSigningEvidence(base, evidence)
+	if err != nil {
+		t.Fatalf("EmbedSigningEvidence: %v", err)
+	}
+	signed, err := SignPAdES(ctx, embedded, "SignerOne", "SignerOne")
+	if err != nil {
+		t.Fatalf("SignPAdES: %v", err)
+	}
+
+	effectiveAt, err := ExtractLifecycleEffectiveAt(signed)
+	if err != nil {
+		t.Fatalf("ExtractLifecycleEffectiveAt: %v", err)
+	}
+	payload, err := ExtractEmbeddedJSONLD(signed)
+	if err != nil {
+		t.Fatalf("ExtractEmbeddedJSONLD: %v", err)
+	}
+	recompiled, err := CompilePDF(ctx, payload, effectiveAt)
+	if err != nil {
+		t.Fatalf("recompile: %v", err)
+	}
+
+	if bytes.Equal(ZeroCOSESignatures(signed), ZeroCOSESignatures(recompiled)) {
+		t.Fatal("a signed PDF must not be byte-equal to its bare recompilation (it carries appended evidence + signature)")
+	}
+	if !bytes.HasPrefix(ZeroCOSESignatures(signed), ZeroCOSESignatures(recompiled)) {
+		t.Fatal("the recompiled base must be a byte-prefix of the signed PDF; /verify would otherwise report a false content mismatch")
+	}
+}
+
 func TestPreviousStartXrefToleratesBlankLine(t *testing.T) {
 	pdf := []byte("%PDF-1.7\n... xref ...\ntrailer\n<< /Size 40 >>\nstartxref\n\n423908\n%%EOF\n")
 	got, err := previousStartXref(pdf)

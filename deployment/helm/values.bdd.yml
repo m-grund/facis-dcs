@@ -43,8 +43,6 @@ extraEnv:
   # created from backend/certs/dev/ by the kind_deploy make target.
   - name: DCS_DID
     value: /app/identity/did.json
-  - name: DCS_PRIVATE_KEY
-    value: /app/identity/key.pem
 
 volumeMounts:
   - name: identity

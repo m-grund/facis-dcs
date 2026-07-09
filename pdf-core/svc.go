@@ -223,7 +223,13 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 			writeError(w, errUnprocessableEntity(err))
 			return
 		}
-		if !bytes.Equal(compiler.ZeroCOSESignatures(raw), compiler.ZeroCOSESignatures(recompiled)) {
+		// The compiled base must reproduce the leading bytes of the submitted
+		// PDF. A PAdES signature (and the signing evidence embedded before it)
+		// is an append-only incremental update written after the base's %%EOF —
+		// it leaves the base bytes untouched and is itself covered by its own
+		// /ByteRange — so the base is a byte-prefix of a signed PDF rather than
+		// byte-equal to it (DCS-OR-C2PA-010).
+		if !bytes.HasPrefix(compiler.ZeroCOSESignatures(raw), compiler.ZeroCOSESignatures(recompiled)) {
 			writeError(w, errConflict(errors.New("embedded payload does not reproduce the submitted PDF")))
 			return
 		}
