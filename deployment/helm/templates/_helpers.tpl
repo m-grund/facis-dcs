@@ -401,28 +401,6 @@ Name of the Secret that holds the pdf-core C2PA signing material.
 {{- end }}
 
 {{/*
-DCS_PDF_CORE_CRYPTO_PROVIDER_URL
-*/}}
-{{- define "digital-contracting-service.pdfCoreCryptoProviderURL" -}}
-{{- if .Values.pdfCore.signing.cryptoProviderURL -}}
-{{- .Values.pdfCore.signing.cryptoProviderURL -}}
-{{- else -}}
-{{- include "digital-contracting-service.cryptoProviderURL" . -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-DCS_PDF_CORE_CRYPTO_PROVIDER_KEY
-*/}}
-{{- define "digital-contracting-service.pdfCoreCryptoProviderKey" -}}
-{{- if .Values.pdfCore.signing.cryptoProviderKey -}}
-{{- .Values.pdfCore.signing.cryptoProviderKey -}}
-{{- else if .Values.cryptoProvider.enabled -}}
-{{- .Values.cryptoProvider.transit.c2paKey -}}
-{{- end -}}
-{{- end }}
-
-{{/*
 Name of the Secret that holds the x5chain PEM for pdf-core C2PA signing.
 Falls back to the devCertChain secret when the crypto provider is co-deployed.
 */}}

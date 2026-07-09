@@ -51,6 +51,34 @@ make -C testWallet ensure-statuslist
 cp backend/.env.dev1 backend/.env
 echo "✓ .env updated from .env.dev"
 
+# Provision the SoftHSM2 token holding this instance's private keys and
+# regenerate its DID document with the ECDSA P-256 token key (Workstream A).
+HSM_TOKEN_DIR="$HOME/.dcs/softhsm-8991"
+bash scripts/hsm-provision.sh "$HSM_TOKEN_DIR" dcs 1234 12345678
+echo "SOFTHSM2_CONF=$HSM_TOKEN_DIR/softhsm2.conf" >> backend/.env
+(
+  cd backend
+  SOFTHSM2_CONF="$HSM_TOKEN_DIR/softhsm2.conf" \
+  PKCS11_MODULE_PATH=/usr/lib/softhsm/libsofthsm2.so \
+  PKCS11_TOKEN_LABEL=dcs PKCS11_PIN=1234 \
+  go run ./cmd/gendid -out certs/dev/did-8991.json \
+    -did "did:web:localhost%3A8991" -endpoint "http://localhost:8991/api"
+)
+echo "✓ HSM token provisioned and did-8991.json regenerated"
+
+# Issue the C2PA x5chain binding the dcs-c2pa token key so pdf-core can embed it
+# in the COSE_Sign1 protected header (the signing itself runs in the backend).
+bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
+  "$PDF_CORE_DIR/certs/dev/c2pa-x5chain-8991.pem"
+echo "✓ C2PA x5chain provisioned for pdf-core"
+
+# Publish an initial (empty) CRL for the dev signing CA so the leaf's
+# crlDistributionPoints resolves to a fresh, valid list. crlcheck (ops) or the
+# AC11 test path can later revoke the signing cert against this CA.
+bash scripts/crl-provision.sh "$PDF_CORE_DIR/certs/dev" \
+  "$PDF_CORE_DIR/certs/dev/dcs-c2pa.crl"
+echo "✓ Dev CRL published"
+
 # Fetch cert-chain from K8s secret
 mkdir -p "$(dirname "$CERT_FILE")"
 echo "Fetching cert-chain from K8s secret..."

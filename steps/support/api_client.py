@@ -81,6 +81,26 @@ def signature_revoke_url(context) -> str:
     return f"{context.base_url}/signature/revoke"
 
 
+def signature_validate_url(context) -> str:
+    return f"{context.base_url}/signature/validate"
+
+
+def signature_retrieve_url(context, did: str) -> str:
+    return f"{context.base_url}/signature/retrieve/{did}"
+
+
+# ASSUMED endpoint contract for the PKI-consolidation refactor (Workstream A,
+# docs/anforderung.md AC6 / A2.3): a NEW, authenticated, non-public backend
+# endpoint that signs a COSE Sig_structure via hsm.Signer("dcs-c2pa") for
+# pdf-core. Does not exist in backend/design/*.go yet - see
+# features/21_pki_consolidation_pkcs11/pki_consolidation_pkcs11.feature's
+# header comment (binding decision 1) for the exact assumed payload shape and
+# why the path/shape may need to be adjusted once the architect confirms it.
+
+def c2pa_internal_sign_url(context) -> str:
+    return f"{context.base_url}/internal/c2pa/sign"
+
+
 def template_create_url(context) -> str:
     return f"{context.base_url}/template/create"
 

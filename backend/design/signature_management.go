@@ -94,6 +94,7 @@ var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {
 var SMContractRetrieveByIDResponse = Type("SMContractRetrieveByIDResponse", func() {
 	Attribute("contract", SMContractItem, "The contract")
 	Attribute("signature_envelope", SMContractSignatureEnvelope, "The signature_envelope of the contract")
+	Attribute("key_version", Int, "HSM key version that produced the latest signature (DCS-OR-C2PA-007)")
 
 	Required("contract", "signature_envelope")
 })
@@ -268,6 +269,7 @@ var _ = Service("SignatureManagement", func() {
 			Scope("Contract Signer")
 			Scope("Sys. Contract Signer")
 			Scope("Contract Observer")
+			Scope("Contract Manager")
 		})
 
 		Payload(SMContractRetrieveByIDRequest)

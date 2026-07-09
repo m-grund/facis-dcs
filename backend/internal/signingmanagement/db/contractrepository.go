@@ -100,8 +100,10 @@ type ContractSignature struct {
 	Status         string     `db:"status"`
 	SignedAt       *time.Time `db:"signed_at"`
 	RevokedAt      *time.Time `db:"revoked_at"`
+	CertRevokedAt  *time.Time `db:"cert_revoked_at"`
 	IpfsCID        *string    `db:"ipfs_cid"`
 	SignatureBytes []byte     `db:"signature_bytes"`
+	KeyVersion     int        `db:"key_version"`
 }
 
 type ContractSignatureEnvelope struct {
@@ -112,6 +114,7 @@ type ContractSignatureEnvelope struct {
 	SignedAt       *string `db:"signed_at"`
 	RevokedAt      *string `db:"revoked_at"`
 	IpfsCID        *string `db:"ipfs_cid"`
+	KeyVersion     int     `db:"key_version"`
 }
 
 type ContractSigningTask struct {
@@ -128,6 +131,7 @@ type SignatureRecord struct {
 	Status         string     `db:"status"`
 	SignedAt       *time.Time `db:"signed_at"`
 	RevokedAt      *time.Time `db:"revoked_at"`
+	CertRevokedAt  *time.Time `db:"cert_revoked_at"`
 }
 
 type ContractRepo interface {
@@ -138,6 +142,7 @@ type ContractRepo interface {
 
 	CreateSignature(ctx context.Context, tx *sqlx.Tx, signature ContractSignature) error
 	RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error
+	ActiveKeyVersion(ctx context.Context, tx *sqlx.Tx, label string) (int, error)
 	ReadLatestEnvelopeByContractDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractSignatureEnvelope, error)
 	ReadAllSigningTasks(ctx context.Context, tx *sqlx.Tx) ([]ContractSigningTask, error)
 	CountSignatureForContractDID(ctx context.Context, tx *sqlx.Tx, did string) (int, error)

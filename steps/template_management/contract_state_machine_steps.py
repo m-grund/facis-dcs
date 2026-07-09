@@ -23,8 +23,6 @@ from urllib.parse import unquote
 
 import requests as _requests
 from behave import given, then, when
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
 
 from steps.support.api_client import (
     contract_approve_url,
@@ -76,49 +74,65 @@ def _did_web_to_hostname(did: str) -> str:
     return unquote(host_encoded)
 
 
-def _dev_signing_key_path(hostname: str) -> Path:
+def _dev_signing_token_dir(hostname: str) -> Path:
     """Map a did:web hostname (e.g. 'localhost:8991') to the matching
-    checked-in dev private key (backend/certs/dev/signing-<port>.key) — the
-    same DID/key pairing backend/.env.dev1 (port 8991) and backend/.env.dev2
-    (port 8992) use for the local dev-stack.sh instances. Only these two
-    known dev ports are supported: this is a self-peer simulation, not a
-    generic did:web resolver, and only works because we control the matching
-    private key for the instance under test.
+    per-instance SoftHSM2 token dir (~/.dcs/softhsm-<port>/), the same
+    convention dev-stack.sh (8991) and dev-stack2.sh (8992) provision
+    (Workstream A: PKCS#11-only key custody, no more checked-in PEM keys).
+    Only these two known dev ports are supported: this is a self-peer
+    simulation, not a generic did:web resolver, and only works because we
+    control the matching HSM token for the instance under test.
     """
     match = re.search(r":(\d+)$", hostname)
     assert match, (
-        f"cannot derive a dev signing key for did:web hostname '{hostname}' "
+        f"cannot derive a dev signing token for did:web hostname '{hostname}' "
         "(expected '<host>:<port>', e.g. 'localhost:8991')"
     )
     port = match.group(1)
-    key_path = _repo_root() / "backend" / "certs" / "dev" / f"signing-{port}.key"
-    assert key_path.is_file(), (
-        f"no checked-in dev signing key at '{key_path}' for did:web port {port} — "
+    token_dir = Path.home() / ".dcs" / f"softhsm-{port}"
+    conf_path = token_dir / "softhsm2.conf"
+    assert conf_path.is_file(), (
+        f"no SoftHSM2 token dir at '{token_dir}' for did:web port {port} — "
         "the peer-path self-simulation in this scenario only supports the "
         "checked-in backend/.env.dev1 (8991) / backend/.env.dev2 (8992) dev "
-        "identities (backend/certs/dev/did-8991.json, did-8992.json). If this "
-        "DCS instance runs under a different DCS_DID (e.g. the Helm/kind BDD "
-        "harness, which currently sets no DCS_DID/DCS_PRIVATE_KEY at all — see "
-        "docs/anforderung.md), the peer-path part of AC4 cannot be proven this "
-        "way and needs re-scoping with the analyst (e.g. grep-gate/manual-drill "
-        "for that entry path, or a real two-instance runner)."
+        "identities, provisioned via scripts/hsm-provision.sh under "
+        "dev-stack.sh/dev-stack2.sh. If this DCS instance runs under a "
+        "different PKCS11 token layout (e.g. the Helm/kind BDD harness), the "
+        "peer-path part of AC4 cannot be proven this way and needs re-scoping "
+        "with the analyst (e.g. grep-gate/manual-drill for that entry path, "
+        "or a real two-instance runner)."
     )
-    return key_path
+    return token_dir
 
 
-def _sign_secret_value_with_dev_key(key_path: Path, secret_value: str) -> bytes:
-    """RSA-PSS(SHA-256) signature matching DIDDocument.Sign (backend/internal/
-    base/identity/did.go): Go's rsa.SignPSS is called with nil *PSSOptions,
-    which defaults the salt length to "auto" (the maximum possible length for
-    signing) — i.e. padding.PSS.MAX_LENGTH here. Go's verify side auto-detects
-    the salt length regardless, so this is compatible either way.
+def _sign_secret_value_with_dev_key(token_dir: Path, secret_value: str) -> bytes:
+    """ECDSA P-256 (SHA-256, ASN.1 DER) signature matching DIDDocument.Sign
+    (backend/internal/base/identity/did.go): the DID private key lives only
+    inside the SoftHSM2 token (Workstream A — no extractable PEM key exists
+    anymore), so this shells out to backend/cmd/hsmsign, which opens the same
+    token via crypto11 and signs through the HSM.
     """
-    private_key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
-    return private_key.sign(
-        secret_value.encode(),
-        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-        hashes.SHA256(),
+    import os
+    import subprocess
+
+    env = dict(os.environ)
+    env["SOFTHSM2_CONF"] = str(token_dir / "softhsm2.conf")
+    env.setdefault("PKCS11_MODULE_PATH", "/usr/lib/softhsm/libsofthsm2.so")
+    env.setdefault("PKCS11_TOKEN_LABEL", "dcs")
+    env.setdefault("PKCS11_PIN", "1234")
+    backend_dir = _repo_root() / "backend"
+    result = subprocess.run(
+        ["go", "run", "./cmd/hsmsign", "-label", "dcs-did", "-message", secret_value],
+        cwd=str(backend_dir),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
+    assert result.returncode == 0, (
+        f"hsmsign failed (token dir '{token_dir}'): {result.stderr.strip()}"
+    )
+    return base64.b64decode(result.stdout.strip())
 
 
 def _self_peer_action_credentials(context):
@@ -151,10 +165,10 @@ def _self_peer_action_credentials(context):
     assert from_peer_did, f"own did.json response has no 'id' field: {did_resp.text}"
 
     hostname = _did_web_to_hostname(from_peer_did)
-    key_path = _dev_signing_key_path(hostname)
+    token_dir = _dev_signing_token_dir(hostname)
 
     secret_value = str(uuid.uuid4())
-    signature = _sign_secret_value_with_dev_key(key_path, secret_value)
+    signature = _sign_secret_value_with_dev_key(token_dir, secret_value)
     secret_hash = base64.b64encode(signature).decode()
 
     return from_peer_did, secret_value, secret_hash

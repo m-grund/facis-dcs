@@ -14,6 +14,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/hsm"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
@@ -108,12 +109,22 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		status = "PENDING"
 	}
 
+	// The PAdES contract-signing key is the rotation-versioned key; the
+	// signature records the version active at signing time so a later rotation
+	// leaves this record attributable to the key that actually produced it
+	// (DCS-OR-C2PA-007).
+	keyVersion, err := h.CRepo.ActiveKeyVersion(ctx, tx, hsm.KeyLabelPADES())
+	if err != nil {
+		return fmt.Errorf("could not resolve active key version: %w", err)
+	}
+
 	signature := db.ContractSignature{
 		ContractDID:    cmd.DID,
 		Status:         status,
 		SignatureBytes: sigBytes,
 		SignerDID:      cmd.AppliedBy,
 		CredentialType: cmd.CredentialType,
+		KeyVersion:     keyVersion,
 	}
 	err = h.CRepo.CreateSignature(ctx, tx, signature)
 	if err != nil {

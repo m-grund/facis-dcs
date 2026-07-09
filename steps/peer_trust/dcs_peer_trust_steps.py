@@ -61,7 +61,7 @@ from steps.support.api_client import (
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
 from steps.template_management.contract_state_machine_steps import (
-    _dev_signing_key_path,
+    _dev_signing_token_dir,
     _did_web_to_hostname,
     _sign_secret_value_with_dev_key,
 )
@@ -88,8 +88,8 @@ def _own_identity(context):
     real_did = resp.json().get("id")
     assert real_did, f"own did.json response has no 'id' field: {resp.text}"
     hostname = _did_web_to_hostname(real_did)
-    key_path = _dev_signing_key_path(hostname)
-    return real_did, key_path
+    token_dir = _dev_signing_token_dir(hostname)
+    return real_did, token_dir
 
 
 def _synthetic_peer_credentials(context, marker: str):
@@ -97,10 +97,10 @@ def _synthetic_peer_credentials(context, marker: str):
     identity that is NOT this instance's own DID string (see module
     docstring) and a matching challenge-response signature over a fresh
     secret_value."""
-    real_did, key_path = _own_identity(context)
+    real_did, token_dir = _own_identity(context)
     synthetic_did = f"{real_did}:{marker}-{uuid.uuid4()}"
     secret_value = str(uuid.uuid4())
-    signature = _sign_secret_value_with_dev_key(key_path, secret_value)
+    signature = _sign_secret_value_with_dev_key(token_dir, secret_value)
     secret_hash = base64.b64encode(signature).decode()
     return synthetic_did, secret_value, secret_hash
 

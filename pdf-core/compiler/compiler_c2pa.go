@@ -3,9 +3,7 @@ package compiler
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
@@ -256,7 +254,7 @@ func renderC2PAManifestStore(ctx context.Context, contractID string, payloadHash
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	// Tag(18) COSE_Sign1 with protected headers containing:
-	//   1 -> -8   (alg=EdDSA)
+	//   1 -> -7   (alg=ES256)
 	//   33 -> [certDer]  (x5chain per RFC 9360)
 	// plus empty unprotected map, detached payload and a real signature over claim bytes.
 	protected := buildCoseProtectedHeadersWithX5Chain()
@@ -621,10 +619,49 @@ func buildCoseProtectedHeadersWithX5Chain() []byte {
 	}
 
 	headers := cborMap(
-		cborUint(1), cborNegInt(-8),
+		cborUint(1), cborNegInt(-7),
 		cborUint(33), cborArray(chainItems...),
 	)
 	return headers
+}
+
+// coseDetachedSig64Marker is the CBOR framing that immediately precedes the
+// 64-byte ES256 signature inside every COSE_Sign1 the compiler emits:
+//
+//	0xA0  empty map  (unprotected headers)
+//	0xF6  null       (detached payload)
+//	0x58 0x40  byte string of length 64  (the signature)
+//
+// The signature bytes themselves are the only non-deterministic part of a
+// compiled PDF: ES256 over the HSM key is randomized, so two signings of the
+// same claim differ. The determinism guarantee pdf-core relies on covers the
+// human-readable content (fully determined by the JSON-LD), not the signature,
+// which is verified separately against its x5chain. ZeroCOSESignatures masks
+// those 64-byte runs so the deterministic re-render comparison ignores them.
+var coseDetachedSig64Marker = []byte{0xA0, 0xF6, 0x58, 0x40}
+
+// ZeroCOSESignatures returns a copy of pdf with every COSE_Sign1 ES256 signature
+// (the 64 bytes following coseDetachedSig64Marker) zeroed, so byte comparisons
+// of deterministically re-rendered PDFs are stable across randomized signings.
+func ZeroCOSESignatures(pdf []byte) []byte {
+	out := append([]byte(nil), pdf...)
+	from := 0
+	for {
+		idx := bytes.Index(out[from:], coseDetachedSig64Marker)
+		if idx < 0 {
+			break
+		}
+		sigStart := from + idx + len(coseDetachedSig64Marker)
+		sigEnd := sigStart + 64
+		if sigEnd > len(out) {
+			break
+		}
+		for i := sigStart; i < sigEnd; i++ {
+			out[i] = 0
+		}
+		from = sigEnd
+	}
+	return out
 }
 
 func signClaimSigStructure(ctx context.Context, protected []byte, claimPayload []byte) ([]byte, error) {
@@ -649,77 +686,25 @@ func mustSigningMaterial() signingMaterial {
 }
 
 func loadSigningMaterialFromEnv(getenv func(string) string, readFile func(string) ([]byte, error)) (signingMaterial, error) {
-	cryptoURL := strings.TrimSpace(getenv(envCryptoProviderURL))
-	if cryptoURL != "" {
-		ns := strings.TrimSpace(getenv(envCryptoProviderNamespace))
-		key := strings.TrimSpace(getenv(envCryptoProviderKey))
-		if ns == "" {
-			return signingMaterial{}, fmt.Errorf("%s is required when %s is set", envCryptoProviderNamespace, envCryptoProviderURL)
-		}
-		if key == "" {
-			return signingMaterial{}, fmt.Errorf("%s is required when %s is set", envCryptoProviderKey, envCryptoProviderURL)
-		}
-		chainInline := strings.TrimSpace(getenv(envX5ChainPEM))
-		chainFile := strings.TrimSpace(getenv(envX5ChainPEMFile))
-		chainPEM, chainProvided, err := resolveSigningConfigValue(readFile, chainInline, chainFile, envX5ChainPEM, envX5ChainPEMFile)
-		if err != nil {
-			return signingMaterial{}, err
-		}
-		if !chainProvided {
-			return signingMaterial{}, fmt.Errorf("x5chain must be provided when using transit signer; set %s or %s", envX5ChainPEM, envX5ChainPEMFile)
-		}
-		certs, err := parseCertificateChainPEM([]byte(chainPEM))
-		if err != nil {
-			return signingMaterial{}, err
-		}
-		return signingMaterial{signer: newTransitSigner(cryptoURL, ns, key), certChainDER: certs}, nil
+	endpoint := strings.TrimSpace(getenv(envSigningEndpoint))
+	if endpoint == "" {
+		return signingMaterial{}, fmt.Errorf("%s is required: pdf-core signs C2PA manifests via the backend's internal signing endpoint", envSigningEndpoint)
 	}
 
-	keyInline := strings.TrimSpace(getenv(envSignerKeyPEM))
-	keyFile := strings.TrimSpace(getenv(envSignerKeyPEMFile))
-	keyPEM, keyProvided, err := resolveSigningConfigValue(
-		readFile,
-		keyInline,
-		keyFile,
-		envSignerKeyPEM,
-		envSignerKeyPEMFile,
-	)
-	if err != nil {
-		return signingMaterial{}, err
-	}
 	chainInline := strings.TrimSpace(getenv(envX5ChainPEM))
 	chainFile := strings.TrimSpace(getenv(envX5ChainPEMFile))
-	chainPEM, chainProvided, err := resolveSigningConfigValue(
-		readFile,
-		chainInline,
-		chainFile,
-		envX5ChainPEM,
-		envX5ChainPEMFile,
-	)
+	chainPEM, chainProvided, err := resolveSigningConfigValue(readFile, chainInline, chainFile, envX5ChainPEM, envX5ChainPEMFile)
 	if err != nil {
 		return signingMaterial{}, err
 	}
-
-	requireExternal := strings.EqualFold(strings.TrimSpace(getenv(envRequireExternalSigningMaterial)), "true")
-	if !keyProvided && !chainProvided {
-		if requireExternal {
-			return signingMaterial{}, fmt.Errorf("external signing material required but not provided")
-		}
-		return signingMaterial{}, fmt.Errorf("signing material not configured; set %s or %s and %s or %s", envSignerKeyPEM, envSignerKeyPEMFile, envX5ChainPEM, envX5ChainPEMFile)
-	}
-	if !keyProvided || !chainProvided {
-		return signingMaterial{}, fmt.Errorf("both signing key and x5chain must be provided together")
-	}
-
-	priv, err := parsePKCS8Ed25519PrivateKeyPEM([]byte(keyPEM))
-	if err != nil {
-		return signingMaterial{}, err
+	if !chainProvided {
+		return signingMaterial{}, fmt.Errorf("x5chain must be provided; set %s or %s", envX5ChainPEM, envX5ChainPEMFile)
 	}
 	certs, err := parseCertificateChainPEM([]byte(chainPEM))
 	if err != nil {
 		return signingMaterial{}, err
 	}
-	return signingMaterial{signer: localSigner{priv: priv}, certChainDER: certs}, nil
+	return signingMaterial{signer: newHTTPCallbackSigner(endpoint), certChainDER: certs}, nil
 }
 
 func resolveSigningConfigValue(readFile func(string) ([]byte, error), inlineValue string, filePath string, inlineName string, fileName string) (string, bool, error) {
@@ -737,22 +722,6 @@ func resolveSigningConfigValue(readFile func(string) ([]byte, error), inlineValu
 		return "", false, fmt.Errorf("read %s: %w", filePath, err)
 	}
 	return string(content), true, nil
-}
-
-func parsePKCS8Ed25519PrivateKeyPEM(pemBytes []byte) (ed25519.PrivateKey, error) {
-	block, _ := pem.Decode(pemBytes)
-	if block == nil {
-		return nil, fmt.Errorf("signer key PEM block not found")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse signer PKCS8 key: %w", err)
-	}
-	priv, ok := parsed.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("signer key is not Ed25519")
-	}
-	return priv, nil
 }
 
 func parseCertificateChainPEM(pemBytes []byte) ([][]byte, error) {

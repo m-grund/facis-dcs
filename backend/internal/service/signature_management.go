@@ -186,9 +186,12 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		Status:         result.SignatureEnvelope.Status.String(),
 	}
 
+	keyVersion := result.SignatureEnvelope.KeyVersion
+
 	return &signaturemanagement.SMContractRetrieveByIDResponse{
 		Contract:          &contract,
 		SignatureEnvelope: signatureEnvelop,
+		KeyVersion:        &keyVersion,
 	}, nil
 }
 

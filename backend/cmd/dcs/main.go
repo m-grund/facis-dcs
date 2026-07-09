@@ -27,6 +27,7 @@ import (
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
+	internalsigning "digital-contracting-service/gen/internal_signing"
 	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
@@ -39,14 +40,13 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/db/pq"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/hsm"
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
-	"digital-contracting-service/internal/base/kv"
 	"digital-contracting-service/internal/base/tsa"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
-	"digital-contracting-service/internal/cryptoprovider"
 	"digital-contracting-service/internal/middleware"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
@@ -138,18 +138,30 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Open the PKCS#11 token that holds every private key (DCS-IR-HI-01). A
+	// wrong module path/token/PIN is fatal: there is no software fallback.
+	hsmClient, err := hsm.Open(hsm.ConfigFromEnv())
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not open PKCS#11 token")
+	}
+	defer func() {
+		if err := hsmClient.Close(); err != nil {
+			log.Errorf(ctx, err, "Could not close PKCS#11 token")
+		}
+	}()
+
 	didFilePath := os.Getenv("DCS_DID")
 	if didFilePath == "" || !fileExists(didFilePath) {
 		log.Printf(ctx, "DCS_DID configuration or file is missing")
 	}
 
-	privateKeyPath := os.Getenv("DCS_PRIVATE_KEY")
-	if privateKeyPath == "" || !fileExists(privateKeyPath) {
-		log.Printf(ctx, "DCS_PRIVATE_KEY configuration or file is missing")
+	didSigner, err := hsmClient.Signer(hsm.KeyLabelDID())
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load HSM DID signing key")
 	}
 
 	log.Printf(ctx, "Reading did.json")
-	didDocument, err := identity.NewDIDDocument(didFilePath, privateKeyPath)
+	didDocument, err := identity.NewDIDDocument(didFilePath, didSigner)
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not read did document")
 	}
@@ -180,6 +192,23 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not load auth config")
 	}
+
+	// Sign OpenID4VP authorization request objects (JAR) with the HSM key; the
+	// public JWK is embedded in the JWT header and the key label is its kid.
+	jarLabel := hsm.KeyLabelJAR()
+	jarSigner, err := hsmClient.Signer(jarLabel)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load HSM JAR signing key")
+	}
+	jarJWK, err := hsmClient.PublicJWK(jarLabel)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not read HSM JAR public key")
+	}
+	requestSigner, err := oid4vprequest.NewHSMSigner(jarLabel, jarSigner, jarJWK, hsm.SignES256)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not build OID4VP request signer")
+	}
+	authCfg.RequestSigner = requestSigner
 	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
 		PublicIssuerURL:   authCfg.Hydra.PublicIssuerURL(),
 		InternalIssuerURL: authCfg.Hydra.InternalIssuerURL(),
@@ -358,27 +387,21 @@ func main() {
 		}
 	}()
 
-	// Initialize Crypto Provider Service client for C2PA signing.
-	cryptoProviderURL := os.Getenv("CRYPTO_PROVIDER_URL")
-	cryptoProviderNamespace := os.Getenv("CRYPTO_PROVIDER_NAMESPACE")
-	cryptoProviderKey := os.Getenv("CRYPTO_PROVIDER_KEY")
-	cryptoProviderCertChainFile := strings.TrimSpace(os.Getenv("CRYPTO_PROVIDER_CERT_CHAIN_FILE"))
+	// Sign contract-lifecycle VCs (DCS-OR-C2PA-004) with the HSM VC key,
+	// producing an ecdsa-rdfc-2019 Data Integrity proof.
 	issuerDID := os.Getenv("ISSUER_DID")
-	cryptoClient := cryptoprovider.NewClient(cryptoProviderURL, cryptoProviderNamespace, cryptoProviderKey)
+	vcKeyLabel := hsm.KeyLabelVC()
+	vcHSMSigner, err := hsmClient.Signer(vcKeyLabel)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load HSM VC signing key")
+	}
+	vcSigner := provenance.NewHSMVCSigner(vcHSMSigner, vcKeyLabel)
 
-	if cryptoProviderCertChainFile == "" {
-		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_CERT_CHAIN_FILE is required")
-	}
-	if err := cryptoClient.SetCertificateChainFromPEMFile(cryptoProviderCertChainFile); err != nil {
-		log.Fatalf(ctx, err, "load crypto provider certificate chain from file")
-	}
-
-	// Probe crypto provider liveness before accepting traffic.
-	if cryptoProviderURL == "" {
-		log.Fatalf(ctx, nil, "CRYPTO_PROVIDER_URL is required")
-	}
-	if err := probeHTTP(cryptoProviderURL + "/readiness"); err != nil {
-		log.Fatalf(ctx, err, "crypto provider not reachable at %s", cryptoProviderURL)
+	// Sign COSE Sig_structure bytes for pdf-core's C2PA manifests with the HSM
+	// C2PA key, exposed via the authenticated InternalSigning endpoint.
+	c2paSigner, err := hsmClient.Signer(hsm.KeyLabelC2PA())
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load HSM C2PA signing key")
 	}
 
 	// Initialize OCM-W Status List Service client (DCS-OR-C2PA-005).
@@ -425,6 +448,7 @@ func main() {
 		templateRepositorySvc           templaterepository.Service
 		didSrv                          didservice.Service
 		c2paSvc                         c2paservice.Service
+		internalSigningSvc              internalsigning.Service
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
@@ -433,26 +457,17 @@ func main() {
 			log.Fatalf(ctx, err, "auth service init failed")
 		}
 
-		// The JAR signing public key cache is a required dependency of the signer:
-		// no cache, no app.
-		if authCfg.RequestSigner != nil {
-			vaultSigner, ok := authCfg.RequestSigner.(*oid4vprequest.VaultTransitSigner)
-			if !ok {
-				log.Fatalf(ctx, fmt.Errorf("oid4vp request signer %T does not support the public key cache", authCfg.RequestSigner), "auth service init failed")
-			}
-			vaultSigner.SetPublicKeyCache(kv.NewStore(db), 0)
-		}
-
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo, *didDocument)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient)
 		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument, ipfsAPIClient)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
-		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher))
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
+		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, auditTrailReader, dss.StubClient{}, ipfsAPIClient, pdfCoreClient)
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 		didSrv = didService
+		internalSigningSvc = service.NewInternalSigning(jwtAuth, c2paSigner)
 	}
 
 	// Channel used by background workers and signal handler to notify main to exit.
@@ -478,7 +493,7 @@ func main() {
 		TRepo:      &ctRepo,
 		PDFCore:    pdfCoreClient,
 		IssuerDID:  issuerDID,
-		VCIssuer:   provenance.NewLocalVCIssuer(cryptoClient, issuerDID, statusListPublisher),
+		VCIssuer:   provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher),
 	}
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {
@@ -500,6 +515,7 @@ func main() {
 		templateRepositoryEndpoints           *templaterepository.Endpoints
 		didEntpoints                          *didservice.Endpoints
 		c2paEndpoints                         *c2paservice.Endpoints
+		internalSigningEndpoints              *internalsigning.Endpoints
 	)
 	{
 		authEndpoints = genauth.NewEndpoints(authSvc)
@@ -535,6 +551,9 @@ func main() {
 		c2paEndpoints = c2paservice.NewEndpoints(c2paSvc)
 		c2paEndpoints.Use(debug.LogPayloads())
 		c2paEndpoints.Use(log.Endpoint)
+		internalSigningEndpoints = internalsigning.NewEndpoints(internalSigningSvc)
+		internalSigningEndpoints.Use(debug.LogPayloads())
+		internalSigningEndpoints.Use(log.Endpoint)
 	}
 
 	// Setup interrupt handler. This optional step configures the process so
@@ -577,7 +596,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, internalSigningEndpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:

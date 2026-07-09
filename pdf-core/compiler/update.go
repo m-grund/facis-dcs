@@ -544,7 +544,7 @@ func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
 	// PAdES signature updates. PAdES appends bytes after %%EOF without altering
 	// the preceding bytes, so the compiled output must be a byte-for-byte prefix
 	// of whatever was submitted as the original.
-	if !bytes.HasPrefix(original, freshOriginal) {
+	if !bytes.HasPrefix(ZeroCOSESignatures(original), ZeroCOSESignatures(freshOriginal)) {
 		return fmt.Errorf("original PDF prefix does not match deterministic recompilation from its embedded payload")
 	}
 
@@ -578,7 +578,7 @@ func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
 	}
 	// Similarly the submitted pdf may have additional PAdES signatures appended
 	// after the dcs-pdf-core incremental update.
-	if !bytes.HasPrefix(pdf, freshUpdated) {
+	if !bytes.HasPrefix(ZeroCOSESignatures(pdf), ZeroCOSESignatures(freshUpdated)) {
 		return fmt.Errorf("amended PDF does not match deterministic re-application of the amendment")
 	}
 	return nil

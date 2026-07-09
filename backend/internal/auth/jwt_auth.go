@@ -72,6 +72,7 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 	a.clearLock(ctx, ip)
 
 	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.HolderDID, info.ParticipantDID)
+	ctx = middleware.InjectBearerToken(ctx, token)
 	return ctx, nil
 }
 

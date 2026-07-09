@@ -102,15 +102,31 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx, signature db.ContractSignature) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO contract_signatures
-			(contract_did, signer_did, credential_type, signature_bytes, status)
-		VALUES ($1, $2, $3, $4, $5)`,
-		signature.ContractDID, signature.SignerDID, signature.CredentialType, signature.SignatureBytes, signature.Status,
+			(contract_did, signer_did, credential_type, signature_bytes, status, key_version)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		signature.ContractDID, signature.SignerDID, signature.CredentialType, signature.SignatureBytes, signature.Status, signature.KeyVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("could not create contract signature: %w", err)
 	}
 
 	return nil
+}
+
+// ActiveKeyVersion returns the currently active HSM key version for a purpose
+// label. A label with no row yet is on its initial (un-rotated) version 1.
+func (r *PostgresContractRepo) ActiveKeyVersion(ctx context.Context, tx *sqlx.Tx, label string) (int, error) {
+	var version int
+	err := tx.QueryRowContext(ctx,
+		`SELECT active_version FROM pki_active_key_version WHERE label = $1`, label,
+	).Scan(&version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 1, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read active key version for %q: %w", label, err)
+	}
+	return version, nil
 }
 
 func (r *PostgresContractRepo) RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error {
@@ -131,7 +147,7 @@ func (r *PostgresContractRepo) RevokeSignature(ctx context.Context, tx *sqlx.Tx,
 func (r *PostgresContractRepo) ReadLatestEnvelopeByContractDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractSignatureEnvelope, error) {
 	var signature db.ContractSignature
 	err := tx.GetContext(ctx, &signature,
-		`SELECT contract_did, signer_did, credential_type, status, signed_at, revoked_at, ipfs_cid
+		`SELECT contract_did, signer_did, credential_type, status, signed_at, revoked_at, ipfs_cid, key_version
 		   FROM contract_signatures
 		  WHERE contract_did = $1
 		  ORDER BY created_at DESC
@@ -147,6 +163,7 @@ func (r *PostgresContractRepo) ReadLatestEnvelopeByContractDID(ctx context.Conte
 		CredentialType: signature.CredentialType,
 		Status:         signature.Status,
 		IpfsCID:        signature.IpfsCID,
+		KeyVersion:     signature.KeyVersion,
 	}
 	if signature.SignedAt != nil {
 		t := signature.SignedAt.Format(time.RFC3339)
@@ -226,6 +243,14 @@ func (r *PostgresContractRepo) CollectValidationFindings(ctx context.Context, tx
 		default:
 			findings = append(findings, fmt.Sprintf("Unknown signature status: %s", rec.Status))
 		}
+
+		// A signing certificate revoked in the CRL invalidates the signature
+		// regardless of its business-level status (DCS-OR-C2PA-007).
+		if rec.CertRevokedAt != nil {
+			findings = append(findings, fmt.Sprintf(
+				"Signing certificate revoked (CRL): signer %s certificate was revoked at %s",
+				rec.SignerDID, rec.CertRevokedAt.UTC().Format(time.RFC3339)))
+		}
 	}
 	if active == 0 {
 		findings = append(findings, "No active signatures available for validation")
@@ -256,7 +281,7 @@ func (r *PostgresContractRepo) CollectValidationFindings(ctx context.Context, tx
 func (r *PostgresContractRepo) LoadSignatures(ctx context.Context, tx *sqlx.Tx, did string) ([]db.SignatureRecord, error) {
 	var records []db.SignatureRecord
 	err := tx.SelectContext(ctx, &records,
-		`SELECT signer_did, credential_type, status, signed_at, revoked_at
+		`SELECT signer_did, credential_type, status, signed_at, revoked_at, cert_revoked_at
 		   FROM contract_signatures
 		  WHERE contract_did = $1
 		  ORDER BY created_at`, did,

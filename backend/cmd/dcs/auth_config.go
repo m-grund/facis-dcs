@@ -10,7 +10,6 @@ import (
 
 	"digital-contracting-service/internal/auth/hydra"
 	"digital-contracting-service/internal/auth/oid4vp"
-	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/pathutil"
 	"digital-contracting-service/internal/service"
 )
@@ -64,23 +63,6 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 		return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: %w", err)
 	}
 
-	var requestSigner oid4vprequest.Signer
-	vaultAddr := strings.TrimRight(strings.TrimSpace(os.Getenv("VAULT_ADDR")), "/")
-
-	if vaultAddr != "" {
-		signer, signerErr := oid4vprequest.NewVaultTransitSigner(
-			vaultAddr,
-			os.Getenv("VAULT_TOKEN"),
-			os.Getenv("OID4VP_VERIFIER_SIGNING_VAULT_MOUNT"),
-			os.Getenv("OID4VP_VERIFIER_SIGNING_VAULT_KEY"),
-		)
-		if signerErr != nil {
-			return service.AuthConfig{}, fmt.Errorf("oid4vp request signer configuration error: %w", signerErr)
-		} else {
-			requestSigner = signer
-		}
-	}
-
 	publicAPIBase := strings.TrimRight(strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")), "/")
 	if publicAPIBase == "" {
 		return service.AuthConfig{}, fmt.Errorf("dcs configuration missing: DCS_PUBLIC_BASE_URL must be set")
@@ -110,7 +92,6 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 		}),
 		Trust:             trustCfg,
 		DCQLQuery:         dcqlQuery,
-		RequestSigner:     requestSigner,
 		PublicAPIBase:     publicAPIBase,
 		LogoutRedirectURI: logoutRedirectURI,
 		UIPath:            uiPath,

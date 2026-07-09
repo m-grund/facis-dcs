@@ -95,6 +95,23 @@ cd ../..
 sleep 2
 
 echo ""
+echo "=== Provisioning instance B SoftHSM token and DID document ==="
+# Instance B keeps its own token dir (separate from instance A's -8991), so the
+# two instances' ECDSA DID keys differ — the genuine two-instance peer-trust
+# breaking-change setup (Workstream A2.4 / C).
+HSM_TOKEN_DIR_B="$HOME/.dcs/softhsm-8992"
+bash scripts/hsm-provision.sh "$HSM_TOKEN_DIR_B" dcs 1234 12345678
+export SOFTHSM2_CONF="$HSM_TOKEN_DIR_B/softhsm2.conf"
+(
+  cd backend
+  PKCS11_MODULE_PATH=/usr/lib/softhsm/libsofthsm2.so \
+  PKCS11_TOKEN_LABEL=dcs PKCS11_PIN=1234 \
+  go run ./cmd/gendid -out certs/dev/did-8992.json \
+    -did "did:web:localhost%3A8992" -endpoint "http://localhost:8992/api"
+)
+echo "✓ HSM token provisioned and did-8992.json regenerated"
+
+echo ""
 echo "=== Building and starting backend for instance B (:8992) ==="
 cd backend
 mkdir -p "$(dirname "$BACKEND_BUILD_OUTPUT")"

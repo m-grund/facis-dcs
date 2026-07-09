@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,26 @@ import (
 // response so clients can cache-bust when the renderer is upgraded.
 func setPDFCoreVersionHeader(w http.ResponseWriter) {
 	w.Header().Set("X-PDF-Core-Version", compiler.RendererVersion)
+}
+
+// signingContext returns the request context carrying the bearer token the DCS
+// backend forwarded. The compiler presents it when it calls back to the
+// backend's internal C2PA signing endpoint (DCS-IR-HI-01).
+func signingContext(r *http.Request) context.Context {
+	token, err := extractBearerToken(r.Header.Get("Authorization"))
+	if err != nil {
+		return r.Context()
+	}
+	return compiler.WithBearerToken(r.Context(), token)
+}
+
+// extractBearerToken parses "Bearer <token>" from an Authorization header value.
+func extractBearerToken(authHeader string) (string, error) {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return "", errors.New("no bearer token")
+	}
+	return strings.TrimPrefix(authHeader, prefix), nil
 }
 
 // service implements all HTTP handlers for the DCS-PDF-CORE API.
@@ -144,7 +165,7 @@ func (s *service) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	pdf, err := compiler.CompilePDF(r.Context(), canonical, time.Now())
+	pdf, err := compiler.CompilePDF(signingContext(r), canonical, time.Now())
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
@@ -177,7 +198,7 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 	var payload []byte
 
 	if _, ok := compiler.SplitAtIncrementalUpdate(raw); ok {
-		if err := compiler.VerifyIncrementalUpdate(r.Context(), raw); err != nil {
+		if err := compiler.VerifyIncrementalUpdate(signingContext(r), raw); err != nil {
 			writeError(w, errConflict(err))
 			return
 		}
@@ -197,12 +218,12 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 			writeError(w, errBadRequest(fmt.Errorf("extract lifecycle timestamp: %w", err)))
 			return
 		}
-		recompiled, err := compiler.CompilePDF(r.Context(), payload, compiledAt)
+		recompiled, err := compiler.CompilePDF(signingContext(r), payload, compiledAt)
 		if err != nil {
 			writeError(w, errUnprocessableEntity(err))
 			return
 		}
-		if !bytes.Equal(raw, recompiled) {
+		if !bytes.Equal(compiler.ZeroCOSESignatures(raw), compiler.ZeroCOSESignatures(recompiled)) {
 			writeError(w, errConflict(errors.New("embedded payload does not reproduce the submitted PDF")))
 			return
 		}
@@ -214,7 +235,7 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 	vcProofValid := vcFound && len(vcBytes) > 0 && isVCProofStructurallyValid(vcBytes)
 
 	// Append a verification witness and embed the resulting PDF as artifact.
-	witness, err := compiler.AppendVerificationWitness(r.Context(), raw, payload)
+	witness, err := compiler.AppendVerificationWitness(signingContext(r), raw, payload)
 	if err != nil {
 		writeError(w, errBadRequest(fmt.Errorf("append verification witness: %w", err)))
 		return
@@ -296,7 +317,7 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 	manifestURL := strings.TrimSpace(string(parts["manifest_url"]))
 
 	now := time.Now()
-	updated, err := compiler.UpdatePDFWithOptions(r.Context(), oldPDF, canonical, vcBytes, manifestURL, now)
+	updated, err := compiler.UpdatePDFWithOptions(signingContext(r), oldPDF, canonical, vcBytes, manifestURL, now)
 	if err != nil {
 		if errors.Is(err, compiler.ErrNoChanges) {
 			writeError(w, errConflict(err))
@@ -354,7 +375,7 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	canonicalPDF, err := compiler.CompilePDF(r.Context(), canonical, time.Now())
+	canonicalPDF, err := compiler.CompilePDF(signingContext(r), canonical, time.Now())
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
@@ -363,7 +384,7 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errConflict(err))
 		return
 	}
-	result, err := compiler.AppendVerificationWitness(r.Context(), canonicalPDF, canonical)
+	result, err := compiler.AppendVerificationWitness(signingContext(r), canonicalPDF, canonical)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
