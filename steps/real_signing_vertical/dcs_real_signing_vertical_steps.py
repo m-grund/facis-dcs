@@ -295,6 +295,7 @@ def _apply_signature(context, name, *, signer_did, credential_type="AES"):
 
 @given('contract "{name}" is APPROVED and has completed a signing ceremony for signatory "{signatory_name}"')
 def step_given_approved_with_completed_ceremony(context, name, signatory_name):
+    ContractService._create_contract_in_draft_with_signature_field(context, name, signatory_name)
     _advance_to_approved(context, name)
     _run_full_ceremony(context, name, signatory_name, signatory_name)
 
@@ -396,6 +397,25 @@ def step_when_start_ceremony_as_role(context, name, field_name, role):
         if not hasattr(context, "ceremony_ids"):
             context.ceremony_ids = {}
         context.ceremony_ids[name] = ceremony_id
+
+        # Build (but do not submit) the PID presentation the webhook steps
+        # need — scenarios that start a ceremony via this low-level step
+        # (AC12) complete it separately via the webhook steps, which expect
+        # context.pid_presentations[name] to already be populated (same
+        # contract as _run_full_ceremony, minus the webhook POST itself).
+        nonce = str(uuid.uuid4())
+        given_name, family_name = field_name, "BDD-Testperson"
+        presentation, _issuer_jwt, _disclosures, subject_did = _build_pid_presentation(
+            given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce
+        )
+        if not hasattr(context, "pid_presentations"):
+            context.pid_presentations = {}
+        context.pid_presentations[name] = {
+            "presentation": presentation,
+            "subject_did": subject_did,
+            "given_name": given_name,
+            "family_name": family_name,
+        }
 
 
 @when('I poll the signing ceremony status for contract "{name}"')
@@ -535,12 +555,24 @@ def step_then_x5chain_embedded(context, name):
     # certificates. A full parse is the pdf-core-level pyHanko conformance
     # test's job (docs/anforderung.md B1).
     pdf_bytes = _pdf_bytes_for(context, name)
-    contents_idx = pdf_bytes.find(b"/Contents")
-    assert contents_idx != -1, "No /Contents entry found in the signed PDF"
-    hex_start = pdf_bytes.find(b"<", contents_idx)
-    hex_end = pdf_bytes.find(b">", hex_start)
-    assert hex_start != -1 and hex_end != -1, "/Contents is not a well-formed PDF hex string"
-    hex_len = hex_end - hex_start - 1
+    # Scan every "/Contents" occurrence and take the one with the largest hex
+    # blob: page objects reference /Contents indirectly ("/Contents 19 0 R"),
+    # embedded-file/evidence dicts may have their own small /Contents-like
+    # entries, and only the /Sig dictionary's /Contents holds the multi-KB
+    # CMS SignedData hex string (chain + signature).
+    best_hex_len = -1
+    search_from = 0
+    while True:
+        contents_idx = pdf_bytes.find(b"/Contents", search_from)
+        if contents_idx == -1:
+            break
+        hex_start = pdf_bytes.find(b"<", contents_idx)
+        hex_end = pdf_bytes.find(b">", hex_start) if hex_start != -1 else -1
+        if hex_start != -1 and hex_end != -1:
+            best_hex_len = max(best_hex_len, hex_end - hex_start - 1)
+        search_from = contents_idx + 1
+    assert best_hex_len != -1, "No /Contents hex string found in the signed PDF"
+    hex_len = best_hex_len
     assert hex_len > 4000, (
         f"/Contents hex blob is only {hex_len} hex chars - too small to plausibly contain a full "
         "X.509 chain alongside the CMS signature (expected several KB for chain + signature); "

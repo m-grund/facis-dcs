@@ -164,6 +164,17 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("store signed PDF in IPFS: %w", err)
 	}
 	cid := ipfsRes.Identifier.Value
+
+	// Confirm the artefact resolves through the read path before persisting its
+	// CID. The tenant store is eventually consistent, so a CID CreateFile has
+	// just returned is not always immediately retrievable; persisting it early
+	// would let a later export/verify fetch the contract's PDF and fail
+	// (DCS-FR-SM-16). FetchFile retries the transient not-yet-resolvable window.
+	readback, err := h.IPFSClient.FetchFile(cid)
+	if err != nil || readback == nil || len(readback.Data) == 0 {
+		return fmt.Errorf("signed PDF CID %s not resolvable after store: %w", cid, err)
+	}
+
 	if err := h.CRepo.SetSignedPDF(ctx, tx, cmd.DID, cid, pdfcore.RendererVersion, "active"); err != nil {
 		return err
 	}

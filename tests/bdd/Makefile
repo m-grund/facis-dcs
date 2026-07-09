@@ -1,10 +1,17 @@
 SHELL := /bin/bash -eu -o pipefail
 
 PYTHON ?= python3
+# Unter WSL gegen /mnt/c liegt das Repo auf dem 9P-Dateisystem — ein venv dort
+# macht jeden Python-Import 5-20x langsamer. Default daher: venv im nativen
+# ext4-Home der Distro. Explizites VENV_PATH=... überschreibt weiterhin;
+# außerhalb von WSL (CI-Runner, macOS) bleibt der bisherige Default .venv.
+ifneq ($(wildcard /proc/sys/fs/binfmt_misc/WSLInterop),)
+VENV_PATH ?= $(HOME)/.dcs-bdd-venv
+endif
 VENV_PATH ?= .venv
 THIS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(THIS_DIR)../..)
-VENV_ABS := $(THIS_DIR)$(VENV_PATH)
+VENV_ABS := $(if $(filter /%,$(VENV_PATH)),$(VENV_PATH),$(THIS_DIR)$(VENV_PATH))
 REPORTS_ABS := $(THIS_DIR).reports
 BDD_EXECUTOR_REPO ?= https://github.com/eclipse-xfsc/bdd-executor.git
 BDD_EXECUTOR_PATH ?= ../../bdd-executor
@@ -52,11 +59,12 @@ HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
 CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
 
-.PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
+.PHONY: setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
-	@echo "make run_bdd_test		# Run all BDD scenarios"
+	@echo "make run_bdd_test		# Run all BDD scenarios (coverage + junit reports)"
+	@echo "make run_bdd_fast T=@tag	# Fast dev loop: tag-scoped, --stop, no coverage/junit"
 	@echo "make run_bdd_helm		# Run BDD via Traefik on http://localhost:18080"
 	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
 	@echo "make ensure_kind			# Validate kind is available in PATH"
@@ -85,13 +93,25 @@ setup_environment:
 	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary
 	"$(VENV_PATH)/bin/pip" install -q -r "$(PROJECT_ROOT)/testWallet/requirements.txt"
 
-run_bdd_test: setup_environment
-	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
-		(echo "ERROR: bdd-executor (eu.xfsc.bdd.core) not found in venv — run 'make setup_environment' first" && exit 1)
-	source "$(VENV_PATH)/bin/activate" && \
+# Bootstrappt das venv nur, wenn es fehlt/kaputt ist — der pip-Refresh bei
+# jedem Lauf kostete sonst 10-60s pro Testzyklus.
+ensure_venv:
+	@"$(VENV_ABS)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
+		$(MAKE) setup_environment
+
+run_bdd_test: ensure_venv
+	source "$(VENV_ABS)/bin/activate" && \
 	mkdir -p "$(REPORTS_ABS)/junit" && \
 	cd "$(PROJECT_ROOT)" && \
 	"$(VENV_ABS)/bin/coverage" run --append -m behave $(ARG_BDD_JUNIT) $(FEATURES_PATH) $(ARG_BDD)
+
+# Schneller Dev-Loop für die Implementierungs-Iteration: kein pip-Refresh,
+# kein coverage, kein junit; stoppt beim ersten Fehlschlag. Scope über
+# T=<tag-expression> (z. B. T=@REQ-mein-slug) und/oder F=<feature-pfad>.
+# Der vollständige, berichtende Lauf bleibt run_bdd_test.
+run_bdd_fast: ensure_venv
+	@cd "$(PROJECT_ROOT)" && \
+	"$(VENV_ABS)/bin/behave" --stop $(if $(T),--tags=$(T)) $(if $(F),$(F),$(FEATURES_PATH)) $(ARG_BDD)
 
 run_bdd_helm: setup_environment ensure_k8s_tools
 	@VENV_PATH="$(VENV_ABS)" \

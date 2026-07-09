@@ -60,6 +60,17 @@ class AuthService:
     CLIENT_ID = "dcs-client"
     DEFAULT_ORGANIZATION = "Acme Corp"
 
+    # Per-(api_base, roles, organization) access-token cache. Each token
+    # normally costs a full headless OID4VP round trip (login -> consent ->
+    # VP presentation -> callback -> refresh), which dominates BDD runtime
+    # when hundreds of scenarios each call get_headers_for_roles for the same
+    # role. Hydra access tokens are valid for a fixed lifespan (returned as
+    # expires_in by /auth/refresh) — safe to reuse across scenarios within
+    # that window. Never used for use_expired_jwt=True (those intentionally
+    # need a token that is NOT valid).
+    _token_cache: dict[tuple[str, tuple[str, ...], str], tuple[str, float]] = {}
+    _TOKEN_EXPIRY_MARGIN_SECONDS = 15
+
     # ------------------------------------------------------------------
     # Step 1 — resolve roles / organization
     # ------------------------------------------------------------------
@@ -152,7 +163,7 @@ class AuthService:
         from dcs_wallet.status_list import BDD_CREDENTIAL_TENANT
 
         issuer_did = os.getenv("BDD_ISSUER_DID", DEFAULT_ISSUER_DID)
-        statuslist_base = os.getenv("STATUSLIST_SERVICE_URL", "").strip()
+        statuslist_base = os.getenv("STATUSLIST_SERVICE_URL", "http://localhost:30821").strip()
         if not statuslist_base:
             raise RuntimeError(
                 "STATUSLIST_SERVICE_URL is required for BDD OID4VP credentials "
@@ -334,13 +345,20 @@ class AuthService:
     def submit_presentation(
         session: requests.Session,
         *,
+        api_base: str,
         response_uri: str,
         state: str,
         query_id: str,
         vp_token: str,
         timeout: float,
     ) -> str:
-        """direct_post vp_token to response_uri and return redirect_uri."""
+        """direct_post vp_token to response_uri, then poll GET /auth/login/status
+        for the redirect_uri. PresentationCallback (the direct_post handler) only
+        acknowledges receipt (`{}`) and persists the redirect target asynchronously
+        via Hydra's AcceptLoginAndConsent — the caller retrieves it by polling
+        loginStatus until status == "complete" (see backend/design/auth.go's
+        `loginStatus` method / `LoginStatus` handler in auth_login.go).
+        """
         response = session.post(
             response_uri,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -354,11 +372,29 @@ class AuthService:
             raise RuntimeError(
                 f"direct_post failed ({response.status_code}): {response.text[:300]}"
             )
-        body = response.json()
-        redirect_uri = body.get("redirect_uri")
-        if not redirect_uri:
-            raise RuntimeError(f"direct_post response missing redirect_uri: {body}")
-        return str(redirect_uri)
+
+        status_url = f"{api_base.rstrip('/')}/auth/login/status"
+        deadline = time.time() + timeout
+        last_body: dict = {}
+        while time.time() < deadline:
+            status_response = session.get(status_url, params={"state": state}, timeout=timeout)
+            if status_response.status_code != 200:
+                raise RuntimeError(
+                    f"GET /auth/login/status failed ({status_response.status_code}): "
+                    f"{status_response.text[:300]}"
+                )
+            last_body = status_response.json()
+            status = last_body.get("status")
+            if status == "complete":
+                redirect_uri = last_body.get("redirect_uri")
+                if not redirect_uri:
+                    raise RuntimeError(f"login status complete but missing redirect_uri: {last_body}")
+                return str(redirect_uri)
+            if status in ("failed", "expired"):
+                raise RuntimeError(f"login status is '{status}': {last_body}")
+            time.sleep(0.2)
+
+        raise RuntimeError(f"login status did not reach 'complete' within {timeout}s: {last_body}")
 
     @staticmethod
     def resolve_oauth_callback_url(
@@ -418,8 +454,11 @@ class AuthService:
         redirect_uri: str,
         *,
         timeout: float,
-    ) -> str:
-        """Follow OAuth callback and refresh to obtain Hydra access_token."""
+    ) -> tuple[str, int]:
+        """Follow OAuth callback and refresh to obtain Hydra access_token.
+
+        Returns (access_token, expires_in_seconds).
+        """
         callback_url = AuthService.resolve_oauth_callback_url(
             session,
             redirect_uri,
@@ -434,10 +473,11 @@ class AuthService:
 
         refresh_response = session.post(f"{api_base.rstrip('/')}/auth/refresh", timeout=timeout)
         refresh_response.raise_for_status()
-        access_token = refresh_response.json().get("access_token")
+        body = refresh_response.json()
+        access_token = body.get("access_token")
         if not access_token:
             raise RuntimeError(f"/auth/refresh missing access_token: {refresh_response.text[:300]}")
-        return str(access_token)
+        return str(access_token), int(body.get("expires_in") or 0)
 
     @staticmethod
     def exchange_roles_for_access_token(
@@ -447,8 +487,21 @@ class AuthService:
         organization: str | None = None,
         timeout: float = 60,
     ) -> str:
-        """Full OID4VP headless login: roles → vp_token → access_token."""
+        """Full OID4VP headless login: roles → vp_token → access_token.
+
+        Reuses a cached access_token for the same (api_base, roles,
+        organization) tuple until it is within _TOKEN_EXPIRY_MARGIN_SECONDS of
+        expiry — the headless login round trip otherwise dominates BDD
+        runtime since most scenarios request the same handful of roles.
+        """
         credentials = AuthService.parse_auth_credentials(roles, organization)
+        cache_key = (api_base, tuple(sorted(credentials.roles)), credentials.organization)
+        cached = AuthService._token_cache.get(cache_key)
+        if cached is not None:
+            token, expires_at = cached
+            if time.time() < expires_at - AuthService._TOKEN_EXPIRY_MARGIN_SECONDS:
+                return token
+
         session = requests.Session()
         session.headers.update({
             "User-Agent": "bdd-auth-service",
@@ -475,18 +528,22 @@ class AuthService:
         )
         redirect_uri = AuthService.submit_presentation(
             session,
+            api_base=api_base,
             response_uri=auth_request.response_uri,
             state=auth_request.state,
             query_id=auth_request.query_id,
             vp_token=vp_token,
             timeout=timeout,
         )
-        return AuthService.complete_session(
+        access_token, expires_in = AuthService.complete_session(
             session,
             api_base,
             redirect_uri,
             timeout=timeout,
         )
+        if expires_in > 0:
+            AuthService._token_cache[cache_key] = (access_token, time.time() + expires_in)
+        return access_token
 
 
     # ------------------------------------------------------------------
@@ -508,7 +565,7 @@ class AuthService:
             username = AuthService.username_for_roles(roles, "bdd")
             token = AuthService.create_expired_jwt(AuthService.CLIENT_ID, username, roles)
         else:
-            api_base = getattr(context, "base_url", os.getenv("BDD_DCS_BASE_URL", "http://127.0.0.1:8991"))
+            api_base = getattr(context, "base_url", os.getenv("BDD_DCS_BASE_URL", "http://localhost:5173/api"))
             timeout = float(getattr(context, "http_timeout_seconds", os.getenv("BDD_HTTP_TIMEOUT_SECONDS", "60")))
             token = AuthService.exchange_roles_for_access_token(
                 api_base,
@@ -536,7 +593,7 @@ class AuthService:
             token = AuthService.create_expired_jwt(AuthService.CLIENT_ID, username, roles)
         else:
             token = AuthService.exchange_roles_for_access_token(
-                api_base or os.getenv("BDD_DCS_BASE_URL", "http://127.0.0.1:8991"),
+                api_base or os.getenv("BDD_DCS_BASE_URL", "http://localhost:5173/api"),
                 roles,
                 organization=organization,
                 timeout=timeout,

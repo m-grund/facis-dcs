@@ -172,6 +172,51 @@ func TestCreateFetchFileTenantAPI_BinaryRoundTrip(t *testing.T) {
 	}
 }
 
+// TestCreateFileWithPreEncodedStringDoesNotRoundTrip documents why callers
+// must pass raw []byte to CreateFile rather than a pre-base64-encoded string
+// (the bug that made pdfgeneration/event/subscriber.go's C2PA-update writes
+// unreadable by a later plain FetchFile): a string argument is JSON-marshalled
+// into a quoted literal instead of used as the raw upload body, so what comes
+// back out of FetchFile is not the original bytes.
+func TestCreateFileWithPreEncodedStringDoesNotRoundTrip(t *testing.T) {
+	payload := []byte("%PDF-1.3\nbinary pdf content here")
+	preEncoded := base64.StdEncoding.EncodeToString(payload)
+
+	var storedBytes []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/ipfs/create":
+			body, _ := io.ReadAll(r.Body)
+			storedBytes = body
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":"tenant-cid"},"data":null}`)
+		case "/api/ipfs/tenant-cid":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":"tenant-cid"},"data":%q}`,
+				base64.StdEncoding.EncodeToString(storedBytes))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "")
+	// The buggy call pattern: passing an already-base64-encoded string.
+	if _, err := client.CreateFile(context.Background(), preEncoded); err != nil {
+		t.Fatalf("CreateFile returned error: %v", err)
+	}
+
+	result, err := client.FetchFile("tenant-cid")
+	if err != nil {
+		t.Fatalf("FetchFile returned error: %v", err)
+	}
+
+	if string(result.Data) == string(payload) {
+		t.Fatal("expected the pre-encoded-string call pattern to NOT reproduce the original PDF bytes " +
+			"(if this starts passing, CreateFile's string handling changed and subscriber.go's raw-bytes fix may be revertable)")
+	}
+}
+
 func TestFetchFileTenantAPI_RetriesUntilResolvable(t *testing.T) {
 	payload := []byte("%PDF-1.7\nresolvable after propagation")
 	var calls int

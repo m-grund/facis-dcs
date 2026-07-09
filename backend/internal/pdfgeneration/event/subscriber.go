@@ -6,7 +6,6 @@ package event
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -183,8 +182,13 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("pdf-core update for contract %s: %w", cweEvt.DID, err)
 	}
 
-	// Store updated PDF in IPFS.
-	storeResult, err := s.IPFSClient.CreateFile(ctx, base64.StdEncoding.EncodeToString(updatedPDF))
+	// Store updated PDF in IPFS. CreateFile must receive the raw PDF bytes, not
+	// a pre-base64-encoded string: passed a string, it JSON-marshals the value
+	// (wrapping it in an extra quoted layer) instead of using it as the raw
+	// upload body, so a later plain FetchFile (export/verify) would decode back
+	// a JSON-string literal rather than the PDF (the same raw-bytes contract
+	// query/appendAndCache and signingmanagement/apply.go's CreateFile calls use).
+	storeResult, err := s.IPFSClient.CreateFile(ctx, updatedPDF)
 	if err != nil {
 		return fmt.Errorf("store updated PDF in IPFS for contract %s: %w", cweEvt.DID, err)
 	}
@@ -302,7 +306,8 @@ func (s *Subscriber) appendOneTemplateManifest(
 		return nil, fmt.Errorf("pdf-core update for template %s: %w", did, err)
 	}
 
-	storeResult, err := s.IPFSClient.CreateFile(ctx, base64.StdEncoding.EncodeToString(updatedPDF))
+	// See appendC2PA: CreateFile must receive raw bytes, not a base64 string.
+	storeResult, err := s.IPFSClient.CreateFile(ctx, updatedPDF)
 	if err != nil {
 		return nil, fmt.Errorf("store updated PDF in IPFS for template %s: %w", did, err)
 	}

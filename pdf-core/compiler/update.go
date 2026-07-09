@@ -502,32 +502,51 @@ func SplitAtIncrementalUpdate(pdf []byte) (original []byte, ok bool) {
 	return pdf[:idx], true
 }
 
+// incrementalUpdateMarkerOffsets returns the byte offset of every occurrence
+// of incrementalUpdateMarker in pdf, in file order — one per C2PA lifecycle
+// update chained onto the original compiled document.
+func incrementalUpdateMarkerOffsets(pdf []byte) []int {
+	var offsets []int
+	base := 0
+	for {
+		idx := bytes.Index(pdf[base:], incrementalUpdateMarker)
+		if idx < 0 {
+			return offsets
+		}
+		offsets = append(offsets, base+idx)
+		base += idx + len(incrementalUpdateMarker)
+	}
+}
+
 // VerifyIncrementalUpdate checks that an incrementally-updated PDF was produced
 // deterministically from its embedded payloads.  It provides the same guarantee
 // as the plain /verify check — the human-readable content is fully determined
-// by the machine-readable JSON-LD — extended to cover the amendment history:
+// by the machine-readable JSON-LD — extended to cover the ENTIRE amendment
+// history, not just a single hop: a contract's PDF typically accumulates
+// several C2PA lifecycle updates before it is ever signed (e.g. submitted,
+// approved) and may accumulate more afterwards (e.g. revoked); a PAdES
+// signature and its signing-evidence attachment may sit, opaque to this check,
+// between any two updates. For each hop i (1-based, in chain order):
 //
-//  1. CompilePDF(oldPayload) == originalPrefix  (original was deterministic)
-//  2. UpdatePDF(originalPrefix, newPayload) == pdf  (amendment was deterministic)
+//  1. i==1: CompilePDF(oldPayload) == boundary[0]  (the base compile was deterministic)
+//  2. UpdatePDF(boundary[i-1], newPayload_i) == boundary[i]  (hop i was deterministic)
 //
-// Both conditions together prove the current visible state is reproducible from
-// the current embedded payload.
+// where boundary[i] is the PDF prefix ending right after the i-th update's
+// appendix (boundary[N] == the full pdf). All hops together prove the current
+// visible state is reproducible, end to end, from its embedded payloads.
 func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
-	original, ok := SplitAtIncrementalUpdate(pdf)
-	if !ok {
+	offsets := incrementalUpdateMarkerOffsets(pdf)
+	if len(offsets) == 0 {
 		return fmt.Errorf("no incremental update marker found")
 	}
 
-	oldPayload, err := ExtractEmbeddedJSONLD(original)
+	boundary := pdf[:offsets[0]]
+
+	oldPayload, err := ExtractEmbeddedJSONLD(boundary)
 	if err != nil {
 		return fmt.Errorf("extract old payload from original prefix: %w", err)
 	}
-	newPayload, err := ExtractLatestEmbeddedJSONLD(pdf)
-	if err != nil {
-		return fmt.Errorf("extract new payload from amended PDF: %w", err)
-	}
-
-	originalC2PA, err := extractEmbeddedStreamByFileSpecName(original, "content_credential.c2pa")
+	originalC2PA, err := extractEmbeddedStreamByFileSpecName(boundary, "content_credential.c2pa")
 	if err != nil {
 		return fmt.Errorf("extract original C2PA: %w", err)
 	}
@@ -535,51 +554,59 @@ func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
 	if err != nil {
 		return fmt.Errorf("extract original lifecycle timestamp: %w", err)
 	}
-
 	freshOriginal, err := CompilePDF(ctx, oldPayload, originalCompiledAt)
 	if err != nil {
 		return fmt.Errorf("recompile original payload: %w", err)
 	}
-	// The "original" prefix is the compiled PDF possibly followed by append-only
-	// PAdES signature updates. PAdES appends bytes after %%EOF without altering
-	// the preceding bytes, so the compiled output must be a byte-for-byte prefix
-	// of whatever was submitted as the original.
-	if !bytes.HasPrefix(ZeroCOSESignatures(original), ZeroCOSESignatures(freshOriginal)) {
+	// boundary is the compiled PDF possibly followed by append-only PAdES
+	// signature updates. PAdES appends bytes after %%EOF without altering the
+	// preceding bytes, so the compiled output must be a byte-for-byte prefix.
+	if !bytes.HasPrefix(ZeroCOSESignatures(boundary), ZeroCOSESignatures(freshOriginal)) {
 		return fmt.Errorf("original PDF prefix does not match deterministic recompilation from its embedded payload")
 	}
 
-	fullC2PA, err := extractEmbeddedStreamByFileSpecName(pdf, "content_credential.c2pa")
-	if err != nil {
-		return fmt.Errorf("extract full C2PA: %w", err)
-	}
-	updateCompiledAt, err := extractLifecycleEffectiveAt(fullC2PA, 1)
-	if err != nil {
-		return fmt.Errorf("extract update lifecycle timestamp: %w", err)
-	}
+	for hop := 1; hop <= len(offsets); hop++ {
+		hopEnd := pdf
+		if hop < len(offsets) {
+			hopEnd = pdf[:offsets[hop]]
+		}
 
-	// Re-apply the amendment to the actual original (which may include PAdES
-	// appendices) so the deterministic update covers the same base offsets.
-	// Re-use any VC from the existing PDF so the deterministic output is
-	// byte-for-byte identical.
-	embeddedVC, vcPresent, _ := ExtractEmbeddedVC(pdf)
-	// The stored update manifest may carry a remote_manifests reference
-	// (DCS-OR-C2PA-008 AC3). Recover it from the stored claim so the
-	// deterministic re-render reproduces the same claim bytes; otherwise the
-	// byte-for-byte prefix check below would fail for PDFs that embed it.
-	remoteManifestURL := extractRemoteManifestURL(fullC2PA)
-	var freshUpdated []byte
-	if vcPresent && len(embeddedVC) > 0 {
-		freshUpdated, err = UpdatePDFWithOptions(ctx, original, newPayload, embeddedVC, remoteManifestURL, updateCompiledAt)
-	} else {
-		freshUpdated, err = UpdatePDFWithOptions(ctx, original, newPayload, nil, remoteManifestURL, updateCompiledAt)
-	}
-	if err != nil {
-		return fmt.Errorf("re-apply amendment: %w", err)
-	}
-	// Similarly the submitted pdf may have additional PAdES signatures appended
-	// after the dcs-pdf-core incremental update.
-	if !bytes.HasPrefix(ZeroCOSESignatures(pdf), ZeroCOSESignatures(freshUpdated)) {
-		return fmt.Errorf("amended PDF does not match deterministic re-application of the amendment")
+		newPayload, err := ExtractLatestEmbeddedJSONLD(hopEnd)
+		if err != nil {
+			return fmt.Errorf("extract payload for update %d: %w", hop, err)
+		}
+		hopC2PA, err := extractEmbeddedStreamByFileSpecName(hopEnd, "content_credential.c2pa")
+		if err != nil {
+			return fmt.Errorf("extract C2PA for update %d: %w", hop, err)
+		}
+		updateCompiledAt, err := extractLifecycleEffectiveAt(hopC2PA, hop)
+		if err != nil {
+			return fmt.Errorf("extract lifecycle timestamp for update %d: %w", hop, err)
+		}
+
+		// Re-apply this hop's amendment to the bytes preceding it (which may
+		// themselves embed a PAdES signature or signing-evidence attachment —
+		// opaque to this check, same as the base boundary above). Re-use the
+		// VC and any remote_manifests reference already embedded for this hop
+		// so the deterministic output is byte-for-byte identical: ExtractEmbeddedVC
+		// / extractRemoteManifestURL operate on hopEnd, so they see exactly the
+		// attachment this specific hop wrote, not one written by a later hop.
+		embeddedVC, vcPresent, _ := ExtractEmbeddedVC(hopEnd)
+		remoteManifestURL := extractRemoteManifestURL(hopC2PA)
+		var freshUpdated []byte
+		if vcPresent && len(embeddedVC) > 0 {
+			freshUpdated, err = UpdatePDFWithOptions(ctx, boundary, newPayload, embeddedVC, remoteManifestURL, updateCompiledAt)
+		} else {
+			freshUpdated, err = UpdatePDFWithOptions(ctx, boundary, newPayload, nil, remoteManifestURL, updateCompiledAt)
+		}
+		if err != nil {
+			return fmt.Errorf("re-apply update %d: %w", hop, err)
+		}
+		if !bytes.HasPrefix(ZeroCOSESignatures(hopEnd), ZeroCOSESignatures(freshUpdated)) {
+			return fmt.Errorf("amended PDF does not match deterministic re-application of update %d", hop)
+		}
+
+		boundary = hopEnd
 	}
 	return nil
 }
