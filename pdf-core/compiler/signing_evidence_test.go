@@ -51,17 +51,3 @@ func TestEmbedSigningEvidenceEmptyIsNoop(t *testing.T) {
 	}
 }
 
-func TestRelabelSubFilterCAdESPreservesLength(t *testing.T) {
-	if len(pdfsignAdbeSubFilter) != len(padesCAdESSubFilter) {
-		t.Fatalf("SubFilter relabel must be length-preserving to keep /ByteRange and xref offsets stable: %d vs %d",
-			len(pdfsignAdbeSubFilter), len(padesCAdESSubFilter))
-	}
-	in := []byte("<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange[0 1 2 3] >>")
-	out := relabelSubFilterCAdES(in)
-	if len(out) != len(in) {
-		t.Fatalf("relabel changed length: %d -> %d", len(in), len(out))
-	}
-	if !bytes.Contains(out, []byte("/SubFilter /ETSI.CAdES.detached")) {
-		t.Fatalf("expected ETSI.CAdES.detached SubFilter, got %q", out)
-	}
-}

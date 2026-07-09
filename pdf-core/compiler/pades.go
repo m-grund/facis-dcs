@@ -16,7 +16,8 @@ import (
 	"time"
 
 	"github.com/digitorus/pdf"
-	"github.com/digitorus/pdfsign/sign"
+
+	"example.com/m/V2/internal/pdfsign/sign"
 )
 
 const (
@@ -156,22 +157,7 @@ func signPAdESBytes(pdfBytes []byte, signData sign.SignData) ([]byte, error) {
 	if err := sign.Sign(bytes.NewReader(pdfBytes), &out, rdr, int64(len(pdfBytes)), signData); err != nil {
 		return nil, fmt.Errorf("pades: sign: %w", err)
 	}
-	return relabelSubFilterCAdES(out.Bytes()), nil
-}
-
-// pdfsignAdbeSubFilter and padesCAdESSubFilter are equal-length PDF name tokens.
-// digitorus/pdfsign always writes the adbe.pkcs7.detached SubFilter; the PAdES
-// baseline (ETSI EN 319 142-1) requires ETSI.CAdES.detached for the CAdES-based
-// detached signature the CMS SignedData already carries (it embeds the ESS
-// SigningCertificateV2 attribute). The two names are the same byte length, so
-// the label is corrected without shifting any /ByteRange or xref offsets.
-var (
-	pdfsignAdbeSubFilter = []byte("/adbe.pkcs7.detached")
-	padesCAdESSubFilter  = []byte("/ETSI.CAdES.detached")
-)
-
-func relabelSubFilterCAdES(pdfBytes []byte) []byte {
-	return bytes.Replace(pdfBytes, pdfsignAdbeSubFilter, padesCAdESSubFilter, 1)
+	return out.Bytes(), nil
 }
 
 // padesCallbackSigner is a crypto.Signer that delegates the ECDSA operation over
