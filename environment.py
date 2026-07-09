@@ -54,6 +54,10 @@ def cleanup_database(context):
 	cursor.execute("DELETE FROM contract_negotiation_task")
 	cursor.execute("DELETE FROM contract_approval_task")
 	cursor.execute("DELETE FROM contract_review_task")
+	cursor.execute("DELETE FROM contract_negotiations")
+	cursor.execute("TRUNCATE contract_archive_entry_events, contract_archive_entries")
+	cursor.execute("DELETE FROM contract_signatures")
+	cursor.execute("DELETE FROM signature_ceremonies")
 	cursor.execute("DELETE FROM contracts")
 
 	cursor.execute("DELETE FROM contract_templates_approval_task")

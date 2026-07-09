@@ -1,11 +1,15 @@
 package query
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -14,8 +18,10 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
+	"digital-contracting-service/internal/signingmanagement/pidverify"
 )
 
 type ValidateQry struct {
@@ -30,8 +36,9 @@ type ValidationResult struct {
 }
 
 type Validator struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB      *sqlx.DB
+	CRepo   db.ContractRepo
+	PDFCore *pdfcore.Client
 }
 
 func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationResult, error) {
@@ -59,6 +66,8 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 		return nil, fmt.Errorf("could not collect validation findings: %w", err)
 	}
 
+	findings = append(findings, h.crossCheckEmbeddedPID(ctx, tx, cmd.DID)...)
+
 	evt := signingmanagementevents.ValidateEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
@@ -80,4 +89,84 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 	return &ValidationResult{
 		Findings: findings,
 	}, nil
+}
+
+// crossCheckEmbeddedPID re-verifies the embedded PID presentation against the
+// signature record (AC17, UC-04-03): it extracts the signing evidence from the
+// stored signed PDF, re-verifies the SD-JWT VC + KB-JWT, and confirms the
+// resolved signer DID matches the signature row. Absence of evidence (e.g. an
+// unsigned or legacy contract) yields no findings; any mismatch or verification
+// failure is reported as a finding so validate surfaces it.
+func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did string) []string {
+	if h.PDFCore == nil {
+		return nil
+	}
+
+	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
+	if err != nil || len(pdfBytes) == 0 {
+		return nil
+	}
+	pdfBytes = decodePDFBytes(pdfBytes)
+
+	evidence, found, err := h.PDFCore.ExtractEvidence(ctx, pdfBytes)
+	if err != nil {
+		return []string{fmt.Sprintf("Could not extract embedded PID evidence: %v", err)}
+	}
+	if !found || len(evidence) == 0 {
+		return nil
+	}
+
+	presentation, subject := signingSummaryPIDFields(evidence)
+	if presentation == "" {
+		return []string{"Embedded signing evidence is missing the PID presentation"}
+	}
+
+	signerDID, _, err := pidverify.Verify(presentation)
+	if err != nil {
+		return []string{fmt.Sprintf("PID verification failed: %v", err)}
+	}
+	if subject != "" && subject != signerDID {
+		return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
+	}
+
+	records, err := h.CRepo.LoadSignatures(ctx, tx, did)
+	if err == nil {
+		for _, rec := range records {
+			if strings.EqualFold(strings.TrimSpace(rec.Status), "REVOKED") {
+				continue
+			}
+			if rec.SignerDID != "" && rec.SignerDID != signerDID {
+				return []string{"Evidence mismatch: re-verified PID signer does not match the signature record"}
+			}
+		}
+	}
+
+	return []string{"Embedded PID presentation re-verified and cross-checked against the signature record"}
+}
+
+// signingSummaryPIDFields extracts the verbatim PID presentation and credential
+// subject from a ContractSigningSummaryCredential evidence document.
+func signingSummaryPIDFields(evidence []byte) (presentation, subject string) {
+	var vc struct {
+		CredentialSubject struct {
+			ID              string `json:"id"`
+			PIDPresentation string `json:"pid_presentation"`
+		} `json:"credentialSubject"`
+	}
+	if err := json.Unmarshal(evidence, &vc); err != nil {
+		return "", ""
+	}
+	return vc.CredentialSubject.PIDPresentation, vc.CredentialSubject.ID
+}
+
+// decodePDFBytes returns raw PDF bytes, base64-decoding the input when it is not
+// already a PDF (some IPFS write paths store the artefact base64-encoded).
+func decodePDFBytes(b []byte) []byte {
+	if len(b) == 0 || bytes.HasPrefix(b, []byte("%PDF")) {
+		return b
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(string(b)); err == nil && bytes.HasPrefix(decoded, []byte("%PDF")) {
+		return decoded
+	}
+	return b
 }

@@ -22,6 +22,13 @@ type APIClient struct {
 	baseURL    string
 	mfsBaseURL string
 	client     *http.Client
+	// fetchAttempts and fetchBackoff bound the read-after-write retry against
+	// the tenant store, which is eventually consistent: a CID returned by
+	// CreateFile is not always immediately resolvable through the tenant
+	// gateway (a subsequent GET can transiently return 404/5xx until the
+	// DataIdentifier record and its blocks propagate).
+	fetchAttempts int
+	fetchBackoff  time.Duration
 }
 
 func NewClient(baseURL string, mfsBaseURL string) *APIClient {
@@ -31,6 +38,8 @@ func NewClient(baseURL string, mfsBaseURL string) *APIClient {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		fetchAttempts: 8,
+		fetchBackoff:  500 * time.Millisecond,
 	}
 }
 
@@ -104,24 +113,7 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 		return c.fetchKuboFile(cid)
 	}
 
-	url := fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println("could not close response body")
-		}
-	}(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := c.fetchTenantFileWithRetry(cid)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +139,59 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 	}
 
 	return &result, nil
+}
+
+// fetchTenantFileWithRetry GETs a CID from the tenant gateway, retrying on
+// transient not-yet-resolvable responses (404/5xx) with a bounded backoff.
+// This absorbs the tenant store's read-after-write lag so a CID that CreateFile
+// has just returned is reliably retrievable by a subsequent request.
+func (c *APIClient) fetchTenantFileWithRetry(cid string) ([]byte, error) {
+	url := fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)
+
+	attempts := c.fetchAttempts
+	if attempts < 1 {
+		attempts = 1
+	}
+
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 && c.fetchBackoff > 0 {
+			time.Sleep(c.fetchBackoff)
+		}
+
+		body, status, err := c.getOnce(url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if status == http.StatusOK {
+			return body, nil
+		}
+		lastErr = fmt.Errorf("unexpected status %d: %s", status, body)
+		// Only the transient not-yet-resolvable statuses are worth retrying;
+		// any other 4xx is a definitive answer.
+		if status != http.StatusNotFound && status < 500 {
+			return nil, lastErr
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *APIClient) getOnce(url string) ([]byte, int, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		if err := Body.Close(); err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
 }
 
 func (c *APIClient) DeleteFile(cid string) error {

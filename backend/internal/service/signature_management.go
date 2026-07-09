@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
@@ -17,10 +18,11 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
-	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
+	"digital-contracting-service/internal/signingmanagement/signer"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -34,6 +36,9 @@ func mapSignatureCommandError(err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, command.ErrCeremonyRequired) {
+		return signaturemanagement.MakeCeremonyRequired(err)
+	}
 	if errors.Is(err, contractstate.ErrInvalidTransition) {
 		return signaturemanagement.MakeBadRequest(err)
 	}
@@ -43,24 +48,31 @@ func mapSignatureCommandError(err error) error {
 type signatureManagementsrvc struct {
 	DB           *sqlx.DB
 	CRepo        db.ContractRepo
+	CeremonyRepo db.CeremonyRepo
 	PDFCore      *pdfcore.Client
 	ATrailReader base.AuditTrailReader
-	DSSClient    dss.Client
+	Signer       signer.ContractSigner
+	VCSigner     provenance.VCSigner
+	IssuerDID    string
 	IPFSClient   *ipfs.APIClient
 	DIDDocument  identity.DIDDocument
 	auth.JWTAuthenticator
 }
 
-func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo,
-	auditTrailReader base.AuditTrailReader, dssClient dss.Client, ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client) signaturemanagement.Service {
+func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, ceremonyRepo db.CeremonyRepo,
+	auditTrailReader base.AuditTrailReader, contractSigner signer.ContractSigner, vcSigner provenance.VCSigner, issuerDID string,
+	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
 		DB:               db,
 		CRepo:            cRepo,
+		CeremonyRepo:     ceremonyRepo,
 		PDFCore:          pdfCore,
 		ATrailReader:     auditTrailReader,
-		DSSClient:        dssClient,
+		Signer:           contractSigner,
+		VCSigner:         vcSigner,
+		IssuerDID:        issuerDID,
 		IPFSClient:       ipfsClient,
 	}
 }
@@ -224,16 +236,28 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	credentialType := req.CredentialType
+	if credentialType == nil || *credentialType == "" {
+		aes := "AES"
+		credentialType = &aes
+	}
 	cmd := command.ApplyCmd{
-		DID:       req.Did,
-		AppliedBy: middleware.GetParticipantID(ctx),
-		HolderDID: middleware.GetHolderDID(ctx),
-		UserRoles: middleware.GetUserRoles(ctx),
+		DID:            req.Did,
+		SignerDID:      req.SignerDid,
+		CredentialType: *credentialType,
+		AppliedBy:      middleware.GetParticipantID(ctx),
+		HolderDID:      middleware.GetHolderDID(ctx),
+		UserRoles:      middleware.GetUserRoles(ctx),
 	}
 	handler := command.Applier{
-		DB:       s.DB,
-		CRepo:    s.CRepo,
-		DSClient: s.DSSClient,
+		DB:           s.DB,
+		CRepo:        s.CRepo,
+		CeremonyRepo: s.CeremonyRepo,
+		Signer:       s.Signer,
+		PDFCore:      s.PDFCore,
+		IPFSClient:   s.IPFSClient,
+		VCSigner:     s.VCSigner,
+		IssuerDID:    s.IssuerDID,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -284,8 +308,9 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 		UserRoles:   middleware.GetUserRoles(ctx),
 	}
 	queryHandler := query.Validator{
-		DB:    s.DB,
-		CRepo: s.CRepo,
+		DB:      s.DB,
+		CRepo:   s.CRepo,
+		PDFCore: s.PDFCore,
 	}
 
 	result, err := queryHandler.Handle(ctx, qry)
@@ -385,4 +410,87 @@ func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signature
 	}
 
 	return &signaturemanagement.SMContractComplianceResponse{}, nil
+}
+
+func (s *signatureManagementsrvc) StartCeremony(ctx context.Context, req *signaturemanagement.SMSignatureRequestStartRequest) (res *signaturemanagement.SMSignatureRequestStartResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	handler := command.StartCeremonyHandler{DB: s.DB, CeremonyRepo: s.CeremonyRepo}
+	ceremony, err := handler.Handle(ctx, command.StartCeremonyCmd{
+		ContractDID: req.ContractDid,
+		FieldName:   req.FieldName,
+		RequestedBy: middleware.GetParticipantID(ctx),
+	})
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	walletURI := ""
+	if ceremony.WalletURI != nil {
+		walletURI = *ceremony.WalletURI
+	}
+	return &signaturemanagement.SMSignatureRequestStartResponse{
+		CeremonyID: ceremony.ID,
+		WalletURI:  walletURI,
+		ExpiresAt:  ceremony.ExpiresAt.Format(time.RFC3339),
+		Status:     ceremony.Status,
+	}, nil
+}
+
+func (s *signatureManagementsrvc) CeremonyStatus(ctx context.Context, req *signaturemanagement.SMSignatureRequestStatusRequest) (res *signaturemanagement.SMSignatureRequestStatusResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	handler := query.CeremonyStatusHandler{DB: s.DB, CeremonyRepo: s.CeremonyRepo}
+	ceremony, err := handler.Handle(ctx, query.CeremonyStatusQry{CeremonyID: req.CeremonyID})
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+	if ceremony == nil {
+		return nil, signaturemanagement.MakeNotFound(fmt.Errorf("ceremony %s not found", req.CeremonyID))
+	}
+
+	res = &signaturemanagement.SMSignatureRequestStatusResponse{
+		CeremonyID: ceremony.ID,
+		Status:     ceremony.Status,
+	}
+	res.ContractDid = &ceremony.ContractDID
+	res.FieldName = &ceremony.FieldName
+	res.SignerDid = ceremony.SignerDID
+	expiresAt := ceremony.ExpiresAt.Format(time.RFC3339)
+	res.ExpiresAt = &expiresAt
+	return res, nil
+}
+
+func (s *signatureManagementsrvc) CeremonyWebhook(ctx context.Context, req *signaturemanagement.SMSignatureWebhookRequest) (res *signaturemanagement.SMSignatureWebhookResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	secret := ""
+	if req.WebhookSecret != nil {
+		secret = *req.WebhookSecret
+	}
+	handler := command.WebhookHandler{DB: s.DB, CeremonyRepo: s.CeremonyRepo}
+	ceremony, err := handler.Handle(ctx, command.WebhookCmd{
+		Secret:     secret,
+		CeremonyID: req.CeremonyID,
+		VpToken:    req.VpToken,
+		PidClaims:  req.PidClaims,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, command.ErrWebhookUnauthorized):
+			return nil, signaturemanagement.MakeUnauthorized(err)
+		case errors.Is(err, command.ErrCeremonyNotFound):
+			return nil, signaturemanagement.MakeNotFound(err)
+		default:
+			return nil, signaturemanagement.MakeInternalError(err)
+		}
+	}
+
+	return &signaturemanagement.SMSignatureWebhookResponse{
+		CeremonyID: ceremony.ID,
+		Status:     ceremony.Status,
+	}, nil
 }

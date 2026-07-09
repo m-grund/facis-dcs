@@ -4,9 +4,10 @@
 #
 # Starts a SECOND, independent DCS instance ("instance B") alongside the one
 # started by dev-stack.sh ("instance A"): its own Helm release (Postgres,
-# Keycloak, Hydra, NATS, Neo4j, Federated Catalogue, crypto-provider/Vault,
-# statuslist-service, ORCE, IPFS — see deployment/helm/values.dev2.yml for
-# the full NodePort map), backend on :8992, frontend on :5174.
+# Keycloak, Hydra, NATS, Neo4j, Federated Catalogue, statuslist-service, ORCE,
+# IPFS — see deployment/helm/values.dev2.yml for the full NodePort map),
+# backend on :8992, frontend on :5174. Instance B holds its own private keys in
+# a separate SoftHSM2 token (provisioned below), never in the cluster.
 #
 # Run dev-stack.sh FIRST (instance A + the shared pdf-core process instance B
 # also depends on, see PDF_CORE_URL in backend/.env.dev2), then run this
@@ -31,12 +32,6 @@ trap 'kill $(jobs -p) 2>/dev/null; exit' INT TERM
 HELM_RELEASE="dcs2"
 HELM_CHART_PATH="deployment/helm"
 HELM_VALUES_FILE="deployment/helm/values.dev2.yml"
-K8S_NAMESPACE="default"
-K8S_SECRET_NAME="${HELM_RELEASE}-crypto-provider-dev-cert-chain"
-K8S_SECRET_KEY="chain.pem"
-# Distinct from instance A's backend/certs/dev/chain.pem — see the comment
-# in backend/.env.dev2's CRYPTO_PROVIDER_CERT_CHAIN_FILE.
-CERT_FILE="backend/certs/dev/chain-b.pem"
 BACKEND_ENV_FILE=".env.dev2"
 BACKEND_BUILD_OUTPUT="tmp2/main2"
 
@@ -55,25 +50,6 @@ echo "Waiting for statuslist-service..."
 kubectl wait --for=condition=ready pod \
   -l "app.kubernetes.io/instance=${HELM_RELEASE},app.kubernetes.io/name=statuslist-service" \
   --timeout=5m
-
-# Fetch cert-chain from K8s secret (instance B's own dev-cert-chain Job)
-mkdir -p "$(dirname "$CERT_FILE")"
-echo "Fetching cert-chain from K8s secret..."
-tmp_cert_file="${CERT_FILE}.tmp"
-b64_cert_chain="$(kubectl -n "$K8S_NAMESPACE" get secret "$K8S_SECRET_NAME" \
-  -o "go-template={{ index .data \"$K8S_SECRET_KEY\" }}")"
-if [ -z "$b64_cert_chain" ]; then
-  echo "error: secret $K8S_SECRET_NAME key $K8S_SECRET_KEY is missing or empty" >&2
-  exit 1
-fi
-printf '%s' "$b64_cert_chain" | base64 -d > "$tmp_cert_file"
-if [ ! -s "$tmp_cert_file" ]; then
-  rm -f "$tmp_cert_file"
-  echo "error: fetched cert-chain is empty" >&2
-  exit 1
-fi
-mv "$tmp_cert_file" "$CERT_FILE"
-echo "✓ Cert-chain ready at $CERT_FILE"
 
 # pdf-core is shared with instance A (same PDF_CORE_URL=http://localhost:8080
 # in both backend/.env.dev1 and backend/.env.dev2) — verify it's already up

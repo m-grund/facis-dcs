@@ -50,7 +50,7 @@ KIND_BIN ?= kind
 KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
-CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
+CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
 
 .PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 

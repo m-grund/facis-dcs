@@ -21,21 +21,16 @@
 #   Neo4j Bolt       : localhost:32287
 #   FC service       : localhost:31081
 #   ORCE             : localhost:31188
-#   Crypto Provider  : localhost:31818  (XFSC signer HTTP API)
-#   Vault API        : localhost:31820  (dev mode, root token = "root")
 #   Status List Service : localhost:30221  (XFSC status list management)
 #   IPFS Gateway: localhost:31486
 #   IPFS API    : localhost:31512
 #
-# Backend .env.dev (auto-detects pre-built dev certificate, no manual setup needed):
-#   CRYPTO_PROVIDER_URL=http://localhost:31818
-#   CRYPTO_PROVIDER_NAMESPACE=transit
-#   CRYPTO_PROVIDER_KEY=dcs-signing-key-p256
-#   CRYPTO_PROVIDER_VC_KEY=dcs-vc-signing-key
-#   CRYPTO_PROVIDER_VC_SIGNATURE_TYPE=ed25519signature2020
+# Backend .env.dev2 (see that file for the full set):
 #   STATUSLIST_SERVICE_URL=http://localhost:30221
 #   OID4VP_STATUSLIST_SKIP_JWS_VERIFY=true
-#   ISSUER_DID=did:web:localhost
+#   ISSUER_DID=did:web:localhost%3A8992
+# The backend runs natively and provisions its own SoftHSM2 token via
+# dev-stack2.sh (scripts/hsm-provision.sh), so no in-cluster PKCS#11 token here.
 
 # In development, don't deploy the DCS or pdf-core containers — both run locally.
 replicaCount: 0
@@ -43,6 +38,12 @@ replicaCount: 0
 # pdf-core runs locally (started by dev-stack.sh), not as a K8s pod.
 pdfCore:
   enabled: false
+
+# The backend runs natively (replicaCount: 0), so no in-cluster SoftHSM2 token
+# is provisioned; dev-stack2.sh provisions the local token instead.
+pkcs11:
+  provisioning:
+    enabled: false
 
 # No private registry needed for local dev (all dep images are public)
 imagePullSecrets: []
@@ -144,14 +145,9 @@ federatedCatalogue:
 
 fcKeycloak:
   realmURL: "http://localhost:30010/realms/gaia-x"
-# OIDC / route values below are not used when replicaCount=0,
-# but kept here as documentation for the backend .env.dev file.
+# Not used when replicaCount=0, but kept as documentation for the backend .env.
 signing:
   issuerDID: "did:web:localhost"
-  cryptoProviderNamespace: "transit"
-  cryptoProviderKey: "dcs-signing-key-p256"
-  cryptoProviderVCKey: "dcs-vc-signing-key"
-  vcSignatureType: "ed25519signature2020"
 
 oidc:
   clientID: "dcs-client"
@@ -159,34 +155,6 @@ oidc:
   logoutRedirectURI: "http://localhost:5174/api/auth/logout-complete"
   realm: "gaia-x"
   keycloakScheme: "http"
-
-cryptoProvider:
-  enabled: true
-  vault:
-    dev:
-      enabled: true
-      rootToken: "root"
-    service:
-      type: NodePort
-      port: 8200
-      nodePort: 31820
-  signer:
-    service:
-      type: NodePort
-      nodePort: 31818
-  transit:
-    mount: "transit"
-    key: "dcs-signing-key-p256"
-    keyType: "ecdsa-p256"
-    vcKey: "dcs-vc-signing-key"
-    vcKeyType: "ed25519"
-    oid4vpVerifierKey: "dcs-oid4vp-verifier-signing"
-    oid4vpVerifierKeyType: "ecdsa-p256"
-  devCertChain:
-    enabled: true
-    overwrite: true
-    # Optional override; by default: <release>-crypto-provider-dev-cert-chain
-    secretName: ""
 
 # XFSC Status List Service (DCS-OR-C2PA-005)
 statuslistService:

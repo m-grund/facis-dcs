@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Local dev-only self-signed TSA stub for backend's TSA_URL.
+"""Local dev-only self-signed TSA stub, signing RFC3161 timestamps locally.
 
-Replicates deployment/helm/charts/orce/flows/tsa_orce_flow.json's GET
-/tsa/:hash contract (build an RFC3161 TSQ via openssl, return a TSR), but
-signs the reply locally with a self-signed dev CA/cert (see
-backend/tsa-relay-test.sh for how those were generated under
-/tmp/local-tsa) instead of forwarding to the real https://freetsa.org/tsr.
+Serves two request shapes against the same self-signed dev CA/cert (see
+backend/tsa-relay-test.sh for how those were generated under /tmp/local-tsa):
+
+  * GET /tsa/:hash — backend's TSA_URL contract (backend/internal/base/tsa/
+    tsa.go): builds an RFC3161 TSQ from the hash via openssl, returns a TSR.
+  * POST — pdf-core's PAdES TSA contract (DCS_PDF_CORE_TSA_URL): the request
+    body is a DER-encoded RFC3161 TimeStampReq (application/timestamp-query),
+    the response an application/timestamp-reply TSR (PAdES-B-T).
+
+Both avoid forwarding to a real https://freetsa.org/tsr.
 
 Backend's TSA client (backend/internal/base/tsa/tsa.go,
 verifyTimestampForData) only checks that the returned token's hashed
@@ -54,6 +59,46 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(query.stderr)
                 return
+
+            reply = subprocess.run(
+                [
+                    "openssl", "ts", "-reply",
+                    "-queryfile", tsq_path,
+                    "-signer", SIGNER_CERT,
+                    "-inkey", SIGNER_KEY,
+                    "-chain", CHAIN_CERT,
+                    "-out", tsr_path,
+                ],
+                capture_output=True,
+            )
+            if reply.returncode != 0 or not os.path.exists(tsr_path):
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(reply.stderr)
+                return
+
+            with open(tsr_path, "rb") as f:
+                tsr_bytes = f.read()
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/timestamp-reply")
+        self.end_headers()
+        self.wfile.write(tsr_bytes)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        tsq_bytes = self.rfile.read(length) if length else b""
+        if not tsq_bytes:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Empty RFC3161 timestamp query")
+            return
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tsq_path = os.path.join(tmp, "request.tsq")
+            tsr_path = os.path.join(tmp, "response.tsr")
+            with open(tsq_path, "wb") as f:
+                f.write(tsq_bytes)
 
             reply = subprocess.run(
                 [
