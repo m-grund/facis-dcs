@@ -1,10 +1,8 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,7 +104,6 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 	if err != nil || len(pdfBytes) == 0 {
 		return nil
 	}
-	pdfBytes = decodePDFBytes(pdfBytes)
 
 	evidence, found, err := h.PDFCore.ExtractEvidence(ctx, pdfBytes)
 	if err != nil {
@@ -157,16 +154,4 @@ func signingSummaryPIDFields(evidence []byte) (presentation, subject string) {
 		return "", ""
 	}
 	return vc.CredentialSubject.PIDPresentation, vc.CredentialSubject.ID
-}
-
-// decodePDFBytes returns raw PDF bytes, base64-decoding the input when it is not
-// already a PDF (some IPFS write paths store the artefact base64-encoded).
-func decodePDFBytes(b []byte) []byte {
-	if len(b) == 0 || bytes.HasPrefix(b, []byte("%PDF")) {
-		return b
-	}
-	if decoded, err := base64.StdEncoding.DecodeString(string(b)); err == nil && bytes.HasPrefix(decoded, []byte("%PDF")) {
-		return decoded
-	}
-	return b
 }

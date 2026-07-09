@@ -11,6 +11,7 @@ import (
 	"github.com/digitorus/pdf"
 	"github.com/digitorus/pkcs7"
 
+	"example.com/m/V2/internal/pdfsign/revocation"
 	"github.com/mattetti/filebuffer"
 )
 
@@ -68,10 +69,38 @@ func Sign(input io.ReadSeeker, output io.Writer, rdr *pdf.Reader, size int64, si
 		return err
 	}
 
+	// SignPDF may rebuild context.OutputBuffer several times (replaceSignature
+	// grows the placeholder and re-runs it). The finished buffer is written to
+	// the output exactly once here so a retried signing pass cannot append a
+	// second copy of the document.
+	if _, err := context.OutputBuffer.Seek(0, 0); err != nil {
+		return err
+	}
+	if _, err := context.OutputFile.Write(context.OutputBuffer.Buff.Bytes()); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (context *SignContext) SignPDF() error {
+	// replaceSignature grows SignatureMaxLengthBase and re-invokes SignPDF when
+	// the produced signature does not fit the reserved placeholder. Each pass
+	// rebuilds the whole incremental update from the original input, so the
+	// per-pass accumulators must start empty; carrying them over from a prior
+	// pass would emit an xref whose offsets and object numbers reference the
+	// discarded attempt's bytes. SignatureMaxLengthBase and existingSignatures
+	// deliberately persist across the retry.
+	context.newXrefEntries = nil
+	context.updatedXrefEntries = nil
+	context.filledFieldObjectID = 0
+	context.lastXrefID = 0
+	context.VisualSignData = VisualSignData{}
+	context.CatalogData = CatalogData{}
+	context.ByteRangeValues = nil
+	context.NewXrefStart = 0
+	context.SignData.RevocationData = revocation.InfoArchival{}
+
 	// set defaults
 	if context.SignData.Signature.CertType == 0 {
 		context.SignData.Signature.CertType = 1
@@ -191,34 +220,49 @@ func (context *SignContext) SignPDF() error {
 		return fmt.Errorf("failed to add signature object: %w", err)
 	}
 
-	// Create visual signature (visible or invisible based on CertType)
-	visible := false
-	rectangle := [4]float64{0, 0, 0, 0}
-	if context.SignData.Signature.CertType != ApprovalSignature && context.SignData.Appearance.Visible {
-		return fmt.Errorf("visible signatures are only allowed for approval signatures")
-	} else if context.SignData.Signature.CertType == ApprovalSignature && context.SignData.Appearance.Visible {
-		visible = true
-		rectangle = [4]float64{
-			context.SignData.Appearance.LowerLeftX,
-			context.SignData.Appearance.LowerLeftY,
-			context.SignData.Appearance.UpperRightX,
-			context.SignData.Appearance.UpperRightY,
+	// When the input PDF already carries an empty signature field with the named
+	// title, fill that field's /V via an incremental update so the signature is
+	// linked to the pre-rendered AcroForm field instead of being appended as a
+	// second, unlinked field. When no such field exists a new one is created.
+	field, hasField := context.resolveExistingSignatureField(context.SignData.ExistingSignatureFieldName)
+	if hasField {
+		fieldObjectID := field.GetPtr().GetID()
+		filled := context.buildFilledSignatureField(field)
+		if err := context.updateObject(fieldObjectID, filled); err != nil {
+			return fmt.Errorf("failed to fill existing signature field: %w", err)
+		}
+		context.filledFieldObjectID = fieldObjectID
+		context.VisualSignData.objectId = fieldObjectID
+	} else {
+		// Create visual signature (visible or invisible based on CertType)
+		visible := false
+		rectangle := [4]float64{0, 0, 0, 0}
+		if context.SignData.Signature.CertType != ApprovalSignature && context.SignData.Appearance.Visible {
+			return fmt.Errorf("visible signatures are only allowed for approval signatures")
+		} else if context.SignData.Signature.CertType == ApprovalSignature && context.SignData.Appearance.Visible {
+			visible = true
+			rectangle = [4]float64{
+				context.SignData.Appearance.LowerLeftX,
+				context.SignData.Appearance.LowerLeftY,
+				context.SignData.Appearance.UpperRightX,
+				context.SignData.Appearance.UpperRightY,
+			}
+		}
+
+		// Example usage: passing page number and default rect values
+		visual_signature, err := context.createVisualSignature(visible, context.SignData.Appearance.Page, rectangle)
+		if err != nil {
+			return fmt.Errorf("failed to create visual signature: %w", err)
+		}
+
+		// Write the new visual signature object.
+		context.VisualSignData.objectId, err = context.addObject(visual_signature)
+		if err != nil {
+			return fmt.Errorf("failed to add visual signature object: %w", err)
 		}
 	}
 
-	// Example usage: passing page number and default rect values
-	visual_signature, err := context.createVisualSignature(visible, context.SignData.Appearance.Page, rectangle)
-	if err != nil {
-		return fmt.Errorf("failed to create visual signature: %w", err)
-	}
-
-	// Write the new visual signature object.
-	context.VisualSignData.objectId, err = context.addObject(visual_signature)
-	if err != nil {
-		return fmt.Errorf("failed to add visual signature object: %w", err)
-	}
-
-	if context.SignData.Appearance.Visible {
+	if context.SignData.Appearance.Visible && context.filledFieldObjectID == 0 {
 		inc_page_update, err := context.createIncPageUpdate(context.SignData.Appearance.Page, context.VisualSignData.objectId)
 		if err != nil {
 			return fmt.Errorf("failed to create incremental page update: %w", err)
@@ -259,16 +303,6 @@ func (context *SignContext) SignPDF() error {
 	// Replace signature
 	if err := context.replaceSignature(); err != nil {
 		return fmt.Errorf("failed to replace signature: %w", err)
-	}
-
-	// Write final output
-	if _, err := context.OutputBuffer.Seek(0, 0); err != nil {
-		return err
-	}
-	file_content := context.OutputBuffer.Buff.Bytes()
-
-	if _, err := context.OutputFile.Write(file_content); err != nil {
-		return err
 	}
 
 	return nil

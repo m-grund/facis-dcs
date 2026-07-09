@@ -124,10 +124,11 @@ func SignPAdES(ctx context.Context, pdfBytes []byte, fieldName, signatoryName st
 				Date: time.Now().UTC(),
 			},
 		},
-		Signer:            signer,
-		DigestAlgorithm:   crypto.SHA256,
-		Certificate:       material.leaf,
-		CertificateChains: [][]*x509.Certificate{material.chain},
+		ExistingSignatureFieldName: fieldName,
+		Signer:                     signer,
+		DigestAlgorithm:            crypto.SHA256,
+		Certificate:                material.leaf,
+		CertificateChains:          [][]*x509.Certificate{material.chain},
 	}
 	if material.tsaURL != "" {
 		signData.TSA = sign.TSA{URL: material.tsaURL}

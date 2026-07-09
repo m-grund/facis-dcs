@@ -1,11 +1,9 @@
 package command
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -222,15 +220,12 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 }
 
 // loadBasePDF returns the current PDF for the contract, generating a fresh base
-// render from the JSON-LD when none is cached yet. IPFS may return the artefact
-// base64-encoded (the C2PA lifecycle subscriber stores it that way); such bytes
-// are decoded back to raw PDF here.
+// render from the JSON-LD when none is cached yet.
 func (h *Applier) loadBasePDF(ctx context.Context, tx *sqlx.Tx, did string, jsonld []byte) ([]byte, error) {
 	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
 	if err != nil {
 		return nil, fmt.Errorf("fetch contract PDF: %w", err)
 	}
-	pdfBytes = decodePDFBytes(pdfBytes)
 	if len(pdfBytes) == 0 {
 		pdfBytes, _, err = h.PDFCore.Download(ctx, jsonld)
 		if err != nil {
@@ -238,16 +233,4 @@ func (h *Applier) loadBasePDF(ctx context.Context, tx *sqlx.Tx, did string, json
 		}
 	}
 	return pdfBytes, nil
-}
-
-// decodePDFBytes returns raw PDF bytes, base64-decoding the input when it is not
-// already a PDF (some IPFS write paths store the artefact base64-encoded).
-func decodePDFBytes(b []byte) []byte {
-	if len(b) == 0 || bytes.HasPrefix(b, []byte("%PDF")) {
-		return b
-	}
-	if decoded, err := base64.StdEncoding.DecodeString(string(b)); err == nil && bytes.HasPrefix(decoded, []byte("%PDF")) {
-		return decoded
-	}
-	return b
 }

@@ -448,8 +448,11 @@ func (context *SignContext) replaceSignature() error {
 
 	if uint32(len(dst)) > context.SignatureMaxLength {
 		log.Println("Signature too long, retrying with increased buffer size.")
-		// set new base and try signing again
-		context.SignatureMaxLengthBase += (uint32(len(dst)) - context.SignatureMaxLength) + 1
+		// Grow the placeholder by the shortfall plus an even margin. The margin
+		// must be even so the /Contents hex string keeps an even digit count: an
+		// odd-length hex string leaves a dangling nibble that shifts the excluded
+		// gap by one byte and defeats a validator's ByteRange coverage accounting.
+		context.SignatureMaxLengthBase += (uint32(len(dst)) - context.SignatureMaxLength) + 2
 		return context.SignPDF()
 	}
 

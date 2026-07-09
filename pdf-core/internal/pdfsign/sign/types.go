@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/digitorus/pdf"
 	"example.com/m/V2/internal/pdfsign/revocation"
+	"github.com/digitorus/pdf"
 	"github.com/mattetti/filebuffer"
 )
 
@@ -34,6 +34,14 @@ type SignData struct {
 	RevocationData     revocation.InfoArchival
 	RevocationFunction RevocationFunction
 	Appearance         Appearance
+
+	// ExistingSignatureFieldName, when set, names an empty (/V-less) /Sig form
+	// field already present in the input PDF. The signer fills that field's /V
+	// with the new signature value dictionary via an incremental update instead
+	// of appending a fresh signature field, so a standards-conformant validator
+	// links the signature to the pre-rendered field when it walks the AcroForm
+	// (DCS-OR-C2PA-010).
+	ExistingSignatureFieldName string
 
 	objectId uint32
 }
@@ -108,8 +116,9 @@ type SignContext struct {
 	SignatureMaxLength     uint32
 	SignatureMaxLengthBase uint32
 
-	existingSignatures []SignData
-	lastXrefID         uint32
-	newXrefEntries     []xrefEntry
-	updatedXrefEntries []xrefEntry
+	existingSignatures  []SignData
+	filledFieldObjectID uint32
+	lastXrefID          uint32
+	newXrefEntries      []xrefEntry
+	updatedXrefEntries  []xrefEntry
 }

@@ -1,0 +1,139 @@
+<script setup lang="ts">
+import { signatureManagementService, type CeremonyStatus } from '@/services/signature-management-service'
+import { useConfirmDialog } from '@vueuse/core'
+import { useQRCode } from '@vueuse/integrations/useQRCode'
+import { computed, ref, useTemplateRef, watch } from 'vue'
+
+interface CeremonyRequest {
+  contractDid: string
+  fieldName: string
+}
+
+export interface CeremonyResult {
+  signerDid: string
+}
+
+const POLL_INTERVAL_MS = 2500
+
+const ceremonyModal = useTemplateRef('ceremony-modal')
+const request = ref<CeremonyRequest>({ contractDid: '', fieldName: '' })
+
+const phase = ref<'starting' | CeremonyStatus>('starting')
+const walletUri = ref('')
+const errorMessage = ref('')
+const qrCodeDataUrl = useQRCode(computed(() => walletUri.value || ''))
+
+let ceremonyId = ''
+let pollTimer: ReturnType<typeof setInterval> | undefined
+
+const { isRevealed, reveal, confirm, cancel, onReveal } = useConfirmDialog<CeremonyRequest, CeremonyResult | undefined>()
+
+onReveal((data) => {
+  if (data) request.value = data
+  void startCeremony()
+})
+
+watch(isRevealed, (value) => {
+  if (value) {
+    ceremonyModal.value?.showModal()
+  } else {
+    stopPolling()
+    ceremonyModal.value?.close()
+  }
+})
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = undefined
+  }
+}
+
+async function startCeremony() {
+  stopPolling()
+  phase.value = 'starting'
+  errorMessage.value = ''
+  walletUri.value = ''
+  try {
+    const started = await signatureManagementService.startCeremony(request.value.contractDid, request.value.fieldName)
+    ceremonyId = started.ceremony_id
+    walletUri.value = started.wallet_uri
+    phase.value = 'pending'
+    pollTimer = setInterval(() => void pollStatus(), POLL_INTERVAL_MS)
+  } catch (e: unknown) {
+    phase.value = 'failed'
+    errorMessage.value = e instanceof Error ? e.message : 'Could not start the signing ceremony.'
+  }
+}
+
+async function pollStatus() {
+  if (!ceremonyId) return
+  try {
+    const status = await signatureManagementService.getCeremonyStatus(ceremonyId)
+    phase.value = status.status
+    if (status.status === 'verified') {
+      stopPolling()
+      confirm({ signerDid: status.signer_did ?? '' })
+    } else if (status.status === 'expired' || status.status === 'failed') {
+      stopPolling()
+    }
+  } catch {
+    // Transient poll failures are ignored; the interval retries on the next tick.
+  }
+}
+
+function retry() {
+  void startCeremony()
+}
+
+function onCancel() {
+  stopPolling()
+  cancel()
+}
+
+interface DialogExpose {
+  reveal: (data: CeremonyRequest) => Promise<{ isCanceled: boolean; data?: CeremonyResult }>
+}
+
+defineExpose<DialogExpose>({ reveal })
+</script>
+
+<template>
+  <Teleport to="body">
+    <dialog ref="ceremony-modal" class="modal modal-bottom transition-none sm:modal-middle" @close="onCancel">
+      <div class="modal-box flex w-full max-w-md flex-col items-center gap-4 text-center">
+        <h3 class="text-lg font-bold">Sign with your EUDI Wallet</h3>
+
+        <div v-if="phase === 'starting'" class="flex flex-col items-center gap-3 py-4">
+          <span class="loading loading-lg loading-spinner" />
+          <p class="text-sm opacity-70">Starting signing ceremony…</p>
+        </div>
+
+        <div v-else-if="phase === 'pending'" class="flex flex-col items-center gap-3">
+          <p class="text-sm opacity-80">Scan the QR code with your wallet to present your PID and sign.</p>
+          <figure class="rounded-box bg-white p-3">
+            <img
+              v-if="qrCodeDataUrl"
+              :src="qrCodeDataUrl"
+              alt="Signing ceremony QR code"
+              class="mx-auto h-48 w-48"
+            />
+          </figure>
+          <p class="text-xs opacity-70">Waiting for the wallet presentation…</p>
+        </div>
+
+        <div v-else-if="phase === 'expired' || phase === 'failed'" class="flex flex-col items-center gap-3 py-2">
+          <p class="text-sm text-error">
+            {{ phase === 'expired' ? 'The signing ceremony expired.' : (errorMessage || 'The signing ceremony failed.') }}
+          </p>
+          <button type="button" class="btn btn-sm btn-primary" @click="retry">Start a new ceremony</button>
+        </div>
+
+        <div class="modal-action mt-2">
+          <button type="button" class="btn btn-outline btn-sm" @click="onCancel">Cancel</button>
+        </div>
+      </div>
+      <div class="modal-backdrop" @click="onCancel"></div>
+    </dialog>
+  </Teleport>
+</template>

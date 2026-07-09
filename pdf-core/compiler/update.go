@@ -58,8 +58,42 @@ func nquadsToSet(nquads []byte) map[string]bool {
 
 var pdfTrailerSizeRE = regexp.MustCompile(`/Size (\d+)`)
 var pdfTrailerIDRE = regexp.MustCompile(`/ID\s*(\[[^\]]*\])`)
+var pdfTrailerRootRE = regexp.MustCompile(`/Root (\d+) 0 R`)
 var pdfKidsRE = regexp.MustCompile(`/Kids \[([^\]]+)\]`)
 var pdfObjRefRE = regexp.MustCompile(`(\d+) 0 R`)
+
+// currentRootObjID returns the object number of /Root in the PDF's most recent
+// trailer. A PAdES signer supersedes the document catalog with a new object
+// carrying an inline AcroForm; a later incremental update must keep /Root
+// pointing at that signed catalog so the signature field's /V link stays the
+// current one the reader resolves.
+func currentRootObjID(pdf []byte) (int, bool) {
+	idx := bytes.LastIndex(pdf, []byte("trailer\n"))
+	if idx < 0 {
+		return 0, false
+	}
+	m := pdfTrailerRootRE.FindSubmatch(pdf[idx:])
+	if len(m) < 2 {
+		return 0, false
+	}
+	id, err := strconv.Atoi(string(m[1]))
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+// isPAdESSigned reports whether pdf already carries a PAdES signature: a
+// signature value dictionary (/Type /Sig) with a /ByteRange. A C2PA lifecycle
+// update over such a PDF must be provenance-only — re-rendering the pages or
+// re-stamping the AcroForm signature field would drop the signed field's /V and
+// invalidate the signature (DCS-OR-C2PA-010).
+func isPAdESSigned(pdf []byte) bool {
+	if !bytes.Contains(pdf, []byte("/ByteRange")) {
+		return false
+	}
+	return bytes.Contains(pdf, []byte("/Type /Sig")) || bytes.Contains(pdf, []byte("/Type/Sig"))
+}
 
 // extractTrailerID returns the raw /ID array string (e.g. "[<abc…> <def…>]")
 // from the last trailer in the PDF, or an empty string if not found.
@@ -206,24 +240,55 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 		return nil, err
 	}
 
+	// A PAdES signature freezes the visible content: the signature's /ByteRange
+	// covers the pages and its DocMDP permissions forbid altering them. A
+	// lifecycle update over a signed PDF is therefore provenance-only — it must
+	// not re-render pages or re-stamp the signed AcroForm field, both of which
+	// would strip the field's /V and invalidate the signature. It keeps /Root
+	// pointing at the signer's catalog (whose inline AcroForm carries the signed
+	// field) rather than reverting to the base catalog.
+	signed := isPAdESSigned(oldPDF)
+	rootObjID := 1
+	// The manifest a provenance-only update embeds describes the frozen, already
+	// embedded payload — not the caller's newPayload, which post-signing must
+	// equal it. Building from the embedded payload keeps the update reproducible
+	// from the PDF's own bytes: VerifyIncrementalUpdate re-extracts that same
+	// (unchanged) embedded payload and rebuilds the identical manifest.
+	manifestDoc := newDoc
+	manifestHashHex := newHashHex
+	if signed {
+		if r, ok := currentRootObjID(oldPDF); ok {
+			rootObjID = r
+		}
+		manifestDoc, err = extractDocumentModelFromCanonical(oldPayload, oldHashHex)
+		if err != nil {
+			return nil, fmt.Errorf("extract frozen document model: %w", err)
+		}
+		manifestHashHex = oldHashHex
+	}
+
 	// Compile the new document into full page layouts and assign new object IDs
 	// beyond the current maximum so the original objects are never overwritten.
+	// Skipped for signed PDFs, whose pages must stay byte-for-byte as signed.
 	nextID := maxObjID + 1
-	newPages := layoutDocumentPages(newDoc)
-	for i := range newPages {
-		newPages[i].ObjectID = nextID
-		nextID++
-		newPages[i].ContentID = nextID
-		nextID++
-		for j := range newPages[i].Annotations {
-			newPages[i].Annotations[j].ObjectID = nextID
+	var newPages []pageLayout
+	if !signed {
+		newPages = layoutDocumentPages(newDoc)
+		for i := range newPages {
+			newPages[i].ObjectID = nextID
 			nextID++
-		}
-		for j := range newPages[i].SigFields {
-			newPages[i].SigFields[j].AppearanceObjectID = nextID
+			newPages[i].ContentID = nextID
 			nextID++
-			newPages[i].SigFields[j].WidgetObjectID = nextID
-			nextID++
+			for j := range newPages[i].Annotations {
+				newPages[i].Annotations[j].ObjectID = nextID
+				nextID++
+			}
+			for j := range newPages[i].SigFields {
+				newPages[i].SigFields[j].AppearanceObjectID = nextID
+				nextID++
+				newPages[i].SigFields[j].WidgetObjectID = nextID
+				nextID++
+			}
 		}
 	}
 
@@ -248,15 +313,23 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 	var result []byte
 
 	for range 6 {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(newHashHex), newDoc.ContractID, newHashHex, hardBindingHash, exclusions, compiledAt, remoteManifestURL)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(manifestHashHex), manifestDoc.ContractID, manifestHashHex, hardBindingHash, exclusions, compiledAt, remoteManifestURL)
 		if err != nil {
 			return nil, fmt.Errorf("render update manifest: %w", err)
 		}
-		appendix := buildUpdateAppendixBytes(
-			len(oldPDF), prevStartXref, oldSize, fileID,
-			updatedC2PA, newDoc.CanonicalJSON, newDoc.PayloadHash,
-			newPages, vcBytes, vcFileObjID, vcSpecObjID,
-		)
+		var appendix []byte
+		if signed {
+			appendix = buildSignedUpdateAppendixBytes(
+				len(oldPDF), prevStartXref, oldSize, rootObjID, fileID,
+				updatedC2PA, vcBytes, vcFileObjID, vcSpecObjID,
+			)
+		} else {
+			appendix = buildUpdateAppendixBytes(
+				len(oldPDF), prevStartXref, oldSize, fileID,
+				updatedC2PA, newDoc.CanonicalJSON, newDoc.PayloadHash,
+				newPages, vcBytes, vcFileObjID, vcSpecObjID,
+			)
+		}
 		result = append(append([]byte(nil), oldPDF...), appendix...)
 
 		streamStart, streamLen, found := findLastObjectStreamRange(result, 9)
@@ -442,6 +515,88 @@ func buildUpdateAppendixBytes(
 	buf.WriteString(fmt.Sprintf(
 		"trailer\n<< /Size %d /Root 1 0 R /Prev %d%s >>\nstartxref\n%d\n%%%%EOF\n",
 		newSize, prevStartXref, idEntry, xrefStart,
+	))
+	return buf.Bytes()
+}
+
+// buildSignedUpdateAppendixBytes constructs a provenance-only incremental
+// update for a PDF that already carries a PAdES signature. It supersedes only
+// the C2PA manifest stream (obj 9) and appends the optional lifecycle VC, all
+// after the signed byte range so the PAdES /ByteRange stays valid. It leaves
+// the pages, the AcroForm, and the signature field widget (with its /V link)
+// untouched, and keeps /Root pointing at the signer's catalog (rootObjID) so
+// that signed AcroForm remains the one the reader resolves.
+func buildSignedUpdateAppendixBytes(
+	baseLen, prevStartXref, oldSize, rootObjID int,
+	fileID string,
+	updatedC2PA []byte,
+	vcBytes []byte, vcFileObjID, vcSpecObjID int,
+) []byte {
+	const c2paObjID = 9
+
+	type objEntry struct{ id, offset int }
+	var entries []objEntry
+
+	var buf bytes.Buffer
+	buf.WriteString("\n% dcs-pdf-core incremental update\n")
+
+	// Lifecycle VC attachment (a provenance event), appended as new objects.
+	if len(vcBytes) > 0 {
+		entries = append(entries, objEntry{vcFileObjID, baseLen + buf.Len()})
+		buf.WriteString(fmt.Sprintf("%d 0 obj\n", vcFileObjID))
+		buf.Write(streamObject(vcBytes, fmt.Sprintf(
+			"<< /Type /EmbeddedFile /Subtype /application#2Fjson /Length %d >>", len(vcBytes))))
+		buf.WriteString("\nendobj\n")
+
+		entries = append(entries, objEntry{vcSpecObjID, baseLen + buf.Len()})
+		buf.WriteString(fmt.Sprintf(
+			"%d 0 obj\n<< /Type /Filespec /F (contract-lifecycle-vc.json) /UF (contract-lifecycle-vc.json) /AFRelationship /Supplement /EF << /F %d 0 R >> >>\nendobj\n",
+			vcSpecObjID, vcFileObjID))
+	}
+
+	// Supersede obj 9: updated C2PA manifest — written last so its stream offset
+	// stabilises across the hard-binding hash iterations. The catalog reaches it
+	// unchanged via the content_credential.c2pa filespec's /EF reference.
+	entries = append(entries, objEntry{c2paObjID, baseLen + buf.Len()})
+	buf.WriteString(fmt.Sprintf("%d 0 obj\n", c2paObjID))
+	buf.Write(streamObject(updatedC2PA, fmt.Sprintf(
+		"<< /Type /EmbeddedFile /Subtype /application#2Fc2pa /Length %d >>", len(updatedC2PA))))
+	buf.WriteString("\nendobj\n")
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].id < entries[j].id })
+	xrefStart := baseLen + buf.Len()
+	buf.WriteString("xref\n")
+	i := 0
+	for i < len(entries) {
+		j := i + 1
+		for j < len(entries) && entries[j].id == entries[j-1].id+1 {
+			j++
+		}
+		buf.WriteString(fmt.Sprintf("%d %d\n", entries[i].id, j-i))
+		for k := i; k < j; k++ {
+			buf.WriteString(fmt.Sprintf("%010d 00000 n \n", entries[k].offset))
+		}
+		i = j
+	}
+
+	newMaxID := 0
+	for _, e := range entries {
+		if e.id > newMaxID {
+			newMaxID = e.id
+		}
+	}
+	newSize := oldSize
+	if newMaxID+1 > newSize {
+		newSize = newMaxID + 1
+	}
+
+	idEntry := ""
+	if fileID != "" {
+		idEntry = " /ID " + fileID
+	}
+	buf.WriteString(fmt.Sprintf(
+		"trailer\n<< /Size %d /Root %d 0 R /Prev %d%s >>\nstartxref\n%d\n%%%%EOF\n",
+		newSize, rootObjID, prevStartXref, idEntry, xrefStart,
 	))
 	return buf.Bytes()
 }

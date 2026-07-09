@@ -59,11 +59,15 @@ func (context *SignContext) createCatalog() ([]byte, error) {
 		catalog_buffer.WriteString(strconv.Itoa(int(sig.objectId)) + " 0 R")
 	}
 
-	// Add the visual signature field to the AcroForm dictionary
-	if len(context.existingSignatures) > 0 {
-		catalog_buffer.WriteString(" ")
+	// Add the newly created signature field to the AcroForm dictionary. When an
+	// existing empty field was filled instead, it is already part of
+	// existingSignatures above and must not be listed twice.
+	if context.filledFieldObjectID == 0 {
+		if len(context.existingSignatures) > 0 {
+			catalog_buffer.WriteString(" ")
+		}
+		catalog_buffer.WriteString(strconv.Itoa(int(context.VisualSignData.objectId)) + " 0 R")
 	}
-	catalog_buffer.WriteString(strconv.Itoa(int(context.VisualSignData.objectId)) + " 0 R")
 
 	catalog_buffer.WriteString("]\n") // close Fields array
 
@@ -113,6 +117,108 @@ func (context *SignContext) createCatalog() ([]byte, error) {
 	catalog_buffer.WriteString(">>\n")   // Close Catalog
 
 	return catalog_buffer.Bytes(), nil
+}
+
+// resolveExistingSignatureField returns the terminal AcroForm field of type /Sig
+// whose /T text equals name and which has no /V yet. A field that already carries
+// a /V (a completed prior signature) is left untouched.
+func (context *SignContext) resolveExistingSignatureField(name string) (pdf.Value, bool) {
+	if name == "" {
+		return pdf.Value{}, false
+	}
+	acroForm := context.PDFReader.Trailer().Key("Root").Key("AcroForm")
+	if acroForm.IsNull() {
+		return pdf.Value{}, false
+	}
+	fields := acroForm.Key("Fields")
+	for i := 0; i < fields.Len(); i++ {
+		field := fields.Index(i)
+		if field.Key("FT").Name() != "Sig" {
+			continue
+		}
+		if field.Key("T").Text() != name {
+			continue
+		}
+		if !field.Key("V").IsNull() {
+			continue
+		}
+		return field, true
+	}
+	return pdf.Value{}, false
+}
+
+// buildFilledSignatureField re-serializes an existing empty signature field,
+// preserving all of its entries (title, rectangle, appearance, page link) and
+// adding a /V reference to the freshly written signature value dictionary. The
+// result is written back at the field's own object number as an incremental
+// update, so validators resolve the field's /V to the signature.
+func (context *SignContext) buildFilledSignatureField(field pdf.Value) []byte {
+	var buffer bytes.Buffer
+	fieldID := field.GetPtr().GetID()
+
+	buffer.WriteString("<<\n")
+	for _, key := range field.Keys() {
+		if key == "V" {
+			continue
+		}
+		_, _ = fmt.Fprintf(&buffer, "  /%s ", key)
+		context.serializeFieldEntry(&buffer, fieldID, field.Key(key))
+		buffer.WriteString("\n")
+	}
+	_, _ = fmt.Fprintf(&buffer, "  /V %d 0 R\n", context.SignData.objectId)
+	buffer.WriteString(">>\n")
+
+	return buffer.Bytes()
+}
+
+// serializeFieldEntry writes value using pdfString for text strings so field
+// titles keep their escaping and UTF-16 encoding. Indirect references (relative
+// to the owning field object fieldID) are emitted as object references.
+func (context *SignContext) serializeFieldEntry(w io.Writer, fieldID uint32, value pdf.Value) {
+	if ptr := value.GetPtr(); ptr.GetID() != 0 && ptr.GetID() != fieldID {
+		_, _ = fmt.Fprintf(w, "%d %d R", ptr.GetID(), ptr.GetGen())
+		return
+	}
+
+	switch value.Kind() {
+	case pdf.String:
+		_, _ = fmt.Fprint(w, pdfString(value.Text()))
+	case pdf.Null:
+		_, _ = fmt.Fprint(w, "null")
+	case pdf.Bool:
+		if value.Bool() {
+			_, _ = fmt.Fprint(w, "true")
+		} else {
+			_, _ = fmt.Fprint(w, "false")
+		}
+	case pdf.Integer:
+		_, _ = fmt.Fprintf(w, "%d", value.Int64())
+	case pdf.Real:
+		_, _ = fmt.Fprintf(w, "%f", value.Float64())
+	case pdf.Name:
+		_, _ = fmt.Fprintf(w, "/%s", value.Name())
+	case pdf.Dict:
+		_, _ = fmt.Fprint(w, "<<")
+		for idx, key := range value.Keys() {
+			if idx > 0 {
+				_, _ = fmt.Fprint(w, " ")
+			}
+			_, _ = fmt.Fprintf(w, "/%s ", key)
+			context.serializeFieldEntry(w, fieldID, value.Key(key))
+		}
+		_, _ = fmt.Fprint(w, ">>")
+	case pdf.Array:
+		_, _ = fmt.Fprint(w, "[")
+		for idx := 0; idx < value.Len(); idx++ {
+			if idx > 0 {
+				_, _ = fmt.Fprint(w, " ")
+			}
+			context.serializeFieldEntry(w, fieldID, value.Index(idx))
+		}
+		_, _ = fmt.Fprint(w, "]")
+	case pdf.Stream:
+		panic("stream cannot be a direct field entry")
+	}
 }
 
 // serializeCatalogEntry takes a pdf.Value and serializes it to the given writer.
