@@ -34,24 +34,12 @@ spec:
             - name: DCS_PDF_CORE_ADDR
               value: {{ printf "0.0.0.0:%v" .Values.pdfCore.service.port | quote }}
             - name: DCS_PDF_CORE_ONTOLOGY_BASE_URL
-<<<<<<< HEAD
               value: {{ .Values.pdfCore.ontologyBaseURL | default (include "digital-contracting-service.pdfCoreURL" .) | quote }}
-            {{- $cpURL := include "digital-contracting-service.pdfCoreCryptoProviderURL" . }}
-            {{- if $cpURL }}
-            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_URL
-              value: {{ $cpURL | quote }}
-            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_NAMESPACE
-              value: {{ include "digital-contracting-service.cryptoProviderNamespace" . | quote }}
-            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_KEY
-              value: {{ include "digital-contracting-service.pdfCoreCryptoProviderKey" . | quote }}
-=======
-              value: {{ include "digital-contracting-service.pdfCoreURL" . | quote }}
             # pdf-core holds no key material: it signs COSE Sig_structure bytes by
             # calling the backend's authenticated internal endpoint, which uses the
             # PKCS#11 dcs-c2pa key (DCS-IR-HI-01).
             - name: DCS_PDF_CORE_C2PA_SIGNING_ENDPOINT
               value: {{ printf "http://%s:%v%s/internal/c2pa/sign" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
->>>>>>> goerkem/contract_state
             - name: DCS_PDF_CORE_C2PA_X5CHAIN_PEM
               valueFrom:
                 secretKeyRef:
