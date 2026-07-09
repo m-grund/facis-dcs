@@ -14,7 +14,9 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/hsm"
 	"digital-contracting-service/internal/base/validation"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
@@ -39,7 +41,9 @@ type Applier struct {
 }
 
 // Handle applies a digital signature to a contract (DCS-FR-SM-16, DCS-IR-SI-10).
-// The contract must be in APPROVED state; this is enforced by the repo query.
+// The APPROVED -> SIGNED gate is enforced by contractstate.ValidateTransition
+// against the single-source-of-truth transition table (see below), not by any
+// hardcoded SQL state literal.
 func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
@@ -55,7 +59,8 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		}
 	}(tx)
 
-	// Validates APPROVED state; errors if not found.
+	// Reads the contract (restricted to APPROVED/SIGNED by the repo query);
+	// errors if not found. The SIGN transition itself is gated below.
 	data, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract %s: %w", cmd.DID, err)
@@ -63,6 +68,13 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 
 	if data.ContractData == nil {
 		return fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
+	}
+
+	// The transition table (contractstate.Transitions) is the single source
+	// of truth for the APPROVED -> SIGNED gate — no hardcoded SQL state
+	// literal decides this anymore (see command package/ADR-3 note).
+	if err := contractstate.ValidateTransition(contractstate.ContractState(data.State), contractstate.EventSign); err != nil {
+		return err
 	}
 
 	if err := validation.ValidateContractPolicySatisfaction(
@@ -97,16 +109,32 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		status = "PENDING"
 	}
 
+	// The PAdES contract-signing key is the rotation-versioned key; the
+	// signature records the version active at signing time so a later rotation
+	// leaves this record attributable to the key that actually produced it
+	// (DCS-OR-C2PA-007).
+	keyVersion, err := h.CRepo.ActiveKeyVersion(ctx, tx, hsm.KeyLabelPADES())
+	if err != nil {
+		return fmt.Errorf("could not resolve active key version: %w", err)
+	}
+
 	signature := db.ContractSignature{
 		ContractDID:    cmd.DID,
 		Status:         status,
 		SignatureBytes: sigBytes,
 		SignerDID:      cmd.AppliedBy,
 		CredentialType: cmd.CredentialType,
+		KeyVersion:     keyVersion,
 	}
 	err = h.CRepo.CreateSignature(ctx, tx, signature)
 	if err != nil {
 		return fmt.Errorf("could not create signature: %w", err)
+	}
+
+	if status == "SIGNED" {
+		if err := h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Signed.String()); err != nil {
+			return fmt.Errorf("could not update contract state: %w", err)
+		}
 	}
 
 	evt := event2.ApplyEvent{

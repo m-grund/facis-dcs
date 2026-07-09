@@ -20,7 +20,7 @@ if echo "$STAGED_FILES" | grep -q "^backend/"; then
   cd "$PROJECT_ROOT/backend"
 
   go mod tidy
-  if [ -n "$(git status --porcelain go.mod go.sum)" ]; then
+  if ! git diff --quiet go.mod go.sum; then
     echo "❌ Error: backend/go.mod or backend/go.sum are not tidy!"
     echo "Please stage the changes created by 'go mod tidy'."
     exit 1

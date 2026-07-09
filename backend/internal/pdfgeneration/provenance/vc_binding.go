@@ -112,7 +112,7 @@ func buildCredentialStatus(statusListURI, contractID string) map[string]interfac
 }
 
 func vcSecuritySuiteContext() string {
-	return "https://w3id.org/security/suites/ed25519-2020/v1"
+	return dataIntegrityContext
 }
 
 // normalizeSubjectID returns a URI to satisfy strict VC signer validation.

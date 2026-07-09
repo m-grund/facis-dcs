@@ -93,8 +93,8 @@ func (h *Rejecter) Handle(ctx context.Context, cmd RejectCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	if processData.State != contractstate.Reviewed.String() || processData.State == contractstate.Terminated.String() {
-		return errors.New("invalid contract state")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventReject); err != nil {
+		return err
 	}
 
 	exist, err := h.ATRepo.IsValidApprover(ctx, tx, cmd.DID, cmd.CauserDID)

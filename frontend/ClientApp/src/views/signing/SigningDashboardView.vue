@@ -67,9 +67,11 @@ function c2paStatus(contract: SignatureContract): C2PAStatus {
   const state = (contract.state ?? '').toLowerCase()
   const map: Record<string, C2PAStatus> = {
     active: { label: 'Active', cls: 'badge-success' },
-    approved: { label: 'Active', cls: 'badge-success' },
+    approved: { label: 'Draft', cls: 'badge-ghost' },
     draft: { label: 'Draft', cls: 'badge-ghost' },
+    signed: { label: 'Active', cls: 'badge-success' },
     suspended: { label: 'Suspended', cls: 'badge-warning' },
+    revoked: { label: 'Suspended', cls: 'badge-warning' },
     terminated: { label: 'Terminated', cls: 'badge-error' },
     replaced: { label: 'Replaced', cls: 'badge-neutral' },
     expired: { label: 'Expired', cls: 'badge-neutral' },

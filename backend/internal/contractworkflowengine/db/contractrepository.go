@@ -222,6 +222,11 @@ type SearchValues struct {
 	Name            string
 	Description     string
 	ContractData    string
+	// ParentDID is the full-scope hierarchy filter: when
+	// set, only contracts whose dcs:parentContract references this DID are
+	// returned. It is a reverse-index QUERY over children the instance
+	// legitimately holds locally — never a field on the parent document.
+	ParentDID string
 }
 
 type ContractPDFState struct {

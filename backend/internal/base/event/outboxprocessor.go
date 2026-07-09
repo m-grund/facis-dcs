@@ -10,6 +10,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
@@ -107,6 +108,19 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 // entry embeds the hash of its predecessor, retroactively modifying an
 // already-anchored entry breaks the chain and is detectable.
 func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.OutboxEvent, origin string) error {
+	// Read-only lookup events (RETRIEVE_*/SEARCH_*) are operational traces that
+	// every audit read filters out (see base.IsAuditVisibleEventType and its use
+	// in both the contract and PAC audit handlers). They are never surfaced from
+	// the tamper-evident chain, yet each one costs a synchronous TSA round-trip
+	// plus an IPFS write here. Under a full BDD run these high-frequency traces
+	// dominate the outbox and starve genuine audit-visible events (e.g. EXPORT):
+	// an event created at the tail of a scenario could take ~45s to anchor,
+	// missing the ~30s audit poll window. They still get republished on NATS and
+	// marked processed, but they are not anchored into the hash chain.
+	if !base.IsAuditVisibleEventType(event.EventType) {
+		return j.processUnanchoredEvent(ctx, event)
+	}
+
 	tx, err := j.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -189,6 +203,34 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 
 	err = db.UpdateOutboxEvent(ctx, tx, event.ID)
 	if err != nil {
+		return fmt.Errorf("could not update outbox event: %w", err)
+	}
+
+	if err := j.CEPPubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
+		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
+	}
+
+	return tx.Commit()
+}
+
+// processUnanchoredEvent handles an outbox event that is intentionally NOT
+// anchored into the tamper-evident audit trail (a read-only trace, see
+// processEvent). It still republishes the event on NATS so subscribers
+// (webhookplatform, dcstodcs, pdfgeneration) behave exactly as before, then
+// marks the outbox row processed. Skipping the TSA/IPFS anchoring keeps the
+// outbox from backing up under the high volume of lookup events.
+func (j OutboxProcessor) processUnanchoredEvent(ctx context.Context, event datatype.OutboxEvent) error {
+	tx, err := j.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	if err = db.UpdateOutboxEvent(ctx, tx, event.ID); err != nil {
 		return fmt.Errorf("could not update outbox event: %w", err)
 	}
 

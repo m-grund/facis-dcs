@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
@@ -13,6 +14,7 @@ import (
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/signingmanagement/command"
@@ -22,6 +24,21 @@ import (
 
 	"github.com/jmoiron/sqlx"
 )
+
+// mapSignatureCommandError classifies a signing command error for the HTTP
+// layer, mirroring service.mapContractCommandError: a contractstate.
+// ErrInvalidTransition (e.g. attempting to sign a contract that isn't
+// APPROVED) is a client error (400), everything else stays an internal
+// error (500).
+func mapSignatureCommandError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, contractstate.ErrInvalidTransition) {
+		return signaturemanagement.MakeBadRequest(err)
+	}
+	return signaturemanagement.MakeInternalError(err)
+}
 
 type signatureManagementsrvc struct {
 	DB           *sqlx.DB
@@ -169,9 +186,12 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		Status:         result.SignatureEnvelope.Status.String(),
 	}
 
+	keyVersion := result.SignatureEnvelope.KeyVersion
+
 	return &signaturemanagement.SMContractRetrieveByIDResponse{
 		Contract:          &contract,
 		SignatureEnvelope: signatureEnvelop,
+		KeyVersion:        &keyVersion,
 	}, nil
 }
 
@@ -217,7 +237,7 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, signaturemanagement.MakeInternalError(err)
+		return nil, mapSignatureCommandError(err)
 	}
 
 	qry := query.GetByIDQry{

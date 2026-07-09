@@ -39,6 +39,22 @@ extraEnv:
     value: "true"
   - name: AUTH_INSECURE_COOKIES
     value: "true"
+  # DID identity (fatal on startup when missing). The dcs-identity secret is
+  # created from backend/certs/dev/ by the kind_deploy make target.
+  - name: DCS_DID
+    value: /app/identity/did.json
+  - name: DCS_PRIVATE_KEY
+    value: /app/identity/key.pem
+
+volumeMounts:
+  - name: identity
+    mountPath: /app/identity
+    readOnly: true
+
+volumes:
+  - name: identity
+    secret:
+      secretName: dcs-identity
 
 oid4vp:
   trust:

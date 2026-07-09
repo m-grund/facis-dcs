@@ -29,6 +29,12 @@ go mod tidy                                    # Required before every commit
 ```bash
 npm install          # Project root — installs Husky pre-commit hooks (run once)
 bash dev-stack.sh    # One-command local stack: Helm (K8s), backend air, frontend Vite
+bash dev-stack2.sh   # Optional second instance ("instance B") for the two-instance inter-org
+                     # demo (Workstream C1-C3, docs/anforderung.md): its own Helm release
+                     # ("dcs2", deployment/helm/values.dev2.yml), backend on :8992
+                     # (backend/.env.dev2, built and run directly rather than via `air`),
+                     # frontend on :5174 (`npm run dev-dcs2`). Run dev-stack.sh first — pdf-core
+                     # is shared between both instances.
 ```
 
 ## Architecture Overview
@@ -95,7 +101,7 @@ Unauthenticated users are redirected to `/login`. Role mismatch redirects to `/u
 - `DCS_API_TARGET` — Backend URL for proxy (default `http://localhost:8991`)
 - `DCS_UI_PATH` — Frontend base path (default `/ui/`)
 
-**Backend** — configure via `backend/.env.dev` (copied to `.env` by `dev-stack.sh`). Key groups: `DATABASE_URL`, `HYDRA_*` (OIDC), `NATS_URL`, `CRYPTO_PROVIDER_*`, `IPFS_*`, `TSA_URL`.
+**Backend** — configure via `backend/.env.dev` (copied to `.env` by `dev-stack.sh`). Key groups: `DATABASE_URL`, `HYDRA_*` (OIDC), `NATS_URL`, `PKCS11_*` + `DCS_HSM_KEY_*` (private keys live in a SoftHSM2/PKCS#11 token — see `backend/internal/base/hsm`, provisioned by `scripts/hsm-provision.sh`), `IPFS_*`, `TSA_URL`.
 
 ### Pre-commit Hooks
 

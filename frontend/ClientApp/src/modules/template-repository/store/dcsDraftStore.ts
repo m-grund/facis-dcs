@@ -47,11 +47,14 @@ import {
   type DcsRequirementField,
   type DcsSubTemplateSnapshot,
   type JsonLdTypedValue,
+  type JsonLdReference,
   type OdrlRule,
+  type OdrlSet,
 } from '@/models/dcs-jsonld'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
+import { DEFAULT_FIELD_CONSTRAINT_ACTION, DCS_ODRL_PROFILE_IRI } from '@template-repository/utils/sla-ontology-catalog'
 
 // ---- MergedApprovedTemplateBlock (UI-only virtual block for composed contract templates) ----
 
@@ -171,7 +174,7 @@ export const useDcsDraftStore = defineStore(storeId, {
           blocks: extractBlockList(structure['dcs:blocks']),
           layout: structure['dcs:layout'].length ? structure['dcs:layout'] : getInitialLayout(),
           contractData: rawDoc['dcs:contractData'],
-          policies: rawDoc['dcs:policies'],
+          policies: flattenPolicySet(rawDoc['dcs:policies']),
           customMetaData: (metadata['dcs:customMetaData'] as MetaData[]) ?? [],
           subTemplateSnapshots: deserializeSubTemplateSnapshots(metadata['dcs:subTemplates'] ?? []),
         })
@@ -232,6 +235,8 @@ export const useDcsDraftStore = defineStore(storeId, {
       operators: SemanticParameterOperator[],
     ): void {
       const documentId = this.did ?? undefined
+      const requirement = requirementForField(this.contractData, fieldId)
+      const role = requirement?.['dcs:entityRole']
       this.policies = this.policies.filter((p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId)
       operators.forEach((operator, index) => {
         if (!isStandardOdrlOperator(operator.operate)) return
@@ -239,6 +244,10 @@ export const useDcsDraftStore = defineStore(storeId, {
         this.policies.push({
           '@id': policyIri(conditionId, parameterName, index, documentId),
           '@type': 'odrl:Duty',
+          'odrl:action': { '@id': DEFAULT_FIELD_CONSTRAINT_ACTION },
+          'odrl:assigner': partyReference(role, documentId),
+          'odrl:assignee': partyReference(counterpartRole(role), documentId),
+          'odrl:target': targetReference(documentId),
           'odrl:constraint': {
             '@type': 'odrl:Constraint',
             'odrl:leftOperand': { '@id': fieldId },
@@ -431,6 +440,70 @@ function policyIri(conditionId: string, parameterName: string, index: number, do
   return objectIri('policy', `${conditionId}-${parameterName}-${index}`, documentId)
 }
 
+function policySetIri(documentId?: string): string {
+  return documentId ? `${documentId}#policy-set` : `${UUID_URN_PREFIX}policy-set`
+}
+
+// ---- ODRL rule parties/target (Workstream F1 — AC3) ----
+//
+// Template = open parties (ODRL-Offer character): the two sides of a rule
+// aren't bound to real party DIDs yet, so a role-derived open reference is
+// used. Contract instance = bound parties (ODRL-Agreement character): once
+// bound to a real contract, the same role-derived reference still resolves
+// consistently against that contract's own DID, which is what AC3 (presence
+// of odrl:assigner/odrl:assignee/odrl:target) requires; resolving to the
+// real counterpart legal-entity DID is left to the semantic mapper that
+// already publishes bound envelopes for peer exchange.
+
+function counterpartRole(role: string | undefined): string {
+  if (role === 'provider') return 'customer'
+  if (role === 'customer') return 'provider'
+  return 'assignee'
+}
+
+function partyReference(role: string | undefined, documentId?: string): JsonLdReference {
+  return { '@id': objectIri('party', role ?? 'assigner', documentId) }
+}
+
+function targetReference(documentId?: string): JsonLdReference {
+  return { '@id': documentId ?? `${UUID_URN_PREFIX}pending-target` }
+}
+
+function requirementForField(
+  contractData: readonly DcsDataRequirement[],
+  fieldId: string,
+): DcsDataRequirement | undefined {
+  return contractData.find((r) => r['dcs:fields'].some((f) => f['@id'] === fieldId))
+}
+
+/** Assembles the single enclosing odrl:Set (Workstream F1 — AC1) from the flat internal rule array. */
+function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string): OdrlSet {
+  const set: OdrlSet = {
+    '@id': policySetIri(documentId),
+    '@type': 'odrl:Set',
+    uid: documentId ?? policySetIri(documentId),
+    'odrl:profile': { '@id': DCS_ODRL_PROFILE_IRI },
+  }
+  const duties = policies.filter((p) => p['@type'] === 'odrl:Duty')
+  const permissions = policies.filter((p) => p['@type'] === 'odrl:Permission')
+  const prohibitions = policies.filter((p) => p['@type'] === 'odrl:Prohibition')
+  if (duties.length) set['odrl:duty'] = duties
+  if (permissions.length) set['odrl:permission'] = permissions
+  if (prohibitions.length) set['odrl:prohibition'] = prohibitions
+  return set
+}
+
+/** Flattens the enclosing odrl:Set (or legacy flat array, for graceful loading of already-persisted data) into the flat internal rule array. */
+export function flattenPolicySet(policies: OdrlSet | OdrlRule[] | undefined): OdrlRule[] {
+  if (!policies) return []
+  if (Array.isArray(policies)) return policies
+  return [
+    ...(policies['odrl:duty'] ?? []),
+    ...(policies['odrl:permission'] ?? []),
+    ...(policies['odrl:prohibition'] ?? []),
+  ]
+}
+
 export function blockIdFromIri(iri: string): string {
   const local = iri.includes('#') ? iri.slice(iri.lastIndexOf('#') + 1) : iri.slice(UUID_URN_PREFIX.length)
   return decodeURIComponent(local.replace(/^block-/, ''))
@@ -490,7 +563,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       'dcs:layout': canonicalLayout,
     },
     'dcs:contractData': input.contractData,
-    'dcs:policies': input.policies,
+    'dcs:policies': assemblePolicySet(input.policies, input.documentId),
     ...(input.documentType === 'dcs:Contract'
       ? {
           semanticConditionValues: input.semanticConditionValues ?? [],
@@ -575,7 +648,7 @@ export function getSemanticConditionsFromTemplateData(
   td: DcsDocumentData | SubTemplateSnapshot['template_data'],
 ): SemanticCondition[] {
   if (!isDcsDocumentData(td)) return []
-  return contractDataToSemanticConditions(td['dcs:contractData'], td['dcs:policies'])
+  return contractDataToSemanticConditions(td['dcs:contractData'], flattenPolicySet(td['dcs:policies']))
 }
 
 // ---- Layout helpers ----
@@ -872,6 +945,7 @@ function semanticConditionToPolicies(
 ): OdrlRule[] {
   const req = contractData.find((r) => r['dcs:conditionId'] === condition.conditionId)
   if (!req) return []
+  const role = condition.entityRole
   return condition.parameters.flatMap((parameter, _pi) =>
     parameter.operators.flatMap((operator, index) => {
       if (!isStandardOdrlOperator(operator.operate)) return []
@@ -882,6 +956,10 @@ function semanticConditionToPolicies(
         {
           '@id': policyIri(condition.conditionId, parameter.parameterName, index, documentId),
           '@type': 'odrl:Duty',
+          'odrl:action': { '@id': DEFAULT_FIELD_CONSTRAINT_ACTION },
+          'odrl:assigner': partyReference(role, documentId),
+          'odrl:assignee': partyReference(counterpartRole(role), documentId),
+          'odrl:target': targetReference(documentId),
           'odrl:constraint': {
             '@type': 'odrl:Constraint',
             'odrl:leftOperand': { '@id': field['@id'] },

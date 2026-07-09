@@ -46,7 +46,7 @@ func TestIssueLifecycleVC_IncludesInlineJSONLDContextAndSubjectID(t *testing.T) 
 	require.Len(t, ctxList, 3)
 	// W3C VC Data Model 2.0: first context element MUST be the v2 URL.
 	assert.Equal(t, "https://www.w3.org/ns/credentials/v2", ctxList[0], "@context[0] must be VC DM 2.0")
-	assert.Equal(t, "https://w3id.org/security/suites/ed25519-2020/v1", ctxList[1])
+	assert.Equal(t, "https://w3id.org/security/data-integrity/v2", ctxList[1])
 
 	inlineCtx, ok := ctxList[2].(map[string]interface{})
 	require.True(t, ok)

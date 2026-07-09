@@ -10,7 +10,14 @@ import (
 func TestMain(m *testing.M) {
 	loadDevEnv()
 	setupTestContext()
-	os.Exit(m.Run())
+	srv, err := setupTestSigning()
+	if err != nil {
+		panic("setupTestSigning: " + err.Error())
+	}
+	defer srv.Close()
+	code := m.Run()
+	srv.Close()
+	os.Exit(code)
 }
 
 func setupTestContext() {

@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"digital-contracting-service/internal/middleware"
 )
 
 // RendererVersion is kept in sync with pdf-core/compiler/version.go.
@@ -64,6 +66,7 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 		return nil, "", fmt.Errorf("pdf-core download request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/ld+json")
+	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -83,8 +86,11 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 // Update posts a multipart request to POST /update containing existingPDF as
 // "pdf", jsonld as "payload", and optionally vcBytes as "vc". When vcBytes is
 // non-nil the request proceeds even if the JSON-LD payload is unchanged.
-// Returns the updated PDF bytes and the renderer version header.
-func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte) (pdf []byte, version string, err error) {
+// When manifestURL is non-empty it is sent as the "manifest_url" field so
+// pdf-core embeds it as the C2PA claim's remote_manifests field
+// (DCS-OR-C2PA-008 AC3). Returns the updated PDF bytes and the renderer version
+// header.
+func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte, manifestURL string) (pdf []byte, version string, err error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 
@@ -99,6 +105,11 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 			return nil, "", fmt.Errorf("pdf-core update: write vc field: %w", err)
 		}
 	}
+	if manifestURL != "" {
+		if err := writeField(mw, "manifest_url", []byte(manifestURL)); err != nil {
+			return nil, "", fmt.Errorf("pdf-core update: write manifest_url field: %w", err)
+		}
+	}
 	if err := mw.Close(); err != nil {
 		return nil, "", fmt.Errorf("pdf-core update: close multipart: %w", err)
 	}
@@ -109,6 +120,7 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 		return nil, "", fmt.Errorf("pdf-core update request: %w", err)
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -147,6 +159,7 @@ func (c *Client) Verify(ctx context.Context, pdf []byte) (VerifyResult, error) {
 		return VerifyResult{}, fmt.Errorf("pdf-core verify request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/pdf")
+	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -203,6 +216,16 @@ func (c *Client) ExtractManifest(ctx context.Context, pdf []byte) ([]byte, error
 		return nil, fmt.Errorf("pdf-core extract-manifest read: %w", err)
 	}
 	return manifest, nil
+}
+
+// forwardBearerToken copies the caller's JWT from ctx onto the outbound pdf-core
+// request. pdf-core presents it as its own Authorization header when it calls the
+// backend's internal C2PA signing endpoint (DCS-IR-HI-01). When ctx carries no
+// token (an unauthenticated internal path) the header is left unset.
+func forwardBearerToken(ctx context.Context, req *http.Request) {
+	if tok := middleware.GetBearerToken(ctx); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
 }
 
 // checkStatus returns an error for non-2xx responses, including the status code

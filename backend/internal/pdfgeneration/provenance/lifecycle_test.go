@@ -41,17 +41,28 @@ func TestLifecycleAssertion_AllFieldsPresent(t *testing.T) {
 // TestMapCWEStateToC2PA_CWEUppercaseMappings verifies that every uppercase CWE state
 // (as emitted by the CWE state machine) maps to the correct SRS C2PA state.
 // This is the fix for Gap 4 (DCS-OR-C2PA-003 lifecycle vocabulary coverage).
+//
+// Updated for Workstream C4 (contract-state-machine-refactor): OFFERED/
+// NEGOTIATION/SUBMITTED/REVIEWED/APPROVED now all map to "draft" (a
+// deliberate behavior change — APPROVED used to map to "active"), SIGNED/
+// ACTIVE map to "active", REVOKED maps to "suspended", and the new
+// REJECTED/WITHDRAWN pre-signing terminal states map to "draft".
 func TestMapCWEStateToC2PA_CWEUppercaseMappings(t *testing.T) {
 	cases := []struct {
 		cwe  string
 		want string
 	}{
 		{"DRAFT", "draft"},
-		{"SUBMITTED", "active"},
-		{"REVIEWED", "active"},
-		{"APPROVED", "active"},
-		{"NEGOTIATION", "amended"},
-		{"REJECTED", "amended"},
+		{"OFFERED", "draft"},
+		{"NEGOTIATION", "draft"},
+		{"SUBMITTED", "draft"},
+		{"REVIEWED", "draft"},
+		{"APPROVED", "draft"},
+		{"REJECTED", "draft"},
+		{"WITHDRAWN", "draft"},
+		{"SIGNED", "active"},
+		{"ACTIVE", "active"},
+		{"REVOKED", "suspended"},
 		{"TERMINATED", "terminated"},
 		{"EXPIRED", "expired"},
 		{"SUSPENDED", "suspended"},
@@ -73,14 +84,18 @@ func TestMapCWEStateToC2PA_UnknownStateFails(t *testing.T) {
 }
 
 // TestMapCWEStateToC2PA_AllSRSStatesCovered verifies that the SRS-mandated states
-// (DCS-OR-C2PA-003) are reachable from at least one CWE input.
+// (DCS-OR-C2PA-003) are reachable from at least one input. Since Workstream
+// C4, "amended" is no longer produced by any CWE contract state (NEGOTIATION/
+// REJECTED now map to "draft"); it remains reachable only via the lowercase
+// SRS-vocabulary pass-through, which is exercised here too.
 func TestMapCWEStateToC2PA_AllSRSStatesCovered(t *testing.T) {
 	required := map[string]bool{
 		"draft": false, "active": false, "amended": false,
 		"suspended": false, "terminated": false, "expired": false, "replaced": false,
 	}
-	// Map a representative CWE input for each SRS state.
-	inputs := []string{"DRAFT", "APPROVED", "NEGOTIATION", "SUSPENDED", "TERMINATED", "EXPIRED", "REPLACED"}
+	// Map a representative CWE input for each SRS state ("amended" via the
+	// lowercase pass-through, since no CWE state maps to it anymore).
+	inputs := []string{"DRAFT", "SIGNED", "amended", "SUSPENDED", "TERMINATED", "EXPIRED", "REPLACED"}
 	for _, in := range inputs {
 		got, err := MapCWEStateToC2PA(in)
 		require.NoError(t, err)

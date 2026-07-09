@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
+	"digital-contracting-service/internal/base/ipfs"
+
+	trustedpeer "digital-contracting-service/internal/dcstodcs"
 
 	command2 "digital-contracting-service/internal/contractworkflowengine/remotesync/command"
 
@@ -51,6 +54,7 @@ type dcsToDcssrvc struct {
 	SRepo       db2.SyncRepository
 	DIDDocument identity.DIDDocument
 	TrustPool   *identity.EUTrustPool
+	IPFSClient  *ipfs.APIClient
 	auth.JWTAuthenticator
 }
 
@@ -58,7 +62,7 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, syncRepo db2.SyncRepository,
 	trustPool *identity.EUTrustPool,
-	didDocument identity.DIDDocument) dcstodcs.Service {
+	didDocument identity.DIDDocument, ipfsClient *ipfs.APIClient) dcstodcs.Service {
 
 	return &dcsToDcssrvc{
 		JWTAuthenticator: jwtAuth,
@@ -72,6 +76,7 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		SRepo:            syncRepo,
 		DIDDocument:      didDocument,
 		TrustPool:        trustPool,
+		IPFSClient:       ipfsClient,
 	}
 }
 
@@ -126,6 +131,19 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 	localPeer, err := s.DIDDocument.GetID()
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	// Third trust layer (see dcstodcs.CheckForUntrustedPeers doc): a
+	// cryptographically and regulatorily valid peer identity still must be
+	// explicitly listed in this node's trusted_peers allowlist before any
+	// peer action is executed locally.
+	untrustedPeers, err := trustedpeer.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, []string{req.FromPeerDid})
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if len(untrustedPeers) > 0 {
+		err := fmt.Errorf("peer action rejected: peer %s is not in the trusted_peers allowlist", req.FromPeerDid)
+		return nil, contractworkflowengine.MakeBadRequest(err)
 	}
 
 	component, err := componenttype.NewComponentType(req.Component)
@@ -191,6 +209,7 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 			ATRepo:      s.ATRepo,
 			SRepo:       s.SRepo,
 			DIDDocument: s.DIDDocument,
+			IPFSStorer:  s.IPFSClient,
 		}
 		err = handler.Handle(ctx, *cmd)
 		if err != nil {
@@ -303,6 +322,38 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 			return nil, dcstodcs.MakeInternalError(err)
 		}
 
+	case remoteaction.Offer:
+		cmd, err := base.ConvertAny[command.OfferCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Offerer{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+	case remoteaction.Withdraw:
+		cmd, err := base.ConvertAny[command.WithdrawCmd](req.Payload)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
+		handler := command.Withdrawer{
+			DB:          s.DB,
+			CRepo:       s.CRepo,
+			DIDDocument: s.DIDDocument,
+		}
+		err = handler.Handle(ctx, *cmd)
+		if err != nil {
+			return nil, dcstodcs.MakeInternalError(err)
+		}
+
 	default:
 		log.Printf(ctx, "unsupported remote action: %s", req.Action)
 	}
@@ -345,6 +396,19 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 
 	if req.FromPeerDid == localPeer {
 		return nil, errors.New("syncing contract to same peer is not allowed")
+	}
+
+	// Third trust layer (see dcstodcs.CheckForUntrustedPeers doc): a
+	// cryptographically and regulatorily valid peer identity still must be
+	// explicitly listed in this node's trusted_peers allowlist before any
+	// synced contract data is accepted and stored locally.
+	untrustedPeers, err := trustedpeer.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, []string{req.FromPeerDid})
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if len(untrustedPeers) > 0 {
+		err := fmt.Errorf("post_sync rejected: peer %s is not in the trusted_peers allowlist", req.FromPeerDid)
+		return nil, contractworkflowengine.MakeBadRequest(err)
 	}
 
 	createAt, err := time.Parse(time.RFC3339, req.Contract.CreatedAt)

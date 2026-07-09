@@ -84,6 +84,46 @@ var ContractSubmitResponse = Type("ContractSubmitResponse", func() {
 	Required("did", "current_state")
 })
 
+var ContractOfferRequest = Type("ContractOfferRequest", func() {
+	Description("Contract offer request: first transmission of a draft contract to the counterparty (DRAFT -> OFFERED)")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Attribute("updated_at", String, "The timestamp when the contract was updated")
+
+	Required("did", "updated_at")
+})
+
+var ContractOfferResponse = Type("ContractOfferResponse", func() {
+	Description("Result for offering a contract")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Required("did")
+})
+
+var ContractWithdrawRequest = Type("ContractWithdrawRequest", func() {
+	Description("Contract withdraw request: initiator retracts the contract before it has been approved")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Attribute("updated_at", String, "The timestamp when the contract was updated")
+
+	Required("did", "updated_at")
+})
+
+var ContractWithdrawResponse = Type("ContractWithdrawResponse", func() {
+	Description("Result for withdrawing a contract")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Required("did")
+})
+
 var ContractHistoryRetrieveByIDRequest = Type("ContractHistoryRetrieveByIDRequest", func() {
 	Description("Contract history retrieve request")
 
@@ -122,6 +162,8 @@ var ContractRetrieveRequest = Type("ContractRetrieveRequest", func() {
 
 	Attribute("offset", Int, "Start index of results")
 	Attribute("limit", Int, "Page size of results")
+
+	Attribute("parent_did", String, "Full-scope hierarchy filter: return only contracts whose dcs:parentContract references this DID (DCS-FR-CWE-29)")
 })
 
 var ContractItem = Type("ContractItem", func() {
@@ -279,6 +321,8 @@ var ContractSearchRequest = Type("ContractSearchRequest", func() {
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
 	Attribute("contract_data", String, "Search value for full text search in contract data")
+
+	Attribute("parent_did", String, "Full-scope hierarchy filter: return only contracts whose dcs:parentContract references this DID (DCS-FR-CWE-29)")
 })
 
 var ContractSearchResponse = Type("ContractSearchResponse", func() {
@@ -564,6 +608,56 @@ var _ = Service("ContractWorkflowEngine", func() {
 		})
 	})
 
+	Method("offer", func() {
+		Description("Transmit a draft contract to the counterparty for the first time (DRAFT -> OFFERED, SRS 2.2.6). Triggers the DCS-to-DCS PostSync broadcast. Requires updated_at for optimistic concurrency and is forwarded to the contract's origin peer if the local node is not the origin.")
+		Meta("dcs:requirements", "DCS-IR-CWE-01")
+		Meta("dcs:cwe:components", "")
+		Meta("dcs:ui", "Contract Creation")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+		})
+
+		Payload(ContractOfferRequest)
+		Result(ContractOfferResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/contract/offer")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("withdraw", func() {
+		Description("Initiator retracts a contract before it has been approved (allowed from OFFERED, NEGOTIATION, SUBMITTED, REVIEWED — never once APPROVED). Requires updated_at for optimistic concurrency and is forwarded to the contract's origin peer if the local node is not the origin.")
+		Meta("dcs:requirements", "DCS-IR-CWE-01")
+		Meta("dcs:cwe:components", "")
+		Meta("dcs:ui", "Contract Creation")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+		})
+
+		Payload(ContractWithdrawRequest)
+		Result(ContractWithdrawResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/contract/withdraw")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
 	Method("negotiate", func() {
 		Description("propose changes.")
 		Meta("dcs:requirements", "DCS-IR-CWE-03")
@@ -679,6 +773,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			GET("/contract/retrieve")
 			Param("offset")
 			Param("limit")
+			Param("parent_did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -791,6 +886,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Param("name")
 			Param("description")
 			Param("contract_data")
+			Param("parent_did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

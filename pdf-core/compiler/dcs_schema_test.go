@@ -193,3 +193,64 @@ func TestUnmarshalCanonicalIntoTypedStruct(t *testing.T) {
 		t.Errorf("root.Children = %v", root.Children)
 	}
 }
+
+// A contract with no policies at all legitimately carries `"dcs:policies": []`
+// (the structural validation rule: absent, empty array, or a single odrl:Set
+// object — never a non-empty flat array). This must decode cleanly instead of
+// failing with "cannot unmarshal array into ... OdrlSet", which was a real
+// regression: any freshly created draft contract without policies broke PDF
+// export entirely once the native odrl:Set policy field was added.
+func TestContractTemplatePolicies_EmptyArray_DecodesToNoPolicies(t *testing.T) {
+	const payload = `{
+		"documentStructure": {"layout": [], "blocks": []},
+		"https://w3id.org/facis/dcs/ontology/v1#policies": []
+	}`
+	var ct ContractTemplate
+	if err := json.Unmarshal([]byte(payload), &ct); err != nil {
+		t.Fatalf("unmarshal empty-array policies: %v", err)
+	}
+	if ct.Policies == nil {
+		t.Fatalf("expected a non-nil zero-value OdrlSet, got nil")
+	}
+	if len(ct.Policies.Duty) != 0 || len(ct.Policies.Permission) != 0 || len(ct.Policies.Prohibition) != 0 {
+		t.Fatalf("expected no rules, got %+v", ct.Policies)
+	}
+	section, ok := buildPolicySection(ct.Policies)
+	if ok {
+		t.Fatalf("expected buildPolicySection to report nothing to render, got %+v", section)
+	}
+}
+
+func TestContractTemplatePolicies_NonEmptyFlatArray_Rejected(t *testing.T) {
+	const payload = `{
+		"documentStructure": {"layout": [], "blocks": []},
+		"https://w3id.org/facis/dcs/ontology/v1#policies": [{"@type": "odrl:Duty"}]
+	}`
+	var ct ContractTemplate
+	if err := json.Unmarshal([]byte(payload), &ct); err == nil {
+		t.Fatalf("expected a non-empty flat policies array to be rejected, decoded without error")
+	}
+}
+
+func TestContractTemplatePolicies_SetObject_Decodes(t *testing.T) {
+	const payload = `{
+		"documentStructure": {"layout": [], "blocks": []},
+		"https://w3id.org/facis/dcs/ontology/v1#policies": {
+			"@type": "odrl:Set",
+			"odrl:duty": {
+				"@type": "odrl:Duty",
+				"odrl:action": {"@id": "dcs:provideCompliantValue"},
+				"odrl:assigner": {"@id": "did:example:a"},
+				"odrl:assignee": {"@id": "did:example:b"},
+				"odrl:target": {"@id": "urn:contract:1"}
+			}
+		}
+	}`
+	var ct ContractTemplate
+	if err := json.Unmarshal([]byte(payload), &ct); err != nil {
+		t.Fatalf("unmarshal odrl:Set policies: %v", err)
+	}
+	if ct.Policies == nil || len(ct.Policies.Duty) != 1 {
+		t.Fatalf("expected one duty rule, got %+v", ct.Policies)
+	}
+}

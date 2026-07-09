@@ -62,7 +62,7 @@ func TestAuditTemplatePoliciesFlagsPolicyOperandOutsideContractData(t *testing.T
 	data := canonicalTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
-	policy := decoded["dcs:policies"].([]any)[0].(map[string]any)
+	policy := firstPolicyDuty(decoded)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
 	raw, err := datatype.NewJSON(decoded)
@@ -140,7 +140,7 @@ func TestAuditTemplatePoliciesFlagsComponentInternalPolicyReferences(t *testing.
 	data := canonicalTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
-	policy := decoded["dcs:policies"].([]any)[0].(map[string]any)
+	policy := firstPolicyDuty(decoded)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
 	raw, err := datatype.NewJSON(decoded)

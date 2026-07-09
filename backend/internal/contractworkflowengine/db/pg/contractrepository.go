@@ -239,13 +239,17 @@ func (r *PostgresContractRepo) ReadProcessDataByDIDOrNil(ctx context.Context, tx
 }
 
 func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	// WITHDRAWN and REVOKED are excluded alongside the other terminal
+	// states: both are already-final/frozen states, so the
+	// expiry cron must not force-flip them to EXPIRED (see
+	// contracts_effective's matching exclusion list).
 	query := `
     SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
            exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
     FROM contracts
     WHERE exp_date IS NOT NULL
     AND exp_date < NOW()
-    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED')
+    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED', 'WITHDRAWN', 'REVOKED')
 `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
@@ -412,6 +416,14 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	if len(values.ContractData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.ContractData)
+		paramIndex++
+	}
+	if len(values.ParentDID) > 0 {
+		// Reverse-index over locally held children: match the child's stored
+		// dcs:parentContract @id in contracts_effective. Kept as a DID-scoped
+		// subquery so it composes with any outer metadata/archive table.
+		conditions += ` did IN (SELECT did FROM contracts_effective WHERE contract_data->'dcs:parentContract'->>'@id' = $` + strconv.Itoa(paramIndex) + `) AND`
+		params = append(params, values.ParentDID)
 	}
 	l := len(" AND")
 	if len(conditions) > l {

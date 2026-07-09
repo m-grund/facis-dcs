@@ -21,7 +21,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
-	"digital-contracting-service/internal/signingmanagement/datatype/contractstate"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/signingmanagement/db"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 )
@@ -58,6 +58,7 @@ type SignatureEnvelope struct {
 	SignedAt       *string
 	RevokedAt      *string
 	IpfsCID        *string
+	KeyVersion     int
 }
 
 type GetByIDResult struct {
@@ -156,6 +157,7 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		SignedAt:       envelopResult.SignedAt,
 		RevokedAt:      envelopResult.RevokedAt,
 		IpfsCID:        envelopResult.IpfsCID,
+		KeyVersion:     envelopResult.KeyVersion,
 	}
 
 	return &GetByIDResult{

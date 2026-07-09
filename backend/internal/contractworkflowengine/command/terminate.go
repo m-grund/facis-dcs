@@ -95,9 +95,9 @@ func (h *Terminator) Handle(ctx context.Context, cmd TerminateCmd) error {
 	}
 
 	// Terminate is allowed from any non-terminal state; there is no path back
-	// out of TERMINATED.
-	if processData.State == contractstate.Terminated.String() {
-		return errors.New("contract is already terminated")
+	// out of TERMINATED. See contractstate.Transitions for the exact table.
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventTerminate); err != nil {
+		return err
 	}
 
 	err = h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Terminated.String())

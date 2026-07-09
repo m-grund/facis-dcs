@@ -313,20 +313,19 @@ func auditCanonicalPolicyOperands(policySet *templatePolicySet, rule templatePol
 
 func auditPolicyOperandIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData, requirePoliciesArray bool) []PolicyFinding {
 	fieldIDs := canonicalContractDataFieldIDs(data)
-	policies, ok := topLevelValue(data, "policies").([]any)
-	if !ok {
+	rawPolicies, exists := topLevelValueExists(data, "policies")
+	if !exists {
 		if !requirePoliciesArray {
 			return nil
 		}
-		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:policies must be an array", "dcs:policies", "")}
+		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:policies must be an odrl:Set object (or an empty array)", "dcs:policies", "")}
 	}
+	// dcs:policies is either the target enclosing odrl:Set (Workstream F1) or
+	// the legacy flat array — collectODRLPolicyRules flattens both shapes for
+	// this advisory audit the same way the enforcement path does.
+	policies := collectODRLPolicyRules(rawPolicies)
 	findings := []PolicyFinding{}
-	for index, rawPolicy := range policies {
-		policy, ok := rawPolicy.(map[string]any)
-		if !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:policies item %d must be an object", index), "dcs:policies", ""))
-			continue
-		}
+	for _, policy := range policies {
 		policyID, _ := policy["@id"].(string)
 		constraint, ok := policy["odrl:constraint"].(map[string]any)
 		if !ok {

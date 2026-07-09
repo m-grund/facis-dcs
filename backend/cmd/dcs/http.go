@@ -13,19 +13,23 @@ import (
 	didservice "digital-contracting-service/gen/did_service"
 
 	genauth "digital-contracting-service/gen/auth"
+	c2paservice "digital-contracting-service/gen/c2_pa_service"
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	authsvr "digital-contracting-service/gen/http/auth/server"
+	c2pasvr "digital-contracting-service/gen/http/c2_pa_service/server"
 	contractstoragearchivesvr "digital-contracting-service/gen/http/contract_storage_archive/server"
 	contractworkflowenginesvr "digital-contracting-service/gen/http/contract_workflow_engine/server"
 	dcstodcssvr "digital-contracting-service/gen/http/dcs_to_dcs/server"
 	didsvr "digital-contracting-service/gen/http/did_service/server"
+	internalsigningsvr "digital-contracting-service/gen/http/internal_signing/server"
 	pdfgenerationsvr "digital-contracting-service/gen/http/pdf_generation/server"
 	processauditandcompliancesvr "digital-contracting-service/gen/http/process_audit_and_compliance/server"
 	signaturemanagementsvr "digital-contracting-service/gen/http/signature_management/server"
 	templatecatalogueintegrationsvr "digital-contracting-service/gen/http/template_catalogue_integration/server"
 	templaterepositorysvr "digital-contracting-service/gen/http/template_repository/server"
+	internalsigning "digital-contracting-service/gen/internal_signing"
 	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
@@ -113,7 +117,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints,
 	dcsToDcsEndpoints *dcstodcs.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints,
 	signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints,
-	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
+	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, c2paEndpoints *c2paservice.Endpoints, internalSigningEndpoints *internalsigning.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
 	errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
@@ -155,6 +159,8 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		templateCatalogueIntegrationServer *templatecatalogueintegrationsvr.Server
 		templateRepositoryServer           *templaterepositorysvr.Server
 		didServer                          *didsvr.Server
+		c2paServer                         *c2pasvr.Server
+		internalSigningServer              *internalsigningsvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
@@ -169,9 +175,13 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		templateCatalogueIntegrationServer = templatecatalogueintegrationsvr.New(templateCatalogueIntegrationEndpoints, apiMux, dec, enc, eh, ef)
 		templateRepositoryServer = templaterepositorysvr.New(templateRepositoryEndpoints, apiMux, dec, enc, eh, ef)
 		didServer = didsvr.New(didEnpoints, apiMux, dec, enc, eh, ef)
+		c2paServer = c2pasvr.New(c2paEndpoints, apiMux, dec, enc, eh, ef)
+		internalSigningServer = internalsigningsvr.New(internalSigningEndpoints, apiMux, dec, enc, eh, ef)
 	}
 
 	didsvr.Mount(mux, didServer)
+	c2pasvr.Mount(apiMux, c2paServer)
+	internalsigningsvr.Mount(apiMux, internalSigningServer)
 
 	// Configure the mux.
 	authsvr.Mount(apiMux, authServer)
@@ -239,6 +249,12 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	for _, m := range didServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
+	for _, m := range c2paServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range internalSigningServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
 
 	(*wg).Add(1)
 	go func() {
@@ -281,9 +297,42 @@ type errorResponse struct {
 
 func (e *errorResponse) StatusCode() int { return e.statusCode }
 
+// bundleExportRefusedResponse preserves the structural-integrity findings of a
+// *pdfgeneration.BundleExportRefusedError in the HTTP body. The default Goa
+// error heuristic (goahttp.NewErrorResponse) only understands *goa.ServiceError
+// and would otherwise collapse the refusal into the generic
+// {name,id,message,temporary,timeout,fault} hull, dropping the findings array
+// clients rely on. The explicit lowercase JSON tags match the
+// generated ExportContractBundleRefusedResponseBody so the wire format is
+// identical to the design's "refused" response body.
+type bundleExportRefusedResponse struct {
+	Name     string   `json:"name"`
+	Message  string   `json:"message"`
+	Findings []string `json:"findings"`
+}
+
+func (e *bundleExportRefusedResponse) StatusCode() int { return http.StatusUnprocessableEntity }
+
 // errorFormatter maps named ServiceErrors to the correct HTTP status codes.
 // All other errors fall through to the default Goa heuristic.
 func errorFormatter(ctx context.Context, err error) goahttp.Statuser {
+	// A bundle-export refusal is its own error type (not a *goa.ServiceError),
+	// so it must be handled before the generic heuristic that would discard its
+	// findings. This covers both ExportContractBundle and ExportTemplateBundle,
+	// which share the type.
+	var refused *pdfgeneration.BundleExportRefusedError
+	if errors.As(err, &refused) {
+		findings := refused.Findings
+		if findings == nil {
+			findings = []string{}
+		}
+		return &bundleExportRefusedResponse{
+			Name:     refused.Name,
+			Message:  refused.Message,
+			Findings: findings,
+		}
+	}
+
 	resp := goahttp.NewErrorResponse(ctx, err)
 
 	var gerr *goa.ServiceError

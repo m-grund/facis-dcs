@@ -45,6 +45,62 @@ def contract_verify_url(context) -> str:
     return f"{context.base_url}/contract/verify"
 
 
+def contract_offer_url(context) -> str:
+    return f"{context.base_url}/contract/offer"
+
+
+def contract_withdraw_url(context) -> str:
+    return f"{context.base_url}/contract/withdraw"
+
+
+def contract_terminate_url(context) -> str:
+    return f"{context.base_url}/contract/terminate"
+
+
+def contract_search_url(context) -> str:
+    return f"{context.base_url}/contract/search"
+
+
+def contract_audit_url(context) -> str:
+    return f"{context.base_url}/contract/audit"
+
+
+def contract_peer_action_url(context) -> str:
+    return f"{context.base_url}/peer/contracts/action"
+
+
+def contract_peer_post_sync_url(context) -> str:
+    return f"{context.base_url}/peer/contracts/"
+
+
+def signature_apply_url(context) -> str:
+    return f"{context.base_url}/signature/apply"
+
+
+def signature_revoke_url(context) -> str:
+    return f"{context.base_url}/signature/revoke"
+
+
+def signature_validate_url(context) -> str:
+    return f"{context.base_url}/signature/validate"
+
+
+def signature_retrieve_url(context, did: str) -> str:
+    return f"{context.base_url}/signature/retrieve/{did}"
+
+
+# ASSUMED endpoint contract for the PKI-consolidation refactor (Workstream A,
+# docs/anforderung.md AC6 / A2.3): a NEW, authenticated, non-public backend
+# endpoint that signs a COSE Sig_structure via hsm.Signer("dcs-c2pa") for
+# pdf-core. Does not exist in backend/design/*.go yet - see
+# features/21_pki_consolidation_pkcs11/pki_consolidation_pkcs11.feature's
+# header comment (binding decision 1) for the exact assumed payload shape and
+# why the path/shape may need to be adjusted once the architect confirms it.
+
+def c2pa_internal_sign_url(context) -> str:
+    return f"{context.base_url}/internal/c2pa/sign"
+
+
 def template_create_url(context) -> str:
     return f"{context.base_url}/template/create"
 
@@ -140,3 +196,21 @@ def contract_verify_pdf_url(context, did: str) -> str:
 
 def template_verify_pdf_url(context, did: str) -> str:
     return f"{context.base_url}/pdf/verify/template/{did}"
+
+
+# C2PA remote-manifest URL: a public, unauthenticated sibling of
+# GET /.well-known/did.json (DCS-OR-C2PA-008).
+
+def c2pa_manifest_url(context, did: str) -> str:
+    return f"{context.base_url}/c2pa/manifest/{did}"
+
+
+# Bundle export URLs: one ZIP per contract/template with an integrity
+# manifest (FR-TR-24, FR-CWE-30).
+
+def contract_export_url(context, did: str) -> str:
+    return f"{context.base_url}/contract/export/{did}"
+
+
+def template_export_url(context, did: str) -> str:
+    return f"{context.base_url}/template/export/{did}"

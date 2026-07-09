@@ -3,25 +3,33 @@
     "https://www.w3.org/ns/did/v1",
     "https://w3id.org/security/suites/jws-2020/v1"
   ],
-  "id": "did:web:localhost%3A8992",
-  "verificationMethod": [
-    {
-      "id": "did:web:localhost%3A8992#dev-key-1",
-      "type": "JsonWebKey2020",
-      "controller": "did:web:localhost%3A8992",
-      "publicKeyJwk": {
-        "kty": "RSA",
-        "n": "snBW7Zjp-YWfLDfEg1qR3152twcTLaHt0If3Qf_-Q3opJ411GPTNzklHz8yzeGxeJIoULTavZE0JkscweYwyTmHJPmHv_dXupyAICuXkDdk5xiUBexhGLcZx-qG0z_sq9oLEBKNrzsqh3nM-XGCQEpWUOtntRnkax41xQKSwmK9RD5qN33eS82TTwIvgk95eKvBDrXxl6rh2M2llzS1eYOCIlG3yD0Zyqzv34JuPCbZQCginaAwLSy4-ffooYhAJXw0JGnqAZ9G7EA0mCO8lCoUeLiArRIHL_vqQxIHS4w0pIJ4bnLMU5fYT6bBNf_DTPtFXEaQd9rYXwT0FvnftuQ",
-        "e": "AQAB",
-        "kid": "dev-key-1",
-        "alg": "PS256",
-        "x5c": [
-          "MIIDFjCCAf6gAwIBAgIUS6/HJd5IK9nW+95WgY54Ny1TKOcwDQYJKoZIhvcNAQELBQAwODEXMBUGA1UEAwwObG9jYWxob3N0Ojg5OTIxEDAOBgNVBAoMB0RDUyBEZXYxCzAJBgNVBAYTAkRFMB4XDTI2MDYyMzA2NDgxOFoXDTI4MDkyNTA2NDgxOFowODEXMBUGA1UEAwwObG9jYWxob3N0Ojg5OTIxEDAOBgNVBAoMB0RDUyBEZXYxCzAJBgNVBAYTAkRFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsnBW7Zjp+YWfLDfEg1qR3152twcTLaHt0If3Qf/+Q3opJ411GPTNzklHz8yzeGxeJIoULTavZE0JkscweYwyTmHJPmHv/dXupyAICuXkDdk5xiUBexhGLcZx+qG0z/sq9oLEBKNrzsqh3nM+XGCQEpWUOtntRnkax41xQKSwmK9RD5qN33eS82TTwIvgk95eKvBDrXxl6rh2M2llzS1eYOCIlG3yD0Zyqzv34JuPCbZQCginaAwLSy4+ffooYhAJXw0JGnqAZ9G7EA0mCO8lCoUeLiArRIHL/vqQxIHS4w0pIJ4bnLMU5fYT6bBNf/DTPtFXEaQd9rYXwT0FvnftuQIDAQABoxgwFjAUBgNVHREEDTALgglsb2NhbGhvc3QwDQYJKoZIhvcNAQELBQADggEBAHTq337zjgo8AasSA/uPopTiNaV0RGjCLtsuTIgVFvGIaVxz5RA2Zcf5nc0eVBZyxzT1fXCBHikF7OutxGUx1Gi+aZtTiiQPtX/b1YsD6/YsX7vonzeiIEUFu0tKrCFmj+hYJzeVvoDrziGNZcK5GpqOiliAPKoQW3XXlAc9GkW90oHOUekRM2W3drQdhFxqE4/3SS/DaABd/dbz0tnEtCmeYzv69c94fEf8s2aTh7ljpT1ZqKth6jttQs74eoHYKmccHC0KDNpfrqwPRbF8BdHR0O4EYLOsxzTeen475Un5rAz3w/29P1Z/Rsj9z1hPXztG+achMo0cJ6n92yfmt/Q="
-        ]
-      }
-    }
-  ],
   "assertionMethod": [
     "did:web:localhost%3A8992#dev-key-1"
+  ],
+  "id": "did:web:localhost%3A8992",
+  "services": [
+    {
+      "id": "did:web:localhost%3A8992#dcs",
+      "serviceEndpoint": "http://localhost:8992/api",
+      "type": "DigitalContractingService"
+    }
+  ],
+  "verificationMethod": [
+    {
+      "controller": "did:web:localhost%3A8992",
+      "id": "did:web:localhost%3A8992#dev-key-1",
+      "publicKeyJwk": {
+        "alg": "ES256",
+        "crv": "P-256",
+        "kid": "dev-key-1",
+        "kty": "EC",
+        "x": "GEJVi_Xdlq2YT1WIB1Ba2bpJ0NDNeN9n0bxqWQznFvY",
+        "x5c": [
+          "MIIBrTCCAVOgAwIBAgIIGMBzrqKQx3EwCgYIKoZIzj0EAwIwODELMAkGA1UEBhMCREUxEDAOBgNVBAoTB0RDUyBEZXYxFzAVBgNVBAMTDmxvY2FsaG9zdDo4OTkyMB4XDTI2MDcwODIyMTcyNloXDTI4MDcwODIzMTcyNlowODELMAkGA1UEBhMCREUxEDAOBgNVBAoTB0RDUyBEZXYxFzAVBgNVBAMTDmxvY2FsaG9zdDo4OTkyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGEJVi/Xdlq2YT1WIB1Ba2bpJ0NDNeN9n0bxqWQznFvbdTJVGV4KPBMl8RN54OKhiSl1XeEXPBCh9o6x8D/tzr6NHMEUwDgYDVR0PAQH/BAQDAgeAMA8GA1UdJQQIMAYGBFUdJQAwDAYDVR0TAQH/BAIwADAUBgNVHREEDTALgglsb2NhbGhvc3QwCgYIKoZIzj0EAwIDSAAwRQIhAMNnP0C57wrhGOsAJnNHuaD+/FtkHA4tzH4ISxJN2xwlAiAKQsxogyp+TduJadzJTo69EgtuHVQw3VvbqhbBm34rOg=="
+        ],
+        "y": "3UyVRleCjwTJfETeeDioYkpdV3hFzwQofaOsfA_7c68"
+      },
+      "type": "JsonWebKey2020"
+    }
   ]
 }

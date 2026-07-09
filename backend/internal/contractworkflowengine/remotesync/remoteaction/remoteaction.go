@@ -41,6 +41,8 @@ const (
 	Submit            RemoteAction = "SUBMIT"
 	Terminate         RemoteAction = "TERMINATE"
 	Update            RemoteAction = "UPDATE"
+	Offer             RemoteAction = "OFFER"
+	Withdraw          RemoteAction = "WITHDRAW"
 )
 
 var validAction = map[RemoteAction]bool{
@@ -53,6 +55,9 @@ var validAction = map[RemoteAction]bool{
 	RejectNegotiation: true,
 	Update:            true,
 	Submit:            true,
+	Terminate:         true,
+	Offer:             true,
+	Withdraw:          true,
 }
 
 func NewRemoteAction(s string) (RemoteAction, error) {

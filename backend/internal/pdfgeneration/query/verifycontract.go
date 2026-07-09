@@ -89,7 +89,7 @@ func (h *VerifyContractPdfHandler) Handle(ctx context.Context, qry VerifyContrac
 			return nil, fmt.Errorf("commit pre-verify append tx for contract %s: %w", qry.DID, err)
 		}
 
-		return runVerify(ctx, updatedPDF, h.PDFCore)
+		return runVerify(ctx, updatedPDF, h.PDFCore, currentC2PAState)
 	}
 
 	if latestCID == "" {
@@ -101,5 +101,5 @@ func (h *VerifyContractPdfHandler) Handle(ctx context.Context, qry VerifyContrac
 		return nil, fmt.Errorf("fetch contract PDF %s from IPFS for verify: %w", qry.DID, err)
 	}
 
-	return runVerify(ctx, r.Data, h.PDFCore)
+	return runVerify(ctx, r.Data, h.PDFCore, currentC2PAState)
 }

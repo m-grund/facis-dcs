@@ -1,7 +1,8 @@
 // Package identity implements the did:web-based peer identity and trust
 // model used for DCS-to-DCS federation (see dcstodcs, contractworkflowengine
-// /remotesync). Each DCS instance publishes its own DID document (RSA key
-// pair) at /.well-known/did.json. Trust between two independently operated
+// /remotesync). Each DCS instance publishes its own DID document (ECDSA P-256
+// key pair, held in the PKCS#11 token) at /.well-known/did.json. Trust between
+// two independently operated
 // instances rests on three layers, all implemented in this file: (1) an
 // eIDAS certificate chain in the DID document, validated against an EU trust
 // pool (VerifyEIDASCertificate); (2) a per-request challenge-response
@@ -14,8 +15,9 @@ package identity
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
@@ -68,24 +70,29 @@ func (x *X5C) UnmarshalJSON(data []byte) error {
 
 type PublicKeyJWK struct {
 	Kty string `json:"kty"`
-	N   string `json:"n"`
-	E   string `json:"e"`
+	Crv string `json:"crv,omitempty"`
+	X   string `json:"x,omitempty"`
+	Y   string `json:"y,omitempty"`
 	X5C X5C    `json:"x5c,omitempty"`
 }
 
-// RSAPublicKey builds an *rsa.PublicKey from the JWK fields n and e.
-func (jwk PublicKeyJWK) RSAPublicKey() (*rsa.PublicKey, error) {
-	nBytes, err := base64.RawURLEncoding.DecodeString(jwk.N)
-	if err != nil {
-		return nil, fmt.Errorf("decoding n: %w", err)
+// ECPublicKey builds an *ecdsa.PublicKey from the JWK fields crv, x and y.
+func (jwk PublicKeyJWK) ECPublicKey() (*ecdsa.PublicKey, error) {
+	if jwk.Crv != "" && jwk.Crv != "P-256" {
+		return nil, fmt.Errorf("unsupported EC curve %q (only P-256 is supported)", jwk.Crv)
 	}
-	eBytes, err := base64.RawURLEncoding.DecodeString(jwk.E)
+	xBytes, err := base64.RawURLEncoding.DecodeString(jwk.X)
 	if err != nil {
-		return nil, fmt.Errorf("decoding e: %w", err)
+		return nil, fmt.Errorf("decoding x: %w", err)
 	}
-	return &rsa.PublicKey{
-		N: new(big.Int).SetBytes(nBytes),
-		E: int(new(big.Int).SetBytes(eBytes).Int64()),
+	yBytes, err := base64.RawURLEncoding.DecodeString(jwk.Y)
+	if err != nil {
+		return nil, fmt.Errorf("decoding y: %w", err)
+	}
+	return &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     new(big.Int).SetBytes(xBytes),
+		Y:     new(big.Int).SetBytes(yBytes),
 	}, nil
 }
 
@@ -97,17 +104,15 @@ type VerificationMethod struct {
 type DIDDocument struct {
 	VerificationMethod []VerificationMethod `json:"verificationMethod"`
 	didContent         map[string]interface{}
-	privateKey         *rsa.PrivateKey
-	publicKey          *rsa.PublicKey
+	signer             crypto.Signer
+	publicKey          *ecdsa.PublicKey
 }
 
-// NewDIDDocument loads a DID document and its private key from disk,
-// verifies that both keys belong together, and validates the key pair
-// with a test signature.
-// NewDIDDocument loads a DID document and its private key from disk,
-// verifies that both keys belong together, and validates the key pair
-// with a test signature.
-func NewDIDDocument(didFilePath string, privateKeyPath string) (*DIDDocument, error) {
+// NewDIDDocument loads a DID document from disk and binds it to the given HSM
+// signer, verifying that the signer's public key matches the DID document's
+// published ECDSA P-256 verification method and validating the pairing with a
+// test signature.
+func NewDIDDocument(didFilePath string, signer crypto.Signer) (*DIDDocument, error) {
 	didJSON, err := os.ReadFile(didFilePath)
 	if err != nil {
 		return nil, err
@@ -128,44 +133,42 @@ func NewDIDDocument(didFilePath string, privateKeyPath string) (*DIDDocument, er
 		return nil, errors.New("no verification methods in DID document")
 	}
 
-	pemData, err := os.ReadFile(privateKeyPath)
-	if err != nil {
-		return nil, err
+	if signer == nil {
+		return nil, errors.New("did signer is required")
 	}
 
-	pubKey, err := doc.VerificationMethod[0].PublicKeyJWK.RSAPublicKey()
+	pubKey, err := doc.VerificationMethod[0].PublicKeyJWK.ECPublicKey()
 	if err != nil {
 		return nil, fmt.Errorf("extracting public key from DID document: %w", err)
 	}
 
-	privKey, err := privateKeyFromPEM(pemData)
-	if err != nil {
-		return nil, fmt.Errorf("parsing private key: %w", err)
+	signerPub, ok := signer.Public().(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("did signer public key is not ECDSA")
 	}
-
-	if pubKey.N.Cmp(privKey.N) != 0 {
-		return nil, errors.New("public key from DID document does not match private key")
+	if signerPub.X.Cmp(pubKey.X) != 0 || signerPub.Y.Cmp(pubKey.Y) != 0 {
+		return nil, errors.New("public key from DID document does not match signer public key")
 	}
 
 	// Self test: signing and verifying must work.
 	message := []byte("key pair self test")
 	hash := sha256.Sum256(message)
 
-	signature, err := rsa.SignPSS(rand.Reader, privKey, crypto.SHA256, hash[:], nil)
+	signature, err := signer.Sign(rand.Reader, hash[:], crypto.SHA256)
 	if err != nil {
 		return nil, fmt.Errorf("key pair self test (sign): %w", err)
 	}
-	if err := rsa.VerifyPSS(pubKey, crypto.SHA256, hash[:], signature, nil); err != nil {
-		return nil, fmt.Errorf("key pair self test (verify): %w", err)
+	if !ecdsa.VerifyASN1(pubKey, hash[:], signature) {
+		return nil, errors.New("key pair self test (verify) failed")
 	}
 
-	doc.privateKey = privKey
+	doc.signer = signer
 	doc.publicKey = pubKey
 
 	return &doc, nil
 }
 
-func (d *DIDDocument) PublicKey() *rsa.PublicKey {
+func (d *DIDDocument) PublicKey() *ecdsa.PublicKey {
 	return d.publicKey
 }
 
@@ -195,24 +198,27 @@ func (d DIDDocument) GetHostname() (string, error) {
 	return DIDWebToHostname(id)
 }
 
-// Sign signs content with RSA-PSS (SHA-256).
+// Sign signs content with ECDSA (SHA-256), returning an ASN.1 DER signature.
 func (d *DIDDocument) Sign(content []byte) ([]byte, error) {
-	if d.privateKey == nil {
-		return nil, errors.New("private key not set")
+	if d.signer == nil {
+		return nil, errors.New("signer not set")
 	}
 
 	hash := sha256.Sum256(content)
-	return rsa.SignPSS(rand.Reader, d.privateKey, crypto.SHA256, hash[:], nil)
+	return d.signer.Sign(rand.Reader, hash[:], crypto.SHA256)
 }
 
-// Verify checks an RSA-PSS signature (SHA-256) against the public key.
+// Verify checks an ECDSA signature (SHA-256, ASN.1 DER) against the public key.
 func (d *DIDDocument) Verify(content []byte, signature []byte) error {
 	if d.publicKey == nil {
 		return errors.New("public key not set")
 	}
 
 	hash := sha256.Sum256(content)
-	return rsa.VerifyPSS(d.publicKey, crypto.SHA256, hash[:], signature, nil)
+	if !ecdsa.VerifyASN1(d.publicKey, hash[:], signature) {
+		return errors.New("ecdsa signature verification failed")
+	}
+	return nil
 }
 
 // VerifyEIDASCertificate validates the x5c certificate chain of the first
@@ -261,15 +267,15 @@ func (d *DIDDocument) VerifyEIDASCertificate(trustPool *EUTrustPool) error {
 	}
 
 	// 2. Does the certificate match the public key from the JWK?
-	certPub, ok := cert.PublicKey.(*rsa.PublicKey)
+	certPub, ok := cert.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		return errors.New("certificate does not contain an RSA public key")
+		return errors.New("certificate does not contain an ECDSA public key")
 	}
-	jwkPub, err := d.VerificationMethod[0].PublicKeyJWK.RSAPublicKey()
+	jwkPub, err := d.VerificationMethod[0].PublicKeyJWK.ECPublicKey()
 	if err != nil {
 		return err
 	}
-	if certPub.N.Cmp(jwkPub.N) != 0 || certPub.E != jwkPub.E {
+	if certPub.X.Cmp(jwkPub.X) != 0 || certPub.Y.Cmp(jwkPub.Y) != 0 {
 		return errors.New("certificate public key does not match JWK public key")
 	}
 
@@ -441,22 +447,6 @@ func DIDWebToHostname(did string) (string, error) {
 	return host, nil
 }
 
-func privateKeyFromPEM(pemData []byte) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode(pemData)
-	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM")
-	}
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	rsaKey, ok := key.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("not an RSA key")
-	}
-	return rsaKey, nil
-}
-
 func fetchDIDDocumentFromURL(url string) (*DIDDocument, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -486,7 +476,7 @@ func fetchDIDDocumentFromURL(url string) (*DIDDocument, error) {
 		return nil, fmt.Errorf("no verification methods in DID document")
 	}
 
-	pubKey, err := doc.VerificationMethod[0].PublicKeyJWK.RSAPublicKey()
+	pubKey, err := doc.VerificationMethod[0].PublicKeyJWK.ECPublicKey()
 	if err != nil {
 		return nil, err
 	}

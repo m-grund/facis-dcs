@@ -87,6 +87,8 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 	return nil
 }
 
+// Handle has no entry in contractstate.Transitions: creation establishes the
+// initial DRAFT state, it is not a transition from a prior state.
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 
 	if len(cmd.Reviewers) == 0 {
