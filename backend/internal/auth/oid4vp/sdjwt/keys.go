@@ -201,18 +201,9 @@ func holderVerificationKey(cnfJWK JWK, token *jwt.Token) (any, error) {
 func JWKFromAny(raw any) (JWK, error) {
 	switch v := raw.(type) {
 	case map[string]any:
-		key := JWK{
-			Kty: stringValue(v["kty"]),
-			Crv: stringValue(v["crv"]),
-			X:   stringValue(v["x"]),
-			Y:   stringValue(v["y"]),
-		}
-		if key.Kty == "" || key.X == "" || key.Y == "" {
-			return JWK{}, fmt.Errorf("jwk is missing public key material")
-		}
-		return key, nil
+		return ecP256PublicKeyFromMap(v)
 	case JWK:
-		return v, nil
+		return ecP256PublicKeyFromJWK(v)
 	default:
 		return JWK{}, fmt.Errorf("unsupported jwk value")
 	}
@@ -220,15 +211,20 @@ func JWKFromAny(raw any) (JWK, error) {
 
 // DIDJWKFromPublicJWK builds a did:jwk identifier from an EC public JWK.
 func DIDJWKFromPublicJWK(key JWK) (string, error) {
-	if key.D != "" {
+	if strings.TrimSpace(key.D) != "" {
 		return "", fmt.Errorf("did:jwk must not include private key")
 	}
 
+	public, err := ecP256PublicKeyFromJWK(key)
+	if err != nil {
+		return "", err
+	}
+
 	payload, err := json.Marshal(map[string]string{
-		"crv": key.Crv,
-		"kty": key.Kty,
-		"x":   key.X,
-		"y":   key.Y,
+		"crv": public.Crv,
+		"kty": public.Kty,
+		"x":   public.X,
+		"y":   public.Y,
 	})
 	if err != nil {
 		return "", err
@@ -237,15 +233,98 @@ func DIDJWKFromPublicJWK(key JWK) (string, error) {
 	return "did:jwk:" + base64.RawURLEncoding.EncodeToString(payload), nil
 }
 
+// JWKFromDIDJWK decodes a did:jwk identifier into public-key material.
+func JWKFromDIDJWK(did string) (JWK, error) {
+	did = strings.TrimSpace(did)
+	if !strings.HasPrefix(did, "did:jwk:") {
+		return JWK{}, fmt.Errorf("subject is not a did:jwk identifier")
+	}
+
+	encoded := strings.TrimPrefix(did, "did:jwk:")
+	if encoded == "" {
+		return JWK{}, fmt.Errorf("did:jwk payload is empty")
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return JWK{}, fmt.Errorf("decode did:jwk payload: %w", err)
+	}
+
+	var payload map[string]any
+	err = json.Unmarshal(raw, &payload)
+	if err != nil {
+		return JWK{}, fmt.Errorf("parse did:jwk payload: %w", err)
+	}
+
+	return ecP256PublicKeyFromMap(payload)
+}
+
+// HolderSubjectMatches reports whether credential sub and cnf.jwk identify the same holder key.
+func HolderSubjectMatches(sub string, cnfJWK JWK) error {
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		return fmt.Errorf("credential missing sub")
+	}
+
+	cnf, err := ecP256PublicKeyFromJWK(cnfJWK)
+	if err != nil {
+		return fmt.Errorf("credential cnf.jwk: %w", err)
+	}
+
+	subject, err := JWKFromDIDJWK(sub)
+	if err != nil {
+		return fmt.Errorf("credential sub: %w", err)
+	}
+
+	if !publicJWKsEqual(subject, cnf) {
+		return fmt.Errorf("credential sub does not match cnf.jwk holder binding")
+	}
+
+	return nil
+}
+
+func ecP256PublicKeyFromMap(raw map[string]any) (JWK, error) {
+	return ecP256PublicKeyFromJWK(JWK{
+		Kty: stringValue(raw["kty"]),
+		Crv: stringValue(raw["crv"]),
+		X:   stringValue(raw["x"]),
+		Y:   stringValue(raw["y"]),
+	})
+}
+
+func ecP256PublicKeyFromJWK(key JWK) (JWK, error) {
+	key.Kty = strings.TrimSpace(key.Kty)
+	key.Crv = strings.TrimSpace(key.Crv)
+	key.X = strings.TrimSpace(key.X)
+	key.Y = strings.TrimSpace(key.Y)
+
+	if key.Kty != "EC" {
+		return JWK{}, fmt.Errorf("unsupported jwk kty %q", key.Kty)
+	}
+	if key.Crv == "" {
+		key.Crv = "P-256"
+	}
+	if key.Crv != "P-256" {
+		return JWK{}, fmt.Errorf("unsupported jwk crv %q", key.Crv)
+	}
+	if key.X == "" || key.Y == "" {
+		return JWK{}, fmt.Errorf("jwk is missing public key material")
+	}
+
+	return key, nil
+}
+
 func publicJWKsEqual(a, b JWK) bool {
-	return a.Kty == b.Kty &&
-		a.Crv == b.Crv &&
-		a.X == b.X &&
-		a.Y == b.Y &&
-		a.Kty == "EC" &&
-		a.Crv == "P-256" &&
-		strings.TrimSpace(a.X) != "" &&
-		strings.TrimSpace(a.Y) != ""
+	aNorm, errA := ecP256PublicKeyFromJWK(a)
+	bNorm, errB := ecP256PublicKeyFromJWK(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+
+	return aNorm.Kty == bNorm.Kty &&
+		aNorm.Crv == bNorm.Crv &&
+		aNorm.X == bNorm.X &&
+		aNorm.Y == bNorm.Y
 }
 
 func stringValue(v any) string {

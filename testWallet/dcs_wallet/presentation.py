@@ -8,7 +8,16 @@ import jwt
 from jwt.algorithms import ECAlgorithm
 
 from dcs_wallet.credential import decode_jwt_payload, load_credential_claims, load_credential_sd_jwt
-from dcs_wallet.sdjwt import KB_JWT_TYP, DEFAULT_SD_ALG, KB_JWT_IAT_LEEWAY_SEC, decode_disclosure, join_sd_jwt, sd_hash, split_sd_jwt
+from dcs_wallet.sdjwt import (
+    KB_JWT_TYP,
+    DEFAULT_SD_ALG,
+    KB_JWT_IAT_LEEWAY_SEC,
+    decode_disclosure,
+    disclosure_digest,
+    join_sd_jwt,
+    sd_hash,
+    split_sd_jwt,
+)
 
 VP_FORMAT = "dc+sd-jwt"
 _REQUIRED_EC_PUBLIC_FIELDS = ("kty", "crv", "x", "y")
@@ -65,15 +74,33 @@ def build_kb_jwt(*, issuer_jwt: str, disclosures: list[str], nonce: str, aud: st
     )
 
 
+def _top_level_sd_disclosures(disclosures: list[str], *, issuer_payload: dict[str, Any], sd_alg: str) -> list[str]:
+    raw_top_sd = issuer_payload.get("_sd")
+    if not isinstance(raw_top_sd, list):
+        return disclosures
+    top_sd = {str(v) for v in raw_top_sd if isinstance(v, str)}
+    if not top_sd:
+        return disclosures
+
+    selected: list[str] = []
+    for disclosure in disclosures:
+        try:
+            digest = disclosure_digest(disclosure, sd_alg=sd_alg)
+        except Exception:
+            continue
+        if digest in top_sd:
+            selected.append(disclosure)
+    return selected if selected else disclosures
+
+
 def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_claim_paths: list[list[str]] | None) -> list[str]:
     if not requested_claim_paths:
         return disclosures
-
-    requested_top_level: set[str] = set()
-    for path in requested_claim_paths:
-        if isinstance(path, list) and path and isinstance(path[0], str) and path[0]:
-            requested_top_level.add(path[0])
-
+    requested_top_level = {
+        str(path[0]).strip()
+        for path in requested_claim_paths
+        if isinstance(path, list) and path and str(path[0]).strip()
+    }
     if not requested_top_level:
         return disclosures
 
@@ -88,8 +115,7 @@ def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_cl
         claim_name = decoded[1]
         if isinstance(claim_name, str) and claim_name in requested_top_level:
             filtered.append(disclosure)
-
-    return filtered
+    return filtered if filtered else disclosures
 
 
 def build_vp_token(
@@ -98,11 +124,15 @@ def build_vp_token(
     nonce: str,
     client_id: str = "",
     requested_claim_paths: list[list[str]] | None = None,
+    top_level_sd_only: bool = False,
 ) -> str:
     """Attach a fresh KB-JWT (aud/nonce from the OpenID4VP request) to a stored credential."""
     raw_credential = load_credential_sd_jwt(credential_name)
     issuer_jwt, disclosures, _stored_kb = split_sd_jwt(raw_credential)
     issuer_payload = decode_jwt_payload(issuer_jwt)
+    sd_alg = str(issuer_payload.get("_sd_alg") or DEFAULT_SD_ALG)
+    if top_level_sd_only:
+        disclosures = _top_level_sd_disclosures(disclosures, issuer_payload=issuer_payload, sd_alg=sd_alg)
     disclosures = _filter_disclosures_by_requested_claims(disclosures, requested_claim_paths)
 
     credential_claims = load_credential_claims(credential_name)
@@ -116,6 +146,6 @@ def build_vp_token(
         nonce=nonce,
         aud=client_id,
         wallet_jwk=wallet_jwk,
-        sd_alg=str(issuer_payload.get("_sd_alg") or DEFAULT_SD_ALG),
+        sd_alg=sd_alg,
     )
     return join_sd_jwt(issuer_jwt, disclosures, kb_jwt)
