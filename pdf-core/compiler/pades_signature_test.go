@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -187,6 +188,69 @@ func TestPAdESSignedContentsCarriesCMSWithChain(t *testing.T) {
 	if len(p7.Certificates) == 0 {
 		t.Fatal("CMS SignedData embeds no X.509 certificates; the x5chain was not included")
 	}
+}
+
+// TestPAdESSignatureVerifiesOverByteRange is the load-bearing cryptographic
+// check: the CMS SignedData in /Contents must verify as a detached signature
+// over the exact bytes the /ByteRange covers. Any post-signing mutation of a
+// byte inside the ByteRange (e.g. rewriting /SubFilter after the digest is
+// computed) breaks the signed messageDigest and fails here.
+func TestPAdESSignatureVerifiesOverByteRange(t *testing.T) {
+	signed := compileSignForTest(t)
+
+	signedContent, der := byteRangeContentAndCMS(t, signed)
+
+	p7, err := pkcs7.Parse(der)
+	if err != nil {
+		t.Fatalf("parse CMS SignedData: %v", err)
+	}
+	p7.Content = signedContent
+	if err := p7.Verify(); err != nil {
+		t.Fatalf("PAdES CMS does not verify over its /ByteRange (signature is cryptographically invalid): %v", err)
+	}
+}
+
+// byteRangeContentAndCMS parses the last /ByteRange array, returns the
+// concatenation of the two covered byte segments (the signed content) and the
+// DER of the CMS SignedData carried in the excluded /Contents gap.
+func byteRangeContentAndCMS(t *testing.T, pdf []byte) (content, der []byte) {
+	t.Helper()
+	brIdx := bytes.LastIndex(pdf, []byte("/ByteRange"))
+	if brIdx < 0 {
+		t.Fatal("no /ByteRange in signed PDF")
+	}
+	open := bytes.IndexByte(pdf[brIdx:], '[')
+	closeB := bytes.IndexByte(pdf[brIdx:], ']')
+	if open < 0 || closeB < 0 {
+		t.Fatal("malformed /ByteRange array")
+	}
+	fields := bytes.Fields(pdf[brIdx+open+1 : brIdx+closeB])
+	if len(fields) != 4 {
+		t.Fatalf("/ByteRange must have 4 integers, got %d", len(fields))
+	}
+	n := make([]int, 4)
+	for i, f := range fields {
+		v, err := strconv.Atoi(string(f))
+		if err != nil {
+			t.Fatalf("non-integer /ByteRange field %q: %v", f, err)
+		}
+		n[i] = v
+	}
+	o1, l1, o2, l2 := n[0], n[1], n[2], n[3]
+	if o1 != 0 || o2+l2 > len(pdf) || o1+l1 >= o2 {
+		t.Fatalf("implausible /ByteRange [%d %d %d %d] for %d-byte PDF", o1, l1, o2, l2, len(pdf))
+	}
+	content = append(append([]byte(nil), pdf[o1:o1+l1]...), pdf[o2:o2+l2]...)
+
+	// The /Contents hex string sits in the excluded gap between the segments.
+	gap := pdf[o1+l1 : o2]
+	lt := bytes.IndexByte(gap, '<')
+	gt := bytes.IndexByte(gap, '>')
+	if lt < 0 || gt < 0 || gt <= lt {
+		t.Fatal("no /Contents hex string in the excluded ByteRange gap")
+	}
+	der = decodeContentsHex(t, gap[lt+1:gt])
+	return content, der
 }
 
 // TestPAdESSignThenUpdateChains reproduces the /sign -> /update ordering: a
