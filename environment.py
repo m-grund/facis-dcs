@@ -84,12 +84,23 @@ def before_all(context):
 		sys.path.insert(0, steps_dir_str)
 
 	# Shared request defaults for step definitions.
-	context.base_url = os.getenv("BDD_DCS_BASE_URL", "http://127.0.0.1:8991").rstrip("/")
+	# Default to the Vite dev-server proxy (:5173), not the backend port
+	# directly (:8991): Hydra has no fixed URLS_SELF_PUBLIC configured, so it
+	# derives its OAuth redirect target dynamically from the Host header of
+	# whichever caller reaches it first in the login chain. Requests that hit
+	# the backend port directly leak that host into Hydra's redirect_to
+	# response, which the backend then can't serve (404 on /oauth2/auth) —
+	# the whole login flow only works end-to-end when everything consistently
+	# goes through the same origin the dev stack's Hydra client is registered
+	# against (localhost:5173, see deployment/helm/values.dev.yml).
+	context.base_url = os.getenv("BDD_DCS_BASE_URL", "http://localhost:5173/api").rstrip("/")
 	context.http_timeout_seconds = float(os.getenv("BDD_HTTP_TIMEOUT_SECONDS", "20"))
 	context.aliases = {}
 
 	try:
-		context.db = psycopg2.connect(os.getenv("DATABASE_URL"))
+		context.db = psycopg2.connect(
+			os.getenv("DATABASE_URL", "host=localhost port=30432 user=dcs password=dcs dbname=dcs sslmode=disable")
+		)
 		context.db.cursor().execute("SELECT 1")
 		print("DB connection successful")
 	except psycopg2.OperationalError as e:

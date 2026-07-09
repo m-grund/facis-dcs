@@ -241,12 +241,27 @@ def _advance_to_approved(context, name):
 
 
 def _apply_signature(context, name):
+    # AC8 (real-signing-vertical) gates /signature/apply on a completed PID
+    # presentation ceremony for the exact (contract_did, signer_did) pair.
+    # Every caller of this shared setup helper — across every feature that
+    # merely wants a contract "in SIGNED state" as a precondition, not as the
+    # thing under test — must therefore run a real ceremony first, or every
+    # such scenario 422s with "ceremony_required". Deferred import: avoids a
+    # module-load-time cycle (real_signing_vertical's steps import
+    # _advance_to_approved etc. from this module).
+    from steps.real_signing_vertical.dcs_real_signing_vertical_steps import (  # noqa: PLC0415
+        _run_full_ceremony,
+    )
+
     did, updated_at = ContractService._contract_data(context, name)
+    _ceremony_id, _presentation, subject_did = _run_full_ceremony(
+        context, name, "BDD Counterparty Signer", "BDD Counterparty Signer"
+    )
     signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
     resp = post_json(
         context,
         signature_apply_url(context),
-        {"did": did, "signer_did": "did:example:bdd-counterparty-signer", "updated_at": updated_at},
+        {"did": did, "signer_did": subject_did, "updated_at": updated_at},
         headers=signer_h,
     )
     assert resp.status_code == 200, (

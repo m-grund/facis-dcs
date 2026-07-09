@@ -369,8 +369,8 @@ def _as_instance(context, base_url):
 
 @given("instance A and instance B are both running and trust each other")
 def step_given_two_instances_running(context):
-    base_url_a = os.getenv("BDD_DCS_BASE_URL_A", "").rstrip("/")
-    base_url_b = os.getenv("BDD_DCS_BASE_URL_B", "").rstrip("/")
+    base_url_a = os.getenv("BDD_DCS_BASE_URL_A", "http://localhost:5173/api").rstrip("/")
+    base_url_b = os.getenv("BDD_DCS_BASE_URL_B", "http://localhost:5174/api").rstrip("/")
     assert base_url_a and base_url_b, (
         "BDD_DCS_BASE_URL_A and BDD_DCS_BASE_URL_B must both be set to run this @two-instance "
         "scenario. This requires the second-instance runner (docs/anforderung.md Workstream "
