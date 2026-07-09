@@ -36,5 +36,5 @@ const { isSidebarCollapsed, pageSidebarId } = storeToRefs(pageStore)
   </div>
 
   <PermissionList class="mr-2" />
-  <AuthButton class="flex-none" />
+  <AuthButton class="btn flex-none gap-2 btn-outline btn-sm" />
 </template>
