@@ -95,12 +95,10 @@ const publish = async () => {
 
 async function register() {
   try {
-    const registered = await contractTemplateService.register({
-      did: props.template.did,
-    })
+    await contractTemplateService.register({ did: props.template.did })
 
     await templatesStore.loadTemplates()
-    await router.push({ name: ROUTES.TEMPLATES.LIST, params: { did: registered.did } })
+    await router.push({ name: ROUTES.TEMPLATES.LIST })
   } catch {}
 }
 </script>

@@ -3,6 +3,7 @@ import type { ContractTemplateActionFlag } from '@/types/contract-template-actio
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { UserRole } from '@/types/user-role'
 import type { ContractTemplateData } from './contract-template'
+import type { ContractTemplateResponsible } from './contract-template-responsible'
 
 export interface ContractTemplateCreateEvent {
   did: string
@@ -35,7 +36,7 @@ export interface ContractTemplateSubmitEvent {
   action_flag: ContractTemplateActionFlag
   comments?: string[]
   occurred_at: string
-  responsible?: unknown
+  responsible?: ContractTemplateResponsible
   holder_did: string
   user_roles: UserRole[]
 }
