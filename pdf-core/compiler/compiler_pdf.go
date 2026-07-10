@@ -45,7 +45,7 @@ func renderPDF(ctx context.Context, doc documentModel) ([]byte, error) {
 	}
 	// ID 14 (acroFormID) is reserved above; next dynamic IDs start at nextID.
 
-	xmpMetadata := renderXMPMetadata(doc.PayloadHash)
+	xmpMetadata := renderXMPMetadata("")
 	c2paManifest, err := renderC2PAManifestStore(ctx, doc.ContractID, doc.PayloadHash, payloadHashBytes(doc.PayloadHash), []c2paExclusion{{Start: 0, Length: 0}}, doc.CompiledAt)
 	if err != nil {
 		return nil, fmt.Errorf("render initial C2PA manifest: %w", err)
@@ -709,17 +709,31 @@ func renderPagesObject(pages []pageLayout) string {
 	return fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.Join(kids, " "), len(pages))
 }
 
-func renderXMPMetadata(_ string) []byte {
+// renderXMPMetadata renders the XMP metadata packet. When remoteManifestURL
+// is non-empty, it adds a dcterms:provenance property referencing it — the
+// C2PA-normative mechanism for remote manifest discovery (DCS-OR-C2PA-008
+// AC3). This is deliberately NOT done via a "remote_manifests" C2PA claim
+// field: c2pa-rs 0.85.1 (c2patool 0.26.61) hard-rejects that as an unknown V2
+// claim field ("claim could not be converted from CBOR"), which broke
+// c2patool/veraPDF validation for every DCS-produced PDF carrying a manifest
+// URL. dcterms is a well-known, PDF/A-registered Dublin Core namespace (see
+// ISO 19005-3:2012 clause 6.6.2.3.1, which only prohibits UNregistered
+// schemas such as the ad-hoc http://c2pa.org/c2pa one — C2PA provenance data
+// itself still belongs in the binary JUMBF attachment, not in XMP).
+func renderXMPMetadata(remoteManifestURL string) []byte {
 	// ISO 19005-3:2012 clause 6.6.4 requires the PDF/A version and conformance
 	// level to be declared via the pdfaid schema (pdfaid:part=3, pdfaid:conformance=A).
-	// Clause 6.6.2.3.1 prohibits XMP properties from unregistered namespaces such as
-	// http://c2pa.org/c2pa — C2PA provenance data belongs in the binary JUMBF
-	// attachment (the /C2PA_Manifest embedded file), not in XMP.
 	// The xpacket processing instructions are required by ISO 19005-3:2012
 	// clause 6.6.3. The begin attribute carries the UTF-8 BOM (U+FEFF) so
 	// tools can detect byte order; the id value is fixed by the XMP spec.
 	// The XML declaration must precede the xpacket PI (it may not appear
 	// after a processing instruction in the XML prolog).
+	provenanceDescription := ""
+	if remoteManifestURL != "" {
+		provenanceDescription = "  <rdf:Description rdf:about=\"\"\n" +
+			"    xmlns:dcterms=\"http://purl.org/dc/terms/\"\n" +
+			"    dcterms:provenance=\"" + remoteManifestURL + "\"/>\n"
+	}
 	xmp := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 		"<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n" +
 		"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"DCS-PDF-CORE 1.0\">\n" +
@@ -732,6 +746,7 @@ func renderXMPMetadata(_ string) []byte {
 		"    xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n" +
 		"    xmp:CreatorTool=\"DCS-PDF-CORE " + RendererVersion + "\"\n" +
 		"    xmp:MetadataDate=\"2026-06-04T00:00:00Z\"/>\n" +
+		provenanceDescription +
 		"</rdf:RDF>\n" +
 		"</x:xmpmeta>\n" +
 		"<?xpacket end=\"w\"?>"

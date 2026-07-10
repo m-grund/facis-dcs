@@ -5,7 +5,7 @@ import { useContractPermissions } from '@/modules/contract-workflow-engine/compo
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { ContractState } from '@/types/contract-state'
-import { computed, normalizeClass, useAttrs, useTemplateRef } from 'vue'
+import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({
@@ -39,6 +39,28 @@ const canTerminate = computed(() => {
   return isManager.value && props.contract.state !== ContractState.terminated
 })
 
+const canDeploy = computed(() => {
+  return isManager.value && props.contract.state === ContractState.signed
+})
+
+const deploying = ref(false)
+
+const deploy = async () => {
+  if (!isManager.value || props.contract.state !== ContractState.signed) return
+  deploying.value = true
+  try {
+    await contractWorkflowService.deploy({
+      did: props.contract.did,
+      updated_at: props.contract.updated_at,
+    })
+    router.go(0)
+  } catch (err) {
+    console.error('Deployment failed:', err)
+  } finally {
+    deploying.value = false
+  }
+}
+
 const terminate = async () => {
   try {
     if (!confirmationModal.value) return
@@ -67,6 +89,9 @@ const terminate = async () => {
 </script>
 
 <template>
+  <button v-if="canDeploy" :class="[filteredClass, 'btn-primary']" :disabled="deploying" @click="deploy">
+    {{ deploying ? 'Deploying…' : 'Deploy' }}
+  </button>
   <button v-if="canTerminate" :class="[filteredClass, 'btn-error']" @click="terminate">Terminate</button>
   <ConfirmationModal ref="confirmation-modal" />
 </template>

@@ -2,7 +2,7 @@ import type { ComponentType } from '@/types/component-type'
 import type { ContractEventType } from '@/types/contract-event-type'
 import type { ContractState } from '@/types/contract-state'
 import type { ContractData } from '../contract-data'
-import type { Contract, ExpirationPolicy } from '../contract/contract'
+import type { Contract, ContractDeploymentKpi, ExpirationPolicy } from '../contract/contract'
 import type { ContractApprovalTask } from '../contract/contract-approval-task'
 import type { ContractEvent } from '../contract/contract-event'
 import type { ContractNegotiation } from '../contract/contract-negotiation'
@@ -50,6 +50,19 @@ export interface ContractRetrieveByIdResponse {
   /** The data of that contract */
   contract_data: ContractData
   negotiations: ContractNegotiation[]
+  /** KPI values reported via deployment callback (DCS-FR-CWE-31, DCS-FR-CWE-09) */
+  kpis?: ContractDeploymentKpi[]
+  /** Metric names whose latest reported value violates its contractual SLA threshold */
+  kpi_violations?: string[]
+}
+
+export interface ContractDeployResponse {
+  did: string
+  contract_version: number
+  content_hash: string
+  timestamp: string
+  correlation_id: string
+  payload: unknown
 }
 
 export interface ContractReviewResponse {

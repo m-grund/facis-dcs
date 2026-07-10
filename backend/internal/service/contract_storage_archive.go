@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
@@ -10,6 +11,7 @@ import (
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
@@ -91,6 +93,7 @@ func (s *contractStorageArchivesrvc) Retrieve(ctx context.Context, p *contractst
 			ExpPolicy:       expPolicy,
 			ExpNoticePeriod: item.ExpNoticePeriod,
 			Responsible:     item.Responsible,
+			Evidence:        archiveEvidenceValue(item.Evidence),
 		})
 	}
 
@@ -188,7 +191,22 @@ func toArchiveContractItem(item db.ContractMetadata) *contractstoragearchive.Con
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: item.ExpNoticePeriod,
 		Responsible:     item.Responsible,
+		Evidence:        archiveEvidenceValue(item.Evidence),
 	}
+}
+
+// archiveEvidenceValue decodes a ContractMetadata.Evidence blob (populated
+// only for archived-contract queries, joined from
+// contract_archive_entries.evidence) into a plain any for the API response.
+func archiveEvidenceValue(evidence *datatype.JSON) any {
+	if evidence == nil || !evidence.IsNotNullValue() {
+		return nil
+	}
+	var value any
+	if err := json.Unmarshal(*evidence, &value); err != nil {
+		return nil
+	}
+	return value
 }
 
 func stringValue(value *string) string {

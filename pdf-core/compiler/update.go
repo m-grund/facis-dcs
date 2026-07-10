@@ -313,7 +313,7 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 	var result []byte
 
 	for range 6 {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(manifestHashHex), manifestDoc.ContractID, manifestHashHex, hardBindingHash, exclusions, compiledAt, remoteManifestURL)
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, updateManifestLabelFromHash(manifestHashHex), manifestDoc.ContractID, manifestHashHex, hardBindingHash, exclusions, compiledAt)
 		if err != nil {
 			return nil, fmt.Errorf("render update manifest: %w", err)
 		}
@@ -321,13 +321,13 @@ func updatePDF(ctx context.Context, oldPDF []byte, newPayload []byte, vcBytes []
 		if signed {
 			appendix = buildSignedUpdateAppendixBytes(
 				len(oldPDF), prevStartXref, oldSize, rootObjID, fileID,
-				updatedC2PA, vcBytes, vcFileObjID, vcSpecObjID,
+				updatedC2PA, vcBytes, vcFileObjID, vcSpecObjID, remoteManifestURL,
 			)
 		} else {
 			appendix = buildUpdateAppendixBytes(
 				len(oldPDF), prevStartXref, oldSize, fileID,
 				updatedC2PA, newDoc.CanonicalJSON, newDoc.PayloadHash,
-				newPages, vcBytes, vcFileObjID, vcSpecObjID,
+				newPages, vcBytes, vcFileObjID, vcSpecObjID, remoteManifestURL,
 			)
 		}
 		result = append(append([]byte(nil), oldPDF...), appendix...)
@@ -364,13 +364,15 @@ func buildUpdateAppendixBytes(
 	newPayloadHash string,
 	newPages []pageLayout,
 	vcBytes []byte, vcFileObjID, vcSpecObjID int,
+	remoteManifestURL string,
 ) []byte {
 	const (
-		fontObjID  = 6
-		pagesObjID = 2
-		c2paObjID  = 9
-		embFileID  = 11
-		acroFormID = 14
+		fontObjID     = 6
+		pagesObjID    = 2
+		c2paObjID     = 9
+		embFileID     = 11
+		acroFormID    = 14
+		metadataObjID = 13
 	)
 
 	type objEntry struct{ id, offset int }
@@ -471,6 +473,19 @@ func buildUpdateAppendixBytes(
 			vcSpecObjID, vcFileObjID))
 	}
 
+	// Supersede obj 13 (XMP Metadata) when a remote manifest URL is supplied,
+	// adding a dcterms:provenance property (DCS-OR-C2PA-008 AC3) — the
+	// C2PA-normative remote-manifest-discovery mechanism (see renderXMPMetadata's
+	// doc comment for why this replaced a non-standard C2PA claim field).
+	if remoteManifestURL != "" {
+		updatedXMP := renderXMPMetadata(remoteManifestURL)
+		entries = append(entries, objEntry{metadataObjID, baseLen + buf.Len()})
+		buf.WriteString(fmt.Sprintf("%d 0 obj\n", metadataObjID))
+		buf.Write(streamObject(updatedXMP, fmt.Sprintf(
+			"<< /Type /Metadata /Subtype /XML /Length %d >>", len(updatedXMP))))
+		buf.WriteString("\nendobj\n")
+	}
+
 	// Supersede obj 9: updated C2PA manifest — written last so stream offset stabilises.
 	entries = append(entries, objEntry{c2paObjID, baseLen + buf.Len()})
 	buf.WriteString(fmt.Sprintf("%d 0 obj\n", c2paObjID))
@@ -531,8 +546,12 @@ func buildSignedUpdateAppendixBytes(
 	fileID string,
 	updatedC2PA []byte,
 	vcBytes []byte, vcFileObjID, vcSpecObjID int,
+	remoteManifestURL string,
 ) []byte {
-	const c2paObjID = 9
+	const (
+		c2paObjID     = 9
+		metadataObjID = 13
+	)
 
 	type objEntry struct{ id, offset int }
 	var entries []objEntry
@@ -552,6 +571,17 @@ func buildSignedUpdateAppendixBytes(
 		buf.WriteString(fmt.Sprintf(
 			"%d 0 obj\n<< /Type /Filespec /F (contract-lifecycle-vc.json) /UF (contract-lifecycle-vc.json) /AFRelationship /Supplement /EF << /F %d 0 R >> >>\nendobj\n",
 			vcSpecObjID, vcFileObjID))
+	}
+
+	// Supersede obj 13 (XMP Metadata) when a remote manifest URL is supplied —
+	// see the identical block in buildUpdateAppendixBytes for the rationale.
+	if remoteManifestURL != "" {
+		updatedXMP := renderXMPMetadata(remoteManifestURL)
+		entries = append(entries, objEntry{metadataObjID, baseLen + buf.Len()})
+		buf.WriteString(fmt.Sprintf("%d 0 obj\n", metadataObjID))
+		buf.Write(streamObject(updatedXMP, fmt.Sprintf(
+			"<< /Type /Metadata /Subtype /XML /Length %d >>", len(updatedXMP))))
+		buf.WriteString("\nendobj\n")
 	}
 
 	// Supersede obj 9: updated C2PA manifest — written last so its stream offset
@@ -742,12 +772,13 @@ func VerifyIncrementalUpdate(ctx context.Context, pdf []byte) error {
 		// Re-apply this hop's amendment to the bytes preceding it (which may
 		// themselves embed a PAdES signature or signing-evidence attachment —
 		// opaque to this check, same as the base boundary above). Re-use the
-		// VC and any remote_manifests reference already embedded for this hop
-		// so the deterministic output is byte-for-byte identical: ExtractEmbeddedVC
-		// / extractRemoteManifestURL operate on hopEnd, so they see exactly the
-		// attachment this specific hop wrote, not one written by a later hop.
+		// VC and any remote-manifest provenance link already embedded for this
+		// hop so the deterministic output is byte-for-byte identical:
+		// ExtractEmbeddedVC / extractRemoteManifestURLFromXMP operate on hopEnd,
+		// so they see exactly the attachment this specific hop wrote, not one
+		// written by a later hop.
 		embeddedVC, vcPresent, _ := ExtractEmbeddedVC(hopEnd)
-		remoteManifestURL := extractRemoteManifestURL(hopC2PA)
+		remoteManifestURL := extractRemoteManifestURLFromXMP(hopEnd)
 		var freshUpdated []byte
 		if vcPresent && len(embeddedVC) > 0 {
 			freshUpdated, err = UpdatePDFWithOptions(ctx, boundary, newPayload, embeddedVC, remoteManifestURL, updateCompiledAt)

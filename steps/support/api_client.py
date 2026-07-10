@@ -85,6 +85,29 @@ def contract_audit_url(context) -> str:
     return f"{context.base_url}/contract/audit"
 
 
+# Deployment (Workstream G, docs/anforderung.md G2): ASSUMED endpoint shapes —
+# neither exists in backend/design/*.go yet (grep backend/design -rn "deploy"
+# only finds the pre-existing "approve" method's descriptive Meta string and
+# the EventDeploy state-machine edge, see contractstate/transition.go). Path/
+# names taken verbatim from docs/anforderung.md G2 ("POST /contract/deploy",
+# "POST /contract/deployment/callback").
+
+def contract_deploy_url(context) -> str:
+    return f"{context.base_url}/contract/deploy"
+
+
+def contract_deployment_callback_url(context) -> str:
+    return f"{context.base_url}/contract/deployment/callback"
+
+
+def archive_search_url(context) -> str:
+    return f"{context.base_url}/archive/search"
+
+
+def archive_retrieve_url(context) -> str:
+    return f"{context.base_url}/archive/retrieve"
+
+
 def contract_peer_action_url(context) -> str:
     return f"{context.base_url}/peer/contracts/action"
 

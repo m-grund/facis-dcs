@@ -174,6 +174,25 @@ const exportPDF = async () => {
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" disabled />
 
+                <!-- Deployment KPIs (DCS-FR-CWE-31, DCS-FR-CWE-09) -->
+                <div v-if="contract.kpis && contract.kpis.length > 0" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
+                  <div class="card-body gap-2">
+                    <h2 class="card-title text-sm">KPIs</h2>
+                    <ul class="flex flex-col gap-1">
+                      <li
+                        v-for="kpi in contract.kpis"
+                        :key="`${kpi.metric}-${kpi.observed_at}`"
+                        class="flex items-center gap-2 text-sm"
+                      >
+                        <span class="font-medium">{{ kpi.metric }}</span>
+                        <span>{{ kpi.value }}</span>
+                        <span class="text-xs text-base-content/40">{{ kpi.observed_at }}</span>
+                        <span v-if="kpi.violation" class="badge badge-error badge-sm">Violation</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
                 <!-- Parent contract -->
                 <div v-if="parentContract" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
                   <div class="card-body gap-2">

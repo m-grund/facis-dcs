@@ -5,7 +5,7 @@ import re
 
 import requests as _requests
 
-from behave import then, when
+from behave import given, then, when
 from behave.matchers import use_step_matcher
 
 
@@ -105,6 +105,28 @@ def step_when_internal_request(context, method, endpoint):
         context.requests_response = _requests.post(url, json={}, timeout=context.http_timeout_seconds)
     else:
         raise NotImplementedError(f"Method {method} not supported in internal endpoint step")
+
+
+@given("get http 200:Success code")
+def step_given_get_http_200(context):
+    """Duplicate of eu.xfsc.bdd.core.steps.rest._200 (pip package
+    bdd-executor), registered as @given too.
+
+    behave registers @given/@when/@then into separate per-type lookup
+    tables; the upstream bdd-executor package only registers this exact
+    text under @then, so behave reports it as "undefined" wherever a
+    scenario uses it as an "And" continuing a Given block (several
+    scenarios in features/05_contract_deployment/contract_deployment.feature
+    do exactly this, to assert an intermediate setup call succeeded before
+    the Given block's actual precondition is fully built). We cannot edit
+    the installed pip package's source, so per the task's own fallback
+    ("dupliziere die Step-Definition mit dem jeweils fehlenden Decorator"),
+    this is a thin, behavior-identical duplicate scoped to the Given case
+    only — the upstream @then registration is untouched and still handles
+    every other (Then) usage across the rest of this codebase's features.
+    """
+    status_code = context.requests_response.status_code
+    assert status_code == 200, (status_code, context.requests_response.content)
 
 
 @then("the response status is {status_code:d}")

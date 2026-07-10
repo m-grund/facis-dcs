@@ -3,6 +3,7 @@ import type {
   ContractApproveRequest,
   ContractAuditRequest,
   ContractCreateRequest,
+  ContractDeployRequest,
   ContractHistoryRetrieveRequest,
   ContractNegotiationRequest,
   ContractNegotiationRespondRequest,
@@ -21,6 +22,7 @@ import type {
   ContractApproveResponse,
   ContractAuditResponse,
   ContractCreateResponse,
+  ContractDeployResponse,
   ContractHistoryResponse,
   ContractNegotiationRespondResponse,
   ContractNegotiationResponse,
@@ -120,6 +122,10 @@ export const contractWorkflowService: ContractWorkflowService = {
 
   async terminate(request: ContractTerminateRequest) {
     return http.post<ContractTerminateResponse>('/contract/terminate', request).then((res) => res.data)
+  },
+
+  async deploy(request: ContractDeployRequest) {
+    return http.post<ContractDeployResponse>('/contract/deploy', request).then((res) => res.data)
   },
 
   async audit(request: ContractAuditRequest) {

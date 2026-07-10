@@ -11,6 +11,13 @@ export const ExpirationPolicy = {
 
 export type ExpirationPolicy = (typeof ExpirationPolicy)[keyof typeof ExpirationPolicy]
 
+export interface ContractDeploymentKpi {
+  metric: string
+  value: string
+  observed_at: string
+  violation?: boolean
+}
+
 export interface Contract {
   did: string
   contract_version: number
@@ -33,6 +40,10 @@ export interface Contract {
   template_version?: number
   template_is_deprecated?: boolean
   parent_contract_did?: string
+  /** KPI values reported via deployment callback (DCS-FR-CWE-31, DCS-FR-CWE-09) */
+  kpis?: ContractDeploymentKpi[]
+  /** Metric names whose latest reported value violates its contractual SLA threshold */
+  kpi_violations?: string[]
 }
 
 export type ContractChangeRequest = Pick<Contract, 'name' | 'description' | 'exp_notice_period' | 'exp_policy'> & {

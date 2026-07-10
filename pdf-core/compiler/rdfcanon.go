@@ -26,10 +26,22 @@ func NormalizePayload(raw []byte) (nquads []byte, err error) {
 
 	proc := ld.NewJsonLdProcessor()
 
-	normalizeOpts := ld.NewJsonLdOptions("")
+	// baseIRI lets Expand (invoked internally by Normalize) resolve every
+	// document's relative @id (bare UUIDs, e.g. "<did>#metadata") to an
+	// absolute IRI — see baseIRIFromContextIRI's doc comment for why this is
+	// required (not optional/cosmetic): without it, URDNA2015 silently drops
+	// every node in the graph, producing zero N-Quads.
+	baseIRI := ""
+	var loader ld.DocumentLoader
+	if ctxIRI, l, loaderErr := canonicalContextArgs(); loaderErr == nil {
+		baseIRI = baseIRIFromContextIRI(ctxIRI)
+		loader = l
+	}
+
+	normalizeOpts := ld.NewJsonLdOptions(baseIRI)
 	normalizeOpts.Algorithm = "URDNA2015"
 	normalizeOpts.Format = "application/n-quads"
-	if _, loader, loaderErr := canonicalContextArgs(); loaderErr == nil {
+	if loader != nil {
 		normalizeOpts.DocumentLoader = loader
 	}
 	normResult, err := proc.Normalize(doc, normalizeOpts)

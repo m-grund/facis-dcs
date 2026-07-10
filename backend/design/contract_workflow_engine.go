@@ -185,6 +185,7 @@ var ContractItem = Type("ContractItem", func() {
 	Attribute("latest_template_did", String, "The DID of the latest template for this contract")
 	Attribute("template_is_deprecated", Boolean, "Whether the template is deprecated")
 	Attribute("parent_contract_did", String, "The DID of the parent contract, if this is a sub-contract")
+	Attribute("evidence", Any, "Archive evidence blob (only populated for archived contracts), including a deployment sub-object with correlation_id/payload_hash/receipt_hash/tsa_token/activated_at (DCS-FR-SM-10, DCS-FR-SM-12)")
 
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_version", "template_did", "template_version")
 })
@@ -286,7 +287,21 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 
 	Attribute("negotiations", ArrayOf(ContractNegotiationItem), "List with negotiations for that contract")
 
+	Attribute("kpis", ArrayOf(ContractDeploymentKPIItem), "KPI values reported via deployment callback for this contract (DCS-FR-CWE-31, DCS-FR-CWE-09)")
+	Attribute("kpi_violations", ArrayOf(String), "Metric names whose latest reported value violates its contractual SLA threshold (DCS-FR-CWE-09)")
+
 	Required("did", "state", "created_by", "created_at", "updated_at", "contract_data", "negotiations", "contract_version", "template_did", "template_version")
+})
+
+var ContractDeploymentKPIItem = Type("ContractDeploymentKPIItem", func() {
+	Description("A single KPI value reported via the deployment callback (DCS-FR-CWE-09, DCS-FR-CWE-31)")
+
+	Attribute("metric", String, "KPI metric name")
+	Attribute("value", String, "Reported KPI value")
+	Attribute("observed_at", String, "When the KPI was reported")
+	Attribute("violation", Boolean, "Whether this KPI value violates its contractual SLA threshold")
+
+	Required("metric", "value", "observed_at")
 })
 
 var ContractReviewRequest = Type("ContractReviewRequest", func() {
@@ -521,6 +536,67 @@ var ApprovedContractTemplateRetrieveResponse = Type("ApprovedContractTemplateRet
 	Attribute("responsible", Any, "Responsible for this contract template, including the creator, approver and reviewers")
 
 	Required("did", "state", "template_type", "created_by", "created_at", "updated_at", "version")
+})
+
+var ContractDeployRequest = Type("ContractDeployRequest", func() {
+	Description("Contract deploy request: submit a SIGNED contract to the configured Contract Target System (UC-05-01)")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("updated_at", String, "The timestamp when the contract was updated")
+
+	Required("did", "updated_at")
+})
+
+var ContractDeployResponse = Type("ContractDeployResponse", func() {
+	Description("Result of deploying a contract to the Contract Target System")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("contract_version", Int, "The version of the deployed contract")
+	Attribute("content_hash", String, "SHA-256 content hash of the deployment payload")
+	Attribute("timestamp", String, "When the deployment was dispatched")
+	Attribute("correlation_id", String, "Correlation ID for matching the target's later ack/status/KPI callbacks")
+	Attribute("payload", Any, "The machine-readable JSON-LD payload sent to the contract target, including the odrl:Set policy")
+
+	Required("did", "contract_version", "content_hash", "timestamp", "correlation_id", "payload")
+})
+
+var ContractDeploymentReceiptPayload = Type("ContractDeploymentReceiptPayload", func() {
+	Description("Execution-evidence receipt carried in a deployment acknowledgement callback")
+
+	Attribute("correlation_id", String, "Correlation ID of the deployment being acknowledged")
+	Attribute("payload_hash", String, "Content hash of the payload the target received and verified")
+	Attribute("activated_at", String, "When the target activated the deployed contract")
+})
+
+var ContractDeploymentKPIReport = Type("ContractDeploymentKPIReport", func() {
+	Description("A single KPI value report carried in a deployment callback")
+
+	Attribute("metric", String, "KPI metric name")
+	Attribute("value", String, "Reported KPI value")
+})
+
+var ContractDeploymentCallbackRequest = Type("ContractDeploymentCallbackRequest", func() {
+	Description("Contract Target System -> DCS deployment callback: ack/status update and/or KPI report, authenticated via a shared-secret header (not a JWT)")
+
+	Attribute("callback_secret", String, "Shared secret proving the caller is the configured contract target")
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("correlation_id", String, "Correlation ID from the original deployment")
+	Attribute("status", String, "Deployment status (e.g. ACKNOWLEDGED)")
+	Attribute("receipt", ContractDeploymentReceiptPayload, "Execution-evidence receipt for a deployment acknowledgement")
+	Attribute("kpi", ContractDeploymentKPIReport, "A single KPI value report")
+
+	Required("did", "correlation_id")
+})
+
+var ContractDeploymentCallbackResponse = Type("ContractDeploymentCallbackResponse", func() {
+	Description("Result of accepting a deployment callback")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("status", String, "Resulting deployment/contract status")
+
+	Required("did")
 })
 
 // Contract Workflow Engine Service  (/contract/...)
@@ -1038,6 +1114,54 @@ var _ = Service("ContractWorkflowEngine", func() {
 			GET("/contract/templates")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("deploy", func() {
+		Description("Deploy a SIGNED contract to the configured Contract Target System (UC-05-01).")
+		Meta("dcs:requirements", "DCS-FR-SM-12")
+		Meta("dcs:cwe:components", "Contract Deployment for Service Provisioning")
+		Meta("dcs:ui", "Contract Management Dashboard")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+		})
+
+		Payload(ContractDeployRequest)
+		Result(ContractDeployResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/contract/deploy")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("deploymentCallback", func() {
+		Description("Accept a deployment ack/status update and/or KPI report from the configured Contract Target System, authenticated by a shared-secret header (DCS-IR-SI-05).")
+		Meta("dcs:requirements", "DCS-IR-SI-05")
+
+		NoSecurity()
+
+		Payload(ContractDeploymentCallbackRequest)
+		Result(ContractDeploymentCallbackResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("unauthorized", ErrorResult, "Missing or invalid shared secret")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/contract/deployment/callback")
+			Header("callback_secret:X-Deployment-Callback-Secret")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("unauthorized", StatusUnauthorized)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

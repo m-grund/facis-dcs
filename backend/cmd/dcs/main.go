@@ -47,6 +47,7 @@ import (
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
+	"digital-contracting-service/internal/contractworkflowengine/deployevent"
 	"digital-contracting-service/internal/middleware"
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
@@ -329,6 +330,18 @@ func main() {
 	if archiveNotaryURL != "" {
 		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL)
 	}
+
+	// Contract deployment (Workstream G, UC-05-01): the Contract Target
+	// System client is optional — without CONTRACT_TARGET_URL set, deploy
+	// dispatches are still recorded (correlation ID, content hash, archive
+	// evidence) but no outbound call is made; the target's own callback
+	// (POST /contract/deployment/callback) is the authoritative signal.
+	cweDeploymentRepo := &cwerepo.PostgresDeploymentRepo{}
+	var contractTargetClient cwecommand.ContractTargetClient
+	if targetURL := cwecommand.ContractTargetURL(); targetURL != "" {
+		contractTargetClient = cwecommand.NewHTTPContractTargetClient(targetURL)
+	}
+
 	// Initialize the Federated Catalogue client.
 	fcURL := os.Getenv("FEDERATED_CATALOGUE_API_URL")
 	fcClientID := os.Getenv("FEDERATED_CATALOGUE_CLIENT_ID")
@@ -466,12 +479,12 @@ func main() {
 		}
 
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo, *didDocument)
-		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient)
+		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient, cweDeploymentRepo, contractTargetClient)
 		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument, ipfsAPIClient)
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smrepo.PostgresCeremonyRepo{}, auditTrailReader, signer.NewPDFCoreSigner(pdfCoreClient), vcSigner, issuerDID, ipfsAPIClient, pdfCoreClient)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smrepo.PostgresCeremonyRepo{}, auditTrailReader, signer.NewPDFCoreSigner(pdfCoreClient), vcSigner, issuerDID, ipfsAPIClient, pdfCoreClient, &cweRepo, archiveNotaryClient, tsaClient, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(db, jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 		didSrv = didService
@@ -506,6 +519,33 @@ func main() {
 	go func() {
 		if err := pdfSub.Start(pdfSubClient); err != nil {
 			errc <- fmt.Errorf("could not start PDF generation subscriber: %w", err)
+		}
+	}()
+
+	// Start the auto-deploy subscriber (DCS-FR-CWE-06): once the signing
+	// workflow completes (APPLIED_SIGNATURE), it calls the same
+	// cwecommand.Deployer the manual POST /contract/deploy endpoint uses.
+	deploySubClient, err := event.NewNatsSubClient(conf.EventBusTopic(), natsURL)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not create contract-deployment NATS subscriber")
+	}
+	defer func(deploySubClient *event.CloudEventSubClient) {
+		err := deploySubClient.Close()
+		if err != nil {
+			log.Errorf(ctx, err, "Could not close contract-deployment subscriber")
+		}
+	}(deploySubClient)
+	deploySub := &deployevent.Subscriber{
+		Deployer: &cwecommand.Deployer{
+			DB:             db,
+			CRepo:          &cweRepo,
+			DeploymentRepo: cweDeploymentRepo,
+			Target:         contractTargetClient,
+		},
+	}
+	go func() {
+		if err := deploySub.Start(deploySubClient); err != nil {
+			errc <- fmt.Errorf("could not start contract-deployment subscriber: %w", err)
 		}
 	}()
 

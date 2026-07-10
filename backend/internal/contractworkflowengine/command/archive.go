@@ -16,13 +16,15 @@ import (
 
 const archiveSnapshotHashAlgorithm = "SHA-256"
 
-// BuildArchiveEntry freezes the approved contract state for archive persistence.
+// BuildArchiveEntry freezes the signed contract state for archive
+// persistence (DCS-FR-CWE-20): the archive entry is created once the
+// signature workflow completes (SIGNED), not at APPROVED.
 func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchiveEntry, error) {
 	if contract == nil {
 		return db.ContractArchiveEntry{}, fmt.Errorf("contract is required")
 	}
-	if contract.State != contractstate.Approved.String() {
-		return db.ContractArchiveEntry{}, fmt.Errorf("contract %s must be approved before archive storage", contract.DID)
+	if contract.State != contractstate.Signed.String() {
+		return db.ContractArchiveEntry{}, fmt.Errorf("contract %s must be signed before archive storage", contract.DID)
 	}
 
 	snapshotJSON, err := buildContractSnapshot(contract)
@@ -50,12 +52,10 @@ func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchi
 		return db.ContractArchiveEntry{}, err
 	}
 	evidence, err := datatype.NewJSON(map[string]any{
-		"source":                  "FINAL_CONTRACT_APPROVAL",
-		"approved_by":             storedBy,
-		"approved_state":          contractstate.Approved.String(),
+		"source":                  "SIGNING_WORKFLOW_COMPLETION",
+		"stored_by":               storedBy,
+		"stored_state":            contractstate.Signed.String(),
 		"snapshot_hash_algorithm": archiveSnapshotHashAlgorithm,
-		"signed_pdf_out_of_scope": true,
-		"signing_out_of_scope":    true,
 	})
 	if err != nil {
 		return db.ContractArchiveEntry{}, err
