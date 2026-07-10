@@ -50,6 +50,8 @@ const inputValue: Ref<T> = computed(() => {
     : { ...props.emptyItem, [searchKey.value]: searchQuery.value }
 })
 
+const isFilterSelectionDisabled = computed(() => Object.entries(props.filterLabels).length === 1)
+
 async function searchRequest() {
   if (searchQuery.value.length < 1 || !searchKey.value) {
     searchResults.value = []
@@ -124,7 +126,8 @@ function onFilterSelect(label: FilterLabelValue) {
         type="button"
         class="select w-full rounded-t-md rounded-b-none select-secondary sm:rounded-l-md sm:rounded-tr-none"
         popovertarget="list-popover-search"
-        :class="{ 'btn-disabled': Object.entries(filterLabels).length === 1 }"
+        :class="{ 'btn-disabled': isFilterSelectionDisabled }"
+        :disabled="isFilterSelectionDisabled"
       >
         {{ selectedFilter }}
       </button>

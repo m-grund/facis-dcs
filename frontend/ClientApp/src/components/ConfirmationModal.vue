@@ -73,7 +73,12 @@ defineExpose<ModalExpose>({ reveal: reveal })
         />
       </div>
       <div class="modal-action flex-col" :class="{ 'flex-row-reverse justify-start': hasEditor }">
-        <button class="btn btn-sm btn-primary" :class="{ 'btn-disabled': inputRequired }" @click="handleConfirm">
+        <button
+          class="btn btn-sm btn-primary"
+          :class="{ 'btn-disabled': inputRequired }"
+          :disabled="inputRequired"
+          @click="handleConfirm"
+        >
           {{ hasEditor ? 'Submit' : 'Confirm' }}
         </button>
         <button class="btn btn-outline btn-sm" @click="cancel">Cancel</button>
