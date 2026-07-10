@@ -102,6 +102,7 @@ spec:
               SO_PIN={{ .Values.pkcs11.provisioning.soPin | quote }}
               SECRET_NAME={{ include "digital-contracting-service.hsmX5ChainSecretName" . | quote }}
               CRL_URL={{ printf "http://%s:%v%s/crl/dcs-c2pa.crl" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
+              PADES_CRL_URL={{ printf "http://%s:%v%s/crl/dcs-contract-pades.crl" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
 
               /app/scripts/hsm-provision.sh "$TOKEN_DIR" "$LABEL" "$PKCS11_PIN" "$SO_PIN" "$MODULE"
 
@@ -109,6 +110,14 @@ spec:
               # stays a stable trust anchor across upgrades.
               /app/scripts/c2pa-cert-provision.sh "$TOKEN_DIR" "$LABEL" "$PKCS11_PIN" \
                 "$TOKEN_DIR/c2pa-x5chain.pem" "$MODULE" "$CRL_URL"
+
+              # Issue the PAdES x5chain bound to the dcs-contract-pades token
+              # key (same dev CA); pdf-core embeds it as the CMS signing
+              # certificate chain when signing via the backend's internal
+              # PAdES endpoint.
+              KEY_LABEL=dcs-contract-pades /app/scripts/c2pa-cert-provision.sh \
+                "$TOKEN_DIR" "$LABEL" "$PKCS11_PIN" \
+                "$TOKEN_DIR/pades-x5chain.pem" "$MODULE" "$PADES_CRL_URL"
 
               # Let the non-root backend container read/write the token.
               chmod -R a+rwX "$TOKEN_DIR"
@@ -164,13 +173,17 @@ spec:
               secret_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets/${SECRET_NAME}"
               create_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets"
               x5chain_json="$(jq -Rs . < "$TOKEN_DIR/c2pa-x5chain.pem")"
+              pades_x5chain_json="$(jq -Rs . < "$TOKEN_DIR/pades-x5chain.pem")"
               payload="$(cat <<EOF
               {
                 "apiVersion": "v1",
                 "kind": "Secret",
                 "metadata": { "name": "${SECRET_NAME}" },
                 "type": "Opaque",
-                "stringData": { "x5chain-pem": ${x5chain_json} }
+                "stringData": {
+                  "x5chain-pem": ${x5chain_json},
+                  "pades-x5chain-pem": ${pades_x5chain_json}
+                }
               }
               EOF
               )"

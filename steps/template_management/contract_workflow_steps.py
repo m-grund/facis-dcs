@@ -252,8 +252,16 @@ def step_when_generate_contract_from_template(context, name):
         or (getattr(context, "named_templates", None) or {}).get(name, {}).get("did")
     )
     assert template_did, f"No approved template DID found for '{name}'"
+    peer_did = ContractService._local_peer_did(context)
     context.requests_response = post_json(
-        context, contract_create_url(context), {"did": template_did}
+        context,
+        contract_create_url(context),
+        {
+            "template_did": template_did,
+            "reviewers": [peer_did],
+            "negotiators": [peer_did],
+            "approvers": [peer_did],
+        },
     )
 
 

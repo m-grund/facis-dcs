@@ -642,13 +642,25 @@ class AuthService:
 
     @staticmethod
     def create_expired_jwt(client_id, username, roles):
-        """Create an expired JWT token for negative credential tests."""
+        """Create an expired JWT token for negative credential tests.
+
+        The issuer must match the backend's HYDRA_PUBLIC_ISSUER_URL: go-oidc
+        checks issuer before expiry, so a foreign issuer fails with
+        "issued by a different provider" instead of the "token is expired"
+        message the scenarios assert on. Expiry is checked before the
+        signature, so the token needs no valid signature.
+        """
+        issuer = (
+            os.getenv("BDD_HYDRA_ISSUER_URL", "").strip()
+            or os.getenv("BDD_PUBLIC_ORIGIN", "").strip()
+            or "http://localhost:18080"
+        ).rstrip("/")
         header = {"alg": "none"}
         payload = {
             "sub": username,
-            "iss": "https://auth.eclipse.org/auth/realms/community",
-            "azp": client_id,
-            "resource_access": {"dcs-client": {"roles": roles}},
+            "iss": issuer,
+            "client_id": client_id,
+            "ext": {"roles": roles, "iss": issuer},
             "exp": int(time.time()) - 3600,
         }
 

@@ -5,6 +5,9 @@ cleanup() {
   if [[ -f .tmp/port-forward-db.pid ]]; then
     kill "$(cat .tmp/port-forward-db.pid)" >/dev/null 2>&1 || true
   fi
+  if [[ -f .tmp/port-forward-dcs.pid ]]; then
+    kill "$(cat .tmp/port-forward-dcs.pid)" >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT
@@ -96,6 +99,28 @@ until nc -z 127.0.0.1 5432 2>/dev/null; do
   sleep 1
 done
 echo "Port-forward on 5432 is ready"
+
+# Direct service access for endpoints Traefik does not route (e.g. /metrics,
+# which the backend serves at its root, outside the API prefix).
+DCS_SERVICE="${DCS_SERVICE:-$DCS_DEPLOYMENT}"
+LOCAL_FORWARD_PORT="${LOCAL_FORWARD_PORT:-18991}"
+SERVICE_PORT="${SERVICE_PORT:-8991}"
+echo "Starting port-forward for DCS service ($DCS_SERVICE)"
+"$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/$DCS_SERVICE" \
+  "$LOCAL_FORWARD_PORT:$SERVICE_PORT" > .tmp/port-forward-dcs.log 2>&1 &
+echo $! > .tmp/port-forward-dcs.pid
+
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 "$LOCAL_FORWARD_PORT" 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for port-forward on $LOCAL_FORWARD_PORT"
+    cat .tmp/port-forward-dcs.log || true
+    exit 1
+  fi
+  sleep 1
+done
+export BDD_DCS_INTERNAL_ORIGIN="http://localhost:$LOCAL_FORWARD_PORT"
+echo "Port-forward on $LOCAL_FORWARD_PORT is ready"
 
 source "$VENV_PATH/bin/activate"
 export BDD_DCS_BASE_URL

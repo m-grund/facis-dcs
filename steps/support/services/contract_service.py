@@ -7,7 +7,6 @@ from steps.support.api_client import (
     fetch_well_known_did,
     contract_retrieve_by_id_url,
     contract_submit_url,
-    contract_verify_url,
     get_with_headers,
     post_json,
     template_approve_url,
@@ -101,33 +100,7 @@ class ContractService:
                 "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Contract Source Template",
                 "description": "BDD template for contract workflows",
-                "template_data": {
-                    "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
-                    "@type": "dcs:ContractTemplate",
-                    "dcs:metadata": {
-                        "@type": "dcs:TemplateMetadata",
-                        "dcs:title": "BDD Contract Source Template",
-                    },
-                    "dcs:documentStructure": {
-                        "@type": "dcs:DocumentStructure",
-                        "dcs:blocks": {
-                            "@list": [
-                                {
-                                    "@id": "urn:uuid:block-clause-1",
-                                    "@type": "dcs:Clause",
-                                    "dcs:content": {"@list": ["Base clause"]},
-                                }
-                            ]
-                        },
-                        "dcs:layout": [
-                            {
-                                "@id": "urn:uuid:block-root",
-                                "dcs:isRoot": True,
-                                "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
-                            }
-                        ],
-                    },
-                },
+                "template_data": TemplateService.canonical_template_data("BDD Contract Source Template"),
             },
             headers=creator_h,
         )
@@ -274,40 +247,18 @@ class ContractService:
                 "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Signature-Field Source Template",
                 "description": "BDD template for real-signing-vertical scenarios",
-                "template_data": {
-                    "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
-                    "@type": "dcs:ContractTemplate",
-                    "dcs:metadata": {
-                        "@type": "dcs:TemplateMetadata",
-                        "dcs:title": "BDD Signature-Field Source Template",
-                    },
-                    "dcs:signatureFields": [
-                        {
-                            "@id": "urn:uuid:sig-field-1",
-                            "@type": "dcs:SignatureField",
-                            "dcs:signatoryName": signatory_name,
-                        }
-                    ],
-                    "dcs:documentStructure": {
-                        "@type": "dcs:DocumentStructure",
-                        "dcs:blocks": {
-                            "@list": [
-                                {
-                                    "@id": "urn:uuid:block-clause-1",
-                                    "@type": "dcs:Clause",
-                                    "dcs:content": {"@list": ["Base clause"]},
-                                }
-                            ]
-                        },
-                        "dcs:layout": [
+                "template_data": TemplateService.canonical_template_data(
+                    "BDD Signature-Field Source Template",
+                    extra={
+                        "dcs:signatureFields": [
                             {
-                                "@id": "urn:uuid:block-root",
-                                "dcs:isRoot": True,
-                                "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
+                                "@id": "urn:uuid:sig-field-1",
+                                "@type": "dcs:SignatureField",
+                                "dcs:signatoryName": signatory_name,
                             }
                         ],
                     },
-                },
+                ),
             },
             headers=creator_h,
         )
@@ -448,19 +399,10 @@ class ContractService:
         did, _ = ContractService._contract_data(context, contract_name)
         ContractService._prepare_contract_under_review(context, contract_name)
 
+        # POST /contract/verify was removed (commit 2712047e, "Remove unneeded
+        # code") — validation now runs server-side inside submit, so the
+        # reviewer submit no longer needs a prior verify call.
         reviewer_h = AuthService.get_headers_for_roles(["Contract Reviewer"])
-        retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
-        assert retrieve.status_code == 200, retrieve.text
-        updated_at = retrieve.json().get("updated_at")
-
-        verify = post_json(
-            context,
-            contract_verify_url(context),
-            {"did": did, "updated_at": updated_at},
-            headers=reviewer_h,
-        )
-        assert verify.status_code == 200, verify.text
-
         retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=reviewer_h)
         assert retrieve.status_code == 200, retrieve.text
         updated_at = retrieve.json().get("updated_at")

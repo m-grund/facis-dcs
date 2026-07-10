@@ -367,21 +367,29 @@ def _as_instance(context, base_url):
 
 @given("instance A and instance B are both running and trust each other")
 def step_given_two_instances_running(context):
+    # When the URLs are set explicitly, the two-instance stack is expected to
+    # be up and any unreachability is a hard failure. Without them we fall
+    # back to the local dev-stack.sh/dev-stack2.sh defaults and SKIP if that
+    # stack isn't running — single-instance environments (e.g. the kind CI
+    # job) don't deploy an instance B.
+    explicit = bool(os.getenv("BDD_DCS_BASE_URL_A") and os.getenv("BDD_DCS_BASE_URL_B"))
     base_url_a = os.getenv("BDD_DCS_BASE_URL_A", "http://localhost:5173/api").rstrip("/")
     base_url_b = os.getenv("BDD_DCS_BASE_URL_B", "http://localhost:5174/api").rstrip("/")
-    assert base_url_a and base_url_b, (
-        "BDD_DCS_BASE_URL_A and BDD_DCS_BASE_URL_B must both be set to run this @two-instance "
-        "scenario. This requires the second-instance runner (docs/anforderung.md Workstream "
-        "C2: extend dev-stack.sh to optionally launch a second DCS instance on :8992 with "
-        "reciprocal DCS_TRUSTED_PEERS seeding against instance A) — which does not exist yet. "
-        "This is an open point for C1/C2, not a defect in this scenario."
-    )
     context.base_url_a = base_url_a
     context.base_url_b = base_url_b
 
-    did_a = fetch_well_known_did(base_url_a, context.http_timeout_seconds)
+    try:
+        did_a = fetch_well_known_did(base_url_a, context.http_timeout_seconds)
+        did_b = fetch_well_known_did(base_url_b, context.http_timeout_seconds)
+    except _requests.exceptions.ConnectionError as exc:
+        if explicit:
+            raise
+        context.scenario.skip(
+            "two-instance stack not reachable (set BDD_DCS_BASE_URL_A/_B or start "
+            f"dev-stack.sh + dev-stack2.sh): {exc}"
+        )
+        return
     assert did_a.status_code == 200, f"instance A did.json unreachable: {did_a.status_code} {did_a.text}"
-    did_b = fetch_well_known_did(base_url_b, context.http_timeout_seconds)
     assert did_b.status_code == 200, f"instance B did.json unreachable: {did_b.status_code} {did_b.text}"
 
     context.peer_did_a = did_a.json().get("id")

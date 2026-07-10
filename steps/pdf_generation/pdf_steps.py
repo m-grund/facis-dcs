@@ -173,47 +173,76 @@ def step_then_verify_includes_hashes(context):
 # ---------------------------------------------------------------------------
 
 
+def _cbor_text(text: str) -> bytes:
+    """CBOR encoding of a short (<24 bytes) text string: 0x60+len prefix.
+
+    Mirrors pdf-core/compiler/compiler_c2pa.go cborText for the lifecycle
+    assertion's keys and values, which are all shorter than 24 bytes.
+    """
+    raw = text.encode()
+    assert len(raw) < 24, f"_cbor_text only handles short strings, got {len(raw)} bytes"
+    return bytes([0x60 + len(raw)]) + raw
+
+
+def _lifecycle_regions(pdf_bytes: bytes) -> list:
+    """Return the byte regions of each dcs.lifecycle JUMBF assertion box.
+
+    pdf-core embeds the C2PA manifest store as an uncompressed
+    content_credential.c2pa embedded file; the lifecycle assertion is a
+    small all-text CBOR map inside a JUMBF box labelled "dcs.lifecycle"
+    (renderLifecycleAssertionCBOR, pdf-core/compiler/compiler_c2pa.go).
+    """
+    regions = []
+    start = 0
+    while True:
+        begin = pdf_bytes.find(b"dcs.lifecycle", start)
+        if begin == -1:
+            return regions
+        # Skip the claim box's hashed-URI reference
+        # ("self#jumbf=c2pa.assertions/dcs.lifecycle") — only count the
+        # JUMBF box label itself.
+        if begin == 0 or pdf_bytes[begin - 1] != ord("/"):
+            regions.append(pdf_bytes[begin:begin + 512])
+        start = begin + 1
+
+
 @then("the PDF contains a C2PA manifest")
 def step_then_pdf_has_c2pa_manifest(context):
     pdf_bytes = context.requests_response.content
-    assert b"%%C2PA-MANIFEST-BEGIN" in pdf_bytes, (
-        "PDF does not contain a C2PA manifest (missing %%C2PA-MANIFEST-BEGIN marker)"
+    assert b"content_credential.c2pa" in pdf_bytes and b"c2pa.assertions" in pdf_bytes, (
+        "PDF does not contain a C2PA manifest (no content_credential.c2pa "
+        "embedded file with a c2pa.assertions JUMBF box)"
     )
 
 
 @then('the manifest lifecycle assertion includes field "{field}"')
 def step_then_manifest_has_field(context, field):
     pdf_bytes = context.requests_response.content
-    begin = pdf_bytes.find(b"%%C2PA-MANIFEST-BEGIN")
-    end = pdf_bytes.find(b"%%C2PA-MANIFEST-END", begin)
-    assert begin != -1 and end != -1, "C2PA manifest delimiters not found in PDF"
-    manifest_region = pdf_bytes[begin:end]
-    assert field.encode() in manifest_region, (
-        f"Field '{field}' not found in C2PA manifest region"
+    regions = _lifecycle_regions(pdf_bytes)
+    assert regions, "No dcs.lifecycle assertion box found in PDF"
+    assert any(_cbor_text(field) in region for region in regions), (
+        f"CBOR key '{field}' not found in any dcs.lifecycle assertion"
     )
 
 
 @then('the manifest contains a lifecycle assertion with field "{field}" equal to "{value}"')
 def step_then_manifest_field_equals(context, field, value):
     pdf_bytes = context.requests_response.content
-    begin = pdf_bytes.find(b"%%C2PA-MANIFEST-BEGIN")
-    end = pdf_bytes.find(b"%%C2PA-MANIFEST-END", begin)
-    assert begin != -1 and end != -1, "C2PA manifest delimiters not found in PDF"
-    manifest_region = pdf_bytes[begin:end]
-    assert field.encode() in manifest_region, (
-        f"Field '{field}' not found in C2PA manifest region"
-    )
-    assert value.encode() in manifest_region, (
-        f"Value '{value}' for field '{field}' not found in C2PA manifest region"
+    regions = _lifecycle_regions(pdf_bytes)
+    assert regions, "No dcs.lifecycle assertion box found in PDF"
+    # In the lifecycle CBOR map the value immediately follows its key.
+    needle = _cbor_text(field) + _cbor_text(value)
+    assert any(needle in region for region in regions), (
+        f"No dcs.lifecycle assertion has field '{field}' equal to '{value}'"
     )
 
 
 @then("the PDF contains two C2PA assertions")
 def step_then_pdf_has_two_c2pa_assertions(context):
     pdf_bytes = context.requests_response.content
-    count = pdf_bytes.count(b"%%C2PA-MANIFEST-BEGIN")
+    count = len(_lifecycle_regions(pdf_bytes))
     assert count >= 2, (
-        f"Expected at least 2 C2PA manifest blocks, found {count}"
+        f"Expected at least 2 dcs.lifecycle assertion boxes, found {count}"
     )
 
 

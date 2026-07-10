@@ -145,6 +145,13 @@ func VerifyReceipt(receipt Receipt, data []byte) (*timestamp.Timestamp, error) {
 	return ts, nil
 }
 
+// tsaRequestAttempts bounds the retries for one timestamp request. The
+// upstream TSA (reached via ORCE) is an external service that intermittently
+// drops or throttles requests; the request is an idempotent hash-keyed GET,
+// so a short bounded retry absorbs transient failures without masking a real
+// outage — after the last attempt the error still propagates.
+const tsaRequestAttempts = 3
+
 func requestTimestampToken(ctx context.Context, httpClient *http.Client, tsaURL string, data []byte) ([]byte, *timestamp.Timestamp, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -153,32 +160,13 @@ func requestTimestampToken(ctx context.Context, httpClient *http.Client, tsaURL 
 	hash := sha256.Sum256(data)
 	hashString := hex.EncodeToString(hash[:])
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, timestampURL(tsaURL, hashString), nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("create TSA HTTP request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "text/plain")
-	httpReq.Header.Set("Accept", "application/timestamp-reply")
-
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
-	httpResp, err := httpClient.Do(httpReq)
-	if err != nil {
-		return nil, nil, fmt.Errorf("call TSA endpoint: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		if err := Body.Close(); err != nil {
-			log.Println("could not close body")
-		}
-	}(httpResp.Body)
 
-	body, err := io.ReadAll(httpResp.Body)
+	body, err := fetchTimestampResponse(ctx, httpClient, timestampURL(tsaURL, hashString))
 	if err != nil {
-		return nil, nil, fmt.Errorf("read TSA response: %w", err)
-	}
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("unexpected TSA status %d: %s", httpResp.StatusCode, string(body))
+		return nil, nil, err
 	}
 
 	ts, err := timestamp.Parse(body)
@@ -197,6 +185,57 @@ func requestTimestampToken(ctx context.Context, httpClient *http.Client, tsaURL 
 	}
 
 	return ts.RawToken, ts, nil
+}
+
+func fetchTimestampResponse(ctx context.Context, httpClient *http.Client, url string) ([]byte, error) {
+	var lastErr error
+	for attempt := 1; attempt <= tsaRequestAttempts; attempt++ {
+		if attempt > 1 {
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("call TSA endpoint: %w", ctx.Err())
+			case <-time.After(time.Duration(attempt-1) * 2 * time.Second):
+			}
+		}
+		body, retryable, err := doTimestampRequest(ctx, httpClient, url)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+		if !retryable || ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
+func doTimestampRequest(ctx context.Context, httpClient *http.Client, url string) (body []byte, retryable bool, err error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("create TSA HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "text/plain")
+	httpReq.Header.Set("Accept", "application/timestamp-reply")
+
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, true, fmt.Errorf("call TSA endpoint: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		if err := Body.Close(); err != nil {
+			log.Println("could not close body")
+		}
+	}(httpResp.Body)
+
+	body, err = io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, true, fmt.Errorf("read TSA response: %w", err)
+	}
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, httpResp.StatusCode >= http.StatusInternalServerError,
+			fmt.Errorf("unexpected TSA status %d: %s", httpResp.StatusCode, string(body))
+	}
+	return body, false, nil
 }
 
 func timestampURL(baseURL, hash string) string {

@@ -115,31 +115,46 @@ def step_given_template_approved_status(context, name):
     step_given_template_approved_available(context, name)
 
 
+def _register_named_template(context, name):
+    """Flip an approved named template to REGISTERED via /template/register.
+
+    Archiving only yields DEPRECATED from REGISTERED/PUBLISHED (any other
+    state is hard-deleted — see backend/internal/templaterepository/command/
+    archive.go).
+    """
+    t = TemplateService.named(context, name)
+    manager_headers = AuthService.get_headers_for_roles(["Template Manager"])
+    register_resp = post_json(
+        context,
+        template_register_url(context),
+        {"did": t["did"], "updated_at": t["updated_at"]},
+        headers=manager_headers,
+    )
+    assert register_resp.status_code == 200, f"Template register failed: {register_resp.text}"
+    updated_at = TemplateService.fetch_template(context, t["did"], headers=manager_headers).get("updated_at")
+    TemplateService.store_named(context, name, t["did"], updated_at)
+
+
+@given('template "{name}" is in "Registered" status')
+def step_given_template_registered_status(context, name):
+    step_given_template_approved_available(context, name)
+    _register_named_template(context, name)
+
+
 @given('template "{name}" is in "Deprecated" status')
 def step_given_template_deprecated_status(context, name):
-    did, updated_at = TemplateService.create_fresh_template(context)
-    updated_at = TemplateService.do_submit(context, did, updated_at)
-    updated_at = TemplateService.do_recommend_for_approval(context, did, updated_at)
-    approver_headers = AuthService.get_headers_for_roles(["Template Approver"])
-    approve_resp = post_json(
-        context,
-        template_approve_url(context),
-        {"did": did, "updated_at": updated_at},
-        headers=approver_headers,
-    )
-    assert approve_resp.status_code == 200, f"Template approve failed: {approve_resp.text}"
-    updated_at = TemplateService.fetch_template(context, did, headers=approver_headers).get("updated_at")
-
+    step_given_template_registered_status(context, name)
+    t = TemplateService.named(context, name)
     manager_headers = AuthService.get_headers_for_roles(["Template Manager"])
     archive_resp = post_json(
         context,
         template_archive_url(context),
-        {"did": did, "updated_at": updated_at},
+        {"did": t["did"], "updated_at": t["updated_at"]},
         headers=manager_headers,
     )
     assert archive_resp.status_code == 200, f"Template archive failed: {archive_resp.text}"
-    updated_at = TemplateService.fetch_template(context, did, headers=manager_headers).get("updated_at")
-    TemplateService.store_named(context, name, did, updated_at)
+    updated_at = TemplateService.fetch_template(context, t["did"], headers=manager_headers).get("updated_at")
+    TemplateService.store_named(context, name, t["did"], updated_at)
 
 
 # When

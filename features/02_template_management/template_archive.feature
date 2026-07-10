@@ -6,7 +6,7 @@ Feature: Archive Contract Templates
   @clean_db
   Scenario: Deprecate an active template
     Given I am authenticated with roles: "Template Manager"
-    And template "Old NDA" is in "Approved" status
+    And template "Old NDA" is in "Registered" status
     When I deprecate template "Old NDA"
     Then the template status is "Deprecated"
     And new contracts cannot be generated from this template
