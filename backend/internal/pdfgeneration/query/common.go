@@ -33,6 +33,61 @@ type pdfStateUpdater func(ctx context.Context, tx *sqlx.Tx, did string, state PD
 // signature check for a capability that does not exist.
 const pdfSignatureNotAvailable = "not_available"
 
+// stampLifecycle embeds a C2PA lifecycle assertion (DCS-OR-C2PA-004) for the
+// given contract state into pdfBytes and returns the updated PDF plus the
+// renderer version pdf-core reports. It performs no IPFS storage or DB
+// bookkeeping — callers decide what to do with the result. This is the
+// building block shared by:
+//   - apply.go, which stamps the "active" lifecycle state into the base PDF
+//     BEFORE PAdES-signing it (update-then-sign), so the signed artefact
+//     already carries its final pre-signature-freeze manifest and never
+//     needs a post-signature revision for that transition; and
+//   - appendAndCache below, for lifecycle transitions that happen entirely
+//     before any PAdES signature exists (draft-state edits).
+//
+// A PDF that already carries a PAdES signature (DCS-FR-SM-16/B) must never be
+// passed to this function again: any incremental update to a referenced
+// embedded-file object (the C2PA manifest attachment) after signing, however
+// carefully byte-range-preserving, is treated as an unexplained/illegal
+// modification by standards-compliant PAdES validators (Adobe Reader,
+// pyHanko's diff-analysis) — even though the CMS signature itself stays
+// cryptographically valid. See exportcontract.go/verifycontract.go, which
+// freeze the PDF once its C2PA state is no longer "draft".
+func stampLifecycle(
+	ctx context.Context,
+	did, state string,
+	jsonldBytes, pdfBytes []byte,
+	pdfCore *pdfcore.Client,
+	vcIssuer provenance.VCIssuer,
+	issuerDID string,
+) ([]byte, string, error) {
+	c2paState, err := provenance.MapCWEStateToC2PA(state)
+	if err != nil {
+		return pdfBytes, "", fmt.Errorf("map lifecycle state %q: %w", state, err)
+	}
+
+	log.Printf("pdfgeneration: stampLifecycle %s state=%s c2paState=%s pdfLen=%d",
+		did, state, c2paState, len(pdfBytes))
+
+	reason := stateToReason(c2paState)
+
+	h := sha256.Sum256(pdfBytes)
+	assetHash := hex.EncodeToString(h[:])
+
+	_, vcBytes, err := vcIssuer.IssueContractLifecycleVC(
+		ctx, did, assetHash, c2paState, reason, issuerDID, time.Now().UTC(),
+	)
+	if err != nil {
+		return pdfBytes, "", fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
+	}
+
+	updatedPDF, rendererVersion, err := pdfCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, provenance.RemoteManifestURL(did))
+	if err != nil {
+		return pdfBytes, "", fmt.Errorf("pdf-core update for %s: %w", did, err)
+	}
+	return updatedPDF, rendererVersion, nil
+}
+
 func appendAndCache(
 	ctx context.Context,
 	tx *sqlx.Tx,
@@ -49,24 +104,9 @@ func appendAndCache(
 		return pdfBytes, fmt.Errorf("map lifecycle state %q: %w", state, err)
 	}
 
-	log.Printf("pdfgeneration: appendAndCache %s state=%s c2paState=%s pdfLen=%d",
-		did, state, c2paState, len(pdfBytes))
-
-	reason := stateToReason(c2paState)
-
-	h := sha256.Sum256(pdfBytes)
-	assetHash := hex.EncodeToString(h[:])
-
-	_, vcBytes, err := vcIssuer.IssueContractLifecycleVC(
-		ctx, did, assetHash, c2paState, reason, issuerDID, time.Now().UTC(),
-	)
+	updatedPDF, rendererVersion, err := stampLifecycle(ctx, did, state, jsonldBytes, pdfBytes, pdfCore, vcIssuer, issuerDID)
 	if err != nil {
-		return pdfBytes, fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
-	}
-
-	updatedPDF, rendererVersion, err := pdfCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, provenance.RemoteManifestURL(did))
-	if err != nil {
-		return pdfBytes, fmt.Errorf("pdf-core update for %s: %w", did, err)
+		return pdfBytes, err
 	}
 
 	ipfsResult, err := ipfsClient.CreateFile(ctx, updatedPDF)
@@ -151,6 +191,15 @@ func ptrToString(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// isFrozenC2PAState reports whether a cached PDF's C2PA state means it
+// already carries (or once carried) a PAdES signature and must never be
+// mutated again — see stampLifecycle's doc comment. Only the pre-signing
+// "draft" state (and the empty/never-cached state) may still be safely
+// updated in place.
+func isFrozenC2PAState(c2paState string) bool {
+	return c2paState != "" && c2paState != "draft"
 }
 
 func payloadHash(jsonld []byte) string {

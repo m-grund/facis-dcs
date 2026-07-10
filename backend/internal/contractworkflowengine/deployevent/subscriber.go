@@ -1,0 +1,64 @@
+// Package deployevent auto-deploys a contract once its signing workflow
+// completes (DCS-FR-CWE-06): it subscribes to the signingmanagement
+// APPLIED_SIGNATURE event on the NATS event bus and calls the same
+// command.Deployer the manual POST /contract/deploy endpoint uses, so both
+// paths share one deployment implementation.
+package deployevent
+
+import (
+	"context"
+	"log"
+	"time"
+
+	cloudevent "github.com/cloudevents/sdk-go/v2/event"
+
+	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/contractworkflowengine/command"
+	smeventtype "digital-contracting-service/internal/signingmanagement/datatype/eventtype"
+)
+
+// Subscriber listens for signature-applied events and dispatches an
+// automatic deployment for the signed contract.
+type Subscriber struct {
+	Deployer *command.Deployer
+}
+
+// Start registers the event handler with the NATS sub-client and begins
+// consuming events. It returns immediately; the subscription runs in the
+// background until the sub-client is closed.
+func (s *Subscriber) Start(subClient *event.CloudEventSubClient) error {
+	return subClient.Subscribe(func(evt cloudevent.Event) {
+		if evt.Type() != smeventtype.Applied.String() {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := s.handle(ctx, evt); err != nil {
+			log.Printf("contractworkflowengine/deployevent: could not auto-deploy: %v", err)
+		}
+	})
+}
+
+func (s *Subscriber) handle(ctx context.Context, evt cloudevent.Event) error {
+	// The outbox publisher republishes the persisted json.RawMessage event
+	// payload as the CloudEvent's data verbatim (base/event/
+	// cloudeventprovider.go: SetData(ApplicationJSON, data) with a
+	// json.RawMessage does not go through the []byte/base64 branch, since
+	// json.RawMessage is a distinct named type from []byte), so DataAs
+	// decodes straight into the target struct.
+	var envelope struct {
+		DID string `json:"did"`
+	}
+	if err := evt.DataAs(&envelope); err != nil {
+		return err
+	}
+	if envelope.DID == "" {
+		return nil
+	}
+
+	_, err := s.Deployer.Handle(ctx, command.DeployCmd{
+		DID:         envelope.DID,
+		RequestedBy: "system:auto-deploy",
+	})
+	return err
+}

@@ -3,6 +3,7 @@ import type {
   ContractApproveRequest,
   ContractAuditRequest,
   ContractCreateRequest,
+  ContractDeployRequest,
   ContractHistoryRetrieveRequest,
   ContractNegotiationRequest,
   ContractNegotiationRespondRequest,
@@ -21,6 +22,7 @@ import type {
   ContractApproveResponse,
   ContractAuditResponse,
   ContractCreateResponse,
+  ContractDeployResponse,
   ContractHistoryResponse,
   ContractNegotiationRespondResponse,
   ContractNegotiationResponse,
@@ -49,6 +51,7 @@ export interface ContractWorkflowService {
   reject: (request: ContractRejectRequest) => Promise<ContractRejectResponse>
   store: (request: ContractStoreRequest) => Promise<ContractStoreResponse>
   terminate: (request: ContractTerminateRequest) => Promise<ContractTerminateResponse>
+  deploy: (request: ContractDeployRequest) => Promise<ContractDeployResponse>
   audit: (request: ContractAuditRequest) => Promise<ContractAuditResponse>
   retrieveHistoryByDid: (request: ContractHistoryRetrieveRequest) => Promise<ContractHistoryResponse>
   exportPdf: (did: string) => Promise<Blob>

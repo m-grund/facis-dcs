@@ -10,12 +10,15 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/tsa"
 
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
+	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
@@ -46,22 +49,27 @@ func mapSignatureCommandError(err error) error {
 }
 
 type signatureManagementsrvc struct {
-	DB           *sqlx.DB
-	CRepo        db.ContractRepo
-	CeremonyRepo db.CeremonyRepo
-	PDFCore      *pdfcore.Client
-	ATrailReader base.AuditTrailReader
-	Signer       signer.ContractSigner
-	VCSigner     provenance.VCSigner
-	IssuerDID    string
-	IPFSClient   *ipfs.APIClient
-	DIDDocument  identity.DIDDocument
+	DB            *sqlx.DB
+	CRepo         db.ContractRepo
+	CeremonyRepo  db.CeremonyRepo
+	PDFCore       *pdfcore.Client
+	ATrailReader  base.AuditTrailReader
+	Signer        signer.ContractSigner
+	VCSigner      provenance.VCSigner
+	VCIssuer      provenance.VCIssuer
+	IssuerDID     string
+	IPFSClient    *ipfs.APIClient
+	DIDDocument   identity.DIDDocument
+	ArchiveRepo   cwedb.ContractRepo
+	ArchiveNotary cwecommand.ArchiveNotary
+	ArchiveTSA    *tsa.APIClient
 	auth.JWTAuthenticator
 }
 
 func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, ceremonyRepo db.CeremonyRepo,
 	auditTrailReader base.AuditTrailReader, contractSigner signer.ContractSigner, vcSigner provenance.VCSigner, issuerDID string,
-	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client) signaturemanagement.Service {
+	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client, archiveRepo cwedb.ContractRepo, archiveNotary cwecommand.ArchiveNotary,
+	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
@@ -72,8 +80,12 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 		ATrailReader:     auditTrailReader,
 		Signer:           contractSigner,
 		VCSigner:         vcSigner,
+		VCIssuer:         vcIssuer,
 		IssuerDID:        issuerDID,
 		IPFSClient:       ipfsClient,
+		ArchiveRepo:      archiveRepo,
+		ArchiveNotary:    archiveNotary,
+		ArchiveTSA:       archiveTSA,
 	}
 }
 
@@ -250,14 +262,19 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		UserRoles:      middleware.GetUserRoles(ctx),
 	}
 	handler := command.Applier{
-		DB:           s.DB,
-		CRepo:        s.CRepo,
-		CeremonyRepo: s.CeremonyRepo,
-		Signer:       s.Signer,
-		PDFCore:      s.PDFCore,
-		IPFSClient:   s.IPFSClient,
-		VCSigner:     s.VCSigner,
-		IssuerDID:    s.IssuerDID,
+		DB:            s.DB,
+		CRepo:         s.CRepo,
+		CeremonyRepo:  s.CeremonyRepo,
+		Signer:        s.Signer,
+		PDFCore:       s.PDFCore,
+		IPFSClient:    s.IPFSClient,
+		VCSigner:      s.VCSigner,
+		VCIssuer:      s.VCIssuer,
+		IssuerDID:     s.IssuerDID,
+		ArchiveRepo:   s.ArchiveRepo,
+		IPFSStorer:    s.IPFSClient,
+		ArchiveNotary: s.ArchiveNotary,
+		ArchiveTSA:    s.ArchiveTSA,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {

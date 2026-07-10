@@ -1,0 +1,62 @@
+[
+    {
+        "id": "b3f7c8e1a2d4f6a8",
+        "type": "tab",
+        "label": "Contract Target System",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "c1a2b3c4d5e6f7a8",
+        "type": "http in",
+        "z": "b3f7c8e1a2d4f6a8",
+        "name": "POST /contract-target/deploy",
+        "url": "/contract-target/deploy",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 165,
+        "y": 140,
+        "wires": [
+            [
+                "d2b3c4d5e6f7a8b9"
+            ]
+        ]
+    },
+    {
+        "id": "d2b3c4d5e6f7a8b9",
+        "type": "function",
+        "z": "b3f7c8e1a2d4f6a8",
+        "name": "Verify content hash and build ack",
+        "func": "const required = [\"contract_did\", \"contract_version\", \"correlation_id\", \"content_hash\", \"timestamp\", \"payload\"];\n\nfor (const key of required) {\n  if (msg.payload === undefined || msg.payload[key] === undefined) {\n    msg.statusCode = 400;\n    msg.headers = { \"Content-Type\": \"application/json\" };\n    msg.payload = { error: `Missing field: ${key}` };\n    return msg;\n  }\n}\n\n// Recompute the payload's content hash the same way the sender canonicalized\n// it (JSON with keys sorted recursively, no extra whitespace) so a tampered\n// or corrupted payload is rejected rather than blindly acknowledged.\nfunction sortKeysDeep(value) {\n  if (Array.isArray(value)) {\n    return value.map(sortKeysDeep);\n  }\n  if (value && typeof value === \"object\") {\n    return Object.keys(value).sort().reduce((acc, key) => {\n      acc[key] = sortKeysDeep(value[key]);\n      return acc;\n    }, {});\n  }\n  return value;\n}\n\nconst canonical = JSON.stringify(sortKeysDeep(msg.payload.payload));\nconst computedHash = \"sha256:\" + crypto.createHash(\"sha256\").update(canonical).digest(\"hex\");\n\nif (computedHash !== msg.payload.content_hash) {\n  msg.statusCode = 400;\n  msg.headers = { \"Content-Type\": \"application/json\" };\n  msg.payload = {\n    error: \"content_hash does not match the payload\",\n    expected: msg.payload.content_hash,\n    computed: computedHash\n  };\n  return msg;\n}\n\nconst activatedAt = new Date().toISOString();\nconst correlationId = msg.payload.correlation_id;\n\nmsg.statusCode = 200;\nmsg.headers = { \"Content-Type\": \"application/json\" };\nmsg.payload = {\n  correlation_id: correlationId,\n  payload_hash: computedHash,\n  activated_at: activatedAt\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [
+            {
+                "var": "crypto",
+                "module": "crypto"
+            }
+        ],
+        "x": 520,
+        "y": 140,
+        "wires": [
+            [
+                "e3c4d5e6f7a8b9c0"
+            ]
+        ]
+    },
+    {
+        "id": "e3c4d5e6f7a8b9c0",
+        "type": "http response",
+        "z": "b3f7c8e1a2d4f6a8",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 900,
+        "y": 140,
+        "wires": []
+    }
+]

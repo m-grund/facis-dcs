@@ -57,6 +57,44 @@ func (h *VerifyContractPdfHandler) Handle(ctx context.Context, qry VerifyContrac
 
 	latestCID := pdfState.IPFSCID
 
+	if pdfState.IPFSCID != "" && isFrozenC2PAState(pdfState.C2PAState) {
+		// Already PAdES-signed: never mutate this PDF's embedded attachments
+		// again, even if its lifecycle state has since moved on (see
+		// exportcontract.go's identical guard for the full explanation).
+		// Verify against the frozen signed bytes as-is and only refresh the
+		// cached C2PA-state bookkeeping so this branch doesn't keep
+		// re-triggering.
+		if pdfState.C2PAState != currentC2PAState {
+			log.Printf("pdfgeneration: VerifyContractPdf %s already signed (c2paState=%q, contract now %q); verifying frozen PDF, no post-signature mutation",
+				qry.DID, pdfState.C2PAState, currentC2PAState)
+			updater := func(ctx context.Context, tx *sqlx.Tx, did string, state PDFStateData) error {
+				return h.CRepo.UpdatePDFState(ctx, tx, did, cwedb.ContractPDFState{
+					IPFSCID:         state.IPFSCID,
+					RendererVersion: state.RendererVersion,
+					C2PAState:       state.C2PAState,
+					PayloadHash:     state.PayloadHash,
+				})
+			}
+			if err := updater(ctx, tx, qry.DID, PDFStateData{
+				IPFSCID:         pdfState.IPFSCID,
+				RendererVersion: pdfState.RendererVersion,
+				C2PAState:       currentC2PAState,
+				PayloadHash:     pdfState.PayloadHash,
+			}); err != nil {
+				return nil, fmt.Errorf("refresh frozen PDF bookkeeping for %s: %w", qry.DID, err)
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, fmt.Errorf("commit frozen PDF bookkeeping for %s: %w", qry.DID, err)
+			}
+		}
+
+		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
+		if err != nil || len(r.Data) == 0 {
+			return nil, fmt.Errorf("fetch frozen signed contract PDF %s from IPFS for verify: %w", qry.DID, err)
+		}
+		return runVerify(ctx, r.Data, h.PDFCore, currentC2PAState)
+	}
+
 	if pdfState.IPFSCID != "" && pdfState.C2PAState != currentC2PAState {
 		log.Printf("pdfgeneration: VerifyContractPdf %s state advanced %q→%q; appending before verify",
 			qry.DID, pdfState.C2PAState, currentC2PAState)

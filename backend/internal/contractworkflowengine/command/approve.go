@@ -38,14 +38,11 @@ type ApproveCmd struct {
 }
 
 type Approver struct {
-	DB            *sqlx.DB
-	CRepo         db.ContractRepo
-	ATRepo        db.ApprovalTaskRepo
-	SRepo         db2.SyncRepository
-	DIDDocument   identity.DIDDocument
-	IPFSStorer    ArchiveSnapshotStorer
-	ArchiveNotary ArchiveNotary
-	ArchiveTSA    ArchiveTimestampIssuer
+	DB          *sqlx.DB
+	CRepo       db.ContractRepo
+	ATRepo      db.ApprovalTaskRepo
+	SRepo       db2.SyncRepository
+	DIDDocument identity.DIDDocument
 }
 
 type ArchiveSnapshotStorer interface {
@@ -180,87 +177,6 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 			ContractData: approvedContract.ContractData,
 		}); err != nil {
 			return fmt.Errorf("could not persist approved contract JSON-LD: %w", err)
-		}
-		archiveEntry, err := BuildArchiveEntry(approvedContract, cmd.ApprovedBy)
-		if err != nil {
-			return fmt.Errorf("could not build archive entry: %w", err)
-		}
-		if h.IPFSStorer == nil {
-			return errors.New("archive snapshot IPFS storer is required")
-		}
-		snapshotResult, err := h.IPFSStorer.CreateFile(ctx, archiveEntry.ContractSnapshot)
-		if err != nil {
-			return fmt.Errorf("could not store archive snapshot in IPFS: %w", err)
-		}
-		if snapshotResult == nil || snapshotResult.Identifier.Value == "" {
-			return errors.New("archive snapshot IPFS storer returned empty CID")
-		}
-		archiveEntry.SnapshotCID = snapshotResult.Identifier.Value
-
-		var notaryReceipt *ArchiveNotaryReceipt
-		notaryPayload := ArchiveNotaryPayload{
-			EventType:       "ARCHIVE_STORED",
-			ArchiveEntryID:  archiveNotaryEntryID(cmd.DID, processData.ContractVersion),
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			ContentHash:     archiveEntry.ContentHash,
-			SnapshotCID:     archiveEntry.SnapshotCID,
-			StoredBy:        cmd.ApprovedBy,
-			StoredAt:        archiveEntry.StoredAt,
-		}
-		if h.ArchiveNotary != nil {
-			notaryReceipt, err = h.ArchiveNotary.NotarizeArchiveEntry(ctx, notaryPayload)
-			if err != nil {
-				return fmt.Errorf("could not notarize archive entry: %w", err)
-			}
-		}
-
-		var tsaReceipt *contractevents.ArchiveTSAReceipt
-		if h.ArchiveTSA != nil && h.ArchiveTSA.Enabled() && notaryReceipt != nil {
-			evidence, err := BuildArchiveTimestampEvidence(notaryPayload, notaryReceipt)
-			if err != nil {
-				return fmt.Errorf("could not build archive TSA evidence: %w", err)
-			}
-			evidenceBytes, err := CanonicalArchiveTimestampEvidence(evidence)
-			if err != nil {
-				return err
-			}
-			rawReceipt, err := h.ArchiveTSA.TimestampBytes(ctx, evidenceBytes)
-			if err != nil {
-				return fmt.Errorf("could not timestamp archive entry: %w", err)
-			}
-			tsaReceipt = archiveTSAEventReceipt(rawReceipt)
-			tsaReceiptJSON, err := datatype.NewJSON(tsaReceipt)
-			if err != nil {
-				return fmt.Errorf("could not encode archive TSA receipt: %w", err)
-			}
-			archiveEntry.TSAReceipt = &tsaReceiptJSON
-		}
-
-		err = h.CRepo.StoreArchiveEntry(ctx, tx, archiveEntry)
-		if err != nil {
-			return fmt.Errorf("could not store contract in archive: %w", err)
-		}
-
-		archiveEvt := contractevents.StoreArchivedEvent{
-			DID:             cmd.DID,
-			ContractVersion: processData.ContractVersion,
-			StoredBy:        cmd.ApprovedBy,
-			ContentHash:     archiveEntry.ContentHash,
-			SnapshotCID:     archiveEntry.SnapshotCID,
-			ArchiveStatus:   "STORED",
-			NotaryReceipt:   archiveNotaryEventReceipt(notaryReceipt),
-			TSAReceipt:      tsaReceipt,
-			EvidenceSummary: contractevents.ArchiveEvidenceSummary{
-				SnapshotHashAlgorithm: archiveSnapshotHashAlgorithm,
-				SignatureStatus:       "NOT_PERFORMED",
-				CredentialHashStatus:  "PENDING",
-			},
-			OccurredAt: time.Now().UTC(),
-		}
-		err = event.Create(ctx, tx, archiveEvt, componenttype.ContractStorageArchive)
-		if err != nil {
-			return fmt.Errorf("could not create archive store event: %w", err)
 		}
 	}
 

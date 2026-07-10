@@ -209,7 +209,6 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 			ATRepo:      s.ATRepo,
 			SRepo:       s.SRepo,
 			DIDDocument: s.DIDDocument,
-			IPFSStorer:  s.IPFSClient,
 		}
 		err = handler.Handle(ctx, *cmd)
 		if err != nil {

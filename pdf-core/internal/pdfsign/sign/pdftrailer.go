@@ -44,7 +44,17 @@ func (context *SignContext) writeTrailer() error {
 				lines[i] = "    " + strings.TrimSpace(line)
 			}
 		}
-		trailer_string = strings.Join(lines, "\n") + "\n"
+		// trailer_buf was read verbatim from the original file and typically
+		// already ends in "startxref\n" (its own trailing newline splits into a
+		// trailing empty element of lines). Unconditionally appending another
+		// "\n" after rejoining then produced a blank line between "startxref"
+		// and the numeric offset written below ("startxref\n\nNNN\n%%EOF\n"),
+		// which c2pa-rs's PDF cross-reference-table parser rejects outright
+		// ("failed parsing cross reference table: invalid start value") — i.e.
+		// c2patool/veraPDF validation failed for every DCS PAdES-signed PDF.
+		// TrimRight first so exactly one trailing newline survives regardless
+		// of how many trailing empty elements the split/rejoin produced.
+		trailer_string = strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\n"
 
 		// Write the new trailer.
 		if _, err := context.OutputBuffer.Write([]byte(trailer_string)); err != nil {

@@ -145,6 +145,10 @@ type ContractMetadata struct {
 	LatestTemplateDID    *string      `db:"latest_template_did"`
 	TemplateIsDeprecated *bool        `db:"template_is_deprecated"`
 	ParentContractDID    *string      `db:"parent_contract_did"`
+	// Evidence is only populated by the archived-contracts queries (joined
+	// from contract_archive_entries.evidence); it is nil for the
+	// non-archive metadata queries that share this struct.
+	Evidence *datatype.JSON `db:"evidence"`
 }
 
 type ContractProcessData struct {

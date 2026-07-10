@@ -467,13 +467,30 @@ def step_when_full_approval_workflow(context, name):
 
 @when('the counterparty signer applies a signature to contract "{name}"')
 def step_when_apply_signature(context, name):
-    did, updated_at = ContractService._contract_data(context, name)
-    signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    context.requests_response = post_json(
-        context,
-        signature_apply_url(context),
-        {"did": did, "signer_did": "did:example:bdd-counterparty-signer", "updated_at": updated_at},
-        headers=signer_h,
+    # Fix (gherkin-autor, contract-deployment loop): this step used to POST
+    # straight to /signature/apply with a made-up signer_did and no prior
+    # signing ceremony, which real-signing-vertical's AC8 gate now rejects
+    # with 422 "ceremony_required" (backend/internal/signingmanagement) —
+    # see the *correct*, already-existing pattern in this same module's
+    # module-level `_apply_signature(context, name)` helper (used by
+    # `_reach_state`'s SIGNED branch), which runs a real ceremony first via
+    # steps/real_signing_vertical/dcs_real_signing_vertical_steps.py's
+    # `_run_full_ceremony`/`_apply_signature`. This @when step reuses those
+    # same two helpers (deferred import: avoids the module-load-time cycle
+    # documented on `_apply_signature` above) instead of re-inventing a
+    # ceremony-less call. Used by contract-deployment AC1/AC6 and
+    # contract-state-machine-refactor AC6 — all three scenarios only assert
+    # a 200 afterwards, so running the real ceremony here does not change
+    # any caller's expected outcome.
+    from steps.real_signing_vertical.dcs_real_signing_vertical_steps import (  # noqa: PLC0415
+        _apply_signature as _apply_signature_with_ceremony_result,
+        _run_full_ceremony,
+    )
+
+    _run_full_ceremony(context, name, "BDD Counterparty Signer", "BDD Counterparty Signer")
+    subject_did = context.pid_presentations[name]["subject_did"]
+    context.requests_response = _apply_signature_with_ceremony_result(
+        context, name, signer_did=subject_did, credential_type="AES"
     )
     if context.requests_response.status_code == 200:
         ContractService._refresh_contract(context, name)

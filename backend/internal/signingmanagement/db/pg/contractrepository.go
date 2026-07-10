@@ -115,14 +115,19 @@ func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx,
 	return nil
 }
 
-// SetSignedPDF records the PAdES-signed PDF artefact CID and its C2PA lifecycle
-// state on the contract so ExportContractPdf serves the signed document.
-func (r *PostgresContractRepo) SetSignedPDF(ctx context.Context, tx *sqlx.Tx, did, ipfsCID, rendererVersion, c2paState string) error {
+// SetSignedPDF records the PAdES-signed PDF artefact CID, its C2PA lifecycle
+// state, and its payload hash on the contract so ExportContractPdf/
+// VerifyContractPdf recognize it as already up to date and serve it frozen —
+// without that payload hash, the very first export/verify after signing would
+// see a "" -> real-hash mismatch and append a post-signature revision to the
+// PDF, which breaks standards-compliant PAdES validation even though the CMS
+// signature itself stays intact.
+func (r *PostgresContractRepo) SetSignedPDF(ctx context.Context, tx *sqlx.Tx, did, ipfsCID, rendererVersion, c2paState, payloadHash string) error {
 	_, err := tx.ExecContext(ctx, `
 		UPDATE contracts
-		   SET pdf_ipfs_cid = $2, pdf_renderer_version = $3, pdf_c2pa_state = $4
+		   SET pdf_ipfs_cid = $2, pdf_renderer_version = $3, pdf_c2pa_state = $4, pdf_payload_hash = $5
 		 WHERE did = $1`,
-		did, ipfsCID, rendererVersion, c2paState,
+		did, ipfsCID, rendererVersion, c2paState, payloadHash,
 	)
 	if err != nil {
 		return fmt.Errorf("could not set signed PDF for %s: %w", did, err)

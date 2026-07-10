@@ -47,6 +47,7 @@ type contractWorkflowEnginesrvc struct {
 	NRepo                db.NegotiationRepo
 	SRepo                db2.SyncRepository
 	CTRepo               db.ContractTemplateRepo
+	DeploymentRepo       db.DeploymentRepo
 	FCClient             *fcclient.FederatedCatalogueClient
 	DIDDocument          identity.DIDDocument
 	ATrailReader         base.AuditTrailReader
@@ -55,6 +56,7 @@ type contractWorkflowEnginesrvc struct {
 	IPFSClient           *ipfs.APIClient
 	ArchiveNotary        command.ArchiveNotary
 	ArchiveTSA           *tsa.APIClient
+	TargetClient         command.ContractTargetClient
 	auth.JWTAuthenticator
 }
 
@@ -63,7 +65,8 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo,
 	sRepo db2.SyncRepository, trustPool *identity.EUTrustPool,
 	fcClient *fcclient.FederatedCatalogueClient, auditTrailReader base.AuditTrailReader, didDocument identity.DIDDocument,
-	ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary, archiveTSA *tsa.APIClient) contractworkflowengine.Service {
+	ipfsClient *ipfs.APIClient, archiveNotary command.ArchiveNotary, archiveTSA *tsa.APIClient,
+	deploymentRepo db.DeploymentRepo, targetClient command.ContractTargetClient) contractworkflowengine.Service {
 
 	return &contractWorkflowEnginesrvc{
 		JWTAuthenticator: jwtAuth,
@@ -75,6 +78,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		NRepo:            nRepo,
 		SRepo:            sRepo,
 		CTRepo:           ctRepo,
+		DeploymentRepo:   deploymentRepo,
 		FCClient:         fcClient,
 		DIDDocument:      didDocument,
 		ATrailReader:     auditTrailReader,
@@ -82,6 +86,7 @@ func NewContractWorkflowEngine(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		IPFSClient:       ipfsClient,
 		ArchiveNotary:    archiveNotary,
 		ArchiveTSA:       archiveTSA,
+		TargetClient:     targetClient,
 	}
 }
 
@@ -96,7 +101,8 @@ func mapContractCommandError(err error) error {
 	}
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, validation.ErrContractHierarchyInvalid) ||
-		errors.Is(err, command.ErrContractHierarchyCycle) {
+		errors.Is(err, command.ErrContractHierarchyCycle) ||
+		errors.Is(err, command.ErrDeploymentNotFound) {
 		return contractworkflowengine.MakeBadRequest(err)
 	}
 	return contractworkflowengine.MakeInternalError(err)
@@ -526,6 +532,11 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		expPolicy = &s
 	}
 
+	kpis, kpiViolations, err := s.retrieveKPIs(ctx, req.Did)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	return &contractworkflowengine.ContractRetrieveByIDResponse{
 		Did:             contractResult.DID,
 		ContractVersion: contractResult.ContractVersion,
@@ -544,7 +555,58 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		ExpPolicy:       expPolicy,
 		ExpNoticePeriod: contractResult.ExpNoticePeriod,
 		Responsible:     contractResult.Responsible,
+		Kpis:            kpis,
+		KpiViolations:   kpiViolations,
 	}, nil
+}
+
+// retrieveKPIs reads the KPI values reported via deployment callbacks for a
+// contract (DCS-FR-CWE-31, DCS-FR-CWE-09), returning both the per-KPI list
+// and the distinct set of metric names whose latest reported value violates
+// its contractual SLA threshold.
+func (s *contractWorkflowEnginesrvc) retrieveKPIs(ctx context.Context, did string) ([]*contractworkflowengine.ContractDeploymentKPIItem, []string, error) {
+	if s.DeploymentRepo == nil {
+		return nil, nil, nil
+	}
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	entries, err := s.DeploymentRepo.ReadKPIsByDID(ctx, tx, did)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not read KPIs for contract %s: %w", did, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("could not commit transaction: %w", err)
+	}
+
+	kpis := make([]*contractworkflowengine.ContractDeploymentKPIItem, 0, len(entries))
+	latestViolation := map[string]bool{}
+	order := make([]string, 0)
+	for _, entry := range entries {
+		violation := entry.Violation
+		kpis = append(kpis, &contractworkflowengine.ContractDeploymentKPIItem{
+			Metric:     entry.Metric,
+			Value:      entry.Value,
+			ObservedAt: entry.ObservedAt.Format(time.RFC3339),
+			Violation:  &violation,
+		})
+		if _, seen := latestViolation[entry.Metric]; !seen {
+			order = append(order, entry.Metric)
+		}
+		latestViolation[entry.Metric] = violation
+	}
+
+	violations := make([]string, 0)
+	for _, metric := range order {
+		if latestViolation[metric] {
+			violations = append(violations, metric)
+		}
+	}
+
+	return kpis, violations, nil
 }
 
 func (s *contractWorkflowEnginesrvc) RetrieveHistoryByID(ctx context.Context, req *contractworkflowengine.ContractHistoryRetrieveByIDRequest) (res []*contractworkflowengine.ContractHistoryRetrieveByIDResponse, err error) {
@@ -862,14 +924,11 @@ func (s *contractWorkflowEnginesrvc) Approve(ctx context.Context, req *contractw
 		CauserDID:  localPeer,
 	}
 	handler := command.Approver{
-		DB:            s.DB,
-		CRepo:         s.CRepo,
-		ATRepo:        s.ATRepo,
-		SRepo:         s.SRepo,
-		DIDDocument:   s.DIDDocument,
-		IPFSStorer:    s.IPFSClient,
-		ArchiveNotary: s.ArchiveNotary,
-		ArchiveTSA:    s.ArchiveTSA,
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		ATRepo:      s.ATRepo,
+		SRepo:       s.SRepo,
+		DIDDocument: s.DIDDocument,
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
@@ -1179,4 +1238,98 @@ func (s *contractWorkflowEnginesrvc) RetrieveTemplates(ctx context.Context, req 
 	}
 
 	return contractTemplates, nil
+}
+
+func (s *contractWorkflowEnginesrvc) Deploy(ctx context.Context, req *contractworkflowengine.ContractDeployRequest) (res *contractworkflowengine.ContractDeployResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	handler := command.Deployer{
+		DB:             s.DB,
+		CRepo:          s.CRepo,
+		DeploymentRepo: s.DeploymentRepo,
+		Target:         s.TargetClient,
+	}
+	result, err := handler.Handle(ctx, command.DeployCmd{
+		DID:         req.Did,
+		UpdatedAt:   updatedAt,
+		RequestedBy: middleware.GetParticipantID(ctx),
+	})
+	if err != nil {
+		return nil, mapContractCommandError(err)
+	}
+
+	return &contractworkflowengine.ContractDeployResponse{
+		Did:             result.DID,
+		ContractVersion: result.ContractVersion,
+		ContentHash:     result.ContentHash,
+		Timestamp:       result.Timestamp.Format(time.RFC3339Nano),
+		CorrelationID:   result.CorrelationID,
+		Payload:         result.Payload,
+	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) DeploymentCallback(ctx context.Context, req *contractworkflowengine.ContractDeploymentCallbackRequest) (res *contractworkflowengine.ContractDeploymentCallbackResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	cmd := command.DeploymentCallbackCmd{
+		DID:           req.Did,
+		CorrelationID: req.CorrelationID,
+	}
+	if req.CallbackSecret != nil {
+		cmd.Secret = *req.CallbackSecret
+	}
+	if req.Status != nil {
+		cmd.Status = *req.Status
+	}
+	if req.Receipt != nil {
+		receipt := &command.DeploymentReceiptPayload{}
+		if req.Receipt.CorrelationID != nil {
+			receipt.CorrelationID = *req.Receipt.CorrelationID
+		}
+		if req.Receipt.PayloadHash != nil {
+			receipt.PayloadHash = *req.Receipt.PayloadHash
+		}
+		if req.Receipt.ActivatedAt != nil {
+			receipt.ActivatedAt = *req.Receipt.ActivatedAt
+		}
+		cmd.Receipt = receipt
+	}
+	if req.Kpi != nil {
+		if req.Kpi.Metric != nil {
+			cmd.KPIMetric = *req.Kpi.Metric
+		}
+		if req.Kpi.Value != nil {
+			cmd.KPIValue = *req.Kpi.Value
+		}
+	}
+
+	handler := command.DeploymentCallbackHandler{
+		DB:             s.DB,
+		CRepo:          s.CRepo,
+		DeploymentRepo: s.DeploymentRepo,
+		ArchiveTSA:     s.ArchiveTSA,
+	}
+	if err := handler.Handle(ctx, cmd); err != nil {
+		switch {
+		case errors.Is(err, command.ErrDeploymentCallbackUnauthorized):
+			return nil, contractworkflowengine.MakeUnauthorized(err)
+		default:
+			return nil, mapContractCommandError(err)
+		}
+	}
+
+	status := "OK"
+	return &contractworkflowengine.ContractDeploymentCallbackResponse{
+		Did:    req.Did,
+		Status: &status,
+	}, nil
 }

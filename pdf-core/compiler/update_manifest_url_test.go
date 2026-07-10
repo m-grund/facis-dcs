@@ -7,14 +7,17 @@ import (
 	"time"
 )
 
-// TestUpdatePDFWithManifestURLEmbedsRemoteManifests verifies that
-// UpdatePDFWithOptions embeds the remote_manifests claim field
-// (DCS-OR-C2PA-008 AC3) when a manifest URL is supplied, and — crucially — that
-// the resulting PDF still passes the deterministic incremental-update
-// verification (VerifyIncrementalUpdate re-renders the amendment with the same
-// remote_manifests recovered from the stored claim, so the byte-for-byte
-// determinism check holds).
-func TestUpdatePDFWithManifestURLEmbedsRemoteManifests(t *testing.T) {
+// TestUpdatePDFWithManifestURLEmbedsXMPProvenance verifies that
+// UpdatePDFWithOptions references the remote manifest URL (DCS-OR-C2PA-008
+// AC3) via the C2PA-normative XMP dcterms:provenance link, NOT via a
+// non-standard "remote_manifests" claim field. c2pa-rs 0.85.1 (c2patool
+// 0.26.61) hard-rejects an unrecognized "remote_manifests" V2 claim field
+// ("claim could not be converted from CBOR"), which broke c2patool/veraPDF
+// validation for every DCS-produced PDF that ever had a manifest URL — i.e.
+// almost all of them, since every lifecycle update passes one. The XMP link
+// is the mechanism real C2PA-conformant tools actually expect for remote
+// manifest discovery.
+func TestUpdatePDFWithManifestURLEmbedsXMPProvenance(t *testing.T) {
 	const manifestURL = "http://localhost:8991/api/c2pa/manifest/did:example:contract-42"
 
 	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
@@ -28,27 +31,31 @@ func TestUpdatePDFWithManifestURLEmbedsRemoteManifests(t *testing.T) {
 		t.Fatalf("UpdatePDFWithOptions: %v", err)
 	}
 
+	if !bytes.Contains(updated, []byte("dcterms:provenance")) {
+		t.Error("updated PDF's XMP metadata does not contain a dcterms:provenance property")
+	}
+	if !bytes.Contains(updated, []byte(manifestURL)) {
+		t.Errorf("updated PDF does not contain the remote manifest URL %q anywhere", manifestURL)
+	}
+
 	store, err := ExtractManifestStore(updated)
 	if err != nil {
 		t.Fatalf("ExtractManifestStore: %v", err)
 	}
-	if !bytes.Contains(store, []byte("remote_manifests")) {
-		t.Error("manifest store does not contain the remote_manifests claim field")
-	}
-	if !bytes.Contains(store, []byte(manifestURL)) {
-		t.Errorf("manifest store does not contain the remote manifest URL %q", manifestURL)
+	if bytes.Contains(store, []byte("remote_manifests")) {
+		t.Error("manifest store must no longer contain the non-standard remote_manifests claim field")
 	}
 
-	// The remote_manifests entry must NOT break the deterministic verify.
 	if err := VerifyIncrementalUpdate(context.Background(), updated); err != nil {
-		t.Fatalf("VerifyIncrementalUpdate must still pass with remote_manifests embedded: %v", err)
+		t.Fatalf("VerifyIncrementalUpdate must still pass with the XMP provenance link embedded: %v", err)
 	}
 }
 
-// TestUpdatePDFWithoutManifestURLHasNoRemoteManifests verifies the default path
-// (no manifest URL) emits no remote_manifests field — matching
-// pdf-core/features/manifest_url.feature's "absent" scenario.
-func TestUpdatePDFWithoutManifestURLHasNoRemoteManifests(t *testing.T) {
+// TestUpdatePDFWithoutManifestURLHasNoProvenanceLink verifies the default path
+// (no manifest URL) emits no dcterms:provenance XMP property and no
+// remote_manifests claim field — matching pdf-core/features/manifest_url.feature's
+// "absent" scenario.
+func TestUpdatePDFWithoutManifestURLHasNoProvenanceLink(t *testing.T) {
 	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF(base): %v", err)
@@ -56,6 +63,9 @@ func TestUpdatePDFWithoutManifestURLHasNoRemoteManifests(t *testing.T) {
 	updated, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended), time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
+	}
+	if bytes.Contains(updated, []byte("dcterms:provenance")) {
+		t.Error("updated PDF must not contain a dcterms:provenance property when no manifest URL is supplied")
 	}
 	store, err := ExtractManifestStore(updated)
 	if err != nil {
