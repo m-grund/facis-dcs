@@ -1,6 +1,26 @@
 """Shared HTTP and URL helpers for executable BDD scenarios."""
 
+from urllib.parse import urlsplit
+
 import requests
+
+
+# The service DID document is domain-level: backend/design/did.go mounts
+# GET /.well-known/did.json on the root mux, OUTSIDE the configurable
+# DCS_API_PATH prefix (did:web semantics — the doc lives at the domain root).
+# The additional GET /api/.well-known/did.json route is a hardcoded alias for
+# the Vite dev proxy, so `{base_url}/.well-known/did.json` only resolves when
+# the API base path happens to be exactly `/api`. Try the origin root first
+# (Helm/kind: the BDD ingress routes /.well-known to the DCS service), then
+# fall back to the base_url alias (dev-proxy layouts).
+
+def fetch_well_known_did(base_url: str, timeout) -> requests.Response:
+    parts = urlsplit(base_url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    resp = requests.get(f"{origin}/.well-known/did.json", timeout=timeout)
+    if resp.status_code == 200:
+        return resp
+    return requests.get(f"{base_url}/.well-known/did.json", timeout=timeout)
 
 
 # URL builders

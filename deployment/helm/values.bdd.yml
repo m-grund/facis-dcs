@@ -40,7 +40,9 @@ extraEnv:
   - name: AUTH_INSECURE_COOKIES
     value: "true"
   # DID identity (fatal on startup when missing). The dcs-identity secret is
-  # created from backend/certs/dev/ by the kind_deploy make target.
+  # published by the hsm-provision post-install/post-upgrade hook job (see
+  # pkcs11.provisioning.didDocument below), generated from the freshly
+  # provisioned in-cluster HSM token key.
   - name: DCS_DID
     value: /app/identity/did.json
 
@@ -101,6 +103,17 @@ ingress:
   className: traefik
   hosts:
     - host: localhost
+      paths:
+        # Default base route (what the no-paths default would render) ...
+        - path: /digital-contracting-service
+          pathType: Prefix
+        # ... plus the domain-level DID document: backend/design/did.go mounts
+        # /.well-known/did.json on the root mux (did:web semantics), outside
+        # DCS_API_PATH, so the BDD harness needs it routed at the origin root.
+        # Full path (not /.well-known): hydra.route.paths already claims the
+        # /.well-known prefix for OIDC discovery, and the longer path wins.
+        - path: /.well-known/did.json
+          pathType: Prefix
 
 hydra:
   enabled: true
@@ -149,6 +162,11 @@ pkcs11:
   provisioning:
     enabled: true
     soPin: "12345678"
+    didDocument:
+      enabled: true
+      secretName: dcs-identity
+      did: "did:web:localhost%3A8991"
+      serviceEndpoint: "http://localhost:8991/api"
 
 # XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
 statuslistService:
@@ -209,7 +227,10 @@ orce:
 signing:
   # Wired as TSA_URL env var; fatal on startup if empty.
   tsaURL: "http://dcs-orce:1880/tsa/"
-  issuerDID: "did:web:localhost"
+  # did:web host must resolve *inside the DCS pod* for the self-peer BDD scenarios
+  # (FetchDIDDocumentFromHostname → http://localhost:8991/.well-known/did.json,
+  # i.e. the DCS container itself). Percent-encoded colon per did:web spec.
+  issuerDID: "did:web:localhost%3A8991"
 
 route:
   basePath: "/digital-contracting-service"

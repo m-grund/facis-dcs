@@ -40,6 +40,11 @@ RUN go run goa.design/goa/v3/cmd/goa@v3.24.2 gen digital-contracting-service/des
 
 # Build binary (cgo enabled so the PKCS#11 signing path links).
 RUN CGO_ENABLED=1 GOOS=linux go build -o dcs ./cmd/dcs
+# BDD/CI helpers: gendid regenerates did.json from the token key inside the
+# hsm-provision hook job; hsmsign lets the BDD harness sign did:web challenges
+# with the in-cluster token via kubectl exec (no extractable private keys).
+RUN CGO_ENABLED=1 GOOS=linux go build -o gendid ./cmd/gendid && \
+    CGO_ENABLED=1 GOOS=linux go build -o hsmsign ./cmd/hsmsign
 
 
 #-- Runtime Stage --
@@ -83,6 +88,9 @@ USER $DOCKER_USER
 
 # Copy compiled binary from go-builder stage
 COPY --from=go-builder /build/dcs /app/dcs
+
+# Copy BDD/CI helper binaries (gendid, hsmsign) — see go-builder stage above.
+COPY --from=go-builder /build/gendid /build/hsmsign /app/
 
 # Copy OID4VP issuer trust for DCS.
 COPY --from=go-builder --chown=$DOCKER_USER:$DOCKER_USER \

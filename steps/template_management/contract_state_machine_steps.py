@@ -15,7 +15,9 @@ refactor itself.
 """
 
 import base64
+import os
 import re
+import shlex
 import time
 import uuid
 from pathlib import Path
@@ -34,6 +36,7 @@ from steps.support.api_client import (
     contract_submit_url,
     contract_terminate_url,
     contract_withdraw_url,
+    fetch_well_known_did,
     get_with_headers,
     post_json,
     signature_apply_url,
@@ -83,6 +86,10 @@ def _dev_signing_token_dir(hostname: str) -> Path:
     simulation, not a generic did:web resolver, and only works because we
     control the matching HSM token for the instance under test.
     """
+    if os.environ.get("BDD_HSMSIGN_EXEC"):
+        # Helm/kind harness: the token lives in the cluster, not on this
+        # machine; _sign_secret_value_with_dev_key execs into the DCS pod.
+        return None
     match = re.search(r":(\d+)$", hostname)
     assert match, (
         f"cannot derive a dev signing token for did:web hostname '{hostname}' "
@@ -111,9 +118,24 @@ def _sign_secret_value_with_dev_key(token_dir: Path, secret_value: str) -> bytes
     inside the SoftHSM2 token (Workstream A — no extractable PEM key exists
     anymore), so this shells out to backend/cmd/hsmsign, which opens the same
     token via crypto11 and signs through the HSM.
+
+    Under the Helm/kind BDD harness (BDD_HSMSIGN_EXEC set), the token lives
+    inside the cluster, not on this machine: sign by kubectl-exec'ing into the
+    DCS pod's already-built /app/hsmsign instead of `go run` locally.
     """
-    import os
     import subprocess
+
+    exec_prefix = os.environ.get("BDD_HSMSIGN_EXEC")
+    if exec_prefix:
+        result = subprocess.run(
+            [*shlex.split(exec_prefix), "/app/hsmsign", "-label", "dcs-did",
+             "-message", secret_value],
+            capture_output=True, text=True, timeout=60,
+        )
+        assert result.returncode == 0, (
+            f"hsmsign via kubectl exec failed: {result.stderr.strip()}"
+        )
+        return base64.b64decode(result.stdout.strip())
 
     env = dict(os.environ)
     env["SOFTHSM2_CONF"] = str(token_dir / "softhsm2.conf")
@@ -152,10 +174,7 @@ def _self_peer_action_credentials(context):
     same `contractstate.ValidateTransition` the UI-API path hits is reached
     directly — see backend/internal/contractworkflowengine/command/approve.go.
     """
-    did_resp = _requests.get(
-        f"{context.base_url}/.well-known/did.json",
-        timeout=context.http_timeout_seconds,
-    )
+    did_resp = fetch_well_known_did(context.base_url, context.http_timeout_seconds)
     assert did_resp.status_code == 200, (
         f"could not fetch this instance's own did:web document from "
         f"{context.base_url}/.well-known/did.json (required to simulate a "

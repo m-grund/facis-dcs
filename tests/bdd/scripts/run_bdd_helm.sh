@@ -21,6 +21,18 @@ BDD_PUBLIC_ORIGIN="${BDD_PUBLIC_ORIGIN:-http://localhost:18080}"
 export BDD_PUBLIC_ORIGIN
 export STATUSLIST_SERVICE_URL="${STATUSLIST_SERVICE_URL:-${BDD_PUBLIC_ORIGIN}/statuslist}"
 
+# Sign did:web challenges through the in-cluster token: the BDD harness has no
+# local SoftHSM token in the Helm/kind harness (Workstream A: keys are
+# non-extractable, PKCS#11-only). Resolve the pod by label rather than
+# `exec deploy/...`: the DCS deployment's selector also matches pdf-core pods
+# (no component label in matchLabels), so kubectl's deploy→pod resolution can
+# pick a pod that has no digital-contracting-service container.
+DCS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
+  -l app.kubernetes.io/component=backend \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].metadata.name}')"
+export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c digital-contracting-service --"
+
 mkdir -p .tmp .reports/junit
 REPORTS_JUNIT_DIR="$PWD/.reports/junit"
 

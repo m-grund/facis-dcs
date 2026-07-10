@@ -4,6 +4,7 @@ import requests
 
 from steps.support.api_client import (
     contract_create_url,
+    fetch_well_known_did,
     contract_retrieve_by_id_url,
     contract_submit_url,
     contract_verify_url,
@@ -37,9 +38,8 @@ class ContractService:
         this instance itself, fetched from its own did:web document.
         """
         if not hasattr(context, "local_peer_did_cache"):
-            resp = requests.get(
-                f"{context.base_url}/.well-known/did.json",
-                timeout=context.http_timeout_seconds,
+            resp = fetch_well_known_did(
+                context.base_url, context.http_timeout_seconds
             )
             assert resp.status_code == 200, (
                 f"could not fetch this instance's own did:web document: "

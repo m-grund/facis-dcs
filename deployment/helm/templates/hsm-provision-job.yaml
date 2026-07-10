@@ -117,6 +117,50 @@ spec:
               k8s_host="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}"
               ca_path="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
               sa_token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+              {{- if .Values.pkcs11.provisioning.didDocument.enabled }}
+              {{- if not .Values.pkcs11.provisioning.didDocument.did }}
+              {{- fail "pkcs11.provisioning.didDocument.did is required when didDocument.enabled" }}
+              {{- end }}
+
+              # Regenerate did.json from the token's dcs-did key so the DID doc
+              # always matches the freshly provisioned key (main.go fatals on
+              # mismatch). Published as a Secret the deployment mounts.
+              export SOFTHSM2_CONF="$TOKEN_DIR/softhsm2.conf"
+              export PKCS11_MODULE_PATH="$MODULE"
+              export PKCS11_TOKEN_LABEL="$LABEL"
+              /app/gendid -out /tmp/did.json \
+                -did {{ .Values.pkcs11.provisioning.didDocument.did | quote }} \
+                {{- if .Values.pkcs11.provisioning.didDocument.serviceEndpoint }}
+                -endpoint {{ .Values.pkcs11.provisioning.didDocument.serviceEndpoint | quote }} \
+                {{- end }}
+
+              DID_SECRET_NAME={{ .Values.pkcs11.provisioning.didDocument.secretName | quote }}
+              did_json="$(jq -Rs . < /tmp/did.json)"
+              did_payload="$(cat <<EOF
+              {
+                "apiVersion": "v1",
+                "kind": "Secret",
+                "metadata": { "name": "${DID_SECRET_NAME}" },
+                "type": "Opaque",
+                "stringData": { "did.json": ${did_json} }
+              }
+              EOF
+              )"
+              did_secret_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets/${DID_SECRET_NAME}"
+              status="$(curl -s -o /dev/null -w '%{http_code}' \
+                --cacert "$ca_path" -H "Authorization: Bearer ${sa_token}" "$did_secret_url")"
+              if [ "$status" = "200" ]; then
+                curl -fsS -X PUT --cacert "$ca_path" \
+                  -H "Authorization: Bearer ${sa_token}" -H "Content-Type: application/json" \
+                  --data "$did_payload" "$did_secret_url" >/dev/null
+                echo "Updated DID document secret ${DID_SECRET_NAME}."
+              else
+                curl -fsS -X POST --cacert "$ca_path" \
+                  -H "Authorization: Bearer ${sa_token}" -H "Content-Type: application/json" \
+                  --data "$did_payload" "${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets" >/dev/null
+                echo "Created DID document secret ${DID_SECRET_NAME}."
+              fi
+              {{- end }}
               secret_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets/${SECRET_NAME}"
               create_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets"
               x5chain_json="$(jq -Rs . < "$TOKEN_DIR/c2pa-x5chain.pem")"
