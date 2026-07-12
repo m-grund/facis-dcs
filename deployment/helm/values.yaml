@@ -174,15 +174,6 @@ pkcs11:
       repository: ""
       tag: ""
       pullPolicy: IfNotPresent
-    # Generate a did.json from the token's dcs-did key inside the provision job
-    # and publish it as a Secret (key: did.json). Dev/CI only — prod manages its
-    # DID identity out-of-band. The DID doc's public key then always matches the
-    # in-cluster HSM key, which main.go enforces fatally at startup.
-    didDocument:
-      enabled: false
-      secretName: "dcs-identity"   # must match .Values.volumes secretName
-      did: ""                       # did:web identifier; REQUIRED when enabled
-      serviceEndpoint: ""           # optional DigitalContractingService endpoint
 
 # ---- Co-deployed dependencies ----------------------------------------
 # Each sub-chart owns its full set of configurable values.

@@ -4,7 +4,6 @@ import requests
 
 from steps.support.api_client import (
     contract_create_url,
-    fetch_well_known_did,
     contract_retrieve_by_id_url,
     contract_submit_url,
     get_with_headers,
@@ -37,8 +36,11 @@ class ContractService:
         this instance itself, fetched from its own did:web document.
         """
         if not hasattr(context, "local_peer_did_cache"):
-            resp = fetch_well_known_did(
-                context.base_url, context.http_timeout_seconds
+            from steps.support.api_client import did_document_url  # noqa: PLC0415
+
+            resp = requests.get(
+                did_document_url(context.base_url),
+                timeout=context.http_timeout_seconds,
             )
             assert resp.status_code == 200, (
                 f"could not fetch this instance's own did:web document: "
@@ -100,7 +102,7 @@ class ContractService:
                 "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Contract Source Template",
                 "description": "BDD template for contract workflows",
-                "template_data": TemplateService.canonical_template_data("BDD Contract Source Template"),
+                "template_data": TemplateService.canonical_document_data("BDD Contract Source Template"),
             },
             headers=creator_h,
         )
@@ -247,18 +249,16 @@ class ContractService:
                 "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Signature-Field Source Template",
                 "description": "BDD template for real-signing-vertical scenarios",
-                "template_data": TemplateService.canonical_template_data(
-                    "BDD Signature-Field Source Template",
-                    extra={
-                        "dcs:signatureFields": [
-                            {
-                                "@id": "urn:uuid:sig-field-1",
-                                "@type": "dcs:SignatureField",
-                                "dcs:signatoryName": signatory_name,
-                            }
-                        ],
-                    },
-                ),
+                "template_data": {
+                    **TemplateService.canonical_document_data("BDD Signature-Field Source Template"),
+                    "dcs:signatureFields": [
+                        {
+                            "@id": "urn:uuid:sig-field-1",
+                            "@type": "dcs:SignatureField",
+                            "dcs:signatoryName": signatory_name,
+                        }
+                    ],
+                },
             },
             headers=creator_h,
         )

@@ -55,7 +55,7 @@ from steps.support.api_client import (
     contract_peer_action_url,
     contract_peer_post_sync_url,
     contract_retrieve_by_id_url,
-    fetch_well_known_did,
+    did_document_url,
     get_with_headers,
     post_json,
 )
@@ -78,10 +78,14 @@ def _own_identity(context):
     checked-in dev signing key path (see contract_state_machine_steps for the
     port-to-key mapping and its documented limitation to the two checked-in
     dev identities, backend/certs/dev/did-8991.json / did-8992.json)."""
-    resp = fetch_well_known_did(context.base_url, context.http_timeout_seconds)
+    did_url = did_document_url(context.base_url)
+    resp = _requests.get(
+        did_url,
+        timeout=context.http_timeout_seconds,
+    )
     assert resp.status_code == 200, (
         f"could not fetch this instance's own did:web document from "
-        f"{context.base_url}/.well-known/did.json: {resp.status_code} {resp.text}"
+        f"{did_url}: {resp.status_code} {resp.text}"
     )
     real_did = resp.json().get("id")
     assert real_did, f"own did.json response has no 'id' field: {resp.text}"
@@ -367,29 +371,21 @@ def _as_instance(context, base_url):
 
 @given("instance A and instance B are both running and trust each other")
 def step_given_two_instances_running(context):
-    # When the URLs are set explicitly, the two-instance stack is expected to
-    # be up and any unreachability is a hard failure. Without them we fall
-    # back to the local dev-stack.sh/dev-stack2.sh defaults and SKIP if that
-    # stack isn't running — single-instance environments (e.g. the kind CI
-    # job) don't deploy an instance B.
-    explicit = bool(os.getenv("BDD_DCS_BASE_URL_A") and os.getenv("BDD_DCS_BASE_URL_B"))
     base_url_a = os.getenv("BDD_DCS_BASE_URL_A", "http://localhost:5173/api").rstrip("/")
     base_url_b = os.getenv("BDD_DCS_BASE_URL_B", "http://localhost:5174/api").rstrip("/")
+    assert base_url_a and base_url_b, (
+        "BDD_DCS_BASE_URL_A and BDD_DCS_BASE_URL_B must both be set to run this @two-instance "
+        "scenario. This requires the second-instance runner (docs/anforderung.md Workstream "
+        "C2: extend dev-stack.sh to optionally launch a second DCS instance on :8992 with "
+        "reciprocal DCS_TRUSTED_PEERS seeding against instance A) — which does not exist yet. "
+        "This is an open point for C1/C2, not a defect in this scenario."
+    )
     context.base_url_a = base_url_a
     context.base_url_b = base_url_b
 
-    try:
-        did_a = fetch_well_known_did(base_url_a, context.http_timeout_seconds)
-        did_b = fetch_well_known_did(base_url_b, context.http_timeout_seconds)
-    except _requests.exceptions.ConnectionError as exc:
-        if explicit:
-            raise
-        context.scenario.skip(
-            "two-instance stack not reachable (set BDD_DCS_BASE_URL_A/_B or start "
-            f"dev-stack.sh + dev-stack2.sh): {exc}"
-        )
-        return
+    did_a = _requests.get(did_document_url(base_url_a), timeout=context.http_timeout_seconds)
     assert did_a.status_code == 200, f"instance A did.json unreachable: {did_a.status_code} {did_a.text}"
+    did_b = _requests.get(did_document_url(base_url_b), timeout=context.http_timeout_seconds)
     assert did_b.status_code == 200, f"instance B did.json unreachable: {did_b.status_code} {did_b.text}"
 
     context.peer_did_a = did_a.json().get("id")

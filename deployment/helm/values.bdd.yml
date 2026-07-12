@@ -40,9 +40,8 @@ extraEnv:
   - name: AUTH_INSECURE_COOKIES
     value: "true"
   # DID identity (fatal on startup when missing). The dcs-identity secret is
-  # published by the hsm-provision post-install/post-upgrade hook job (see
-  # pkcs11.provisioning.didDocument below), generated from the freshly
-  # provisioned in-cluster HSM token key.
+  # published by the hsm-provision post-install/post-upgrade hook job,
+  # generated from the freshly provisioned in-cluster HSM token key.
   - name: DCS_DID
     value: /app/identity/did.json
 
@@ -162,11 +161,6 @@ pkcs11:
   provisioning:
     enabled: true
     soPin: "12345678"
-    didDocument:
-      enabled: true
-      secretName: dcs-identity
-      did: "did:web:localhost%3A8991"
-      serviceEndpoint: "http://localhost:8991/api"
 
 # XFSC Status List Service: required (fatal on startup if STATUSLIST_SERVICE_URL unreachable).
 statuslistService:

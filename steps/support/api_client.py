@@ -1,26 +1,24 @@
 """Shared HTTP and URL helpers for executable BDD scenarios."""
 
-from urllib.parse import urlsplit
-
 import requests
 
 
-# The service DID document is domain-level: backend/design/did.go mounts
-# GET /.well-known/did.json on the root mux, OUTSIDE the configurable
-# DCS_API_PATH prefix (did:web semantics — the doc lives at the domain root).
-# The additional GET /api/.well-known/did.json route is a hardcoded alias for
-# the Vite dev proxy, so `{base_url}/.well-known/did.json` only resolves when
-# the API base path happens to be exactly `/api`. Try the origin root first
-# (Helm/kind: the BDD ingress routes /.well-known to the DCS service), then
-# fall back to the base_url alias (dev-proxy layouts).
+def origin_url(base_url: str) -> str:
+    """Scheme+host only, stripping any path (e.g. route.basePath + '/api').
 
-def fetch_well_known_did(base_url: str, timeout) -> requests.Response:
-    parts = urlsplit(base_url)
-    origin = f"{parts.scheme}://{parts.netloc}"
-    resp = requests.get(f"{origin}/.well-known/did.json", timeout=timeout)
-    if resp.status_code == 200:
-        return resp
-    return requests.get(f"{base_url}/.well-known/did.json", timeout=timeout)
+    did.json is mounted at the bare origin root per the did:web spec
+    (backend/cmd/dcs/http.go: didsvr.Mount(mux, didServer) uses the
+    unprefixed base mux, not the DCS_API_PATH-prefixed apiMux) — appending
+    '/.well-known/did.json' directly to a base_url that already carries
+    route.basePath (non-empty in every values.bdd.yml/kind-CI deployment)
+    produces a path Goa never registers. Use this helper, not string
+    concatenation, wherever the well-known DID document is fetched.
+    """
+    return "/".join(base_url.split("/", 3)[:3])
+
+
+def did_document_url(base_url: str) -> str:
+    return f"{origin_url(base_url)}/.well-known/did.json"
 
 
 # URL builders
@@ -106,6 +104,22 @@ def archive_search_url(context) -> str:
 
 def archive_retrieve_url(context) -> str:
     return f"{context.base_url}/archive/retrieve"
+
+
+def archive_audit_url(context) -> str:
+    return f"{context.base_url}/archive/audit"
+
+
+def pac_audit_url(context) -> str:
+    return f"{context.base_url}/pac/audit"
+
+
+def pac_report_url(context) -> str:
+    return f"{context.base_url}/pac/report"
+
+
+def pac_monitor_url(context) -> str:
+    return f"{context.base_url}/pac/monitor"
 
 
 def contract_peer_action_url(context) -> str:

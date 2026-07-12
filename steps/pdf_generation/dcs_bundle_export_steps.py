@@ -42,6 +42,9 @@ def step_given_contract_no_exported_pdf(context, name):
 
 @given('an approved template "{name}" is available for bundle export')
 def step_given_template_for_bundle_export(context, name):
+    # Canonical dcs:documentStructure envelope via the shared fixture source
+    # (TemplateService.canonical_document_data) — NormalizeTemplateData
+    # rejects the flat {"title", "clauses"} shape.
     from steps.support.api_client import template_create_url, template_approve_url
     from steps.support.services.auth_service import AuthService
 
@@ -53,7 +56,7 @@ def step_given_template_for_bundle_export(context, name):
             "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
             "name": name,
             "description": "BDD template for bundle export",
-            "template_data": TemplateService.canonical_template_data(name),
+            "template_data": TemplateService.canonical_document_data(name, clause_text="Base clause"),
         },
         headers=creator_headers,
     )

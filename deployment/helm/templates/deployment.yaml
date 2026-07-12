@@ -11,6 +11,7 @@ spec:
   selector:
     matchLabels:
       {{- include "digital-contracting-service.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
   template:
     metadata:
       {{- with .Values.podAnnotations }}

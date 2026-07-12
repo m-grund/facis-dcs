@@ -29,13 +29,27 @@ func PostgresPersistEvent(ctx context.Context, tx *sqlx.Tx, component componentt
 
 func PostgresUpdateOutboxEvent(ctx context.Context, tx *sqlx.Tx, id int64) error {
 	_, err := tx.ExecContext(ctx, `
-        UPDATE outbox_events 
+        UPDATE outbox_events
         SET processed = TRUE, processed_at = CURRENT_TIMESTAMP
         WHERE id = $1
     `, id)
 
 	if err != nil {
 		return fmt.Errorf("could not mark event %d as processed: %w", id, err)
+	}
+
+	return nil
+}
+
+func PostgresMarkOutboxEventPublished(ctx context.Context, tx *sqlx.Tx, id int64) error {
+	_, err := tx.ExecContext(ctx, `
+        UPDATE outbox_events
+        SET published = TRUE, published_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+    `, id)
+
+	if err != nil {
+		return fmt.Errorf("could not mark event %d as published: %w", id, err)
 	}
 
 	return nil

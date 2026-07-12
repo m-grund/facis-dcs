@@ -189,6 +189,13 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
+	@# DID identity for DCS (DCS_DID is fatal on startup when missing);
+	@# mounted via volumes/volumeMounts in values.bdd.yml. The dcs-identity
+	@# Secret (did.json) and the signing key itself are both produced by the
+	@# hsm-provision-job.yaml post-install hook from the freshly generated
+	@# SoftHSM token key — a static did.json fixture would mismatch a random
+	@# per-run token key and crash-loop the backend (identity.NewDIDDocument
+	@# is fatal on mismatch), so it is deliberately NOT pre-created here.
 	@"$(KUBECTL_BIN)" create namespace "$(KIND_NAMESPACE)" --dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
 	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
 	@# ready, but DCS can't become ready until the devCertChain post-install hook has
