@@ -5,6 +5,7 @@ from behave import given, then, when
 
 from core.utils import is_date
 from steps.support.services.contract_service import ContractService
+from steps.support.services.template_service import TemplateService
 from steps.support.api_client import (
     contract_approve_url,
     contract_create_url,
@@ -238,7 +239,9 @@ def step_when_edit_contract(context, name):
     payload = {
         "did": did,
         "updated_at": updated_at,
-        "contract_data": {"title": "BDD Contract (edited)", "clauses": [{"id": "c1", "text": "Updated clause"}]},
+        "contract_data": TemplateService.canonical_document_data(
+            "BDD Contract (edited)", clause_text="Updated clause", document_type="dcs:Contract"
+        ),
     }
     context.requests_response = put_json(context, contract_update_url(context), payload)
     if context.requests_response.status_code == 200:

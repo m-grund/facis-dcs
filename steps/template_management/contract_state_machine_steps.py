@@ -29,6 +29,7 @@ from behave import given, then, when
 from steps.support.api_client import (
     contract_approve_url,
     contract_audit_url,
+    did_document_url,
     contract_offer_url,
     contract_peer_action_url,
     contract_retrieve_by_id_url,
@@ -36,7 +37,6 @@ from steps.support.api_client import (
     contract_submit_url,
     contract_terminate_url,
     contract_withdraw_url,
-    fetch_well_known_did,
     get_with_headers,
     post_json,
     signature_apply_url,
@@ -174,10 +174,14 @@ def _self_peer_action_credentials(context):
     same `contractstate.ValidateTransition` the UI-API path hits is reached
     directly — see backend/internal/contractworkflowengine/command/approve.go.
     """
-    did_resp = fetch_well_known_did(context.base_url, context.http_timeout_seconds)
+    did_url = did_document_url(context.base_url)
+    did_resp = _requests.get(
+        did_url,
+        timeout=context.http_timeout_seconds,
+    )
     assert did_resp.status_code == 200, (
         f"could not fetch this instance's own did:web document from "
-        f"{context.base_url}/.well-known/did.json (required to simulate a "
+        f"{did_url} (required to simulate a "
         f"trusted peer): {did_resp.status_code} {did_resp.text}"
     )
     from_peer_did = did_resp.json().get("id")
@@ -510,6 +514,20 @@ def step_when_apply_signature(context, name):
     subject_did = context.pid_presentations[name]["subject_did"]
     context.requests_response = _apply_signature_with_ceremony_result(
         context, name, signer_did=subject_did, credential_type="AES"
+    )
+    if context.requests_response.status_code == 200:
+        ContractService._refresh_contract(context, name)
+
+
+@when('the contract manager terminates contract "{name}" with reason "{reason}"')
+def step_when_terminate_contract_with_reason(context, name, reason):
+    did, updated_at = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    context.requests_response = post_json(
+        context,
+        contract_terminate_url(context),
+        {"did": did, "reason": reason, "updated_at": updated_at},
+        headers=manager_h,
     )
     if context.requests_response.status_code == 200:
         ContractService._refresh_contract(context, name)

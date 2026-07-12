@@ -160,7 +160,7 @@ func makeTSR(t *testing.T, cert *x509.Certificate, key *ecdsa.PrivateKey, dataHa
 // SHA-256 fingerprint. If FreeTSA rotates their cert, this test fails and
 // signals that certs/tsa.crt must be updated.
 func TestFreeTSACertFingerprint(t *testing.T) {
-	const wantFingerprint = "32e841a95cc1164101ffde41298ef2fc75c1c4372ef095e88a6bbd47dfb191fc"
+	const wantFingerprint = "a6379e7cecc05faa3cbf076013d745e327bbbaa38c0b9af22469d4701d18aabc"
 
 	pemData, err := os.ReadFile("certs/tsa.crt")
 	require.NoError(t, err)

@@ -42,11 +42,9 @@ def step_given_contract_no_exported_pdf(context, name):
 
 @given('an approved template "{name}" is available for bundle export')
 def step_given_template_for_bundle_export(context, name):
-    # Deliberately NOT TemplateService.create_fresh_template/create_approved_template:
-    # that shared helper posts a flat {"title", "clauses"} template_data shape,
-    # which NormalizeContractData's canonical-envelope validation rejects.
-    # Build the canonical dcs:documentStructure envelope directly instead of
-    # widening the shared helper.
+    # Canonical dcs:documentStructure envelope via the shared fixture source
+    # (TemplateService.canonical_document_data) — NormalizeTemplateData
+    # rejects the flat {"title", "clauses"} shape.
     from steps.support.api_client import template_create_url, template_approve_url
     from steps.support.services.auth_service import AuthService
 
@@ -58,33 +56,7 @@ def step_given_template_for_bundle_export(context, name):
             "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
             "name": name,
             "description": "BDD template for bundle export",
-            "template_data": {
-                "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
-                "@type": "dcs:ContractTemplate",
-                "dcs:metadata": {
-                    "@type": "dcs:TemplateMetadata",
-                    "dcs:title": name,
-                },
-                "dcs:documentStructure": {
-                    "@type": "dcs:DocumentStructure",
-                    "dcs:blocks": {
-                        "@list": [
-                            {
-                                "@id": "urn:uuid:block-clause-1",
-                                "@type": "dcs:Clause",
-                                "dcs:content": {"@list": ["Base clause"]},
-                            }
-                        ]
-                    },
-                    "dcs:layout": [
-                        {
-                            "@id": "urn:uuid:block-root",
-                            "dcs:isRoot": True,
-                            "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
-                        }
-                    ],
-                },
-            },
+            "template_data": TemplateService.canonical_document_data(name, clause_text="Base clause"),
         },
         headers=creator_headers,
     )

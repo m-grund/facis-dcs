@@ -55,7 +55,7 @@ from steps.support.api_client import (
     contract_peer_action_url,
     contract_peer_post_sync_url,
     contract_retrieve_by_id_url,
-    fetch_well_known_did,
+    did_document_url,
     get_with_headers,
     post_json,
 )
@@ -78,10 +78,14 @@ def _own_identity(context):
     checked-in dev signing key path (see contract_state_machine_steps for the
     port-to-key mapping and its documented limitation to the two checked-in
     dev identities, backend/certs/dev/did-8991.json / did-8992.json)."""
-    resp = fetch_well_known_did(context.base_url, context.http_timeout_seconds)
+    did_url = did_document_url(context.base_url)
+    resp = _requests.get(
+        did_url,
+        timeout=context.http_timeout_seconds,
+    )
     assert resp.status_code == 200, (
         f"could not fetch this instance's own did:web document from "
-        f"{context.base_url}/.well-known/did.json: {resp.status_code} {resp.text}"
+        f"{did_url}: {resp.status_code} {resp.text}"
     )
     real_did = resp.json().get("id")
     assert real_did, f"own did.json response has no 'id' field: {resp.text}"
@@ -379,9 +383,9 @@ def step_given_two_instances_running(context):
     context.base_url_a = base_url_a
     context.base_url_b = base_url_b
 
-    did_a = fetch_well_known_did(base_url_a, context.http_timeout_seconds)
+    did_a = _requests.get(did_document_url(base_url_a), timeout=context.http_timeout_seconds)
     assert did_a.status_code == 200, f"instance A did.json unreachable: {did_a.status_code} {did_a.text}"
-    did_b = fetch_well_known_did(base_url_b, context.http_timeout_seconds)
+    did_b = _requests.get(did_document_url(base_url_b), timeout=context.http_timeout_seconds)
     assert did_b.status_code == 200, f"instance B did.json unreachable: {did_b.status_code} {did_b.text}"
 
     context.peer_did_a = did_a.json().get("id")
