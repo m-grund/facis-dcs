@@ -27,6 +27,7 @@ from jwt.algorithms import ECAlgorithm
 
 from steps.support.api_client import (
     c2pa_internal_sign_url,
+    did_document_url,
     get_with_headers,
     post_json,
     signature_retrieve_url,
@@ -44,7 +45,7 @@ from steps.support.services.contract_service import ContractService
 @when("I request this instance's own DID document")
 def step_when_request_own_did_document(context):
     context.requests_response = _requests.get(
-        f"{context.base_url}/.well-known/did.json",
+        did_document_url(context.base_url),
         timeout=context.http_timeout_seconds,
     )
 
@@ -201,7 +202,7 @@ def step_then_vc_proof_is_ecdsa(context, name):
 def step_then_both_instances_publish_ec_p256(context):
     for label, base_url in (("A", context.base_url_a), ("B", context.base_url_b)):
         resp = _requests.get(
-            f"{base_url}/.well-known/did.json", timeout=context.http_timeout_seconds
+            did_document_url(base_url), timeout=context.http_timeout_seconds
         )
         assert resp.status_code == 200, (
             f"instance {label} did.json unreachable: {resp.status_code} {resp.text}"

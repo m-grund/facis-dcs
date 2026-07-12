@@ -190,13 +190,13 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
 	@# DID identity for DCS (DCS_DID is fatal on startup when missing);
-	@# mounted via volumes/volumeMounts in values.bdd.yml. The signing key itself
-	@# lives in the co-deployed SoftHSM token (hsm-provision-job.yaml), not in
-	@# this secret, since Workstream A moved signing off file-based private keys.
+	@# mounted via volumes/volumeMounts in values.bdd.yml. The dcs-identity
+	@# Secret (did.json) and the signing key itself are both produced by the
+	@# hsm-provision-job.yaml post-install hook from the freshly generated
+	@# SoftHSM token key — a static did.json fixture would mismatch a random
+	@# per-run token key and crash-loop the backend (identity.NewDIDDocument
+	@# is fatal on mismatch), so it is deliberately NOT pre-created here.
 	@"$(KUBECTL_BIN)" create namespace "$(KIND_NAMESPACE)" --dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
-	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" create secret generic dcs-identity \
-		--from-file=did.json=../../backend/certs/dev/did-8991.json \
-		--dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
 	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
 	@# ready, but DCS can't become ready until the devCertChain post-install hook has
 	@# created its Secret — a deadlock. We break the cycle by letting helm return as
@@ -232,7 +232,8 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 		echo "=== EVENTS ==="; \
 		"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
 		echo "=== DCS LOGS ==="; \
-		"$(KUBECTL_BIN)" logs deployment/"$(DCS_DEPLOYMENT)" -n "$(KIND_NAMESPACE)" --tail=200 || true; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend" -c digital-contracting-service --tail=200 || true; \
 		exit 1; \
 	fi
 

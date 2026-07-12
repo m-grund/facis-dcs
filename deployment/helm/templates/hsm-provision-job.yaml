@@ -101,6 +101,8 @@ spec:
               MODULE={{ .Values.pkcs11.modulePath | quote }}
               SO_PIN={{ .Values.pkcs11.provisioning.soPin | quote }}
               SECRET_NAME={{ include "digital-contracting-service.hsmX5ChainSecretName" . | quote }}
+              IDENTITY_SECRET_NAME="dcs-identity"
+              DID_HOSTNAME={{ include "digital-contracting-service.didHostname" . | quote }}
               CRL_URL={{ printf "http://%s:%v%s/crl/dcs-c2pa.crl" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
 
               /app/scripts/hsm-provision.sh "$TOKEN_DIR" "$LABEL" "$PKCS11_PIN" "$SO_PIN" "$MODULE"
@@ -110,39 +112,84 @@ spec:
               /app/scripts/c2pa-cert-provision.sh "$TOKEN_DIR" "$LABEL" "$PKCS11_PIN" \
                 "$TOKEN_DIR/c2pa-x5chain.pem" "$MODULE" "$CRL_URL"
 
+              # Issue a second leaf bound to the dcs-contract-pades token key for
+              # pdf-core's PAdES CMS signing certificate (DCS-IR-SI-10). Same dev
+              # CA, same script, different KEY_LABEL/output file.
+              KEY_LABEL=dcs-contract-pades /app/scripts/c2pa-cert-provision.sh "$TOKEN_DIR" "$LABEL" "$PKCS11_PIN" \
+                "$TOKEN_DIR/pades-x5chain.pem" "$MODULE" "$CRL_URL"
+
+              # Derive did.json from the dcs-did token key with the same /app/gendid
+              # tool dev-stack.sh uses natively (identity.NewDIDDocument is fatal on
+              # startup if the JWK does not match the token's key — SoftHSM2 keys are
+              # freshly generated every provisioning run, so a static did.json fixture
+              # would mismatch and crash-loop the backend).
+              DID_ID="did:web:$(printf '%s' "$DID_HOSTNAME" | sed 's/:/%3A/g')"
+              SOFTHSM2_CONF="$TOKEN_DIR/softhsm2.conf" \
+              PKCS11_MODULE_PATH="$MODULE" \
+              PKCS11_TOKEN_LABEL="$LABEL" \
+              PKCS11_PIN="$PKCS11_PIN" \
+                /app/gendid -out "$TOKEN_DIR/did.json" -did "$DID_ID" -endpoint "http://${DID_HOSTNAME}/api"
+
               # Let the non-root backend container read/write the token.
               chmod -R a+rwX "$TOKEN_DIR"
 
-              # Publish the x5chain as a Secret for pdf-core via the K8s API.
               k8s_host="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}"
               ca_path="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
               sa_token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
-              secret_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets/${SECRET_NAME}"
               create_url="${k8s_host}/api/v1/namespaces/${K8S_NAMESPACE}/secrets"
+
+              put_secret() {
+                local name="$1" payload="$2"
+                local secret_url="${create_url}/${name}"
+                local status
+                status="$(curl -s -o /dev/null -w '%{http_code}' \
+                  --cacert "$ca_path" -H "Authorization: Bearer ${sa_token}" "$secret_url")"
+                if [ "$status" = "200" ]; then
+                  curl -fsS -X PUT --cacert "$ca_path" \
+                    -H "Authorization: Bearer ${sa_token}" -H "Content-Type: application/json" \
+                    --data "$payload" "$secret_url" >/dev/null
+                  echo "Updated secret ${name}."
+                else
+                  curl -fsS -X POST --cacert "$ca_path" \
+                    -H "Authorization: Bearer ${sa_token}" -H "Content-Type: application/json" \
+                    --data "$payload" "$create_url" >/dev/null
+                  echo "Created secret ${name}."
+                fi
+              }
+
+              # Publish both x5chains as one Secret for pdf-core via the K8s API.
               x5chain_json="$(jq -Rs . < "$TOKEN_DIR/c2pa-x5chain.pem")"
-              payload="$(cat <<EOF
+              pades_x5chain_json="$(jq -Rs . < "$TOKEN_DIR/pades-x5chain.pem")"
+              x5chain_payload="$(cat <<EOF
               {
                 "apiVersion": "v1",
                 "kind": "Secret",
                 "metadata": { "name": "${SECRET_NAME}" },
                 "type": "Opaque",
-                "stringData": { "x5chain-pem": ${x5chain_json} }
+                "stringData": {
+                  "x5chain-pem": ${x5chain_json},
+                  "pades-x5chain-pem": ${pades_x5chain_json}
+                }
               }
               EOF
               )"
-              status="$(curl -s -o /dev/null -w '%{http_code}' \
-                --cacert "$ca_path" -H "Authorization: Bearer ${sa_token}" "$secret_url")"
-              if [ "$status" = "200" ]; then
-                curl -fsS -X PUT --cacert "$ca_path" \
-                  -H "Authorization: Bearer ${sa_token}" -H "Content-Type: application/json" \
-                  --data "$payload" "$secret_url" >/dev/null
-                echo "Updated x5chain secret ${SECRET_NAME}."
-              else
-                curl -fsS -X POST --cacert "$ca_path" \
-                  -H "Authorization: Bearer ${sa_token}" -H "Content-Type: application/json" \
-                  --data "$payload" "$create_url" >/dev/null
-                echo "Created x5chain secret ${SECRET_NAME}."
-              fi
+              put_secret "$SECRET_NAME" "$x5chain_payload"
+
+              # Publish did.json as the dcs-identity Secret the backend mounts at
+              # DCS_DID — replaces the static kubectl-create-secret previously run
+              # from tests/bdd/Makefile's kind_deploy target before this job existed.
+              did_json="$(jq -Rs . < "$TOKEN_DIR/did.json")"
+              identity_payload="$(cat <<EOF
+              {
+                "apiVersion": "v1",
+                "kind": "Secret",
+                "metadata": { "name": "${IDENTITY_SECRET_NAME}" },
+                "type": "Opaque",
+                "stringData": { "did.json": ${did_json} }
+              }
+              EOF
+              )"
+              put_secret "$IDENTITY_SECRET_NAME" "$identity_payload"
           volumeMounts:
             - name: hsm-token
               mountPath: {{ .Values.pkcs11.provisioning.tokenDir | quote }}

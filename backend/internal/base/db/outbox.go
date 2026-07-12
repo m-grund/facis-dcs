@@ -16,3 +16,7 @@ func PersistEvent(ctx context.Context, tx *sqlx.Tx, component componenttype.Comp
 func UpdateOutboxEvent(ctx context.Context, tx *sqlx.Tx, id int64) error {
 	return pq.PostgresUpdateOutboxEvent(ctx, tx, id)
 }
+
+func MarkOutboxEventPublished(ctx context.Context, tx *sqlx.Tx, id int64) error {
+	return pq.PostgresMarkOutboxEventPublished(ctx, tx, id)
+}

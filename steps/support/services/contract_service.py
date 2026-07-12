@@ -37,8 +37,10 @@ class ContractService:
         this instance itself, fetched from its own did:web document.
         """
         if not hasattr(context, "local_peer_did_cache"):
+            from steps.support.api_client import did_document_url  # noqa: PLC0415
+
             resp = requests.get(
-                f"{context.base_url}/.well-known/did.json",
+                did_document_url(context.base_url),
                 timeout=context.http_timeout_seconds,
             )
             assert resp.status_code == 200, (

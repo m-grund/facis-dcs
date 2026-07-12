@@ -357,6 +357,33 @@ Key within the x5chain Secret for pdf-core C2PA signing.
 {{- end }}
 
 {{/*
+The host:port a did:web identifier encodes for THIS instance's own did.json
+(DCS-OR-C2PA-008), derived from route.publicBaseURL — the same origin
+callers actually reach this instance at.
+*/}}
+{{- define "digital-contracting-service.didHostname" -}}
+{{- if .Values.route.publicBaseURL -}}
+{{- (urlParse .Values.route.publicBaseURL).host -}}
+{{- else -}}
+{{- printf "localhost:%v" .Values.service.port -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Key within the hsm-c2pa-x5chain Secret for pdf-core PAdES signing (DCS-IR-SI-10).
+The provisioning job issues a second leaf (KEY_LABEL=dcs-contract-pades) bound
+to the token's PAdES key and publishes it into the same Secret object as the
+C2PA x5chain, under this second key, so pdf-core mounts one Secret for both.
+*/}}
+{{- define "digital-contracting-service.pdfCorePadesX5ChainSecretKey" -}}
+{{- if .Values.pdfCore.signing.existingSecretPadesX5ChainKey -}}
+{{- .Values.pdfCore.signing.existingSecretPadesX5ChainKey -}}
+{{- else -}}
+{{- "pades-x5chain-pem" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 STATUSLIST_SERVICE_URL — auto-derived from the statuslistService sub-chart when
 enabled=true, otherwise falls back to the explicit statuslistService.url override.
 */}}

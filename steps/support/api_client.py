@@ -3,6 +3,24 @@
 import requests
 
 
+def origin_url(base_url: str) -> str:
+    """Scheme+host only, stripping any path (e.g. route.basePath + '/api').
+
+    did.json is mounted at the bare origin root per the did:web spec
+    (backend/cmd/dcs/http.go: didsvr.Mount(mux, didServer) uses the
+    unprefixed base mux, not the DCS_API_PATH-prefixed apiMux) — appending
+    '/.well-known/did.json' directly to a base_url that already carries
+    route.basePath (non-empty in every values.bdd.yml/kind-CI deployment)
+    produces a path Goa never registers. Use this helper, not string
+    concatenation, wherever the well-known DID document is fetched.
+    """
+    return "/".join(base_url.split("/", 3)[:3])
+
+
+def did_document_url(base_url: str) -> str:
+    return f"{origin_url(base_url)}/.well-known/did.json"
+
+
 # URL builders
 
 def contract_create_url(context) -> str:
@@ -86,6 +104,22 @@ def archive_search_url(context) -> str:
 
 def archive_retrieve_url(context) -> str:
     return f"{context.base_url}/archive/retrieve"
+
+
+def archive_audit_url(context) -> str:
+    return f"{context.base_url}/archive/audit"
+
+
+def pac_audit_url(context) -> str:
+    return f"{context.base_url}/pac/audit"
+
+
+def pac_report_url(context) -> str:
+    return f"{context.base_url}/pac/report"
+
+
+def pac_monitor_url(context) -> str:
+    return f"{context.base_url}/pac/monitor"
 
 
 def contract_peer_action_url(context) -> str:

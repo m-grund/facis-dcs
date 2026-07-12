@@ -28,8 +28,77 @@ type OutboxProcessor struct {
 }
 
 func (j OutboxProcessor) Start(ctx context.Context, origin string) error {
+	go j.startPublishingJob(ctx, conf.OutboxPublishTimeOut())
 	go j.startProcessingJob(ctx, conf.OutboxProcessorTimeOut(), origin)
 	return nil
+}
+
+// startPublishingJob republishes outbox events on NATS on its own ticker,
+// independent of startProcessingJob's TSA/IPFS anchoring: subscribers
+// (webhookplatform, pdfgeneration, contractworkflowengine/deployevent's
+// auto-deploy) only ever consume an event's JSON payload, never an
+// anchor-derived value, so publishing must not wait behind the strictly
+// sequential, network-bound anchoring of earlier events in the same
+// backlog — that decoupling is why `published` is a separate flag from
+// `processed`.
+func (j OutboxProcessor) startPublishingJob(ctx context.Context, interval time.Duration) {
+	schedulerLogic := func() error {
+		tx, err := j.DB.BeginTxx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("could not start transaction: %w", err)
+		}
+		defer func(tx *sqlx.Tx) {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				log.Printf("could not rollback transaction: %v", err)
+			}
+		}(tx)
+
+		rows, err := tx.QueryxContext(ctx, `
+			SELECT id, component, event_type, event_data, did, created_at
+			FROM outbox_events
+			WHERE published = FALSE
+			ORDER BY created_at ASC
+			LIMIT 200
+			FOR UPDATE SKIP LOCKED
+		`)
+		if err != nil {
+			return fmt.Errorf("could not query unpublished outbox events: %w", err)
+		}
+
+		var events []datatype.OutboxEvent
+		for rows.Next() {
+			var event datatype.OutboxEvent
+			if err := rows.StructScan(&event); err != nil {
+				if closeErr := rows.Close(); closeErr != nil {
+					return closeErr
+				}
+				return fmt.Errorf("could not scan event: %w", err)
+			}
+			events = append(events, event)
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+
+		for _, event := range events {
+			if err := j.CEPPubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
+				log.Printf("could not publish event %d: %v", event.ID, err)
+				continue
+			}
+			if err := db.MarkOutboxEventPublished(ctx, tx, event.ID); err != nil {
+				return fmt.Errorf("could not mark event %d published: %w", event.ID, err)
+			}
+		}
+
+		return tx.Commit()
+	}
+
+	ticker := time.NewTicker(interval)
+	for range ticker.C {
+		if err := schedulerLogic(); err != nil {
+			log.Printf("could not publish outbox entries: %v", err)
+		}
+	}
 }
 
 func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.Duration, origin string) {
@@ -104,9 +173,10 @@ func (j OutboxProcessor) startProcessingJob(ctx context.Context, interval time.D
 // it chains the entry to the previous CID (both per-resource and globally),
 // has it timestamped by the TSA, verifies that timestamp immediately as a
 // sanity check, writes the signed entry to IPFS, and only then marks the
-// outbox row processed and republishes the event on NATS. Because each
-// entry embeds the hash of its predecessor, retroactively modifying an
-// already-anchored entry breaks the chain and is detectable.
+// outbox row processed. Because each entry embeds the hash of its
+// predecessor, retroactively modifying an already-anchored entry breaks the
+// chain and is detectable. The event was already republished on NATS by the
+// caller before this ran (see startProcessingJob).
 func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.OutboxEvent, origin string) error {
 	// Read-only lookup events (RETRIEVE_*/SEARCH_*) are operational traces that
 	// every audit read filters out (see base.IsAuditVisibleEventType and its use
@@ -206,19 +276,15 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		return fmt.Errorf("could not update outbox event: %w", err)
 	}
 
-	if err := j.CEPPubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
-		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
-	}
-
 	return tx.Commit()
 }
 
-// processUnanchoredEvent handles an outbox event that is intentionally NOT
-// anchored into the tamper-evident audit trail (a read-only trace, see
-// processEvent). It still republishes the event on NATS so subscribers
-// (webhookplatform, dcstodcs, pdfgeneration) behave exactly as before, then
-// marks the outbox row processed. Skipping the TSA/IPFS anchoring keeps the
-// outbox from backing up under the high volume of lookup events.
+// processUnanchoredEvent marks a read-only-lookup outbox event (see
+// base.IsAuditVisibleEventType) processed without anchoring it into the
+// tamper-evident audit trail. It was already republished on NATS by the
+// caller before this ran (see startProcessingJob). Skipping the TSA/IPFS
+// anchoring keeps the outbox from backing up under the high volume of
+// lookup events.
 func (j OutboxProcessor) processUnanchoredEvent(ctx context.Context, event datatype.OutboxEvent) error {
 	tx, err := j.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -232,10 +298,6 @@ func (j OutboxProcessor) processUnanchoredEvent(ctx context.Context, event datat
 
 	if err = db.UpdateOutboxEvent(ctx, tx, event.ID); err != nil {
 		return fmt.Errorf("could not update outbox event: %w", err)
-	}
-
-	if err := j.CEPPubClient.Publish(event.Component, event.EventType, event.EventData); err != nil {
-		return fmt.Errorf("could not publish event %d: %v", event.ID, err)
 	}
 
 	return tx.Commit()

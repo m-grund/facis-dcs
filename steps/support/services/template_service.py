@@ -27,6 +27,41 @@ class TemplateService:
             "procurement": TemplateService.COMPONENT_TEMPLATE_TYPE,
         }.get(category_key, category.strip().upper().replace(" ", "_"))
 
+    @staticmethod
+    def canonical_document_data(title: str, clause_text: str = "Confidentiality clause", document_type: str = "dcs:ContractTemplate") -> dict:
+        """Build the canonical dcs:documentStructure envelope (single fixture
+        source for template_data/contract_data across all step modules — the
+        flat {"title", "clauses"} shape is rejected by
+        NormalizeTemplateData/NormalizeContractData, see
+        backend/internal/base/validation/documentdata.go isCanonicalEnvelope).
+        """
+        return {
+            "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
+            "@type": document_type,
+            "dcs:metadata": {
+                "@type": "dcs:TemplateMetadata",
+                "dcs:title": title,
+            },
+            "dcs:documentStructure": {
+                "@type": "dcs:DocumentStructure",
+                "dcs:blocks": {
+                    "@list": [
+                        {
+                            "@id": "urn:uuid:block-clause-1",
+                            "@type": "dcs:Clause",
+                            "dcs:content": {"@list": [clause_text]},
+                        }
+                    ]
+                },
+                "dcs:layout": [
+                    {
+                        "@id": "urn:uuid:block-root",
+                        "dcs:isRoot": True,
+                        "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
+                    }
+                ],
+            },
+        }
 
     @staticmethod
     def create_fresh_template(context, name="Standard Template", description="BDD auto-created template", title="BDD Standard NDA") -> tuple:
@@ -36,10 +71,7 @@ class TemplateService:
             "template_type": TemplateService.template_type_for_category("legal"),
             "name": name,
             "description": description,
-            "template_data": {
-                "title": title,
-                "clauses": [{"id": "c1", "text": "Confidentiality clause"}],
-            },
+            "template_data": TemplateService.canonical_document_data(title),
         }
         resp = post_json(context, template_create_url(context), payload, headers=headers)
         assert resp.status_code == 200, f"Template create failed: {resp.text}"

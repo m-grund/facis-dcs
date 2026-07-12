@@ -45,9 +45,10 @@ const (
 	// EventSign: Signature Management applies a signature.
 	EventSign Event = "SIGN"
 
-	// EventDeploy: NOT triggered by any in-scope command yet (Workstream G's
-	// deployment trigger owns ACTIVE-entry) — the edge exists in the table so
-	// the machine is complete, but nothing calls ValidateTransition with it today.
+	// EventDeploy: drives the SIGNED -> ACTIVE transition. The deploy command
+	// (command/deploy.go) validates this edge before dispatching to the
+	// Contract Target System, and the target's ack callback (command/callback.go)
+	// validates it again before flipping the contract to ACTIVE.
 	EventDeploy Event = "DEPLOY"
 
 	// EventRevoke: signingmanagement/command/revoke.go transitions the contract
