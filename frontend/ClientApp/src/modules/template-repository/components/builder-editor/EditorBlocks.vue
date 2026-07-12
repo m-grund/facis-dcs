@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 import { useFlattenedOutline, type FlattenedOutlineItem } from '@template-repository/composables/useFlattenedOutline'
@@ -12,7 +12,7 @@ import EditorBlock from '@template-repository/components/builder-editor/document
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId } from '@template-repository/utils/template-data-ref'
 
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { layout, blocks } = storeToRefs(draftStore)
 const { isInFadeOutSet, effectiveIndentWidth, horizontalPreviewFor, horizontalArrowIcon } =

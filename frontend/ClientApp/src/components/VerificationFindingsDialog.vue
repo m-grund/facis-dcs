@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { nextTick, ref } from 'vue'
 
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 
 const findingsModal = ref<HTMLDialogElement | null>(null)
 

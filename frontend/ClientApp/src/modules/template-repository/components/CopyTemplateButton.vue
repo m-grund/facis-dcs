@@ -2,11 +2,11 @@
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useRouter } from 'vue-router'
-import { useTemplateDraftStore } from '../store/templateDraftStore'
+import { useDcsDraftStore } from '../store/dcsDraftStore'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
 const router = useRouter()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 
 const { isCreator, isManager } = useTemplatePermissions()
 

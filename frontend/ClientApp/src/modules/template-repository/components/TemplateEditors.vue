@@ -7,7 +7,7 @@ import SemanticRulesEditor from '@template-repository/components/SemanticRulesEd
 import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
@@ -24,7 +24,7 @@ withDefaults(
 const route = useRoute()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const { activeTab } = storeToRefs(templateEditorUiStore)
 const { state, templateType } = storeToRefs(draftStore)
 const tabs = computed(() => {

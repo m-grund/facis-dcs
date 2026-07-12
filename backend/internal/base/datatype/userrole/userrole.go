@@ -30,7 +30,7 @@ const (
 	Auditor             UserRole = "Auditor"
 	SystemAdministrator UserRole = "Sys. Administrator"
 	ComplianceOfficer   UserRole = "Compliance Officer"
-	IntegrationManager  UserRole = "Ingestion Manager"
+	IntegrationManager  UserRole = "Integration Manager"
 
 	ProcessOrchestrator UserRole = "Process Orchestrator"
 	Validator           UserRole = "Validator"

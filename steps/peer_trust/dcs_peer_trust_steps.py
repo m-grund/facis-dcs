@@ -76,8 +76,8 @@ from steps.template_management.contract_state_machine_steps import (
 def _own_identity(context):
     """Fetch this instance's own did:web document and derive the matching
     checked-in dev signing key path (see contract_state_machine_steps for the
-    port-to-key mapping and its documented limitation to the two checked-in
-    dev identities, backend/certs/dev/did-8991.json / did-8992.json)."""
+    port-to-token-dir mapping and its documented limitation to the two
+    checked-in dev identities, backend/certs/dev/did-8991.json / did-8992.json)."""
     did_url = did_document_url(context.base_url)
     resp = _requests.get(
         did_url,

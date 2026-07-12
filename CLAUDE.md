@@ -69,7 +69,7 @@ Three distinct layers in `frontend/ClientApp/src/`:
 
 ### Template Editor — JSON-LD as Single Source of Truth
 
-The template builder uses `dcsDraftStore` (not `templateDraftStore`, which is legacy). The store state *is* the JSON-LD document (`dcs:ContractTemplate`):
+The template builder uses `dcsDraftStore`. The store state *is* the JSON-LD document (`dcs:ContractTemplate`):
 
 - **`dcs:sections`** — flat ordered array of `DcsClause | DcsTextBlock`. No tree hierarchy.
 - **`odrl:policy`** (assembled as getter) — ODRL rules (`OdrlDuty`, `OdrlPermission`, `OdrlProhibition`). Types are concrete, not the abstract `odrl:Rule`.

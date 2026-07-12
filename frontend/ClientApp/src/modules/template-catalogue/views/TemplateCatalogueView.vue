@@ -4,7 +4,7 @@ import { contractTemplateService } from '@/services/contract-template-service'
 import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import type { TemplateCatalogueRetrieveByIdResponse } from '@/models/responses/template-catalogue-integration-response'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import CatalogueTemplateDetailsInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateDetailsInfo.vue'
 import CatalogueTemplateMetaDataInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateMetaDataInfo.vue'
 import CatalogueTemplatePreviewInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplatePreviewInfo.vue'
@@ -33,7 +33,7 @@ const catalogue = ref<TemplateCatalogueRetrieveByIdResponse | null>(null)
 
 const registerLoading = ref(false)
 
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 
 type CatalogueTabId = 'details' | 'meta' | 'preview'
 const activeTab = ref<CatalogueTabId>('details')
