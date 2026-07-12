@@ -27,23 +27,38 @@ In short, the OCM-W stack is built around the OID4VCI credential-issuance protoc
 
 ## Decision
 
-DCS calls the **HashiCorp Vault transit engine directly** (`POST /v1/{mount}/sign/{key}`) and constructs the `Ed25519Signature2020` proof locally:
+DCS signs VCs via the **HSM directly** (PKCS#11, `backend/internal/base/hsm`) and constructs an `ecdsa-rdfc-2019` Data Integrity proof locally (`provenance.NewHSMVCSigner`):
 
 1. URDNA2015-canonicalize the proof options and the VC document (`piprate/json-gold`)
 2. SHA-256 hash each
-3. Send the 64-byte concatenation to Vault for Ed25519 signing
-4. Encode the signature as multibase base58btc and set `proof.proofValue`
+3. Send the concatenation to the PKCS#11-held ECDSA P-256 key for signing
+4. Set `proof.proofValue` from the resulting signature
 
-Vault transit is also the engine that the OCM-W signer service uses internally — DCS is simply calling one layer lower, without the JWT wrapper that is irrelevant here.
+This supersedes an earlier iteration of this decision that called a Vault
+transit engine (`crypto-provider` Helm subchart) directly instead of the
+HSM — see "Findings Collected During Implementation" below, which is kept
+as the historical record of that iteration. Workstream A (PKI
+consolidation) replaced Vault-backed key custody with PKCS#11/SoftHSM2
+throughout DCS, including VC signing: **one key-custody mechanism, not
+two** (see ADR-1). The `crypto-provider` Helm chart no longer exists in
+this repository.
 
 ## Consequences
 
-- No OCM-W dependency for VC signing; the crypto-provider Helm subchart is a standalone Vault dev-mode deployment.
-- If DCS later needs to *issue credentials to wallet holders* via OID4VCI (e.g. issuing a signed contract summary to a participant's wallet), the OCM-W issuance service would be the right integration point for that separate feature.
+- No OCM-W dependency for VC signing, and no Vault dependency either —
+  VCs, C2PA claim signatures, and PAdES signatures now all resolve to the
+  same PKCS#11 key-custody layer (ADR-1).
+- If DCS later needs to *issue credentials to wallet holders* via OID4VCI
+  (e.g. issuing a signed contract summary to a participant's wallet), the
+  OCM-W issuance service would be the right integration point for that
+  separate feature — that reasoning is unaffected by the Vault→HSM signer
+  change.
 
-## Findings Collected During Implementation
+## Findings Collected During Implementation (historical — Vault-era)
 
-The decision above was validated against running deployments and direct endpoint tests.
+The findings below were recorded against the Vault-transit-engine iteration
+of this decision, before the PKCS#11 migration (ADR-1) replaced it. Kept
+for historical record; none of it applies to the current HSM-backed signer.
 
 ### 1. Status list liveness/probes had two valid paths in different components
 

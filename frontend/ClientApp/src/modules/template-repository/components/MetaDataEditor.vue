@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import MetaDataRow from '@template-repository/components/meta-data/MetaDataRow.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { customMetaData } = storeToRefs(store)
 

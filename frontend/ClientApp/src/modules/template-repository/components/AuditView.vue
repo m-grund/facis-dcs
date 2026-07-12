@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useTemplateDraftStore } from '../store/templateDraftStore'
+import { useDcsDraftStore } from '../store/dcsDraftStore'
 import { ref, watch, type Ref } from 'vue'
 import { useTemplateEditorUiStore } from '../store/templateEditorUiStore'
 import type { ContractTemplateAuditResponse } from '@/models/responses/template-response'
 import TemplateAuditList from '@/components/lists/template/TemplateAuditList.vue'
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const editorStore = useTemplateEditorUiStore()
 const data: Ref<ContractTemplateAuditResponse> = ref([])
 

@@ -5,7 +5,7 @@ import type { EnrichedBlockItem } from '@template-repository/models/enriched-blo
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import {
   parseSegmentsFromContent,
   getPlaceholderLabelFromConditions,
@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 const uiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const { selectedBlockId } = storeToRefs(uiStore)
 const { semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
 const { isSwapPreviewTarget } = useBlockMovementPreview()

@@ -13,7 +13,7 @@ export interface PreprocessedContractData {
   blocks: (DcsBlock | MergedApprovedTemplateBlock)[]
   layout: DcsLayoutNode[]
   contractData: DcsContractData['dcs:contractData']
-  /** Flattened from the stored enclosing odrl:Set (Workstream F1) — dcsDraftStore/templateDraftStore keep the flat rule array as their internal source of truth. */
+  /** Flattened from the stored enclosing odrl:Set (Workstream F1) — dcsDraftStore/dcsDraftStore keep the flat rule array as their internal source of truth. */
   policies: OdrlRule[]
   semanticConditionValues: DcsContractData['semanticConditionValues']
   subTemplateSnapshots: SubTemplateSnapshot[]

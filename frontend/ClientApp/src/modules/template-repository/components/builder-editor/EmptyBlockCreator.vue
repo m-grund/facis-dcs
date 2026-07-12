@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 
-const { layout } = storeToRefs(useTemplateDraftStore())
+const { layout } = storeToRefs(useDcsDraftStore())
 const uiStore = useTemplateEditorUiStore()
 
 const rootBlock = computed(() => layout.value.find((n) => n['dcs:isRoot']))

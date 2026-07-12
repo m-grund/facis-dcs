@@ -1622,3 +1622,30 @@ func isEmptyAuditValue(value any) bool {
 		return false
 	}
 }
+
+// shaclSeverity and shaclPredicateLine are shared by the real SHACL shapes
+// reader above (parseContractSHACLShapesTTL); they used to also back the
+// pseudo-SHACL validation-profile parser, which the clean-product sweep
+// replaced with structured YAML/JSON profiles (contractstatementvalidation.go).
+
+func shaclSeverity(statement string) string {
+	severity := ontologyResource(statement, "sh:severity")
+	switch severity {
+	case "sh:Warning":
+		return "warning"
+	case "sh:Info":
+		return "info"
+	default:
+		return "error"
+	}
+}
+
+func shaclPredicateLine(statement string, predicate string) string {
+	for _, line := range strings.Split(statement, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, predicate+" ") {
+			return line
+		}
+	}
+	return ""
+}

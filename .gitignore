@@ -1,4 +1,5 @@
 tmp
+__debug_bin*
 
 .idea
 .vscode

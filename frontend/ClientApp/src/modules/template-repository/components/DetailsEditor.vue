@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
@@ -15,7 +15,7 @@ interface ComponentTemplateKey {
   document_number?: string
 }
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { templates: allTemplates } = useTemplateList()
 const { templateType, blocks, subTemplateSnapshots, state, version } = storeToRefs(store)

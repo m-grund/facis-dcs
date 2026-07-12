@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
@@ -16,7 +16,7 @@ import { TemplateType } from '../../models/contract-template.ts'
 import type { DcsClause } from '@/models/dcs-jsonld'
 import type { NewBlockType } from '@template-repository/models/template-draft-store'
 
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { addBlockModalContext, pendingPlacementClauseBlockId } = storeToRefs(uiStore)
 const { blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)

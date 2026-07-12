@@ -65,10 +65,11 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
   # two-instance peer isn't available in this single-instance BDD harness
   # (docs/anforderung.md: two-instance runner still missing), so this
   # scenario instead simulates a trusted peer by having the instance
-  # authenticate as its own did:web identity (checked-in dev DID/key pair,
-  # backend/certs/dev/did-8991.json + signing-8991.key, or the 8992
-  # counterpart — see steps/template_management/contract_state_machine_steps.py
-  # _self_peer_action_credentials). Because the contract under test is also
+  # authenticate as its own did:web identity (checked-in dev DID document,
+  # backend/certs/dev/did-8991.json, signed via the per-instance SoftHSM2
+  # token — see steps/template_management/contract_state_machine_steps.py
+  # _self_peer_action_credentials / _dev_signing_token_dir). Because the
+  # contract under test is also
   # created locally (Origin == this same DID), Approver.Handle's
   # single-writer forwarding check is a no-op and the exact same
   # `contractstate.ValidateTransition` the UI-API path hits is reached

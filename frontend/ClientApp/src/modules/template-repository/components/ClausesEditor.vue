@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { blocks, layout, semanticConditions: mainSemanticConditions, subTemplateSnapshots } = storeToRefs(store)
 const { pendingClauseDraft } = storeToRefs(uiStore)

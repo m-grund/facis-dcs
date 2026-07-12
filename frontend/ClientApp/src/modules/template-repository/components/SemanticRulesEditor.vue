@@ -27,7 +27,7 @@ import {
   roleLabelFor,
 } from '@template-repository/utils/ontology-domain-types'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { MinusIcon, PlusIcon } from '@heroicons/vue/20/solid'
 
@@ -55,7 +55,7 @@ interface RequirementDraft {
   parameterValidity: Record<string, boolean>
 }
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { semanticConditions: mainSemanticConditions, blocks, subTemplateSnapshots } = storeToRefs(store)
 

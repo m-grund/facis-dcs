@@ -15,7 +15,7 @@ import ContractDetailsEditor from '@/modules/contract-workflow-engine/components
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
@@ -43,7 +43,7 @@ const errorStore = useErrorStore()
 const contractStore = useContractsStore()
 
 const { hasApprovedTemplates, approvedTemplates } = storeToRefs(contractStore)
-const templateDraftStore = useTemplateDraftStore()
+const dcsDraftStore = useDcsDraftStore()
 const contractContentValuesStore = useContractContentValuesStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
@@ -84,11 +84,11 @@ function buildCurrentContractData(): ContractData | undefined {
     documentId: contract.value.did,
     name: contract.value.name,
     description: contract.value.description,
-    blocks: templateDraftStore.blocks,
-    layout: templateDraftStore.layout,
-    contractData: templateDraftStore.contractData,
-    policies: templateDraftStore.policies,
-    subTemplateSnapshots: templateDraftStore.subTemplateSnapshots,
+    blocks: dcsDraftStore.blocks,
+    layout: dcsDraftStore.layout,
+    contractData: dcsDraftStore.contractData,
+    policies: dcsDraftStore.policies,
+    subTemplateSnapshots: dcsDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
     parentContractDid: selectedParentContractDid.value ?? undefined,
     sourceTemplate: contract.value.contract_data?.sourceTemplate,
@@ -123,17 +123,17 @@ async function saveContractDraftForSubmit(): Promise<Contract> {
 }
 
 function verifySemanticValues(): boolean {
-  const subTemplateSemanticConditions = templateDraftStore.subTemplateSnapshots.map((subTemplate) => ({
+  const subTemplateSemanticConditions = dcsDraftStore.subTemplateSnapshots.map((subTemplate) => ({
     templateId: subTemplate.did,
     version: subTemplate.version,
     document_number: subTemplate.document_number,
     semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
   }))
   const result = verifySemanticValue(
-    templateDraftStore.semanticConditions,
+    dcsDraftStore.semanticConditions,
     subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
-    templateDraftStore.blocks,
+    dcsDraftStore.blocks,
   )
   verificationResult.value = result
   if (result.isValid) {
@@ -274,15 +274,15 @@ onMounted(async () => {
 })
 
 watch(
-  () => [templateDraftStore.blocks, templateDraftStore.semanticConditions, templateDraftStore.subTemplateSnapshots],
+  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions, dcsDraftStore.subTemplateSnapshots],
   () => {
     const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
       (conditionValue) =>
         !hasConditionParameterForValue(
           conditionValue,
-          templateDraftStore.blocks,
-          templateDraftStore.semanticConditions,
-          templateDraftStore.subTemplateSnapshots,
+          dcsDraftStore.blocks,
+          dcsDraftStore.semanticConditions,
+          dcsDraftStore.subTemplateSnapshots,
         ),
     )
     contractContentValuesStore.removeSemanticConditionValues(invalidValues)
@@ -295,7 +295,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  templateDraftStore.reset({ workflow: 'contract' })
+  dcsDraftStore.reset({ workflow: 'contract' })
   contractContentValuesStore.reset()
   contractEditorUiStore.reset()
   templateEditorUiStore.reset({ workflow: 'contract' })
@@ -305,14 +305,14 @@ onUnmounted(() => {
 // Contract data includes the template data used to fill the contract template
 function applyContractDataToDraft(contractData?: unknown) {
   if (contractData == null) {
-    templateDraftStore.reset({ workflow: 'contract' })
+    dcsDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
     verificationResult.value = null
     return
   }
   const cd = preprocessContractData(contractData)
   if (cd) {
-    templateDraftStore.reset({
+    dcsDraftStore.reset({
       workflow: 'contract',
       blocks: cd.blocks,
       layout: cd.layout,
@@ -322,7 +322,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     })
     contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   } else {
-    templateDraftStore.reset({ workflow: 'contract' })
+    dcsDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
   }
   verificationResult.value = null
@@ -416,12 +416,12 @@ onBeforeRouteLeave(() => {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :layout="templateDraftStore.layout"
-                        :blocks="templateDraftStore.blocks"
-                        :semantic-conditions="templateDraftStore.semanticConditions"
+                        :layout="dcsDraftStore.layout"
+                        :blocks="dcsDraftStore.blocks"
+                        :semantic-conditions="dcsDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
-                        :sub-template-snapshots="templateDraftStore.subTemplateSnapshots"
+                        :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                         :set-semantic-condition-value="setSemanticConditionValue"
                       />
                     </div>
