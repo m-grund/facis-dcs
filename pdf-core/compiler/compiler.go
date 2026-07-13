@@ -67,11 +67,11 @@ func ExtractLatestEmbeddedJSONLD(pdf []byte) ([]byte, error) {
 	return extractJSONLDStream(pdf, true)
 }
 
-// extractJSONLDStream finds the embedded payload.jsonld stream in a PDF.
+// extractJSONLDStream finds the embedded contract.jsonld stream in a PDF.
 // When lastOccurrence is true, the last (superseding) object definition is used,
 // mirroring PDF cross-reference resolution rules for incremental updates.
 func extractJSONLDStream(pdf []byte, lastOccurrence bool) ([]byte, error) {
-	fileSpecPos := bytes.Index(pdf, []byte("/F (payload.jsonld)"))
+	fileSpecPos := bytes.Index(pdf, []byte("/F (contract.jsonld)"))
 	if fileSpecPos < 0 {
 		return nil, fmt.Errorf("embedded JSON-LD filespec not found")
 	}
@@ -132,7 +132,7 @@ func AppendVerificationWitness(ctx context.Context, pdf []byte, payload []byte) 
 	exclusions := []c2paExclusion{}
 	var candidate []byte
 	for iteration := 0; iteration < 6; iteration++ {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), "", hashHex, hardBindingHash, exclusions, time.Now())
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), "", hashHex, hardBindingHash, exclusions, time.Now(), "")
 		if err != nil {
 			return nil, err
 		}

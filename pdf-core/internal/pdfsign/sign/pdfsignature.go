@@ -3,6 +3,7 @@ package sign
 import (
 	"bytes"
 	"crypto"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/digitorus/pkcs7"
 	"github.com/digitorus/timestamp"
@@ -383,24 +385,25 @@ func (context *SignContext) createSignature() ([]byte, error) {
 	return signed_data.Finish()
 }
 
+// GetTSA requests a timestamp token for sign_content from the configured TSA.
+//
+// The deployed TSA (reached via ORCE, see
+// deployment/helm/charts/orce/flows/tsa_orce_flow.json) does not speak the
+// classic RFC 3161 "POST an ASN.1 TimeStampReq to the bare URL" protocol.
+// Instead it exposes a bodyless GET at {TSA.URL}/{sha256-hex(sign_content)}
+// and returns the raw TSR (TimeStampResp) as the response body — mirroring
+// backend/internal/base/tsa/tsa.go's doTimestampRequest/timestampURL.
 func (context *SignContext) GetTSA(sign_content []byte) (timestamp_response []byte, err error) {
-	sign_reader := bytes.NewReader(sign_content)
-	ts_request, err := timestamp.CreateRequest(sign_reader, &timestamp.RequestOptions{
-		Hash:         context.SignData.DigestAlgorithm,
-		Certificates: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+	hash := sha256.Sum256(sign_content)
+	hashHex := hex.EncodeToString(hash[:])
 
-	ts_request_reader := bytes.NewReader(ts_request)
-	req, err := http.NewRequest("POST", context.SignData.TSA.URL, ts_request_reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare request (%s): %w", context.SignData.TSA.URL, err)
-	}
+	url := timestampURL(context.SignData.TSA.URL, hashHex)
 
-	req.Header.Add("Content-Type", "application/timestamp-query")
-	req.Header.Add("Content-Transfer-Encoding", "binary")
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare request (%s): %w", url, err)
+	}
+	req.Header.Set("Accept", "application/timestamp-reply")
 
 	if context.SignData.TSA.Username != "" && context.SignData.TSA.Password != "" {
 		req.SetBasicAuth(context.SignData.TSA.Username, context.SignData.TSA.Password)
@@ -408,33 +411,34 @@ func (context *SignContext) GetTSA(sign_content []byte) (timestamp_response []by
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	code := 0
-
-	if resp != nil {
-		code = resp.StatusCode
+	if err != nil {
+		return nil, fmt.Errorf("failed to call TSA endpoint (%s): %w", url, err)
 	}
-
-	if err != nil || (code < 200 || code > 299) {
-		if err == nil {
-			defer func() {
-				_ = resp.Body.Close()
-			}()
-			body, _ := io.ReadAll(resp.Body)
-			return nil, errors.New("non success response (" + strconv.Itoa(code) + "): " + string(body))
-		}
-
-		return nil, errors.New("non success response (" + strconv.Itoa(code) + ")")
-	}
-
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+
 	timestamp_response_body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, errors.New("non success response (" + strconv.Itoa(resp.StatusCode) + "): " + string(timestamp_response_body))
+	}
+
 	return timestamp_response_body, nil
+}
+
+// timestampURL joins baseURL and hash with a single "/" separator, appending
+// the hash as the final path segment (baseURL may or may not already end in
+// "/").
+func timestampURL(baseURL, hash string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if strings.HasSuffix(baseURL, "/") {
+		return baseURL + hash
+	}
+	return baseURL + "/" + hash
 }
 
 func (context *SignContext) replaceSignature() error {

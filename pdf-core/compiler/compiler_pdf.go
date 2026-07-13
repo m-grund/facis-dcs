@@ -89,7 +89,7 @@ func renderPDF(ctx context.Context, doc documentModel) ([]byte, error) {
 		pdfObject{ID: ids.c2paFileSpecID, Data: []byte(fmt.Sprintf("<< /Type /Filespec /F (content_credential.c2pa) /UF (content_credential.c2pa) /AFRelationship /C2PA_Manifest /Desc (Embedded C2PA manifest store) /EF << /F %d 0 R >> >>", ids.c2paEmbeddedID))},
 		pdfObject{ID: ids.embeddedFileID, Data: streamObject(doc.CanonicalJSON, fmt.Sprintf("<< /Type /EmbeddedFile /Subtype /application#2Fld+json /Length %d /Params << /Size %d /ModDate (D:20260604000000Z) /CheckSum <%s> >> >>", len(doc.CanonicalJSON), len(doc.CanonicalJSON), doc.PayloadHash[:32]))},
 		// CanonicalJSON holds the original JSON-LD bytes; PayloadHash is SHA-256 of URDNA2015 N-Quads.
-		pdfObject{ID: ids.fileSpecID, Data: []byte(fmt.Sprintf("<< /Type /Filespec /F (payload.jsonld) /UF (payload.jsonld) /AFRelationship /Source /Desc (Embedded canonical JSON-LD payload) /EF << /F %d 0 R >> >>", ids.embeddedFileID))},
+		pdfObject{ID: ids.fileSpecID, Data: []byte(fmt.Sprintf("<< /Type /Filespec /F (contract.jsonld) /UF (contract.jsonld) /AFRelationship /Source /Desc (Embedded canonical JSON-LD payload) /EF << /F %d 0 R >> >>", ids.embeddedFileID))},
 		pdfObject{ID: ids.metadataID, Data: streamObject(xmpMetadata, fmt.Sprintf("<< /Type /Metadata /Subtype /XML /Length %d >>", len(xmpMetadata)))},
 	)
 
@@ -249,7 +249,7 @@ func renderPageObject(page pageLayout, fontID int, pagesID int) string {
 }
 
 func renderCatalogObject(ids objectIDs, pages []pageLayout, hasSigFields bool, structRootID int, outlineRootID int) string {
-	nameEntries := []string{fmt.Sprintf("/EmbeddedFiles << /Names [(content_credential.c2pa) %d 0 R (payload.jsonld) %d 0 R] >>", ids.c2paFileSpecID, ids.fileSpecID)}
+	nameEntries := []string{fmt.Sprintf("/EmbeddedFiles << /Names [(content_credential.c2pa) %d 0 R (contract.jsonld) %d 0 R] >>", ids.c2paFileSpecID, ids.fileSpecID)}
 	acroFormEntry := ""
 	if hasSigFields {
 		acroFormEntry = fmt.Sprintf(" /AcroForm %d 0 R", ids.acroFormID)

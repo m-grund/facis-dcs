@@ -53,15 +53,38 @@ def step_when_compliance_officer_submits_incident(context):
 
 @then('the process audit response includes an audit trail entry for contract "{name}"')
 def step_then_audit_response_includes_contract(context, name):
+    # The audit trail is anchored asynchronously by the outbox processor
+    # (TSA+IPFS per event) — a contract created moments before the audit
+    # trigger may not be anchored yet when the first snapshot is taken. Same
+    # polling convention as the contract-audit steps: re-trigger the audit
+    # until the entry appears or the deadline expires.
+    import time  # noqa: PLC0415
+
     did, _ = ContractService._contract_data(context, name)
-    body = context.requests_response.json()
-    assert isinstance(body, list) and body, f"Expected a non-empty PACAuditResponse list, got: {body}"
-    all_dids = [
-        entry.get("did")
-        for scope_result in body
-        for entry in (scope_result.get("audit_trail") or [])
-        if isinstance(entry, dict)
-    ]
+    headers = AuthService.get_headers_for_roles(["Auditor"])
+    all_dids = []
+    deadline = time.monotonic() + 90
+    while True:
+        body = context.requests_response.json()
+        assert isinstance(body, list) and body, f"Expected a non-empty PACAuditResponse list, got: {body}"
+        all_dids = [
+            entry.get("did")
+            for scope_result in body
+            for entry in (scope_result.get("audit_trail") or [])
+            if isinstance(entry, dict)
+        ]
+        if did in all_dids:
+            return
+        if time.monotonic() > deadline:
+            break
+        time.sleep(2)
+        context.requests_response = post_json(
+            context, pac_audit_url(context), {"scope": "CONTRACT_WORKFLOW_ENGINE"}, headers=headers
+        )
+        assert context.requests_response.status_code == 200, (
+            f"process audit re-trigger failed: {context.requests_response.status_code} "
+            f"{context.requests_response.text}"
+        )
     assert did in all_dids, (
         f"Expected the CONTRACT_WORKFLOW_ENGINE audit trail to include an entry for contract "
         f"'{name}' (did={did}), got dids: {all_dids}"

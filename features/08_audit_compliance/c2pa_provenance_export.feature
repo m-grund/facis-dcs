@@ -45,6 +45,10 @@ Feature: C2PA Lifecycle Assertions on Exported Contract PDFs
   # The NATS subscriber appends a second C2PA assertion asynchronously on state
   # transition.  Chain-linkage correctness is covered by the Go unit tests in
   # c2pa/embedder_test.go (TestAppendManifest_ChainLinkage).
+  # @skip: the "transitions to state" harness step is a stub (no real state
+  # transition is driven), so a second lifecycle assertion never gets
+  # appended — chain linkage stays covered by the Go unit test
+  # (c2pa/embedder_test.go TestAppendManifest_ChainLinkage).
   @DCS-OR-C2PA-003 @skip
   Scenario: C2PA manifest chain links successive lifecycle events
     Given contract "Service Agreement" has been exported in "Draft" state

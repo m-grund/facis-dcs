@@ -29,7 +29,7 @@ Feature: Contract Approval
     And contract "Service Agreement" requires my approval
     When I reject contract "Service Agreement" with reason "Missing compliance clause"
     Then the rejection is logged with comments and timestamp
-    And the contract status returns to "Draft"
+    And the contract status shows "Rejected"
     And the contract is returned for revision
 
   # @skip: step definitions not implemented yet (undefined steps would fail the run)

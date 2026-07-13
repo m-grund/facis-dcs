@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -134,10 +135,21 @@ func SignPAdES(ctx context.Context, pdfBytes []byte, fieldName, signatoryName st
 		signData.TSA = sign.TSA{URL: material.tsaURL}
 	}
 
+	return signPAdESWithFallback(pdfBytes, signData)
+}
+
+// signPAdESWithFallback signs pdfBytes with signData, retrying without a
+// timestamp (PAdES-B-B) if the TSA fails. Factored out of SignPAdES so it can
+// be exercised directly in tests with an explicit signData.TSA, independent
+// of loadPAdESMaterial's process-wide, env-derived, sync.Once-cached
+// material.
+func signPAdESWithFallback(pdfBytes []byte, signData sign.SignData) ([]byte, error) {
+	tsaURL := signData.TSA.URL
 	signed, err := signPAdESBytes(pdfBytes, signData)
-	if err != nil && material.tsaURL != "" {
+	if err != nil && tsaURL != "" {
 		// PAdES-B-B fallback: the TSA is configured but unreachable/failed. Retry
 		// without a timestamp rather than hard-failing (documented deviation).
+		log.Printf("WARN pades: TSA %s failed, falling back to PAdES-B-B (no timestamp): %v", tsaURL, err)
 		signData.TSA = sign.TSA{}
 		if fallbackSigned, fbErr := signPAdESBytes(pdfBytes, signData); fbErr == nil {
 			return fallbackSigned, nil

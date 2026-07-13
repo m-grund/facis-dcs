@@ -840,7 +840,7 @@ def step_c2pa_signature_has_x5chain_key(context):
 # Amendment (/update) steps
 # ---------------------------------------------------------------------------
 
-def _build_multipart_body(pdf_bytes, payload_text):
+def _build_multipart_body(pdf_bytes, payload_text, manifest_url=None):
     boundary = b"dcs-pdf-amendment-boundary"
     body = (
         b"--" + boundary + b"\r\n"
@@ -849,12 +849,19 @@ def _build_multipart_body(pdf_bytes, payload_text):
         + pdf_bytes
         + b"\r\n"
         b"--" + boundary + b"\r\n"
-        b'Content-Disposition: form-data; name="payload"; filename="payload.jsonld"\r\n'
+        b'Content-Disposition: form-data; name="payload"; filename="contract.jsonld"\r\n'
         b"Content-Type: application/ld+json\r\n\r\n"
         + payload_text.encode("utf-8")
         + b"\r\n"
-        b"--" + boundary + b"--\r\n"
     )
+    if manifest_url is not None:
+        body += (
+            b"--" + boundary + b"\r\n"
+            b'Content-Disposition: form-data; name="manifest_url"\r\n\r\n'
+            + manifest_url.encode("utf-8")
+            + b"\r\n"
+        )
+    body += b"--" + boundary + b"--\r\n"
     content_type = "multipart/form-data; boundary=" + boundary.decode()
     return body, content_type
 
@@ -899,14 +906,14 @@ def step_amended_prefix(context):
 
 @then("the amended PDF embeds the new JSON-LD payload")
 def step_amended_embeds_new_payload(context):
-    extracted = _extract_embedded_stream_by_filespec_name(context.amended_pdf, "payload.jsonld")
+    extracted = _extract_embedded_stream_by_filespec_name(context.amended_pdf, "contract.jsonld")
 
     # /update embeds the canonicalized payload form. Validate against the same
     # canonical form produced by /download for this amended payload.
     _request(context, "POST", "/download", context.amended_payload_text, "application/ld+json")
     assert context.last_response["status"] == 200, context.last_response
     expected_pdf = context.last_response["body"]
-    expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "payload.jsonld")
+    expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "contract.jsonld")
 
     assert extracted.strip() == expected.strip(), (
         f"embedded JSON-LD does not match canonical amended payload\n"
@@ -1424,7 +1431,7 @@ def _strip_embedded_jsonld(pdf_bytes):
     """Return a copy of pdf_bytes with the embedded JSON-LD stream content
     replaced by null bytes of the same length, mirroring StripEmbeddedJSONLD
     in compiler/claim.go.  All object offsets remain unchanged."""
-    needle = b"/F (payload.jsonld)"
+    needle = b"/F (contract.jsonld)"
     file_spec_pos = pdf_bytes.find(needle)
     assert file_spec_pos >= 0, "embedded JSON-LD filespec not found"
 
@@ -1502,7 +1509,7 @@ def step_claimed_longer_than_compiled(context):
 @then("the claimed PDF embeds the original JSON-LD payload")
 def step_claimed_embeds_original_payload(context):
     extracted = _extract_embedded_stream_by_filespec_name(
-        context.claimed_pdf, "payload.jsonld"
+        context.claimed_pdf, "contract.jsonld"
     )
 
     # /claim embeds the canonicalized payload form. Validate against the same
@@ -1510,7 +1517,7 @@ def step_claimed_embeds_original_payload(context):
     _request(context, "POST", "/download", context.payload_text, "application/ld+json")
     assert context.last_response["status"] == 200, context.last_response
     expected_pdf = context.last_response["body"]
-    expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "payload.jsonld")
+    expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "contract.jsonld")
 
     assert extracted.strip() == expected.strip(), (
         f"claimed PDF embedded JSON-LD does not match canonical payload\n"
@@ -1566,9 +1573,9 @@ def _get_stage_pdf(context, stage):
 
 @when('I extract and recompile the embedded JSON-LD from the "{stage}" PDF')
 def step_extract_and_recompile(context, stage):
-    """Extract the embedded payload.jsonld from the named PDF stage and recompile it."""
+    """Extract the embedded contract.jsonld from the named PDF stage and recompile it."""
     pdf = _get_stage_pdf(context, stage)
-    extracted = _extract_embedded_stream_by_filespec_name(pdf, "payload.jsonld")
+    extracted = _extract_embedded_stream_by_filespec_name(pdf, "contract.jsonld")
     _request(context, "POST", "/download", extracted, "application/ld+json")
     assert context.last_response["status"] == 200, (
         f"recompile from {stage} PDF embedded JSON-LD failed "
@@ -1822,6 +1829,54 @@ def step_updated_pdf_has_no_manifest_url(context):
     c2pa_bytes = context.last_response["body"]
     assert b"remote_manifests" not in c2pa_bytes, (
         "remote_manifests key unexpectedly present in C2PA manifest store"
+    )
+
+
+@when('I amend the PDF with a new payload and manifest_url "{manifest_url}":')
+def step_amend_with_manifest_url(context, manifest_url):
+    payload_text = context.text.strip().replace("http://127.0.0.1:8080", context.server_url)
+    resolved_manifest_url = manifest_url.replace("http://127.0.0.1:8080", context.server_url)
+    context.manifest_url = resolved_manifest_url
+    body, content_type = _build_multipart_body(
+        context.compiled_pdf, payload_text, manifest_url=resolved_manifest_url
+    )
+    _request(context, "POST", "/update", body, content_type)
+    if context.last_response["status"] == 200:
+        context.updated_pdf = context.last_response["body"]
+        _save_artifact(context, context.updated_pdf, "_updated_with_manifest_url")
+
+
+def _extract_active_manifest_from_updated_pdf(context):
+    _request(context, "POST", "/manifest/extract", context.updated_pdf, "application/pdf")
+    assert context.last_response["status"] == 200, (
+        f"manifest/extract failed: {context.last_response['body'][:300]}"
+    )
+    c2pa_bytes = context.last_response["body"]
+    return _extract_active_manifest_jumbf_box(c2pa_bytes)
+
+
+@then("the updated PDF C2PA claim has no remote_manifests field")
+def step_updated_pdf_claim_has_no_remote_manifests_field(context):
+    active_manifest = _extract_active_manifest_from_updated_pdf(context)
+    claim_cbor = _find_cbor_payload_in_manifest(active_manifest, "c2pa.claim.v2")
+    assert claim_cbor is not None, "c2pa.claim.v2 not found in active manifest"
+    claim = cbor2.loads(claim_cbor)
+    assert "remote_manifests" not in claim, (
+        f"claim unexpectedly contains a standalone remote_manifests field: {sorted(claim.keys())}"
+    )
+
+
+@then('the updated PDF C2PA manifest embeds a dcs.remote_manifests assertion for "{manifest_url}"')
+def step_updated_pdf_has_remote_manifests_assertion(context, manifest_url):
+    resolved_manifest_url = manifest_url.replace("http://127.0.0.1:8080", context.server_url)
+    active_manifest = _extract_active_manifest_from_updated_pdf(context)
+    remote_manifests_cbor = _find_cbor_payload_in_manifest(active_manifest, "dcs.remote_manifests")
+    assert remote_manifests_cbor is not None, (
+        "dcs.remote_manifests assertion not found in active manifest"
+    )
+    payload = cbor2.loads(remote_manifests_cbor)
+    assert payload.get("remote_manifests") == [resolved_manifest_url], (
+        f"dcs.remote_manifests assertion does not equal [{resolved_manifest_url!r}]: {payload}"
     )
 
 

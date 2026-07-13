@@ -32,6 +32,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -51,6 +52,33 @@ var embeddedTSACert = func() *x509.Certificate {
 	if err != nil {
 		panic("tsa: failed to parse certs/tsa.crt: " + err.Error())
 	}
+	return cert
+}()
+
+// trustedTSACert is the certificate TSR signatures are verified against. It
+// defaults to the compile-time embedded certs/tsa.crt; deployments running
+// their own TSA (e.g. the in-cluster dev TSA in the ORCE chart's localTSA
+// mode) override it via TSA_TRUST_CERT_FILE. A set-but-unloadable file is
+// fatal: silently falling back to the embedded cert would make every
+// timestamp verification fail later with a far less obvious error.
+var trustedTSACert = func() *x509.Certificate {
+	path := os.Getenv("TSA_TRUST_CERT_FILE")
+	if path == "" {
+		return embeddedTSACert
+	}
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		panic("tsa: TSA_TRUST_CERT_FILE is set but unreadable: " + err.Error())
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		panic("tsa: TSA_TRUST_CERT_FILE does not contain a PEM certificate: " + path)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		panic("tsa: failed to parse TSA_TRUST_CERT_FILE " + path + ": " + err.Error())
+	}
+	log.Printf("tsa: trusting TSA certificate from %s (subject %s)", path, cert.Subject)
 	return cert
 }()
 
@@ -307,10 +335,10 @@ func Verify(tsrBase64 string, data any) (bool, error) {
 		return false, fmt.Errorf("TSR hash mismatch")
 	}
 
-	// Verify the TSA's cryptographic signature using the embedded certificate.
-	// embeddedTSACert was parsed from certs/tsa.crt at package init time.
+	// Verify the TSA's cryptographic signature against the trusted TSA
+	// certificate (embedded default or TSA_TRUST_CERT_FILE override).
 	pool := x509.NewCertPool()
-	pool.AddCert(embeddedTSACert)
+	pool.AddCert(trustedTSACert)
 	p7, err := pkcs7.Parse(ts.RawToken)
 	if err != nil {
 		return false, fmt.Errorf("parse TSR token: %w", err)

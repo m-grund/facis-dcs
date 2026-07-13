@@ -1,12 +1,38 @@
 """Behave environment hooks for DCS BDD tests."""
 
 import os
+import socket
 import sys
 from pathlib import Path
 import psycopg2
 
 
 SKIP_TAGS = {"skip", "skipped"}
+
+
+def _install_localhost_resolver_fallback():
+    """RFC 6761 reserves *.localhost for loopback, but not every resolver
+    actually implements that (e.g. plain /etc/nsswitch.conf 'dns' without
+    'files' or a wildcard stub). The two-instance BDD suite's did:web
+    hostnames (dcs-a.localhost, dcs-b.localhost) need to resolve host-side
+    without editing /etc/hosts or using sudo (explicit harness constraint) —
+    so wrap socket.getaddrinfo: only for hostnames ending in '.localhost'
+    that the real resolver fails to resolve, synthesize a loopback (127.0.0.1)
+    result instead of raising. A no-op wherever the system resolver already
+    handles it (e.g. GitHub runners via systemd-resolved), since the real
+    resolver is always tried first.
+    """
+    real_getaddrinfo = socket.getaddrinfo
+
+    def _getaddrinfo(host, port, *args, **kwargs):
+        try:
+            return real_getaddrinfo(host, port, *args, **kwargs)
+        except socket.gaierror:
+            if isinstance(host, str) and host.endswith(".localhost"):
+                return real_getaddrinfo("127.0.0.1", port, *args, **kwargs)
+            raise
+
+    socket.getaddrinfo = _getaddrinfo
 
 
 def _normalize_tag(tag):
@@ -80,6 +106,8 @@ def before_scenario(context, scenario):
 
 
 def before_all(context):
+	_install_localhost_resolver_fallback()
+
 	steps_dir = Path(__file__).resolve().parent / "steps"
 	steps_dir_str = str(steps_dir)
 	if steps_dir_str not in sys.path:

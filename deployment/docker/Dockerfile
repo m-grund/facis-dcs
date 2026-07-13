@@ -107,6 +107,7 @@ COPY --from=go-builder --chown=$DOCKER_USER:$DOCKER_USER \
 COPY --from=go-builder /build/gen/http/openapi3.json /app/gen/http/openapi3.json
 COPY --chown=$DOCKER_USER:$DOCKER_USER docs/semantic-ontology/ /app/docs/semantic-ontology/
 COPY --chown=$DOCKER_USER:$DOCKER_USER docs/ontology/ /app/docs/ontology/
+COPY --chown=$DOCKER_USER:$DOCKER_USER docs/policies/ /app/docs/policies/
 
 # Copy built frontend from frontend-builder stage
 COPY --from=frontend-builder --chown=$DOCKER_USER:$DOCKER_USER /frontend/dist /app/web/dist

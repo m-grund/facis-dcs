@@ -563,7 +563,9 @@ def step_when_export_and_verify(context, name):
 
 @when('the contract search endpoint is queried with state filter "{state}"')
 def step_when_search_by_state(context, state):
-    headers = getattr(context, "headers", {})
+    # /contract/search is JWT-gated; lifecycle Givens seed with per-role
+    # headers and never set context.headers, so self-authorize when absent.
+    headers = getattr(context, "headers", None) or AuthService.get_headers_for_roles(["Contract Manager"])
     context.requests_response = _requests.get(
         contract_search_url(context),
         params={"state": state},

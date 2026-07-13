@@ -175,7 +175,7 @@ All endpoints are served on `DCS_PDF_CORE_ADDR` (default `0.0.0.0:8080`).
 ```bash
 curl -X POST http://localhost:8080/download \
   -H "Content-Type: application/ld+json" \
-  --data-binary @payload.jsonld \
+  --data-binary @contract.jsonld \
   -o document.pdf
 ```
 
@@ -208,7 +208,7 @@ Verifies that an external payload produces the same page content as the submitte
 ```bash
 curl -X POST http://localhost:8080/claim \
   -F "pdf=@external.pdf" \
-  -F "payload=@payload.jsonld" \
+  -F "payload=@contract.jsonld" \
   -o claimed.pdf
 ```
 

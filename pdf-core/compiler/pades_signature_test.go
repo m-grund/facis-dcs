@@ -3,24 +3,32 @@ package compiler
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"log"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/digitorus/pkcs7"
+	"github.com/digitorus/timestamp"
+
+	"example.com/m/V2/internal/pdfsign/sign"
 )
 
 const padesTestPayload = `{
@@ -353,5 +361,195 @@ func TestPreviousStartXrefToleratesBlankLine(t *testing.T) {
 	}
 	if got != 423908 {
 		t.Fatalf("startxref offset = %d, want 423908", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TSA protocol fix (bodyless GET {TSA.URL}/{sha256-hex}, per
+// deployment/helm/charts/orce/flows/tsa_orce_flow.json) and the PAdES-B-B
+// fallback's WARN log.
+// ---------------------------------------------------------------------------
+
+// buildTestSignData constructs a sign.SignData for the "SignerOne" field
+// using the shared test PAdES signing material (see
+// ensurePAdESTestServer), with TSA set to tsaURL (empty disables the
+// timestamp). Unlike SignPAdES's cached loadPAdESMaterial, this re-resolves
+// the material from the current environment on every call, so tests can
+// point at their own per-test TSA server without fighting SignPAdES's
+// process-wide sync.Once (which locks in whatever DCS_PDF_CORE_TSA_URL was
+// set — or unset — the first time any test calls SignPAdES).
+func buildTestSignData(t *testing.T, tsaURL string) sign.SignData {
+	t.Helper()
+	material := resolvePAdESMaterial(os.Getenv, os.ReadFile)
+	if material.err != nil {
+		t.Fatalf("resolvePAdESMaterial: %v", material.err)
+	}
+	signData := sign.SignData{
+		Signature: sign.SignDataSignature{
+			CertType:   sign.ApprovalSignature,
+			DocMDPPerm: sign.AllowFillingExistingFormFieldsAndSignaturesPerms,
+			Info: sign.SignDataSignatureInfo{
+				Name: "SignerOne",
+				Date: time.Now().UTC(),
+			},
+		},
+		ExistingSignatureFieldName: "SignerOne",
+		Signer:                     material.signer,
+		DigestAlgorithm:            crypto.SHA256,
+		Certificate:                material.leaf,
+		CertificateChains:          [][]*x509.Certificate{material.chain},
+	}
+	if tsaURL != "" {
+		signData.TSA = sign.TSA{URL: tsaURL}
+	}
+	return signData
+}
+
+// compileAndEmbedForTest compiles padesTestPayload and embeds signing
+// evidence, returning a PDF ready for signPAdESWithFallback/signPAdESBytes.
+func compileAndEmbedForTest(t *testing.T) []byte {
+	t.Helper()
+	ensurePAdESTestServer(t)
+	ctx := context.Background()
+	compiledAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	base, err := CompilePDF(ctx, []byte(padesTestPayload), compiledAt)
+	if err != nil {
+		t.Fatalf("CompilePDF: %v", err)
+	}
+	evidence := []byte(`{"type":["VerifiableCredential","ContractSigningSummaryCredential"],"pid":"eyJ.aaa~bbb~ccc"}`)
+	embedded, err := EmbedSigningEvidence(base, evidence)
+	if err != nil {
+		t.Fatalf("EmbedSigningEvidence: %v", err)
+	}
+	return embedded
+}
+
+// startMockORCETSAServer starts an httptest server speaking the shape the
+// deployed ORCE TSA flow actually implements
+// (deployment/helm/charts/orce/flows/tsa_orce_flow.json): a bodyless GET at
+// /tsa/{sha256-hex}, responding with a raw RFC 3161 TSR (TimeStampResp).
+func startMockORCETSAServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	tsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate TSA key: %v", err)
+	}
+	tsaTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(3),
+		Subject:               pkix.Name{CommonName: "DCS mock ORCE TSA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageTimeStamping},
+	}
+	tsaDER, err := x509.CreateCertificate(rand.Reader, tsaTmpl, tsaTmpl, tsaKey.Public(), tsaKey)
+	if err != nil {
+		t.Fatalf("create TSA cert: %v", err)
+	}
+	tsaCert, err := x509.ParseCertificate(tsaDER)
+	if err != nil {
+		t.Fatalf("parse TSA cert: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/tsa/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		hashHex := strings.TrimPrefix(r.URL.Path, "/tsa/")
+		hashBytes, err := hex.DecodeString(hashHex)
+		if err != nil || len(hashBytes) != 32 {
+			http.Error(w, "bad hash", http.StatusBadRequest)
+			return
+		}
+		ts := timestamp.Timestamp{
+			HashAlgorithm:     crypto.SHA256,
+			HashedMessage:     hashBytes,
+			Time:              time.Now().UTC(),
+			Policy:            asn1.ObjectIdentifier{1, 2, 3, 4, 1},
+			Ordering:          true,
+			AddTSACertificate: true,
+		}
+		tsr, err := ts.CreateResponseWithOpts(tsaCert, tsaKey, crypto.SHA256)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/timestamp-reply")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(tsr)
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
+}
+
+// TestSignPAdESEmbedsRealTimestampWhenTSAWorks is the key regression test for
+// the TSA protocol fix: GetTSA previously POSTed a client-built ASN.1
+// TimeStampReq to the bare TSA URL, but the deployed ORCE TSA flow
+// (deployment/helm/charts/orce/flows/tsa_orce_flow.json) serves a bodyless
+// GET at {TSA.URL}/{sha256-hex}. Against a server that speaks that shape, a
+// real RFC 3161 timestamp token must be embedded as an unauthenticated CMS
+// attribute (id-aa-timeStampToken, 1.2.840.113549.1.9.16.2.14).
+func TestSignPAdESEmbedsRealTimestampWhenTSAWorks(t *testing.T) {
+	embedded := compileAndEmbedForTest(t)
+	tsaServer := startMockORCETSAServer(t)
+
+	signData := buildTestSignData(t, tsaServer.URL+"/tsa")
+	signed, err := signPAdESWithFallback(embedded, signData)
+	if err != nil {
+		t.Fatalf("signPAdESWithFallback: %v", err)
+	}
+
+	_, der := byteRangeContentAndCMS(t, signed)
+	timeStampTokenOID, err := asn1.Marshal(asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 16, 2, 14})
+	if err != nil {
+		t.Fatalf("marshal id-aa-timeStampToken OID: %v", err)
+	}
+	if !bytes.Contains(der, timeStampTokenOID) {
+		t.Error("signed CMS does not carry the id-aa-timeStampToken (1.2.840.113549.1.9.16.2.14) unauthenticated attribute; the TSA timestamp was not embedded")
+	}
+}
+
+// TestSignPAdESLogsWarningOnTSAFallback verifies that when the TSA fails,
+// SignPAdES's PAdES-B-B fallback (kept, not removed) is loud about it: a WARN
+// line naming the TSA URL and the underlying error, rather than silently
+// downgrading the signature with no trace.
+func TestSignPAdESLogsWarningOnTSAFallback(t *testing.T) {
+	embedded := compileAndEmbedForTest(t)
+
+	// A server that is closed before use guarantees every request to it fails
+	// with connection refused.
+	deadServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadServer.Close()
+
+	signData := buildTestSignData(t, deadServer.URL+"/tsa")
+
+	var logBuf bytes.Buffer
+	originalOutput := log.Writer()
+	originalFlags := log.Flags()
+	log.SetOutput(&logBuf)
+	log.SetFlags(0)
+	defer func() {
+		log.SetOutput(originalOutput)
+		log.SetFlags(originalFlags)
+	}()
+
+	signed, err := signPAdESWithFallback(embedded, signData)
+	if err != nil {
+		t.Fatalf("signPAdESWithFallback: %v (fallback to PAdES-B-B should have succeeded)", err)
+	}
+	if len(signed) == 0 {
+		t.Fatal("signPAdESWithFallback returned no bytes despite a nil error")
+	}
+
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "WARN pades: TSA "+deadServer.URL+"/tsa failed") {
+		t.Errorf("expected a WARN log naming the failed TSA URL, got: %q", logOutput)
+	}
+	if !strings.Contains(logOutput, "falling back to PAdES-B-B (no timestamp)") {
+		t.Errorf("expected the WARN log to name the PAdES-B-B fallback, got: %q", logOutput)
 	}
 }

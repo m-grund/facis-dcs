@@ -101,7 +101,7 @@ spec:
               MODULE={{ .Values.pkcs11.modulePath | quote }}
               SO_PIN={{ .Values.pkcs11.provisioning.soPin | quote }}
               SECRET_NAME={{ include "digital-contracting-service.hsmX5ChainSecretName" . | quote }}
-              IDENTITY_SECRET_NAME="dcs-identity"
+              IDENTITY_SECRET_NAME={{ include "digital-contracting-service.identitySecretName" . | quote }}
               DID_HOSTNAME={{ include "digital-contracting-service.didHostname" . | quote }}
               CRL_URL={{ printf "http://%s:%v%s/crl/dcs-c2pa.crl" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
 
@@ -175,9 +175,12 @@ spec:
               )"
               put_secret "$SECRET_NAME" "$x5chain_payload"
 
-              # Publish did.json as the dcs-identity Secret the backend mounts at
-              # DCS_DID — replaces the static kubectl-create-secret previously run
-              # from tests/bdd/Makefile's kind_deploy target before this job existed.
+              # Publish did.json as the identity Secret (identitySecretName
+              # helper — <fullname>-identity, unique per release so two BDD
+              # releases in one namespace don't collide) that the backend
+              # mounts at DCS_DID — replaces the static kubectl-create-secret
+              # previously run from tests/bdd/Makefile's kind_deploy target
+              # before this job existed.
               did_json="$(jq -Rs . < "$TOKEN_DIR/did.json")"
               identity_payload="$(cat <<EOF
               {

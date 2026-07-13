@@ -1,5 +1,6 @@
 """Contract workflow steps for negotiation, adjustment, and approval slices."""
 import datetime
+import time
 
 from behave import given, then, when
 
@@ -10,6 +11,7 @@ from steps.support.api_client import (
     contract_approve_url,
     contract_create_url,
     contract_negotiate_url,
+    contract_audit_url,
     contract_reject_url,
     contract_retrieve_by_id_url,
     contract_submit_url,
@@ -58,6 +60,32 @@ def step_given_contract_negotiation_complete(context, name):
 @given('contract "{name}" has completed multiple negotiation rounds')
 def step_given_contract_multiple_negotiation_rounds(context, name):
     ContractService._create_contract_in_draft(context, name)
+    creator_h = context.contract_seed_headers[name]
+    manager = AuthService.username_for_roles(["Contract Manager"])
+    for change, flag, reason in (
+        ("Round 1: tighten SLA wording", "accept", ""),
+        ("Round 2: extend liability cap", "reject", "cap too high"),
+    ):
+        did, updated_at = ContractService._contract_data(context, name)
+        resp = post_json(
+            context,
+            contract_negotiate_url(context),
+            {"did": did, "updated_at": updated_at, "negotiated_by": manager, "change_request": change},
+            headers=creator_h,
+        )
+        assert resp.status_code == 200, f"negotiation round failed: {resp.text}"
+        refreshed = ContractService._refresh_contract(context, name)
+        negotiation_id = (refreshed.get("negotiations") or [])[-1]["id"]
+        resp = post_json(
+            context,
+            f"{context.base_url}/contract/respond",
+            {"id": str(negotiation_id), "action_flag": flag,
+             "rejected_by": manager if flag == "reject" else "",
+             "rejection_reason": reason},
+            headers=creator_h,
+        )
+        assert resp.status_code == 200, f"negotiation {flag} failed: {resp.text}"
+    ContractService._refresh_contract(context, name)
 
 
 @when('I open contract "{name}" for negotiation')
@@ -111,6 +139,7 @@ def step_when_approve_contract(context, name):
 @when('I reject contract "{name}" with reason "{reason}"')
 def step_when_reject_contract(context, name, reason):
     did, updated_at = ContractService._contract_data(context, name)
+    context.last_rejection = {"name": name, "reason": reason}
     context.requests_response = post_json(
         context,
         contract_reject_url(context),
@@ -318,6 +347,7 @@ def step_when_approve_redline(context):
 @when('I reject the redline proposal with reason "{reason}"')
 def step_when_reject_redline(context, reason):
     name = "Service Agreement"
+    context.last_redline_rejection_reason = reason
     did, _ = ContractService._contract_data(context, name)
     refresh = ContractService._refresh_contract(context, name)
     negotiations = refresh.get("negotiations") or []
@@ -575,7 +605,7 @@ def step_then_comment_attributed(context):
     negotiations = retrieve.json().get("negotiations") or []
     assert negotiations, "Expected at least one negotiation entry"
     last = negotiations[-1]
-    assert last.get("negotiated_by"), f"Negotiation entry missing 'negotiated_by': {last}"
+    assert last.get("created_by"), f"Negotiation entry missing 'created_by': {last}"
 
 
 @then("the comment includes a timestamp")
@@ -636,6 +666,19 @@ def step_then_change_applied(context):
     )
 
 
+@then("the approval is logged in the negotiation log")
+def step_then_approval_in_negotiation_log(context):
+    refreshed = ContractService._refresh_contract(context, "Service Agreement")
+    decisions = [
+        d
+        for entry in (refreshed.get("negotiations") or [])
+        for d in (entry.get("negotiation_decisions") or [])
+    ]
+    assert any(str(d.get("decision", "")).upper() == "ACCEPTED" for d in decisions), (
+        f"Expected an ACCEPTED decision in the negotiation log, got: {decisions}"
+    )
+
+
 @then("a new version is created")
 def step_then_new_contract_version(context):
     body = context.requests_response.json()
@@ -647,6 +690,47 @@ def step_then_proposal_rejected(context):
     assert context.requests_response.status_code == 200, (
         f"Expected rejection to succeed (200), got {context.requests_response.status_code}: "
         f"{context.requests_response.text}"
+    )
+
+
+@then("the rejection reason is logged")
+def step_then_rejection_reason_logged(context):
+    reason = getattr(context, "last_redline_rejection_reason", None)
+    assert reason, "No rejection reason recorded by the reject step"
+    refreshed = ContractService._refresh_contract(context, "Service Agreement")
+    decisions = [
+        d
+        for entry in (refreshed.get("negotiations") or [])
+        for d in (entry.get("negotiation_decisions") or [])
+    ]
+    rejected = [d for d in decisions if str(d.get("decision", "")).upper() == "REJECTED"]
+    assert rejected, f"Expected a REJECTED decision in the negotiation log, got: {decisions}"
+    assert any(reason in str(d.get("rejection_reason", "")) for d in rejected), (
+        f"Expected rejection reason '{reason}' to be logged, got: {rejected}"
+    )
+
+
+@then("the original text is retained")
+def step_then_original_text_retained(context):
+    refreshed = ContractService._refresh_contract(context, "Service Agreement")
+    contract_data = refreshed.get("contract_data") or {}
+    assert contract_data, "Expected contract_data to remain present after rejection"
+    assert "dcs:documentStructure" in str(contract_data), (
+        "Expected the contract's document structure (original text) to remain intact"
+    )
+
+
+@then("I see approvals and rejections")
+def step_then_see_approvals_and_rejections(context):
+    body = context.requests_response.json()
+    decisions = [
+        d
+        for entry in (body.get("negotiations") or [])
+        for d in (entry.get("negotiation_decisions") or [])
+    ]
+    kinds = {str(d.get("decision", "")).upper() for d in decisions}
+    assert "ACCEPTED" in kinds and "REJECTED" in kinds, (
+        f"Expected the negotiation log to contain both ACCEPTED and REJECTED decisions, got: {kinds}"
     )
 
 
@@ -729,20 +813,52 @@ def step_then_rejection_logged(context):
     assert body.get("did"), f"No DID in reject response: {body}"
 
 
-@then('the contract status returns to "Draft"')
-def step_then_contract_returns_draft(context):
-    body = context.requests_response.json()
-    did = body.get("did")
-    assert did, f"No DID in reject response: {body}"
-    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did))
-    assert retrieve.status_code == 200, retrieve.text
-    state = str(retrieve.json().get("state", "")).upper()
-    assert state == "DRAFT", f"Expected contract to revert to DRAFT after rejection, got '{state}'"
-
-
 @then("the contract is returned for revision")
 def step_then_contract_returned_revision(context):
-    step_then_contract_returns_draft(context)
+    # SRS (Contract Approval post-condition): a rejected contract is returned
+    # to negotiation with the Approver's comments. Prove the reopen path
+    # end-to-end: resubmit the rejected contract and require NEGOTIATION,
+    # then require the rejection (with its reason) in the audit trail.
+    rejection = getattr(context, "last_rejection", None)
+    assert rejection, "No rejection recorded by the reject step"
+    name, reason = rejection["name"], rejection["reason"]
+    ContractService._refresh_contract(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
+    creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
+    resubmit = post_json(
+        context,
+        contract_submit_url(context),
+        ContractService._contract_submit_payload(context, did, updated_at),
+        headers=creator_h,
+    )
+    assert resubmit.status_code == 200, (
+        f"Resubmit of rejected contract failed: {resubmit.status_code} — {resubmit.text}"
+    )
+    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=creator_h)
+    assert retrieve.status_code == 200, retrieve.text
+    state = str(retrieve.json().get("state", "")).upper()
+    assert state == "NEGOTIATION", (
+        f"Expected rejected contract to reopen into NEGOTIATION on resubmit, got '{state}'"
+    )
+    # Rejection reason must be retrievable from the audit trail (anchored
+    # asynchronously by the outbox processor — poll generously).
+    auditor_h = AuthService.get_headers_for_roles(["Auditor"])
+    events, found = [], False
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        resp = post_json(context, contract_audit_url(context), {"did": did}, headers=auditor_h)
+        assert resp.status_code == 200, f"Audit query failed: {resp.status_code} {resp.text}"
+        events = resp.json()
+        assert isinstance(events, list), f"Expected audit response list, got: {events}"
+        reject_events = [e for e in events if str(e.get("event_type", "")).upper() == "REJECT_CONTRACT"]
+        if reject_events and any(reason in str(e) for e in reject_events):
+            found = True
+            break
+        time.sleep(2)
+    assert found, (
+        f"Expected a REJECT_CONTRACT audit event carrying reason '{reason}', got: "
+        f"{[e.get('event_type') for e in events]}"
+    )
 
 
 @then('the contract is marked as "Approved"')

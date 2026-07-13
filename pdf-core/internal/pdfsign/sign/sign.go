@@ -140,22 +140,7 @@ func (context *SignContext) SignPDF() error {
 			return fmt.Errorf("certificate is required")
 		}
 
-		switch context.SignData.Certificate.SignatureAlgorithm.String() {
-		case "SHA1-RSA":
-		case "ECDSA-SHA1":
-		case "DSA-SHA1":
-			context.SignatureMaxLength += uint32(hex.EncodedLen(128))
-		case "SHA256-RSA":
-		case "ECDSA-SHA256":
-		case "DSA-SHA256":
-			context.SignatureMaxLength += uint32(hex.EncodedLen(256))
-		case "SHA384-RSA":
-		case "ECDSA-SHA384":
-			context.SignatureMaxLength += uint32(hex.EncodedLen(384))
-		case "SHA512-RSA":
-		case "ECDSA-SHA512":
-			context.SignatureMaxLength += uint32(hex.EncodedLen(512))
-		}
+		context.SignatureMaxLength += signatureAlgorithmMaxLengthHint(context.SignData.Certificate.SignatureAlgorithm.String())
 
 		// Add size of digest algorithm twice (for file digist and signing certificate attribute)
 		context.SignatureMaxLength += uint32(hex.EncodedLen(context.SignData.DigestAlgorithm.Size() * 2))
@@ -306,4 +291,30 @@ func (context *SignContext) SignPDF() error {
 	}
 
 	return nil
+}
+
+// signatureAlgorithmMaxLengthHint returns the extra byte-length headroom to
+// reserve in the signature placeholder for a certificate's signature
+// algorithm family (hex-encoded, hence [hex.EncodedLen]). sigAlg is the
+// string form of an [x509.SignatureAlgorithm] (e.g. "SHA256-RSA"). Unknown
+// algorithms add no extra headroom.
+//
+// Grouped with comma-joined case lists rather than one case per algorithm
+// name: Go switch statements do not fall through between cases, so listing
+// "SHA1-RSA" and "ECDSA-SHA1" as separate empty cases above a shared body
+// (the original, buggy form of this function) silently reserves zero extra
+// bytes for every algorithm except the last name in each group.
+func signatureAlgorithmMaxLengthHint(sigAlg string) uint32 {
+	switch sigAlg {
+	case "SHA1-RSA", "ECDSA-SHA1", "DSA-SHA1":
+		return uint32(hex.EncodedLen(128))
+	case "SHA256-RSA", "ECDSA-SHA256", "DSA-SHA256":
+		return uint32(hex.EncodedLen(256))
+	case "SHA384-RSA", "ECDSA-SHA384":
+		return uint32(hex.EncodedLen(384))
+	case "SHA512-RSA", "ECDSA-SHA512":
+		return uint32(hex.EncodedLen(512))
+	default:
+		return 0
+	}
 }

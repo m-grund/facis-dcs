@@ -179,8 +179,22 @@ spec:
               {{- else }}
               value: {{ include "digital-contracting-service.issuerDID" . | quote }}
               {{- end }}
+            {{- if .Values.identity.enabled }}
+            # DID identity (DCS_DID is fatal on startup when missing): did.json
+            # is mounted from the Secret the hsm-provision post-install hook
+            # publishes (see the 'identitySecretName' helper).
+            - name: DCS_DID
+              value: {{ printf "%s/did.json" .Values.identity.mountPath | quote }}
+            {{- end }}
             - name: TSA_URL
               value: {{ .Values.signing.tsaURL | quote }}
+            {{- if .Values.signing.tsaTrustCertSecret }}
+            # Trust anchor for verifying RFC3161 tokens issued by an in-cluster
+            # dev TSA (ORCE chart localTSA mode) instead of the compile-time
+            # embedded certs/tsa.crt.
+            - name: TSA_TRUST_CERT_FILE
+              value: /etc/dcs/tsa-trust/tsa-cert.pem
+            {{- end }}
             # ---- IPFS storage -------------------------------------------------------
             - name: IPFS_TENANT_BASE_URL
               {{- if .Values.ipfs.tenantBaseURLSecretRef.name }}
@@ -251,7 +265,7 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.customCA.enabled .Values.volumeMounts .Values.pkcs11.provisioning.enabled }}
+          {{- if or .Values.customCA.enabled .Values.volumeMounts .Values.pkcs11.provisioning.enabled .Values.identity.enabled .Values.signing.tsaTrustCertSecret }}
           volumeMounts:
           {{- if .Values.customCA.enabled }}
             - name: custom-ca-certs
@@ -261,6 +275,16 @@ spec:
           {{- if .Values.pkcs11.provisioning.enabled }}
             - name: hsm-token
               mountPath: {{ .Values.pkcs11.provisioning.tokenDir | quote }}
+          {{- end }}
+          {{- if .Values.identity.enabled }}
+            - name: identity
+              mountPath: {{ .Values.identity.mountPath | quote }}
+              readOnly: true
+          {{- end }}
+          {{- if .Values.signing.tsaTrustCertSecret }}
+            - name: tsa-trust
+              mountPath: /etc/dcs/tsa-trust
+              readOnly: true
           {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -291,7 +315,7 @@ spec:
             limits:
               memory: 64Mi
         {{- end }}
-      {{- if or .Values.customCA.enabled .Values.volumes .Values.pkcs11.provisioning.enabled .Values.statusListLocalhostProxy.enabled }}
+      {{- if or .Values.customCA.enabled .Values.volumes .Values.pkcs11.provisioning.enabled .Values.statusListLocalhostProxy.enabled .Values.identity.enabled .Values.signing.tsaTrustCertSecret }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
@@ -307,6 +331,19 @@ spec:
         - name: statuslist-localhost-proxy-config
           configMap:
             name: {{ include "digital-contracting-service.fullname" . }}-statuslist-localhost-proxy
+      {{- end }}
+      {{- if .Values.identity.enabled }}
+        - name: identity
+          secret:
+            secretName: {{ include "digital-contracting-service.identitySecretName" . | quote }}
+      {{- end }}
+      {{- if .Values.signing.tsaTrustCertSecret }}
+        - name: tsa-trust
+          secret:
+            secretName: {{ .Values.signing.tsaTrustCertSecret | quote }}
+            items:
+              - key: tsa-cert.pem
+                path: tsa-cert.pem
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

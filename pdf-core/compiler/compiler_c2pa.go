@@ -273,7 +273,7 @@ func renderC2PAManifestStore(ctx context.Context, contractID string, payloadHash
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", [][]byte{manifestBox}), nil
 }
 
-func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, contractID string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
+func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, contractID string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time, remoteManifestURL string) ([]byte, error) {
 	manifestBoxes, err := extractTopLevelManifestBoxes(originalC2PA)
 	if err != nil {
 		return nil, err
@@ -293,7 +293,7 @@ func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, m
 	originalManifestHash := sha256.Sum256(originalManifestBox[8:])
 	originalSignatureHash := sha256.Sum256(originalSignatureBox[8:])
 
-	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, contractID, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions, compiledAt)
+	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, contractID, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions, compiledAt, remoteManifestURL)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, m
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", children), nil
 }
 
-func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, contractID string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
+func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, contractID string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time, remoteManifestURL string) ([]byte, error) {
 	updateLabel := manifestLabel
 	hardBindingLabel := "c2pa.hash.data"
 	hardBindingPayload := renderMinimalDataHashAssertionCBOR(hardBindingHash, exclusions)
@@ -333,8 +333,17 @@ func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string,
 		lifecycleURI = absoluteAssertionURI(updateLabel, "dcs.lifecycle")
 		assertionChildren = append(assertionChildren, lifecycleBox)
 	}
+	var remoteManifestsURI string
+	var remoteManifestsHash [32]byte
+	if remoteManifestURL != "" {
+		remoteManifestsPayload := renderRemoteManifestsAssertionCBOR(remoteManifestURL)
+		remoteManifestsBox := renderJUMBFSuperbox(cborUUID, 0x03, "dcs.remote_manifests", [][]byte{renderBMFFBox("cbor", remoteManifestsPayload)})
+		remoteManifestsHash = sha256.Sum256(remoteManifestsBox[8:])
+		remoteManifestsURI = absoluteAssertionURI(updateLabel, "dcs.remote_manifests")
+		assertionChildren = append(assertionChildren, remoteManifestsBox)
+	}
 	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", assertionChildren)
-	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:], lifecycleURI, lifecycleHash[:])
+	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:], lifecycleURI, lifecycleHash[:], remoteManifestsURI, remoteManifestsHash[:])
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	protected := buildCoseProtectedHeadersWithX5Chain()
@@ -559,7 +568,7 @@ func renderVerificationActionsAssertionCBOR(ingredientURI string, ingredientHash
 	)
 }
 
-func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte, lifecycleURI string, lifecycleHash []byte) []byte {
+func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte, lifecycleURI string, lifecycleHash []byte, remoteManifestsURI string, remoteManifestsHash []byte) []byte {
 	instanceID := "xmp:iid:" + uuidFromHashPrefix(payloadHash)
 	hardBindingRef := cborMap(
 		cborText("url"), cborText(hardBindingURI),
@@ -586,20 +595,46 @@ func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardB
 		cborText("version"), cborText("1.0"),
 	)
 	// Remote-manifest discovery (DCS-OR-C2PA-008 AC3) is NOT expressed here as a
-	// claim field: c2pa-rs 0.85.1 / c2patool 0.26.61 reject an unrecognized
-	// "remote_manifests" V2 claim field outright ("claim could not be converted
-	// from CBOR"), breaking every DCS PDF that ever carried one. The
-	// C2PA-normative mechanism — a dcterms:provenance link in the XMP metadata —
-	// is emitted instead, by renderXMPMetadata via the update appendix builders
-	// in update.go. See pdf-core/features/manifest_url.feature.
+	// standalone "remote_manifests" claim field: c2pa-rs 0.85.1 / c2patool
+	// 0.26.61 reject an unrecognized "remote_manifests" V2 claim field outright
+	// ("claim could not be converted from CBOR"), breaking every DCS PDF that
+	// ever carried one. Instead, when a manifest URL is supplied, a normal
+	// named assertion — "dcs.remote_manifests", holding {"remote_manifests":
+	// [url]} — is added to the assertion store (see
+	// renderRemoteManifestsAssertionCBOR) and referenced here as a
+	// hashed-URI in created_assertions, exactly like any other assertion
+	// (mirroring dcs.lifecycle). The C2PA-normative discovery mechanism — a
+	// dcterms:provenance link in the XMP metadata — is emitted in addition,
+	// by renderXMPMetadata via the update appendix builders in update.go.
+	// See pdf-core/features/manifest_url.feature.
+	createdAssertions := [][]byte{hardBindingRef, ingredientRef, actionsRef, lifecycleRef}
+	if remoteManifestsURI != "" {
+		remoteManifestsRef := cborMap(
+			cborText("url"), cborText(remoteManifestsURI),
+			cborText("alg"), cborText("sha256"),
+			cborText("hash"), cborBytes(remoteManifestsHash),
+		)
+		createdAssertions = append(createdAssertions, remoteManifestsRef)
+	}
 	pairs := [][]byte{
 		cborText("instanceID"), cborText(instanceID),
 		cborText("claim_generator_info"), claimGenInfo,
 		cborText("alg"), cborText("sha256"),
 		cborText("signature"), cborText(absoluteSignatureURI(manifestLabel)),
-		cborText("created_assertions"), cborArray(hardBindingRef, ingredientRef, actionsRef, lifecycleRef),
+		cborText("created_assertions"), cborArray(createdAssertions...),
 	}
 	return cborMap(pairs...)
+}
+
+// renderRemoteManifestsAssertionCBOR builds the dcs.remote_manifests named
+// assertion payload: {"remote_manifests": [url]}. This is a normal C2PA
+// assertion (mirroring renderLifecycleAssertionCBOR), NOT a claim field —
+// see the comment in renderVerificationClaimCBOR for why the two must not
+// be conflated.
+func renderRemoteManifestsAssertionCBOR(url string) []byte {
+	return cborMap(
+		cborText("remote_manifests"), cborArray(cborText(url)),
+	)
 }
 
 func buildCoseProtectedHeadersWithX5Chain() []byte {

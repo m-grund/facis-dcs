@@ -146,6 +146,8 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		ContractData:    normalizedContractData,
 		TemplateDID:     cmd.TemplateDID,
 		TemplateVersion: contractTemplate.TemplateVersion,
+		Name:            contractTemplate.Name,
+		Description:     contractTemplate.Description,
 		Responsible:     &resp,
 	}
 	err = h.CRepo.Create(ctx, tx, data)
@@ -162,6 +164,8 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		DID:          cmd.DID,
 		TemplateDID:  cmd.TemplateDID,
 		CreatedBy:    cmd.CreatedBy,
+		Name:         contractTemplate.Name,
+		Description:  contractTemplate.Description,
 		ContractData: normalizedContractData,
 		OccurredAt:   data.CreatedAt,
 		HolderDID:    cmd.HolderDID,

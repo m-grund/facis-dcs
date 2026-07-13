@@ -358,15 +358,33 @@ Key within the x5chain Secret for pdf-core C2PA signing.
 
 {{/*
 The host:port a did:web identifier encodes for THIS instance's own did.json
-(DCS-OR-C2PA-008), derived from route.publicBaseURL — the same origin
-callers actually reach this instance at.
+(DCS-OR-C2PA-008). route.didHostname is an explicit override (needed when the
+did:web hostname differs from route.publicBaseURL's host — e.g. the BDD
+two-instance suite's cluster-routable dcs-a.localhost/dcs-b.localhost
+hostnames, which resolve via a CoreDNS rewrite rather than being the literal
+ingress host callers use for every path); falling back to publicBaseURL's
+host, then the in-cluster default, keeps every existing single-host
+deployment unchanged.
 */}}
 {{- define "digital-contracting-service.didHostname" -}}
-{{- if .Values.route.publicBaseURL -}}
+{{- if .Values.route.didHostname -}}
+{{- .Values.route.didHostname -}}
+{{- else if .Values.route.publicBaseURL -}}
 {{- (urlParse .Values.route.publicBaseURL).host -}}
 {{- else -}}
 {{- printf "localhost:%v" .Values.service.port -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Name of the Secret the hsm-provision Job publishes did.json into and that the
+deployment mounts as the 'identity' volume (DCS_DID) when identity.enabled is
+true. Derived from <fullname> so two releases sharing one namespace (e.g. the
+BDD two-instance suite's 'dcs' / 'dcs2' releases) never collide on a shared
+literal name.
+*/}}
+{{- define "digital-contracting-service.identitySecretName" -}}
+{{- default (printf "%s-identity" (include "digital-contracting-service.fullname" .)) .Values.identity.secretName -}}
 {{- end }}
 
 {{/*

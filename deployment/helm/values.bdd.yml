@@ -39,21 +39,19 @@ extraEnv:
     value: "true"
   - name: AUTH_INSECURE_COOKIES
     value: "true"
-  # DID identity (fatal on startup when missing). The dcs-identity secret is
-  # published by the hsm-provision post-install/post-upgrade hook job,
-  # generated from the freshly provisioned in-cluster HSM token key.
-  - name: DCS_DID
-    value: /app/identity/did.json
+  # Reciprocal trust for the @two-instance peer-trust scenarios (Workstream
+  # C1-C3, docs/anforderung.md): instance B's DID (see values.bdd2.yml's own
+  # DCS_TRUSTED_PEERS for the other half of this pair). Seeded at startup by
+  # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv (~:304/665).
+  - name: DCS_TRUSTED_PEERS
+    value: "did:web:dcs-b.localhost%3A18080"
 
-volumeMounts:
-  - name: identity
-    mountPath: /app/identity
-    readOnly: true
-
-volumes:
-  - name: identity
-    secret:
-      secretName: dcs-identity
+# DID identity (fatal on startup when missing). The <fullname>-identity
+# Secret (identitySecretName helper) is published by the hsm-provision
+# post-install/post-upgrade hook job, generated from the freshly provisioned
+# in-cluster HSM token key.
+identity:
+  enabled: true
 
 oid4vp:
   trust:
@@ -111,6 +109,19 @@ ingress:
         # DCS_API_PATH, so the BDD harness needs it routed at the origin root.
         # Full path (not /.well-known): hydra.route.paths already claims the
         # /.well-known prefix for OIDC discovery, and the longer path wins.
+        - path: /.well-known/did.json
+          pathType: Prefix
+    # Cluster-routable did:web hostname for this instance (Workstream C1-C3,
+    # docs/anforderung.md two-instance peer-trust suite): dcs-a.localhost
+    # resolves in-cluster via a CoreDNS rewrite to the shared Traefik Service
+    # (tests/bdd/scripts/kind_coredns_rewrite.sh) and, host-side, via the
+    # RFC 6761 *.localhost fallback resolver in environment.py. Same paths as
+    # the host-agnostic "localhost" rule above, which stays untouched — both
+    # host rules route to this same release's backend Service.
+    - host: dcs-a.localhost
+      paths:
+        - path: /digital-contracting-service
+          pathType: Prefix
         - path: /.well-known/did.json
           pathType: Prefix
 
@@ -213,22 +224,45 @@ ipfsDocumentManager:
 
 # ORCE (Timestamp Authority): required — TSA_URL is fatal on startup.
 # Disable persistence: kind has no default PV provisioner for the ORCE PVC.
+# Ingress exposes the contract-target-flow's HTTP-in endpoint
+# (POST /contract-target/deploy) through the shared Traefik at the public
+# origin, so the BDD runner reaches it without a port-forward — identical
+# path locally and on CI. The /tsa flow itself signs locally (localTSA in the
+# orce chart) — no external timestamp authority is contacted.
 orce:
   enabled: true
   persistence:
     enabled: false
+  ingress:
+    enabled: true
+    hosts:
+      - host: "localhost"
+        path: /contract-target
 
 signing:
   # Wired as TSA_URL env var; fatal on startup if empty.
   tsaURL: "http://dcs-orce:1880/tsa/"
-  # did:web host must resolve *inside the DCS pod* for the self-peer BDD scenarios
-  # (FetchDIDDocumentFromHostname → http://localhost:8991/.well-known/did.json,
-  # i.e. the DCS container itself). Percent-encoded colon per did:web spec.
-  issuerDID: "did:web:localhost%3A8991"
+  # In-cluster dev TSA (orce chart localTSA): verify tokens against the
+  # provisioned dev TSA cert instead of the embedded production cert.
+  tsaTrustCertSecret: "dcs-orce-tsa-material"
+  # did:web host must be reachable both from outside the cluster (host-side
+  # BDD steps resolving via environment.py's *.localhost fallback) and from
+  # inside the DCS pod itself (dcs_to_dcs.go's did:web challenge-response
+  # resolves https://<hostname>/.well-known/did.json — including this
+  # instance's OWN hostname for the self-peer BDD scenarios). dcs-a.localhost
+  # resolves in-cluster via the CoreDNS rewrite
+  # (tests/bdd/scripts/kind_coredns_rewrite.sh) to the shared Traefik Service,
+  # which routes it right back to this same instance (see the ingress host
+  # rule above) — so this one hostname satisfies both cases. Percent-encoded
+  # colon per did:web spec. Must equal route.didHostname below.
+  issuerDID: "did:web:dcs-a.localhost%3A18080"
 
 route:
   basePath: "/digital-contracting-service"
   publicBaseURL: "http://localhost:18080/digital-contracting-service/api"
+  # Explicit did:web hostname override (see the 'didHostname' helper) — must
+  # match signing.issuerDID's host component above.
+  didHostname: "dcs-a.localhost:18080"
 
 # Monitoring disabled: default storageClassName 'local-path' is not available in kind,
 # causing Prometheus/Alertmanager PVCs to stay Pending and helm --wait to time out.

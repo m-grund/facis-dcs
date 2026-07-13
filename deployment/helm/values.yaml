@@ -93,11 +93,28 @@ archiveNotary:
 route:
   basePath: "/digital-contracting-service"
   publicBaseURL: ""
+  # Explicit override for the did:web hostname (see the 'didHostname' helper
+  # in _helpers.tpl). Empty falls back to publicBaseURL's host. Only needed
+  # when the did:web identifier's hostname differs from publicBaseURL's host
+  # (e.g. a cluster-routable hostname resolved via a CoreDNS rewrite rather
+  # than being the literal ingress host, as in the BDD two-instance suite).
+  didHostname: ""
 
 # Override individual paths (derived from route.basePath if not set)
 paths:
   api: ""
   ui: ""
+
+# DID identity Secret mount (DCS_DID). Disabled by default: most deployments
+# derive their signing identity from the PKCS#11 token directly. Enabled by
+# the BDD kind harness, where a post-install hsm-provision Job publishes
+# did.json (freshly derived from the in-cluster SoftHSM2 token key) into the
+# Secret named by the 'identitySecretName' helper.
+identity:
+  enabled: false
+  # Override the auto-derived <fullname>-identity Secret name.
+  secretName: ""
+  mountPath: "/app/identity"
 
 # Keycloak realm URL for Federated Catalogue.
 fcKeycloak:
@@ -143,6 +160,10 @@ signing:
 
   # RFC 3161 Timestamp Authority (optional; activates real timestamps on C2PA manifests).
   tsaURL: ""
+  # Optional: Secret (key tsa-cert.pem) holding the TSA certificate to trust
+  # for RFC3161 token verification, overriding the embedded certs/tsa.crt
+  # (mounted at /etc/dcs/tsa-trust, wired as TSA_TRUST_CERT_FILE).
+  tsaTrustCertSecret: ""
 
 # ---- PKCS#11 signing token (DCS-IR-HI-01) -----------------------------
 # Every private key is held in a PKCS#11 token. With provisioning.enabled a

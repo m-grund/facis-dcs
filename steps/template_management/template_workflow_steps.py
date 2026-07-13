@@ -95,8 +95,7 @@ def step_given_templates_exist_with_name_and_description(context, name, title):
     did, updated_at = TemplateService.create_fresh_template(context, name, title=title)
     TemplateService.store_named(context, name, did, updated_at)
 
-@given('template "{name}" is approved and available')
-def step_given_template_approved_available(context, name):
+def _approve_named_template(context, name):
     did, updated_at = TemplateService.create_fresh_template(context)
     updated_at = TemplateService.do_submit(context, did, updated_at)
     updated_at = TemplateService.do_recommend_for_approval(context, did, updated_at)
@@ -110,9 +109,19 @@ def step_given_template_approved_available(context, name):
     context.template_dids[name] = did
 
 
+@given('template "{name}" is approved and available')
+def step_given_template_approved_available(context, name):
+    # "available" for contract creation means REGISTERED — contract/create only
+    # accepts templates in REGISTERED/PUBLISHED state.
+    _approve_named_template(context, name)
+    _register_named_template(context, name)
+
+
 @given('template "{name}" is in "Approved" status')
 def step_given_template_approved_status(context, name):
-    step_given_template_approved_available(context, name)
+    # Approve only — scenarios using this Given transition FROM Approved
+    # (e.g. "Register approved template") and must not pre-register.
+    _approve_named_template(context, name)
 
 
 def _register_named_template(context, name):

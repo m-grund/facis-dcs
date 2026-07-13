@@ -110,6 +110,7 @@ func normalizeVCJSONLD(doc interface{}) (string, error) {
 	opts := ld.NewJsonLdOptions("")
 	opts.Algorithm = ld.AlgorithmURDNA2015
 	opts.Format = "application/n-quads"
+	opts.DocumentLoader = vcDocumentLoader()
 	norm, err := proc.Normalize(doc, opts)
 	if err != nil {
 		return "", err

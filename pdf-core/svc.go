@@ -318,8 +318,11 @@ func (s *service) update(w http.ResponseWriter, r *http.Request) {
 	}
 	vcBytes := parts["vc"] // optional
 	// manifest_url (DCS-OR-C2PA-008 AC3): when the DCS hosting layer supplies a
-	// public manifest URL, it is embedded as the C2PA claim's remote_manifests
-	// field. Absent (the default) => no remote_manifests entry is emitted.
+	// public manifest URL, it is embedded via a dcs.remote_manifests C2PA
+	// assertion (not a claim field — c2pa-rs 0.85.1 hard-rejects an
+	// unrecognized "remote_manifests" claim field, see the comment in
+	// renderVerificationClaimCBOR) plus an XMP dcterms:provenance link.
+	// Absent (the default) => neither is emitted.
 	manifestURL := strings.TrimSpace(string(parts["manifest_url"]))
 
 	now := time.Now()

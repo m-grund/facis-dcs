@@ -9,14 +9,19 @@ import (
 
 // TestUpdatePDFWithManifestURLEmbedsXMPProvenance verifies that
 // UpdatePDFWithOptions references the remote manifest URL (DCS-OR-C2PA-008
-// AC3) via the C2PA-normative XMP dcterms:provenance link, NOT via a
-// non-standard "remote_manifests" claim field. c2pa-rs 0.85.1 (c2patool
-// 0.26.61) hard-rejects an unrecognized "remote_manifests" V2 claim field
-// ("claim could not be converted from CBOR"), which broke c2patool/veraPDF
-// validation for every DCS-produced PDF that ever had a manifest URL — i.e.
-// almost all of them, since every lifecycle update passes one. The XMP link
-// is the mechanism real C2PA-conformant tools actually expect for remote
-// manifest discovery.
+// AC3) via:
+//  1. the C2PA-normative XMP dcterms:provenance link, AND
+//  2. a normal "dcs.remote_manifests" C2PA assertion (mirroring
+//     dcs.lifecycle) holding {"remote_manifests": [url]},
+//
+// but NOT via a standalone "remote_manifests" field on the claim
+// (c2pa.claim.v2) itself. c2pa-rs 0.85.1 (c2patool 0.26.61) hard-rejects an
+// unrecognized "remote_manifests" V2 claim field ("claim could not be
+// converted from CBOR"), which broke c2patool/veraPDF validation for every
+// DCS-produced PDF that ever had a manifest URL — i.e. almost all of them,
+// since every lifecycle update passes one. Expressing the URL as a regular
+// assertion (referenced from the claim only via an opaque hashed-URI, same
+// as every other assertion) sidesteps that hard rejection.
 func TestUpdatePDFWithManifestURLEmbedsXMPProvenance(t *testing.T) {
 	const manifestURL = "http://localhost:8991/api/c2pa/manifest/did:example:contract-42"
 
@@ -42,8 +47,45 @@ func TestUpdatePDFWithManifestURLEmbedsXMPProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractManifestStore: %v", err)
 	}
-	if bytes.Contains(store, []byte("remote_manifests")) {
-		t.Error("manifest store must no longer contain the non-standard remote_manifests claim field")
+
+	manifestBoxes, err := extractTopLevelManifestBoxes(store)
+	if err != nil {
+		t.Fatalf("extractTopLevelManifestBoxes: %v", err)
+	}
+	if len(manifestBoxes) == 0 {
+		t.Fatalf("no manifests found in updated manifest store")
+	}
+	activeManifest := manifestBoxes[len(manifestBoxes)-1]
+
+	claimBox, err := extractLabeledChildJUMBFBox(activeManifest, "c2pa.claim.v2")
+	if err != nil {
+		t.Fatalf("extract c2pa.claim.v2: %v", err)
+	}
+	// CBOR major type 3 (text string) header for a 16-byte string is
+	// 0x60 | 16 = 0x70. "remote_manifests" is exactly 16 ASCII characters, so
+	// this byte sequence is the standalone CBOR text item that would appear
+	// as a literal claim field name — as opposed to occurring merely as a
+	// substring of a longer string (e.g. the "dcs.remote_manifests"
+	// assertion label or its "self#jumbf=..." reference URL, both of which
+	// use different, longer CBOR text headers and are expected to appear).
+	standaloneRemoteManifestsField := append([]byte{0x70}, []byte("remote_manifests")...)
+	if bytes.Contains(claimBox, standaloneRemoteManifestsField) {
+		t.Error("c2pa.claim.v2 must not contain a standalone 'remote_manifests' CBOR text field")
+	}
+
+	assertionStore, err := extractLabeledChildJUMBFBox(activeManifest, "c2pa.assertions")
+	if err != nil {
+		t.Fatalf("extract c2pa.assertions: %v", err)
+	}
+	remoteManifestsBox, err := extractLabeledChildJUMBFBox(assertionStore, "dcs.remote_manifests")
+	if err != nil {
+		t.Fatalf("dcs.remote_manifests assertion not found in assertion store: %v", err)
+	}
+	if !bytes.Contains(remoteManifestsBox, standaloneRemoteManifestsField) {
+		t.Error("dcs.remote_manifests assertion is missing its 'remote_manifests' CBOR text field")
+	}
+	if !bytes.Contains(remoteManifestsBox, []byte(manifestURL)) {
+		t.Errorf("dcs.remote_manifests assertion does not contain the manifest URL %q", manifestURL)
 	}
 
 	if err := VerifyIncrementalUpdate(context.Background(), updated); err != nil {
