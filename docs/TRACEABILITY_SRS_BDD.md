@@ -75,7 +75,7 @@ decision (see `features/22_real_signing_vertical` AC20 header), not a coverage h
 | DCS-FR-CWE-12 | Termination Handling | ✅ Covered | 06/contract_termination: terminate with reason, double-termination guard (tagged @DCS-FR-CWE-11/12). |
 | DCS-FR-CWE-13 | Contract Creation | ✅ Covered | 03/contract_creation create-from-template, editable versioned draft. |
 | DCS-FR-CWE-14 | Contract Submission for Review | ✅ Covered | 03 state machine AC5 submit→review→approve; 'Submit contract for review after negotiation' (this pass). |
-| DCS-FR-CWE-15 | Contract Review and Approval | ✅ Covered | 03/contract_approval: reject-with-comments (green) + approve/initiate/all-approvals implemented this pass; rejection returns contract for revision (verified reopen). |
+| DCS-FR-CWE-15 | Contract Review and Approval | ✅ Covered | 03/contract_approval approve/reject/initiate; partial-quorum enforcement proven with two DISTINCT approver peers in 17/two_instance AC9: one approval leaves the contract REVIEWED, the second flips it APPROVED with both peer decisions recorded. |
 | DCS-FR-CWE-16 | Contract Initiation | ✅ Covered | 'Contract transitions to signing phase upon approval' implemented this pass; sign-after-approve already proven in 22. |
 | DCS-FR-CWE-17 | Contract Review | 🟡 Partial | Redlining + version compare via history endpoint (this pass); automated missing-field checks via structural validation (20 AC1/2). Side-by-side diff is a UI concern. |
 | DCS-FR-CWE-18 | Contract Negotiation | ✅ Covered | 03/contract_negotiation: comments, redlines (green); decision rounds + negotiation log implemented this pass. |
@@ -103,7 +103,7 @@ decision (see `features/22_real_signing_vertical` AC20 header), not a coverage h
 | DCS-FR-SM-04 | Counterparty Authorization and PoA Credential Chain Verification | 🟡 Partial | Credential status/revocation is checked on every verification (status-list check in each verify path, per entscheidungen_zu_den_blockern.txt) — a revoked PoA blocks the login that gates signing. Chain-walk to a trust anchor remains roadmap (deviation 8). |
 | DCS-FR-SM-05 | Integration with Signing Identity and PoA Verifiable Credentials | ✅ Covered | W3C-compliant SD-JWT VC + KB-JWT presented, verified, embedded verbatim under the PAdES signature (22 AC14, AC17). |
 | DCS-FR-SM-06 | Wallet for Identity, PoA Credential Management, and Signing | 🟡 Partial | Wallet protocol surface (OID4VP presentation, headless) proven (22 AC12–13); a real end-user wallet app is outside the harness. |
-| DCS-FR-SM-07 | Multi-Signature and Role-Based Signing Flows | 🟡 Partial | Role-gated signing (roles enforced at request/apply, 22 AC10); multi-signature ordering/dependency flows not yet exercised — gap noted for a follow-up scenario. |
+| DCS-FR-SM-07 | Multi-Signature and Role-Based Signing Flows | 🟡 Partial | Role-gated signing (roles enforced at request/apply, 22 AC10). Multi-signature mechanics PROVEN at the signing layer (pdf-core TestPAdESSecondSignatureProbe: second approval signature appends incrementally, both CAdES structures intact); the product workflow (ordering/dependencies, and evidence placement — signer 2's evidence attachment after signature 1 would trip strict PAdES diff analysis, so the compliant model is all-ceremonies-before-first-signature) is a designed feature still to land. |
 | DCS-FR-SM-08 | Persisted Contract Signing Summary with Verifiable Credential and P… | ✅ Covered | 22 AC15 ContractSigningSummaryCredential issued + embedded; AC14 PDF/A-3 attachment under signature (tagged @DCS-FR-SM-08). |
 | DCS-FR-SM-09 | Secure Human-Readable Contract Viewer | 🟡 Partial | Same as CWE-05: tamper-evidence of served content proven; viewer UI out of harness. |
 | DCS-FR-SM-10 | Proof of Contract Execution | ✅ Covered | 05 AC9 TSA-timestamped execution receipt appended to archive (tagged @DCS-FR-SM-10). |
@@ -113,7 +113,7 @@ decision (see `features/22_real_signing_vertical` AC20 header), not a coverage h
 | DCS-FR-SM-14 | Signature Request from Signer | ✅ Covered | 22 AC10/AC11 POST /signature/request + status polling (tagged @FR-SM-14). |
 | DCS-FR-SM-15 | Contract Retrieval for Signing | ✅ Covered | Signed-PDF retrieval with validation exercised throughout 22 (AC5 IPFS-CID persisted artifact). |
 | DCS-FR-SM-16 | Apply Digital Signature (via Cloud PCM or OCM Signer API Endpoint) | ✅ Covered | 22 AC1–AC6 real PAdES via HSM path (tagged @DCS-FR-SM-16). |
-| DCS-FR-SM-17 | Multi-Signer Support | 🟡 Partial | Independent verifiability per signature proven for the single-signer flow; multi-signer same-contract flow not yet exercised — gap noted with SM-07. |
+| DCS-FR-SM-17 | Multi-Signer Support | 🟡 Partial | Independent per-signature verifiability proven single-signer (22) and mechanically for a second incremental signature (pdf-core probe test, see SM-07); the multi-signer apply workflow (EventSign re-entry from SIGNED + evidence-placement model) is the remaining feature work. |
 | DCS-FR-SM-18 | Signature Validation | ✅ Covered | Signature validate endpoint scenario added this pass (04/signature_validation, @DCS-FR-SM-18). |
 | DCS-FR-SM-19 | Audit Log for Signatures | ✅ Covered | Signature audit-log scenario added this pass (@DCS-FR-SM-19). |
 | DCS-FR-SM-20 | Signature Revocation | ✅ Covered | 15 revocation → REVOKED + re-approval path (tagged @DCS-FR-SM-20). |
