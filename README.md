@@ -1,6 +1,6 @@
 # Digital Contracting Service (DCS)
 
-[![Behavior Tests](https://github.com/dasimonde/facis-dcs/actions/workflows/bdd-kind.yml/badge.svg)](https://github.com/dasimonde/facis-dcs/actions/workflows/bdd-kind.yml)
+[![Behavior Tests](https://github.com/eclipse-xfsc/facis-dcs/actions/workflows/bdd-kind.yml/badge.svg)](https://github.com/eclipse-xfsc/facis-dcs/actions/workflows/bdd-kind.yml)
 
 The **Digital Contracting Service** provides an **open-source platform** for creating, signing, and managing contracts digitally.  
 Integrated with the **European Digital Identity Wallet (EUDI)**, it guarantees that all digital transactions are secure, legally binding, and interoperable.  
