@@ -9,3 +9,5 @@ steps/pki_consolidation/__init__.py for the same, correct pattern.
 """
 
 from . import dcs_real_signing_vertical_steps  # noqa: F401
+from . import dcs_real_signing_vertical_tamper_steps  # noqa: F401
+from . import dcs_real_signing_vertical_orce_steps  # noqa: F401

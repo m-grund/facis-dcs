@@ -42,14 +42,15 @@ Feature: C2PA Lifecycle Assertions on Exported Contract PDFs
     And the PDF contains a C2PA manifest
 
   # DCS-OR-C2PA-003 — chain linkage between lifecycle events
-  # The NATS subscriber appends a second C2PA assertion asynchronously on state
-  # transition.  Chain-linkage correctness is covered by the Go unit tests in
-  # c2pa/embedder_test.go (TestAppendManifest_ChainLinkage).
-  # @skip: the "transitions to state" harness step is a stub (no real state
-  # transition is driven), so a second lifecycle assertion never gets
-  # appended — chain linkage stays covered by the Go unit test
-  # (c2pa/embedder_test.go TestAppendManifest_ChainLinkage).
-  @DCS-OR-C2PA-003 @skip
+  # The "transitions to state" step (steps/pdf_generation/pdf_steps.py) now
+  # drives a REAL Draft -> Under Review transition through the actual
+  # workflow API (ContractService._prepare_contract_under_review) and polls
+  # the export endpoint until the NATS subscriber's async second C2PA
+  # assertion has actually landed, so this exercises the real chain-linkage
+  # behavior end-to-end, not just the Go unit test in c2pa/embedder_test.go
+  # (TestAppendManifest_ChainLinkage), which remains a separate, faster unit
+  # of coverage for the same invariant.
+  @DCS-OR-C2PA-003
   Scenario: C2PA manifest chain links successive lifecycle events
     Given contract "Service Agreement" has been exported in "Draft" state
     When contract "Service Agreement" transitions to "Under Review" state

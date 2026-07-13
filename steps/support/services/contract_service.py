@@ -1,5 +1,7 @@
 """Contract service API client for test steps."""
 
+import os
+
 import requests
 
 from steps.support.api_client import (
@@ -50,6 +52,46 @@ class ContractService:
             assert did, f"own did.json response has no 'id' field: {resp.text}"
             context.local_peer_did_cache = did
         return context.local_peer_did_cache
+
+    @staticmethod
+    def _other_trusted_peer_did(context):
+        """DID of instance B (dcs2), pre-seeded as a mutually trusted peer of
+        this instance via DCS_TRUSTED_PEERS (deployment/helm/values.bdd.yml) —
+        needed so that CheckForUntrustedPeers (backend/internal/service/
+        contract_workflow_engine.go Create()) accepts it as a
+        reviewer/negotiator/approver DID.
+
+        Used as a stand-in for "a different, legitimate party that is NOT
+        this instance": registering it (instead of this instance's own DID,
+        see _local_peer_did) as a contract's sole reviewer/negotiator/
+        approver exercises the party-scoping denial path (FR-CWE-18,
+        IsValidNegotiator in acceptnegotiation.go/negotiate.go/
+        rejectnegotiation.go) without an actual live round-trip to instance B
+        — negotiate/respond calls made by THIS instance's own JWT-authenticated
+        users always resolve, server-side, to this instance's own peer DID
+        (CauserDID = s.DIDDocument.GetID(), see internal/service/
+        contract_workflow_engine.go), never to instance B's.
+        """
+        if not hasattr(context, "other_trusted_peer_did_cache"):
+            from steps.support.api_client import did_document_url  # noqa: PLC0415
+
+            base_url_b = os.getenv("BDD_DCS_BASE_URL_B", "").strip()
+            assert base_url_b, (
+                "BDD_DCS_BASE_URL_B must be set (two-instance kind harness, "
+                "tests/bdd/scripts/run_bdd_helm.sh) to resolve a second trusted peer DID"
+            )
+            resp = requests.get(
+                did_document_url(base_url_b),
+                timeout=context.http_timeout_seconds,
+            )
+            assert resp.status_code == 200, (
+                f"could not fetch instance B's own did:web document: "
+                f"{resp.status_code} {resp.text}"
+            )
+            did = resp.json().get("id")
+            assert did, f"instance B did.json response has no 'id' field: {resp.text}"
+            context.other_trusted_peer_did_cache = did
+        return context.other_trusted_peer_did_cache
 
     @staticmethod
     def _template_submit_payload(context, did: str, updated_at: str) -> dict:
@@ -230,6 +272,54 @@ class ContractService:
         context.contract_updated_at[contract_name] = updated_at
         context.contract_seed_headers[contract_name] = creator_h
 
+    @staticmethod
+    def _create_contract_excluding_local_peer(context, contract_name: str):
+        """Like _create_contract_in_negotiation, but registers instance B's
+        DID (see _other_trusted_peer_did) as the sole reviewer/negotiator/
+        approver instead of this instance's own DID — this instance is
+        therefore NOT a party to the resulting contract. Used by the
+        "non-party" negotiation-denial scenarios (FR-CWE-18).
+        """
+        t_did = ContractService._create_approved_template_for_contract(context)
+        creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
+        other_peer_did = ContractService._other_trusted_peer_did(context)
+        create_payload = {
+            "template_did": t_did,
+            "reviewers": [other_peer_did],
+            "negotiators": [other_peer_did],
+            "approvers": [other_peer_did],
+        }
+        create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
+        assert create_resp.status_code == 200, create_resp.text
+        c_did = create_resp.json().get("did")
+
+        retrieve_resp = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
+        assert retrieve_resp.status_code == 200, retrieve_resp.text
+        updated_at = retrieve_resp.json().get("updated_at")
+
+        submit_payload = {
+            "did": c_did,
+            "updated_at": updated_at,
+            "reviewers": [other_peer_did],
+            "approvers": [other_peer_did],
+            "negotiators": [other_peer_did],
+        }
+        submit_resp = post_json(context, contract_submit_url(context), submit_payload, headers=creator_h)
+        assert submit_resp.status_code == 200, submit_resp.text
+
+        retrieve_resp = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
+        assert retrieve_resp.status_code == 200, retrieve_resp.text
+        assert retrieve_resp.json().get("state") == "NEGOTIATION", (
+            f'Contract should be in NEGOTIATION state, but it is {retrieve_resp.json().get("state")}'
+        )
+        updated_at = retrieve_resp.json().get("updated_at")
+
+        ContractService._ensure_store(context, "contract_dids", {})
+        ContractService._ensure_store(context, "contract_updated_at", {})
+        ContractService._ensure_store(context, "contract_seed_headers", {})
+        context.contract_dids[contract_name] = c_did
+        context.contract_updated_at[contract_name] = updated_at
+        context.contract_seed_headers[contract_name] = creator_h
 
     @staticmethod
     def _create_approved_template_with_signature_field(context, signatory_name: str) -> str:

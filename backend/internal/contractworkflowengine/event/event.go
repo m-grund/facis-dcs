@@ -378,6 +378,27 @@ func (e StoreArchivedEvent) GetDID() string {
 	return e.DID
 }
 
+// DeleteArchivedEvent is emitted when an archive entry is soft-deleted
+// (DCS-FR-CSA-17: deletion requires a justification and MUST be logged with
+// timestamp and user identity).
+type DeleteArchivedEvent struct {
+	DID           string    `json:"did"`
+	DeletedBy     string    `json:"deleted_by"`
+	Justification string    `json:"justification"`
+	EntriesMarked int       `json:"entries_marked"`
+	OccurredAt    time.Time `json:"occurred_at"`
+}
+
+// EventType implements [event.Event].
+func (e DeleteArchivedEvent) EventType() string {
+	return eventtype.DeleteArchived.String()
+}
+
+// GetDID implements [event.Event].
+func (e DeleteArchivedEvent) GetDID() string {
+	return e.DID
+}
+
 // EventType implements the Event interface.
 func (e RetrieveAllEvent) EventType() string {
 	return eventtype.RetrieveAll.String()
@@ -530,6 +551,33 @@ func (e TerminateEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e TerminateEvent) GetDID() string {
+	return e.DID
+}
+
+// RenewEvent is emitted on the newly created renewal contract when it is
+// derived from an existing (original) contract (DCS-FR-CWE-11/22,
+// DCS-FR-CSA-15). The original contract is not mutated and does not receive
+// a matching event; the link is one-directional (new -> original), recorded
+// both here and in the new contract's dcs:renewsContract JSON-LD reference.
+type RenewEvent struct {
+	DID                     string             `json:"did"`
+	HolderDID               string             `json:"holder_did"`
+	RenewedBy               string             `json:"renewed_by"`
+	OriginalDID             string             `json:"original_did"`
+	OriginalContractVersion int                `json:"original_contract_version"`
+	ContractData            *datatype.JSON     `json:"contract_data"`
+	OccurredAt              time.Time          `json:"occurred_at"`
+	UserRoles               userrole.UserRoles `json:"user_roles"`
+	Responsible             *db.Responsible    `json:"responsible,omitempty"`
+}
+
+// EventType implements the Event interface.
+func (e RenewEvent) EventType() string {
+	return eventtype.Renew.String()
+}
+
+// GetDID implements the Event interface.
+func (e RenewEvent) GetDID() string {
 	return e.DID
 }
 

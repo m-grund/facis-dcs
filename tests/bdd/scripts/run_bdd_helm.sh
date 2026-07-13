@@ -56,6 +56,27 @@ DCS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
   -o jsonpath='{.items[0].metadata.name}')"
 export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c digital-contracting-service --"
 
+# IPFS CID-swap tamper seam (steps/support/tamper_seam.py): several
+# verify-shaped endpoints always re-fetch the SERVER'S OWN stored PDF from
+# IPFS by CID, so tampered-artifact scenarios inject bytes as a NEW CID via
+# `ipfs add` exec'd inside the shared IPFS pod, then repoint the owning row's
+# CID column at it (via the existing context.db test-DB connection). IPFS is
+# a SINGLE instance shared across both BDD releases (values.bdd2.yml's
+# ipfsClient.mfsBaseURL points at "dcs-ipfs" regardless of caller instance),
+# so this is not release-scoped the way BDD_HSMSIGN_EXEC is.
+IPFS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
+  -l "app.kubernetes.io/name=ipfs,app.kubernetes.io/instance=dcs" \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].metadata.name}')"
+# -i/--stdin is required (not just harmless) here: `ipfs add -` reads its
+# content from stdin, and without --stdin the API server may not have a
+# stdin stream attached before the remote command starts reading — observed
+# in practice as an intermittent race where `ipfs add` silently succeeds
+# against an EMPTY stdin (producing the well-known empty-file CID
+# Qmb...4Q7Vs-style hash) instead of the intended bytes, rather than a
+# reliable failure.
+export BDD_IPFS_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec -i ${IPFS_POD} --"
+
 mkdir -p .tmp .reports/junit
 REPORTS_JUNIT_DIR="$PWD/.reports/junit"
 

@@ -491,6 +491,32 @@ var ContractTerminateResponse = Type("ContractTerminateResponse", func() {
 	Required("did")
 })
 
+var ContractRenewRequest = Type("ContractRenewRequest", func() {
+	Description("Contract renew request: create a new linked contract instance from an existing one (DCS-FR-CWE-11/22, DCS-FR-CSA-15). The original contract is not mutated; the new instance starts in DRAFT carrying the original's template reference, metadata, and responsible parties, plus a dcs:renewsContract reference back to the original's DID and version.")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract to renew")
+	Attribute("updated_at", String, "The caller's view of the original contract's last update timestamp (optimistic concurrency guard)")
+
+	Attribute("new_start_date", String, "Optional start date for the new renewal term; defaults to the original's start date if omitted")
+	Attribute("new_exp_date", String, "Optional expiry date for the new renewal term; defaults to the original's expiry date if omitted")
+	Attribute("new_exp_policy", String, "Optional expiry policy for the new renewal term; defaults to the original's expiry policy if omitted")
+	Attribute("new_exp_notice_period", Int, "Optional notice period (in days) for the new renewal term; defaults to the original's notice period if omitted")
+
+	Required("did", "updated_at")
+})
+
+var ContractRenewResponse = Type("ContractRenewResponse", func() {
+	Description("Result for renewing a contract")
+
+	Attribute("did", String, "Decentralized Identifier of the newly created renewal contract")
+	Attribute("renews_did", String, "Decentralized Identifier of the original contract this renewal references")
+	Attribute("renews_contract_version", Int, "Contract version of the original contract at the time of renewal")
+
+	Required("did", "renews_did", "renews_contract_version")
+})
+
 var ContractAuditRequest = Type("ContractAuditRequest", func() {
 	Description("Contract audit request")
 
@@ -1065,6 +1091,31 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			POST("/contract/terminate")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("renew", func() {
+		Description("renew a contract: create a new linked contract instance from an existing one, retaining references to the original's DID, version, and signatures (DCS-FR-CWE-11/22, DCS-FR-CSA-15).")
+		Meta("dcs:requirements", "DCS-FR-CWE-11", "DCS-FR-CWE-22", "DCS-FR-CSA-15")
+		Meta("dcs:cwe:components", "")
+		Meta("dcs:ui", "Contract Management Dashboard")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+		})
+
+		Payload(ContractRenewRequest)
+		Result(ContractRenewResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/contract/renew")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

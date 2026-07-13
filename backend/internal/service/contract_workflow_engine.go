@@ -102,7 +102,11 @@ func mapContractCommandError(err error) error {
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, validation.ErrContractHierarchyInvalid) ||
 		errors.Is(err, command.ErrContractHierarchyCycle) ||
-		errors.Is(err, command.ErrDeploymentNotFound) {
+		errors.Is(err, command.ErrDeploymentNotFound) ||
+		errors.Is(err, command.ErrContractNotRenewable) ||
+		errors.Is(err, command.ErrNotAParty) ||
+		errors.Is(err, command.ErrConflictOfInterest) ||
+		errors.Is(err, db.ErrNoMatchingDecision) {
 		return contractworkflowengine.MakeBadRequest(err)
 	}
 	return contractworkflowengine.MakeInternalError(err)
@@ -1070,6 +1074,74 @@ func (s *contractWorkflowEnginesrvc) Terminate(ctx context.Context, req *contrac
 
 	return &contractworkflowengine.ContractTerminateResponse{
 		Did: req.Did,
+	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) Renew(ctx context.Context, req *contractworkflowengine.ContractRenewRequest) (res *contractworkflowengine.ContractRenewResponse, err error) {
+
+	err = s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	updatedAt, err := time.Parse(time.RFC3339, req.UpdatedAt)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	did, err := base.GenerateID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	var newStartDate, newExpDate *time.Time
+	if req.NewStartDate != nil {
+		parsed, err := time.Parse(time.RFC3339, *req.NewStartDate)
+		if err != nil {
+			return nil, contractworkflowengine.MakeBadRequest(err)
+		}
+		newStartDate = &parsed
+	}
+	if req.NewExpDate != nil {
+		parsed, err := time.Parse(time.RFC3339, *req.NewExpDate)
+		if err != nil {
+			return nil, contractworkflowengine.MakeBadRequest(err)
+		}
+		newExpDate = &parsed
+	}
+
+	cmd := command.RenewCmd{
+		DID:                *did,
+		OriginalDID:        req.Did,
+		RenewedBy:          middleware.GetParticipantID(ctx),
+		HolderDID:          middleware.GetHolderDID(ctx),
+		UserRoles:          middleware.GetUserRoles(ctx),
+		UpdatedAt:          updatedAt,
+		NewStartDate:       newStartDate,
+		NewExpDate:         newExpDate,
+		NewExpPolicy:       req.NewExpPolicy,
+		NewExpNoticePeriod: req.NewExpNoticePeriod,
+	}
+	handler := command.Renewer{
+		DB:          s.DB,
+		CRepo:       s.CRepo,
+		RTRepo:      s.RTRepo,
+		ATRepo:      s.ATRepo,
+		NTRepo:      s.NTRepo,
+		DIDDocument: s.DIDDocument,
+	}
+	result, err := handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, mapContractCommandError(err)
+	}
+
+	return &contractworkflowengine.ContractRenewResponse{
+		Did:                   *did,
+		RenewsDid:             req.Did,
+		RenewsContractVersion: result.OriginalContractVersion,
 	}, nil
 }
 

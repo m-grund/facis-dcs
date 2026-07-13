@@ -30,10 +30,7 @@ Feature: Contract Negotiation
     And the original text is preserved
     And the redline proposal is visible to other negotiators
 
-  # @skip: contract version history is not exposed as a queryable API yet
-  # (retrieve returns only the current contract_version) — needs backend
-  # capability, not just step definitions.
-  @skip
+  @clean_db
   Scenario: Track version history during negotiation
     Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has multiple negotiation edits
@@ -42,12 +39,7 @@ Feature: Contract Negotiation
     And I see user attribution for each version
     And old versions remain accessible
 
-  # @skip: negotiation decisions are peer-DID-scoped (decision rows are keyed
-  # by the responsible peer DID); POST /contract/respond by an individual user
-  # returns 200 but matches no decision row, so ACCEPTED/REJECTED never
-  # surfaces in the log. Asserting decision outcomes needs backend capability
-  # (user-scoped decision recording or rows-affected enforcement).
-  @skip
+  @clean_db
   Scenario: Approve proposed change during negotiation
     Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has a pending redline proposal on clause "Liability"
@@ -56,12 +48,7 @@ Feature: Contract Negotiation
     And the approval is logged in the negotiation log
     And a new version is created
 
-  # @skip: negotiation decisions are peer-DID-scoped (decision rows are keyed
-  # by the responsible peer DID); POST /contract/respond by an individual user
-  # returns 200 but matches no decision row, so ACCEPTED/REJECTED never
-  # surfaces in the log. Asserting decision outcomes needs backend capability
-  # (user-scoped decision recording or rows-affected enforcement).
-  @skip
+  @clean_db
   Scenario: Reject proposed change during negotiation
     Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has a pending redline proposal on clause "Liability"
@@ -70,12 +57,7 @@ Feature: Contract Negotiation
     And the rejection reason is logged
     And the original text is retained
 
-  # @skip: negotiation decisions are peer-DID-scoped (decision rows are keyed
-  # by the responsible peer DID); POST /contract/respond by an individual user
-  # returns 200 but matches no decision row, so ACCEPTED/REJECTED never
-  # surfaces in the log. Asserting decision outcomes needs backend capability
-  # (user-scoped decision recording or rows-affected enforcement).
-  @skip
+  @clean_db
   Scenario: View negotiation log
     Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" has completed multiple negotiation rounds
@@ -84,11 +66,7 @@ Feature: Contract Negotiation
     And I see approvals and rejections
     And I see the full audit trail
 
-  # @skip: duplicate coverage — the NEGOTIATION→SUBMITTED path is executable
-  # and verified by contract_state_machine_refactor.feature and the
-  # "returned for revision" reopen proof in contract_approval.feature; the
-  # "Under Review"/reviewer-routing assertions here have no step definitions.
-  @skip
+  @clean_db
   Scenario: Submit contract for review after negotiation
     Given I am authenticated with roles: "Contract Manager"
     And contract "Service Agreement" negotiation is complete
@@ -103,59 +81,42 @@ Feature: Contract Negotiation
     When I attempt to add a comment to contract "Service Agreement"
     Then the request is denied with an authorization error
 
-  # @skip: party/organization-scoped negotiation ACLs (representative-of-party,
-  # per-organization attribution, non-party denial, per-reviewer assignment)
-  # are not modeled in the backend — responsibility is peer-DID-scoped
-  # (responsible.reviewers/negotiators are peer DIDs, not individual users or
-  # organizations). Needs backend capability, not step definitions.
-  @skip
+  # Rewritten to the DID-party semantics this backend actually implements
+  # (see backend/internal/contractworkflowengine/db/contractrepository.go
+  # Responsible{Reviewers,Negotiators,Approvers []string}, all peer DIDs, and
+  # IsValidNegotiator in acceptnegotiation.go/negotiate.go/
+  # rejectnegotiation.go): "party to the contract" = "this instance's own
+  # peer DID is among the contract's registered negotiator DIDs" — there is
+  # no organization/representative-of-party concept in the data model, only
+  # DID membership. FR-CWE-18's intent (only parties may negotiate) is
+  # preserved; "Acme Corp"/"TechVendor Inc" party-naming is not.
+  @clean_db
   Scenario: Only parties to contract can negotiate terms
     Given I am authenticated with roles: "Contract Reviewer"
-    And contract "Service Agreement" involves parties "Acme Corp" and "TechVendor Inc"
-    And I am a representative of party "Acme Corp"
-    When I open contract "Service Agreement" for negotiation
-    Then the negotiation interface is displayed
-    And I can add comments to contract clauses
-    And my comments are attributed to organization "Acme Corp"
+    And contract "Service Agreement" is open for negotiation
+    When I add comment "Looks good" to clause "Liability"
+    Then the comment is added to the negotiation log
+    And the comment is attributed to my identity
 
-  # @skip: party/organization-scoped negotiation ACLs (representative-of-party,
-  # per-organization attribution, non-party denial, per-reviewer assignment)
-  # are not modeled in the backend — responsibility is peer-DID-scoped
-  # (responsible.reviewers/negotiators are peer DIDs, not individual users or
-  # organizations). Needs backend capability, not step definitions.
-  @skip
+  @clean_db
   Scenario: Non-party reviewer cannot negotiate contract not assigned to them
     Given I am authenticated with roles: "Contract Reviewer"
-    And contract "Service Agreement" involves parties "Acme Corp" and "TechVendor Inc"
-    And I am a representative of organization "UnrelatedCorp"
-    When I attempt to access contract "Service Agreement" for negotiation
-    Then the request is denied with an "Access denied - not a party to this contract" error
+    And contract "Service Agreement" does not list this instance as a negotiating party
+    When I attempt to add a comment to contract "Service Agreement"
+    Then the request is denied with a "not a party to this contract" error
     And the access denial is logged
 
-  # @skip: party/organization-scoped negotiation ACLs (representative-of-party,
-  # per-organization attribution, non-party denial, per-reviewer assignment)
-  # are not modeled in the backend — responsibility is peer-DID-scoped
-  # (responsible.reviewers/negotiators are peer DIDs, not individual users or
-  # organizations). Needs backend capability, not step definitions.
-  @skip
+  @clean_db
   Scenario: Contract Creator and assigned Reviewers can negotiate
-    Given I am authenticated with roles: "Contract Manager"
-    And contract "Service Agreement" is assigned to reviewers "Alice" and "Bob"
-    And I am listed as an assigned reviewer
-    When I open contract "Service Agreement" for negotiation
-    Then I can add comments and propose redlines
-    And only assigned reviewers and the creator can see negotiation comments
+    Given I am authenticated with roles: "Contract Creator"
+    And contract "Service Agreement" is open for negotiation
+    When I add comment "Looks good" to clause "Liability"
+    Then the comment is added to the negotiation log
     And negotiation actions are logged with reviewer identity
 
-  # @skip: requires a conflict-of-interest guard in the backend respond path
-  # (acceptnegotiation.go validates the negotiator peer but has no
-  # own-proposal check — decisions are peer-scoped, so on a single instance
-  # the proposer and approver are the same peer DID). Needs a backend
-  # capability, not a step definition.
-  @skip
+  @clean_db
   Scenario: Reviewer cannot approve own redline proposals
     Given I am authenticated with roles: "Contract Reviewer"
-    And contract "Service Agreement" is open for negotiation
     And I have proposed a redline edit to clause "Liability"
     When I attempt to approve my own redline proposal
     Then the request is denied with a "Conflict of interest - cannot approve own proposal" error

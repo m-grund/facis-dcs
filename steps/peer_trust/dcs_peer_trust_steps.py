@@ -556,11 +556,24 @@ def step_when_full_approval_cross_instance(context):
         assert negotiation_id, f"Negotiation record has no id: {negotiations[-1]}"
 
     with _as_instance(context, context.base_url_b):
+        # Accept as a DIFFERENT organization than the one that proposed the
+        # change above (negotiator_h) — acceptnegotiation.go's
+        # conflict-of-interest guard (FR-CWE-07) now rejects a respond call
+        # whose participant identity (the OID4VP credential's organization
+        # claim) matches the negotiation's created_by, and both would
+        # otherwise default to the same organization ("Acme Corp") since
+        # neither call overrides it. This is orthogonal to the peer-DID
+        # authorization (IsValidNegotiator/CauserDID) this scenario is
+        # actually testing, which is unaffected by which organization the
+        # accepting credential carries.
+        accepting_negotiator_h = AuthService.get_headers_for_roles(
+            ["Contract Negotiator"], api_base=context.base_url_b, organization="TechVendor Inc"
+        )
         respond_resp = post_json(
             context,
             f"{context.base_url_b}/contract/respond",
             {"id": negotiation_id, "did": c_did, "action_flag": "ACCEPTING"},
-            headers=negotiator_h,
+            headers=accepting_negotiator_h,
         )
         context.requests_response = respond_resp
         if respond_resp.status_code != 200:

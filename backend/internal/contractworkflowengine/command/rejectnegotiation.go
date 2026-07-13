@@ -96,7 +96,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid user")
+		return ErrNotAParty
 	}
 
 	err = h.NRepo.Reject(ctx, tx, cmd.ID, cmd.CauserDID, cmd.RejectionReason)

@@ -2,6 +2,8 @@
 
 # This file ensures that step definitions in subpackages are loaded by behave
 from core import *
+from contract_lifecycle import *
+from contract_signing import *
 from template_management import *
 from frontend import *
 from pdf_generation import *

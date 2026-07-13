@@ -26,15 +26,38 @@
 #     no Gherkin scenario is appropriate for a documentation-existence
 #     check).
 #
-# AC4 (strip-then-verify) is INTENTIONALLY @skip — see the Scenario itself
-# for the detailed rationale. Summary: proving the backend's remote-manifest
-# fallback honestly requires the SERVER'S OWN stored/cached PDF to be
-# missing its `content_credential.c2pa` attachment. There is no HTTP-level
-# way to put the server into that state today (verify_contract_pdf always
-# re-fetches its own IPFS-cached copy by DID —
-# backend/internal/pdfgeneration/query/verifycontract.go:94-103 — there is
-# no upload-a-PDF-and-verify-it endpoint). This is the EXACT same class of
-# problem the codebase already hit and already resolved the same way: see
+# AC4 (strip-then-verify) is STILL @skip, but for a DIFFERENT, narrower
+# reason than before — see the Scenario itself for the original rationale
+# text. UPDATE (seam re-investigation): the "no HTTP-level way to put the
+# server into that state" half of the original rationale is now WRONG — the
+# IPFS CID-swap seam (steps/support/tamper_seam.py) that unblocked
+# contract_format_review's "Tampered PDF fails hash verification" (no
+# longer @skip) solves exactly that: it CAN get the server's own stored PDF
+# into a state missing its `content_credential.c2pa` attachment.
+#
+# What that seam does NOT solve, and why this scenario stays @skip: the
+# "remote-manifest fallback" behavior AC4 asserts (verify still succeeding,
+# "served from the remote manifest fallback") does not exist ANYWHERE in
+# backend/internal/pdfgeneration today — grepping for
+# "remote_manifest|RemoteManifest|pdf_manifest_ipfs_cid|fallback" under that
+# package finds no code path that falls back to a separately-stored
+# manifest on local-attachment-absence (verifycontract.go just calls
+# pdfCore.Verify(pdfBytes) and reports match=false on error — no fallback
+# branch). Worse, the architectural precondition for that fallback to mean
+# anything doesn't exist either: GET /c2pa/manifest/{contract_did} (the
+# "remote manifest" AC1 serves) derives its response from the EXACT SAME
+# stored PDF, via the EXACT SAME pdf_ipfs_cid column
+# (backend/internal/service/c2pa.go's GetManifest calls the same
+# ExportContractPdfHandler.Handle path verify_contract_pdf uses) — there is
+# no independently-persisted manifest copy to actually fall back to. So
+# stripping the attachment via the seam would make BOTH the verify endpoint
+# AND the "remote manifest" endpoint fail identically, not one succeed where
+# the other fails. Implementing real AC4 behavior needs backend work outside
+# this BDD-seam task's scope: persisting the C2PA manifest as an
+# independent artifact (e.g. its own IPFS CID, decoupled from the PDF's own
+# CID) at export/sign time, plus a genuine fallback branch in verify. This
+# is the EXACT same class of problem the codebase already hit and already
+# resolved the same way for its OTHER half: see
 # features/03_contract_creation/contract_format_review.feature:84-93
 # ("Tampered PDF fails hash verification", @skip, "requires injecting a
 # tampered PDF into IPFS ... covered by the Go unit tests"). AC4 follows

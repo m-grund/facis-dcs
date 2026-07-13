@@ -30,8 +30,6 @@ Feature: Contract Creation
     Then the changes are saved
     And a new version is created with timestamp and user attribution
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
-  @skip
   Scenario: Assemble contract from reusable clauses
     Given I am authenticated with roles: "Contract Creator"
     And reusable clauses "Payment Terms", "Liability", and "Confidentiality" exist
@@ -41,8 +39,6 @@ Feature: Contract Creation
     And the assembly process validates content logic
     And a draft contract is generated
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
-  @skip
   Scenario: Create contract with hierarchical structure
     Given I am authenticated with roles: "Contract Creator"
     And master agreement template "Framework Agreement" exists
@@ -51,8 +47,6 @@ Feature: Contract Creation
     And components are logically linked
     And components are version-controlled
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
-  @skip
   Scenario: Bundle multiple contracts into a package
     Given I am authenticated with roles: "Contract Manager"
     And contracts "Service Agreement" and "SLA Addendum" exist
@@ -62,8 +56,6 @@ Feature: Contract Creation
     And the package maintains shared metadata
     And the package tracks signature states
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
-  @skip
   Scenario: Auto-fill metadata from template
     Given I am authenticated with roles: "Contract Creator"
     And template "NDA Template" has predefined metadata fields
@@ -76,8 +68,6 @@ Feature: Contract Creation
     When I attempt to create a contract from template "Service Agreement Template"
     Then the request is denied with an authorization error
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
-  @skip
   Scenario: Contract Creator can only create contracts for authorized parties
     Given I am authenticated with roles: "Contract Creator"
     And I am authorized to create contracts involving party "Acme Corp"
@@ -86,8 +76,6 @@ Feature: Contract Creation
     Then the contract is created successfully
     And the contract is associated with party "Acme Corp"
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
-  @skip
   Scenario: Contract Creator cannot create contracts involving unauthorized parties
     Given I am authenticated with roles: "Contract Creator"
     And I am not authorized to create contracts with party "RestrictedVendor Inc"
@@ -96,7 +84,27 @@ Feature: Contract Creation
     And the contract creation is prevented
     And the attempt is logged
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
+  # @skip: read-scoping cannot be surfaced as a 4xx from this task's permitted
+  # edit scope. GetByIDHandler.Handle (internal/contractworkflowengine/query/
+  # contract/querybyid.go — a file this task IS allowed to edit) could reject
+  # unauthorized reads, but internal/service/contract_workflow_engine.go's
+  # RetrieveByID (line ~489, a file this task is NOT allowed to edit)
+  # unconditionally wraps every query-handler error as
+  # `templaterepository.MakeInternalError(err)` -> HTTP 500, regardless of
+  # error type — there is no branch analogous to the file's own
+  # mapContractCommandError helper for this method. The design also only
+  # registers "bad_request"/"internal_error" responses for retrieve_by_id
+  # (backend/design/contract_workflow_engine.go), so even MakeUnauthorized
+  # would not encode as 401/403 here. Landing the check anyway would silently
+  # turn every retrieve_by_id call from a non-privileged, non-party caller
+  # into a 500 with no way to special-case it — including many currently
+  # green scenarios elsewhere (03/05/06/07/12/15/20) that read contracts via
+  # a broad role (Contract Manager/Observer) without being creator/reviewer/
+  # approver — so it was not landed. Needs a one-line fix in
+  # contract_workflow_engine.go's RetrieveByID to route a new
+  # contract.ErrContractAccessDenied sentinel to
+  # contractworkflowengine.MakeBadRequest (mirroring mapContractCommandError)
+  # before this can go green without that regression risk.
   @skip
   Scenario: Created contract is accessible only to authorized parties
     Given I am authenticated with roles: "Contract Creator"
@@ -106,7 +114,11 @@ Feature: Contract Creation
     And when a representative of unrelated party "UnrelatedCorp" attempts to access the contract
     Then the access is denied with a "Not authorized to access this contract" error
 
-  # @skip: step definitions not implemented yet (undefined steps would fail the run)
+  # @skip: same backend gap as "Created contract is accessible only to
+  # authorized parties" above — GetByIDHandler.Handle could reject this
+  # denial, but internal/service/contract_workflow_engine.go's RetrieveByID
+  # (outside this task's permitted edit scope) always surfaces any
+  # query-handler error as HTTP 500, never 4xx, for this endpoint.
   @skip
   Scenario: Unauthorized party cannot access created contract
     Given I am authenticated with roles: "Contract Observer"

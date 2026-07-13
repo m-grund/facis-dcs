@@ -1,14 +1,21 @@
-# Contract lifecycle termination (UC-06-02, POST /contract/terminate,
-# backend/design/contract_workflow_engine.go). KPI monitoring for ACTIVE
-# contracts (UC-06-01) is covered by 05_contract_deployment/
-# contract_deployment.feature (Workstream G, AC11/AC12) — not duplicated here.
+# Contract lifecycle termination and renewal (UC-06-02, POST /contract/
+# terminate + POST /contract/renew, backend/design/contract_workflow_engine.go).
+# KPI monitoring for ACTIVE contracts (UC-06-01) is covered by
+# 05_contract_deployment/contract_deployment.feature (Workstream G,
+# AC11/AC12) — not duplicated here.
 #
-# Renewal (the other half of UC-06-02) is NOT covered: no /contract/renew (or
-# equivalent) endpoint exists in backend/design/*.go — grep confirms only
-# create/update/submit/negotiate/respond/review/retrieve/search/approve/
-# reject/store/terminate/audit/templates/deploy/deployment-callback methods
-# on the ContractWorkflowEngine service. Renewal is therefore a genuine gap,
-# not a broken test — see the @skip scenario below.
+# Renewal (DCS-FR-CWE-11/22, DCS-FR-CSA-15) creates a NEW, independently
+# versioned contract instance rather than mutating the original's expiry date
+# in place: SRS DCS-FR-CWE-11 ("Renewals MUST generate a new contract
+# instance with reference links") and DCS-FR-CSA-15 ("creation of renewal or
+# extension contracts linked to archived originals... retain references to
+# the prior contract's version, ID, and signatures") both describe a linked
+# sibling document, not an edit of the original. The original contract is
+# left completely intact; the new instance starts in DRAFT and carries a
+# dcs:renewsContract JSON-LD back-reference to the original's DID and
+# version (see backend/internal/contractworkflowengine/command/renew.go).
+# The scenarios below assert that honest model, not an in-place expiry-date
+# mutation.
 
 @UC-06-02 @DCS-FR-CWE-11 @DCS-FR-CWE-12
 Feature: Contract termination
@@ -27,12 +34,20 @@ Feature: Contract termination
     When the contract manager terminates contract "Double Termination Contract" with reason "second attempt"
     Then the request is denied with a client error
 
-  # @skip: FR-CWE-11/12 renewal path has no backend endpoint (SRS §3.1.1 lists
-  # no POST /contract/renew or equivalent; grep of backend/design confirms
-  # only terminate exists among lifecycle-ending actions). Deviation-register
-  # candidate: renewal is v1-undelivered, not merely untested.
-  @skip @UC-06-02 @DCS-FR-CWE-22
-  Scenario: Renew a contract before its expiry notice period
-    Given contract "Renewal Contract" has reached contract state "ACTIVE"
+  @REQ-contract-termination-AC3 @UC-06-02 @DCS-FR-CWE-11 @DCS-FR-CWE-22
+  Scenario: Contract Manager renews a contract before its expiry notice period
+    Given contract "Renewal Contract" has reached contract state "SIGNED"
+    And contract "Renewal Contract" is force-set to state "ACTIVE" directly in the database (pre-deploy test seam, bypassing the deployment chain)
     When the contract manager renews contract "Renewal Contract" for a new term
-    Then the contract "Renewal Contract" has an extended expiry date
+    Then get http 200:Success code
+    And the renewal of "Renewal Contract" is a new contract in state "DRAFT"
+    And the renewal of "Renewal Contract" has its own term dates
+    And the contract "Renewal Contract" is in state "ACTIVE"
+
+  @DCS-FR-CSA-15 @DCS-FR-CWE-22 @UC-06-02
+  Scenario: Renewal contract references the original contract's DID and version
+    Given contract "Renewal Source Contract" has reached contract state "SIGNED"
+    And contract "Renewal Source Contract" is force-set to state "ACTIVE" directly in the database (pre-deploy test seam, bypassing the deployment chain)
+    When the contract manager renews contract "Renewal Source Contract" for a new term
+    Then get http 200:Success code
+    And the renewal of "Renewal Source Contract" references the original contract's DID and version

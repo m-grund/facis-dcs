@@ -59,6 +59,10 @@ def contract_retrieve_by_id_url(context, did: str) -> str:
     return f"{context.base_url}/contract/retrieve/{did}"
 
 
+def contract_history_url(context, did: str) -> str:
+    return f"{context.base_url}/contract/history/{did}"
+
+
 def contract_verify_url(context) -> str:
     return f"{context.base_url}/contract/verify"
 
@@ -73,6 +77,10 @@ def contract_withdraw_url(context) -> str:
 
 def contract_terminate_url(context) -> str:
     return f"{context.base_url}/contract/terminate"
+
+
+def contract_renew_url(context) -> str:
+    return f"{context.base_url}/contract/renew"
 
 
 def contract_search_url(context) -> str:
@@ -110,6 +118,10 @@ def archive_audit_url(context) -> str:
     return f"{context.base_url}/archive/audit"
 
 
+def archive_delete_url(context) -> str:
+    return f"{context.base_url}/archive/delete"
+
+
 def pac_audit_url(context) -> str:
     return f"{context.base_url}/pac/audit"
 
@@ -144,6 +156,14 @@ def signature_validate_url(context) -> str:
 
 def signature_retrieve_url(context, did: str) -> str:
     return f"{context.base_url}/signature/retrieve/{did}"
+
+
+def signature_audit_url(context) -> str:
+    return f"{context.base_url}/signature/audit"
+
+
+def signature_compliance_url(context) -> str:
+    return f"{context.base_url}/signature/compliance"
 
 
 # Signing-ceremony endpoints (Workstream B3, docs/anforderung.md B3): an
@@ -225,6 +245,22 @@ def template_search_url(context) -> str:
     return f"{context.base_url}/template/search"
 
 
+def template_publish_url(context) -> str:
+    return f"{context.base_url}/template/publish"
+
+
+def catalogue_template_retrieve_url(context) -> str:
+    return f"{context.base_url}/catalogue/template/retrieve"
+
+
+def catalogue_template_retrieve_by_id_url(context, did: str) -> str:
+    return f"{context.base_url}/catalogue/template/retrieve/{did}"
+
+
+def catalogue_template_search_url(context) -> str:
+    return f"{context.base_url}/catalogue/template/search"
+
+
 # HTTP helpers
 
 def post_json(context, url: str, payload: dict, headers=None):
@@ -251,6 +287,16 @@ def get_with_headers(context, url: str, headers=None):
     h = headers if headers is not None else getattr(context, "headers", {})
     return requests.get(
         url,
+        headers=h,
+        timeout=context.http_timeout_seconds,
+    )
+
+
+def delete_with_params(context, url: str, params: dict, headers=None):
+    h = headers if headers is not None else getattr(context, "headers", {})
+    return requests.delete(
+        url,
+        params=params,
         headers=h,
         timeout=context.http_timeout_seconds,
     )

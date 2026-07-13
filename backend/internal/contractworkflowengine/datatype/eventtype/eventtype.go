@@ -29,12 +29,14 @@ const (
 	RetrieveAll              EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveArchived         EventType = "RETRIEVE_ARCHIVED_CONTRACTS"
 	StoreArchived            EventType = "STORE_ARCHIVED_CONTRACT"
+	DeleteArchived           EventType = "DELETE_ARCHIVED_CONTRACT"
 	RetrieveByID             EventType = "RETRIEVE_CONTRACT_BY_ID"
 	RetrieveHistoryByDID     EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
 	Search                   EventType = "SEARCH_CONTRACT"
 	Review                   EventType = "REVIEW_CONTRACT"
 	Audit                    EventType = "AUDIT_CONTRACT"
 	Terminate                EventType = "TERMINATE_CONTRACT"
+	Renew                    EventType = "RENEW_CONTRACT"
 	RecordEvidence           EventType = "RECORD_EVIDENCE"
 	ContractExpired          EventType = "CONTRACT_EXPIRED"
 	RetrieveAllTemplates     EventType = "RETRIEVE_ALL_TEMPLATES"
@@ -65,12 +67,14 @@ var validStates = map[EventType]bool{
 	RetrieveAll:              true,
 	RetrieveArchived:         true,
 	StoreArchived:            true,
+	DeleteArchived:           true,
 	RetrieveByID:             true,
 	RetrieveHistoryByDID:     true,
 	Search:                   true,
 	Review:                   true,
 	Audit:                    true,
 	Terminate:                true,
+	Renew:                    true,
 	RecordEvidence:           true,
 	ContractExpired:          true,
 	RetrieveAllTemplates:     true,

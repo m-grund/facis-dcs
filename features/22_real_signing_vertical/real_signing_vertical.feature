@@ -37,14 +37,41 @@
 #      of use in the steps module.
 #
 # Design gaps (open points for architect/analyst):
-#   a) AC3's PAdES-B-B fallback path cannot be driven by this harness (same
-#      class of "restart with deliberately broken config" problem as
-#      pki-consolidation-pkcs11's AC1 negative path) - documented as an
-#      accepted manual/ops verification concern, not a Gherkin scenario.
-#   b) AC16 needs the same unavailable "upload a tampered PDF and verify it"
-#      seam already identified for c2pa-conformance's AC4 and
-#      contract_format_review's "Tampered PDF fails hash verification" - @skip
-#      here, following that precedent.
+#   a) RESOLVED - AC3's PAdES-B-B fallback path IS now driven by this
+#      harness, though NOT the originally-envisioned way. The original
+#      rationale conflated two different problems: pki-consolidation-pkcs11's
+#      AC1 genuinely needs the backend's own STARTUP config broken (its
+#      HSM/PKCS#11 open() is fatal on bad config, and there is exactly one
+#      running backend instance this harness cannot restart mid-suite) -
+#      that one really is unreachable here. AC3's TSA, by contrast, is
+#      reached over HTTP at RUNTIME. The PAdES timestamp specifically is
+#      fetched by PDF-CORE via its own DCS_PDF_CORE_TSA_URL env; repointing
+#      that at an unreachable address and rolling instance A's pdf-core takes
+#      the TSA away from the PAdES path only, triggering pdf-core's B-B
+#      fallback, while leaving ORCE up. Investigation finding that RULED OUT
+#      the simpler "scale all of ORCE to 0": /signature/apply ALSO calls
+#      ORCE's archive-notary (apply.go), which HARD-FAILS with a 500 when
+#      ORCE is down and has no fallback - so scaling all of ORCE aborts apply
+#      before any B-B PDF is persisted. That archive-notary asymmetry (PAdES
+#      timestamping degrades gracefully; archive notarization does not) is a
+#      real open point for the architect. pdf-core is per-release so this
+#      only affects instance A, but it MUST still run under the suite-wide
+#      flock for its entire duration; see steps/real_signing_vertical/
+#      dcs_real_signing_vertical_orce_steps.py's module docstring.
+#   b) RESOLVED - AC16 now uses the IPFS CID-swap seam (steps/support/
+#      tamper_seam.py) established by contract_format_review's "Tampered
+#      PDF fails hash verification". The observable signal is
+#      /signature/validate's embedded-PID cross-check finding, not a
+#      literal "PAdES signature invalid" verdict - see
+#      steps/real_signing_vertical/dcs_real_signing_vertical_tamper_steps.py's
+#      module docstring for why no stronger, honest claim is provable from
+#      this black-box harness (no reachable endpoint cryptographically
+#      re-verifies the CMS signature over its /ByteRange, and pdf-core's own
+#      /verify treats the whole PAdES-signed span as an opaque, unchecked
+#      suffix by design). c2pa-conformance's AC4 needs this SAME seam PLUS a
+#      genuinely separate, not-yet-implemented backend feature (a real
+#      remote-manifest fallback in the verify path) and stays @skip for that
+#      reason - see that feature file's header comment for what was found.
 #   c) AC20 (Signature Manager UI: QR/poll/result, AES badge) has no coverage
 #      in this pack - this repo-root BDD harness has no browser-automation
 #      convention at all (see features/16_other/frontend.feature, a bare
@@ -78,14 +105,44 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding 
     Given contract "RSV Timestamp Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerThree"
     Then the signed PDF for contract "RSV Timestamp Contract" embeds an RFC3161 timestamp token
 
-  @REQ-real-signing-vertical-AC3 @DCS-OR-C2PA-002 @skip
-  Scenario: PAdES-B-B fallback when the TSA is unavailable is a documented deviation, not exercised here
-    # See design-gap (a) in the header comment above: this would require
-    # restarting the single running backend instance with a deliberately
-    # broken/missing TSA_URL mid-run, which this harness cannot do (identical
-    # class of problem as pki-consolidation-pkcs11's AC1 negative path).
-    # Tracked as an accepted manual/ops verification concern.
+  # Made REAL: design-gap (a) assumed the only way to take the TSA away was
+  # restarting the backend with a broken TSA_URL, which this harness indeed
+  # cannot do. The TSA the PAdES timestamp uses is, however, reached by
+  # PDF-CORE over HTTP at runtime via pdf-core's own DCS_PDF_CORE_TSA_URL env
+  # (deployment/helm/templates/pdf-core-deployment.yaml) — repointing THAT at
+  # an unreachable address and rolling instance A's pdf-core takes the TSA
+  # away from the PAdES path, which is the actual runtime condition PAdES-B-B
+  # fallback (pdf-core/compiler/pades.go) exists for. This is DIFFERENT from
+  # pki-consolidation-pkcs11's AC1 (that one genuinely needs a broken HSM
+  # config at backend STARTUP, unreachable here).
+  #
+  # NOTE (investigation finding): scaling the whole shared ORCE deployment to
+  # 0 — the originally-envisioned mechanism — does NOT work, because
+  # /signature/apply has a SECOND, independent ORCE dependency (the archive
+  # notary, backend/internal/signingmanagement/command/apply.go ->
+  # http://dcs-orce:1880/archive/notary) that HARD-FAILS the whole apply with
+  # a 500 when ORCE is down, aborting before any PAdES-B-B PDF is persisted.
+  # Only the PAdES timestamp path has a fallback; the archive-notary path
+  # does not (a real open point for the architect — see the steps module
+  # docstring). Repointing pdf-core's TSA env isolates the PAdES path while
+  # leaving ORCE (and the archive notary) up, so apply completes and yields a
+  # genuine, inspectable B-B PDF.
+  #
+  # pdf-core is PER-RELEASE, so this only affects instance A, never instance
+  # B or the shared ORCE — but it MUST still run under the suite-wide flock
+  # for its entire duration, since any other agent signing via instance A
+  # during the TSA-down window would unexpectedly get a B-B signature. See
+  # steps/real_signing_vertical/dcs_real_signing_vertical_orce_steps.py.
+  @REQ-real-signing-vertical-AC3 @DCS-OR-C2PA-002
+  Scenario: PAdES-B-B fallback when the TSA is unavailable, and recovery to PAdES-B-T once it returns
     Given I am authenticated with roles: "Contract Manager"
+    When pdf-core's RFC3161 TSA endpoint is made unavailable for this scenario
+    And contract "RSV TSA Down Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerTsaDown", signed while the TSA is unavailable
+    Then the signed PDF for contract "RSV TSA Down Contract" carries no RFC3161 timestamp token
+    And pdf-core logged a PAdES-B-B fallback WARN
+    When pdf-core's RFC3161 TSA endpoint is restored
+    And contract "RSV TSA Recovered Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerTsaRecovered", signed after the TSA is restored
+    Then the signed PDF for contract "RSV TSA Recovered Contract" embeds an RFC3161 timestamp token
 
   @REQ-real-signing-vertical-AC4 @DCS-OR-C2PA-002 @DCS-OR-C2PA-010
   Scenario: The order /update -> /sign -> /update leaves the PAdES signature and C2PA chain valid
@@ -190,18 +247,24 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding 
     Given contract "RSV Summary VC Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerFourteen"
     Then a ContractSigningSummaryCredential for contract "RSV Summary VC Contract" is embedded inside the PAdES ByteRange
 
-  @REQ-real-signing-vertical-AC16 @DCS-FR-SM-08 @skip
-  Scenario: Removing the signature-evidence attachment invalidates the PAdES validation
-    # See design-gap (b) in the header comment above: every verify-shaped
-    # endpoint this harness can reach always re-fetches the SERVER'S OWN
-    # stored PDF by DID - there is no upload-a-tampered-PDF-and-verify-it
-    # endpoint, the identical class of problem already accepted for
-    # c2pa-conformance's AC4 (@skip) and contract_format_review's "Tampered
-    # PDF fails hash verification" (@skip). Real evidence for this claim is
-    # expected from pdf-core's own pyHanko-based BDD harness (per
-    # docs/anforderung.md B-acceptance: "write this as an explicit test")
-    # or a Go-level unit test mocking IPFSClient.FetchFile.
-    Given I am authenticated with roles: "Contract Manager"
+  # Made REAL via the IPFS CID-swap seam (steps/support/tamper_seam.py) —
+  # the same one that unblocked contract_format_review's "Tampered PDF
+  # fails hash verification". See steps/real_signing_vertical/
+  # dcs_real_signing_vertical_tamper_steps.py's module docstring for why
+  # the observable signal here is /signature/validate's embedded-PID
+  # cross-check finding, not a literal PAdES cryptographic signature
+  # verdict — no endpoint reachable by this harness re-verifies the CMS
+  # signature over its /ByteRange, and pdf-core's own /verify treats the
+  # entire PAdES-signed span (including the evidence attachment) as an
+  # opaque, unchecked suffix by design. c2pa-conformance's AC4 needs the
+  # SAME seam plus a genuinely separate, not-yet-implemented backend
+  # feature (remote-manifest fallback) and stays @skip for that reason —
+  # see that feature file's header comment.
+  @REQ-real-signing-vertical-AC16 @DCS-FR-SM-08
+  Scenario: Corrupting the signature-evidence attachment invalidates the embedded-PID cross-check
+    Given contract "RSV Evidence Tamper Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerEvidenceTamper"
+    When the signature-evidence attachment for contract "RSV Evidence Tamper Contract" is corrupted on the server-stored PDF
+    Then the signature validation findings for contract "RSV Evidence Tamper Contract" report the embedded signing evidence as invalid
 
   @REQ-real-signing-vertical-AC17 @UC-04-02 @UC-04-03
   Scenario: The verify side re-verifies the embedded PID presentation and cross-checks it against the signature record

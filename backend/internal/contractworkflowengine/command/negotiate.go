@@ -108,7 +108,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid permissions")
+		return ErrNotAParty
 	}
 
 	negotiators, err := h.NTRepo.ReadNegotiatorsForDID(ctx, tx, cmd.DID)

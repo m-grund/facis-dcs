@@ -198,23 +198,43 @@ Feature: PKI consolidation - PKCS#11 + SoftHSM2, ECDSA P-256, trust anchors, rot
   @REQ-pki-consolidation-pkcs11-AC10 @DCS-NFR-SEC-02 @skip
   Scenario: DCS_TRUST_ANCHORS switches the trust-anchor source for all verification layers
     # NOT modeled as a real scenario in this pass - see design-gaps note (b)
-    # above. Summary: `DCS_TRUST_ANCHORS` does not exist anywhere in the
-    # codebase yet (grep backend/ returns nothing); the closest existing
-    # relative, `DCS_FORCE_EIDAS_CERT` + `identity.EUTrustPool`
-    # (backend/cmd/dcs/main.go:157-176), is a ONE-TIME, STARTUP-ONLY
-    # self-check of THIS instance's own DID document certificate against the
-    # EU trust pool - it has no per-peer or per-signature runtime call site
-    # today (dcstodcs.CheckForUntrustedPeers, the layer this task's guidance
-    # suggested reusing, is a completely separate mechanism: a local
-    # trusted_peers allowlist with no relationship to X.509 chains or trust
-    # anchors at all - already covered by the unrelated two-instance-peer-
-    # trust requirement's AC2/AC3/AC4). Writing a scenario against either of
-    # these existing mechanisms would misrepresent what AC10 actually claims
-    # (ONE swappable provider consumed by ALL FOUR verification layers via
-    # config alone). This needs re-scoping with the analyst/architect once
-    # Workstream A5 gives the abstraction a concrete, request-time call site
-    # this harness can drive over HTTP (e.g. a verify/validate endpoint whose
-    # response names which trust-anchor mode was used) - the @skip here
+    # above. Re-investigated on this pass (2026-07-13): `DCS_TRUST_ANCHORS`
+    # still does not exist anywhere in the codebase (grep backend/ returns
+    # nothing). `DCS_FORCE_EIDAS_CERT` + `identity.EUTrustPool`
+    # (backend/cmd/dcs/main.go:170-189) IS invoked on more than just startup
+    # - `s.DIDDocument.VerifyEIDASCertificate(s.TrustPool)` is called at the
+    # top of nearly every ContractWorkflowEngine mutation handler (Terminate,
+    # Renew, Offer, Withdraw, Update, ...), not only once at boot - but every
+    # one of those calls re-verifies the SAME thing: THIS instance's own
+    # local DID-document certificate against the trust pool. It is still a
+    # self-check, never a per-peer, per-signature, or per-presentation
+    # verification of externally supplied material, so the substance of the
+    # original finding is unchanged: there is no runtime call site where a
+    # caller-supplied certificate/signature/presentation is checked against
+    # a swappable trust-anchor source. (dcstodcs.CheckForUntrustedPeers,
+    # the layer earlier guidance suggested reusing, is a completely separate
+    # mechanism: a local trusted_peers allowlist with no relationship to
+    # X.509 chains or trust anchors at all - already covered by the
+    # unrelated two-instance-peer-trust requirement's AC2/AC3/AC4.) Writing
+    # a scenario against either of these existing mechanisms would
+    # misrepresent what AC10 actually claims (ONE swappable provider
+    # consumed by ALL FOUR verification layers via config alone, with a
+    # request-time HTTP call site this harness can assert against). Landing
+    # DCS_TRUST_ANCHORS honestly means: (1) a TrustAnchors interface with at
+    # least a dev-ca (local file/dir of trusted certs, hermetic - no
+    # internet fetch) and an eu-lotl (today's EUTrustPool) provider; (2)
+    # wiring FOUR call sites - eIDAS self-check, OID4VP presentation
+    # verification, /signature/validate, and PDF/C2PA verification - through
+    # that one interface instead of each hardcoding its own trust source;
+    # (3) a response surface naming which mode was active. That is a
+    # multi-layer refactor of shared, heavily-concurrent files (main.go's
+    # service wiring, signingmanagement's validate path, auth's OID4VP
+    # verifier, c2pa verification) actively being edited in parallel by
+    # other agents this same pass - it does not decompose into a change this
+    # agent can land in isolation without materially expanding scope beyond
+    # "trivial" or risking a collision on those shared files. Left @skip and
+    # re-flagged for analyst/architect re-scoping once Workstream A5 gives
+    # the abstraction its four call sites - the @skip here
     # keeps the AC's traceability tag present without a false green or red
     # result.
     Given I am authenticated with roles: "Contract Manager"

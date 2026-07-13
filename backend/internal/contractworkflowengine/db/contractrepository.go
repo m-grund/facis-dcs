@@ -250,6 +250,13 @@ type ContractRepo interface {
 	ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data ContractArchiveEntry) error
 	ReadArchiveEntries(ctx context.Context, tx *sqlx.Tx) ([]ContractArchiveEntry, error)
+	// MarkArchiveEntryDeleted soft-deletes every not-yet-deleted archive
+	// entry for did (DCS-FR-CSA-17): sets deleted_at/deleted_by/
+	// deletion_reason rather than removing the row, so the evidence stays
+	// discoverable for compliance/dispute resolution. Returns the number of
+	// entries marked (0 if did has no archive entries, or all its entries
+	// were already deleted).
+	MarkArchiveEntryDeleted(ctx context.Context, tx *sqlx.Tx, did string, deletedBy string, reason string) (int, error)
 	ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractMetadata, error)
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)

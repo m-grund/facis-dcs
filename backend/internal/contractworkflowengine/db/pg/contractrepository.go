@@ -301,6 +301,23 @@ func (r *PostgresContractRepo) ReadArchiveEntries(ctx context.Context, tx *sqlx.
 	return entries, nil
 }
 
+func (r *PostgresContractRepo) MarkArchiveEntryDeleted(ctx context.Context, tx *sqlx.Tx, did string, deletedBy string, reason string) (int, error) {
+	statement := `
+        UPDATE contract_archive_entries
+        SET deleted_at = NOW(), deleted_by = $1, deletion_reason = $2
+        WHERE did = $3 AND deleted_at IS NULL
+    `
+	result, err := tx.ExecContext(ctx, statement, deletedBy, reason, did)
+	if err != nil {
+		return 0, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(affected), nil
+}
+
 func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
 	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence

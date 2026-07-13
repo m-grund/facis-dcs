@@ -2,12 +2,20 @@ package db
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/datatype"
 )
+
+// ErrNoMatchingDecision indicates a respond (accept/reject) call, or a
+// created_by lookup for the conflict-of-interest check, matched no row —
+// e.g. an unknown negotiation id, an already-decided decision, or (the
+// pre-existing rows-affected check in PostgresNegotiationRepo.Accept/Reject)
+// a decision row that does not belong to the calling negotiator.
+var ErrNoMatchingDecision = errors.New("no matching negotiation decision for this party")
 
 type NegotiationCreateData struct {
 	DID             string         `db:"did"`
@@ -50,6 +58,7 @@ type NegotiationRepo interface {
 	HasOpenNegotiationDecisions(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int, negotiator string) (bool, error)
 	HasNegotiationForContractVersion(ctx context.Context, tx *sqlx.Tx, did string, contractVersion int) (bool, error)
 	ReadAllNegotiationDecisionsByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]NegotiationDecisionData, error)
+	ReadCreatedByByNegotiationID(ctx context.Context, tx *sqlx.Tx, id string) (string, error)
 
 	RemoteCreateOrUpdateNegotiation(ctx context.Context, tx *sqlx.Tx, data NegotiationData) error
 	RemoteCreateOrUpdateNegotiationDecision(ctx context.Context, tx *sqlx.Tx, data NegotiationDecisionData) error
