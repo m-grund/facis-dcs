@@ -265,14 +265,25 @@ def step_then_deployment_payload_declared(context, name):
 
 @then('the archive entry for contract "{name}" records an automatic deployment correlation ID')
 def step_then_archive_records_auto_deployment(context, name):
-    entry = _archive_entry_for(context, name)
+    # The dispatch is event-driven (outbox anchor -> NATS -> deploy
+    # subscriber), so the deployment row lands asynchronously after SIGNED —
+    # poll like the other async-evidence assertions instead of racing it.
+    import time as _time  # noqa: PLC0415
+
+    entry, evidence, deployment, correlation_id = None, {}, {}, None
+    deadline = _time.monotonic() + 60
+    while _time.monotonic() < deadline:
+        entry = _archive_entry_for(context, name)
+        evidence = (entry or {}).get("evidence") or {}
+        deployment = evidence.get("deployment") or {}
+        correlation_id = deployment.get("correlation_id")
+        if correlation_id:
+            break
+        _time.sleep(2)
     assert entry is not None, (
         f"Expected an archive entry for contract '{name}' after the signing workflow completed "
         "(AC1: archive entry is created on SIGNED) — none was found"
     )
-    evidence = entry.get("evidence") or {}
-    deployment = evidence.get("deployment") or {}
-    correlation_id = deployment.get("correlation_id")
     assert correlation_id, (
         f"Expected the archive entry's evidence.deployment.correlation_id to be populated "
         f"automatically (event-driven, NATS-Outbox-Subscriber per AC6) without any explicit "
@@ -339,12 +350,23 @@ def step_when_callback_valid_ack(context, name):
 
 @then('the archive entry for contract "{name}" contains an RFC-3161 TSA timestamp over the execution-evidence receipt')
 def step_then_archive_has_tsa_timestamp(context, name):
-    entry = _archive_entry_for(context, name)
+    # The auto-dispatch subscriber can insert a second (un-acked) deployment
+    # row concurrently with the explicit deploy+ack this scenario drives; the
+    # archive view prefers acknowledged rows, but the ack itself follows the
+    # async dispatch — poll briefly rather than racing it.
+    import time as _time  # noqa: PLC0415
+
+    entry, deployment, receipt_hash, tsa_token_b64 = None, {}, None, None
+    deadline = _time.monotonic() + 60
+    while _time.monotonic() < deadline:
+        entry = _archive_entry_for(context, name)
+        deployment = ((entry or {}).get("evidence") or {}).get("deployment") or {}
+        receipt_hash = deployment.get("receipt_hash")
+        tsa_token_b64 = deployment.get("tsa_token")
+        if receipt_hash and tsa_token_b64:
+            break
+        _time.sleep(2)
     assert entry is not None, f"Expected an archive entry for contract '{name}'"
-    evidence = entry.get("evidence") or {}
-    deployment = evidence.get("deployment") or {}
-    receipt_hash = deployment.get("receipt_hash")
-    tsa_token_b64 = deployment.get("tsa_token")
     assert receipt_hash, (
         f"Expected the archive entry's evidence.deployment.receipt_hash (canonical hash of the "
         f"execution-evidence receipt) to be populated, got: {deployment!r}"
