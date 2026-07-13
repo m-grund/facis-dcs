@@ -7,7 +7,7 @@ harness (deployment/helm/charts/federated-catalogue), already exercised
 indirectly by the passing "register" scenarios in template_workflow.feature.
 """
 
-from behave import then, when
+from behave import given, then, when
 
 from steps.support.api_client import (
     catalogue_template_retrieve_url,
@@ -27,6 +27,18 @@ def step_when_publish_template(context, name):
     if context.requests_response.status_code == 200:
         updated_at = TemplateService.fetch_template(context, t["did"]).get("updated_at")
         TemplateService.store_named(context, name, t["did"], updated_at)
+
+
+@given('I publish template "{name}"')
+def step_given_publish_template(context, name):
+    # Given-position variant (used as setup by the retrieve/search scenarios):
+    # unlike the When form, a failure here is a broken precondition, so assert
+    # the publish succeeded instead of leaving that to a later Then.
+    step_when_publish_template(context, name)
+    assert context.requests_response.status_code == 200, (
+        f"Publishing template '{name}' as a scenario precondition failed: "
+        f"{context.requests_response.status_code} {context.requests_response.text}"
+    )
 
 
 @when('I attempt to publish template "{name}" with my current role')
@@ -72,17 +84,40 @@ def _catalogue_items(context):
     return body
 
 
+def _poll_catalogue_for_template(context, name, refetch):
+    """The Federated Catalogue ingests published self-descriptions
+    asynchronously (verification + Neo4j claims-graph load), so a search or
+    retrieval issued right after /template/publish can legitimately miss the
+    template for a few seconds — poll by re-issuing the same request."""
+    import time  # noqa: PLC0415
+
+    t = TemplateService.named(context, name)
+    dids = []
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        items = _catalogue_items(context)
+        dids = [i.get("did") for i in items if isinstance(i, dict)]
+        if t["did"] in dids:
+            return
+        time.sleep(2)
+        refetch(context)
+        assert context.requests_response.status_code == 200, (
+            f"catalogue re-query failed: {context.requests_response.status_code} "
+            f"{context.requests_response.text}"
+        )
+    raise AssertionError(
+        f"Expected the template catalogue to include template '{name}' (did={t['did']}) "
+        f"within 60s of publish, got dids: {dids}"
+    )
+
+
 @then('the catalogue result includes template "{name}"')
 def step_then_catalogue_includes(context, name):
-    t = TemplateService.named(context, name)
-    items = _catalogue_items(context)
-    dids = [i.get("did") for i in items if isinstance(i, dict)]
-    assert t["did"] in dids, (
-        f"Expected the template catalogue retrieval to include template '{name}' (did={t['did']}), "
-        f"got dids: {dids}"
-    )
+    _poll_catalogue_for_template(context, name, step_when_retrieve_catalogue)
 
 
 @then('the catalogue search result includes template "{name}"')
 def step_then_catalogue_search_includes(context, name):
-    step_then_catalogue_includes(context, name)
+    _poll_catalogue_for_template(
+        context, name, lambda ctx: step_when_search_catalogue(ctx, name)
+    )

@@ -286,6 +286,28 @@ func (e RetrieveByIDEvent) GetDID() string {
 	return e.DID
 }
 
+// RetrieveByIDDeniedEvent is emitted when a retrieve_by_id call is refused
+// because the caller is not an authorized party of the contract (party
+// read-scoping in query/contract/querybyid.go) — the denial itself is part
+// of the auditable access history.
+type RetrieveByIDDeniedEvent struct {
+	DID         string             `json:"did"`
+	HolderDID   string             `json:"holder_did"`
+	RetrievedBy string             `json:"retrieved_by"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e RetrieveByIDDeniedEvent) EventType() string {
+	return eventtype.AccessDenied.String()
+}
+
+// GetDID implements the Event interface.
+func (e RetrieveByIDDeniedEvent) GetDID() string {
+	return e.DID
+}
+
 // RetrieveHistoryByDIDEvent is emitted when contract data is retrieved.
 type RetrieveHistoryByDIDEvent struct {
 	DID         string             `json:"did"`

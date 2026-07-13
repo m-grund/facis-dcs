@@ -118,7 +118,7 @@ _ENDPOINT_PAYLOADS = {
     "contract_update":        {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},
     "contract_submit":        {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},
     "contract_negotiate":     {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z", "negotiated_by": "test", "change_request": "test"},
-    "contract_respond":       {"id": "1", "action_flag": "accept", "rejected_by": "", "rejection_reason": "", "responded_by": "bdd-test"},
+    "contract_respond":       {"id": "1", "action_flag": "ACCEPTING", "rejected_by": "", "rejection_reason": "", "responded_by": "bdd-test"},
     "contract_verify":        {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},
     "contract_approve":       {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z"},
     "contract_reject":        {"did": "did:example:1", "updated_at": "2024-01-01T00:00:00Z", "reason": "test"},

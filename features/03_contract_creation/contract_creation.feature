@@ -84,46 +84,24 @@ Feature: Contract Creation
     And the contract creation is prevented
     And the attempt is logged
 
-  # @skip: read-scoping cannot be surfaced as a 4xx from this task's permitted
-  # edit scope. GetByIDHandler.Handle (internal/contractworkflowengine/query/
-  # contract/querybyid.go — a file this task IS allowed to edit) could reject
-  # unauthorized reads, but internal/service/contract_workflow_engine.go's
-  # RetrieveByID (line ~489, a file this task is NOT allowed to edit)
-  # unconditionally wraps every query-handler error as
-  # `templaterepository.MakeInternalError(err)` -> HTTP 500, regardless of
-  # error type — there is no branch analogous to the file's own
-  # mapContractCommandError helper for this method. The design also only
-  # registers "bad_request"/"internal_error" responses for retrieve_by_id
-  # (backend/design/contract_workflow_engine.go), so even MakeUnauthorized
-  # would not encode as 401/403 here. Landing the check anyway would silently
-  # turn every retrieve_by_id call from a non-privileged, non-party caller
-  # into a 500 with no way to special-case it — including many currently
-  # green scenarios elsewhere (03/05/06/07/12/15/20) that read contracts via
-  # a broad role (Contract Manager/Observer) without being creator/reviewer/
-  # approver — so it was not landed. Needs a one-line fix in
-  # contract_workflow_engine.go's RetrieveByID to route a new
-  # contract.ErrContractAccessDenied sentinel to
-  # contractworkflowengine.MakeBadRequest (mirroring mapContractCommandError)
-  # before this can go green without that regression risk.
-  @skip
+  # Party read-scoping (query/contract/querybyid.go): the caller's
+  # organization (the OID4VP-disclosed organization claim, the same value
+  # persisted as created_by) must be the creating organization or listed in
+  # the contract's dcs:parties to read it; Sys.* automation roles, the
+  # Sys. Administrator, and the Auditor are org-independent readers. A
+  # denial is HTTP 403 (retrieve_by_id's "forbidden" design error) and lands
+  # in the audit trail as a RETRIEVE_CONTRACT_DENIED event.
   Scenario: Created contract is accessible only to authorized parties
     Given I am authenticated with roles: "Contract Creator"
-    And I have created contract "Service Agreement" with parties "Acme Corp" and "TechVendor Inc"
-    When a representative of party "Acme Corp" attempts to access the contract
+    And I have created contract "Party Scoped Contract" with parties "Acme Corp" and "TechVendor Inc"
+    When a representative of party "TechVendor Inc" attempts to access contract "Party Scoped Contract"
     Then the contract is accessible and visible
-    And when a representative of unrelated party "UnrelatedCorp" attempts to access the contract
-    Then the access is denied with a "Not authorized to access this contract" error
+    And when a representative of unrelated party "UnrelatedCorp" attempts to access contract "Party Scoped Contract"
+    Then the access is denied with a "not authorized to access this contract" error
 
-  # @skip: same backend gap as "Created contract is accessible only to
-  # authorized parties" above — GetByIDHandler.Handle could reject this
-  # denial, but internal/service/contract_workflow_engine.go's RetrieveByID
-  # (outside this task's permitted edit scope) always surfaces any
-  # query-handler error as HTTP 500, never 4xx, for this endpoint.
-  @skip
   Scenario: Unauthorized party cannot access created contract
-    Given I am authenticated with roles: "Contract Observer"
-    And contract "Service Agreement" is created with parties "Acme Corp" and "TechVendor Inc"
-    And I do not have authorization for either party
-    When I attempt to access contract "Service Agreement"
-    Then the request is denied with an "Access denied - unauthorized for contract parties" error
-    And the access denial is logged with timestamp
+    Given I am authenticated with roles: "Contract Creator"
+    And I have created contract "Party Denied Contract" with parties "Acme Corp" and "TechVendor Inc"
+    When a representative of unrelated party "UnrelatedCorp" attempts to access contract "Party Denied Contract"
+    Then the access is denied with a "not authorized to access this contract" error
+    And the access denial for contract "Party Denied Contract" is logged in the audit trail

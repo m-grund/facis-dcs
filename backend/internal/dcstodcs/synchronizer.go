@@ -79,7 +79,8 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 				return
 			}
 
-			if evtType == eventtype.RetrieveAll || evtType == eventtype.RetrieveByID || evtType == eventtype.RetrieveHistoryByDID {
+			if evtType == eventtype.RetrieveAll || evtType == eventtype.RetrieveByID ||
+				evtType == eventtype.AccessDenied || evtType == eventtype.RetrieveHistoryByDID {
 				return
 			}
 
@@ -335,6 +336,7 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 		RetrievedBy: "System",
 		HolderDID:   localPeer,
 		UserRoles:   nil,
+		Internal:    true,
 	}
 	qryHandler := contract.GetByIDHandler{
 		Ctx:   ctx,

@@ -14,6 +14,7 @@ var ContractCreateRequest = Type("ContractCreateRequest", func() {
 	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
 	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
 	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
+	Attribute("parties", ArrayOf(String), "Organizations that are parties to this contract; party membership gates read access to the contract (stored as the dcs:parties JSON-LD property)")
 
 	Required("template_did")
 })
@@ -907,6 +908,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 		Result(ContractRetrieveByIDResponse)
 
 		Error("bad_request", ErrorResult, "Bad request")
+		Error("forbidden", ErrorResult, "Caller is not an authorized party of this contract")
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
@@ -915,6 +917,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
+			Response("forbidden", StatusForbidden)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

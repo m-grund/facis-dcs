@@ -6,16 +6,24 @@ contract is never mutated. See backend/internal/contractworkflowengine/
 command/renew.go for the handler.
 """
 
+from datetime import datetime, timedelta, timezone
+
 from behave import given, then, when
 
 from steps.support.api_client import (
     contract_renew_url,
     contract_retrieve_by_id_url,
+    contract_update_url,
     get_with_headers,
     post_json,
+    put_json,
 )
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
+from steps.template_management.contract_state_machine_steps import (
+    _advance_to_approved,
+    _apply_signature,
+)
 
 
 def _renewal_response(context, name):
@@ -38,6 +46,48 @@ def _fetch_renewal_contract(context, name):
         f"{resp.status_code} {resp.text}"
     )
     return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Given
+# ---------------------------------------------------------------------------
+
+
+@given('contract "{name}" with a contract term has reached contract state "SIGNED"')
+def step_given_contract_with_term_signed(context, name):
+    """Like the plain "has reached contract state" Given, but sets the
+    contract's term (start_date/exp_date) via PUT /contract/update while the
+    contract is still in DRAFT — the only state from which EventUpdate is
+    legal (contractstate/transition.go) — before advancing to SIGNED. The
+    renewal scenarios need the original to actually carry a term, otherwise
+    the DCS-FR-CWE-22 carryover assertion would have nothing to carry over.
+    Both dates must be at least one day in the future (command/update.go).
+    """
+    ContractService._create_contract_in_draft(context, name)
+    did, updated_at = ContractService._contract_data(context, name)
+    # /contract/update is scoped to Contract Creator (design Security block);
+    # reuse the creator identity that _create_contract_in_draft seeded.
+    creator_h = context.contract_seed_headers[name]
+    start = datetime.now(timezone.utc) + timedelta(days=2)
+    resp = put_json(
+        context,
+        contract_update_url(context),
+        {
+            "did": did,
+            "updated_at": updated_at,
+            "start_date": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "exp_date": (start + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+        headers=creator_h,
+    )
+    assert resp.status_code == 200, (
+        f"Setting the contract term for '{name}' while in DRAFT failed: "
+        f"{resp.status_code} {resp.text}"
+    )
+    ContractService._refresh_contract(context, name)
+    _advance_to_approved(context, name)
+    _apply_signature(context, name)
+    ContractService._refresh_contract(context, name)
 
 
 # ---------------------------------------------------------------------------

@@ -48,3 +48,19 @@ Feature: Contract storage and archive retrieval
     And I am authenticated with roles: "Template Creator"
     When I attempt to delete the archived contract "Unauthorized Archive Deletion Contract" with my current role
     Then the request is denied with a client error
+
+  # DCS-IR-CSA-06: read-only users (Contract Observer) can view archived
+  # records but MUST NOT be able to modify or delete entries. The design
+  # scopes /archive/retrieve+search to Archive Manager AND Contract Observer,
+  # while /archive/store and /archive/delete are Archive Manager only
+  # (backend/design/contract_storage_archive.go) — this scenario asserts
+  # both halves of that contract against the running service.
+  @REQ-archive-management-AC7 @UC-07-03 @DCS-IR-CSA-06
+  Scenario: A read-only Observer can view the archive but cannot delete from it
+    Given contract "Observer Readonly Archive Contract" has reached contract state "SIGNED"
+    And I am authenticated with roles: "Contract Observer"
+    When I attempt to retrieve the archive with my current role
+    Then get http 200:Success code
+    And the archive retrieval result includes contract "Observer Readonly Archive Contract"
+    When I attempt to delete the archived contract "Observer Readonly Archive Contract" with my current role
+    Then the request is denied with a client error

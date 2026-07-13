@@ -36,7 +36,7 @@ Feature: Contract termination
 
   @REQ-contract-termination-AC3 @UC-06-02 @DCS-FR-CWE-11 @DCS-FR-CWE-22
   Scenario: Contract Manager renews a contract before its expiry notice period
-    Given contract "Renewal Contract" has reached contract state "SIGNED"
+    Given contract "Renewal Contract" with a contract term has reached contract state "SIGNED"
     And contract "Renewal Contract" is force-set to state "ACTIVE" directly in the database (pre-deploy test seam, bypassing the deployment chain)
     When the contract manager renews contract "Renewal Contract" for a new term
     Then get http 200:Success code

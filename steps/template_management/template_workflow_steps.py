@@ -96,7 +96,10 @@ def step_given_templates_exist_with_name_and_description(context, name, title):
     TemplateService.store_named(context, name, did, updated_at)
 
 def _approve_named_template(context, name):
-    did, updated_at = TemplateService.create_fresh_template(context)
+    # Pass the scenario's template name through to the API — the catalogue
+    # search scenarios match on the template's REAL name in the Federated
+    # Catalogue self-description, not on the harness-side alias.
+    did, updated_at = TemplateService.create_fresh_template(context, name=name)
     updated_at = TemplateService.do_submit(context, did, updated_at)
     updated_at = TemplateService.do_recommend_for_approval(context, did, updated_at)
     headers = AuthService.get_headers_for_roles(["Template Approver"])

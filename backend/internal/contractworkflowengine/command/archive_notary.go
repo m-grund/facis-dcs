@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 )
 
 type ArchiveNotaryPayload struct {
@@ -91,21 +89,4 @@ func (c *HTTPArchiveNotaryClient) NotarizeArchiveEntry(ctx context.Context, payl
 	}
 
 	return &receipt, nil
-}
-
-func archiveNotaryEntryID(did string, contractVersion int) string {
-	return fmt.Sprintf("%s#%d", did, contractVersion)
-}
-
-func archiveNotaryEventReceipt(receipt *ArchiveNotaryReceipt) *contractevents.ArchiveNotaryReceipt {
-	if receipt == nil {
-		return nil
-	}
-	return &contractevents.ArchiveNotaryReceipt{
-		ReceiptType:    receipt.ReceiptType,
-		ArchiveEntryID: receipt.ArchiveEntryID,
-		EventHash:      receipt.EventHash,
-		PreviousHash:   receipt.PreviousHash,
-		ReceivedAt:     receipt.ReceivedAt,
-	}
 }

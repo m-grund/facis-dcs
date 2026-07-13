@@ -302,9 +302,13 @@ func (r *PostgresContractRepo) ReadArchiveEntries(ctx context.Context, tx *sqlx.
 }
 
 func (r *PostgresContractRepo) MarkArchiveEntryDeleted(ctx context.Context, tx *sqlx.Tx, did string, deletedBy string, reason string) (int, error) {
+	// archive_status must flip to DELETED together with the deletion
+	// metadata: the contract_archive_entries trigger
+	// (migrations/sql/20260305_create_contract_repository.sql) rejects
+	// deletion metadata on rows whose status is still STORED/RETAINED.
 	statement := `
         UPDATE contract_archive_entries
-        SET deleted_at = NOW(), deleted_by = $1, deletion_reason = $2
+        SET archive_status = 'DELETED', deleted_at = NOW(), deleted_by = $1, deletion_reason = $2
         WHERE did = $3 AND deleted_at IS NULL
     `
 	result, err := tx.ExecContext(ctx, statement, deletedBy, reason, did)

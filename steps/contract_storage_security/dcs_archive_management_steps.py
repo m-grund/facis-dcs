@@ -104,11 +104,11 @@ def step_then_archive_audit_nonempty(context):
 
 
 @when('the Archive Manager deletes the archived contract "{name}" with justification "{justification}"')
-def step_when_archive_manager_deletes(context, name):
+def step_when_archive_manager_deletes(context, name, justification):
     did, _ = ContractService._contract_data(context, name)
     headers = AuthService.get_headers_for_roles(["Archive Manager"])
     context.requests_response = delete_with_params(
-        context, archive_delete_url(context), {"did": did, "justification": "BDD deletion test"}, headers=headers
+        context, archive_delete_url(context), {"did": did, "justification": justification}, headers=headers
     )
 
 

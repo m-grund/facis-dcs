@@ -40,6 +40,26 @@ var PACAuditResponse = Type("PACAuditResponse", func() {
 	Required("did", "component", "created_at", "audit_trail")
 })
 
+var PACComplianceRisk = Type("PACComplianceRisk", func() {
+	Description("A single compliance risk detected by continuous monitoring")
+
+	Attribute("did", String, "Decentralized Identifier of the affected contract")
+	Attribute("risk_type", String, "Machine-readable risk class (e.g. MISSING_APPROVAL)")
+	Attribute("detail", String, "Human-readable description of the detected risk")
+	Attribute("detected_at", String, "When the risk was detected (RFC3339)")
+
+	Required("did", "risk_type", "detail", "detected_at")
+})
+
+var PACMonitorResponse = Type("PACMonitorResponse", func() {
+	Description("Continuous-monitoring snapshot of policy adherence (DCS-IR-PACM-03)")
+
+	Attribute("checked_at", String, "When the monitoring sweep ran (RFC3339)")
+	Attribute("risks", ArrayOfRequired(PACComplianceRisk), "Detected compliance risks; empty when all monitored workflows adhere")
+
+	Required("checked_at", "risks")
+})
+
 // Process Audit & Compliance Management Service  (/pac/...)
 var _ = Service("ProcessAuditAndCompliance", func() {
 	Description("Process Audit & Compliance Management APIs (/pac/...)")
@@ -94,7 +114,7 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 	})
 
 	Method("monitor", func() {
-		Description("continuous monitoring and event retrieval.")
+		Description("Continuous compliance monitoring sweep: flags contracts pending approval that still have OPEN approval tasks (a missing required approval, DCS-FR-PACM-03) and records the sweep in the audit trail.")
 		Meta("dcs:requirements", "DCS-IR-PACM-03")
 		Meta("dcs:ui", "Non-Compliance Investigation")
 		Meta("dcs:pacm:components", "")
@@ -104,11 +124,15 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		Payload(func() {
 			Token("token", String, "JWT token")
 		})
+		Result(PACMonitorResponse)
+
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			GET("/pac/monitor")
 			Response(StatusOK)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(Any)
 	})
 
 	Method("incident_report", func() {

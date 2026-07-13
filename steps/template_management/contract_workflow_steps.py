@@ -25,6 +25,24 @@ from steps.support.api_client import (
 from steps.support.services.auth_service import AuthService
 
 
+def _negotiation_id_for_change(refreshed, change_request):
+    """Select the negotiation entry matching a specific change request.
+
+    retrieve_by_id assembles the negotiations list from a Go map
+    (slices.Collect(maps.Values(...)) in service RetrieveByID), so its ORDER
+    IS RANDOM — `negotiations[-1]` is a coin flip once a contract has more
+    than one negotiation and picking an already-decided one makes respond
+    fail with "no matching negotiation decision for this party".
+    """
+    negotiations = refreshed.get("negotiations") or []
+    matching = [n for n in negotiations if n.get("change_request") == change_request]
+    assert matching, (
+        f"Expected a negotiation entry with change_request {change_request!r}, "
+        f"got: {[n.get('change_request') for n in negotiations]}"
+    )
+    return matching[-1]["id"]
+
+
 @given('contract "{name}" is in "Draft" status')
 def step_given_contract_draft(context, name):
     ContractService._create_contract_in_draft(context, name)
@@ -80,8 +98,8 @@ def step_given_contract_multiple_negotiation_rounds(context, name):
     # reject as a distinct organization from the proposer's.
     responder_h = AuthService.get_headers_for_roles(["Contract Reviewer"], organization="TechVendor Inc")
     for change, flag, reason in (
-        ("Round 1: tighten SLA wording", "accept", ""),
-        ("Round 2: extend liability cap", "reject", "cap too high"),
+        ("Round 1: tighten SLA wording", "ACCEPTING", ""),
+        ("Round 2: extend liability cap", "REJECTING", "cap too high"),
     ):
         did, updated_at = ContractService._contract_data(context, name)
         resp = post_json(
@@ -93,14 +111,12 @@ def step_given_contract_multiple_negotiation_rounds(context, name):
         )
         assert resp.status_code == 200, f"negotiation round failed: {resp.status_code} {resp.text}"
         refreshed = ContractService._refresh_contract(context, name)
-        negotiations = refreshed.get("negotiations") or []
-        assert negotiations, f"Expected a negotiation entry after negotiate, got: {refreshed}"
-        negotiation_id = negotiations[-1]["id"]
+        negotiation_id = _negotiation_id_for_change(refreshed, change)
         resp = post_json(
             context,
             f"{context.base_url}/contract/respond",
             {"id": str(negotiation_id), "did": did, "action_flag": flag,
-             "rejected_by": AuthService.username_for_roles(["Contract Manager"]) if flag == "reject" else "",
+             "rejected_by": AuthService.username_for_roles(["Contract Manager"]) if flag == "REJECTING" else "",
              "rejection_reason": reason},
             headers=responder_h,
         )
@@ -249,24 +265,27 @@ def step_given_contract_has_negotiation_edits(context, name):
     responder_h = AuthService.get_headers_for_roles(["Contract Reviewer"], organization="TechVendor Inc")
     for change in ("Round 1: tighten SLA wording", "Round 2: extend liability cap"):
         did, updated_at = ContractService._contract_data(context, name)
+        # The change request must be a structured negotiationmerging.ChangeRequest
+        # object — submit's merge pass unmarshals accepted change requests into
+        # that type (mergechangerequests.go) and a bare string 500s there. A
+        # description-only change is the smallest real merge: each accepted
+        # round updates the contract description and bumps contract_version.
         resp = post_json(
             context,
             contract_negotiate_url(context),
             {"did": did, "updated_at": updated_at,
              "negotiated_by": AuthService.username_for_roles(["Contract Manager"]),
-             "change_request": change},
+             "change_request": {"description": change}},
             headers=creator_h,
         )
         assert resp.status_code == 200, f"negotiate failed: {resp.status_code} {resp.text}"
         refreshed = ContractService._refresh_contract(context, name)
-        negotiations = refreshed.get("negotiations") or []
-        assert negotiations, f"Expected a negotiation entry after negotiate, got: {refreshed}"
-        negotiation_id = negotiations[-1]["id"]
+        negotiation_id = _negotiation_id_for_change(refreshed, {"description": change})
 
         resp = post_json(
             context,
             f"{context.base_url}/contract/respond",
-            {"id": str(negotiation_id), "did": did, "action_flag": "accept",
+            {"id": str(negotiation_id), "did": did, "action_flag": "ACCEPTING",
              "rejected_by": "", "rejection_reason": ""},
             headers=responder_h,
         )
@@ -432,7 +451,7 @@ def step_when_approve_redline(context):
     context.requests_response = post_json(
         context,
         f"{context.base_url}/contract/respond",
-        {"id": str(negotiation_id), "did": did, "action_flag": "accept", "rejected_by": "", "rejection_reason": ""},
+        {"id": str(negotiation_id), "did": did, "action_flag": "ACCEPTING", "rejected_by": "", "rejection_reason": ""},
         headers=responder_h,
     )
 
@@ -450,7 +469,7 @@ def step_when_reject_redline(context, reason):
     context.requests_response = post_json(
         context,
         f"{context.base_url}/contract/respond",
-        {"id": str(negotiation_id), "did": did, "action_flag": "reject",
+        {"id": str(negotiation_id), "did": did, "action_flag": "REJECTING",
          "rejected_by": AuthService.username_for_roles(["Contract Manager"]), "rejection_reason": reason},
         headers=responder_h,
     )
@@ -520,7 +539,7 @@ def step_when_attempt_approve_own_redline(context):
     context.requests_response = post_json(
         context,
         f"{context.base_url}/contract/respond",
-        {"id": str(negotiation_id), "did": did, "action_flag": "accept", "rejected_by": "", "rejection_reason": ""},
+        {"id": str(negotiation_id), "did": did, "action_flag": "ACCEPTING", "rejected_by": "", "rejection_reason": ""},
     )
 
 
@@ -530,22 +549,121 @@ def step_when_attempt_access_contract_negotiation(context, name):
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did))
 
 
-@when('a representative of party "{party}" attempts to access the contract')
-def step_when_party_accesses_contract(context, party):
+@given('I have created contract "{name}" with parties "{party_a}" and "{party_b}"')
+def step_given_contract_with_parties(context, name, party_a, party_b):
+    """Creates a contract whose create request names its party organizations
+    (ContractCreateRequest.parties -> stored as the dcs:parties JSON-LD
+    property) — the basis for party read-scoping in
+    query/contract/querybyid.go."""
+    t_did = ContractService._create_approved_template_for_contract(context)
+    creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
+    peer_did = ContractService._local_peer_did(context)
+    create_resp = post_json(
+        context,
+        contract_create_url(context),
+        {
+            "template_did": t_did,
+            "reviewers": [peer_did],
+            "negotiators": [peer_did],
+            "approvers": [peer_did],
+            "parties": [party_a, party_b],
+        },
+        headers=creator_h,
+    )
+    assert create_resp.status_code == 200, (
+        f"Creating contract '{name}' with parties failed: {create_resp.status_code} {create_resp.text}"
+    )
+    c_did = create_resp.json().get("did")
+    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
+    assert retrieve.status_code == 200, retrieve.text
+    parties = (retrieve.json().get("contract_data") or {}).get("dcs:parties")
+    assert parties == [party_a, party_b], (
+        f"Expected the created contract's JSON-LD to record dcs:parties "
+        f"{[party_a, party_b]}, got: {parties}"
+    )
+    ContractService._ensure_store(context, "contract_dids", {})
+    ContractService._ensure_store(context, "contract_updated_at", {})
+    ContractService._ensure_store(context, "contract_seed_headers", {})
+    context.contract_dids[name] = c_did
+    context.contract_updated_at[name] = retrieve.json().get("updated_at")
+    context.contract_seed_headers[name] = creator_h
+
+
+@when('a representative of party "{party}" attempts to access contract "{name}"')
+def step_when_party_accesses_contract(context, party, name):
     # Party identity is carried by the OID4VP credential's disclosed
     # organization claim (middleware.GetParticipantID -> CreatedBy on
     # contract/create, see AuthService.DEFAULT_ORGANIZATION /
     # AuthCredentials.organization) — authenticate AS that party rather than
     # reusing whatever role/org happens to be on context.headers.
-    name = "Service Agreement"
     did, _ = ContractService._contract_data(context, name)
     headers = AuthService.get_headers_for_roles(["Contract Observer"], organization=party)
     context.requests_response = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
 
 
-@then('when a representative of unrelated party "{party}" attempts to access the contract')
-def step_then_unrelated_party_accesses_contract(context, party):
-    step_when_party_accesses_contract(context, party)
+@when('a representative of unrelated party "{party}" attempts to access contract "{name}"')
+def step_when_unrelated_party_accesses_contract(context, party, name):
+    step_when_party_accesses_contract(context, party, name)
+
+
+@then('when a representative of unrelated party "{party}" attempts to access contract "{name}"')
+def step_then_unrelated_party_accesses_contract(context, party, name):
+    step_when_party_accesses_contract(context, party, name)
+
+
+@then("the contract is accessible and visible")
+def step_then_contract_accessible(context):
+    assert context.requests_response.status_code == 200, (
+        f"Expected the party representative to read the contract (200), got "
+        f"{context.requests_response.status_code}: {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    assert body.get("did") and body.get("contract_data"), (
+        f"Expected a full contract body (did + contract_data), got: {body}"
+    )
+
+
+@then('the access is denied with a "{message}" error')
+def step_then_access_denied_with_message(context, message):
+    assert context.requests_response.status_code == 403, (
+        f"Expected party read-scoping to deny with HTTP 403 (retrieve_by_id's "
+        f"'forbidden' design error), got {context.requests_response.status_code}: "
+        f"{context.requests_response.text}"
+    )
+    assert message.lower() in context.requests_response.text.lower(), (
+        f"Expected the denial body to carry '{message}', got: {context.requests_response.text}"
+    )
+
+
+@then('the access denial for contract "{name}" is logged in the audit trail')
+def step_then_access_denial_audited(context, name):
+    # CONTRACT_ACCESS_DENIED is written by querybyid.go's denial branch and
+    # anchored asynchronously by the outbox processor — poll the contract's
+    # audit trail (POST /contract/audit) like the other audit-event steps.
+    did, _ = ContractService._contract_data(context, name)
+    auditor_h = AuthService.get_headers_for_roles(["Auditor"])
+    event_types = []
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        resp = post_json(context, contract_audit_url(context), {"did": did}, headers=auditor_h)
+        assert resp.status_code == 200, f"contract audit query failed: {resp.status_code} {resp.text}"
+        entries = resp.json()
+        assert isinstance(entries, list), f"Expected audit entries list, got: {entries}"
+        event_types = [str(e.get("event_type", "")).upper() for e in entries]
+        if "CONTRACT_ACCESS_DENIED" in event_types:
+            matching = [
+                e for e in entries
+                if str(e.get("event_type", "")).upper() == "CONTRACT_ACCESS_DENIED"
+            ]
+            assert matching[0].get("created_at"), (
+                f"Expected the denial audit entry to carry a timestamp, got: {matching[0]}"
+            )
+            return
+        time.sleep(2)
+    raise AssertionError(
+        f"Expected a CONTRACT_ACCESS_DENIED audit event for contract '{name}' "
+        f"(did={did}), got event types: {event_types}"
+    )
 
 
 @when('I attempt to access contract "{name}"')

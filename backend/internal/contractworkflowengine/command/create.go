@@ -3,10 +3,12 @@ package command
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/identity"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
@@ -31,6 +33,7 @@ type CreateCmd struct {
 	Reviewers   []string           `json:"reviewers"`
 	Approvers   []string           `json:"approvers"`
 	Negotiators []string           `json:"negotiators"`
+	Parties     []string           `json:"parties"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -122,6 +125,16 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
+	// Parties are attached after normalization for the same reason renewal's
+	// dcs:renewsContract is (see attachRenewsContractReference): the rebase
+	// pass must not touch them. They gate party read-scoping in
+	// query/contract/querybyid.go.
+	if len(cmd.Parties) > 0 {
+		normalizedContractData, err = attachContractParties(normalizedContractData, cmd.Parties)
+		if err != nil {
+			return fmt.Errorf("could not attach contract parties: %w", err)
+		}
+	}
 
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
@@ -178,4 +191,21 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	}
 
 	return tx.Commit()
+}
+
+// attachContractParties records the organizations that are parties to this
+// contract as a plain top-level "dcs:parties" JSON-LD property. Party
+// membership (organization names, the same value the OID4VP organization
+// claim discloses) gates read access in query/contract/querybyid.go.
+func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(*raw, &doc); err != nil {
+		return nil, fmt.Errorf("could not decode contract data: %w", err)
+	}
+	doc["dcs:parties"] = parties
+	encoded, err := datatype.NewJSON(doc)
+	if err != nil {
+		return nil, fmt.Errorf("could not encode contract data: %w", err)
+	}
+	return &encoded, nil
 }

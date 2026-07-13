@@ -102,7 +102,7 @@ def step_then_another_reviewer_must_approve(context):
     resp = post_json(
         context,
         f"{context.base_url}/contract/respond",
-        {"id": str(negotiation_id), "did": did, "action_flag": "accept", "rejected_by": "", "rejection_reason": ""},
+        {"id": str(negotiation_id), "did": did, "action_flag": "ACCEPTING", "rejected_by": "", "rejection_reason": ""},
         headers=other_h,
     )
     assert resp.status_code == 200, (

@@ -23,6 +23,7 @@ from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
 from steps.support.services.pdf_service import PDFService
 from steps.pdf_generation.pdf_steps import _utf16be
+from steps.template_management.contract_workflow_steps import _negotiation_id_for_change
 
 
 # ---------------------------------------------------------------------------
@@ -55,24 +56,28 @@ def step_given_contract_with_version(context, name, version):
 
     for i in range(rounds_needed):
         did, updated_at = ContractService._contract_data(context, name)
+        # Structured change request: submit's merge pass unmarshals accepted
+        # change requests into negotiationmerging.ChangeRequest and a bare
+        # string 500s there; select the entry by content because the
+        # negotiations list order is random (Go map iteration, see
+        # contract_workflow_steps._negotiation_id_for_change).
+        change = {"description": f"Round {i + 1}: version bump edit"}
         resp = post_json(
             context,
             contract_negotiate_url(context),
             {"did": did, "updated_at": updated_at,
              "negotiated_by": AuthService.username_for_roles(["Contract Manager"]),
-             "change_request": f"Round {i + 1}: version bump edit"},
+             "change_request": change},
             headers=creator_h,
         )
         assert resp.status_code == 200, f"negotiate failed: {resp.status_code} {resp.text}"
         refreshed = ContractService._refresh_contract(context, name)
-        negotiations = refreshed.get("negotiations") or []
-        assert negotiations, f"Expected a negotiation entry, got: {refreshed}"
-        negotiation_id = negotiations[-1]["id"]
+        negotiation_id = _negotiation_id_for_change(refreshed, change)
 
         resp = post_json(
             context,
             f"{context.base_url}/contract/respond",
-            {"id": str(negotiation_id), "did": did, "action_flag": "accept",
+            {"id": str(negotiation_id), "did": did, "action_flag": "ACCEPTING",
              "rejected_by": "", "rejection_reason": ""},
             headers=responder_h,
         )

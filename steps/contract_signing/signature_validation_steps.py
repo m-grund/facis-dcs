@@ -39,15 +39,37 @@ def step_when_compliance_check(context, name):
     )
 
 
-@then('the signature validation for contract "{name}" reports no findings')
+# The validate endpoint's findings list mixes defect findings with positive
+# confirmations (signingmanagement/db/pg/contractrepository.go's
+# CollectValidationFindings appends "Document integrity check passed" on
+# success; signingmanagement/query/validate.go appends the PID cross-check
+# confirmation). A healthy signature therefore reports *only* entries from
+# this confirmation set — an empty list would itself be a bug.
+_PASSING_VALIDATION_FINDINGS = {
+    "Document integrity check passed",
+    "Embedded PID presentation re-verified and cross-checked against the signature record",
+    "Validation passed",
+}
+
+
+@then('the signature validation for contract "{name}" reports only passing checks')
 def step_then_validation_no_findings(context, name):
     assert context.requests_response.status_code == 200, (
         f"Expected 200, got {context.requests_response.status_code}: {context.requests_response.text}"
     )
     body = context.requests_response.json()
     findings = body.get("findings") or []
-    assert findings == [], (
-        f"Expected a freshly-signed contract '{name}' to report no signature validation findings, "
+    assert findings, (
+        f"Expected the signature validation of freshly-signed contract '{name}' to report "
+        f"its passing confirmations (e.g. the document-integrity check), got an empty findings list"
+    )
+    negative = [f for f in findings if f not in _PASSING_VALIDATION_FINDINGS]
+    assert not negative, (
+        f"Expected a freshly-signed contract '{name}' to report only passing validation "
+        f"confirmations, got defect findings: {negative} (full list: {findings})"
+    )
+    assert "Document integrity check passed" in findings, (
+        f"Expected the MR/HR document-integrity check confirmation for contract '{name}', "
         f"got: {findings}"
     )
 
@@ -93,4 +115,47 @@ def step_then_signature_audit_includes(context, name, event_type):
         time.sleep(1)
     assert event_type.upper() in event_types, (
         f"Expected a '{event_type}' signature audit event for contract '{name}', got event types: {event_types}"
+    )
+
+
+def _exported_pdf_bytes(context, name):
+    pdf_store = getattr(context, "pdf_bytes", {}) or {}
+    assert name in pdf_store, (
+        f"No exported PDF bytes recorded for contract '{name}' — was "
+        f"'contract \"{name}\" has an exported PDF' run first?"
+    )
+    return pdf_store[name]
+
+
+@then('the exported PDF for contract "{name}" declares PDF/A-3 conformance in its XMP metadata')
+def step_then_pdf_declares_pdfa(context, name):
+    # DCS-FR-SM-27 / ISO 19005-3 clause 6.6.4: PDF/A version and conformance
+    # level are declared via the pdfaid XMP extension schema. pdf-core
+    # compiles part=3, conformance=A (compiler/compiler_pdf.go).
+    pdf = _exported_pdf_bytes(context, name)
+    assert b'pdfaid:part="3"' in pdf, (
+        f"Expected the exported PDF of '{name}' to declare pdfaid:part=\"3\" "
+        f"(PDF/A-3) in its XMP metadata"
+    )
+    assert b'pdfaid:conformance="A"' in pdf, (
+        f"Expected the exported PDF of '{name}' to declare pdfaid:conformance=\"A\" "
+        f"in its XMP metadata"
+    )
+
+
+@then('the exported PDF for contract "{name}" embeds the canonical JSON-LD payload as an associated file')
+def step_then_pdf_embeds_jsonld(context, name):
+    # The machine-readable payload rides inside the PDF/A-3 container as an
+    # associated file: Filespec (contract.jsonld) with AFRelationship /Source
+    # and an application/ld+json embedded file stream.
+    pdf = _exported_pdf_bytes(context, name)
+    assert b"(contract.jsonld)" in pdf, (
+        f"Expected a (contract.jsonld) Filespec in the exported PDF of '{name}'"
+    )
+    assert b"/AFRelationship /Source" in pdf, (
+        f"Expected the contract.jsonld attachment of '{name}' to be an associated "
+        f"file with AFRelationship /Source"
+    )
+    assert b"application#2Fld+json" in pdf, (
+        f"Expected an application/ld+json embedded file stream in the exported PDF of '{name}'"
     )
