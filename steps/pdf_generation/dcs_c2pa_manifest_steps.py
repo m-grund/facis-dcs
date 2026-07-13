@@ -1,27 +1,20 @@
-"""BDD step definitions for the c2pa-conformance requirement (Workstream D,
-docs/anforderung.md Zeilen 270-282).
+"""BDD step definitions for C2PA conformance
+(features/19_c2pa_conformance; SRS DCS-OR-C2PA-006/-008).
 
 Covers:
-  - AC1/AC2: the public, unauthenticated GET /c2pa/manifest/{did} endpoint
-    (raw manifest store bytes by default; ?history=true for a parsed chain
-    enumeration).
-  - AC3: the embedded manifest's `remote_manifests` claim field referencing
-    AC1's own endpoint.
-  - AC6: the verify response's four independently named checks, with the
-    PDF-signature check honestly reporting "not yet available" rather than
-    faking a pass (Workstream B/PAdES does not exist yet).
+  - the public, unauthenticated GET /c2pa/manifest/{did} endpoint
+    (backend/design/c2pa.go; raw manifest store bytes by default,
+    ?history=true for a parsed chain enumeration);
+  - the embedded manifest's `remote_manifests` claim field referencing
+    that endpoint;
+  - the verify response's four independently named checks.
 
-AC5 (lifecycle banner per state) and the "has reached contract state"/
+The lifecycle-banner scenarios and the "has reached contract state"/
 "is exported and verified as PDF" setup steps are deliberately NOT
 redefined here — they already exist in
 steps/template_management/contract_state_machine_steps.py and are reused
 as-is (see that module's `_reach_state` helper and its
 `the C2PA lifecycle_status for contract "{name}" is "{status}"` step).
-
-GET /c2pa/manifest/{contract_did} does not exist in backend/design/ yet
-(searched backend/design/*.go — no match) — every request this module
-issues against it is expected to 404/fail until Workstream D1 lands. That
-is the intended red signal for AC1/AC2/AC3.
 """
 
 import requests as _requests
@@ -34,7 +27,7 @@ from steps.support.services.contract_service import ContractService
 
 # ---------------------------------------------------------------------------
 # When — public manifest requests (deliberately sent WITHOUT any
-# Authorization header, proving AC1's "no JWT/auth" requirement honestly —
+# Authorization header, proving the "no JWT/auth" requirement honestly —
 # not just reusing context.headers with an empty override).
 # ---------------------------------------------------------------------------
 
@@ -59,7 +52,7 @@ def step_when_request_manifest_history(context, name):
 
 
 # ---------------------------------------------------------------------------
-# Then — AC1: raw manifest store response shape
+# Then — raw manifest store response shape
 # ---------------------------------------------------------------------------
 
 
@@ -89,7 +82,7 @@ def step_then_response_is_jumbf_manifest_store(context):
 
 
 # ---------------------------------------------------------------------------
-# Then — AC2: parsed history enumeration response shape
+# Then — parsed history enumeration response shape
 # ---------------------------------------------------------------------------
 
 
@@ -111,7 +104,7 @@ def step_then_history_response_shape(context):
 
 
 # ---------------------------------------------------------------------------
-# Then — AC3: remote_manifests claim field
+# Then — remote_manifests claim field
 # ---------------------------------------------------------------------------
 
 
@@ -131,8 +124,8 @@ def step_then_manifest_declares_remote_manifests(context, name):
     # (pdf-core/features/manifest_url.feature, pdf-core/features/steps/
     # dcs_pdf_core_steps.py:1816-1825), which also documents that c2pa-rs
     # 0.85.1 currently REJECTS this field in V2 claims. Per this task's
-    # explicit user decision, AC3 is checked against the literal claim-field
-    # approach anyway (see the feature file's header comment).
+    # this is checked against the literal claim-field approach (see the
+    # feature file's header comment).
     assert b"remote_manifests" in manifest_bytes, (
         "C2PA manifest store does not declare a 'remote_manifests' field at all: "
         f"{manifest_bytes[:300]!r}"
@@ -146,7 +139,7 @@ def step_then_manifest_declares_remote_manifests(context, name):
 
 
 # ---------------------------------------------------------------------------
-# Then — AC6: four independently named verify checks
+# Then — four independently named verify checks
 # ---------------------------------------------------------------------------
 
 
@@ -160,12 +153,9 @@ def step_then_verify_four_named_checks(context, name):
         f"{context.requests_response.text}"
     )
     body = context.requests_response.json()
-    # c2pa_manifest_found / vc_proof_valid / status_list_status already exist
-    # on PDFVerifyResult (backend/design/pdf_generation.go:16-22).
-    # pdf_signature_status does NOT exist yet — Workstream B/PAdES has not
-    # landed, so there is currently no dedicated "PDF signature" check field
-    # distinct from the C2PA COSE signature check. Its absence here is the
-    # intended red signal for AC6's fourth named check.
+    # c2pa_manifest_found / vc_proof_valid / status_list_status /
+    # pdf_signature_status live on PDFVerifyResult
+    # (backend/design/pdf_generation.go).
     required_fields = {
         "pdf_signature_status": "PDF signature",
         "c2pa_manifest_found": "C2PA manifest",
@@ -192,7 +182,7 @@ def step_then_pdf_signature_not_available(context, name):
     status = body.get("pdf_signature_status")
     assert status in ("pending", "not_available"), (
         f"Expected pdf_signature_status to be 'pending' or 'not_available' for "
-        f"contract '{name}' (Workstream B/PAdES is not implemented yet — "
-        "DCS-OR-C2PA-006 forbids the verifier from falsely showing a passed PDF "
-        f"signature check), got: {status!r} in response {body}"
+        f"contract '{name}' (the verify path does not cryptographically re-verify the "
+        "PAdES CMS signature, and DCS-OR-C2PA-006 forbids the verifier from falsely "
+        f"showing a passed PDF signature check), got: {status!r} in response {body}"
     )

@@ -90,10 +90,10 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 }
 
 // crossCheckEmbeddedPID re-verifies the embedded PID presentation against the
-// signature record (AC17, UC-04-03): it extracts the signing evidence from the
+// signature record (UC-04-03): it extracts the signing evidence from the
 // stored signed PDF, re-verifies the SD-JWT VC + KB-JWT, and confirms the
-// resolved signer DID matches the signature row. Absence of evidence (e.g. an
-// unsigned or legacy contract) yields no findings; any mismatch or verification
+// resolved signer DID matches the signature row. Absence of evidence (an
+// unsigned contract) yields no findings; any mismatch or verification
 // failure is reported as a finding so validate surfaces it.
 func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did string) []string {
 	if h.PDFCore == nil {

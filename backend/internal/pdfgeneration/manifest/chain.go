@@ -1,5 +1,5 @@
 // Package manifest parses a C2PA JUMBF manifest store into a lightweight
-// enumeration of its manifest chain (DCS-OR-C2PA-008, Workstream D AC2).
+// enumeration of its manifest chain (DCS-OR-C2PA-008).
 //
 // The manifest store bytes are produced by pdf-core (compiler.renderJUMBFSuperbox
 // et al., pdf-core/compiler/compiler_c2pa.go) and returned verbatim by the

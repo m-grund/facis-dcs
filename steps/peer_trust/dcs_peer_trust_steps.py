@@ -1,14 +1,9 @@
-"""BDD steps for the two-instance-peer-trust requirement (Workstream C1-C3,
-docs/anforderung.md).
+"""BDD steps for two-instance peer trust (features/17_peer_trust; SRS
+NFR-BR-08, DCS-FR-CWE-01/-15).
 
-Covers only the BDD-testable ACs (AC2, AC3, AC4, AC6). AC1 and AC5 are
-"manueller-Drill" per the analyst's Pruefmittel column and are deliberately
-NOT implemented here — the verifier checks those against the recorded manual
-demo evidence, not a Gherkin scenario.
-
-AC2/AC3 single-instance testing technique
-------------------------------------------
-AC2 (`post_sync`) and AC3 (`action`) both authenticate the calling peer via a
+Untrusted-peer single-instance testing technique
+------------------------------------------------
+The `post_sync` and `action` peer endpoints authenticate the calling peer via a
 did:web challenge-response signature (see backend/internal/service/
 dcs_to_dcs.go): the caller signs a fresh `secret_value` with its private key,
 and the receiving instance resolves `https://<hostname>/.well-known/did.json`
@@ -24,17 +19,17 @@ produces a genuinely valid signature for that synthetic identifier, without
 needing a second real DCS process. Crucially the synthetic identifier is a
 DIFFERENT STRING than the instance's real DID id, so:
   - it does not trip PostSync's separate same-peer guard
-    (`req.FromPeerDid == localPeer`, dcs_to_dcs.go ~line 378), which would
+    (`req.FromPeerDid == localPeer`, dcs_to_dcs.go), which would
     otherwise reject self-simulated same-DID requests for an unrelated
-    reason and make an AC2 test dishonest; and
-  - it can be independently seeded into (AC4) or kept absent from (AC2/AC3)
+    reason and make the untrusted-peer test dishonest; and
+  - it can be independently seeded into or kept absent from
     the local `trusted_peers` table, exercising exactly the third trust
     layer trustedpeercheck.go documents (allowlist, distinct from
     cryptographic validity).
 
 This technique is the natural single-instance extension of the self-peer
-simulation already used for AC4 of the contract-state-machine-refactor
-requirement (see steps/template_management/contract_state_machine_steps.py,
+simulation used by the contract-state-machine pack (see
+steps/template_management/contract_state_machine_steps.py,
 `_self_peer_action_credentials`), adapted here to also cover the PostSync
 same-peer guard.
 """
@@ -109,10 +104,9 @@ def _synthetic_peer_credentials(context, marker: str):
 
 def _seed_trusted_peer(context, peer_did: str):
     """Insert peer_did into trusted_peers directly via the test DB
-    connection (context.db, see environment.py) rather than relying on any
-    particular env-var-based seeding mechanism the implementer may still be
-    building (e.g. DCS_TRUSTED_PEERS, docs/anforderung.md C1) — this keeps
-    the scenario robust regardless of how that mechanism ends up wired."""
+    connection (context.db, see environment.py) rather than relying on the
+    env-var-based seeding mechanism (DCS_TRUSTED_PEERS) — this keeps the
+    scenario independent of how that mechanism is wired."""
     cursor = context.db.cursor()
     cursor.execute(
         "INSERT INTO trusted_peers (peer_did) VALUES (%s) ON CONFLICT (peer_did) DO NOTHING",
@@ -221,9 +215,9 @@ def step_when_create_contract_raw_peer_did(context):
     creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
     # A raw did:web peer identity (this instance's own, fetched from its
     # public did.json) — deliberately NOT a username and NOT any
-    # authenticated user's JWT sub, since AC6 claims this must work without
-    # a JWT-sub binding (see the stale comment at
-    # frontend/ClientApp/src/utils/participant-selection.ts:1).
+    # authenticated user's JWT sub: entering a raw peer DID as participant
+    # must work without a JWT-sub binding (see
+    # frontend/ClientApp/src/utils/participant-selection.ts).
     peer_did = ContractService._local_peer_did(context)
     context.raw_peer_did_used = peer_did
     context.contract_creator_headers = creator_h
@@ -320,7 +314,7 @@ def step_then_raw_peer_did_recorded(context):
     responsible = retrieve.json().get("responsible") or {}
     peer_did = context.raw_peer_did_used
     assert peer_did.startswith("did:web:"), (
-        f"expected a raw did:web peer identity for AC6, got '{peer_did}'"
+        f"expected a raw did:web peer identity, got '{peer_did}'"
     )
     for role_key in ("reviewers", "approvers", "negotiators"):
         assert peer_did in (responsible.get(role_key) or []), (
@@ -329,28 +323,14 @@ def step_then_raw_peer_did_recorded(context):
 
 
 # ---------------------------------------------------------------------------
-# AC7 / AC8 — genuine two-instance scenarios (@two-instance)
+# Genuine two-instance scenarios (@two-instance)
 #
 # These require a SECOND real DCS process (instance B) that trusts, and is
-# trusted by, instance A — i.e. Workstream C2 ("Second-instance runner",
-# docs/anforderung.md) plus C1's reciprocal trusted_peers seeding. Neither
-# exists yet at the time this pack was written. Per the architect's guidance
-# these scenarios are still written now (targeting BDD_DCS_BASE_URL_A /
-# BDD_DCS_BASE_URL_B, not the single-instance BDD_DCS_BASE_URL) so that they
-# are ready to run the moment C2 lands; until then they fail fast with an
-# explicit message naming the missing runner, which is the expected/correct
-# red state — not a defect in this BDD pack.
-#
-# A genuine backend gap surfaced while writing AC8: the C4 transition table
-# (backend/internal/contractworkflowengine/datatype/contractstate/
-# transition.go) only allows Offered -> {Withdrawn, Terminated} — there is
-# currently NO declared path from Offered back into Negotiation/Submitted/
-# Reviewed/Approved. That means AC8's "submit/review/approve complete on
-# both sides after Offer" is not reachable yet even on a single instance,
-# independent of the two-instance runner. This scenario intentionally
-# exercises that real path (rather than working around it) so it stays red
-# for the right reason until the table is extended — flagged here for the
-# analyst/architect rather than silently patched.
+# trusted by, instance A, targeting BDD_DCS_BASE_URL_A / BDD_DCS_BASE_URL_B
+# instead of the single-instance BDD_DCS_BASE_URL. The runners providing
+# that: dev-stack2.sh locally, tests/bdd/scripts/run_bdd_helm.sh (dcs-a /
+# dcs-b releases) in CI. If the URLs are unset, the scenarios fail fast
+# with an explicit message naming the missing wiring.
 # ---------------------------------------------------------------------------
 
 
@@ -375,10 +355,8 @@ def step_given_two_instances_running(context):
     base_url_b = os.getenv("BDD_DCS_BASE_URL_B", "http://localhost:5174/api").rstrip("/")
     assert base_url_a and base_url_b, (
         "BDD_DCS_BASE_URL_A and BDD_DCS_BASE_URL_B must both be set to run this @two-instance "
-        "scenario. This requires the second-instance runner (docs/anforderung.md Workstream "
-        "C2: extend dev-stack.sh to optionally launch a second DCS instance on :8992 with "
-        "reciprocal DCS_TRUSTED_PEERS seeding against instance A) — which does not exist yet. "
-        "This is an open point for C1/C2, not a defect in this scenario."
+        "scenario: a second DCS instance with reciprocal DCS_TRUSTED_PEERS seeding against "
+        "instance A (dev-stack2.sh locally, tests/bdd/scripts/run_bdd_helm.sh in CI)."
     )
     context.base_url_a = base_url_a
     context.base_url_b = base_url_b
@@ -407,7 +385,7 @@ def step_when_create_and_offer_cross_instance(context):
         # context.base_url swapped in by _as_instance. This only produces a
         # correct evidence trail if BDD_DCS_BASE_URL_A == BDD_DCS_BASE_URL
         # (i.e. instance A is conventionally "the" default single-instance
-        # URL in the two-instance dev setup, per docs/anforderung.md C2).
+        # URL in the two-instance dev setup).
         # Flagging this here rather than silently relying on it: if the
         # two-instance runner ever assigns A a different URL than the
         # single-instance default, this helper needs an api_base-aware
@@ -415,9 +393,7 @@ def step_when_create_and_offer_cross_instance(context):
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"], api_base=context.base_url_a)
         # Reviewer = A's own identity (Origin == localPeer, so review can
-        # complete locally without depending on the still-open C1/C2 points);
-        # negotiator/approver = B, per AC7's own wording ("B als Negotiator +
-        # Approver").
+        # complete locally); negotiator/approver = instance B.
         create_resp = post_json(
             context,
             contract_create_url(context),
@@ -479,10 +455,9 @@ def step_when_full_approval_cross_instance(context):
         creator_h = context.cross_instance_creator_headers
 
         # Draft/Offered -> Negotiation -> Submitted (creator submits twice,
-        # same pattern as the single-instance contract-state-machine-refactor
-        # pack). NOTE: per the module-level comment above, the transition
-        # table does not (yet) declare Offered -> Negotiation as a legal
-        # outcome — this call is expected to surface that gap honestly.
+        # same pattern as the single-instance contract-state-machine pack).
+        # This exercises the Offered -> Negotiation edge of the transition
+        # table (contractstate/transition.go, Offered branch).
         retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
         assert retrieve.status_code == 200, retrieve.text
         updated_at = retrieve.json().get("updated_at")
@@ -506,9 +481,9 @@ def step_when_full_approval_cross_instance(context):
     # own endpoint; B's local copy has Origin=A, so each of these calls
     # transparently forwards to A via the existing peer-action machinery
     # (negotiate.go / acceptnegotiation.go both do the same
-    # `Origin != localPeer` forwarding check already proven by AC7's offer
-    # replication) — no manual peer-action signing needed here, unlike the
-    # untrusted-peer simulation in AC2/AC3.
+    # `Origin != localPeer` forwarding check already proven by the
+    # cross-instance offer replication) — no manual peer-action signing
+    # needed here, unlike the untrusted-peer simulation scenarios.
     with _as_instance(context, context.base_url_b):
         negotiator_h = AuthService.get_headers_for_roles(["Contract Negotiator"], api_base=context.base_url_b)
 
@@ -691,7 +666,7 @@ def step_then_approved_replicated_both(context):
 
 
 # ---------------------------------------------------------------------------
-# AC9 — approval quorum with two distinct approver peers (DCS-FR-CWE-15/25)
+# Approval quorum with two distinct approver peers (DCS-FR-CWE-15/25)
 # ---------------------------------------------------------------------------
 
 
@@ -771,7 +746,8 @@ def _approve_from_instance(context, base_url):
     creator_h = context.cross_instance_creator_headers
     approver_h = AuthService.get_headers_for_roles(["Contract Approver"], api_base=base_url)
     # Always read the authoritative updated_at from A (the origin) — B's
-    # replica catches up asynchronously (same convention as AC8).
+    # replica catches up asynchronously (same convention as the
+    # APPROVED-replication scenario).
     retrieve = get_with_headers(
         context, f"{context.base_url_a}/contract/retrieve/{c_did}", headers=creator_h
     )

@@ -1,20 +1,20 @@
 /**
  * Single source for ODRL 2.2 action IRIs used when the editor emits ODRL
- * rules (Workstream F / "odrl-soundness", docs/anforderung.md, F1).
+ * rules (see docs/adr-6-odrl-profile-enforcement.md).
  *
  * Every `OdrlRule` built by dcsDraftStore carries exactly one `odrl:action`.
  * For field-value constraints generated from semantic conditions/parameters
  * (the common case in the template/contract editor), the DCS ODRL profile
  * action `dcs:provideCompliantValue` applies (see
- * docs/semantic-ontology/dcs-odrl-profile.md). Where a clause instead
+ * docs/adr-6-odrl-profile-enforcement.md). Where a clause instead
  * expresses a standard ODRL usage/spatial/temporal permission directly, the
  * corresponding standard-vocabulary action IRI should be preferred over the
  * DCS-specific one.
  *
  * This file intentionally does not yet catalogue SLA metric IRIs/operators/
- * units (see CLAUDE.md) — only the ODRL action-IRI slice needed for
- * Workstream F1 has been populated so far; extending it into the full
- * planned SLA/ODRL vocabulary catalogue is an open follow-up.
+ * units (see CLAUDE.md) — only the ODRL action-IRI slice needed by the
+ * editor has been populated so far; extending it into the full planned
+ * SLA/ODRL vocabulary catalogue is an open follow-up.
  */
 
 /** The DCS ODRL profile action for "the bound contract-data field value complies with the declared constraint". */

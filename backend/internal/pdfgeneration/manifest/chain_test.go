@@ -101,7 +101,7 @@ func TestParseChain_MultipleManifests(t *testing.T) {
 	if entries[0].Label != "urn:c2pa:manifest-1" || entries[1].Label != "urn:c2pa:manifest-2" {
 		t.Errorf("unexpected labels: %q, %q", entries[0].Label, entries[1].Label)
 	}
-	// At least one entry must carry a lifecycle assertion (AC2 requirement).
+	// At least one entry must carry a lifecycle assertion.
 	found := false
 	for _, e := range entries {
 		if e.Lifecycle != nil {

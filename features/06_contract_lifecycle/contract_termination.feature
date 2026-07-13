@@ -1,8 +1,7 @@
 # Contract lifecycle termination and renewal (UC-06-02, POST /contract/
 # terminate + POST /contract/renew, backend/design/contract_workflow_engine.go).
 # KPI monitoring for ACTIVE contracts (UC-06-01) is covered by
-# 05_contract_deployment/contract_deployment.feature (Workstream G,
-# AC11/AC12) — not duplicated here.
+# 05_contract_deployment/contract_deployment.feature — not duplicated here.
 #
 # Renewal (DCS-FR-CWE-11/22, DCS-FR-CSA-15) creates a NEW, independently
 # versioned contract instance rather than mutating the original's expiry date
@@ -20,7 +19,7 @@
 @UC-06-02 @DCS-FR-CWE-11 @DCS-FR-CWE-12
 Feature: Contract termination
 
-  @REQ-contract-termination-AC1 @UC-06-02
+  @UC-06-02
   Scenario: Contract Manager terminates an approved contract
     Given contract "Termination Contract" has reached contract state "APPROVED"
     When the contract manager terminates contract "Termination Contract" with reason "BDD termination test"
@@ -28,13 +27,13 @@ Feature: Contract termination
     And the contract "Termination Contract" is in state "TERMINATED"
     And the contract "Termination Contract" has an audit event of type "TERMINATE_CONTRACT"
 
-  @REQ-contract-termination-AC2 @UC-06-02
+  @UC-06-02
   Scenario: A terminated contract cannot be terminated again
     Given contract "Double Termination Contract" has reached contract state "TERMINATED"
     When the contract manager terminates contract "Double Termination Contract" with reason "second attempt"
     Then the request is denied with a client error
 
-  @REQ-contract-termination-AC3 @UC-06-02 @DCS-FR-CWE-11 @DCS-FR-CWE-22
+  @UC-06-02 @DCS-FR-CWE-11 @DCS-FR-CWE-22
   Scenario: Contract Manager renews a contract before its expiry notice period
     Given contract "Renewal Contract" with a contract term has reached contract state "SIGNED"
     And contract "Renewal Contract" is force-set to state "ACTIVE" directly in the database (pre-deploy test seam, bypassing the deployment chain)

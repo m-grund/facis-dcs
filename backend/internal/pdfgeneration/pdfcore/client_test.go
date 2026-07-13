@@ -88,7 +88,7 @@ func TestClientUpdate(t *testing.T) {
 }
 
 // TestClientUpdateWithManifestURL verifies that Update sends a "manifest_url"
-// multipart field when a remote manifest URL is supplied (DCS-OR-C2PA-008 AC3).
+// multipart field when a remote manifest URL is supplied (DCS-OR-C2PA-008).
 func TestClientUpdateWithManifestURL(t *testing.T) {
 	const manifestURL = "https://dcs.example/c2pa/manifest/did:example:contract-1"
 	srv := stubServer(t, func(w http.ResponseWriter, r *http.Request) {

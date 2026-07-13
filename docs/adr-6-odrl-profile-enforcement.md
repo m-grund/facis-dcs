@@ -25,16 +25,15 @@ directly, which makes it a security gap, not a UX nicety.
   frontend is not the enforcement point.
 - The `odrl:Offer` → `odrl:Agreement` two-party upgrade and compound
   (AND/OR-nested) constraint expressions are not implemented — every
-  shipped policy is a single-party `odrl:Set` with a flat constraint list
-  (Deviation Register #6).
+  shipped policy is a single-party `odrl:Set` with a flat constraint
+  list.
 
 ## Consequences
 
-- A Contract Target System (DCS's example ORCE flow, Workstream G) can
+- A Contract Target System (DCS's example ORCE flow) can
   consume the emitted `odrl:Set` as real ODRL, not a bespoke shape it has
   to special-case.
-- Server-side enforcement is the one item on this list explicitly marked
-  **not trimmable** even under schedule pressure (docs/anforderung.md's
-  sequencing section) — it is a security fix, not a feature.
+- Server-side enforcement is **not trimmable** (SRS DCS-FR-PACM-03) — it
+  is a security property, not a feature.
 - The emitted `odrl:Set` is validated against ODRL SHACL shapes in CI and
   can express the SRS Appendix C example policy.

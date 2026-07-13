@@ -331,7 +331,7 @@ func main() {
 		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL)
 	}
 
-	// Contract deployment (Workstream G, UC-05-01): the Contract Target
+	// Contract deployment (UC-05-01): the Contract Target
 	// System client is optional — without CONTRACT_TARGET_URL set, deploy
 	// dispatches are still recorded (correlation ID, content hash, archive
 	// evidence) but no outbound call is made; the target's own callback

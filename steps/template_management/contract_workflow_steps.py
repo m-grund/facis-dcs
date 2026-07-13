@@ -680,7 +680,7 @@ def step_when_automated_compliance_checks(context):
     # constraints now runs INSIDE approval itself
     # (validation.ValidateContractPolicySatisfaction, approve.go) — approving
     # is what actually exercises "automated compliance checks are performed"
-    # for a pending-approval contract; pack 18 AC4 covers the negative path
+    # for a pending-approval contract; pack 18 covers the negative path
     # (a violated constraint blocks approval with a 4xx).
     name = "Service Agreement"
     did, updated_at = ContractService._contract_data(context, name)

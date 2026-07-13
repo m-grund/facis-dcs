@@ -94,7 +94,7 @@ def _minimal_canonical_contract_data(extra_top_level: dict | None = None) -> dic
 def _link_contract_to_parent(context, child_name: str, parent_name: str):
     """PUT /contract/update on `child_name` with a single dcs:parentContract
     reference pointing at `parent_name`. Does NOT assert the outcome — some
-    callers (AC3's cycle scenario) need to observe a rejection."""
+    callers (the parent-cycle scenario) need to observe a rejection."""
     child_did, updated_at = ContractService._contract_data(context, child_name)
     parent_did, _ = ContractService._contract_data(context, parent_name)
     headers = context.contract_seed_headers[child_name]

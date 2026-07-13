@@ -320,9 +320,9 @@ func auditPolicyOperandIntegrity(policySet *templatePolicySet, rule templatePoli
 		}
 		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:policies must be an odrl:Set object (or an empty array)", "dcs:policies", "")}
 	}
-	// dcs:policies is either the target enclosing odrl:Set (Workstream F1) or
-	// the legacy flat array — collectODRLPolicyRules flattens both shapes for
-	// this advisory audit the same way the enforcement path does.
+	// dcs:policies is the canonical enclosing odrl:Set (or an empty array);
+	// collectODRLPolicyRules flattens its rule buckets for this advisory
+	// audit the same way the enforcement path does.
 	policies := collectODRLPolicyRules(rawPolicies)
 	findings := []PolicyFinding{}
 	for _, policy := range policies {

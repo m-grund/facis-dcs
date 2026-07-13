@@ -8,7 +8,7 @@ steps/template_management/dcs_contract_hierarchy_steps.py and
 steps/pdf_generation/dcs_bundle_export_steps.py (pack 20) rather than
 duplicated.
 
-Party authorization (AC5/AC6 of this feature) is enforced today in
+Party authorization is enforced in
 backend/internal/service/contract_workflow_engine.go's Create() via
 dcstodcs.CheckForUntrustedPeers on reviewers/approvers/negotiators — a peer
 DID is accepted only if it is this instance's own DID or already present in

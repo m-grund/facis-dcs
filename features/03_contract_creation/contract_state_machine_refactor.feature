@@ -1,25 +1,26 @@
-# Requirement: contract-state-machine-refactor
+# Contract state machine — Offer, Withdraw, and the extended transition
+# table: the first-class contract states OFFERED, WITHDRAWN, ACTIVE, and
+# REVOKED alongside DRAFT/NEGOTIATION/SUBMITTED/REVIEWED/APPROVED/SIGNED/
+# TERMINATED/EXPIRED (authoritative table:
+# backend/internal/contractworkflowengine/datatype/contractstate; see also
+# docs/adr-2-contract-state-machine.md).
 #
-# Covers the new first-class contract states (OFFERED, WITHDRAWN, ACTIVE,
-# REVOKED) added around the existing DRAFT/NEGOTIATION/SUBMITTED/REVIEWED/
-# APPROVED/SIGNED/TERMINATED/EXPIRED states (see docs/anforderung.md, decision
-# #5 "Offer/accept/withdraw become FIRST-CLASS contract states").
-#
-# Out of scope for this pack (see final BDD report for details):
-#   - AC8's ACTIVE/REVOKED C2PA mapping: reaching ACTIVE requires the
-#     deployment/ORCE flow and reaching REVOKED requires POST /signature/revoke
-#     to actually flip contract state — neither is one of this requirement's
-#     9 ACs, so only OFFERED/NEGOTIATION/SUBMITTED/REVIEWED/APPROVED/SIGNED/
-#     TERMINATED are exercised here.
-#   - AC9's frontend status label rendering: this BDD stack has no browser
+# Out of scope for this pack:
+#   - The ACTIVE/REVOKED C2PA lifecycle mapping: reaching ACTIVE requires
+#     the deployment/ORCE flow (covered in 05_contract_deployment) and
+#     REVOKED is covered in 15_access_revocation, so only OFFERED/
+#     NEGOTIATION/SUBMITTED/REVIEWED/APPROVED/SIGNED/TERMINATED are
+#     exercised here.
+#   - Frontend status label rendering: this BDD stack has no browser
 #     automation (no Selenium/Playwright), only HTTP-level checks. The
-#     scenario below only proves the backend search/filter contract the
-#     frontend Status-Filter depends on; it does NOT observe the Vue label.
+#     search-filter scenario below only proves the backend search/filter
+#     contract the frontend Status-Filter depends on; it does NOT observe
+#     the Vue label.
 
 @UC-03
 Feature: Contract state machine refactor — Offer, Withdraw, and the extended transition table
 
-  @REQ-contract-state-machine-refactor-AC1 @SRS-2.2.6 @SRS-1.2 @UC-03
+  @SRS-2.2.6 @SRS-1.2 @UC-03
   Scenario: Initiator offers a draft contract and it becomes OFFERED
     Given I am authenticated with roles: "Contract Creator"
     And contract "Offer Draft Contract" is in "Draft" status
@@ -27,7 +28,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     Then get http 200:Success code
     And the contract "Offer Draft Contract" is in state "OFFERED"
 
-  @REQ-contract-state-machine-refactor-AC2 @SRS-1.2 @SRS-2.2.6 @UC-03
+  @SRS-1.2 @SRS-2.2.6 @UC-03
   Scenario Outline: Initiator withdraws a contract from a pre-approval state
     Given I am authenticated with roles: "Contract Creator"
     And contract "<name>" has reached contract state "<state>"
@@ -42,7 +43,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
       | Withdraw From Submitted       | SUBMITTED   |
       | Withdraw From Reviewed        | REVIEWED    |
 
-  @REQ-contract-state-machine-refactor-AC3 @DCS-NFR-BR-08 @SRS-1.2
+  @DCS-NFR-BR-08 @SRS-1.2
   Scenario: Withdraw is rejected once the contract has been approved
     Given I am authenticated with roles: "Contract Creator"
     And contract "Withdraw After Approval" has reached contract state "APPROVED"
@@ -50,7 +51,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     Then the withdraw request is rejected
     And the contract "Withdraw After Approval" is in state "APPROVED"
 
-  @REQ-contract-state-machine-refactor-AC4 @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @SRS-3.1.1
+  @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @SRS-3.1.1
   Scenario: Approve on a draft contract is rejected via the UI-API entry path
     Given I am authenticated with roles: "Contract Approver"
     And contract "Invalid Transition UI Path" is in "Draft" status
@@ -61,10 +62,8 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
   # NOTE: the peer-action entry path (`POST /peer/contracts/action`) requires
   # a successful did:web challenge-response handshake (hostname resolution +
   # eIDAS check + signature verify, see backend/internal/service/dcs_to_dcs.go
-  # Action()) before the transition table is ever reached. A genuine
-  # two-instance peer isn't available in this single-instance BDD harness
-  # (docs/anforderung.md: two-instance runner still missing), so this
-  # scenario instead simulates a trusted peer by having the instance
+  # Action()) before the transition table is ever reached. This scenario runs
+  # single-instance, so it simulates a trusted peer by having the instance
   # authenticate as its own did:web identity (checked-in dev DID document,
   # backend/certs/dev/did-8991.json, signed via the per-instance SoftHSM2
   # token — see steps/template_management/contract_state_machine_steps.py
@@ -79,22 +78,22 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
   # This still doesn't exercise cross-operator peer trust (did:web hostname
   # resolution across two independently-run instances, a real
   # eIDAS-certificate-chain check, or the local trusted_peers allowlist) —
-  # that remains the two-instance runner's job.
-  @REQ-contract-state-machine-refactor-AC4 @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @SRS-3.1.1
+  # that is the @two-instance peer-trust pack's job (features/17_peer_trust).
+  @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @SRS-3.1.1
   Scenario: Approve on a draft contract is rejected via the peer-action entry path
     Given contract "Invalid Transition Peer Path" is in "Draft" status
     When a peer attempts to approve contract "Invalid Transition Peer Path" via the peer action endpoint
     Then the peer action request fails
     And the contract "Invalid Transition Peer Path" is in state "DRAFT"
 
-  @REQ-contract-state-machine-refactor-AC5 @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @UC-03
+  @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @UC-03
   Scenario: Submit, review, and approve still reach APPROVED under the new transition table
     Given I am authenticated with roles: "Contract Creator"
     And contract "Full Approval Path" is in "Draft" status
     When contract "Full Approval Path" is submitted, reviewed, and approved via the standard workflow
     Then the contract "Full Approval Path" is in state "APPROVED"
 
-  @REQ-contract-state-machine-refactor-AC6 @SRS-1.2 @FR-SM
+  @SRS-1.2 @FR-SM
   Scenario: Signing an approved contract transitions it to SIGNED
     Given I am authenticated with roles: "Contract Creator"
     And contract "Signing Flow" has reached contract state "APPROVED"
@@ -102,7 +101,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     Then get http 200:Success code
     And the contract "Signing Flow" is in state "SIGNED"
 
-  @REQ-contract-state-machine-refactor-AC7 @SRS-2.2.6 @DCS-NFR-BR-08
+  @SRS-2.2.6 @DCS-NFR-BR-08
   Scenario: Offering a contract emits a typed OFFER outbox event
     Given I am authenticated with roles: "Contract Creator"
     And contract "Offer Event Contract" is in "Draft" status
@@ -110,7 +109,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     Then get http 200:Success code
     And the contract "Offer Event Contract" has an audit event of type "OFFER_CONTRACT"
 
-  @REQ-contract-state-machine-refactor-AC7 @SRS-2.2.6 @DCS-NFR-BR-08
+  @SRS-2.2.6 @DCS-NFR-BR-08
   Scenario: Withdrawing a contract emits a typed WITHDRAW outbox event
     Given I am authenticated with roles: "Contract Creator"
     And contract "Withdraw Event Contract" has reached contract state "OFFERED"
@@ -118,7 +117,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     Then get http 200:Success code
     And the contract "Withdraw Event Contract" has an audit event of type "WITHDRAW_CONTRACT"
 
-  @REQ-contract-state-machine-refactor-AC8 @DCS-OR-C2PA-003
+  @DCS-OR-C2PA-003
   Scenario Outline: C2PA lifecycle mapping is valid for every reachable new-machine contract state
     Given I am authenticated with roles: "Contract Manager"
     And contract "<name>" has reached contract state "<state>"
@@ -136,11 +135,11 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
       | C2PA State Signed    | SIGNED      | active      |
       | C2PA State Terminate | TERMINATED  | terminated  |
 
-  # Partial coverage only — see the feature-level comment above and the final
-  # BDD report: this proves the backend `state` filter accepts the new
-  # lifecycle values (the contract on which the frontend Status-Filter and
-  # status-label components depend), not the actual Vue rendering.
-  @REQ-contract-state-machine-refactor-AC9 @SRS-3.1.1
+  # Partial coverage only — see the feature-level comment above: this proves
+  # the backend `state` filter accepts the new lifecycle values (the
+  # contract on which the frontend Status-Filter and status-label components
+  # depend), not the actual Vue rendering.
+  @SRS-3.1.1
   Scenario Outline: The contract search endpoint recognizes the new lifecycle states as a filter value
     Given I am authenticated with roles: "Contract Manager"
     And contract "<name>" has reached contract state "<state>"

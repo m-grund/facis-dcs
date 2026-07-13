@@ -19,7 +19,8 @@
 #     search never surfaces that child's DID.
 #   - credentials/ in the contract bundle is extracted from the exported
 #     PDF's C2PA manifest chain (the same source as manifest-store.c2pa);
-#     signing-summary VCs do not exist in the backend and are not asserted.
+#     signing-summary VCs are not part of the bundle's credentials/ folder
+#     and are not asserted here.
 #   - deployment/ in the contract bundle stays empty/optional (no
 #     contract_deployments source exists).
 #
@@ -36,22 +37,22 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     Given I am authenticated with roles: "Contract Manager"
 
   # ---------------------------------------------------------------------
-  # H1 — hierarchy invariant
+  # Hierarchy invariant
   # ---------------------------------------------------------------------
 
-  @REQ-contract-hierarchy-bundle-export-AC1 @DCS-FR-TR-02 @DCS-FR-CWE-02
+  @DCS-FR-TR-02 @DCS-FR-CWE-02
   Scenario: A contract document with more than one dcs:parentContract reference is rejected
     Given contract "Multi-Parent Contract" exists with no parent reference
     When contract "Multi-Parent Contract" is updated with two dcs:parentContract references
     Then the request is denied with a client error
 
-  @REQ-contract-hierarchy-bundle-export-AC2 @DCS-FR-TR-02 @DCS-FR-CWE-02
+  @DCS-FR-TR-02 @DCS-FR-CWE-02
   Scenario: A contract document with a child-enumerating property is rejected
     Given contract "Child Enumerating Contract" exists with no parent reference
     When contract "Child Enumerating Contract" is updated with a child-enumerating dcs:childContracts property
     Then the request is denied with a client error
 
-  @REQ-contract-hierarchy-bundle-export-AC3 @DCS-FR-TR-02 @DCS-FR-CWE-02
+  @DCS-FR-TR-02 @DCS-FR-CWE-02
   Scenario: A contract whose locally resolvable parent chain contains a cycle is rejected
     Given contracts "Cycle A" and "Cycle B" exist locally with no parent reference
     When contract "Cycle B" is updated to reference contract "Cycle A" as its parent
@@ -59,7 +60,7 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     When contract "Cycle A" is updated to reference contract "Cycle B" as its parent
     Then the request is denied with a client error
 
-  @REQ-contract-hierarchy-bundle-export-AC4 @DCS-FR-CWE-29
+  @DCS-FR-CWE-29
   Scenario: contract search accepts a parent_did filter and returns only contracts referencing it
     Given contract "Filter Frame Contract" exists with no parent reference
     And contract "Filter Linked Child" references contract "Filter Frame Contract" as its parent
@@ -69,13 +70,13 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     And the search results include contract "Filter Linked Child"
     And the search results do not include contract "Filter Unrelated Contract"
 
-  @REQ-contract-hierarchy-bundle-export-AC5 @DCS-FR-CSA-26 @two-instance
+  @DCS-FR-CSA-26 @two-instance
   Scenario: Sibling isolation — instance B never sees a child kept local to instance A
     Given instance A and instance B are both running and trust each other
     When child contracts are created on instance A: one linked to a frame and offered to instance B, another linked to the same frame and kept local to instance A only
     Then instance B's parent_did-filtered search for the frame includes the offered child but never the sibling that stayed local to instance A
 
-  @REQ-contract-hierarchy-bundle-export-AC6 @DCS-FR-CWE-29
+  @DCS-FR-CWE-29
   Scenario: Frame contract detail query shows linked child contracts with their states
     Given contract "Detail Frame Contract" exists with no parent reference
     And contract "Detail Linked Draft Child" references contract "Detail Frame Contract" as its parent, then reaches contract state "DRAFT"
@@ -86,10 +87,10 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     And the search results for contract "Detail Frame Contract" show contract "Detail Linked Negotiating Child" with state "NEGOTIATION"
 
   # ---------------------------------------------------------------------
-  # H2 — ZIP bundle export
+  # ZIP bundle export
   # ---------------------------------------------------------------------
 
-  @REQ-contract-hierarchy-bundle-export-AC7 @DCS-FR-CWE-30
+  @DCS-FR-CWE-30
   Scenario: Contract bundle export returns a ZIP with all required members
     Given contract "Bundle Export Contract" has reached contract state "SIGNED"
     And contract "Bundle Export Contract" has an exported PDF
@@ -98,7 +99,7 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     And the response has Content-Type "application/zip"
     And the contract bundle ZIP for "Bundle Export Contract" contains entries: contract.jsonld, contract.pdf, manifest-store.c2pa, credentials/, signatures.json, bundle-manifest.json
 
-  @REQ-contract-hierarchy-bundle-export-AC8 @DCS-FR-CWE-30 @DCS-FR-CSA-26
+  @DCS-FR-CWE-30 @DCS-FR-CSA-26
   Scenario: Child contract bundle carries the parent chain upward but nothing about its sibling
     # All three contracts are deliberately kept in DRAFT (not advanced to
     # SIGNED): contract/update — used to establish dcs:parentContract links
@@ -117,7 +118,7 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     And the contract bundle ZIP for "Hierarchy Bundle Child" contains the parent chain for "Hierarchy Bundle Frame"
     And the contract bundle ZIP for "Hierarchy Bundle Child" contains nothing about sibling contract "Hierarchy Bundle Sibling"
 
-  @REQ-contract-hierarchy-bundle-export-AC9 @DCS-FR-CWE-30
+  @DCS-FR-CWE-30
   Scenario: Every bundle-manifest.json entry's SHA-256 matches the packaged bytes
     Given contract "Hash Integrity Bundle Contract" has reached contract state "SIGNED"
     And contract "Hash Integrity Bundle Contract" has an exported PDF
@@ -125,13 +126,13 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     Then get http 200:Success code
     And every entry in the bundle-manifest.json for "Hash Integrity Bundle Contract" has a SHA-256 matching the packaged bytes
 
-  @REQ-contract-hierarchy-bundle-export-AC10 @DCS-FR-TR-26 @DCS-FR-PACM-06
+  @DCS-FR-TR-26 @DCS-FR-PACM-06
   Scenario: Export is refused with a findings list when a referenced component is missing
     Given contract "Incomplete Bundle Contract" exists with no exported PDF
     When I request the contract bundle export for "Incomplete Bundle Contract"
     Then the contract bundle export for "Incomplete Bundle Contract" is refused with a findings list
 
-  @REQ-contract-hierarchy-bundle-export-AC11 @DCS-FR-TR-24 @DCS-FR-TR-09
+  @DCS-FR-TR-24 @DCS-FR-TR-09
   Scenario: Template bundle export returns a ZIP with flat template artifacts only
     Given an approved template "Bundle Export Template" is available for bundle export
     When I request the template bundle export for "Bundle Export Template"
@@ -139,14 +140,14 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     And the response has Content-Type "application/zip"
     And the template bundle ZIP for "Bundle Export Template" contains no frame/parent chain directory
 
-  @REQ-contract-hierarchy-bundle-export-AC12 @DCS-FR-CSA-18
+  @DCS-FR-CSA-18
   Scenario: Contract bundle export honors RBAC like retrieval
     Given contract "RBAC Bundle Contract" has reached contract state "SIGNED"
     And contract "RBAC Bundle Contract" has an exported PDF
     When I request the contract bundle export for "RBAC Bundle Contract" with an unauthorized role
     Then the request is denied with an authorization error
 
-  @REQ-contract-hierarchy-bundle-export-AC12 @DCS-FR-CSA-18
+  @DCS-FR-CSA-18
   Scenario: Contract bundle export creates an audit log entry
     Given contract "Audited Bundle Contract" has reached contract state "SIGNED"
     And contract "Audited Bundle Contract" has an exported PDF

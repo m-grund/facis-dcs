@@ -4,8 +4,8 @@
  * on the contract's `responsible` reviewers/approvers/negotiators lists.
  * There is no JWT-`sub` binding/validation here or on the backend — any
  * syntactically accepted identifier can be assigned, including a raw peer
- * DID that never authenticates via this instance's own JWTs (see
- * two-instance-peer-trust AC6, docs/anforderung.md Workstream C1-C3).
+ * DID that never authenticates via this instance's own JWTs (see the
+ * two-instance peer-trust pack, features/17_peer_trust).
  */
 
 export interface ParticipantSelection {

@@ -127,7 +127,7 @@ export interface OdrlConstraint {
 export interface OdrlRule {
   '@id': string
   '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
-  /** Every rule declares exactly one action (Workstream F1/AC2). */
+  /** Every rule declares exactly one action (DCS ODRL profile). */
   'odrl:action': JsonLdReference
   /** Bound party DIDs for a contract instance (ODRL Agreement); open/placeholder party references for a template (ODRL Offer). */
   'odrl:assigner': JsonLdReference
@@ -137,7 +137,7 @@ export interface OdrlRule {
   'odrl:constraint'?: OdrlConstraint
 }
 
-/** The single enclosing ODRL 2.2 policy container for a template/contract's `dcs:policies` (Workstream F1). */
+/** The single enclosing ODRL 2.2 policy container for a template/contract's `dcs:policies`. */
 export interface OdrlSet {
   '@id': string
   '@type': 'odrl:Set'
@@ -220,7 +220,7 @@ export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {
     (value['@type'] === 'dcs:ContractTemplate' || value['@type'] === 'dcs:Contract') &&
     typeof value['dcs:documentStructure'] === 'object' &&
     Array.isArray(value['dcs:contractData']) &&
-    // Target shape (Workstream F1): a single enclosing odrl:Set object.
+    // Canonical shape: a single enclosing odrl:Set object.
     // An empty array is still accepted as "no policies yet" (brand-new
     // documents) — the legacy non-empty bare-rule array shape is not.
     (isOdrlSet(policies) || (Array.isArray(policies) && policies.length === 0))

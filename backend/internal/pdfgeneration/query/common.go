@@ -27,10 +27,12 @@ type PDFStateData struct {
 
 type pdfStateUpdater func(ctx context.Context, tx *sqlx.Tx, did string, state PDFStateData) error
 
-// pdfSignatureNotAvailable is the honest PDF-signature check status reported by
-// the verify endpoint while Workstream B/PAdES is not implemented yet
-// (DCS-OR-C2PA-006 AC6). The verifier must never falsely report a passed PDF
-// signature check for a capability that does not exist.
+// pdfSignatureNotAvailable is the honest PDF-signature check status reported
+// by the verify endpoint (DCS-OR-C2PA-006): the verify path does not
+// cryptographically re-verify the PAdES CMS signature over its /ByteRange
+// (pdf-core's /verify treats the signed span as an opaque suffix), and the
+// verifier must never falsely report a passed PDF signature check it did not
+// actually perform.
 const pdfSignatureNotAvailable = "not_available"
 
 // stampLifecycle embeds a C2PA lifecycle assertion (DCS-OR-C2PA-004) for the
@@ -157,10 +159,10 @@ func runVerify(ctx context.Context, pdfBytes []byte, pdfCore *pdfcore.Client, li
 		StatusListURI:      ptrToString(statusListURI),
 		StatusListStatus:   ptrToString(statusListStatus),
 		LifecycleStatus:    ptrToString(lifecycleStatus),
-		// DCS-OR-C2PA-006 AC6: the PDF-signature check is an independently named
-		// check, distinct from the C2PA COSE signature check. Workstream B/PAdES
-		// has not landed yet, so we honestly report "not_available" rather than
-		// faking a passed PDF-signature verification.
+		// DCS-OR-C2PA-006: the PDF-signature check is an independently named
+		// check, distinct from the C2PA COSE signature check. This path performs
+		// no cryptographic PAdES re-verification, so it honestly reports
+		// "not_available" rather than faking a passed PDF-signature verification.
 		PdfSignatureStatus: pdfSignatureNotAvailable,
 	}, nil
 }

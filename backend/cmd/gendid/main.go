@@ -1,6 +1,6 @@
 // Command gendid regenerates a DID document whose verificationMethod publishes
 // the ECDSA P-256 public key of the HSM dcs-did token key, together with a
-// self-signed x5c certificate binding that same key (Workstream A2.4). It is
+// self-signed x5c certificate binding that same key. It is
 // invoked by the dev-stack provisioning after the token keys are created.
 package main
 

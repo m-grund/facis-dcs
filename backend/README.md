@@ -90,7 +90,7 @@ export HYDRA_POST_LOGOUT_REDIRECT_URI="http://localhost:5173/api/auth/logout-com
 export HYDRA_ADMIN_URL="http://localhost:30085"
 ```
 
-When using the local Helm stack, copy `backend/.env.dev` to `backend/.env`.
+When using the local Helm stack, copy `backend/.env.dev1` to `backend/.env` (done automatically by `dev-stack.sh`).
 
 ### Start the DCS backend service
 ```bash

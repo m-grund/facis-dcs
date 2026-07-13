@@ -5,12 +5,12 @@ import (
 )
 
 // C2PAService exposes the public C2PA manifest for signed/exported contracts
-// (DCS-OR-C2PA-008, Workstream D). Like the DID document service
+// (DCS-OR-C2PA-008). Like the DID document service
 // (backend/design/did.go), these endpoints are public: they declare no
 // Security scheme, so no JWT/auth is required. A C2PA manifest store is meant
 // to be resolvable by any verifier from the contract's public manifest URL.
 var _ = Service("C2PAService", func() {
-	Description("Public C2PA manifest retrieval for signed/exported contracts (DCS-OR-C2PA-008, Workstream D). Unauthenticated, public sibling of GET /.well-known/did.json.")
+	Description("Public C2PA manifest retrieval for signed/exported contracts (DCS-OR-C2PA-008). Unauthenticated, public sibling of GET /.well-known/did.json.")
 
 	Error("not_found", ErrorResult, "Contract or C2PA manifest not found")
 	Error("internal_error", ErrorResult, "Internal server error")

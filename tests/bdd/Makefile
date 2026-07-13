@@ -61,9 +61,9 @@ CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
 COREDNS_REWRITE_SCRIPT ?= scripts/kind_coredns_rewrite.sh
 
 # Second DCS release ("dcs2", instance B) for the @two-instance peer-trust
-# scenarios (Workstream C1-C3, docs/anforderung.md) — see
-# deployment/helm/values.bdd2.yml. Deployed into the SAME kind namespace as
-# the primary "dcs" release (instance A), strictly after it.
+# scenarios (features/17_peer_trust) — see deployment/helm/values.bdd2.yml.
+# Deployed into the SAME kind namespace as the primary "dcs" release
+# (instance A), strictly after it.
 HELM_RELEASE_B ?= dcs2
 DCS_SERVICE_B ?= $(HELM_RELEASE_B)-digital-contracting-service
 DCS_DEPLOYMENT_B ?= $(DCS_SERVICE_B)
@@ -129,7 +129,7 @@ run_bdd_test: ensure_venv
 
 # Schneller Dev-Loop für die Implementierungs-Iteration: kein pip-Refresh,
 # kein coverage, kein junit; stoppt beim ersten Fehlschlag. Scope über
-# T=<tag-expression> (z. B. T=@REQ-mein-slug) und/oder F=<feature-pfad>.
+# T=<tag-expression> (z. B. T=@two-instance) und/oder F=<feature-pfad>.
 # Der vollständige, berichtende Lauf bleibt run_bdd_test.
 run_bdd_fast: ensure_venv
 	@cd "$(PROJECT_ROOT)" && \
@@ -289,8 +289,8 @@ kind_coredns_rewrite: ensure_k8s_tools
 	@KUBECTL_BIN="$(KUBECTL_BIN)" KIND_NAMESPACE="$(KIND_NAMESPACE)" \
 		bash "$(COREDNS_REWRITE_SCRIPT)"
 
-# Deploys the SECOND DCS release (instance B, docs/anforderung.md Workstream
-# C1-C3) into the same kind namespace, strictly after instance A: B probes
+# Deploys the SECOND DCS release (instance B, features/17_peer_trust) into
+# the same kind namespace, strictly after instance A: B probes
 # several of A's already-deployed shared services (Traefik, ORCE TSA, Status
 # List Service, IPFS) at its own startup, so it depends on kind_deploy rather
 # than only on kind_create/kind_load_image.

@@ -2,8 +2,8 @@
 
 ## Roles
 
-Every DCS user holds one or more of the following roles, assigned via
-Keycloak and disclosed at login as a verifiable credential claim
+Every DCS user holds one or more of the following roles, disclosed at
+login as a verifiable credential claim
 (`backend/internal/base/datatype/userrole/userrole.go`, SRS Tables 4/5):
 
 | Role | What it can do |

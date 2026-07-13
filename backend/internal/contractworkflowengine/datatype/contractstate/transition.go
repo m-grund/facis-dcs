@@ -52,7 +52,7 @@ const (
 	EventDeploy Event = "DEPLOY"
 
 	// EventRevoke: signingmanagement/command/revoke.go transitions the contract
-	// Signed/Active -> Revoked after a signature is revoked (DCS-OR-C2PA-006 AC5,
+	// Signed/Active -> Revoked after a signature is revoked (DCS-OR-C2PA-006,
 	// C2PA lifecycle banner "suspended").
 	EventRevoke Event = "REVOKE"
 
@@ -87,9 +87,8 @@ var Transitions = map[ContractState]map[Event][]ContractState{
 		// Offered -> Negotiation: the creator submits the offered contract to
 		// start the negotiation round (mirrors Draft -> Negotiation; see
 		// command/submit.go's Offered branch). Without this edge the
-		// documented DRAFT -> OFFERED -> NEGOTIATION -> SUBMITTED -> ...
-		// sequence (docs/anforderung.md) is unreachable once a contract has
-		// been offered.
+		// DRAFT -> OFFERED -> NEGOTIATION -> SUBMITTED -> ... sequence is
+		// unreachable once a contract has been offered.
 		EventSubmit:    {Negotiation},
 		EventWithdraw:  {Withdrawn},
 		EventTerminate: {Terminated},

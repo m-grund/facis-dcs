@@ -1,22 +1,24 @@
-"""Fixture builders for Workstream F ("odrl-soundness") BDD scenarios.
+"""Fixture builders for the ODRL-soundness BDD scenarios
+(features/18_odrl_soundness).
 
 These build canonical `dcs:documentStructure`-enveloped contract documents
 (see backend/internal/base/validation/documentdata.go `isCanonicalEnvelope`)
 carrying either:
 
-  - the CURRENT/legacy bare-Duty `dcs:policies` shape (flat array of
+  - the legacy bare-Duty `dcs:policies` shape (flat array of
     `odrl:Duty`/`odrl:Permission`/`odrl:Prohibition` nodes, each with only an
     `odrl:constraint` — no `odrl:action`, no enclosing `odrl:Set`, no
     parties/target), or
-  - the TARGET ODRL 2.2 shape Workstream F (docs/anforderung.md) asks for: one
-    enclosing `odrl:Set` (`uid` == the contract DID, `odrl:profile` declared),
+  - the canonical ODRL 2.2 shape (docs/adr-6-odrl-profile-enforcement.md):
+    one enclosing `odrl:Set` (`uid` == the contract DID, `odrl:profile`
+    declared),
     whose rules each carry exactly one `odrl:action` plus
     `odrl:assigner`/`odrl:assignee`/`odrl:target`.
 
 Both shapes constrain the SAME field (`urn:uuid:field-provider-country`, a
 string, or `urn:uuid:field-provider-coverage`, a number) so the same fixture
-family can drive AC1/2/3 (structure), AC4/5/7 (enforcement), AC6 (operator
-matrix), and AC8 (legacy-shape rejection).
+family can drive the structure, enforcement, operator-matrix, and
+legacy-shape-rejection scenarios.
 """
 
 FIELD_COUNTRY = "urn:uuid:field-provider-country"
@@ -75,7 +77,7 @@ def odrl_set_policies(
     right_operand,
     rule_type: str = "odrl:Duty",
 ) -> dict:
-    """The TARGET Workstream-F1 shape: one enclosing `odrl:Set` (`uid` ==
+    """The canonical ODRL 2.2 shape: one enclosing `odrl:Set` (`uid` ==
     contract DID), `odrl:profile` declared, rule carries exactly one
     `odrl:action` plus assigner/assignee/target.
     """

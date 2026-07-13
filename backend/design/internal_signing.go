@@ -44,7 +44,7 @@ var PAdESSignResponse = Type("PAdESSignResponse", func() {
 // keep private-key material inside the backend's PKCS#11 token. pdf-core (a
 // separate process holding no key material) builds the COSE Sig_structure and
 // calls c2paSign to obtain the ES256 signature it embeds into a C2PA manifest
-// (DCS-IR-HI-01, Workstream A2.3). Unlike C2PAService (public manifest
+// (DCS-IR-HI-01). Unlike C2PAService (public manifest
 // retrieval), these methods require a JWT.
 var _ = Service("InternalSigning", func() {
 	Description("Authenticated backend-internal signing primitives backed by the PKCS#11 token (DCS-IR-HI-01).")

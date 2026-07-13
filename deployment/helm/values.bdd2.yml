@@ -1,5 +1,5 @@
-# BDD test values for the SECOND DCS release ("dcs2", instance B) used by the
-# @two-instance peer-trust scenarios (Workstream C1-C3, docs/anforderung.md).
+# BDD test values for the SECOND DCS release ("dcs2", instance B) used by
+# the @two-instance peer-trust scenarios (features/17_peer_trust).
 # Deployed into the SAME namespace (dcs-bdd) as the primary "dcs" release
 # (values.bdd.yml, instance A) by tests/bdd/Makefile's kind_deploy_b target,
 # strictly AFTER kind_deploy — this instance shares several of instance A's

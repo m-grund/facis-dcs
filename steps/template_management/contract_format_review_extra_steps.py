@@ -1,4 +1,4 @@
-"""New step definitions for the previously-@skip, non-tamper scenarios in
+"""Step definitions for the non-tamper scenarios in
 features/03_contract_creation/contract_format_review.feature: viewing a
 contract in machine-/human-readable format, the synchronized (MR+HR) view,
 version-tag consistency across exports, positive structural validation, and

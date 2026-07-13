@@ -1,12 +1,11 @@
 // Command hsmsign signs an arbitrary UTF-8 message with a named HSM key
 // (SHA-256, ECDSA ASN.1 DER — matching identity.DIDDocument.Sign) and prints
 // the base64-encoded signature to stdout. It exists purely as a BDD test-fixture
-// helper: steps/peer_trust/dcs_peer_trust_steps.py's self-peer-simulation used
-// to sign the did:web challenge secret directly with a checked-in RSA PEM key;
-// since Workstream A moved DID signing to the PKCS#11 dcs-did key (ECDSA
-// P-256, non-extractable private key), the Python test harness can no longer
-// produce a verifiable signature on its own and must shell out to this
-// program, which opens the same SoftHSM2 token the target instance uses
+// helper: DID signing uses the PKCS#11 dcs-did key (ECDSA P-256,
+// non-extractable private key), so steps/peer_trust/dcs_peer_trust_steps.py's
+// self-peer-simulation cannot produce a verifiable did:web challenge
+// signature on its own and must shell out to this program, which opens the
+// same SoftHSM2 token the target instance uses
 // (selected via the usual PKCS11_*/SOFTHSM2_CONF env vars).
 package main
 

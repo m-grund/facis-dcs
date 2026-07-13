@@ -88,7 +88,7 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 // non-nil the request proceeds even if the JSON-LD payload is unchanged.
 // When manifestURL is non-empty it is sent as the "manifest_url" field so
 // pdf-core embeds it as the C2PA claim's remote_manifests field
-// (DCS-OR-C2PA-008 AC3). Returns the updated PDF bytes and the renderer version
+// (DCS-OR-C2PA-008). Returns the updated PDF bytes and the renderer version
 // header.
 func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte, manifestURL string) (pdf []byte, version string, err error) {
 	var buf bytes.Buffer

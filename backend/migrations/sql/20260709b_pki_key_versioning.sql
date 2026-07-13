@@ -1,7 +1,7 @@
 -- Active HSM key version per purpose label. A key rotation inserts/advances the
 -- active_version for a label; new signing operations resolve the versioned key
 -- from here while historical signatures keep the version they were made with
--- (DCS-OR-C2PA-007, docs/anforderung.md Workstream A5).
+-- (DCS-OR-C2PA-007).
 CREATE TABLE pki_active_key_version (
     label          TEXT PRIMARY KEY,
     active_version INT NOT NULL,

@@ -543,24 +543,17 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"}
 
 // collectODRLPolicyRules flattens dcs:policies into a plain list of rule
-// nodes, reading both a bare rule array and the enclosing-odrl:Set shape
-// (see extractContractODRLPolicies for the server-side-enforcement-critical
-// rationale).
+// nodes. Only the canonical shape yields rules: a single enclosing odrl:Set
+// whose rules live in the odrl:duty/odrl:permission/odrl:prohibition/
+// odrl:obligation bucket properties. An array (the empty "no policies yet"
+// default; non-empty bare rule arrays are rejected by
+// validateODRLPoliciesShape before they can be persisted) yields none.
 func collectODRLPolicyRules(policies any) []map[string]any {
-	switch typed := policies.(type) {
-	case []any:
-		result := make([]map[string]any, 0, len(typed))
-		for _, item := range typed {
-			if rule, ok := item.(map[string]any); ok {
-				result = append(result, rule)
-			}
-		}
-		return result
-	case map[string]any:
-		return collectODRLSetRules(typed)
-	default:
+	set, ok := policies.(map[string]any)
+	if !ok {
 		return nil
 	}
+	return collectODRLSetRules(set)
 }
 
 func collectODRLSetRules(set map[string]any) []map[string]any {

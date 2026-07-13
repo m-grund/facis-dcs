@@ -10,12 +10,12 @@
 @UC-15-01 @DCS-FR-SM-20
 Feature: Signature revocation transitions the contract to REVOKED
 
-  @REQ-signature-revocation-state-AC1 @UC-15-01
+  @UC-15-01
   Scenario: Revoking a contract's signature moves the contract to REVOKED
     Given contract "Revocation State Contract" has reached contract state "REVOKED"
     Then the contract "Revocation State Contract" is in state "REVOKED"
 
-  @REQ-signature-revocation-state-AC2 @UC-15-01 @DCS-FR-CWE-06
+  @UC-15-01 @DCS-FR-CWE-06
   Scenario: A revoked contract can be re-approved to allow re-signing
     Given contract "Revocation Restore Contract" has reached contract state "REVOKED"
     And I am authenticated with roles: "Contract Approver"

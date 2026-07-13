@@ -109,7 +109,7 @@ docs/semantic-ontology/
   shapes/
     facis-dcs-shapes.ttl
   validation/
-    facis.sla.basic.v1.ttl
+    facis.sla.basic.v1.yaml
   contexts/
     facis-dcs-context.jsonld
   examples/
@@ -319,7 +319,7 @@ SHACL is a separate validation asset:
 | Pre-deployment | Blocking validation before deployment payload is sent. |
 | Archive | Persist validation report hash and evidence. |
 
-The starter shapes are in [facis-dcs-shapes.ttl](shapes/facis-dcs-shapes.ttl). The active contract content audit manifest is [facis-contract-content-audit-policies.json](../policies/facis-contract-content-audit-policies.json), which references these shapes and [facis.sla.basic.v1.ttl](validation/facis.sla.basic.v1.ttl).
+The starter shapes are in [facis-dcs-shapes.ttl](shapes/facis-dcs-shapes.ttl). The active contract content audit manifest is [facis-contract-content-audit-policies.json](../policies/facis-contract-content-audit-policies.json), which references these shapes and [facis.sla.basic.v1.yaml](validation/facis.sla.basic.v1.yaml).
 
 ## 11. Repository-Struktur
 
@@ -630,8 +630,3 @@ WHERE contract_data @? '$.sla.services[*].slos[*] ? (@.sloType == "availability"
 4. Emit semantic NATS/CloudEvents for validation, lifecycle, signing, deployment, and revocation.
 5. Export deployment policy bundles from approved/signed contracts.
 6. Add optional SHACL validation in PACM/CI once RDF expansion is operational.
-docs/ontology/
-  facis-sla-ontology.ttl
-```
-
-```text

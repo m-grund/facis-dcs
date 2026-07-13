@@ -1,4 +1,4 @@
-"""ODRL soundness (Workstream F, requirement slug 'odrl-soundness') BDD step
+"""ODRL soundness (features/18_odrl_soundness) BDD step
 definitions."""
 
 # Import all step modules to register them with behave

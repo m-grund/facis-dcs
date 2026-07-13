@@ -45,10 +45,10 @@ make -C testWallet ensure-statuslist
 
 # Setup backend .env
 cp backend/.env.dev1 backend/.env
-echo "✓ .env updated from .env.dev"
+echo "✓ .env updated from .env.dev1"
 
 # Provision the SoftHSM2 token holding this instance's private keys and
-# regenerate its DID document with the ECDSA P-256 token key (Workstream A).
+# regenerate its DID document with the ECDSA P-256 token key.
 HSM_TOKEN_DIR="$HOME/.dcs/softhsm-8991"
 bash scripts/hsm-provision.sh "$HSM_TOKEN_DIR" dcs 1234 12345678
 echo "SOFTHSM2_CONF=$HSM_TOKEN_DIR/softhsm2.conf" >> backend/.env

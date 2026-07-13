@@ -14,7 +14,7 @@
 @UC-12 @DCS-FR-CWE-13 @DCS-FR-CWE-28
 Feature: Contract lifecycle driven entirely through the API
 
-  @REQ-system-contract-lifecycle-AC1 @UC-12-01 @UC-12-02 @UC-12-03 @UC-12-05
+  @UC-12-01 @UC-12-02 @UC-12-03 @UC-12-05
   Scenario: Create, review, approve, sign, and archive a contract entirely via API calls
     Given contract "API Lifecycle Contract" is in "Draft" status
     Then the contract "API Lifecycle Contract" has an audit event of type "CREATE_CONTRACT"
@@ -26,7 +26,7 @@ Feature: Contract lifecycle driven entirely through the API
     And the contract "API Lifecycle Contract" is in state "SIGNED"
     And the archive has an entry for contract "API Lifecycle Contract"
 
-  @REQ-system-contract-lifecycle-AC2 @UC-12-04
+  @UC-12-04
   Scenario: Contract metadata and history are queryable via API after the lifecycle completes
     Given contract "API Query Contract" has reached contract state "APPROVED"
     When the contract search endpoint is queried with state filter "APPROVED"

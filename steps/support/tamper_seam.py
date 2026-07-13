@@ -1,6 +1,6 @@
 """Shared helper for infra-mutation test seams used by the "inject a
 tampered/stripped artifact" BDD scenarios in contract_format_review,
-c2pa_conformance (AC4), and real_signing_vertical (AC16).
+c2pa_conformance, and real_signing_vertical.
 
 Why this exists: several verify-shaped backend endpoints (GET
 /pdf/verify/contract/{did}, POST /signature/validate, GET

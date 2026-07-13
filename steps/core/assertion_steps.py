@@ -126,9 +126,8 @@ def step_given_get_http_200(context):
     scenarios in features/05_contract_deployment/contract_deployment.feature
     do exactly this, to assert an intermediate setup call succeeded before
     the Given block's actual precondition is fully built). We cannot edit
-    the installed pip package's source, so per the task's own fallback
-    ("dupliziere die Step-Definition mit dem jeweils fehlenden Decorator"),
-    this is a thin, behavior-identical duplicate scoped to the Given case
+    the installed pip package's source, so this is a thin,
+    behavior-identical duplicate scoped to the Given case
     only — the upstream @then registration is untouched and still handles
     every other (Then) usage across the rest of this codebase's features.
     """

@@ -10,10 +10,9 @@ import (
 
 // EvaluateKPIViolation reports whether the reported value for metric
 // violates a contractual SLA threshold declared in the contract's own ODRL
-// policy (dcs:policies, DCS-FR-CWE-09). It supports both the legacy flat
-// array of bare odrl:Duty/Permission/Prohibition nodes and the odrl:Set-
-// enclosed shape (rules under the odrl:duty/odrl:permission/odrl:prohibition/
-// odrl:obligation bucket properties).
+// policy (dcs:policies, DCS-FR-CWE-09): a single enclosing odrl:Set whose
+// rules live under the odrl:duty/odrl:permission/odrl:prohibition/
+// odrl:obligation bucket properties.
 //
 // A policy rule's odrl:constraint governs metric when its
 // odrl:leftOperand's @id contains metric as a case-insensitive substring
@@ -64,26 +63,21 @@ func kpiPolicyRules(contractData map[string]any) []map[string]any {
 	if !ok {
 		raw = contractData["policies"]
 	}
+	set, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
 	var rules []map[string]any
-	switch typed := raw.(type) {
-	case []any:
-		for _, item := range typed {
-			if rule, ok := item.(map[string]any); ok {
-				rules = append(rules, rule)
-			}
-		}
-	case map[string]any:
-		for _, key := range []string{"odrl:duty", "odrl:permission", "odrl:prohibition", "odrl:obligation"} {
-			switch bucket := typed[key].(type) {
-			case []any:
-				for _, item := range bucket {
-					if rule, ok := item.(map[string]any); ok {
-						rules = append(rules, rule)
-					}
+	for _, key := range []string{"odrl:duty", "odrl:permission", "odrl:prohibition", "odrl:obligation"} {
+		switch bucket := set[key].(type) {
+		case []any:
+			for _, item := range bucket {
+				if rule, ok := item.(map[string]any); ok {
+					rules = append(rules, rule)
 				}
-			case map[string]any:
-				rules = append(rules, bucket)
 			}
+		case map[string]any:
+			rules = append(rules, bucket)
 		}
 	}
 	return rules

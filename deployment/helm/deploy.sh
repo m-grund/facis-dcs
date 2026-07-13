@@ -7,7 +7,7 @@ log() {
 
 usage() {
   echo "Usage: $0 <kubeconfig> <private_key_path> <crt_path> <domain> <path> <oidc_issuer_url> <oidc_client_id>"
-  echo "Example: $0 ~/.kube/config ./certs/dev.key ./certs/dev.crt xfsc.local dcs https://keycloak.xfsc.local/realms/dcs digital-contracting-service"
+  echo "Example: $0 ~/.kube/config ./certs/dev.key ./certs/dev.crt xfsc.local dcs https://xfsc.local/dcs/hydra dcs-client"
   echo ""
   echo "Optional environment variables:"
   echo "  OIDC_REDIRECT_URI - Redirect URI for OIDC flow (default: http://localhost:8991)"
@@ -54,12 +54,12 @@ CUSTOM_CA_ENABLED="${CUSTOM_CA_ENABLED:-false}"
 CUSTOM_CA_CONFIGMAP="${CUSTOM_CA_CONFIGMAP:-dev-ca-cert}"
 CUSTOM_CA_CERT_FILE="${CUSTOM_CA_CERT_FILE:-}"
 
-# Host Aliases Configuration for local Keycloak access
+# Host Aliases Configuration for in-cluster OIDC issuer access
 # Extract hostname from OIDC_ISSUER_URL if it uses HTTPS
-KEYCLOAK_HOSTNAME=""
+OIDC_ISSUER_HOSTNAME=""
 if [[ "${OIDC_ISSUER_URL:-}" =~ ^https://([^/]+) ]]; then
-  KEYCLOAK_HOSTNAME="${BASH_REMATCH[1]}"
-  log "ℹ️ Detected HTTPS OIDC issuer, will configure host alias for: $KEYCLOAK_HOSTNAME"
+  OIDC_ISSUER_HOSTNAME="${BASH_REMATCH[1]}"
+  log "ℹ️ Detected HTTPS OIDC issuer, will configure host alias for: $OIDC_ISSUER_HOSTNAME"
   
   # Get Traefik ClusterIP for in-cluster resolution
   TRAEFIK_CLUSTER_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.spec.clusterIP}' --kubeconfig "$KUBECONFIG" 2>/dev/null || echo "")
@@ -168,14 +168,14 @@ sed -i \
 
 # Add hostAliases if HTTPS OIDC is configured
 if [[ "$HOST_ALIAS_ENABLED" == "true" ]]; then
-  log "ℹ️ Adding hostAlias: $KEYCLOAK_HOSTNAME -> $TRAEFIK_CLUSTER_IP"
+  log "ℹ️ Adding hostAlias: $OIDC_ISSUER_HOSTNAME -> $TRAEFIK_CLUSTER_IP"
   cat >> "$TMP_VALUES" <<EOF
 
 # Auto-configured host alias for in-cluster OIDC access
 hostAliases:
   - ip: "${TRAEFIK_CLUSTER_IP}"
     hostnames:
-      - "${KEYCLOAK_HOSTNAME}"
+      - "${OIDC_ISSUER_HOSTNAME}"
 EOF
 fi
 
@@ -275,11 +275,10 @@ log "🎉 All operations completed successfully!"
 echo
 echo "🔹 DCS URL: https://${DOMAIN}/${URL_PATH}"
 echo ""
-log "ℹ️ Before accessing the service, ensure Keycloak is configured:"
+log "ℹ️ Before accessing the service, ensure the OIDC provider (Hydra) is configured:"
 log "   1. OIDC Issuer: ${OIDC_ISSUER_URL}"
 log "   2. Client ID: ${OIDC_CLIENT_ID}"
 log "   3. Valid Redirect URI: ${OIDC_REDIRECT_URI}"
 log "   4. Valid post logout redirect URI: ${OIDC_LOGOUT_REDIRECT_URI}"
-log "   5. Create users and assign roles in Keycloak admin console"
 log ""
-log "ℹ️ See README.md for detailed Keycloak setup instructions"
+log "ℹ️ See deployment/README.md for the hydra.clients provisioning details"

@@ -42,11 +42,11 @@ func TestLifecycleAssertion_AllFieldsPresent(t *testing.T) {
 // (as emitted by the CWE state machine) maps to the correct SRS C2PA state.
 // This is the fix for Gap 4 (DCS-OR-C2PA-003 lifecycle vocabulary coverage).
 //
-// Updated for Workstream C4 (contract-state-machine-refactor): OFFERED/
-// NEGOTIATION/SUBMITTED/REVIEWED/APPROVED now all map to "draft" (a
-// deliberate behavior change — APPROVED used to map to "active"), SIGNED/
-// ACTIVE map to "active", REVOKED maps to "suspended", and the new
-// REJECTED/WITHDRAWN pre-signing terminal states map to "draft".
+// OFFERED/NEGOTIATION/SUBMITTED/REVIEWED/APPROVED all map to "draft"
+// (APPROVED deliberately does NOT map to "active": approval alone does not
+// make a contract binding), SIGNED/ACTIVE map to "active", REVOKED maps to
+// "suspended", and the REJECTED/WITHDRAWN pre-signing terminal states map
+// to "draft".
 func TestMapCWEStateToC2PA_CWEUppercaseMappings(t *testing.T) {
 	cases := []struct {
 		cwe  string
@@ -84,10 +84,10 @@ func TestMapCWEStateToC2PA_UnknownStateFails(t *testing.T) {
 }
 
 // TestMapCWEStateToC2PA_AllSRSStatesCovered verifies that the SRS-mandated states
-// (DCS-OR-C2PA-003) are reachable from at least one input. Since Workstream
-// C4, "amended" is no longer produced by any CWE contract state (NEGOTIATION/
-// REJECTED now map to "draft"); it remains reachable only via the lowercase
-// SRS-vocabulary pass-through, which is exercised here too.
+// (DCS-OR-C2PA-003) are reachable from at least one input. "amended" is not
+// produced by any CWE contract state (NEGOTIATION/REJECTED map to "draft");
+// it remains reachable only via the lowercase SRS-vocabulary pass-through,
+// which is exercised here too.
 func TestMapCWEStateToC2PA_AllSRSStatesCovered(t *testing.T) {
 	required := map[string]bool{
 		"draft": false, "active": false, "amended": false,

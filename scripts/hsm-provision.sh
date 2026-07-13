@@ -2,7 +2,7 @@
 # Idempotently provision a SoftHSM2 token with the five DCS ECDSA P-256 keys.
 # One token dir per DCS instance keeps instance A (port 8991) and instance B
 # (port 8992) key material separate, mirroring how .env.dev1/.env.dev2 already
-# separate per-instance secrets (Workstream A3).
+# separate per-instance secrets.
 #
 # Usage: hsm-provision.sh <token-dir> <token-label> <pin> <so-pin> [module-path]
 set -euo pipefail

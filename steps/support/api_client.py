@@ -91,12 +91,7 @@ def contract_audit_url(context) -> str:
     return f"{context.base_url}/contract/audit"
 
 
-# Deployment (Workstream G, docs/anforderung.md G2): ASSUMED endpoint shapes —
-# neither exists in backend/design/*.go yet (grep backend/design -rn "deploy"
-# only finds the pre-existing "approve" method's descriptive Meta string and
-# the EventDeploy state-machine edge, see contractstate/transition.go). Path/
-# names taken verbatim from docs/anforderung.md G2 ("POST /contract/deploy",
-# "POST /contract/deployment/callback").
+# Deployment endpoints (backend/design/contract_workflow_engine.go).
 
 def contract_deploy_url(context) -> str:
     return f"{context.base_url}/contract/deploy"
@@ -166,12 +161,7 @@ def signature_compliance_url(context) -> str:
     return f"{context.base_url}/signature/compliance"
 
 
-# Signing-ceremony endpoints (Workstream B3, docs/anforderung.md B3): an
-# ASSUMED endpoint contract — none of these exist in backend/design/*.go yet
-# (grep backend/design -rn "signature/request" returns nothing at the time
-# this pack was written). Path/shape taken verbatim from the anforderung.md
-# B3 section ("name the start endpoint POST /signature/request: that is the
-# SRS's own vocabulary").
+# Signing-ceremony endpoints (backend/design/signature_management.go).
 
 def signature_request_url(context) -> str:
     return f"{context.base_url}/signature/request"
@@ -185,13 +175,9 @@ def signature_request_webhook_url(context) -> str:
     return f"{context.base_url}/signature/request/webhook"
 
 
-# ASSUMED endpoint contract for the PKI-consolidation refactor (Workstream A,
-# docs/anforderung.md AC6 / A2.3): a NEW, authenticated, non-public backend
-# endpoint that signs a COSE Sig_structure via hsm.Signer("dcs-c2pa") for
-# pdf-core. Does not exist in backend/design/*.go yet - see
-# features/21_pki_consolidation_pkcs11/pki_consolidation_pkcs11.feature's
-# header comment (binding decision 1) for the exact assumed payload shape and
-# why the path/shape may need to be adjusted once the architect confirms it.
+# Authenticated, non-public backend endpoint that signs a COSE
+# Sig_structure via hsm.Signer("dcs-c2pa") for pdf-core
+# (backend/design/internal_signing.go).
 
 def c2pa_internal_sign_url(context) -> str:
     return f"{context.base_url}/internal/c2pa/sign"

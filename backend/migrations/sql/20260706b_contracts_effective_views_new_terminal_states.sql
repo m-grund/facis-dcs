@@ -7,7 +7,7 @@
 -- contracts_effective (and its two siblings) override a contract's stored
 -- state to 'EXPIRED' once exp_date has passed, UNLESS the contract is
 -- already in one of a handful of terminal states. WITHDRAWN and REVOKED are
--- both states the contract-state-machine-refactor (Workstream C4) treats as
+-- both states the contract state machine treats as
 -- already-final/frozen for this purpose (WITHDRAWN: initiator retracted
 -- before approval; REVOKED: signature/credential invalidated post-signing)
 -- — auto-expiring on top of either would be misleading, so both join the

@@ -81,7 +81,7 @@ def _dev_signing_token_dir(hostname: str) -> Path:
     """Map a did:web hostname (e.g. 'localhost:8991') to the matching
     per-instance SoftHSM2 token dir (~/.dcs/softhsm-<port>/), the same
     convention dev-stack.sh (8991) and dev-stack2.sh (8992) provision
-    (Workstream A: PKCS#11-only key custody, no more checked-in PEM keys).
+    (PKCS#11-only key custody).
     Only these two known dev ports are supported: this is a self-peer
     simulation, not a generic did:web resolver, and only works because we
     control the matching HSM token for the instance under test.
@@ -105,9 +105,7 @@ def _dev_signing_token_dir(hostname: str) -> Path:
         "identities, provisioned via scripts/hsm-provision.sh under "
         "dev-stack.sh/dev-stack2.sh. If this DCS instance runs under a "
         "different PKCS11 token layout (e.g. the Helm/kind BDD harness), the "
-        "peer-path part of AC4 cannot be proven this way and needs re-scoping "
-        "with the analyst (e.g. grep-gate/manual-drill for that entry path, "
-        "or a real two-instance runner)."
+        "peer-path self-simulation cannot be proven this way."
     )
     return token_dir
 
@@ -115,8 +113,8 @@ def _dev_signing_token_dir(hostname: str) -> Path:
 def _sign_secret_value_with_dev_key(token_dir: Path, secret_value: str) -> bytes:
     """ECDSA P-256 (SHA-256, ASN.1 DER) signature matching DIDDocument.Sign
     (backend/internal/base/identity/did.go): the DID private key lives only
-    inside the SoftHSM2 token (Workstream A — no extractable PEM key exists
-    anymore), so this shells out to backend/cmd/hsmsign, which opens the same
+    inside the SoftHSM2 token (no extractable PEM key exists), so this
+    shells out to backend/cmd/hsmsign, which opens the same
     token via crypto11 and signs through the HSM.
 
     Under the Helm/kind BDD harness (BDD_HSMSIGN_EXEC set), the token lives
@@ -167,7 +165,7 @@ def _self_peer_action_credentials(context):
     instance's own identity, instead of failing on an unresolvable/invalid
     peer hostname before ever reaching the transition-table check.
 
-    This only proves AC4's peer-path claim because the contract under test
+    This only proves the peer-path claim because the contract under test
     was also created locally on this same instance (Origin == this DID):
     Approver.Handle's single-writer-per-aggregate forwarding check
     (`processData.Origin != localPeer`) is therefore a no-op, and the very
@@ -220,10 +218,10 @@ def _withdraw_contract(context, name):
 
 
 def _advance_to_submitted(context, name):
-    # DRAFT -> NEGOTIATION -> SUBMITTED via the existing, working submit chain
-    # (deliberately not routed through Offer: the exact Offer -> Negotiation
-    # wiring is an implementation decision left to the implementer; this
-    # helper only needs *a* contract sitting in SUBMITTED).
+    # DRAFT -> NEGOTIATION -> SUBMITTED via the plain submit chain
+    # (deliberately not routed through Offer: this helper only needs *a*
+    # contract sitting in SUBMITTED, and the plain chain is the shortest
+    # path there).
     ContractService._prepare_contract_under_review(context, name)
 
 
@@ -264,8 +262,8 @@ def _advance_to_approved(context, name):
 
 
 def _apply_signature(context, name):
-    # AC8 (real-signing-vertical) gates /signature/apply on a completed PID
-    # presentation ceremony for the exact (contract_did, signer_did) pair.
+    # /signature/apply is gated on a completed PID presentation ceremony for
+    # the exact (contract_did, signer_did) pair (see real_signing_vertical).
     # Every caller of this shared setup helper — across every feature that
     # merely wants a contract "in SIGNED state" as a precondition, not as the
     # thing under test — must therefore run a real ceremony first, or every
@@ -296,18 +294,11 @@ def _apply_signature(context, name):
 def _revoke_signature(context, name):
     # Suspended (C2PA lifecycle banner) is exercised through the existing,
     # wired /signature/revoke command (backend/internal/signingmanagement/
-    # command/revoke.go) rather than an invented seam. Per the accepted user
-    # decision (see features/19_c2pa_conformance/c2pa_conformance.feature),
-    # revoke.go is expected to be extended to call
-    # contractstate.ValidateTransition(current, EventRevoke) +
-    # UpdateState(Revoked) after flipping the signature row's own status —
-    # analogous to command/apply.go:123-127 — so that
-    # ContractState.Revoked (the edge already exists in
-    # contractstate/transition.go:130,134) becomes observable through
-    # ContractRepo.ReadDataByDID / the verify endpoint's lifecycle_status.
-    # Until that lands, this step's own state-reached assertion
-    # (step_given_contract_reached_state) is the expected red signal — not a
-    # broken BDD setup path.
+    # command/revoke.go) rather than an invented seam: revoke.go validates
+    # the EventRevoke transition and updates the contract's own state to
+    # REVOKED after flipping the signature row's status, so
+    # ContractState.Revoked is observable through ContractRepo.ReadDataByDID
+    # / the verify endpoint's lifecycle_status.
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
     resp = post_json(
@@ -368,10 +359,9 @@ def _reach_state(context, name, state):
         _advance_to_approved(context, name)
         _terminate_contract(context, name)
     elif normalized == "REVOKED":
-        # Suspended (C2PA lifecycle banner, DCS-OR-C2PA-006 AC5) — see
-        # _revoke_signature's docstring for why this is expected red until
-        # signature/command/revoke.go is extended to also transition the
-        # contract's own state column.
+        # Suspended (C2PA lifecycle banner, DCS-OR-C2PA-006) — revoking the
+        # signature also transitions the contract's own state column (see
+        # _revoke_signature).
         ContractService._create_contract_in_draft(context, name)
         _advance_to_approved(context, name)
         _apply_signature(context, name)
@@ -398,16 +388,15 @@ def step_given_contract_reached_state(context, name, state):
     assert retrieve.status_code == 200, retrieve.text
     actual_state = str(retrieve.json().get("state", "")).upper()
     assert actual_state == state.strip().upper(), (
-        f"BDD setup could not reach state '{state}' for contract '{name}' "
-        f"(this is the expected red signal before the contract-state-machine "
-        f"refactor lands): got '{actual_state}'"
+        f"BDD setup could not reach state '{state}' for contract '{name}': "
+        f"got '{actual_state}'"
     )
 
 
 @given('contract "{name}" has an expiry date in the past')
 def step_given_expiry_date_in_past(context, name):
     """Test-only seam for the "Expired" C2PA lifecycle banner
-    (DCS-OR-C2PA-006 AC5): directly backdate the contract's `exp_date`
+    (DCS-OR-C2PA-006): directly backdate the contract's `exp_date`
     column via the shared test DB connection (context.db, see
     environment.py) instead of exercising `contract/update`, which rejects
     any exp_date less than one day in the future
@@ -490,21 +479,14 @@ def step_when_full_approval_workflow(context, name):
 
 @when('the counterparty signer applies a signature to contract "{name}"')
 def step_when_apply_signature(context, name):
-    # Fix (gherkin-autor, contract-deployment loop): this step used to POST
-    # straight to /signature/apply with a made-up signer_did and no prior
-    # signing ceremony, which real-signing-vertical's AC8 gate now rejects
-    # with 422 "ceremony_required" (backend/internal/signingmanagement) —
-    # see the *correct*, already-existing pattern in this same module's
-    # module-level `_apply_signature(context, name)` helper (used by
-    # `_reach_state`'s SIGNED branch), which runs a real ceremony first via
+    # /signature/apply rejects a request without a prior signing ceremony
+    # with 422 "ceremony_required" (backend/internal/signingmanagement), so
+    # this step runs a real ceremony first, reusing
     # steps/real_signing_vertical/dcs_real_signing_vertical_steps.py's
-    # `_run_full_ceremony`/`_apply_signature`. This @when step reuses those
-    # same two helpers (deferred import: avoids the module-load-time cycle
-    # documented on `_apply_signature` above) instead of re-inventing a
-    # ceremony-less call. Used by contract-deployment AC1/AC6 and
-    # contract-state-machine-refactor AC6 — all three scenarios only assert
-    # a 200 afterwards, so running the real ceremony here does not change
-    # any caller's expected outcome.
+    # `_run_full_ceremony`/`_apply_signature` (deferred import: avoids the
+    # module-load-time cycle documented on `_apply_signature` above). The
+    # calling scenarios only assert a 200 afterwards, so running the real
+    # ceremony here does not change any caller's expected outcome.
     from steps.real_signing_vertical.dcs_real_signing_vertical_steps import (  # noqa: PLC0415
         _apply_signature as _apply_signature_with_ceremony_result,
         _run_full_ceremony,
@@ -618,7 +600,7 @@ def step_then_peer_action_fails(context):
     # The peer-auth handshake (did:web fetch + eIDAS check + challenge-response
     # verify, see backend/internal/service/dcs_to_dcs.go Action()) is simulated
     # as succeeding (see _self_peer_action_credentials), so a failure here can
-    # only honestly evidence AC4's peer-path claim if it is the same
+    # only honestly evidence the peer-path claim if it is the same
     # contractstate.ValidateTransition rejection the UI-API path hits — not a
     # did:web auth error that happens to also return a non-200.
     body_text = resp.text.lower()

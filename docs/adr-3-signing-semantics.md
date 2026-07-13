@@ -12,7 +12,7 @@ cryptographically sealed region) would produce a document whose identity
 binding could be stripped without invalidating the signature — legally
 worthless.
 
-TBD-A and TBD-B (see [tbd-resolutions.md](tbd-resolutions.md)) are the
+TBD-A and TBD-B (SRS Appendix B) are the
 SRS's own acknowledgment that both the legal form of the organizational
 signature (QES vs. AES) and the wallet ecosystem for the PID presentation
 are externally unsettled.

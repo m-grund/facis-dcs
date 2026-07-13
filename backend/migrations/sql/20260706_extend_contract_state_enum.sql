@@ -1,4 +1,4 @@
--- Workstream C4 (contract-state-machine-refactor): add the new first-class
+-- Contract-state-machine refactor: add the first-class
 -- offer/acceptance states around the existing contract_state enum. Per the
 -- greenfield rule this is additive-only (ALTER TYPE ... ADD VALUE) rather
 -- than a drop/recreate, since contract_state already backs live columns
@@ -6,7 +6,7 @@
 -- values to be added outside of the transaction that first uses them —
 -- this migration only adds values, it does not reference them.
 --
--- New states (see docs/anforderung.md, decision #5 and Workstream C4):
+-- New states (see docs/adr-2-contract-state-machine.md):
 --   OFFERED   - contract has been transmitted to the counterparty (DRAFT -> OFFERED)
 --   WITHDRAWN - initiator retracted the contract before approval (terminal)
 --   ACTIVE    - post-signing execution/deployment state (not entered by any

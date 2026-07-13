@@ -6,7 +6,7 @@ import (
 )
 
 // RemoteManifestURL builds the public C2PA remote-manifest URL for a contract
-// DID (DCS-OR-C2PA-008 AC3): DCS_PUBLIC_URL + the C2PAService.GetManifest path
+// DID (DCS-OR-C2PA-008): DCS_PUBLIC_URL + the C2PAService.GetManifest path
 // (GET /c2pa/manifest/{contract_did}). This URL is embedded as the C2PA claim's
 // remote_manifests field so a verifier can resolve the manifest store remotely.
 //

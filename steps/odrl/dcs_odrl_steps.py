@@ -1,42 +1,23 @@
-"""BDD steps for the 'odrl-soundness' requirement (Workstream F,
-docs/anforderung.md) — Prüfmittel=BDD ACs only:
+"""BDD steps for ODRL soundness (features/18_odrl_soundness; SRS
+DCS-FR-PACM-03).
 
-  AC1 — all rules of a document inside ONE enclosing odrl:Set (uid = the
-        contract DID), odrl:profile declared.
-  AC2 — every rule carries exactly one odrl:action.
-  AC3 — every rule carries odrl:assigner/odrl:assignee + odrl:target.
-  AC4 — a contract with a violated constraint cannot be approved (UI/API
-        entry path; the peer-action entry path dispatches through the same
-        command.Approver handler per the architect's note and is not
-        separately re-tested here).
-  AC5 — a contract with a violated constraint cannot be signed, even via a
-        direct raw API call.
-  AC6 — server-side operator evaluation covers eq/neq/isAnyOf/isNoneOf/
-        gteq/lteq/gt/lt correctly (Scenario Outline).
-  AC7 — a contract with SATISFIED constraints is not falsely rejected
-        (positive counter-test to AC4/AC5).
-  AC8 — the legacy bare-Duty policy shape (no action, no enclosing Set) is
-        explicitly rejected by structural validation.
+The structure and enforcement scenarios build their fixtures against the
+canonical odrl:Set-enclosed shape the backend emits and validates
+(`extractContractODRLPolicies`,
+backend/internal/base/validation/contractcontentaudit.go). Testing
+enforcement against the enclosed shape is what catches the regression where
+the emitted shape and the extraction drift apart — approve/apply would then
+silently see zero policies and let everything through.
 
-AC9 (manueller-Drill), AC10/AC11 (extern-validiert), AC12 (BDD but explicitly
-"nice-to-have, nur falls Kapazität" per the analyst) are deliberately NOT
-implemented here — see the feature file header for the full rationale.
+The operator Scenario Outline and the legacy-shape rejection scenario use
+the bare flat-array fixture instead: operator evaluation is independent of
+the enclosing Set (and additionally covered by the Go unit tests in
+backend/internal/base/validation/contractcontentaudit_test.go), and the
+bare-Duty legacy shape must be REJECTED by structural validation.
 
-AC1/AC2/AC3/AC4/AC5/AC7 deliberately build their fixtures against the TARGET
-odrl:Set-enclosed shape (Workstream F1), per the architect's explicit
-instruction: `extractContractODRLPolicies`
-(backend/internal/base/validation/contractcontentaudit.go:897) reads
-`dcs:policies` as a flat array TODAY; once the implementer migrates the
-emitted shape to an enclosing `odrl:Set`, that extraction MUST be migrated in
-the same change or the enforcement in approve.go/apply.go silently sees zero
-policies and lets everything through. Testing AC4/AC5/AC7 against the NEW
-shape (not the old flat array) is what would catch that regression.
-
-AC6/AC8 deliberately use the CURRENT legacy flat-array shape: AC6 is about
-operator-evaluation correctness, which already works today independent of
-the enclosing-Set migration (and is additionally covered by the Go unit
-tests in backend/internal/base/validation/contractcontentaudit_test.go); AC8
-is specifically about that legacy shape being rejected once F1/F3 land.
+The peer-action entry path is not separately re-tested: it dispatches
+through the same command.Approver handler as the UI/API path (see the
+feature file header).
 """
 
 from behave import given, then, when
@@ -163,12 +144,12 @@ def step_when_policies_updated_to_legacy_form(context, name, field, operator, ri
     'while the actual value is "{actual_value}"'
 )
 def step_given_operator_fixture(context, name, field, operator, right_operand, actual_value):
-    # Deliberately the TARGET odrl:Set shape (not the legacy flat form) — a
-    # fixture identical in shape to AC8's rejected legacy form cannot also be
-    # the accepted fixture AC6 approves against; the two ACs would be
-    # mutually unsatisfiable otherwise. AC6 is about operator-evaluation
-    # correctness, which is exercised identically regardless of the
-    # enclosing shape, and is additionally covered by the Go unit tests in
+    # Deliberately the canonical odrl:Set shape (not the legacy flat form):
+    # a fixture identical in shape to the rejected legacy form cannot also
+    # be the accepted fixture the operator scenarios approve against; the
+    # two would be mutually unsatisfiable otherwise. Operator-evaluation
+    # correctness is exercised identically regardless of the enclosing
+    # shape, and is additionally covered by the Go unit tests in
     # backend/internal/base/validation/contractcontentaudit_test.go.
     ContractService._create_contract_in_draft(context, name)
     did, _ = ContractService._contract_data(context, name)
@@ -252,7 +233,7 @@ def step_then_policy_update_rejected_legacy(context, name):
 
 
 # ---------------------------------------------------------------------------
-# Then — structural assertions (AC1/AC2/AC3)
+# Then — structural assertions
 # ---------------------------------------------------------------------------
 
 
@@ -307,7 +288,7 @@ def step_then_every_rule_has_parties_and_target(context, name):
 
 
 # ---------------------------------------------------------------------------
-# Then — enforcement outcomes (AC4/AC5/AC7)
+# Then — enforcement outcomes
 # ---------------------------------------------------------------------------
 
 
@@ -338,7 +319,7 @@ def step_then_contract_reaches_signed(context, name):
 
 
 # ---------------------------------------------------------------------------
-# Then — operator matrix outcome (AC6, Scenario Outline)
+# Then — operator matrix outcome (Scenario Outline)
 # ---------------------------------------------------------------------------
 
 

@@ -1,5 +1,5 @@
-"""New step definitions for the previously-@skip contract_negotiation.feature
-scenarios (party-scoping and conflict-of-interest). See
+"""Step definitions for the contract_negotiation.feature party-scoping and
+conflict-of-interest scenarios. See
 steps/template_management/contract_workflow_steps.py for the pre-existing
 negotiation steps this file complements — several of the Then-steps there
 (e.g. "the approval is logged in the negotiation log", "I see approvals and

@@ -375,7 +375,7 @@ def step_then_c2pa_chain_linkage(context):
     name = getattr(context, "last_transitioned_contract", "Service Agreement")
     did, _ = ContractService._contract_data(context, name)
 
-    # GET /c2pa/manifest/{did} is public (AC1, no JWT) — same style as
+    # GET /c2pa/manifest/{did} is public (no JWT) — same style as
     # dcs_c2pa_manifest_steps.py's step_when_request_public_manifest.
     store_resp = _requests.get(
         c2pa_manifest_url(context, did), timeout=context.http_timeout_seconds

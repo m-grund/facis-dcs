@@ -1,9 +1,9 @@
-"""Step definitions for real_signing_vertical.feature's AC16 scenario
-("Removing the signature-evidence attachment invalidates the embedded-PID
-cross-check"), using the IPFS CID-swap seam (steps/support/tamper_seam.py)
-to get a corrupted, server-STORED signed PDF the same way contract_format_
-review.feature's "Tampered PDF fails hash verification" and c2pa_
-conformance.feature's AC4 do.
+"""Step definitions for real_signing_vertical.feature's evidence-tamper
+scenario ("Corrupting the signature-evidence attachment invalidates the
+embedded-PID cross-check"), using the IPFS CID-swap seam
+(steps/support/tamper_seam.py) to get a corrupted, server-STORED signed PDF
+the same way contract_format_review.feature's "Tampered PDF fails hash
+verification" does.
 
 --- Why this corrupts the evidence stream bytes IN PLACE rather than
 deleting the attachment ---
@@ -20,8 +20,8 @@ Flipping bytes strictly WITHIN the embedded-file stream's data (same
 length, same offsets, found via the same filespec/EF/object/stream-marker
 walk as pdf-core's own ExtractSigningEvidence in that file) keeps the PDF
 otherwise well-formed while genuinely destroying the evidence content —
-exactly the "mutate bytes inside the signed ByteRange" seam the task
-describes.
+exactly the "mutate bytes inside the signed ByteRange" seam this scenario
+needs.
 
 --- Why the observable signal is /signature/validate's PID cross-check,
 not a "PAdES signature is now invalid" claim ---

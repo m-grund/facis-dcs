@@ -444,16 +444,16 @@ function policySetIri(documentId?: string): string {
   return documentId ? `${documentId}#policy-set` : `${UUID_URN_PREFIX}policy-set`
 }
 
-// ---- ODRL rule parties/target (Workstream F1 — AC3) ----
+// ---- ODRL rule parties/target (DCS ODRL profile: assigner/assignee/target required) ----
 //
 // Template = open parties (ODRL-Offer character): the two sides of a rule
 // aren't bound to real party DIDs yet, so a role-derived open reference is
 // used. Contract instance = bound parties (ODRL-Agreement character): once
 // bound to a real contract, the same role-derived reference still resolves
-// consistently against that contract's own DID, which is what AC3 (presence
-// of odrl:assigner/odrl:assignee/odrl:target) requires; resolving to the
-// real counterpart legal-entity DID is left to the semantic mapper that
-// already publishes bound envelopes for peer exchange.
+// consistently against that contract's own DID, which is what the profile
+// requires (presence of odrl:assigner/odrl:assignee/odrl:target); resolving
+// to the real counterpart legal-entity DID is left to the semantic mapper
+// that already publishes bound envelopes for peer exchange.
 
 function counterpartRole(role: string | undefined): string {
   if (role === 'provider') return 'customer'
@@ -476,7 +476,7 @@ function requirementForField(
   return contractData.find((r) => r['dcs:fields'].some((f) => f['@id'] === fieldId))
 }
 
-/** Assembles the single enclosing odrl:Set (Workstream F1 — AC1) from the flat internal rule array. */
+/** Assembles the single enclosing odrl:Set (DCS ODRL profile) from the flat internal rule array. */
 function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string): OdrlSet {
   const set: OdrlSet = {
     '@id': policySetIri(documentId),
@@ -493,7 +493,7 @@ function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string): 
   return set
 }
 
-/** Flattens the enclosing odrl:Set (or legacy flat array, for graceful loading of already-persisted data) into the flat internal rule array. */
+/** Flattens the enclosing odrl:Set (or the empty "no policies yet" array) into the flat internal rule array. */
 export function flattenPolicySet(policies: OdrlSet | OdrlRule[] | undefined): OdrlRule[] {
   if (!policies) return []
   if (Array.isArray(policies)) return policies

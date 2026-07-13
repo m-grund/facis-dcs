@@ -41,6 +41,5 @@ triggered by the local UI/API path or a remote peer's `POST
   against this one vocabulary; nothing downstream needs its own
   state-translation layer.
 - The reconciliation is recorded here explicitly (rather than silently
-  picking one SRS reading) so it can be raised to ECO as a documented
-  interpretation, not discovered as an inconsistency during acceptance —
-  see Deviation Register #4.
+  picking one SRS reading) so it is a documented interpretation, not an
+  inconsistency discovered during acceptance.

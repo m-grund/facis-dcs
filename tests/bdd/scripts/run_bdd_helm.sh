@@ -43,7 +43,7 @@ export BDD_DCS_BASE_URL_A="$BDD_DCS_BASE_URL"
 export BDD_DCS_BASE_URL_B="${BDD_DCS_BASE_URL_B:-http://dcs-b.localhost:18080/digital-contracting-service/api}"
 
 # Sign did:web challenges through the in-cluster token: the BDD harness has no
-# local SoftHSM token in the Helm/kind harness (Workstream A: keys are
+# local SoftHSM token in the Helm/kind harness (keys are
 # non-extractable, PKCS#11-only). Resolve the pod by label rather than
 # `exec deploy/...`: the DCS deployment's selector also matches pdf-core pods
 # (no component label in matchLabels), so kubectl's deploy→pod resolution can
@@ -149,7 +149,7 @@ fi
 wait_for_dcs_http
 echo "DCS is reachable at $DCS_HEALTH_URL"
 
-# Instance B (dcs2, docs/anforderung.md Workstream C1-C3): only checked when
+# Instance B (dcs2, features/17_peer_trust @two-instance): only checked when
 # the caller tells us it exists (DCS_DEPLOYMENT_B set AND actually present in
 # this namespace) — never silently skipped without saying so, since a
 # missing/unready instance B means every @two-instance scenario will fail

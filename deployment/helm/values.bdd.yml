@@ -39,10 +39,10 @@ extraEnv:
     value: "true"
   - name: AUTH_INSECURE_COOKIES
     value: "true"
-  # Reciprocal trust for the @two-instance peer-trust scenarios (Workstream
-  # C1-C3, docs/anforderung.md): instance B's DID (see values.bdd2.yml's own
+  # Reciprocal trust for the @two-instance peer-trust scenarios
+  # (features/17_peer_trust): instance B's DID (see values.bdd2.yml's own
   # DCS_TRUSTED_PEERS for the other half of this pair). Seeded at startup by
-  # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv (~:304/665).
+  # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv.
   - name: DCS_TRUSTED_PEERS
     value: "did:web:dcs-b.localhost%3A18080"
 
@@ -111,8 +111,8 @@ ingress:
         # /.well-known prefix for OIDC discovery, and the longer path wins.
         - path: /.well-known/did.json
           pathType: Prefix
-    # Cluster-routable did:web hostname for this instance (Workstream C1-C3,
-    # docs/anforderung.md two-instance peer-trust suite): dcs-a.localhost
+    # Cluster-routable did:web hostname for this instance (@two-instance
+    # peer-trust suite, features/17_peer_trust): dcs-a.localhost
     # resolves in-cluster via a CoreDNS rewrite to the shared Traefik Service
     # (tests/bdd/scripts/kind_coredns_rewrite.sh) and, host-side, via the
     # RFC 6761 *.localhost fallback resolver in environment.py. Same paths as

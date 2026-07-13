@@ -11,7 +11,7 @@ import (
 // features/03_contract_creation/contract_state_machine_refactor.feature
 // exercise the same rules end-to-end.
 func TestOfferAndWithdrawTransitions(t *testing.T) {
-	// AC1: DRAFT -> OFFERED via Offer.
+	// DRAFT -> OFFERED via Offer.
 	if err := ValidateTransition(Draft, EventOffer); err != nil {
 		t.Fatalf("expected Offer to be allowed from Draft, got: %v", err)
 	}
@@ -19,7 +19,7 @@ func TestOfferAndWithdrawTransitions(t *testing.T) {
 		t.Fatalf("expected Draft -Offer-> Offered to be a declared outcome")
 	}
 
-	// AC2: Withdraw must succeed from OFFERED/NEGOTIATION/SUBMITTED/REVIEWED.
+	// Withdraw must succeed from OFFERED/NEGOTIATION/SUBMITTED/REVIEWED.
 	for _, from := range []ContractState{Offered, Negotiation, Submitted, Reviewed} {
 		if err := ValidateTransition(from, EventWithdraw); err != nil {
 			t.Fatalf("expected Withdraw to be allowed from %s, got: %v", from, err)
@@ -29,7 +29,7 @@ func TestOfferAndWithdrawTransitions(t *testing.T) {
 		}
 	}
 
-	// AC3: Withdraw must be rejected once APPROVED.
+	// Withdraw must be rejected once APPROVED.
 	err := ValidateTransition(Approved, EventWithdraw)
 	if err == nil {
 		t.Fatalf("expected Withdraw from Approved to be rejected")
@@ -38,13 +38,13 @@ func TestOfferAndWithdrawTransitions(t *testing.T) {
 		t.Fatalf("expected ErrInvalidTransition, got: %v", err)
 	}
 
-	// AC4: Approve is rejected from Draft.
+	// Approve is rejected from Draft.
 	err = ValidateTransition(Draft, EventApprove)
 	if err == nil || !errors.Is(err, ErrInvalidTransition) {
 		t.Fatalf("expected Approve from Draft to be rejected with ErrInvalidTransition, got: %v", err)
 	}
 
-	// AC5/AC6: the pre-existing Submit -> Reviewed -> Approve -> Sign path
+	// The pre-existing Submit -> Reviewed -> Approve -> Sign path
 	// still works under the new table.
 	if err := ValidateTransition(Submitted, EventSubmit); err != nil {
 		t.Fatalf("expected Submit to remain allowed from Submitted, got: %v", err)
@@ -61,7 +61,7 @@ func TestOfferAndWithdrawTransitions(t *testing.T) {
 }
 
 // TestSubmitAllowedFromOffered covers the C1-C3 two-instance-peer-trust
-// gap found while writing AC8 of features/17_peer_trust: the documented
+// gap surfaced by features/17_peer_trust's replication scenarios: the documented
 // sequence DRAFT -> OFFERED -> NEGOTIATION -> SUBMITTED -> ... requires an
 // Offered -Submit-> Negotiation edge, analogous to the pre-existing
 // Draft -Submit-> Negotiation edge.

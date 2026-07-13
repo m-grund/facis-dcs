@@ -1,10 +1,8 @@
-// Package contractstate defines the contract lifecycle enum and (since
-// Workstream C4, "contract-state-machine-refactor") the single explicit
-// transition table (see transition.go) that is the sole source of truth for
-// which state × event combinations are valid. This is the ONE contract
-// state machine used across the whole backend — the divergent, now-deleted
-// copy that used to live under signingmanagement/datatype/contractstate is
-// gone; every consumer imports this package.
+// Package contractstate defines the contract lifecycle enum and the single
+// explicit transition table (see transition.go) that is the sole source of
+// truth for which state × event combinations are valid. This is the ONE
+// contract state machine used across the whole backend; every consumer
+// imports this package.
 //
 // Expired is set out-of-band by the CWE cron job, though readers see it
 // instantly via the contracts_effective DB view.

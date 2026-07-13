@@ -40,9 +40,7 @@ could accidentally violate by adding a `children` field.
 - Sibling isolation is a structural guarantee (a document a peer can never
   legally hold cannot leak sibling identities), not a discipline convention
   that a future feature could accidentally violate.
-- The freeze-day grep gate `git grep -n "childContracts\|hasPart"
+- The invariant is grep-checkable: `git grep -n "childContracts\|hasPart"
   backend frontend` must return zero *document-model* hits (ODRL's own
   `odrl:hasPart` operator is a separate, allowed vocabulary term and is
-  excluded from this check by context, not by name — see the sweep
-  verification for the distinction) — this is one of the architecture
-  invariants the "fresh mind" freeze test checks for.
+  excluded from this check by context, not by name).

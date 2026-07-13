@@ -326,8 +326,8 @@ class ContractService:
         """Like _create_approved_template_for_contract, but the template
         declares a named `dcs:signatureFields` entry (dcs:SignatureField,
         dcs:signatoryName) — the field pdf-core's PAdES signer is expected to
-        bind its /T AcroForm field name to (docs/anforderung.md B1: "existing
-        signature field by name (/T == signatoryName from the JSON-LD)").
+        bind its /T AcroForm field name to (the signer signs an existing
+        signature field by name: /T == signatoryName from the JSON-LD).
         See docs/semantic-ontology/linkml/tests/valid/signature-fields.jsonld
         for the schema shape this mirrors.
         """
@@ -416,7 +416,7 @@ class ContractService:
         """Like _create_contract_in_draft, but sourced from a template that
         carries a named dcs:SignatureField (see
         _create_approved_template_with_signature_field) — used by the
-        real-signing-vertical (Workstream B) scenarios that assert on the
+        real-signing-vertical scenarios that assert on the
         PAdES-signed PDF's AcroForm /T field name.
         """
         t_did = ContractService._create_approved_template_with_signature_field(context, signatory_name)

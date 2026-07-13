@@ -1,6 +1,6 @@
 #!/bin/bash
-# Second-instance runner for the two-instance inter-org demo (Workstream C2,
-# docs/anforderung.md, requirement two-instance-peer-trust AC5).
+# Second-instance runner for the two-instance inter-org setup
+# (features/17_peer_trust @two-instance scenarios).
 #
 # Starts a SECOND, independent DCS instance ("instance B") alongside the one
 # started by dev-stack.sh ("instance A"): its own Helm release (Postgres,
@@ -74,7 +74,7 @@ echo ""
 echo "=== Provisioning instance B SoftHSM token and DID document ==="
 # Instance B keeps its own token dir (separate from instance A's -8991), so the
 # two instances' ECDSA DID keys differ — the genuine two-instance peer-trust
-# breaking-change setup (Workstream A2.4 / C).
+# breaking-change setup.
 HSM_TOKEN_DIR_B="$HOME/.dcs/softhsm-8992"
 bash scripts/hsm-provision.sh "$HSM_TOKEN_DIR_B" dcs 1234 12345678
 export SOFTHSM2_CONF="$HSM_TOKEN_DIR_B/softhsm2.conf"

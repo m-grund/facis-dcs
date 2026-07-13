@@ -1,5 +1,5 @@
--- Deployment/execution-evidence/KPI tables for Workstream G (contract
--- deployment). One row per POST /contract/deploy dispatch (manual or
+-- Deployment/execution-evidence/KPI tables (contract deployment,
+-- UC-05-01). One row per POST /contract/deploy dispatch (manual or
 -- event-driven), keyed by a correlation_id the target echoes back in its
 -- ack/status/KPI callbacks.
 

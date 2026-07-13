@@ -31,7 +31,7 @@ type c2paSrvc struct {
 }
 
 // NewC2PAService wires the public C2PA manifest endpoint (DCS-OR-C2PA-008,
-// Workstream D). It reuses the same PDF export dependencies as PDFGeneration so
+// DCS-OR-C2PA-008). It reuses the same PDF export dependencies as PDFGeneration so
 // it can fetch the current/cached signed PDF and extract its embedded C2PA
 // manifest store.
 func NewC2PAService(

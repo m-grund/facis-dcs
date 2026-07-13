@@ -108,7 +108,7 @@ var _ = Service("PDFGeneration", func() {
 
 	// export_contract_bundle — GET /contract/export/{did}
 	Method("export_contract_bundle", func() {
-		Description("Export a contract as a ZIP bundle containing its JSON-LD, signed PDF, C2PA manifest store, extracted credentials, signature states, bundle manifest (with per-entry SHA-256), and the parent chain upward (Workstream H2, FR-CWE-30). Refuses with a findings list when a referenced component is missing (FR-TR-26/FR-PACM-06).")
+		Description("Export a contract as a ZIP bundle containing its JSON-LD, signed PDF, C2PA manifest store, extracted credentials, signature states, bundle manifest (with per-entry SHA-256), and the parent chain upward (FR-CWE-30). Refuses with a findings list when a referenced component is missing (FR-TR-26/FR-PACM-06).")
 		Meta("dcs:requirements", "DCS-FR-CWE-30", "DCS-FR-TR-26", "DCS-FR-PACM-06", "DCS-FR-CSA-18")
 		Security(JWTAuth, func() {
 			Scope("Contract Manager")

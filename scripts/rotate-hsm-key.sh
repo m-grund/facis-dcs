@@ -3,8 +3,7 @@
 # keypair in the SoftHSM token, optionally issue a dev-CA leaf certificate for
 # it, and advance the pki_active_key_version pointer so new signing operations
 # pick up the new version while historical signatures stay attributable to (and
-# verifiable against) the versions that produced them (DCS-OR-C2PA-007,
-# docs/anforderung.md Workstream A5).
+# verifiable against) the versions that produced them (DCS-OR-C2PA-007).
 #
 # Rotation is an ops action, not an HTTP endpoint: it provisions token key
 # material the running process cannot mint itself.

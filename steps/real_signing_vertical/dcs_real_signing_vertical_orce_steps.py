@@ -1,14 +1,13 @@
-"""Step definitions for real_signing_vertical.feature's AC3 PAdES-B-B
-fallback scenario: makes the previously-"cannot be driven by this harness"
-TSA-unavailable path REAL by taking pdf-core's RFC 3161 TSA endpoint away at
-runtime, signing through it while it's down (so pdf-core soft-falls-back to
-PAdES-B-B), and restoring it — then proving a fresh signing recovers
+"""Step definitions for real_signing_vertical.feature's PAdES-B-B
+fallback scenario: takes pdf-core's RFC 3161 TSA endpoint away at runtime,
+signs through it while it's down (so pdf-core soft-falls-back to
+PAdES-B-B), and restores it — then proves a fresh signing recovers
 PAdES-B-T.
 
 --- Why this patches pdf-core's TSA env rather than scaling the whole ORCE
-deployment to 0 (the originally-envisioned mechanism) ---
+deployment to 0 ---
 
-Investigation finding: scaling the shared ORCE deployment to 0 replicas does
+Scaling the shared ORCE deployment to 0 replicas does
 NOT work for this scenario, because /signature/apply has TWO independent
 runtime dependencies on ORCE, only one of which has a fallback:
 
@@ -25,11 +24,9 @@ runtime dependencies on ORCE, only one of which has a fallback:
 
 So scaling ALL of ORCE to 0 makes dependency #2 abort /signature/apply
 before a PAdES-B-B PDF is ever persisted or exportable — the B-B fallback
-(#1) becomes unobservable at the black-box surface. (This is a genuine
-design observation for the architect: the archive-notary step does not
-degrade gracefully the way PAdES timestamping does. Fixing that is backend
-work in apply.go, out of scope for this test-seam task and in a package this
-task must not edit.)
+(#1) becomes unobservable at the black-box surface. (The archive-notary
+step does not degrade gracefully the way PAdES timestamping does; changing
+that would be backend work in apply.go.)
 
 PAdES-B-B is specifically a pdf-core capability keyed off pdf-core's own
 DCS_PDF_CORE_TSA_URL env var (deployment/helm/templates/pdf-core-deployment.
@@ -37,15 +34,15 @@ yaml:57). Repointing THAT env at an unreachable address and rolling pdf-core
 takes the TSA away from the PAdES path ONLY, leaving ORCE (and hence the
 backend's archive-notary, dependency #2) fully up — so /signature/apply
 completes and yields a genuine, inspectable PAdES-B-B PDF. This isolates the
-exact behavior AC3 is about.
+exact behavior the scenario is about.
 
 --- Shared-cluster safety ---
 
 pdf-core is PER-RELEASE (instance A's dcs-...-pdf-core is a separate
 Deployment from instance B's dcs2-...-pdf-core), so this only affects
 instance A — it never touches instance B or the shared ORCE. It nonetheless
-MUST run under the suite-wide flock for the whole scenario (per the task
-brief), because any OTHER agent signing against instance A during the
+MUST run under the suite-wide flock for the whole scenario, because any
+OTHER agent signing against instance A during the
 TSA-down window would unexpectedly get a B-B signature. Restoration is
 layered: (1) a context.add_cleanup restores the original env value + rolls
 pdf-core back even on failure; (2) the scenario itself also explicitly
