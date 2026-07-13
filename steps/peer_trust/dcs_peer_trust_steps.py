@@ -688,3 +688,157 @@ def step_then_approved_replicated_both(context):
             f"observed state: '{actual_state}' (last response: "
             f"{last_resp.status_code if last_resp else 'n/a'} {last_resp.text if last_resp else ''})"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC9 — approval quorum with two distinct approver peers (DCS-FR-CWE-15/25)
+# ---------------------------------------------------------------------------
+
+
+@when("the initiator on instance A creates and offers a contract requiring approval from both instances")
+def step_when_create_offer_dual_approver(context):
+    with _as_instance(context, context.base_url_a):
+        t_did = ContractService._create_approved_template_for_contract(context)
+        creator_h = AuthService.get_headers_for_roles(["Contract Creator"], api_base=context.base_url_a)
+        # Reviewer and negotiator = A's own peer so the pre-approval drive
+        # stays local; approvers = BOTH peers so the quorum needs two
+        # observably distinct CauserDIDs (the point of this scenario).
+        create_resp = post_json(
+            context,
+            contract_create_url(context),
+            {
+                "template_did": t_did,
+                "reviewers": [context.peer_did_a],
+                "negotiators": [context.peer_did_a],
+                "approvers": [context.peer_did_a, context.peer_did_b],
+            },
+            headers=creator_h,
+        )
+        assert create_resp.status_code == 200, create_resp.text
+        c_did = create_resp.json().get("did")
+        context.cross_instance_contract_did = c_did
+        context.cross_instance_creator_headers = creator_h
+
+        retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
+        assert retrieve.status_code == 200, retrieve.text
+        updated_at = retrieve.json().get("updated_at")
+
+        offer_resp = post_json(
+            context, contract_offer_url(context), {"did": c_did, "updated_at": updated_at}, headers=creator_h
+        )
+        context.requests_response = offer_resp
+        assert offer_resp.status_code == 200, offer_resp.text
+
+
+@when("instance A drives the contract to the approval stage")
+def step_when_drive_to_approval_stage(context):
+    c_did = context.cross_instance_contract_did
+    with _as_instance(context, context.base_url_a):
+        creator_h = context.cross_instance_creator_headers
+        submit_payload = {
+            "did": c_did,
+            "reviewers": [context.peer_did_a],
+            "approvers": [context.peer_did_a, context.peer_did_b],
+            "negotiators": [context.peer_did_a],
+        }
+        # OFFERED -> NEGOTIATION -> SUBMITTED: two creator submits (A is the
+        # sole negotiator and there are no open negotiation decisions, same
+        # pattern as the single-instance state-machine pack).
+        for _ in range(2):
+            retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
+            assert retrieve.status_code == 200, retrieve.text
+            submit_payload["updated_at"] = retrieve.json().get("updated_at")
+            resp = post_json(context, f"{context.base_url_a}/contract/submit", submit_payload, headers=creator_h)
+            assert resp.status_code == 200, f"submit failed: {resp.status_code} {resp.text}"
+
+        # SUBMITTED -> REVIEWED: reviewer forwards to approval.
+        reviewer_h = AuthService.get_headers_for_roles(["Contract Reviewer"], api_base=context.base_url_a)
+        retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=reviewer_h)
+        assert retrieve.status_code == 200, retrieve.text
+        review_submit = post_json(
+            context,
+            f"{context.base_url_a}/contract/submit",
+            {"did": c_did, "updated_at": retrieve.json().get("updated_at"), "forward_to": "approval"},
+            headers=reviewer_h,
+        )
+        assert review_submit.status_code == 200, (
+            f"reviewer forward-to-approval failed: {review_submit.status_code} {review_submit.text}"
+        )
+
+
+def _approve_from_instance(context, base_url):
+    c_did = context.cross_instance_contract_did
+    creator_h = context.cross_instance_creator_headers
+    approver_h = AuthService.get_headers_for_roles(["Contract Approver"], api_base=base_url)
+    # Always read the authoritative updated_at from A (the origin) — B's
+    # replica catches up asynchronously (same convention as AC8).
+    retrieve = get_with_headers(
+        context, f"{context.base_url_a}/contract/retrieve/{c_did}", headers=creator_h
+    )
+    assert retrieve.status_code == 200, retrieve.text
+    resp = post_json(
+        context,
+        f"{base_url}/contract/approve",
+        {"did": c_did, "updated_at": retrieve.json().get("updated_at")},
+        headers=approver_h,
+    )
+    context.requests_response = resp
+    assert resp.status_code == 200, f"approve via {base_url} failed: {resp.status_code} {resp.text}"
+
+
+@when("instance A's approver approves the contract")
+def step_when_approver_a_approves(context):
+    _approve_from_instance(context, context.base_url_a)
+
+
+@when("instance B's approver approves the contract")
+def step_when_approver_b_approves(context):
+    _approve_from_instance(context, context.base_url_b)
+
+
+@then("the contract is still not APPROVED because instance B's required approval is open")
+def step_then_partial_quorum_holds(context):
+    c_did = context.cross_instance_contract_did
+    creator_h = context.cross_instance_creator_headers
+    retrieve = get_with_headers(
+        context, f"{context.base_url_a}/contract/retrieve/{c_did}", headers=creator_h
+    )
+    assert retrieve.status_code == 200, retrieve.text
+    state = str(retrieve.json().get("state", "")).upper()
+    assert state != "APPROVED", (
+        "Quorum violation: the contract reached APPROVED after only instance A's approval, "
+        "although instance B's approval task must still be OPEN (approve.go AnyTasksInState guard)"
+    )
+    assert state == "REVIEWED", (
+        f"Expected the contract to remain in REVIEWED awaiting instance B's approval, got '{state}'"
+    )
+
+
+@then("both peers' approval decisions are recorded on the contract's approval tasks")
+def step_then_both_approvals_recorded(context):
+    # GET /contract/retrieve lists the approval tasks assigned to the VIEWING
+    # instance's own peer DID, so each peer's recorded decision is asserted
+    # against its own instance. B's task state arrives via the async
+    # post_sync broadcast from A (the origin) — poll briefly.
+    c_did = context.cross_instance_contract_did
+    for label, base_url, peer_did in (
+        ("A", context.base_url_a, context.peer_did_a),
+        ("B", context.base_url_b, context.peer_did_b),
+    ):
+        approver_h = AuthService.get_headers_for_roles(["Contract Approver"], api_base=base_url)
+        states = {}
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            resp = get_with_headers(context, f"{base_url}/contract/retrieve", headers=approver_h)
+            assert resp.status_code == 200, (
+                f"contract retrieve on instance {label} failed: {resp.status_code} {resp.text}"
+            )
+            tasks = [t for t in (resp.json().get("approval_tasks") or []) if t.get("did") == c_did]
+            states = {t.get("approver"): str(t.get("state", "")).upper() for t in tasks}
+            if states.get(peer_did) == "APPROVED":
+                break
+            time.sleep(1)
+        assert states.get(peer_did) == "APPROVED", (
+            f"Expected instance {label}'s own approval task (approver={peer_did}) to be "
+            f"recorded APPROVED on instance {label}, got tasks: {states}"
+        )

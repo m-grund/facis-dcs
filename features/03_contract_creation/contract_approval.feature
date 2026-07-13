@@ -28,33 +28,13 @@ Feature: Contract Approval
     And the contract status shows "Rejected"
     And the contract is returned for revision
 
-  # @skip: quorum enforcement itself IS correctly implemented — approve.go's
-  # AnyTasksInState(..., Open) check (lines ~148-157) only flips the contract
-  # to APPROVED once no contract_approval_task rows remain Open, i.e. it
-  # already refuses to complete on a partial approval. What is not
-  # demonstrable in this single-instance BDD run is two OBSERVABLY DISTINCT
-  # approvers: CauserDID on every /contract/approve call is hardcoded to this
-  # instance's own peer DID (internal/service/contract_workflow_engine.go's
-  # Approve(): CauserDID: localPeer), and PostgresApprovalTaskRepo.UpdateState
-  # (backend/internal/contractworkflowengine/db/pg/approvaltaskrepository.go:
-  # 104-121) matches WHERE approver = $2 — so one approve() call flips EVERY
-  # task row assigned to that same peer at once, even if "Legal" and
-  # "Finance" were entered as two rows with the same DID. Proving partial
-  # quorum for real needs two independently-approving peer instances (the
-  # existing dcs/dcs2 @two-instance harness, see pack 20 AC5's
-  # offer-from-Draft + PostSync pattern) — a fixture substantially larger
-  # than this task's remaining scope (dual negotiator/reviewer routing plus
-  # the offer/sync round trip), so it was not attempted here rather than
-  # risk a fragile implementation.
-  @skip
-  Scenario: All required approvals gathered
-    Given contract "Service Agreement" requires approvals from "Legal" and "Finance"
-    And "Legal" has approved the contract
-    And "Finance" has approved the contract
-    When the system evaluates approval status
-    Then all required approvals are recorded
-    And the contract content is locked
-    And the contract is marked as ready for execution
+  # "All required approvals gathered" (partial-quorum proof) lives in
+  # 17_peer_trust/two_instance_peer_trust.feature AC9: approvers are PEERS
+  # (CauserDID is always the executing instance's own peer DID and
+  # UpdateState matches WHERE approver = CauserDID), so two observably
+  # distinct approvals require two instances — the AC9 scenario approves
+  # from A, proves the contract stays REVIEWED, approves from B, and proves
+  # APPROVED replicates with both approval tasks recorded.
 
   Scenario: Contract transitions to signing phase upon approval
     Given I am authenticated with roles: "Contract Manager"

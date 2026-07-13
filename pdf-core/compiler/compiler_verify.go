@@ -31,7 +31,7 @@ func ExtractPageContentByteRanges(pdf []byte) ([][2]int, error) {
 		streamDataEnd := streamDataStart + endIdx
 
 		streamData := search[streamIdx+len(streamMarker) : streamIdx+len(streamMarker)+endIdx]
-		if bytes.Contains(streamData, []byte("BT")) {
+		if bytes.Contains(streamData, []byte("BT")) && !isC2PAManifestDict(search, streamIdx) {
 			ranges = append(ranges, [2]int{streamDataStart, streamDataEnd})
 		}
 
@@ -40,6 +40,21 @@ func ExtractPageContentByteRanges(pdf []byte) ([][2]int, error) {
 		search = search[advance:]
 	}
 	return ranges, nil
+}
+
+// isC2PAManifestDict reports whether the object dictionary immediately
+// preceding the stream keyword at streamIdx declares the stream as the
+// embedded C2PA manifest (/Subtype /application#2Fc2pa). The manifest's
+// binary JUMBF payload can incidentally contain the bytes "BT", which would
+// otherwise misclassify the manifest stream as page content and make it
+// "overlap" its own exclusion window exactly (seen as an intermittent
+// compiler-invariant panic in /sign under real load).
+func isC2PAManifestDict(search []byte, streamIdx int) bool {
+	dictStart := 0
+	if objIdx := bytes.LastIndex(search[:streamIdx], []byte(" obj")); objIdx >= 0 {
+		dictStart = objIdx
+	}
+	return bytes.Contains(search[dictStart:streamIdx], []byte("/Subtype /application#2Fc2pa"))
 }
 
 // rangesOverlap reports whether the half-open intervals [aStart, aEnd) and

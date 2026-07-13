@@ -76,3 +76,24 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     Then the contract appears on instance B in state OFFERED within a few seconds
     When the parties complete negotiation acceptance, submit, review, and approval on both sides
     Then the contract state APPROVED is replicated on both instance A and instance B
+
+  # DCS-FR-CWE-15 approval quorum: approve.go flips a contract to APPROVED
+  # only once NO approval task remains OPEN, and each approve call flips only
+  # the CALLING peer's task (UpdateState matches WHERE approver = CauserDID,
+  # and CauserDID is always the executing instance's own peer DID). Proving a
+  # PARTIAL quorum therefore needs two observably distinct approver peers —
+  # this scenario supersedes the former single-instance @skip
+  # "All required approvals gathered" in 03/contract_creation/
+  # contract_approval.feature, which could never produce two distinct
+  # approver identities on one instance.
+  @REQ-two-instance-peer-trust-AC9 @DCS-FR-CWE-15 @DCS-FR-CWE-25 @UC-03-04 @two-instance
+  Scenario: Approval quorum — one of two approver peers is not enough, both together complete it
+    Given instance A and instance B are both running and trust each other
+    When the initiator on instance A creates and offers a contract requiring approval from both instances
+    Then the contract appears on instance B in state OFFERED within a few seconds
+    When instance A drives the contract to the approval stage
+    And instance A's approver approves the contract
+    Then the contract is still not APPROVED because instance B's required approval is open
+    When instance B's approver approves the contract
+    Then the contract state APPROVED is replicated on both instance A and instance B
+    And both peers' approval decisions are recorded on the contract's approval tasks

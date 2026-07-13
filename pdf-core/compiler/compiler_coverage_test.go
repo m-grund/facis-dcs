@@ -174,3 +174,36 @@ func TestReRenderingStableAfterVerification(t *testing.T) {
 			len(blocks1), len(blocks2))
 	}
 }
+
+// TestManifestStreamContainingBTIsNotPageContent reproduces the intermittent
+// /sign panic "C2PA coverage invariant violated: page content stream [x, y)
+// overlaps C2PA exclusion [x, y)": the manifest's binary JUMBF payload can
+// incidentally contain the bytes "BT", which misclassified the manifest
+// stream itself as page content — making it "overlap" its own exclusion
+// window exactly. The object-dict classifier must exclude it.
+func TestManifestStreamContainingBTIsNotPageContent(t *testing.T) {
+	// A minimal PDF-shaped byte string: one real content stream and one C2PA
+	// manifest object whose binary payload happens to contain "BT".
+	pdf := []byte("%PDF-1.7\n" +
+		"4 0 obj\n<< /Length 20 >>\nstream\n" +
+		"BT (real text) ET ..\nendstream\nendobj\n" +
+		"9 0 obj\n<< /Type /EmbeddedFile /Subtype /application#2Fc2pa /Length 16 >>\nstream\n" +
+		"\x00\x01BT\x02jumbf\x03\x04\x05\x06\x07\x08\nendstream\nendobj\n")
+
+	ranges, err := ExtractPageContentByteRanges(pdf)
+	if err != nil {
+		t.Fatalf("ExtractPageContentByteRanges: %v", err)
+	}
+	if len(ranges) != 1 {
+		t.Fatalf("expected exactly 1 page content range (the manifest stream must be excluded), got %d: %v", len(ranges), ranges)
+	}
+
+	manifestStreamStart := bytes.Index(pdf, []byte("\x00\x01BT"))
+	if manifestStreamStart < 0 {
+		t.Fatal("test setup: manifest payload not found")
+	}
+	exclusion := c2paExclusion{Start: manifestStreamStart, Length: 16}
+	if err := checkCoverageWithExclusions(pdf, []c2paExclusion{exclusion}); err != nil {
+		t.Fatalf("coverage check must not flag the manifest stream against its own exclusion: %v", err)
+	}
+}
