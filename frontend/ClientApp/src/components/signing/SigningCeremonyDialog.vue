@@ -26,7 +26,10 @@ const qrCodeDataUrl = useQRCode(computed(() => walletUri.value || ''))
 let ceremonyId = ''
 let pollTimer: ReturnType<typeof setInterval> | undefined
 
-const { isRevealed, reveal, confirm, cancel, onReveal } = useConfirmDialog<CeremonyRequest, CeremonyResult | undefined>()
+const { isRevealed, reveal, confirm, cancel, onReveal } = useConfirmDialog<
+  CeremonyRequest,
+  CeremonyResult | undefined
+>()
 
 onReveal((data) => {
   if (data) request.value = data
@@ -112,19 +115,14 @@ defineExpose<DialogExpose>({ reveal })
         <div v-else-if="phase === 'pending'" class="flex flex-col items-center gap-3">
           <p class="text-sm opacity-80">Scan the QR code with your wallet to present your PID and sign.</p>
           <figure class="rounded-box bg-white p-3">
-            <img
-              v-if="qrCodeDataUrl"
-              :src="qrCodeDataUrl"
-              alt="Signing ceremony QR code"
-              class="mx-auto h-48 w-48"
-            />
+            <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="Signing ceremony QR code" class="mx-auto h-48 w-48" />
           </figure>
           <p class="text-xs opacity-70">Waiting for the wallet presentation…</p>
         </div>
 
         <div v-else-if="phase === 'expired' || phase === 'failed'" class="flex flex-col items-center gap-3 py-2">
           <p class="text-sm text-error">
-            {{ phase === 'expired' ? 'The signing ceremony expired.' : (errorMessage || 'The signing ceremony failed.') }}
+            {{ phase === 'expired' ? 'The signing ceremony expired.' : errorMessage || 'The signing ceremony failed.' }}
           </p>
           <button type="button" class="btn btn-sm btn-primary" @click="retry">Start a new ceremony</button>
         </div>

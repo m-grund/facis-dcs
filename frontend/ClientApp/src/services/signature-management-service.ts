@@ -85,11 +85,7 @@ export const signatureManagementService = {
     return http.get<CeremonyStatusResult>(`/signature/request/${ceremonyId}`).then((res) => res.data)
   },
 
-  async applySignature(
-    did: string,
-    signerDid: string,
-    credentialType: string,
-  ): Promise<SignatureEnvelope | undefined> {
+  async applySignature(did: string, signerDid: string, credentialType: string): Promise<SignatureEnvelope | undefined> {
     return http
       .post<{ did: string; signature_envelope?: SignatureEnvelope }>('/signature/apply', {
         did,
