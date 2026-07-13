@@ -90,7 +90,8 @@ Feature: Contract Creation
   # the contract's dcs:parties to read it; Sys.* automation roles, the
   # Sys. Administrator, and the Auditor are org-independent readers. A
   # denial is HTTP 403 (retrieve_by_id's "forbidden" design error) and lands
-  # in the audit trail as a RETRIEVE_CONTRACT_DENIED event.
+  # in the audit trail as a CONTRACT_ACCESS_DENIED event.
+  @DCS-NFR-SEC-03 @DCS-NFR-SEC-08 @UC-03-01
   Scenario: Created contract is accessible only to authorized parties
     Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Party Scoped Contract" with parties "Acme Corp" and "TechVendor Inc"
@@ -99,6 +100,7 @@ Feature: Contract Creation
     And when a representative of unrelated party "UnrelatedCorp" attempts to access contract "Party Scoped Contract"
     Then the access is denied with a "not authorized to access this contract" error
 
+  @DCS-NFR-SEC-03 @DCS-NFR-SEC-08 @UC-03-01
   Scenario: Unauthorized party cannot access created contract
     Given I am authenticated with roles: "Contract Creator"
     And I have created contract "Party Denied Contract" with parties "Acme Corp" and "TechVendor Inc"

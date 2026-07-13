@@ -4,25 +4,24 @@
 # feature (EUDIPLO ceremony, SD-JWT VC + KB-JWT presentation, embedded under
 # the PAdES signature) — not duplicated here.
 #
-# What remains genuinely unimplemented is Power-of-Attorney (PoA) credential
-# chain verification (FR-SM-03/04: presenting and validating a PoA credential
-# proving delegated signing authority, on top of the PID identity credential).
-# docs/anforderung.md B3/deviation-register item 7a records this explicitly:
-# "PoA presentation only if the demo wallet supports a PoA credential ...
-# full chain-walk to trust anchors = roadmap", citing SRS TBD-B (XFSC PCM
-# wallet availability, itself Open per the SRS). There is no PoA credential
-# type, DCQL query, or chain-walk verifier anywhere in backend/ or
-# testWallet/ (grep -ri "poa\|power.of.attorney" backend/internal
-# testWallet returns nothing outside this comment).
+# PoA disposition per entscheidungen_zu_den_blockern.txt ("Credential zum
+# Login"): the PoA credential (dc+sd-jwt, vct urn:dcs:poa:v1, holder-bound)
+# is presented at LOGIN — every session starts with an OpenID4VP PoA
+# presentation whose organization/role attributes are mapped into the Hydra
+# session, and the credential's revocation status is checked in every verify
+# path. Presentation + status verification are therefore exercised by every
+# authenticated scenario in this suite. What remains open (deviation 8 of
+# that document, backed by SRS TBD-B: the XFSC PCM wallet ecosystem is not
+# yet available for testing) is the ISSUER CHAIN-WALK: verifying that the
+# PoA's issuer is itself legitimized up to a trust anchor. The scenarios
+# below assert exactly that chain-walk and stay @skip until it lands.
 
 @UC-14 @DCS-FR-SM-03 @DCS-FR-SM-04
 Feature: Power-of-Attorney credential verification at signing
 
-  # @skip: PoA credential acquisition/chain-walk verification is not
-  # implemented (deviation-register item 7a, docs/anforderung.md E3) — no PoA
-  # credential type, DCQL query, or trust-anchor chain-walk exists in the
-  # codebase. PID-only identity binding is implemented and covered by
-  # 22_real_signing_vertical instead.
+  # @skip: asserts the PoA issuer chain-walk to a trusted root — roadmap per
+  # deviation 8 (entscheidungen_zu_den_blockern.txt); presentation + status
+  # check of the PoA itself happen at login and are covered suite-wide.
   @skip @UC-14-01 @DCS-FR-SM-03
   Scenario: Signer presents a PoA credential proving delegated signing authority
     Given I hold a PoA credential compliant with eIDAS framework for organization "BDD Org"
@@ -30,9 +29,9 @@ Feature: Power-of-Attorney credential verification at signing
     Then the PoA credential chain is verified to a trusted root
     And the signature is bound to the delegated authority
 
-  # @skip: same reason as above — a revoked PoA credential cannot be
-  # distinguished from "no PoA credential" because no PoA verification path
-  # exists at all.
+  # @skip: distinguishing a chain-invalid PoA (issuer not anchored) from a
+  # merely revoked one needs the same chain-walk verifier — same deviation-8
+  # roadmap item. Plain revocation blocking is live in every verify path.
   @skip @UC-14-01 @DCS-FR-SM-04
   Scenario: A revoked PoA credential blocks signing
     Given I hold a revoked PoA credential for organization "BDD Org"

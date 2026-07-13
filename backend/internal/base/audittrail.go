@@ -77,7 +77,7 @@ func (r AuditTrailReader) ReadAuditLogEntriesByComponent(ctx context.Context, tx
 
 	chains := make([][]datatype.AuditLogEntry, len(nonNil))
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(32)
+	g.SetLimit(128)
 	for i, headCID := range nonNil {
 		g.Go(func() error {
 			logEntries := make([]datatype.AuditLogEntry, 0)
