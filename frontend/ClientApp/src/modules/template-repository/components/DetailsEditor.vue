@@ -2,11 +2,11 @@
 import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { contractTemplateService } from '@/services/contract-template-service'
+import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState } from '@/types/contract-template-state'
-import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
 interface ComponentTemplateKey {
@@ -17,10 +17,13 @@ interface ComponentTemplateKey {
 
 const store = useTemplateDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { templates: allTemplates } = useTemplateList()
+const templatesStore = useContractTemplatesStore()
 const { templateType, blocks, subTemplateSnapshots, state, version } = storeToRefs(store)
+const { contractTemplates: allTemplates } = storeToRefs(templatesStore)
 
 const { isManager } = useTemplatePermissions()
+
+onMounted(templatesStore.loadTemplates)
 
 const document_number = computed({
   get: () => store.document_number,
