@@ -479,11 +479,17 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	qry := contract.GetByIDQry{
 		DID:         req.Did,
 		RetrievedBy: middleware.GetParticipantID(ctx),
 		HolderDID:   middleware.GetHolderDID(ctx),
 		UserRoles:   middleware.GetUserRoles(ctx),
+		LocalPeer:   localPeer,
 	}
 	qryHandler := contract.GetByIDHandler{
 		Ctx:   ctx,

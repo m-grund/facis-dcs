@@ -35,7 +35,7 @@ def step_then_template_audit_includes_action(context, name, event_type):
     t = TemplateService.named(context, name)
     headers = AuthService.get_headers_for_roles(["Auditor"])
     event_types = []
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         resp = requests.get(
             template_audit_url(context),

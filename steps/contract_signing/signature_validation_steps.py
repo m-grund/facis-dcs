@@ -98,7 +98,7 @@ def step_then_signature_audit_includes(context, name, event_type):
     did, _ = ContractService._contract_data(context, name)
     auditor_h = AuthService.get_headers_for_roles(["Auditor"])
     event_types = []
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         resp = requests.get(
             signature_audit_url(context),

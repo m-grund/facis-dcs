@@ -50,6 +50,13 @@ type GetByIDQry struct {
 	// synchronizer reading as "System") that bypasses party read-scoping.
 	// Never set from an HTTP request path.
 	Internal bool
+	// LocalPeer is this instance's own peer DID. Contracts whose Origin is a
+	// DIFFERENT peer were adopted via trusted-peer sync — the remote origin
+	// only syncs to its responsible peers, so an adopted copy is by
+	// construction shared with this instance's organization and is readable
+	// by its authenticated users. Party scoping applies strictly to
+	// contracts originated locally.
+	LocalPeer string
 }
 
 type GetByIDResult struct {
@@ -185,6 +192,9 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 // bypass the check.
 func callerMayReadContract(query GetByIDQry, data *db.Contract) bool {
 	if query.Internal {
+		return true
+	}
+	if query.LocalPeer != "" && data.Origin != "" && data.Origin != query.LocalPeer {
 		return true
 	}
 	for _, role := range query.UserRoles {

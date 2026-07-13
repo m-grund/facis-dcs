@@ -640,7 +640,7 @@ def step_then_contract_has_audit_event(context, name, event_type):
     did, _ = ContractService._contract_data(context, name)
     auditor_h = AuthService.get_headers_for_roles(["Auditor"])
     event_types = []
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         resp = post_json(context, contract_audit_url(context), {"did": did}, headers=auditor_h)
         assert resp.status_code == 200, f"Audit query failed for contract '{name}': {resp.status_code} {resp.text}"

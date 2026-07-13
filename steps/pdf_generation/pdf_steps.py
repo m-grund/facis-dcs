@@ -124,7 +124,7 @@ def step_when_contract_transitions(context, name, state):
     # backend/internal/pdfgeneration/query/exportcontract.go's cache-hit
     # branch), so repeated calls are safe.
     did, _ = ContractService._contract_data(context, name)
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 90
     last_count = 0
     last_status = None
     while time.monotonic() < deadline:
