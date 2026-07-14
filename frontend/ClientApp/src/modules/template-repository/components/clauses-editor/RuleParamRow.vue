@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import { computed } from 'vue'
 import type { SemanticConditionParameter } from '@/modules/template-repository/models/contract-template'
-import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 
 const props = defineProps<{
   param: SemanticConditionParameter

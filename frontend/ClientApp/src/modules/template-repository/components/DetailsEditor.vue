@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { storeToRefs } from 'pinia'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, ref } from 'vue'
 import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useTemplateList } from '@/views/contract-template-list/ContractTemplateListController'
+import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { TemplateState } from '@/types/contract-template-state'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
 interface ComponentTemplateKey {
@@ -17,10 +17,13 @@ interface ComponentTemplateKey {
 
 const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
-const { templates: allTemplates } = useTemplateList()
+const templatesStore = useContractTemplatesStore()
 const { templateType, blocks, subTemplateSnapshots, state, version } = storeToRefs(store)
+const { contractTemplates: allTemplates } = storeToRefs(templatesStore)
 
 const { isManager } = useTemplatePermissions()
+
+onMounted(templatesStore.loadTemplates)
 
 const document_number = computed({
   get: () => store.document_number,

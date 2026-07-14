@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
+import { useRouter } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import type { PartialContractTemplate } from '@/models/contract-template'
 import { useTemplatePermissions } from '@/modules/template-repository/composables/useTemplatePermissions'
 import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
-import { TemplateState, type ContractTemplateState } from '@/types/contract-template-state'
-import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
-import { useRouter } from 'vue-router'
+import { type ContractTemplateState, TemplateState } from '@/types/contract-template-state'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 defineOptions({
   inheritAttrs: false,
@@ -95,12 +95,10 @@ const publish = async () => {
 
 async function register() {
   try {
-    const registered = await contractTemplateService.register({
-      did: props.template.did,
-    })
+    await contractTemplateService.register({ did: props.template.did })
 
     await templatesStore.loadTemplates()
-    await router.push({ name: ROUTES.TEMPLATES.LIST, params: { did: registered.did } })
+    await router.push({ name: ROUTES.TEMPLATES.LIST })
   } catch {}
 }
 </script>

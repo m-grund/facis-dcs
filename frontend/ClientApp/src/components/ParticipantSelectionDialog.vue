@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { nextTick, type Ref, ref } from 'vue'
 import { getLocalDIDFile } from '@/services/did-service'
 import { isDuplicateInList, mergeDraftIntoList } from '@/utils/participant-selection'
 import type { ParticipantSelection } from '@/utils/participant-selection'
-import { nextTick, ref, type Ref } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 

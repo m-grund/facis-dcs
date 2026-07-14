@@ -322,9 +322,30 @@ func (r *PostgresContractRepo) MarkArchiveEntryDeleted(ctx context.Context, tx *
 	return int(affected), nil
 }
 
+func (r *PostgresContractRepo) AnnotateArchiveEntry(ctx context.Context, tx *sqlx.Tx, did string, summary string, tags *datatype.JSON) (int, error) {
+	// Only the annotation columns are updated; the immutable-fields trigger
+	// on contract_archive_entries guards the snapshot/evidence columns, and
+	// DELETED entries are excluded so a soft-deleted entry can never be
+	// re-labelled.
+	statement := `
+        UPDATE contract_archive_entries
+        SET summary = $1, tags = COALESCE($2, tags)
+        WHERE did = $3 AND archive_status <> 'DELETED'
+    `
+	result, err := tx.ExecContext(ctx, statement, summary, tags, did)
+	if err != nil {
+		return 0, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(affected), nil
+}
+
 func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence
+	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence, archive_summary, archive_tags
     FROM contracts_archive_metadata
 	`
 	var cts []db.ContractMetadata
@@ -338,7 +359,7 @@ func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sq
 
 func (r *PostgresContractRepo) ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
 	query := `
-	        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence
+	        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence, archive_summary, archive_tags
         FROM contracts_archive_metadata
     `
 	conditions, params, err := createSearchConditions(values)
@@ -437,6 +458,13 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	if len(values.ContractData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.ContractData)
+		paramIndex++
+	}
+	if len(values.Tag) > 0 {
+		// Annotation-tag filter (DCS-FR-CSA-11): archive_tags is a JSONB
+		// string array on the archive view, GIN-indexed for containment.
+		conditions += ` archive_tags @> jsonb_build_array($` + strconv.Itoa(paramIndex) + `::text) AND`
+		params = append(params, values.Tag)
 		paramIndex++
 	}
 	if len(values.ParentDID) > 0 {

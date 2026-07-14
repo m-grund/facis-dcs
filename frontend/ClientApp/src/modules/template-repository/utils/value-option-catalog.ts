@@ -1,11 +1,11 @@
-import type {
-  SemanticValueConstraint,
-  SemanticValueOption,
-} from '@/modules/template-repository/models/contract-template'
 import {
   resolveAllowedValues,
   resolveValueConstraintOptions,
 } from '@template-repository/utils/value-constraint-catalog'
+import type {
+  SemanticValueConstraint,
+  SemanticValueOption,
+} from '@/modules/template-repository/models/contract-template'
 
 export type ValueOption = Required<Pick<SemanticValueOption, 'value' | 'label'>> & Pick<SemanticValueOption, 'symbol'>
 

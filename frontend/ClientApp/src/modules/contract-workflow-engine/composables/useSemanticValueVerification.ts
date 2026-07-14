@@ -1,17 +1,17 @@
-import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { SemanticCondition, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
-import type { DcsBlock, DcsClause } from '@/models/dcs-jsonld'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
+import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import { normalizeNumberInput } from '@template-repository/utils/number-format'
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
-import { normalizeNumberInput } from '@template-repository/utils/number-format'
 import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
-import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import type { SemanticConditionValue } from '@/models/contract-data'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { DcsBlock, DcsClause } from '@/models/dcs-jsonld'
+import type { SemanticCondition, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
+import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export interface VerificationResult {
   isValid: boolean

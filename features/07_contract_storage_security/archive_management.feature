@@ -64,3 +64,59 @@ Feature: Contract storage and archive retrieval
     And the archive retrieval result includes contract "Observer Readonly Archive Contract"
     When I attempt to delete the archived contract "Observer Readonly Archive Contract" with my current role
     Then the request is denied with a client error
+
+  # DCS-FR-CSA-13: full-text search across archived contract CONTENT (not just
+  # name/description metadata). The contracts table keeps a stored tsvector
+  # over the entire contract JSON-LD (search_vector, GIN-indexed) and
+  # /archive/search?contract_data=... queries it via plainto_tsquery — this
+  # scenario drives that path with a term that exists in the contract's data
+  # payload, and asserts a nonsense term yields no hit for the same contract.
+  @UC-07-01 @DCS-FR-CSA-13
+  Scenario: Archive full-text search finds a contract by terms inside its content
+    Given contract "Fulltext Corpus Archive Contract" has reached contract state "SIGNED"
+    When the Archive Manager searches the archive with full-text query "Fulltext Corpus"
+    Then get http 200:Success code
+    And the archive search result includes contract "Fulltext Corpus Archive Contract"
+    When the Archive Manager searches the archive with full-text query "xyzzyplugh nonexistent"
+    Then get http 200:Success code
+    And the archive search result does not include contract "Fulltext Corpus Archive Contract"
+
+  # DCS-FR-CSA-11: each archived contract can carry a summary (manual or
+  # system-generated) and user-assigned tags for thematic categorization and
+  # discovery. Annotation is Archive Manager-scoped, mutates ONLY the
+  # annotation columns (the archive entry's snapshot/evidence stay immutable,
+  # enforced by DB trigger), and is recorded in the archive audit log.
+  @UC-07-01 @DCS-FR-CSA-11
+  Scenario: Archive Manager annotates an archived contract with a manual summary and tags
+    Given contract "Annotated Archive Contract" has reached contract state "SIGNED"
+    When the Archive Manager annotates the archived contract "Annotated Archive Contract" with summary "Pilot supply agreement archived for the BDD suite" and tags "pilot-agreement,bdd-supply"
+    Then get http 200:Success code
+    And the archive entry for contract "Annotated Archive Contract" carries summary "Pilot supply agreement archived for the BDD suite" and tags "pilot-agreement,bdd-supply"
+    And the archive annotation of contract "Annotated Archive Contract" is recorded in the archive audit log
+
+  @UC-07-01 @DCS-FR-CSA-11
+  Scenario: Searching the archive by tag returns only contracts carrying that tag
+    Given contract "Tagged Archive Contract" has reached contract state "SIGNED"
+    And contract "Untagged Archive Contract" has reached contract state "SIGNED"
+    And the Archive Manager annotates the archived contract "Tagged Archive Contract" with summary "tagged for discovery" and tags "quarterly-review-bdd"
+    When the Archive Manager searches the archive by tag "quarterly-review-bdd"
+    Then get http 200:Success code
+    And the archive search result includes contract "Tagged Archive Contract"
+    And the archive search result does not include contract "Untagged Archive Contract"
+
+  # The "automatic ... generation of a summary" half of DCS-FR-CSA-11: when no
+  # summary is supplied, the system derives one from the archived contract's
+  # own metadata (name, version, state, creator).
+  @UC-07-01 @DCS-FR-CSA-11
+  Scenario: Annotating without a summary generates one from the contract metadata
+    Given contract "Auto Summary Archive Contract" has reached contract state "SIGNED"
+    When the Archive Manager annotates the archived contract "Auto Summary Archive Contract" with tags "auto-summary-bdd" and no summary
+    Then get http 200:Success code
+    And the archive entry for contract "Auto Summary Archive Contract" carries a generated summary mentioning "Auto Summary Archive Contract"
+
+  @UC-07-02 @DCS-FR-CSA-11
+  Scenario: A read-only role cannot annotate an archived contract
+    Given contract "Unauthorized Annotation Contract" has reached contract state "SIGNED"
+    And I am authenticated with roles: "Contract Observer"
+    When I attempt to annotate the archived contract "Unauthorized Annotation Contract" with my current role
+    Then the request is denied with a client error

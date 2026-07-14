@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import PageNavBar from '@/core/layouts/page/PageNavBar.vue'
-import PageSidebar from '@/core/layouts/page/PageSidebar.vue'
-import { useScrollStore } from '@/core/store/scroll'
 import { usePageStore } from '@core/store/page'
 import { storeToRefs } from 'pinia'
 import { onMounted, useTemplateRef } from 'vue'
 import { RouterView } from 'vue-router'
+import PageNavBar from '@/core/layouts/page/PageNavBar.vue'
+import PageSidebar from '@/core/layouts/page/PageSidebar.vue'
+import { useScrollStore } from '@/core/store/scroll'
 
 const scrollContainer = useTemplateRef<HTMLElement>('scroll-container')
 

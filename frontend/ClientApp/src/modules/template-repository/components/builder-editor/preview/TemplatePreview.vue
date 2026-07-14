@@ -1,27 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
-import type { SemanticConditionValue } from '@/models/contract-data'
-import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type { SemanticCondition } from '@template-repository/models/contract-template'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { DcsBlock, DcsLayoutNode, DcsContentSegment } from '@/models/dcs-jsonld'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
 import {
   getBlocksFromTemplateData,
   getLayoutFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
-import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
-import PreviewSectionBlock from './PreviewSectionBlock.vue'
-import PreviewTextBlock from './PreviewTextBlock.vue'
-import PreviewClauseBlock from './PreviewClauseBlock.vue'
 import {
   getOwnerBlockIdFromMergedBlockId,
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
+import { computed } from 'vue'
+import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
+import PreviewClauseBlock from './PreviewClauseBlock.vue'
+import PreviewSectionBlock from './PreviewSectionBlock.vue'
+import PreviewTextBlock from './PreviewTextBlock.vue'
+import type { SemanticConditionValue } from '@/models/contract-data'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { DcsBlock, DcsContentSegment, DcsLayoutNode } from '@/models/dcs-jsonld'
+import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
+import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
+import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 const props = withDefaults(
   defineProps<{

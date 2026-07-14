@@ -1,7 +1,7 @@
-import type { ContractState } from '@/types/contract-state'
 import type { ContractData } from '../contract-data'
 import type { ContractNegotiation } from './contract-negotiation'
 import type { ContractResponsible } from './contract-responsible'
+import type { ContractState } from '@/types/contract-state'
 
 export const ExpirationPolicy = {
   renewal: 'RENEWAL',

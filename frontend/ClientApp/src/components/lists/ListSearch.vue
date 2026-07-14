@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends { did: string }">
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/vue'
-import { computed, ref, shallowRef, useTemplateRef, type Ref, type ShallowRef } from 'vue'
+import { computed, type Ref, ref, type ShallowRef, shallowRef, useTemplateRef } from 'vue'
 
 type FilterLabelConfig<T> = Partial<Record<keyof T, string>>
 type SearchFunction<T> = (request: Record<string, unknown>) => Promise<T[]>
@@ -49,6 +49,8 @@ const inputValue: Ref<T> = computed(() => {
     ? props.emptyItem
     : { ...props.emptyItem, [searchKey.value]: searchQuery.value }
 })
+
+const isFilterSelectionDisabled = computed(() => Object.entries(props.filterLabels).length === 1)
 
 async function searchRequest() {
   if (searchQuery.value.length < 1 || !searchKey.value) {
@@ -124,7 +126,8 @@ function onFilterSelect(label: FilterLabelValue) {
         type="button"
         class="select w-full rounded-t-md rounded-b-none select-secondary sm:rounded-l-md sm:rounded-tr-none"
         popovertarget="list-popover-search"
-        :class="{ 'btn-disabled': Object.entries(filterLabels).length === 1 }"
+        :class="{ 'btn-disabled': isFilterSelectionDisabled }"
+        :disabled="isFilterSelectionDisabled"
       >
         {{ selectedFilter }}
       </button>

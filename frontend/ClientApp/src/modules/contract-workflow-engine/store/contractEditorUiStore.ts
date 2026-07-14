@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
+import { useAuthStore } from '@/stores/auth-store'
+import { ContractState } from '@/types/contract-state'
 import type { ContractEditorTabId, ContractEditorUiState } from '../models/contract-editor-ui-store'
 import type { ContractState as ContractStateType } from '@/types/contract-state'
-import { ContractState } from '@/types/contract-state'
-import { useAuthStore } from '@/stores/auth-store'
 import type { UserRole } from '@/types/user-role'
 
 const storeId = 'contractEditorUi'

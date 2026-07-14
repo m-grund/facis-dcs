@@ -1,7 +1,3 @@
-import type { ComponentType } from '@/types/component-type'
-import type { ContractEventType } from '@/types/contract-event-type'
-import type { ContractState } from '@/types/contract-state'
-import type { ContractData } from '../contract-data'
 import type { Contract, ContractDeploymentKpi, ExpirationPolicy } from '../contract/contract'
 import type { ContractApprovalTask } from '../contract/contract-approval-task'
 import type { ContractEvent } from '../contract/contract-event'
@@ -9,7 +5,11 @@ import type { ContractNegotiation } from '../contract/contract-negotiation'
 import type { ContractNegotiationTask } from '../contract/contract-negotiation-task'
 import type { ContractResponsible } from '../contract/contract-responsible'
 import type { ContractReviewTask } from '../contract/contract-review-task'
+import type { ContractData } from '../contract-data'
 import type { ContractTemplate } from '../contract-template'
+import type { ComponentType } from '@/types/component-type'
+import type { ContractEventType } from '@/types/contract-event-type'
+import type { ContractState } from '@/types/contract-state'
 
 export interface ContractCreateResponse {
   did: string

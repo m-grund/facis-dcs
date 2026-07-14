@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useContractEventType } from '@/composables/useContractEventType'
-import type { ContractAuditResponse } from '@/models/responses/contract-response'
 import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 import { toProperCase } from '@/utils/string'
+import type { ContractAuditResponse } from '@/models/responses/contract-response'
 
 defineProps<{
   audits: ContractAuditResponse

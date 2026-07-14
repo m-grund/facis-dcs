@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import PidQrPresentation from '@/components/auth/PidQrPresentation.vue'
 import { ref } from 'vue'
+import PidQrPresentation from '@/components/auth/PidQrPresentation.vue'
 
 const verified = ref(false)
 const errorMessage = ref('')

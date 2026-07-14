@@ -149,6 +149,11 @@ type ContractMetadata struct {
 	// from contract_archive_entries.evidence); it is nil for the
 	// non-archive metadata queries that share this struct.
 	Evidence *datatype.JSON `db:"evidence"`
+	// ArchiveSummary/ArchiveTags carry the archive entry's annotation
+	// (DCS-FR-CSA-11); like Evidence they are only populated by the
+	// archived-contracts queries.
+	ArchiveSummary *string        `db:"archive_summary"`
+	ArchiveTags    *datatype.JSON `db:"archive_tags"`
 }
 
 type ContractProcessData struct {
@@ -226,6 +231,10 @@ type SearchValues struct {
 	Name            string
 	Description     string
 	ContractData    string
+	// Tag filters archived contracts by an assigned annotation tag
+	// (DCS-FR-CSA-11); only meaningful for the archive queries, whose
+	// backing view exposes archive_tags.
+	Tag string
 	// ParentDID is the full-scope hierarchy filter: when
 	// set, only contracts whose dcs:parentContract references this DID are
 	// returned. It is a reverse-index QUERY over children the instance
@@ -257,6 +266,12 @@ type ContractRepo interface {
 	// entries marked (0 if did has no archive entries, or all its entries
 	// were already deleted).
 	MarkArchiveEntryDeleted(ctx context.Context, tx *sqlx.Tx, did string, deletedBy string, reason string) (int, error)
+	// AnnotateArchiveEntry sets the summary and (when tags is non-nil,
+	// replacing the whole set) the tags of every not-deleted archive entry
+	// for did (DCS-FR-CSA-11). Only the annotation columns are touched —
+	// the entry's snapshot/evidence stay immutable. Returns the number of
+	// entries annotated (0 if did has no live archive entries).
+	AnnotateArchiveEntry(ctx context.Context, tx *sqlx.Tx, did string, summary string, tags *datatype.JSON) (int, error)
 	ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractMetadata, error)
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)

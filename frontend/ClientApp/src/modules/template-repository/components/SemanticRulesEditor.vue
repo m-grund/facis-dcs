@@ -1,35 +1,35 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { storeToRefs } from 'pinia'
+import { MinusIcon, PlusIcon } from '@heroicons/vue/20/solid'
+import ParameterObligationEditor from '@template-repository/components/semantic-rules-editor/ParameterObligationEditor.vue'
+import { conditionIdsInContent } from '@template-repository/composables/useClauseTextChips'
 import {
-  SEMANTIC_CONDITION_SCHEMA_VERSION,
   type DomainFieldDefinition,
+  SEMANTIC_CONDITION_SCHEMA_VERSION,
   type SemanticCondition,
   type SemanticConditionParameter,
   type SemanticEntityRole,
   type SemanticParameterOperator,
   type SemanticValueConstraint,
 } from '@template-repository/models/contract-template'
-import type { SubTemplateReference } from '@template-repository/models/template-draft-store'
-import ParameterObligationEditor from '@template-repository/components/semantic-rules-editor/ParameterObligationEditor.vue'
 import {
   getBlocksFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
-import { conditionIdsInContent } from '@template-repository/composables/useClauseTextChips'
-import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import {
+  buildOntologyDomainTypeParameters,
   ONTOLOGY_DOMAIN_TYPES,
   type OntologyDomainType,
-  buildOntologyDomainTypeParameters,
   ontologyRoleOptions,
   roleLabelFor,
 } from '@template-repository/utils/ontology-domain-types'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { MinusIcon, PlusIcon } from '@heroicons/vue/20/solid'
+import { storeToRefs } from 'pinia'
+import { computed, ref } from 'vue'
+import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
+import type { SubTemplateReference } from '@template-repository/models/template-draft-store'
 
 interface RequirementItem {
   condition: SemanticCondition

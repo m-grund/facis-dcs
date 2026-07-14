@@ -1,8 +1,9 @@
-import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
-import type { DcsBlock, DcsClause, DcsLayoutNode } from '@/models/dcs-jsonld'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
+import {
+  isNewline,
+  isPlaceholder,
+  isText,
+  parseSegmentsFromContent,
+} from '@template-repository/composables/useClauseTextChips'
 import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
 import {
   getBlocksFromTemplateData,
@@ -14,13 +15,12 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
-import {
-  parseSegmentsFromContent,
-  isText,
-  isPlaceholder,
-  isNewline,
-} from '@template-repository/composables/useClauseTextChips'
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
+import type { SemanticConditionValue } from '@/models/contract-data'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { DcsBlock, DcsClause, DcsLayoutNode } from '@/models/dcs-jsonld'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'
 const NEWLINE = '\n'

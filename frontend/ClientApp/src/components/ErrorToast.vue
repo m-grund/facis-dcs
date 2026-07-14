@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useErrorStore } from '@/stores/error-store'
 import { storeToRefs } from 'pinia'
+import { useErrorStore } from '@/stores/error-store'
 
 const errorStore = useErrorStore()
 const { errors } = storeToRefs(errorStore)

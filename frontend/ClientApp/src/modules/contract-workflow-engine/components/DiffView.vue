@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { ContractData } from '@/models/contract-data'
+import { computed } from 'vue'
+import DiffPane from '@/modules/contract-workflow-engine/components/diff-view/DiffPane.vue'
+import { useContractBlockDiff } from '@/modules/contract-workflow-engine/composables/useContractBlockDiff'
 import {
   type ContractPlainTextBlock,
   useContractPlainTextConverter,
 } from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
-import { useContractBlockDiff } from '@/modules/contract-workflow-engine/composables/useContractBlockDiff'
-import DiffPane from '@/modules/contract-workflow-engine/components/diff-view/DiffPane.vue'
-import { computed } from 'vue'
+import type { ContractData } from '@/models/contract-data'
 
 const props = withDefaults(
   defineProps<{

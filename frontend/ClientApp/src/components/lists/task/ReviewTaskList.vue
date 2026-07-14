@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import type { ContractTemplateReviewTask } from '@/models/contract-template-review-task'
-import type { ContractReviewTask } from '@/models/contract/contract-review-task'
+import { computed, onUnmounted, type Ref, ref } from 'vue'
 import { ROUTES } from '@/router/router'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import { useReviewTaskStateFilterStore } from '@/stores/state-filter-store'
+import { ContractState } from '@/types/contract-state'
 import { TemplateState } from '@/types/contract-template-state'
 import { ReviewTaskState, reviewTaskStates } from '@/types/review-task-state'
 import { compareValues } from '@/utils/comparison'
 import { toProperCase } from '@/utils/string'
-import { computed, onUnmounted, ref, type Ref } from 'vue'
+import TaskListSearch from './TaskListSearch.vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
-import TaskListSearch from './TaskListSearch.vue'
-import { ContractState } from '@/types/contract-state'
+import type { ContractReviewTask } from '@/models/contract/contract-review-task'
+import type { ContractTemplateReviewTask } from '@/models/contract-template-review-task'
 
 type ReviewTask = ContractTemplateReviewTask | ContractReviewTask
 

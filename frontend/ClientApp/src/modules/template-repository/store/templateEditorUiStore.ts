@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia'
+import { useAuthStore } from '@/stores/auth-store'
+import { TemplateType, type TemplateTypeValue } from '../models/contract-template'
 import type {
-  TemplateEditorUiState,
-  TemplateEditorTabId,
   BlockMovementPreview,
   ClausePlaceholderHighlight,
   PendingClauseDraft,
+  TemplateEditorTabId,
+  TemplateEditorUiState,
 } from '@template-repository/models/template-editor-ui-store'
-import { useAuthStore } from '@/stores/auth-store'
-import { TemplateType, type TemplateTypeValue } from '../models/contract-template'
 
 const storeId = 'templateEditorUi'
 const defaultState: Readonly<TemplateEditorUiState> = {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { Contract } from '@/models/contract/contract'
+import { computed } from 'vue'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
 import { requestContractSync } from '@/services/dcs-to-dcs-service'
 import { useContractsStore } from '@/stores/contracts-store'
 import { ContractState } from '@/types/contract-state'
-import { computed } from 'vue'
+import type { Contract } from '@/models/contract/contract'
 
 const props = defineProps<{
   contract: Contract

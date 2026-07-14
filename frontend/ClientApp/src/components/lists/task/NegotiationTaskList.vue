@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { ContractNegotiationTask } from '@/models/contract/contract-negotiation-task'
+import { computed, onUnmounted, type Ref, ref } from 'vue'
 import { ROUTES } from '@/router/router'
 import { useContractsStore } from '@/stores/contracts-store'
 import { useNegotiationTaskStateFilterStore } from '@/stores/state-filter-store'
 import { ContractState } from '@/types/contract-state'
 import { negotiationTaskStates } from '@/types/negotiation-task-state'
 import { compareValues } from '@/utils/comparison'
-import { computed, onUnmounted, ref, type Ref } from 'vue'
+import TaskListSearch from './TaskListSearch.vue'
 import ListSort from '../ListSort.vue'
 import ListStateFilter from '../ListStateFilter.vue'
-import TaskListSearch from './TaskListSearch.vue'
+import type { ContractNegotiationTask } from '@/models/contract/contract-negotiation-task'
 
 const props = defineProps<{
   tasks: ContractNegotiationTask[]

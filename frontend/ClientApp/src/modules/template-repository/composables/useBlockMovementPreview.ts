@@ -1,9 +1,9 @@
-import { computed, ref, unref, onBeforeUnmount, type MaybeRef, type Component } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { DcsLayoutNode } from '@/models/dcs-jsonld'
 import IconMoveLeft from '@template-repository/components/builder-editor/toolbar/icons/IconMoveLeft.vue'
 import IconMoveRight from '@template-repository/components/builder-editor/toolbar/icons/IconMoveRight.vue'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { type Component, computed, type MaybeRef, onBeforeUnmount, ref, unref } from 'vue'
+import type { DcsLayoutNode } from '@/models/dcs-jsonld'
 
 const VERTICAL_ENTER_MS = 100
 const VERTICAL_LEAVE_MS = 120

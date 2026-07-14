@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
-import type { TemplateResource } from '@/modules/template-catalogue/models/template-resource'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
+import type { TemplateResource } from '@/modules/template-catalogue/models/template-resource'
 
 const router = useRouter()
 const route = useRoute()

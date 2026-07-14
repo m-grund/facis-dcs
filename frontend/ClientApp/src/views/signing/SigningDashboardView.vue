@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import { onMounted, ref, useTemplateRef } from 'vue'
+import SigningCeremonyDialog from '@/components/signing/SigningCeremonyDialog.vue'
+import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
+import { contractWorkflowService } from '@/services/contract-workflow-service'
 import {
-  signatureManagementService,
   type SignatureComplianceResult,
   type SignatureContract,
   type SignatureEnvelope,
+  signatureManagementService,
   type SignatureValidateResult,
   type SignatureVerifyResult,
 } from '@/services/signature-management-service'
-import { contractWorkflowService } from '@/services/contract-workflow-service'
-import { onMounted, ref, useTemplateRef } from 'vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
-import SigningCeremonyDialog from '@/components/signing/SigningCeremonyDialog.vue'
 
 // AcroForm field name the signing ceremony binds to; the field itself is
 // created by the PDF renderer, so a single fixed name is sufficient here.
