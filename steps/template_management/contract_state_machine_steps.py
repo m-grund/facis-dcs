@@ -298,13 +298,28 @@ def _revoke_signature(context, name):
     # the EventRevoke transition and updates the contract's own state to
     # REVOKED after flipping the signature row's status, so
     # ContractState.Revoked is observable through ContractRepo.ReadDataByDID
-    # / the verify endpoint's lifecycle_status.
+    # / the verify endpoint's lifecycle_status. The revoked signer is read
+    # from /signature/view — revoking an unknown signer is a 400
+    # (db.ErrSignatureNotFound), not a silent no-op.
+    import requests as _requests  # noqa: PLC0415
+
+    from steps.support.api_client import signature_view_url  # noqa: PLC0415
+
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    view = _requests.get(
+        signature_view_url(context), params={"did": did}, headers=manager_h,
+        timeout=context.http_timeout_seconds,
+    )
+    assert view.status_code == 200, (
+        f"signature view failed while preparing REVOKED state for '{name}': {view.status_code} {view.text}"
+    )
+    signatures = view.json().get("signatures") or []
+    assert signatures, f"Expected an applied signature to revoke on '{name}', got: {view.json()}"
     resp = post_json(
         context,
         signature_revoke_url(context),
-        {"did": did, "signer_did": "did:example:bdd-counterparty-signer"},
+        {"did": did, "signer_did": signatures[0]["signer_did"]},
         headers=manager_h,
     )
     assert resp.status_code == 200, (

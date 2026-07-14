@@ -322,12 +322,26 @@ def step_when_apply_with_ceremony_signer_did(context, name, credential_type):
 
 @when('the signature for contract "{name}" is revoked as a post-sign C2PA update')
 def step_when_revoke_post_sign_update(context, name):
-    from steps.support.api_client import signature_revoke_url  # noqa: PLC0415
+    import requests as _requests  # noqa: PLC0415
+
+    from steps.support.api_client import signature_revoke_url, signature_view_url  # noqa: PLC0415
 
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
     presentation = getattr(context, "pid_presentations", {}).get(name, {})
-    signer_did = presentation.get("subject_did", "did:example:bdd-no-ceremony-signer")
+    signer_did = presentation.get("subject_did")
+    if not signer_did:
+        # No ceremony ran in this scenario — resolve the actual signer from
+        # the signature view; a fabricated DID would be rejected with a 400
+        # (db.ErrSignatureNotFound) instead of silently revoking nothing.
+        view = _requests.get(
+            signature_view_url(context), params={"did": did}, headers=manager_h,
+            timeout=context.http_timeout_seconds,
+        )
+        assert view.status_code == 200, f"signature view failed: {view.status_code} {view.text}"
+        signatures = view.json().get("signatures") or []
+        assert signatures, f"Expected an applied signature to revoke on '{name}', got: {view.json()}"
+        signer_did = signatures[0]["signer_did"]
     context.requests_response = post_json(
         context,
         signature_revoke_url(context),
