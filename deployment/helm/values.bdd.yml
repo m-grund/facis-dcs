@@ -120,6 +120,11 @@ ingress:
         # /.well-known prefix for OIDC discovery, and the longer path wins.
         - path: /.well-known/did.json
           pathType: Prefix
+        # Webhook platform (DCS-FR-TR-22 template-update notifications):
+        # backend/cmd/dcs/http.go mounts it at /orce/ on the service root,
+        # outside DCS_API_PATH, so subscribers need it routed explicitly.
+        - path: /orce
+          pathType: Prefix
     # Cluster-routable did:web hostname for this instance (@two-instance
     # peer-trust suite, features/17_peer_trust): dcs-a.localhost
     # resolves in-cluster via a CoreDNS rewrite to the shared Traefik Service
@@ -132,6 +137,8 @@ ingress:
         - path: /digital-contracting-service
           pathType: Prefix
         - path: /.well-known/did.json
+          pathType: Prefix
+        - path: /orce
           pathType: Prefix
 
 hydra:
