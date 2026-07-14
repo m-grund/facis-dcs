@@ -30,6 +30,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
+	smeventtype "digital-contracting-service/internal/signingmanagement/datatype/eventtype"
 
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -110,6 +111,36 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 
 			err = s.doContractPeerSync(ctx, didString)
 			if err != nil {
+				log.Errorf(ctx, err, "failed to do peer sync, %s", evt.Data())
+			}
+		case componenttype.SignatureManagement:
+			// Signing and revocation change the CONTRACT's state (APPROVED ->
+			// SIGNED, SIGNED/ACTIVE -> REVOKED) but are SignatureManagement-
+			// sourced events, not workflow-engine ones — without this case a
+			// revocation never reaches peers (DCS-NFR-BR-06: revocation MUST
+			// take immediate effect). Only the two state-changing event types
+			// broadcast; lookups/validations stay local.
+			evtType, err := smeventtype.NewEventType(evt.Type())
+			if err != nil {
+				log.Errorf(ctx, err, "failed to parse signature management event type, %s", evt.Type())
+				return
+			}
+			if evtType != smeventtype.Applied && evtType != smeventtype.Revoke {
+				return
+			}
+
+			var data map[string]interface{}
+			if err := json.Unmarshal(evt.Data(), &data); err != nil {
+				log.Errorf(ctx, err, "failed to unmarshal event data, %s", evt.Data())
+				return
+			}
+			didString, ok := data["did"].(string)
+			if !ok {
+				log.Errorf(ctx, nil, "could not read did from signature management event")
+				return
+			}
+
+			if err := s.doContractPeerSync(ctx, didString); err != nil {
 				log.Errorf(ctx, err, "failed to do peer sync, %s", evt.Data())
 			}
 		}
