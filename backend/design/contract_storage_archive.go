@@ -26,6 +26,17 @@ var ArchiveSearchRequest = Type("ArchiveSearchRequest", func() {
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "A description for that contract")
 	Attribute("contract_data", String, "Search value for full text search in contract data")
+	Attribute("tag", String, "Return only archive entries carrying this annotation tag (DCS-FR-CSA-11)")
+})
+
+var ArchiveAnnotationResponse = Type("ArchiveAnnotationResponse", func() {
+	Description("The archive entry annotation after an annotate call (DCS-FR-CSA-11)")
+
+	Attribute("did", String, "Decentralized Identifier of the annotated contract")
+	Attribute("summary", String, "The stored summary (caller-provided, or system-generated from the contract metadata when none was supplied)")
+	Attribute("tags", ArrayOf(String), "The stored tag set")
+
+	Required("did", "summary")
 })
 
 // Contract Storage & Archive Service  (/archive/...)
@@ -80,6 +91,7 @@ var _ = Service("ContractStorageArchive", func() {
 			Param("name")
 			Param("description")
 			Param("contract_data")
+			Param("tag")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -131,6 +143,34 @@ var _ = Service("ContractStorageArchive", func() {
 			Response("internal_error", StatusInternalServerError)
 		})
 		Result(Int)
+	})
+
+	Method("annotate", func() {
+		Description("Annotate an archived contract with a summary and tags (DCS-FR-CSA-11). The summary may be supplied by the caller or, when omitted, is generated from the archived contract's metadata; tags replace the entry's tag set when provided. Only the annotation is mutable — the archive entry's snapshot and evidence stay immutable.")
+		Meta("dcs:requirements", "DCS-FR-CSA-11")
+		Meta("dcs:ui", "Archive Manager Dashboard")
+		Meta("dcs:csa:components", "Signed Contract Archive")
+		Security(JWTAuth, func() {
+			Scope("Archive Manager")
+		})
+		Payload(func() {
+			Token("token", String, "JWT token")
+			Attribute("did", String, "Decentralized Identifier of the archived contract to annotate")
+			Attribute("summary", String, "Manual summary; when omitted (and none is stored yet) a summary is generated from the contract metadata")
+			Attribute("tags", ArrayOf(String), "Tags for thematic categorization and discovery; replaces the entry's tag set")
+			Required("did")
+		})
+		Result(ArchiveAnnotationResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/archive/annotate")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
 	})
 
 	Method("audit", func() {

@@ -421,6 +421,26 @@ func (e DeleteArchivedEvent) GetDID() string {
 	return e.DID
 }
 
+// AnnotateArchivedEvent is emitted when an archive entry's summary/tags
+// annotation is set (DCS-FR-CSA-11).
+type AnnotateArchivedEvent struct {
+	DID         string    `json:"did"`
+	AnnotatedBy string    `json:"annotated_by"`
+	Summary     string    `json:"summary"`
+	Tags        []string  `json:"tags"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// EventType implements [event.Event].
+func (e AnnotateArchivedEvent) EventType() string {
+	return eventtype.AnnotateArchived.String()
+}
+
+// GetDID implements [event.Event].
+func (e AnnotateArchivedEvent) GetDID() string {
+	return e.DID
+}
+
 // EventType implements the Event interface.
 func (e RetrieveAllEvent) EventType() string {
 	return eventtype.RetrieveAll.String()

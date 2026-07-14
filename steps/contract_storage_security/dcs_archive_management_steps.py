@@ -11,12 +11,14 @@ import time
 from behave import given, then, when
 
 from steps.support.api_client import (
+    archive_annotate_url,
     archive_audit_url,
     archive_delete_url,
     archive_retrieve_url,
     archive_search_url,
     delete_with_params,
     get_with_headers,
+    post_json,
 )
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
@@ -140,5 +142,148 @@ def step_then_archive_deletion_audited(context, name):
         time.sleep(2)
     assert "DELETE_ARCHIVED_CONTRACT" in event_types_for_did, (
         f"Expected a DELETE_ARCHIVED_CONTRACT audit event for contract '{name}' ({did}), "
+        f"got event types for this DID: {event_types_for_did}"
+    )
+
+
+@when('the Archive Manager searches the archive with full-text query "{query}"')
+def step_when_archive_fulltext_search(context, query):
+    """DCS-FR-CSA-13: /archive/search?contract_data=... queries the stored
+    tsvector over the whole contract JSON-LD (search_vector), not the
+    name/description metadata columns."""
+    import requests as _requests  # noqa: PLC0415
+
+    headers = AuthService.get_headers_for_roles(["Archive Manager"])
+    context.requests_response = _requests.get(
+        archive_search_url(context),
+        params={"contract_data": query},
+        headers=headers,
+        timeout=context.http_timeout_seconds,
+    )
+
+
+@when('the Archive Manager searches the archive by tag "{tag}"')
+def step_when_archive_tag_search(context, tag):
+    import requests as _requests  # noqa: PLC0415
+
+    headers = AuthService.get_headers_for_roles(["Archive Manager"])
+    context.requests_response = _requests.get(
+        archive_search_url(context),
+        params={"tag": tag},
+        headers=headers,
+        timeout=context.http_timeout_seconds,
+    )
+
+
+@then('the archive search result does not include contract "{name}"')
+def step_then_archive_search_excludes(context, name):
+    entries, did = _contract_dids_in_response(context, name)
+    dids = [e.get("did") for e in entries if isinstance(e, dict)]
+    assert did not in dids, (
+        f"Expected archive search to NOT include contract '{name}' (did={did}), got dids: {dids}"
+    )
+
+
+def _annotate_archived_contract(context, name, payload_extra, headers):
+    did, _ = ContractService._contract_data(context, name)
+    payload = {"did": did, **payload_extra}
+    context.requests_response = post_json(context, archive_annotate_url(context), payload, headers=headers)
+
+
+@when('the Archive Manager annotates the archived contract "{name}" with summary "{summary}" and tags "{tags}"')
+def step_when_archive_manager_annotates(context, name, summary, tags):
+    headers = AuthService.get_headers_for_roles(["Archive Manager"])
+    _annotate_archived_contract(
+        context, name, {"summary": summary, "tags": tags.split(",")}, headers
+    )
+
+
+@given('the Archive Manager annotates the archived contract "{name}" with summary "{summary}" and tags "{tags}"')
+def step_given_archive_manager_annotates(context, name, summary, tags):
+    # Given-position variant (setup for the tag-search scenario): a failure
+    # here is a broken precondition, so assert success immediately.
+    step_when_archive_manager_annotates(context, name, summary, tags)
+    assert context.requests_response.status_code == 200, (
+        f"Annotating archived contract '{name}' as a scenario precondition failed: "
+        f"{context.requests_response.status_code} {context.requests_response.text}"
+    )
+
+
+@when('the Archive Manager annotates the archived contract "{name}" with tags "{tags}" and no summary')
+def step_when_archive_manager_annotates_no_summary(context, name, tags):
+    headers = AuthService.get_headers_for_roles(["Archive Manager"])
+    _annotate_archived_contract(context, name, {"tags": tags.split(",")}, headers)
+
+
+@when('I attempt to annotate the archived contract "{name}" with my current role')
+def step_when_attempt_annotate_archive(context, name):
+    headers = getattr(context, "headers", {})
+    _annotate_archived_contract(
+        context, name, {"summary": "BDD unauthorized annotation attempt"}, headers
+    )
+
+
+def _archive_entry_for(context, name):
+    """Fetch the archive entry for the named contract via a DID-filtered
+    archive search, so the assertion reads what the API serves (not what the
+    annotate call echoed back)."""
+    import requests as _requests  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    headers = AuthService.get_headers_for_roles(["Archive Manager"])
+    resp = _requests.get(
+        archive_search_url(context),
+        params={"did": did},
+        headers=headers,
+        timeout=context.http_timeout_seconds,
+    )
+    assert resp.status_code == 200, f"archive search for '{name}' failed: {resp.status_code} {resp.text}"
+    entries = resp.json()
+    assert isinstance(entries, list) and len(entries) > 0, (
+        f"Expected an archive entry for contract '{name}' (did={did}), got: {entries}"
+    )
+    return entries[0]
+
+
+@then('the archive entry for contract "{name}" carries summary "{summary}" and tags "{tags}"')
+def step_then_archive_entry_annotation(context, name, summary, tags):
+    entry = _archive_entry_for(context, name)
+    assert entry.get("archive_summary") == summary, (
+        f"Expected archive_summary {summary!r}, got: {entry.get('archive_summary')!r}"
+    )
+    expected_tags = tags.split(",")
+    assert entry.get("archive_tags") == expected_tags, (
+        f"Expected archive_tags {expected_tags}, got: {entry.get('archive_tags')}"
+    )
+
+
+@then('the archive entry for contract "{name}" carries a generated summary mentioning "{text}"')
+def step_then_archive_entry_generated_summary(context, name, text):
+    entry = _archive_entry_for(context, name)
+    generated = entry.get("archive_summary") or ""
+    assert text in generated, (
+        f"Expected the generated archive summary to mention {text!r}, got: {generated!r}"
+    )
+
+
+@then('the archive annotation of contract "{name}" is recorded in the archive audit log')
+def step_then_archive_annotation_audited(context, name):
+    did, _ = ContractService._contract_data(context, name)
+    headers = AuthService.get_headers_for_roles(["Auditor"])
+    event_types_for_did = []
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        resp = get_with_headers(context, archive_audit_url(context), headers=headers)
+        assert resp.status_code == 200, f"Archive audit query failed: {resp.status_code} {resp.text}"
+        entries = resp.json()
+        assert isinstance(entries, list), f"Expected a list of audit log entries, got: {entries}"
+        event_types_for_did = [
+            str(e.get("event_type", "")).upper() for e in entries if isinstance(e, dict) and e.get("did") == did
+        ]
+        if "ANNOTATE_ARCHIVED_CONTRACT" in event_types_for_did:
+            return
+        time.sleep(2)
+    assert "ANNOTATE_ARCHIVED_CONTRACT" in event_types_for_did, (
+        f"Expected an ANNOTATE_ARCHIVED_CONTRACT audit event for contract '{name}' ({did}), "
         f"got event types for this DID: {event_types_for_did}"
     )
