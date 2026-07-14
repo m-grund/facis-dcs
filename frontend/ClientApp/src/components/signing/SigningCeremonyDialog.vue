@@ -22,6 +22,7 @@ const phase = ref<'starting' | CeremonyStatus>('starting')
 const walletUri = ref('')
 const errorMessage = ref('')
 const qrCodeDataUrl = useQRCode(computed(() => walletUri.value || ''))
+const copyHint = ref('')
 
 let ceremonyId = ''
 let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -61,6 +62,7 @@ async function startCeremony() {
     const started = await signatureManagementService.startCeremony(request.value.contractDid, request.value.fieldName)
     ceremonyId = started.ceremony_id
     walletUri.value = started.wallet_uri
+    copyHint.value = ''
     phase.value = 'pending'
     pollTimer = setInterval(() => void pollStatus(), POLL_INTERVAL_MS)
   } catch (e: unknown) {
@@ -83,6 +85,12 @@ async function pollStatus() {
   } catch {
     // Transient poll failures are ignored; the interval retries on the next tick.
   }
+}
+
+async function copyWalletUri() {
+  if (!walletUri.value) return
+  await navigator.clipboard.writeText(walletUri.value)
+  copyHint.value = 'Link copied.'
 }
 
 function retry() {
@@ -117,6 +125,8 @@ defineExpose<DialogExpose>({ reveal })
           <figure class="rounded-box bg-white p-3">
             <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="Signing ceremony QR code" class="mx-auto h-48 w-48" />
           </figure>
+          <button type="button" class="btn btn-sm btn-primary" @click="copyWalletUri">Copy link</button>
+          <p v-if="copyHint" class="text-sm text-warning">{{ copyHint }}</p>
           <p class="text-xs opacity-70">Waiting for the wallet presentation…</p>
         </div>
 
