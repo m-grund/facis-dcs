@@ -48,6 +48,13 @@ def _did(context, name: str) -> str:
     return ContractService._contract_data(context, name)[0]
 
 
+def _source_template_did(context, name: str) -> str:
+    contract = ContractService._refresh_contract(context, name)
+    template_did = contract.get("template_did") or contract.get("templateDid")
+    assert template_did, f"Contract {name!r} has no source template DID: {contract!r}"
+    return template_did
+
+
 def _audit_entries(body) -> list[dict]:
     groups = body if isinstance(body, list) else []
     return [
@@ -95,12 +102,36 @@ def _request_audit(context, role: str, scope: str, justification: str | None, di
     if did:
         payload["did"] = did
     context.last_audit_request = payload
+    context.last_access_request = payload
+    context.last_audit_role = role
     context.requests_response = post_json(context, pac_audit_url(context), payload, headers=_headers(role))
+
+
+def _request_report(context, role: str, scope: str, fmt: str, justification: str):
+    params = {"scope": scope, "format": fmt, "justification": justification}
+    context.last_access_request = params
+    context.requests_response = requests.get(
+        pac_report_url(context),
+        params=params,
+        headers=_headers(role),
+        timeout=context.http_timeout_seconds,
+    )
 
 
 @when('the Auditor runs scope "{scope}" for DID "{did}" with justification "{justification}"')
 def step_auditor_scope_did(context, scope, did, justification):
     _request_audit(context, "Auditor", scope, justification, did)
+
+
+@when('the Auditor runs scope "{scope}" for the source template of that contract with justification "{justification}"')
+def step_auditor_scope_source_template(context, scope, justification):
+    name = _last_contract_name(context)
+    _request_audit(context, "Auditor", scope, justification, _source_template_did(context, name))
+
+
+@when('the Auditor runs scope "{scope}" for that contract with justification "{justification}"')
+def step_auditor_scope_last_contract(context, scope, justification):
+    _request_audit(context, "Auditor", scope, justification, _did(context, _last_contract_name(context)))
 
 
 @when('the Archive Manager runs scope "{scope}" with justification "{justification}"')
@@ -123,10 +154,20 @@ def step_manager_scope(context, scope, justification):
     _request_audit(context, "Contract Manager", scope, justification)
 
 
-@when('the Auditor runs scope "archive" for that contract with justification "{justification}"')
-def step_auditor_archive_last_contract(context, justification):
-    name = _last_contract_name(context)
-    _request_audit(context, "Auditor", "archive", justification, _did(context, name))
+@when('a Contract Manager exports scope "{scope}" as "{fmt}" with justification "{justification}"')
+def step_manager_report(context, scope, fmt, justification):
+    _request_report(context, "Contract Manager", scope, fmt, justification)
+
+
+@when('the Auditor exports scope "{scope}" as "{fmt}" with justification "{justification}"')
+def step_auditor_report(context, scope, fmt, justification):
+    _request_report(context, "Auditor", scope, fmt, justification)
+
+
+@then("the report request is accepted")
+def step_report_accepted(context):
+    assert context.requests_response.status_code == 200, context.requests_response.text
+    assert context.requests_response.content, "Expected non-empty report bytes"
 
 
 @then("the process audit request is accepted")
@@ -137,18 +178,37 @@ def step_audit_accepted(context):
 
 @then('every returned audit group belongs to scope "{scope}" and DID "{did}"')
 def step_groups_filtered(context, scope, did):
-    body = context.requests_response.json()
     aliases = {
-        "templates": "TEMPLATE_REPOSITORY",
+        "templates": "CONTRACT_TEMPLATE_REPOSITORY",
         "contracts": "CONTRACT_WORKFLOW_ENGINE",
         "signatures": "SIGNING_MANAGEMENT",
         "archive": "CONTRACT_STORAGE_ARCHIVE",
     }
     expected_component = aliases[scope]
-    for group in body:
-        assert group.get("component") == expected_component, group
-        entries = group.get("audit_trail") or []
-        assert all(entry.get("did") == did for entry in entries), entries
+    deadline = time.monotonic() + 90
+    while True:
+        body = context.requests_response.json()
+        if body and all(group.get("audit_trail") for group in body):
+            for group in body:
+                assert group.get("component") == expected_component, group
+                assert group.get("did") == did, group
+                entries = group.get("audit_trail") or []
+                assert all(entry.get("did") == did for entry in entries), entries
+            return
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"Expected a non-empty {scope} audit result for {did}: {body!r}")
+        time.sleep(2)
+        _request_audit(context, context.last_audit_role, scope, context.last_audit_request["justification"], did)
+
+
+@then('the filtered audit contains a non-empty "{scope}" group for the source template of that contract')
+def step_source_template_group_non_empty(context, scope):
+    step_groups_filtered(context, scope, _source_template_did(context, _last_contract_name(context)))
+
+
+@then('the filtered audit contains a non-empty "{scope}" group for that contract')
+def step_contract_group_non_empty(context, scope):
+    step_groups_filtered(context, scope, _did(context, _last_contract_name(context)))
 
 
 @then("the audit response distinguishes timeline events from integrity checks")
@@ -179,6 +239,69 @@ def step_archive_passed(context):
 def step_empty_result(context):
     assert context.requests_response.status_code == 200, context.requests_response.text
     assert _audit_entries(context.requests_response.json()) == [], context.requests_response.text
+
+
+@when(
+    "the Auditor runs an archive audit while audit trail persistence is "
+    'unavailable with justification "{justification}"'
+)
+def step_audit_with_unavailable_persistence(context, justification):
+    """Exercise the API's infrastructure-error path against the disposable BDD DB.
+
+    The table is restored before this step returns, including when the request
+    itself fails unexpectedly, so subsequent scenarios see the normal schema.
+    """
+    original = "audit_trail_log"
+    unavailable = f"audit_trail_log_bdd_unavailable_{uuid.uuid4().hex[:8]}"
+    cursor = context.db.cursor()
+    try:
+        cursor.execute(f'ALTER TABLE {original} RENAME TO {unavailable}')
+        context.db.commit()
+        _request_audit(context, "Auditor", "archive", justification)
+    finally:
+        try:
+            cursor.execute(f'ALTER TABLE {unavailable} RENAME TO {original}')
+            context.db.commit()
+        except Exception:
+            context.db.rollback()
+            raise
+        finally:
+            cursor.close()
+
+
+@then("the audit request fails with an infrastructure error")
+def step_audit_infrastructure_error(context):
+    assert context.requests_response.status_code == 500, context.requests_response.text
+
+
+@given('contract "{name}" exists in a pre-effective lifecycle state')
+def step_pre_effective_contract(context, name):
+    ContractService._create_contract_in_draft(context, name)
+    contract = ContractService._refresh_contract(context, name)
+    state = str(contract.get("state") or contract.get("status") or "").upper()
+    assert state and state not in {"ACTIVE", "SIGNED", "TERMINATED", "EXPIRED"}, contract
+
+
+@then("the contract audit contains lifecycle evidence for that contract")
+def step_pre_effective_lifecycle_visible(context):
+    did = _did(context, _last_contract_name(context))
+    entries = [entry for entry in _audit_entries(context.requests_response.json()) if entry.get("did") == did]
+    assert entries, f"No audit evidence returned for pre-effective contract {did}"
+    assert any(_entry_kind(entry) == "TIMELINE" for entry in entries), entries
+
+
+@then("no failed finding is caused solely by the contract being pre-effective")
+def step_no_pre_effective_false_failure(context):
+    did = _did(context, _last_contract_name(context))
+    lifecycle_terms = ("lifecycle", "effective", "effectivity", "contract state", "status")
+    false_failures = []
+    for entry in _audit_entries(context.requests_response.json()):
+        if entry.get("did") != did or _finding_result(entry) != "FAILED":
+            continue
+        classification = f"{_finding_rule(entry)} {_finding_reason(entry)}".lower()
+        if any(term in classification for term in lifecycle_terms):
+            false_failures.append(entry)
+    assert not false_failures, false_failures
 
 
 @then("passed findings exist for DB snapshot, content hash, IPFS snapshot, ORCE receipt, ORCE chain, and RFC-3161 TSA")
@@ -489,39 +612,49 @@ def step_report_bytes_archived(context):
     assert all(data.get("report_cid") for data in matching), matching
 
 
-def _access_log_row(context, success: bool) -> tuple:
+def _access_log_row(context, success: bool, method: str) -> tuple:
     cursor = context.db.cursor()
     cursor.execute(
         """
         SELECT attempt_by, roles, attempted_at, scope, did, justification
         FROM access_attempts
-        WHERE service = 'ProcessAuditAndCompliance' AND method = 'audit' AND success = %s
+        WHERE service = 'ProcessAuditAndCompliance' AND method = %s AND success = %s
         ORDER BY attempted_at DESC LIMIT 1
         """,
-        (success,),
+        (method, success),
     )
     row = cursor.fetchone()
     cursor.close()
-    assert row is not None, f"No access-attempt audit row found for success={success}"
+    assert row is not None, f"No {method} access-attempt row found for success={success}"
     return row
 
 
-def _assert_access_metadata(context, success: bool):
-    actor, roles, attempted_at, scope, did, justification = _access_log_row(context, success)
+def _assert_access_metadata(context, success: bool, method: str):
+    actor, roles, attempted_at, scope, did, justification = _access_log_row(context, success, method)
     assert actor and roles and attempted_at and scope and justification
-    assert scope == context.last_audit_request["scope"]
-    assert justification == context.last_audit_request["justification"]
-    assert did == context.last_audit_request.get("did")
+    assert scope == context.last_access_request["scope"]
+    assert justification == context.last_access_request["justification"]
+    assert did == context.last_access_request.get("did")
 
 
 @then("the denied audit access is logged with actor, roles, time, scope, and justification")
 def step_denied_access_logged(context):
-    _assert_access_metadata(context, False)
+    _assert_access_metadata(context, False, "audit")
 
 
 @then("the audit action is logged with actor, roles, time, scope, and justification")
 def step_allowed_access_logged(context):
-    _assert_access_metadata(context, True)
+    _assert_access_metadata(context, True, "audit")
+
+
+@then("the denied report access is logged with actor, roles, time, scope, and justification")
+def step_denied_report_access_logged(context):
+    _assert_access_metadata(context, False, "audit_report")
+
+
+@then("the report action is logged with actor, roles, time, scope, and justification")
+def step_allowed_report_access_logged(context):
+    _assert_access_metadata(context, True, "audit_report")
 
 
 def _findings_for_did(body, did: str) -> list[tuple[str, str, str]]:

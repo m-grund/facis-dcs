@@ -18,6 +18,8 @@ HELM_VALUES_FILE="deployment/helm/values.dev.yml"
 PDF_CORE_DIR="pdf-core"
 PDF_CORE_DEV_ENV="$PDF_CORE_DIR/.dev.env"
 PDF_CORE_ENV="$PDF_CORE_DIR/.env"
+TSA_TRUST_CERT_FILE="backend/certs/dev/orce-tsa-cert.pem"
+TSA_TRUST_SECRET="${HELM_RELEASE}-orce-tsa-material"
 
 echo "=== Setting up dev environment ==="
 
@@ -26,6 +28,14 @@ echo "=== Setting up dev environment ==="
 echo "Updating Helm dependencies and deploying to Kubernetes..."
 helm dependency update "$HELM_CHART_PATH"
 helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE"
+
+# The host-side backend verifies every RFC 3161 token against the same
+# certificate used by the in-cluster ORCE TSA. Keep the local trust anchor in
+# sync with the release Secret on every stack start.
+kubectl wait --for=create "secret/$TSA_TRUST_SECRET" --timeout=2m
+kubectl get secret "$TSA_TRUST_SECRET" \
+  -o jsonpath='{.data.tsa-cert\.pem}' | base64 --decode > "$TSA_TRUST_CERT_FILE"
+echo "✓ ORCE TSA trust certificate exported"
 
 echo "Waiting for Federated Catalogue to become ready..."
 kubectl wait --for=condition=ready pod \

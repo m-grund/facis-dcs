@@ -89,6 +89,12 @@ archiveNotary:
     name: ""
     key: "ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN"
 
+global:
+  archiveAuditToken: ""
+  archiveAuditTokenSecretRef:
+    name: ""
+    key: "ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN"
+
 # Route and path configuration
 route:
   basePath: "/digital-contracting-service"

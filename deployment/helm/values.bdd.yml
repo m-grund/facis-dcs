@@ -223,7 +223,9 @@ ipfsDocumentManager:
     serverMode: "debug"
 
 # ORCE (Timestamp Authority): required — TSA_URL is fatal on startup.
-# Disable persistence: kind has no default PV provisioner for the ORCE PVC.
+# Persistence is backed by the static, release-scoped kind volume provisioned
+# by tests/bdd/scripts/ensure_orce_persistence.sh so restart tests retain the
+# archive receipt chain without requiring a cluster storage provisioner.
 # Ingress exposes the contract-target-flow's HTTP-in endpoint
 # (POST /contract-target/deploy) through the shared Traefik at the public
 # origin, so the BDD runner reaches it without a port-forward — identical
@@ -232,7 +234,7 @@ ipfsDocumentManager:
 orce:
   enabled: true
   persistence:
-    enabled: false
+    enabled: true
   ingress:
     enabled: true
     hosts:
@@ -245,6 +247,7 @@ signing:
   # In-cluster dev TSA (orce chart localTSA): verify tokens against the
   # provisioned dev TSA cert instead of the embedded production cert.
   tsaTrustCertSecret: "dcs-orce-tsa-material"
+
   # did:web host must be reachable both from outside the cluster (host-side
   # BDD steps resolving via environment.py's *.localhost fallback) and from
   # inside the DCS pod itself (dcs_to_dcs.go's did:web challenge-response
@@ -256,6 +259,13 @@ signing:
   # rule above) — so this one hostname satisfies both cases. Percent-encoded
   # colon per did:web spec. Must equal route.didHostname below.
   issuerDID: "did:web:dcs-a.localhost%3A18080"
+
+archiveNotary:
+  notaryPath: "/archive/notary"
+  auditLogPath: "/archive-audit-events.jsonl"
+
+global:
+  archiveAuditToken: "bdd-archive-audit-token"
 
 route:
   basePath: "/digital-contracting-service"

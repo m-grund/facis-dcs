@@ -7,17 +7,20 @@
 Feature: Minimal auditing workstation with archive integrity and ORCE evidence
 
   @REQ-audit-ui-archive-orce-AC1 @DCS-IR-PACM-01 @DCS-FR-CSA-24
-  Scenario Outline: Auditor can run every audit scope with a DID and justification
-    When the Auditor runs scope "<scope>" for DID "did:web:bdd.example:resource" with justification "external audit BDD-4711"
+  Scenario: Auditor can filter every audit scope to a real resource DID
+    Given contract "Scoped Audit Contract" is submitted, reviewed, approved, and signed via the standard workflow
+    When the Auditor runs scope "templates" for the source template of that contract with justification "external audit BDD-4711"
     Then the process audit request is accepted
-    And every returned audit group belongs to scope "<scope>" and DID "did:web:bdd.example:resource"
-
-    Examples:
-      | scope      |
-      | templates  |
-      | contracts  |
-      | signatures |
-      | archive    |
+    And the filtered audit contains a non-empty "templates" group for the source template of that contract
+    When the Auditor runs scope "contracts" for that contract with justification "external audit BDD-4711"
+    Then the process audit request is accepted
+    And the filtered audit contains a non-empty "contracts" group for that contract
+    When the Auditor runs scope "signatures" for that contract with justification "external audit BDD-4711"
+    Then the process audit request is accepted
+    And the filtered audit contains a non-empty "signatures" group for that contract
+    When the Auditor runs scope "archive" for that contract with justification "external audit BDD-4711"
+    Then the process audit request is accepted
+    And the filtered audit contains a non-empty "archive" group for that contract
 
   @REQ-audit-ui-archive-orce-AC1 @DCS-IR-CSA-04 @DCS-FR-CSA-24
   Scenario: Archive Manager is restricted to the archive audit scope
@@ -29,9 +32,9 @@ Feature: Minimal auditing workstation with archive integrity and ORCE evidence
   @REQ-audit-ui-archive-orce-AC1 @DCS-IR-PACM-01
   Scenario: Audit scope and justification are validated
     When the Auditor runs scope "unknown" with justification "scope validation BDD-4714"
-    Then get http 400:Bad Request code
+    Then get http 400:Bad Request
     When the Auditor runs scope "contracts" without a justification
-    Then get http 400:Bad Request code
+    Then get http 400:Bad Request
 
   @REQ-audit-ui-archive-orce-AC2 @DCS-IR-CSA-04 @DCS-FR-CSA-24
   Scenario: Archive integrity results carry unambiguous workstation semantics
@@ -46,6 +49,19 @@ Feature: Minimal auditing workstation with archive integrity and ORCE evidence
   Scenario: An empty audit is an explicit successful state
     When the Auditor runs scope "archive" with justification "empty state BDD-4716"
     Then the audit response is a successful empty result
+
+  @REQ-audit-ui-archive-orce-AC2 @DCS-IR-PACM-01
+  Scenario: Audit API reports an infrastructure failure separately from an empty result
+    When the Auditor runs an archive audit while audit trail persistence is unavailable with justification "infrastructure state BDD-4717"
+    Then the audit request fails with an infrastructure error
+
+  @REQ-audit-ui-archive-orce-AC1 @DCS-IR-PACM-01
+  Scenario: A pre-effective contract remains visible as lifecycle evidence
+    Given contract "Pre-effective Audit Contract" exists in a pre-effective lifecycle state
+    When the Auditor runs scope "contracts" for that contract with justification "pre-effective lifecycle BDD-4717"
+    Then the process audit request is accepted
+    And the contract audit contains lifecycle evidence for that contract
+    And no failed finding is caused solely by the contract being pre-effective
 
   @REQ-audit-ui-archive-orce-AC3 @DCS-FR-CSA-19 @UC-08-02
   Scenario: A valid archive entry passes each independent integrity rule
@@ -73,7 +89,7 @@ Feature: Minimal auditing workstation with archive integrity and ORCE evidence
     Then its archive entry records signer, credential type, ceremony, field, signing time, PDF CID, and PDF hash
     And its archive entry stores credential hashes but no credential payload
 
-  @REQ-audit-ui-archive-orce-AC4 @DCS-FR-CWE-20
+  @REQ-audit-ui-archive-orce-AC5 @DCS-FR-CWE-20 @DCS-FR-CSA-18
   Scenario: ORCE continues the persisted chain after a restart
     Given the configured ORCE archive notary is reachable with its bearer token
     When archive event "bdd-restart-chain-first" is notarized
@@ -121,6 +137,12 @@ Feature: Minimal auditing workstation with archive integrity and ORCE evidence
     When the Auditor runs scope "contracts" with justification "authorized audit BDD-4722"
     Then the process audit request is accepted
     And the audit action is logged with actor, roles, time, scope, and justification
+    When a Contract Manager exports scope "contracts" as "json" with justification "unauthorized report BDD-4722"
+    Then the request is denied with an authorization error
+    And the denied report access is logged with actor, roles, time, scope, and justification
+    When the Auditor exports scope "contracts" as "json" with justification "authorized report BDD-4722"
+    Then the report request is accepted
+    And the report action is logged with actor, roles, time, scope, and justification
 
   @REQ-audit-ui-archive-orce-AC8 @DCS-IR-CSA-04 @DCS-FR-CSA-19 @DCS-FR-CSA-24
   Scenario: One damaged archive entry does not hide a valid entry and both audit routes agree
