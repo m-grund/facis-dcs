@@ -80,6 +80,21 @@ def step_when_register_schema(context, kind, name):
     assert before.status_code == 200, f"versions listing failed: {before.status_code} {before.text}"
     context.hub_versions_before = [v["version"] for v in before.json()]
 
+    # Self-heal even when a later step of this scenario fails: the genesis
+    # scenario (and production behavior) expects version 1 active, so restore
+    # it unconditionally at scenario teardown — otherwise one mid-scenario
+    # failure leaves the extension version active and cascades into the next
+    # suite run.
+    def _restore_genesis_active():
+        _requests.post(
+            _hub_url(context, "/semantic/schema/rollback"),
+            json={"name": name, "kind": kind, "version": 1},
+            headers=AuthService.get_headers_for_roles(["Template Manager"]),
+            timeout=context.http_timeout_seconds,
+        )
+
+    context.add_cleanup(_restore_genesis_active)
+
     genesis = _requests.get(
         _hub_url(context, "/semantic/schema/retrieve"),
         params={"name": name, "kind": kind, "version": 1},
