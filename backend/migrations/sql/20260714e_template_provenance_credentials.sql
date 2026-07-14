@@ -20,4 +20,5 @@ CREATE TABLE IF NOT EXISTS template_provenance_credentials
     CONSTRAINT fk_template_provenance_template
         FOREIGN KEY (did)
             REFERENCES contract_templates (did)
+            ON DELETE CASCADE
 );
