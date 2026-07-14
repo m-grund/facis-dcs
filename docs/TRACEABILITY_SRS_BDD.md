@@ -26,9 +26,9 @@ not a coverage hole.
 
 | Status | Meaning | Count |
 |---|---|---|
-| ✅ Covered | scenario(s) assert the requirement end-to-end | 142 |
+| ✅ Covered | scenario(s) assert the requirement end-to-end | 144 |
 | 🔧 In progress | being implemented | 0 |
-| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 51 |
+| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 49 |
 | 📋 Not BDD-verifiable | UI/infrastructure/process requirement — verified outside the black-box HTTP harness | 29 |
 | ❌ Deviation | capability not implemented in the product; recorded deviation | 3 |
 | | **Total** | **225** |
@@ -203,7 +203,7 @@ not a coverage hole.
 | DCS-IR-SI-05 | External Target System API Integration | ✅ Covered | 05 external target deploy API scenarios incl. shared-secret callback (tagged @DCS-IR-SI-05). |
 | DCS-IR-SI-06 | Counterparty DCS Information Endpoint | ✅ Covered | 17 get_sync/post_sync + GetServiceDID: policy-gated peer information exchange (untrusted peer rejected). |
 | DCS-IR-SI-07 | OpenID Provider Discovery & JWKS Consumption | ✅ Covered | Hydra discovery/JWKS consumption (see CI-05). |
-| DCS-IR-SI-08 | OpenID4VP Login & Access Control | 🟡 Partial | OID4VP building blocks proven (JAR ES256-signed, 21; presentation verified, 22). Full VP-login as primary login not exercised — noted. |
+| DCS-IR-SI-08 | OpenID4VP Login & Access Control | ✅ Covered | OID4VP login is the only authentication path: Hydra login+consent is accepted solely after trust-anchored presentation verification (`auth_login.go` PresentationCallback → `oid4vp.Verify` → `AcceptLoginAndConsent`), and every authenticated scenario performs the full headless VP login. JAR ES256-signed (21); PID presentation re-verified at signing (22). |
 | DCS-IR-SI-09 | Credential Status & Revocation Service | ✅ Covered | 21 CRL/status-list revocation flip. |
 | DCS-IR-SI-10 | Digital Signature Service (DSS) Authorization & Signing | 🟡 Partial | DSS-shaped authorize+sign+timestamp path via internal signing + TSA (22 timestamp scenario); external DSS not hermetic. |
 | DCS-IR-SI-11 | Relational Database Access | ✅ Covered | PostgreSQL with versioned migrations exercised by the entire suite (backend/migrations/sql). |
@@ -285,7 +285,7 @@ not a coverage hole.
 
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
-| DCS-NFR-BR-01 | Strong Authentication & Role Binding | 🟡 Partial | AuthN+RBAC enforced everywhere (01). Wallet-VC-based 2FA login not the primary auth path yet (see SI-08). |
+| DCS-NFR-BR-01 | Strong Authentication & Role Binding | ✅ Covered | Wallet-VC login is the only auth path — there is no password or non-VP fallback (see SI-08); roles bind from the verified presentation and RBAC is enforced everywhere (01). The second factor (wallet unlock / holder authentication) lives in the wallet, outside the DCS boundary. |
 | DCS-NFR-BR-02 | Participant Eligibility | ✅ Covered | 17: unverified/untrusted peers rejected on every DCS-to-DCS surface. |
 | DCS-NFR-BR-03 | Legally Valid Signatures | ✅ Covered | 05 non-SIGNED deploy refusal (tagged @DCS-NFR-BR-03); AES default (22). |
 | DCS-NFR-BR-04 | Template Governance | ✅ Covered | Contract create only from REGISTERED templates (03 steps + 02 approval chain). |
@@ -384,8 +384,11 @@ not a coverage hole.
 | TPM sealing / remote attestation | DCS-IR-HI-03, DCS-NFR-SEC-17 | Platform concern, not implemented |
 | "Replaced" C2PA lifecycle banner | (19 lifecycle-banner subset) | Explicit scope decision, tracked in 19 pack header |
 
-OID4VP-as-login (DCS-IR-SI-08, DCS-NFR-BR-01) is exercised implicitly by every scenario's
-authentication but remains underasserted as dedicated scenarios — follow-up work, not a deviation.
+OID4VP-as-login (DCS-IR-SI-08, DCS-NFR-BR-01) is exercised by every scenario's
+authentication: the harness performs the full headless VP login (login → challenge binding →
+JAR → vp_token → verification → token exchange) and the backend accepts a Hydra login only
+through that path. A dedicated rejected-presentation-at-login negative remains follow-up
+work, not a deviation.
 Multi-signer flows (DCS-FR-SM-07/17) graduated from this list: 22/multi_signer asserts them
 end-to-end, including two distinct signer identities and the deploy gate.
 
