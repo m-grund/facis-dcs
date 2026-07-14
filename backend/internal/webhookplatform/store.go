@@ -18,11 +18,10 @@ var KnownEvents = []EventInfo{
 	{Name: "template.created", Description: "A new contract template was created"},
 	{Name: "template.approved", Description: "A contract template was approved"},
 	// DCS-FR-TR-22: Template Users subscribe to these to learn that a
-	// template they have used was updated, re-registered as a new version,
-	// or deprecated; the payload carries the template DID to filter on.
+	// template they have used was updated or re-registered as a new
+	// version; the payload carries the template DID to filter on.
 	{Name: "template.updated", Description: "A contract template was updated"},
 	{Name: "template.registered", Description: "A contract template version was registered (published)"},
-	{Name: "template.deprecated", Description: "A contract template was archived/deprecated"},
 }
 
 // DCSEventMap maps internal NATS event types to webhook event names.
@@ -37,7 +36,6 @@ var DCSEventMap = map[string]string{
 	"APPROVE_CONTRACT_TEMPLATE":  "template.approved",
 	"UPDATE_CONTRACT_TEMPLATE":   "template.updated",
 	"REGISTER_CONTRACT_TEMPLATE": "template.registered",
-	"ARCHIVE_CONTRACT_TEMPLATE":  "template.deprecated",
 }
 
 // EventInfo describes a subscribable event.

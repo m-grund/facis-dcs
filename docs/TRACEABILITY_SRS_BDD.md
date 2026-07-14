@@ -58,7 +58,7 @@ not a coverage hole.
 | DCS-FR-TR-19 | Template Retrieval | ✅ Covered | 02/generate_contract + template_identity retrieve-by-DID (/template/retrieve). |
 | DCS-FR-TR-20 | Template Compliance and Integrity Verification | ✅ Covered | /template/verify scenario (02, tagged @DCS-FR-TR-20). |
 | DCS-FR-TR-21 | Audit Logs for Template Changes | ✅ Covered | Template audit-log scenario (02, tagged @DCS-FR-TR-21). |
-| DCS-FR-TR-22 | Notification System for Template Updates | ✅ Covered | Webhook platform (/orce): subscribable template.updated/registered/deprecated events fan out to registered receivers with the template DID in the payload; delivery log with acknowledgement (GET /deliveries). Verified end-to-end against the ORCE monitoring flow (02/template_update_notifications). |
+| DCS-FR-TR-22 | Notification System for Template Updates | ✅ Covered | Webhook platform (/orce): subscribable template.updated/template.registered events fan out to registered receivers with the template DID in the payload; delivery log with acknowledgement (GET /deliveries). Verified end-to-end against the ORCE monitoring flow (02/template_update_notifications). |
 | DCS-FR-TR-23 | Structural Dependency Mapping The Template Repository MUST allow Te… | ✅ Covered | 20 hierarchy dependency enforcement + export refusal on missing component (tagged @DCS-FR-TR-26/@DCS-FR-PACM-06). |
 | DCS-FR-TR-24 | Structural Export in Unified Format | ✅ Covered | 20 template bundle export (tagged @DCS-FR-TR-24). |
 | DCS-FR-TR-25 | Multi-Contract Template Builder | 📋 Not BDD-verifiable | Visual builder is a frontend concern (HTTP-only harness; see the 22 UI-gap precedent). Backing APIs covered via 20 hierarchy/bundle + 02 CRUD. |

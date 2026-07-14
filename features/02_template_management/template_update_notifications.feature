@@ -1,13 +1,13 @@
 # DCS-FR-TR-22: the system SHOULD notify Template Users when a contract
-# template they have used has been updated or deprecated. The DCS webhook
-# platform (backend/internal/webhookplatform, mounted at /orce/ on the
-# service root) fans every template lifecycle event out to registered
-# subscribers; the ORCE monitoring flow (charts/orce/flows/
-# event-webhook-orce-flow.json, POST /dcs-dispatch) is the deployed
-# receiver these scenarios deliver to. Each notification payload carries
-# the template DID, which is how a subscriber matches notifications to the
-# templates it has used. GET /deliveries is the platform's monitoring
-# surface: per-notification callback URL, HTTP status, and acknowledgement.
+# template they have used has changed. The DCS webhook platform
+# (backend/internal/webhookplatform, mounted at /orce/ on the service
+# root) fans template lifecycle events out to registered subscribers; the
+# ORCE monitoring flow (charts/orce/flows/event-webhook-orce-flow.json,
+# POST /dcs-dispatch) is the deployed receiver these scenarios deliver to.
+# Each notification payload carries the template DID, which is how a
+# subscriber matches notifications to the templates it has used.
+# GET /deliveries is the platform's monitoring surface: per-notification
+# callback URL, HTTP status, and acknowledgement.
 
 @UC-02 @DCS-FR-TR-22
 Feature: Template-update notifications through the webhook platform
