@@ -5,6 +5,13 @@
 mapping metadata, not requirements). Coverage: `features/**/*.feature` (behave suite run on every
 CI push, kind-in-docker).
 
+**2026-07-14 wave note.** The rows citing packs 22/multi_signer and 23/semantic_hub, the
+archive annotation/full-text scenarios (07), the JAdES provenance scenarios (17), the
+target-acknowledgement/KPI scenarios (05), and the signature view/compliance scenarios (04)
+were implemented in this wave: all scenarios bind (behave dry-run) and every backend unit
+test is green, but the wave has not yet had its first full CI run — statuses here reflect
+the executable evidence as written.
+
 **Method.** Every requirement gets exactly one disposition. Scenario references name the
 feature pack (by its `features/` directory number) plus a short scenario descriptor; most
 scenarios also carry the requirement ID as a behave tag (`@DCS-…`), so `grep -r <ID> features/`
@@ -19,11 +26,11 @@ not a coverage hole.
 
 | Status | Meaning | Count |
 |---|---|---|
-| ✅ Covered | scenario(s) assert the requirement end-to-end | 132 |
+| ✅ Covered | scenario(s) assert the requirement end-to-end | 138 |
 | 🔧 In progress | being implemented | 0 |
-| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 58 |
+| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 54 |
 | 📋 Not BDD-verifiable | UI/infrastructure/process requirement — verified outside the black-box HTTP harness | 29 |
-| ❌ Deviation | capability not implemented in the product; recorded deviation | 6 |
+| ❌ Deviation | capability not implemented in the product; recorded deviation | 4 |
 | | **Total** | **225** |
 
 ## 3.2.1 Template Repository (DCS-FR-TR-…)
@@ -32,7 +39,7 @@ not a coverage hole.
 |---|---|---|---|
 | DCS-FR-TR-01 | Machine-Readable Format | ✅ Covered | Templates stored/retrieved as JSON-LD — 02/create_template, 02/template_identity; editor state is the JSON-LD doc. |
 | DCS-FR-TR-02 | Multi-Tiered Contract Template Management | ✅ Covered | 20/hierarchy invariant scenarios (tagged @DCS-FR-TR-02): parent refs, child-enumeration rejection, cycle rejection. |
-| DCS-FR-TR-03 | Semantic Hub for Schema Storage | ❌ Deviation | No Semantic Hub component (SHACL shape repository with versioning) exists; JSON-LD contexts are embedded per document. Recorded deviation. |
+| DCS-FR-TR-03 | Semantic Hub for Schema Storage | ✅ Covered | Semantic Hub built (23/semantic_hub): versioned JSON-LD context + SHACL shape storage seeded with the FACIS v1 profile, public resolution, Template-Manager register/rollback (UC-02-08), every produced document anchored via resolvable dcs:schemaRefs, and hub-prefix redefinition rejected at template creation. |
 | DCS-FR-TR-04 | Machine-Readable and Human-Readable Template Linking | 🟡 Partial | MR→HR derivation proven via template PDF export + verify (02/template_integrity_audit); bidirectional *link* metadata not modeled beyond same-DID pairing. |
 | DCS-FR-TR-05 | Template Version Control | ✅ Covered | Template versions/approvals tracked; template audit-log scenario (02, @DCS-FR-TR-21/TR-05). retrieve_history_by_id exists. |
 | DCS-FR-TR-06 | Role-Based Access Control for Template Repository | ✅ Covered | RBAC negative scenarios: 02/create, 02/update, 02/archive, 02/workflow 'Unauthorized role cannot …' + 01 pack 401 sweep. |
@@ -100,12 +107,12 @@ not a coverage hole.
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
 | DCS-FR-SM-01 | Level of Assurance Flexibility for Simple Electronic Signature, Adv… | 🟡 Partial | AES level proven end-to-end (22 e2e scenario); credential_type honored (apply-fields scenario). QES requires a qualified TSP/QSCD — unavailable in hermetic env; deviation note for QES execution. |
-| DCS-FR-SM-02 | Support for PAdES, JAdES, and CAdES Signatures | 🟡 Partial | PAdES B-T proven (22 PAdES scenarios) with ETSI.CAdES.detached CMS container. JAdES (JSON AdES) not implemented — recorded deviation. |
+| DCS-FR-SM-02 | Support for PAdES, JAdES, and CAdES Signatures | ✅ Covered | PAdES B-T proven (22) with ETSI.CAdES.detached CMS container (CAdES); JAdES baseline-B implemented for the machine-readable contract in the DCS-to-DCS flow (17 provenance + tamper-negative scenarios; internal/base/jades unit tests). |
 | DCS-FR-SM-03 | Signing Identity and PoA Authorization Credentials | 🟡 Partial | Signer identity credential (PID SD-JWT VC) verified before signing (22 ceremony-gate, webhook/PID-embedding, and verify cross-check scenarios). PoA (dc+sd-jwt, vct urn:dcs:poa:v1) is presented at LOGIN and mapped into the Hydra session — every authenticated call is PoA-gated; issuer chain-walk to trust anchor stays open (recorded deviation; SRS TBD-B acknowledges XFSC PCM unavailability). |
 | DCS-FR-SM-04 | Counterparty Authorization and PoA Credential Chain Verification | 🟡 Partial | Credential status/revocation is checked on every verification (status-list check in each verify path) — a revoked PoA blocks the login that gates signing. Chain-walk to a trust anchor remains roadmap (recorded deviation). |
 | DCS-FR-SM-05 | Integration with Signing Identity and PoA Verifiable Credentials | ✅ Covered | W3C-compliant SD-JWT VC + KB-JWT presented, verified, embedded verbatim under the PAdES signature (22 verbatim-embedding + verify cross-check scenarios). |
 | DCS-FR-SM-06 | Wallet for Identity, PoA Credential Management, and Signing | 🟡 Partial | Wallet protocol surface (OID4VP presentation, headless) proven (22 webhook + headless-ceremony scenarios); a real end-user wallet app is outside the harness. |
-| DCS-FR-SM-07 | Multi-Signature and Role-Based Signing Flows | 🟡 Partial | Role-gated signing (roles enforced at request/apply, 22 ceremony role-denial scenario). Multi-signature mechanics PROVEN at the signing layer (pdf-core TestPAdESSecondSignatureProbe: second approval signature appends incrementally, both CAdES structures intact); the product workflow (ordering/dependencies, and evidence placement — signer 2's evidence attachment after signature 1 would trip strict PAdES diff analysis, so the compliant model is all-ceremonies-before-first-signature) is a designed feature still to land. |
+| DCS-FR-SM-07 | Multi-Signature and Role-Based Signing Flows | ✅ Covered | 22/multi_signer: one ceremony + one sequential PAdES signature per declared field, all-ceremonies-before-first-signature evidence embedding, ceremony-gate and double-signing negatives, deploy gate until every field is signed; role gating via 22 ceremony role-denial. |
 | DCS-FR-SM-08 | Persisted Contract Signing Summary with Verifiable Credential and P… | ✅ Covered | 22 ContractSigningSummaryCredential issued + embedded; PDF/A-3 attachment under signature (tagged @DCS-FR-SM-08). |
 | DCS-FR-SM-09 | Secure Human-Readable Contract Viewer | 🟡 Partial | Same as CWE-05: tamper-evidence of served content proven; viewer UI out of harness. |
 | DCS-FR-SM-10 | Proof of Contract Execution | ✅ Covered | 05 TSA-timestamped execution receipt appended to archive (tagged @DCS-FR-SM-10). |
@@ -115,7 +122,7 @@ not a coverage hole.
 | DCS-FR-SM-14 | Signature Request from Signer | ✅ Covered | 22 POST /signature/request + status polling (tagged @FR-SM-14). |
 | DCS-FR-SM-15 | Contract Retrieval for Signing | ✅ Covered | Signed-PDF retrieval with validation exercised throughout 22 (IPFS-CID persisted artifact). |
 | DCS-FR-SM-16 | Apply Digital Signature (via Cloud PCM or OCM Signer API Endpoint) | ✅ Covered | 22 real PAdES via HSM path (tagged @DCS-FR-SM-16). |
-| DCS-FR-SM-17 | Multi-Signer Support | 🟡 Partial | Independent per-signature verifiability proven single-signer (22) and mechanically for a second incremental signature (pdf-core probe test, see SM-07); the multi-signer apply workflow (EventSign re-entry from SIGNED + evidence-placement model) is the remaining feature work. |
+| DCS-FR-SM-17 | Multi-Signer Support | ✅ Covered | 22/multi_signer end-to-end: two DISTINCT signer identities recorded independently per field (signature view assertion), sequential application on signed bytes (mechanics also unit-proven by pdf-core TestPAdESSecondSignatureProbe); parallel signing stays a documented change request. |
 | DCS-FR-SM-18 | Signature Validation | ✅ Covered | Signature validate endpoint scenario (04/signature_validation, tagged @DCS-FR-SM-18). |
 | DCS-FR-SM-19 | Audit Log for Signatures | ✅ Covered | Signature audit-log scenario (04, tagged @DCS-FR-SM-19). |
 | DCS-FR-SM-20 | Signature Revocation | ✅ Covered | 15 revocation → REVOKED + re-approval path (tagged @DCS-FR-SM-20). |
@@ -124,7 +131,7 @@ not a coverage hole.
 | DCS-FR-SM-23 | Signing Interface | 📋 Not BDD-verifiable | Browser signing UI + biometrics: documented out of harness (22 @skip UI scenario records the decision). |
 | DCS-FR-SM-24 | Signature Status Tracking | ✅ Covered | 22 ceremony-status-progression scenario. |
 | DCS-FR-SM-25 | Automated Signature Processing API | ✅ Covered | 22 fully headless API-driven ceremony (tagged @FR-SM-25). |
-| DCS-FR-SM-26 | Signature Compliance Viewer | 🟡 Partial | Compliance data exposed via validate/compliance endpoints; viewer UI out of harness. |
+| DCS-FR-SM-26 | Signature Compliance Viewer | 🟡 Partial | GET /signature/view serves the viewer's full data set — per-signature signer identity, field, credential class, status, timestamps, container format + integrity findings (04 view scenarios incl. RBAC negative); the Vue viewer itself stays out of the HTTP harness. |
 | DCS-FR-SM-27 | Support for PDF/A Format | ✅ Covered | 04/signature_validation asserts PDF/A-3 identification on the exported SIGNED PDF bytes (pdfaid:part=3, conformance=A, ISO 19005-3) plus the contract.jsonld associated file (AFRelationship /Source); full veraPDF-class validation remains an external check. |
 
 ## 3.2.4 Contract Storage & Archive (DCS-FR-CSA-…)
@@ -141,9 +148,9 @@ not a coverage hole.
 | DCS-FR-CSA-08 | Store Signed Contract in Archive | ✅ Covered | 05 archive-at-SIGNED: archive entry exactly on SIGNED with evidence. |
 | DCS-FR-CSA-09 | Generate and Assign Contract Identifier | ✅ Covered | Contract DIDs assigned at creation and used across workflows (03, 12, 17). |
 | DCS-FR-CSA-10 | Index Contract Metadata | ✅ Covered | 07 state-filtered archive search; archive metadata view (contracts_archive_metadata). |
-| DCS-FR-CSA-11 | Create Contract Summary and Tags | ❌ Deviation | No summary/tag facility on archive entries (store/search payloads carry none). Recorded deviation. |
+| DCS-FR-CSA-11 | Create Contract Summary and Tags | ✅ Covered | 07 annotation scenarios: manual + metadata-generated summaries, tag assignment, tag-filtered search (inclusion and exclusion), RBAC negative, ANNOTATE_ARCHIVED_CONTRACT audit event. |
 | DCS-FR-CSA-12 | Retrieve Contract from Archive | ✅ Covered | 07 archive retrieval with RBAC + audit (20 export audit-log). |
-| DCS-FR-CSA-13 | Search Contracts | 🟡 Partial | Metadata/state search proven (07); full-text content search not implemented — deviation note. |
+| DCS-FR-CSA-13 | Search Contracts | ✅ Covered | Metadata/state search (07) plus full-text content search over the whole contract JSON-LD (stored tsvector, GIN-indexed) — 07 full-text scenario with positive and negative queries. |
 | DCS-FR-CSA-14 | Contract Expiration Handling | ✅ Covered | 19 expired banner + expiry cron; expired contracts excluded from active workflows. |
 | DCS-FR-CSA-15 | Contract Renewal and Extension | ✅ Covered | Renewal contract linked to archived original (06, tagged @DCS-FR-CSA-15). |
 | DCS-FR-CSA-16 | Contract Termination | ✅ Covered | 06 termination with reason recorded; terminated contracts remain retrievable read-only (07 search by state). |
@@ -252,7 +259,7 @@ not a coverage hole.
 | DCS-IR-SM-02 | Secure Contract Viewer UI MUST allow verification of contract integ… | ✅ Covered | Integrity/envelope verification via verify endpoints (08, 19, 22 verify cross-check). |
 | DCS-IR-SM-03 | Secure Contract Viewer UI MUST allow applying signatures with appro… | ✅ Covered | Signature application with verified credentials (22 ceremony-gate + webhook/PID scenarios). |
 | DCS-IR-SM-04 | Secure Contract Viewer UI MUST allow validation of applied signatur… | ✅ Covered | Applied-signature validation endpoint scenario (04, tagged @DCS-FR-SM-18). |
-| DCS-IR-SM-05 | Signature Compliance Viewer UI MUST allow compliance users to valid… | 🟡 Partial | Trust anchors/proofs/timestamps validated in verify paths (21, 22); dedicated compliance-viewer queries partial (compliance endpoint scenario only). |
+| DCS-IR-SM-05 | Signature Compliance Viewer UI MUST allow compliance users to valid… | 🟡 Partial | Compliance users (Compliance Officer/Auditor scopes) read GET /signature/view (04) with cryptographic integrity findings from the shared validation machinery; trust anchors/proofs/timestamps validated in verify paths (21, 22). UI out of harness. |
 | DCS-IR-SM-06 | Signature Compliance Viewer UI MUST allow revocation of signatures … | ✅ Covered | 15 signature revocation (tagged @DCS-FR-SM-20). |
 | DCS-IR-SM-07 | Signature Compliance Viewer UI MUST allow running compliance checks… | ✅ Covered | Compliance-check endpoint scenario (04, tagged @DCS-FR-SM-21). |
 | DCS-IR-SM-08 | Signature Compliance Viewer UI MUST allow generating audit reports … | ✅ Covered | Signature audit-report scenario (04, tagged @DCS-FR-SM-19). |
@@ -370,9 +377,7 @@ not a coverage hole.
 
 | Item | Requirement(s) | Note |
 |---|---|---|
-| Semantic Hub (SHACL schema repo, versioned) | DCS-FR-TR-03 | Contexts embedded per document instead |
 | Template-update notifications | DCS-FR-TR-22 | SHOULD-level |
-| JAdES signatures | DCS-FR-SM-02 | PAdES B-T + CAdES-in-PAdES delivered; JSON AdES absent |
 | QES execution | DCS-FR-SM-01 | Needs qualified TSP/QSCD; AES delivered |
 | PoA credential acquisition + chain-walk | DCS-FR-SM-03/04, UC-14 | PoA presented at login with status checking; issuer chain-walk is deferred roadmap work — 14 pack keeps tagged @skip placeholders |
 | Archive summary/tags | DCS-FR-CSA-11 | No tag/summary fields in archive API |
