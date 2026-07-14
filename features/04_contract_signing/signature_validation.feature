@@ -39,7 +39,9 @@ Feature: Signature validation, audit, and compliance
 
   @clean_db @DCS-FR-SM-21 @DCS-FR-SM-20
   Scenario: The compliance check flags a revoked signature
-    Given contract "Revoked Compliance Contract" has reached contract state "REVOKED"
+    Given contract "Revoked Compliance Contract" has reached contract state "SIGNED"
+    When the applied signature of contract "Revoked Compliance Contract" is revoked
+    Then get http 200:Success code
     When the contract manager requests a compliance check for contract "Revoked Compliance Contract"
     Then get http 200:Success code
     And the compliance check for contract "Revoked Compliance Contract" flags a revoked signature

@@ -71,8 +71,8 @@ func enforceCanonicalOntologyIRIs(data documentData) error {
 		canonical, known := canonicalOntologyIRIs[prefix]
 		if known && supplied != canonical {
 			return fmt.Errorf(
-				"document @context redefines prefix %q to %q, but the Semantic Hub's active context declares %q",
-				prefix, supplied, canonical)
+				"%w: document @context redefines prefix %q to %q, but the Semantic Hub's active context declares %q",
+				ErrDocumentSchemaConflict, prefix, supplied, canonical)
 		}
 	}
 	return nil
@@ -171,6 +171,11 @@ type documentData map[string]any
 // (service.mapContractCommandError) maps it to a 4xx client error rather than
 // a 500, since it is caused by malformed client-supplied contract data.
 var ErrContractHierarchyInvalid = errors.New("contract hierarchy invariant violated")
+
+// ErrDocumentSchemaConflict is a client-input error (map to 400): the
+// submitted document's @context redefines a Semantic Hub-declared ontology
+// prefix to a different IRI (DCS-FR-TR-03).
+var ErrDocumentSchemaConflict = errors.New("document schema conflict")
 
 // childEnumeratingProperties are top-level document properties that would
 // enumerate child contracts from a parent document. The hierarchy is

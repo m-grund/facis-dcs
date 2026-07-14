@@ -129,6 +129,7 @@ var SMContractApplyRequest = Type("SMContractApplyRequest", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("signer_did", String, "DID of the signer")
+	Attribute("field_name", String, "For multi-signer contracts (DCS-FR-SM-07/-17): the declared signature field this signer covers. When omitted, the signer's most recent verified ceremony is used (single-signer flow).")
 	Attribute("credential_type", String, "Type of credential to use (default: AES)")
 	Attribute("updated_at", String, "The timestamp when the contract was updated")
 

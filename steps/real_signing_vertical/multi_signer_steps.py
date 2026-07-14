@@ -62,7 +62,7 @@ def step_given_field_ceremony(context, name, field):
 @when('the signer of field "{field}" applies their signature to contract "{name}"')
 def step_when_field_signer_applies(context, name, field):
     subject_did = context.multi_signer_dids[name][field]
-    context.requests_response = _apply_signature(context, name, signer_did=subject_did)
+    context.requests_response = _apply_signature(context, name, signer_did=subject_did, field_name=field)
     if context.requests_response.status_code == 200:
         ContractService._refresh_contract(context, name)
 

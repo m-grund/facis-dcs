@@ -17,6 +17,7 @@ from steps.support.api_client import (
     post_json,
     signature_audit_url,
     signature_compliance_url,
+    signature_revoke_url,
     signature_view_url,
     signature_validate_url,
 )
@@ -29,6 +30,29 @@ def step_when_validate_signature(context, name):
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
     context.requests_response = post_json(context, signature_validate_url(context), {"did": did}, headers=manager_h)
+
+
+@when('the applied signature of contract "{name}" is revoked')
+def step_when_applied_signature_revoked(context, name):
+    """Revokes the ACTUAL signer bound to the applied signature (read from
+    /signature/view), not a placeholder DID — so the signature ROW flips to
+    REVOKED and the compliance check can observe it."""
+    import requests as _requests  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    view = _requests.get(
+        signature_view_url(context), params={"did": did}, headers=manager_h,
+        timeout=context.http_timeout_seconds,
+    )
+    assert view.status_code == 200, f"signature view failed: {view.status_code} {view.text}"
+    signatures = view.json().get("signatures") or []
+    assert signatures, f"Expected an applied signature to revoke, got: {view.json()}"
+    signer_did = signatures[0]["signer_did"]
+    context.requests_response = post_json(
+        context, signature_revoke_url(context),
+        {"did": did, "signer_did": signer_did}, headers=manager_h,
+    )
 
 
 @when('the contract manager requests a compliance check for contract "{name}"')

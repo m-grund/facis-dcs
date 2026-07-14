@@ -214,20 +214,18 @@ def _run_full_ceremony(context, name, field_name, signatory_name):
     return ceremony_id, presentation, subject_did
 
 
-def _apply_signature(context, name, *, signer_did, credential_type="AES"):
+def _apply_signature(context, name, *, signer_did, credential_type="AES", field_name=None):
     did, updated_at = ContractService._contract_data(context, name)
     signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    return post_json(
-        context,
-        signature_apply_url(context),
-        {
-            "did": did,
-            "signer_did": signer_did,
-            "credential_type": credential_type,
-            "updated_at": updated_at,
-        },
-        headers=signer_h,
-    )
+    payload = {
+        "did": did,
+        "signer_did": signer_did,
+        "credential_type": credential_type,
+        "updated_at": updated_at,
+    }
+    if field_name is not None:
+        payload["field_name"] = field_name
+    return post_json(context, signature_apply_url(context), payload, headers=signer_h)
 
 
 # ---------------------------------------------------------------------------

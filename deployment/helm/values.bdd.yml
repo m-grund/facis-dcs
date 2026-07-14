@@ -248,8 +248,11 @@ orce:
   # DeploymentCallbackSecret; the value below is its BDD default, stated
   # explicitly so the pairing is visible in one place).
   extraEnv:
+    # DCS_URL must carry the API base path (DCS_API_PATH mounts every app
+    # endpoint under /digital-contracting-service/api) — the flow's callback
+    # legs append /contract/deployment/callback to it.
     - name: DCS_URL
-      value: "http://dcs-digital-contracting-service:8991"
+      value: "http://dcs-digital-contracting-service:8991/digital-contracting-service/api"
     - name: DEPLOYMENT_CALLBACK_SECRET
       value: "bdd-deployment-callback-secret"
   ingress:

@@ -54,8 +54,12 @@ var ErrFieldAlreadySigned = errors.New("signature field is already signed")
 
 // ApplyCmd carries the inputs for applying a digital signature.
 type ApplyCmd struct {
-	DID            string
-	SignerDID      string
+	DID       string
+	SignerDID string
+	// FieldName selects which declared signature field this signer covers
+	// on a multi-signer contract (DCS-FR-SM-07/-17). Empty = single-signer
+	// flow (resolve the signer's most recent verified ceremony).
+	FieldName      string
 	CredentialType string
 	AppliedBy      string
 	HolderDID      string
@@ -120,7 +124,17 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// presentation for this signer and contract must exist. Evaluated before
 	// the state-machine transition so a missing ceremony is reported as its own
 	// typed error rather than a state error.
-	ceremony, err := h.CeremonyRepo.FindVerifiedCeremony(ctx, tx, cmd.DID, cmd.SignerDID)
+	// Resolve the ceremony this signature applies to. On a multi-signer
+	// contract several fields may share one signer identity (e.g. one person
+	// signing two roles), so resolving by signer alone is ambiguous —
+	// FieldName disambiguates when provided; otherwise fall back to the
+	// signer's most recent verified ceremony (single-signer flow).
+	var ceremony *db.SignatureCeremony
+	if cmd.FieldName != "" {
+		ceremony, err = h.CeremonyRepo.FindVerifiedCeremonyByField(ctx, tx, cmd.DID, cmd.FieldName)
+	} else {
+		ceremony, err = h.CeremonyRepo.FindVerifiedCeremony(ctx, tx, cmd.DID, cmd.SignerDID)
+	}
 	if err != nil {
 		return fmt.Errorf("could not resolve signing ceremony: %w", err)
 	}

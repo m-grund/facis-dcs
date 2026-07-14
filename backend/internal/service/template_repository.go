@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"digital-contracting-service/internal/base/validation"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
@@ -56,6 +59,16 @@ func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db
 }
 
 // Create a new template.
+// mapTemplateCommandError maps a client-input document error (a Semantic Hub
+// ontology-prefix conflict, DCS-FR-TR-03) to bad_request; everything else
+// stays an internal error.
+func mapTemplateCommandError(err error) error {
+	if errors.Is(err, validation.ErrDocumentSchemaConflict) {
+		return templaterepository.MakeBadRequest(err)
+	}
+	return templaterepository.MakeInternalError(err)
+}
+
 func (s *templateRepositorysrvc) Create(ctx context.Context, req *templaterepository.ContractTemplateCreateRequest) (*templaterepository.ContractTemplateCreateResponse, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
@@ -93,7 +106,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateCreateResponse{
@@ -125,7 +138,7 @@ func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templatereposito
 	}
 	err = copyHandler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateCopyResponse{
@@ -171,7 +184,7 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateSubmitResponse{
@@ -224,7 +237,7 @@ func (s *templateRepositorysrvc) Update(ctx context.Context, req *templatereposi
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateUpdateResponse{
@@ -287,7 +300,7 @@ func (s *templateRepositorysrvc) UpdateManage(ctx context.Context, req *template
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateUpdateManageResponse{
@@ -581,7 +594,7 @@ func (s *templateRepositorysrvc) Approve(ctx context.Context, req *templaterepos
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateApproveResponse{
@@ -616,7 +629,7 @@ func (s *templateRepositorysrvc) Reject(ctx context.Context, req *templatereposi
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateRejectResponse{
@@ -678,7 +691,7 @@ func (s *templateRepositorysrvc) Archive(ctx context.Context, req *templaterepos
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateArchiveResponse{
@@ -780,7 +793,7 @@ func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepos
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplatePublishResponse{

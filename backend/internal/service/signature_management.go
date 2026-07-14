@@ -255,9 +255,14 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		aes := "AES"
 		credentialType = &aes
 	}
+	fieldName := ""
+	if req.FieldName != nil {
+		fieldName = *req.FieldName
+	}
 	cmd := command.ApplyCmd{
 		DID:            req.Did,
 		SignerDID:      req.SignerDid,
+		FieldName:      fieldName,
 		CredentialType: *credentialType,
 		AppliedBy:      middleware.GetParticipantID(ctx),
 		HolderDID:      middleware.GetHolderDID(ctx),
