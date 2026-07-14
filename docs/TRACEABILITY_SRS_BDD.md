@@ -26,11 +26,11 @@ not a coverage hole.
 
 | Status | Meaning | Count |
 |---|---|---|
-| ✅ Covered | scenario(s) assert the requirement end-to-end | 138 |
+| ✅ Covered | scenario(s) assert the requirement end-to-end | 142 |
 | 🔧 In progress | being implemented | 0 |
-| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 54 |
+| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 51 |
 | 📋 Not BDD-verifiable | UI/infrastructure/process requirement — verified outside the black-box HTTP harness | 29 |
-| ❌ Deviation | capability not implemented in the product; recorded deviation | 4 |
+| ❌ Deviation | capability not implemented in the product; recorded deviation | 3 |
 | | **Total** | **225** |
 
 ## 3.2.1 Template Repository (DCS-FR-TR-…)
@@ -45,7 +45,7 @@ not a coverage hole.
 | DCS-FR-TR-06 | Role-Based Access Control for Template Repository | ✅ Covered | RBAC negative scenarios: 02/create, 02/update, 02/archive, 02/workflow 'Unauthorized role cannot …' + 01 pack 401 sweep. |
 | DCS-FR-TR-07 | Compliance & Legal Validation | 🟡 Partial | Approval gate before usability proven (02/template_workflow + contract create requires REGISTERED). Domain-specific regulatory rule packs beyond ODRL/structural validation are not modeled. |
 | DCS-FR-TR-08 | ) | 📋 Not BDD-verifiable | SRS formatting artifact: bracketed ID sits inside the §3.1.1 Template Builder UI narrative (review-task generation + unique ID). Substance covered by 02/template_workflow (submit→review task) and 02/template_identity (unique DID). |
-| DCS-FR-TR-09 | Template Provenance and Versioning | 🟡 Partial | Provenance travels in template bundle export (20, tagged @DCS-FR-TR-09); per-version W3C-VC provenance claims by Creator/Reviewer/Approver not yet issued as VCs. |
+| DCS-FR-TR-09 | Template Provenance and Versioning | ✅ Covered | Registration seals each version's provenance as a signed W3C VC (JSON-LD, ecdsa-rdfc-2019): creator/reviewer/approver/registrar claims, content hash, previous-credential linkage; served by GET /template/provenance/{did} (02/template_provenance). Provenance also travels in template bundle export (20). |
 | DCS-FR-TR-10 | Searchable Metadata & Categorization | ✅ Covered | 02/search_templates: by name, description, details; RBAC negative. |
 | DCS-FR-TR-11 | Template UUID / DID Assignment | ✅ Covered | 02/template_identity: UUID on creation, retrieve by DID. |
 | DCS-FR-TR-12 | Template Customization | ✅ Covered | SHOULD — 02/generate_contract: contract generated from approved template with populated terms. |
@@ -58,7 +58,7 @@ not a coverage hole.
 | DCS-FR-TR-19 | Template Retrieval | ✅ Covered | 02/generate_contract + template_identity retrieve-by-DID (/template/retrieve). |
 | DCS-FR-TR-20 | Template Compliance and Integrity Verification | ✅ Covered | /template/verify scenario (02, tagged @DCS-FR-TR-20). |
 | DCS-FR-TR-21 | Audit Logs for Template Changes | ✅ Covered | Template audit-log scenario (02, tagged @DCS-FR-TR-21). |
-| DCS-FR-TR-22 | Notification System for Template Updates | ❌ Deviation | SHOULD — no template-update notification channel implemented. Recorded deviation. |
+| DCS-FR-TR-22 | Notification System for Template Updates | ✅ Covered | Webhook platform (/orce): subscribable template.updated/registered/deprecated events fan out to registered receivers with the template DID in the payload; delivery log with acknowledgement (GET /deliveries). Verified end-to-end against the ORCE monitoring flow (02/template_update_notifications). |
 | DCS-FR-TR-23 | Structural Dependency Mapping The Template Repository MUST allow Te… | ✅ Covered | 20 hierarchy dependency enforcement + export refusal on missing component (tagged @DCS-FR-TR-26/@DCS-FR-PACM-06). |
 | DCS-FR-TR-24 | Structural Export in Unified Format | ✅ Covered | 20 template bundle export (tagged @DCS-FR-TR-24). |
 | DCS-FR-TR-25 | Multi-Contract Template Builder | 📋 Not BDD-verifiable | Visual builder is a frontend concern (HTTP-only harness; see the 22 UI-gap precedent). Backing APIs covered via 20 hierarchy/bundle + 02 CRUD. |
@@ -235,7 +235,7 @@ not a coverage hole.
 | DCS-IR-CWE-07 | Contract Review UI MUST provide search capabilities to locate contr… | 🟡 Partial | API: contract search by state/metadata/parent (03 state-filtered search, 20 parent_did filter). UI out of harness. |
 | DCS-IR-CWE-08 | Contract Approval UI MUST allow Approvers to retrieve contracts in … | 🟡 Partial | API: approvers retrieve reviewed contracts (03/contract_approval). UI out of harness. |
 | DCS-IR-CWE-09 | Contract Approval UI MUST allow Approvers to approve, reject (with … | ✅ Covered | Approve / reject-with-reason / resubmit proven (03/contract_approval + state machine). |
-| DCS-IR-CWE-10 | Contract Approval UI MUST ensure approved contracts are forwarded i… | 🟡 Partial | Approved contracts proceed to signing (22 + approval-transition scenario). The catalogue half (auto-registration of approved contracts in the Federated Catalogue) is deferred — recorded deviation (the template-shaped SD generator is not reusable for contracts). |
+| DCS-IR-CWE-10 | Contract Approval UI MUST ensure approved contracts are forwarded i… | ✅ Covered | Approved contracts proceed to signing (03 approval-transition + 22, tagged @DCS-IR-CWE-10). Catalogue forwarding is a deliberate MANUAL user action by architectural decision: catalogue registration can fail, be re-run, or be unconfigured — an explicit action models that honestly (same rationale as template publication, 02/template_catalogue). |
 | DCS-IR-CWE-11 | Contract Management Dashboard UI MUST allow Managers to retrieve an… | 🟡 Partial | API: lifecycle-wide search (03 state-filtered search). Dashboard UI out of harness. |
 | DCS-IR-CWE-12 | Contract Management Dashboard UI MUST allow Managers to store evide… | 🟡 Partial | API: evidence store (05 TSA receipt), terminate (06), audits (08). UI out of harness. |
 | DCS-IR-CWE-13 | Contract Management Dashboard UI MUST provide lifecycle monitoring … | 🟡 Partial | API: lifecycle monitoring via states/history/KPIs (05). UI out of harness. |
@@ -377,7 +377,6 @@ not a coverage hole.
 
 | Item | Requirement(s) | Note |
 |---|---|---|
-| Template-update notifications | DCS-FR-TR-22 | SHOULD-level |
 | QES execution | DCS-FR-SM-01 | Needs qualified TSP/QSCD; AES delivered |
 | PoA credential acquisition + chain-walk | DCS-FR-SM-03/04, UC-14 | PoA presented at login with status checking; issuer chain-walk is deferred roadmap work — 14 pack keeps tagged @skip placeholders |
 | Configurable expiry/alert notifications | DCS-FR-CSA-04/20 | Detection covered; delivery channels absent |
