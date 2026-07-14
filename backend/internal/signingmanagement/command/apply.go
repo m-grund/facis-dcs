@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/conf"
@@ -242,7 +243,15 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("could not update contract state: %w", err)
 	}
 
-	if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy); err != nil {
+	credentialHashes := map[string]string{}
+	if vpToken != "" {
+		sum := sha256.Sum256([]byte(vpToken))
+		credentialHashes["presentation"] = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	if kbSDHash != "" {
+		credentialHashes["key_binding"] = "sha256:" + strings.TrimPrefix(kbSDHash, "sha256:")
+	}
+	if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy, cwecommand.ArchiveSigningEvidence{Signer: cmd.SignerDID, CredentialType: cmd.CredentialType, CeremonyID: ceremony.ID, Field: ceremony.FieldName, SignedAt: signedAt, PDFCID: cid, PDFHash: signedPDFHash, CredentialHashes: credentialHashes}); err != nil {
 		return err
 	}
 
@@ -266,13 +275,13 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 // reached SIGNED (DCS-FR-CWE-20: the archive-entry trigger is gated to
 // SIGNED, not APPROVED), notarizing and RFC-3161-TSA-timestamping it exactly
 // as the former APPROVED-time trigger did.
-func (h *Applier) archiveSignedContract(ctx context.Context, tx *sqlx.Tx, did string, appliedBy string) error {
+func (h *Applier) archiveSignedContract(ctx context.Context, tx *sqlx.Tx, did string, appliedBy string, signingEvidence cwecommand.ArchiveSigningEvidence) error {
 	signedContract, err := h.ArchiveRepo.ReadDataByDID(ctx, tx, did)
 	if err != nil {
 		return fmt.Errorf("could not read signed contract for archive storage: %w", err)
 	}
 
-	archiveEntry, err := cwecommand.BuildArchiveEntry(signedContract, appliedBy)
+	archiveEntry, err := cwecommand.BuildArchiveEntry(signedContract, appliedBy, signingEvidence)
 	if err != nil {
 		return fmt.Errorf("could not build archive entry: %w", err)
 	}
@@ -364,7 +373,7 @@ func (h *Applier) archiveSignedContract(ctx context.Context, tx *sqlx.Tx, did st
 		EvidenceSummary: cweevent.ArchiveEvidenceSummary{
 			SnapshotHashAlgorithm: "SHA-256",
 			SignatureStatus:       "SIGNED",
-			CredentialHashStatus:  "PENDING",
+			CredentialHashStatus:  "HASHED",
 		},
 		OccurredAt: time.Now().UTC(),
 	}

@@ -29,13 +29,13 @@ func (s *processAuditAndCompliancesrvc) auditArchiveTrailEntries(ctx context.Con
 		return result, nil
 	}
 
+	notaryEvents := map[string][]archiveNotaryEvent{}
+	var chainErr error
 	chainReader, err := newArchiveNotaryChainReaderFromEnv()
 	if err != nil {
-		return nil, err
-	}
-	notaryEvents, err := chainReader.Read(ctx)
-	if err != nil {
-		return nil, err
+		chainErr = err
+	} else if notaryEvents, err = chainReader.Read(ctx); err != nil {
+		chainErr = err
 	}
 
 	for i, entry := range entries {
@@ -64,22 +64,25 @@ func (s *processAuditAndCompliancesrvc) auditArchiveTrailEntries(ctx context.Con
 			},
 			Did:       &did,
 			CreatedAt: entry.StoredAt.UTC().Format(time.RFC3339),
+			Kind:      stringPointer("TIMELINE"),
 		})
 		archiveStoreEvents, err := s.ATrailReader.ReadAuditLogEntriesByComponentAndDID(ctx, tx, componenttype.ContractStorageArchive, did)
 		if err != nil {
 			return nil, err
 		}
-		integrityEntry, err := s.archiveIntegrityTrailEntries(ctx, entry, i, archiveStoreEvents, notaryEvents)
+		integrityEntries := s.archiveIntegrityTrailEntries(ctx, entry, i, archiveStoreEvents, notaryEvents, chainErr)
 		if err != nil {
 			return nil, err
 		}
-		result[did] = append(result[did], integrityEntry)
+		result[did] = append(result[did], integrityEntries...)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+
+func stringPointer(value string) *string { return &value }
 
 func archiveJSONStatus(raw *datatype.JSON) string {
 	if raw == nil {

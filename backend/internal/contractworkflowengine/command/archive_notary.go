@@ -33,13 +33,15 @@ type ArchiveNotaryReceipt struct {
 }
 
 type HTTPArchiveNotaryClient struct {
-	url        string
-	httpClient *http.Client
+	url         string
+	bearerToken string
+	httpClient  *http.Client
 }
 
-func NewHTTPArchiveNotaryClient(url string) *HTTPArchiveNotaryClient {
+func NewHTTPArchiveNotaryClient(url, bearerToken string) *HTTPArchiveNotaryClient {
 	return &HTTPArchiveNotaryClient{
-		url: strings.TrimSpace(url),
+		url:         strings.TrimSpace(url),
+		bearerToken: strings.TrimSpace(bearerToken),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -49,6 +51,9 @@ func NewHTTPArchiveNotaryClient(url string) *HTTPArchiveNotaryClient {
 func (c *HTTPArchiveNotaryClient) NotarizeArchiveEntry(ctx context.Context, payload ArchiveNotaryPayload) (*ArchiveNotaryReceipt, error) {
 	if c == nil || c.url == "" {
 		return nil, fmt.Errorf("archive notary URL is empty")
+	}
+	if c.bearerToken == "" {
+		return nil, fmt.Errorf("archive notary bearer token is empty")
 	}
 
 	body, err := json.Marshal(payload)
@@ -61,6 +66,7 @@ func (c *HTTPArchiveNotaryClient) NotarizeArchiveEntry(ctx context.Context, payl
 		return nil, fmt.Errorf("create archive notary request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.bearerToken)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

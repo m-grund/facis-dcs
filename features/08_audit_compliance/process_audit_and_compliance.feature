@@ -1,7 +1,7 @@
 # Process Audit & Compliance Management (UC-08,
 # backend/design/process_audit_and_compliance.go, /pac/...). C2PA provenance
 # export is covered separately by c2pa_provenance_export.feature (kept as-is,
-# already real). This file covers the four /pac/* endpoints themselves.
+# already real). This file covers the minimal audit and report endpoints.
 
 @UC-08 @DCS-IR-PACM-01
 Feature: Process audit and compliance management
@@ -23,14 +23,4 @@ Feature: Process audit and compliance management
   Scenario: Auditor generates an audit report
     Given contract "PAC Report Contract" is in "Draft" status
     When the Auditor requests an audit report for scope "CONTRACT_WORKFLOW_ENGINE" in format "json"
-    Then get http 200:Success code
-
-  @REQ-pac-audit-AC4 @UC-08-02 @DCS-IR-PACM-03
-  Scenario: Compliance Officer runs continuous monitoring
-    When the Compliance Officer requests continuous monitoring
-    Then get http 200:Success code
-
-  @REQ-pac-audit-AC5 @UC-08-02 @DCS-IR-PACM-04
-  Scenario: Compliance Officer submits a non-compliance incident report
-    When the Compliance Officer submits a non-compliance incident report
     Then get http 200:Success code

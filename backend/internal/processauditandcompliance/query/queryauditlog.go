@@ -19,10 +19,12 @@ import (
 )
 
 type GetAuditLogQry struct {
-	Scope     componenttype.ComponentType
-	AuditedBy string
-	HolderDID string
-	UserRoles userrole.UserRoles
+	Scope         componenttype.ComponentType
+	AuditedBy     string
+	HolderDID     string
+	UserRoles     userrole.UserRoles
+	DID           string
+	Justification string
 }
 
 type Auditor struct {
@@ -54,6 +56,8 @@ func (h *Auditor) Handle(ctx context.Context, query GetAuditLogQry) ([][]datatyp
 		OccurredAt:    time.Now().UTC(),
 		HolderDID:     query.HolderDID,
 		UserRoles:     query.UserRoles,
+		DID:           query.DID,
+		Justification: query.Justification,
 	}
 	err = event.Create(ctx, tx, evt, componenttype.ProcessAuditAndCompliance)
 	if err != nil {

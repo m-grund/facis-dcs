@@ -153,6 +153,7 @@ func TestRenderAuditReportCSVAndPDF(t *testing.T) {
 		Findings: []auditReportFinding{
 			{Timestamp: "2026-06-30T10:05:00Z", DID: "did:example:contract", Component: "CONTRACT_WORKFLOW_ENGINE", EventType: "CONTRACT_CONTENT_POLICY_AUDIT_FINDING", RuleID: "rule,with,comma", Severity: "error", Message: "quoted \"message\"", Requirement: "value must be >= 99.9"},
 		},
+		Events: []auditReportEvent{{Timestamp: "2026-06-30T10:00:00Z", Actor: "did:web:actor", EventType: "CREATE_CONTRACT", DID: "did:example:contract"}},
 	}
 
 	csvBytes, err := renderAuditReportCSV(report)
@@ -169,6 +170,13 @@ func TestRenderAuditReportCSVAndPDF(t *testing.T) {
 	}
 	if len(pdfBytes) < 100 {
 		t.Fatalf("pdf too small: %d", len(pdfBytes))
+	}
+	if !strings.Contains(string(pdfBytes), "CREATE_CONTRACT") || !strings.Contains(string(pdfBytes), "did:web:actor") {
+		t.Fatal("pdf does not include lifecycle actor and timestamp evidence")
+	}
+	download := reportDownloadEnvelope(report, "pdf", pdfBytes, "application/pdf")
+	if download.ContentHash != hashBytes(pdfBytes) {
+		t.Fatalf("hash is not over exact report bytes: %s", download.ContentHash)
 	}
 }
 

@@ -28,7 +28,7 @@
         "type": "function",
         "z": "f10514b54313a655",
         "name": "Build archive audit event",
-        "func": "const required = [\n  \"eventType\",\n  \"did\",\n  \"contractVersion\",\n  \"archiveEntryId\",\n  \"contentHash\",\n  \"snapshotCid\",\n  \"storedBy\",\n  \"storedAt\"\n];\n\nfor (const key of required) {\n  if (!msg.payload || !msg.payload[key]) {\n    msg.statusCode = 400;\n    msg.payload = { error: `Missing field: ${key}` };\n    return msg;\n  }\n}\n\nconst previousHash = flow.get(\"archiveChainHead\") || null;\n\nconst auditPayload = {\n  eventType: msg.payload.eventType,\n  did: msg.payload.did,\n  contractVersion: msg.payload.contractVersion,\n  archiveEntryId: msg.payload.archiveEntryId,\n  contentHash: msg.payload.contentHash,\n  snapshotCid: msg.payload.snapshotCid,\n  storedBy: msg.payload.storedBy,\n  storedAt: msg.payload.storedAt,\n  receivedAt: new Date().toISOString(),\n  previousHash\n};\n\nconst canonical = JSON.stringify(auditPayload);\nconst eventHash = \"sha256:\" + crypto\n  .createHash(\"sha256\")\n  .update(canonical)\n  .digest(\"hex\");\n\nconst storedEvent = {\n  ...auditPayload,\n  eventHash\n};\n\nflow.set(\"archiveChainHead\", eventHash);\n\nmsg.payload = JSON.stringify(storedEvent) + \"\\n\";\n\nmsg.receipt = {\n  receiptType: \"ARCHIVE_NOTARY_RECEIPT\",\n  archiveEntryId: storedEvent.archiveEntryId,\n  eventHash: storedEvent.eventHash,\n  previousHash: storedEvent.previousHash,\n  receivedAt: storedEvent.receivedAt\n};\n\nreturn msg;",
+        "func": "const token = env.get(\"ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN\");\nif (!token || msg.req?.headers?.authorization !== `Bearer ${token}`) { msg.statusCode = 401; msg.payload = {error: \"Unauthorized\"}; return msg; }\nconst required = [\"eventType\",\"did\",\"contractVersion\",\"archiveEntryId\",\"contentHash\",\"snapshotCid\",\"storedBy\",\"storedAt\"];\nfor (const key of required) { if (!msg.payload || msg.payload[key] === undefined || msg.payload[key] === null || msg.payload[key] === \"\") { msg.statusCode = 400; msg.payload = {error: `Missing field: ${key}`}; return msg; } }\nconst path = \"/data/archive-audit-events.jsonl\";\nlet events = [];\ntry { events = fs.readFileSync(path, \"utf8\").split(/\\r?\\n/).filter(Boolean).map(JSON.parse); } catch (error) { if (error.code !== \"ENOENT\") { msg.statusCode = 500; msg.payload = {error: \"Cannot read archive chain\"}; return msg; } }\nlet head = null;\nfor (const event of events) { const {eventHash, ...payload} = event; const expected = \"sha256:\" + crypto.createHash(\"sha256\").update(JSON.stringify(payload)).digest(\"hex\"); if (event.previousHash !== head || eventHash !== expected) { msg.statusCode = 409; msg.payload = {error: \"Persistent archive chain is invalid\"}; return msg; } head = eventHash; }\nconst input = Object.fromEntries(required.map(key => [key, msg.payload[key]]));\nconst existing = events.find(event => event.archiveEntryId === input.archiveEntryId);\nif (existing) { const same = required.every(key => existing[key] === input[key]); if (!same) { msg.statusCode = 409; msg.payload = {error: \"Archive entry id already exists with different content\"}; return msg; } msg.receipt = {receiptType: \"ARCHIVE_NOTARY_RECEIPT\", archiveEntryId: existing.archiveEntryId, eventHash: existing.eventHash, previousHash: existing.previousHash, receivedAt: existing.receivedAt}; return msg; }\nconst auditPayload = {...input, receivedAt: new Date().toISOString(), previousHash: head};\nconst eventHash = \"sha256:\" + crypto.createHash(\"sha256\").update(JSON.stringify(auditPayload)).digest(\"hex\");\nconst storedEvent = {...auditPayload, eventHash};\nfs.appendFileSync(path, JSON.stringify(storedEvent) + \"\\n\", {encoding: \"utf8\"});\nmsg.receipt = {receiptType: \"ARCHIVE_NOTARY_RECEIPT\", archiveEntryId: storedEvent.archiveEntryId, eventHash, previousHash: head, receivedAt: storedEvent.receivedAt};\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -38,13 +38,17 @@
             {
                 "var": "crypto",
                 "module": "crypto"
+            },
+            {
+                "var": "fs",
+                "module": "fs"
             }
         ],
         "x": 517.5,
         "y": 140,
         "wires": [
             [
-                "a140293e82da129a"
+                "e1bdd77b97527da2"
             ]
         ]
     },
@@ -83,7 +87,7 @@
         "type": "function",
         "z": "f10514b54313a655",
         "name": "Return receipt",
-        "func": "msg.statusCode = 200;\nmsg.headers = {\n  \"Content-Type\": \"application/json\"\n};\nmsg.payload = msg.receipt;\nreturn msg;",
+        "func": "msg.headers = {\"Content-Type\": \"application/json\"};\nif (msg.receipt) { msg.statusCode = 200; msg.payload = msg.receipt; }\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -120,7 +124,7 @@
         "type": "function",
         "z": "f10514b54313a655",
         "name": "Check audit log bearer token",
-        "func": "const configuredToken = env.get(\"ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN\") || \"dev-archive-audit-token\";\nconst expected = `Bearer ${configuredToken}`;\nconst actual = msg.req?.headers?.authorization;\n\nif (actual !== expected) {\n  msg.statusCode = 401;\n  msg.headers = {\n    \"Content-Type\": \"application/json\"\n  };\n  msg.payload = { error: \"Unauthorized\" };\n  return [null, msg];\n}\n\nreturn [msg, null];",
+        "func": "const configuredToken = env.get(\"ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN\");\nconst expected = configuredToken ? `Bearer ${configuredToken}` : null;\nconst actual = msg.req?.headers?.authorization;\n\nif (!expected || actual !== expected) {\n  msg.statusCode = 401;\n  msg.headers = {\n    \"Content-Type\": \"application/json\"\n  };\n  msg.payload = { error: \"Unauthorized\" };\n  return [null, msg];\n}\n\nreturn [msg, null];",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,

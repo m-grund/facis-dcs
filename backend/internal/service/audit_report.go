@@ -353,6 +353,13 @@ func renderAuditReportPDF(report auditReport) []byte {
 	if len(report.Findings) == 0 {
 		lines = append(lines, "No compliance findings.")
 	}
+	lines = append(lines, "", "Lifecycle Events")
+	for _, event := range report.Events {
+		lines = append(lines, wrapPDFLine(fmt.Sprintf("%s actor=%s %s %s", event.Timestamp, event.Actor, event.EventType, event.DID))...)
+	}
+	if len(report.Events) == 0 {
+		lines = append(lines, "No lifecycle events.")
+	}
 	return simplePDF(lines)
 }
 

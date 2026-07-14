@@ -18,6 +18,7 @@ type AuditEvent struct {
 	ComponentType componenttype.ComponentType `json:"component_type"`
 	Scope         componenttype.ComponentType `json:"scope"`
 	UserRoles     userrole.UserRoles          `json:"user_roles"`
+	Justification string                      `json:"justification"`
 }
 
 // EventType implements the Event interface.
@@ -35,16 +36,18 @@ func (e AuditEvent) GetDID() string {
 
 // ReportGeneratedEvent is emitted when PACM generates an audit report.
 type ReportGeneratedEvent struct {
-	ReportID    string             `json:"report_id"`
-	Scope       string             `json:"scope"`
-	Format      string             `json:"format"`
-	DID         string             `json:"did,omitempty"`
-	GeneratedBy string             `json:"generated_by"`
-	GeneratedAt time.Time          `json:"generated_at"`
-	ContentHash string             `json:"content_hash"`
-	Summary     map[string]int     `json:"summary"`
-	HolderDID   string             `json:"holder_did"`
-	UserRoles   userrole.UserRoles `json:"user_roles"`
+	ReportID      string             `json:"report_id"`
+	Scope         string             `json:"scope"`
+	Format        string             `json:"format"`
+	DID           string             `json:"did,omitempty"`
+	GeneratedBy   string             `json:"generated_by"`
+	GeneratedAt   time.Time          `json:"generated_at"`
+	ContentHash   string             `json:"report_hash"`
+	ContentCID    string             `json:"report_cid"`
+	Justification string             `json:"justification"`
+	Summary       map[string]int     `json:"summary"`
+	HolderDID     string             `json:"holder_did"`
+	UserRoles     userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.

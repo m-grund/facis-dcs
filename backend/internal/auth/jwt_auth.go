@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -45,13 +46,13 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 	ip := middleware.IPFromContext(ctx)
 
 	if token == "" {
-		a.logAttempt(ctx, ip, nil, false)
+		a.logAttempt(ctx, ip, nil, nil, false)
 		return ctx, goa.PermanentError("unauthorized", "missing JWT token")
 	}
 
 	info, err := a.Validator.ValidateToken(ctx, token)
 	if err != nil {
-		a.logAttempt(ctx, ip, nil, false)
+		a.logAttempt(ctx, ip, nil, nil, false)
 		if err := a.checkAndLock(ctx, ip); err != nil {
 			return ctx, err
 		}
@@ -60,7 +61,7 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 
 	if len(scheme.RequiredScopes) > 0 {
 		if !hasAnyRole(info.Roles, scheme.RequiredScopes) {
-			a.logAttempt(ctx, ip, &info.HolderDID, false)
+			a.logAttempt(ctx, ip, &info.HolderDID, info.Roles, false)
 			if err := a.checkAndLock(ctx, ip); err != nil {
 				return ctx, err
 			}
@@ -68,7 +69,7 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 		}
 	}
 
-	a.logAttempt(ctx, ip, &info.HolderDID, true)
+	a.logAttempt(ctx, ip, &info.HolderDID, info.Roles, true)
 	a.clearLock(ctx, ip)
 
 	ctx = middleware.InjectAuthContext(ctx, info.Roles, info.HolderDID, info.ParticipantDID)
@@ -92,7 +93,7 @@ func hasAnyRole(roles []string, required []string) bool {
 
 // logAttempt writes a login attempt – errors are ignored so that a DB issue
 // does not block the login flow.
-func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *string, success bool) {
+func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *string, roles []string, success bool) {
 
 	tx, err := a.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -104,6 +105,8 @@ func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *
 		}
 	}(tx)
 
+	metadata := accessMetadataFromContext(ctx)
+	roleBytes, _ := json.Marshal(roles)
 	_ = a.AAttemptRepo.Create(ctx, tx, db.AccessAttempt{
 		IPAddress:   ip,
 		AttemptBy:   attemptBy,
@@ -111,6 +114,7 @@ func (a JWTAuthenticator) logAttempt(ctx context.Context, ip string, attemptBy *
 		Success:     success,
 		Service:     ctx.Value(goa.ServiceKey).(string),
 		Method:      ctx.Value(goa.MethodKey).(string),
+		Roles:       string(roleBytes), Scope: metadata.Scope, DID: metadata.DID, Justification: metadata.Justification,
 	})
 
 	_ = tx.Commit()

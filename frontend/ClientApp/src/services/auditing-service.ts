@@ -1,6 +1,6 @@
 import http from '@/api/http'
 import type { AuditReportRequest, AuditRequest, AuditScope } from '@/models/requests/auditing-request'
-import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/responses/auditing-response'
+import type { AuditFinding, AuditResponse } from '@/models/responses/auditing-response'
 import type { AuditingService } from '@/models/services/auditing-service'
 import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 
@@ -14,6 +14,10 @@ interface RawAuditTrailEntry {
   did?: string
   created_at?: string
   createdAt?: string
+  kind?: string
+  result?: string
+  rule_id?: string
+  reason?: string
 }
 
 interface RawPACAuditResource {
@@ -80,7 +84,7 @@ function normalizeFinding(
   const eventType = item.event_type ?? item.eventType
   const eventData = item.event_data ?? item.eventData
   const policyData = isObjectRecord(eventData) ? eventData : null
-  const severity = stringValue(policyData?.severity)
+  const severity = stringValue(item.result) ?? stringValue(policyData?.result) ?? stringValue(policyData?.severity)
   const status = item.status ?? severity
   const category = item.category ?? categoryFromEvent(eventType, status)
   const objectDid = stringValue(policyData?.objectDid)
@@ -217,6 +221,10 @@ export const auditingService: AuditingService = {
   },
 
   async report(request: AuditReportRequest) {
-    return http.get<AuditReportResponse>('/pac/report', { params: request }).then((res) => res.data)
+    return http.get<ArrayBuffer>('/pac/report', { params: request, responseType: 'arraybuffer' }).then((res) => ({
+      bytes: res.data,
+      contentType: res.headers['content-type'] ?? 'application/octet-stream',
+      filename: `audit-report-${request.scope}.${request.format ?? 'json'}`,
+    }))
   },
 }

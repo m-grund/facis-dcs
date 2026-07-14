@@ -10,8 +10,10 @@ var PACAuditRequest = Type("PACAuditRequest", func() {
 	Token("token", String, "JWT token")
 
 	Attribute("scope", String, "Scope that should be audited")
+	Attribute("did", String, "Optional resource DID filter")
+	Attribute("justification", String, "Required audit justification", func() { MinLength(1) })
 
-	Required("scope")
+	Required("scope", "justification")
 })
 
 var PACResourceAuditTrailEntry = Type("PACResourceAuditTrailEntry", func() {
@@ -25,6 +27,10 @@ var PACResourceAuditTrailEntry = Type("PACResourceAuditTrailEntry", func() {
 	Attribute("created_at", String, "The creation date of the event")
 	Attribute("res_log_pred_cid", String, "Resource audit trail predecessor on the IPFS chain")
 	Attribute("global_log_pred_cid", String, "Global audit trail predecessor on the IPFS chain")
+	Attribute("kind", String, "Entry kind: TIMELINE or CHECK")
+	Attribute("result", String, "Check result: PASSED or FAILED")
+	Attribute("rule_id", String, "Stable integrity rule identifier")
+	Attribute("reason", String, "Human-readable check reason")
 
 	Required("id", "component", "event_type", "event_data", "created_at")
 })
@@ -52,19 +58,21 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 
 		Security(JWTAuth, func() {
 			Scope("Auditor")
-			Scope("Compliance Officer")
+			Scope("Archive Manager")
 		})
 
 		Payload(PACAuditRequest)
 		Result(ArrayOfRequired(PACAuditResponse))
 
 		Error("bad_request", ErrorResult, "Bad request")
+		Error("forbidden", ErrorResult, "Forbidden")
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
 			POST("/pac/audit")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
+			Response("forbidden", StatusForbidden)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})
@@ -76,21 +84,27 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		Meta("dcs:pacm:components", "")
 		Security(JWTAuth, func() {
 			Scope("Auditor")
+			Scope("Archive Manager")
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")
 			Attribute("scope", String, "Scope that should be reported")
 			Attribute("format", String, "Report format: json, csv, or pdf")
 			Attribute("did", String, "Optional resource DID filter")
+			Attribute("justification", String, "Required report justification", func() { MinLength(1) })
+			Required("justification")
 		})
+		Error("forbidden", ErrorResult, "Forbidden")
+		Result(Bytes)
 		HTTP(func() {
 			GET("/pac/report")
 			Param("scope")
 			Param("format")
 			Param("did")
+			Param("justification")
 			Response(StatusOK)
+			Response("forbidden", StatusForbidden)
 		})
-		Result(Any)
 	})
 
 	Method("monitor", func() {
