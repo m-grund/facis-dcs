@@ -71,10 +71,15 @@ Feature: Contract storage and archive retrieval
   # /archive/search?contract_data=... queries it via plainto_tsquery — this
   # scenario drives that path with a term that exists in the contract's data
   # payload, and asserts a nonsense term yields no hit for the same contract.
+  # "Confidentiality" is a word inside the standard template's clause text
+  # (embedded in the contract JSON-LD, therefore in the stored search_vector),
+  # NOT a metadata field — so a hit proves the tsvector covers document
+  # CONTENT. The nonsense term proves it is a real full-text match, not a
+  # match-everything.
   @UC-07-01 @DCS-FR-CSA-13
   Scenario: Archive full-text search finds a contract by terms inside its content
     Given contract "Fulltext Corpus Archive Contract" has reached contract state "SIGNED"
-    When the Archive Manager searches the archive with full-text query "Fulltext Corpus"
+    When the Archive Manager searches the archive with full-text query "Confidentiality"
     Then get http 200:Success code
     And the archive search result includes contract "Fulltext Corpus Archive Contract"
     When the Archive Manager searches the archive with full-text query "xyzzyplugh nonexistent"
@@ -112,7 +117,7 @@ Feature: Contract storage and archive retrieval
     Given contract "Auto Summary Archive Contract" has reached contract state "SIGNED"
     When the Archive Manager annotates the archived contract "Auto Summary Archive Contract" with tags "auto-summary-bdd" and no summary
     Then get http 200:Success code
-    And the archive entry for contract "Auto Summary Archive Contract" carries a generated summary mentioning "Auto Summary Archive Contract"
+    And the archive entry for contract "Auto Summary Archive Contract" carries a generated summary derived from its version and state
 
   @UC-07-02 @DCS-FR-CSA-11
   Scenario: A read-only role cannot annotate an archived contract

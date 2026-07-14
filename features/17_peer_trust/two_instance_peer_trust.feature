@@ -34,6 +34,18 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     When that peer posts a full-state sync for a brand-new contract to this instance
     Then the contract data is accepted and stored locally with state "DRAFT"
 
+  # DCS-FR-SM-02 (JAdES): every peer broadcast must carry the SENDER's JAdES
+  # baseline-B signature over the canonical contract representation. The
+  # challenge-response secret only authenticates the session; this scenario
+  # holds session auth and trust listing VALID and breaks only the JAdES
+  # payload binding, so the rejection can only come from the receiver's
+  # content-signature check.
+  @NFR-BR-08 @DCS-FR-SM-02
+  Scenario: post_sync whose JAdES signature covers a different contract document is rejected
+    Given a cryptographically valid peer DID that is listed in trusted_peers
+    When that peer posts a full-state sync whose JAdES signature covers a different contract document
+    Then the post_sync request is rejected because the JAdES payload does not match
+
   Scenario: A raw peer DID can be entered as Reviewer, Approver, and Negotiator without a JWT-sub binding
     Given I am authenticated with roles: "Contract Creator"
     When the initiator creates a contract with a raw peer DID as reviewer, approver, and negotiator
@@ -46,6 +58,16 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
     Then the contract appears on instance B in state OFFERED within a few seconds
 
+  # The stored JAdES artifact (verified at sync time, persisted for
+  # independent re-verification) is the contract's cross-instance provenance:
+  # instance B can prove WHO sent it the contract content it holds.
+  @NFR-BR-08 @DCS-FR-SM-02 @two-instance
+  Scenario: A contract synced from instance A carries instance A's verifiable JAdES provenance on B
+    Given instance A and instance B are both running and trust each other
+    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    Then the contract appears on instance B in state OFFERED within a few seconds
+    And instance B stores a JAdES sync-provenance artifact for that contract signed by instance A
+
   @NFR-BR-08 @two-instance
   Scenario: Contract state APPROVED replicates to both instances after negotiation/submit/review/approve
     Given instance A and instance B are both running and trust each other
@@ -53,6 +75,25 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     Then the contract appears on instance B in state OFFERED within a few seconds
     When the parties complete negotiation acceptance, submit, review, and approval on both sides
     Then the contract state APPROVED is replicated on both instance A and instance B
+
+  # DCS-NFR-BR-06 Revocation & Termination Propagation: revoking a signature
+  # MUST take immediate effect — including across instances. Revocation is a
+  # SignatureManagement-sourced event (signingmanagement/command/revoke.go),
+  # so the dcs-to-dcs synchronizer must broadcast it exactly like the
+  # workflow-engine state changes it already replicates; the peer adopts the
+  # full contract state (REVOKED) through the same verified post_sync path.
+  # SIGNED replication is deliberately not asserted in between: auto-deploy
+  # can race SIGNED to ACTIVE, and EventRevoke is valid from either state.
+  @DCS-NFR-BR-06 @two-instance
+  Scenario: Signature revocation on instance A propagates REVOKED to instance B
+    Given instance A and instance B are both running and trust each other
+    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    Then the contract appears on instance B in state OFFERED within a few seconds
+    When the parties complete negotiation acceptance, submit, review, and approval on both sides
+    Then the contract state APPROVED is replicated on both instance A and instance B
+    When instance A applies a ceremony-backed signature to the contract
+    And instance A revokes the applied signature of the cross-instance contract
+    Then the contract state "REVOKED" is replicated on both instance A and instance B
 
   # DCS-FR-CWE-15 approval quorum: approve.go flips a contract to APPROVED
   # only once NO approval task remains OPEN, and each approve call flips only

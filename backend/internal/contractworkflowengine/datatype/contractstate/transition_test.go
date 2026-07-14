@@ -99,6 +99,48 @@ func TestTerminateAllowedFromEveryNonTerminalState(t *testing.T) {
 	}
 }
 
+// TestDeployAllowedFromSignedAndActive: signing completion auto-deploys and
+// the real contract target acknowledges within moments (DCS-FR-CWE-06/SM-12),
+// so a manual /contract/deploy — and the second ack it produces — must stay
+// valid for an already-activated contract (idempotent ACTIVE -> ACTIVE
+// re-dispatch). Deploy remains rejected from every pre-signing state.
+func TestDeployAllowedFromSignedAndActive(t *testing.T) {
+	if err := ValidateTransition(Signed, EventDeploy); err != nil {
+		t.Fatalf("expected Deploy to be allowed from Signed, got: %v", err)
+	}
+	if !IsAllowed(Signed, EventDeploy, Active) {
+		t.Fatalf("expected Signed -Deploy-> Active to be a declared outcome")
+	}
+	if err := ValidateTransition(Active, EventDeploy); err != nil {
+		t.Fatalf("expected Deploy to be allowed from Active (idempotent re-dispatch), got: %v", err)
+	}
+	if !IsAllowed(Active, EventDeploy, Active) {
+		t.Fatalf("expected Active -Deploy-> Active to be a declared outcome")
+	}
+	for _, from := range []ContractState{Draft, Offered, Negotiation, Submitted, Reviewed, Approved, Terminated} {
+		if err := ValidateTransition(from, EventDeploy); err == nil {
+			t.Fatalf("expected Deploy from %s to be rejected", from)
+		}
+	}
+}
+
+// TestSignReentryFromSigned: a further signatory on a multi-signer contract
+// signs from SIGNED (DCS-FR-SM-07/-17); the pre-signing states still reject
+// Sign except Approved.
+func TestSignReentryFromSigned(t *testing.T) {
+	if err := ValidateTransition(Signed, EventSign); err != nil {
+		t.Fatalf("expected Sign to be allowed from Signed (multi-signer re-entry), got: %v", err)
+	}
+	if !IsAllowed(Signed, EventSign, Signed) {
+		t.Fatalf("expected Signed -Sign-> Signed to be a declared outcome")
+	}
+	for _, from := range []ContractState{Draft, Offered, Negotiation, Submitted, Reviewed, Active, Terminated} {
+		if err := ValidateTransition(from, EventSign); err == nil {
+			t.Fatalf("expected Sign from %s to be rejected", from)
+		}
+	}
+}
+
 func TestValidateOutcomeRejectsUndeclaredTarget(t *testing.T) {
 	// Submit from Draft may only reach Negotiation, never e.g. Approved.
 	if err := ValidateOutcome(Draft, EventSubmit, Approved); err == nil {

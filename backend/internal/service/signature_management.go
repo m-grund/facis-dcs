@@ -39,10 +39,13 @@ func mapSignatureCommandError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, command.ErrCeremonyRequired) {
+	if errors.Is(err, command.ErrCeremonyRequired) || errors.Is(err, command.ErrCeremoniesIncomplete) {
 		return signaturemanagement.MakeCeremonyRequired(err)
 	}
-	if errors.Is(err, contractstate.ErrInvalidTransition) {
+	if errors.Is(err, contractstate.ErrInvalidTransition) ||
+		errors.Is(err, command.ErrUnknownSignatureField) ||
+		errors.Is(err, command.ErrFieldAlreadySigned) ||
+		errors.Is(err, db.ErrSignatureNotFound) {
 		return signaturemanagement.MakeBadRequest(err)
 	}
 	return signaturemanagement.MakeInternalError(err)
@@ -253,9 +256,14 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		aes := "AES"
 		credentialType = &aes
 	}
+	fieldName := ""
+	if req.FieldName != nil {
+		fieldName = *req.FieldName
+	}
 	cmd := command.ApplyCmd{
 		DID:            req.Did,
 		SignerDID:      req.SignerDid,
+		FieldName:      fieldName,
 		CredentialType: *credentialType,
 		AppliedBy:      middleware.GetParticipantID(ctx),
 		HolderDID:      middleware.GetHolderDID(ctx),
@@ -349,6 +357,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 
 	qry := command.RevokeCmd{
 		DID:       req.Did,
+		SignerDID: req.SignerDid,
 		RevokedBy: middleware.GetParticipantID(ctx),
 		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
@@ -360,8 +369,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 
 	err = queryHandler.Handle(ctx, qry)
 	if err != nil {
-		return nil, signaturemanagement.MakeInternalError(err)
-
+		return nil, mapSignatureCommandError(err)
 	}
 
 	return &signaturemanagement.SMContractRevokeResponse{}, nil
@@ -420,13 +428,86 @@ func (s *signatureManagementsrvc) Compliance(ctx context.Context, req *signature
 		CRepo: s.CRepo,
 	}
 
-	err = queryHandler.Handle(ctx, qry)
+	findings, err := queryHandler.Handle(ctx, qry)
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 
 	}
 
-	return &signaturemanagement.SMContractComplianceResponse{}, nil
+	return &signaturemanagement.SMContractComplianceResponse{
+		Did:      req.Did,
+		Findings: findings,
+	}, nil
+}
+
+// View serves the Signature Compliance Viewer (DCS-FR-SM-26, DCS-IR-SM-05):
+// per-signature signer identity, credential class/signature level, status,
+// and timestamps, plus the contract's cryptographic integrity findings from
+// the same validation machinery /signature/validate uses.
+func (s *signatureManagementsrvc) View(ctx context.Context, req *signaturemanagement.SMSignatureViewRequest) (res *signaturemanagement.SMSignatureViewResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	validator := query.Validator{
+		DB:      s.DB,
+		CRepo:   s.CRepo,
+		PDFCore: s.PDFCore,
+	}
+	validation, err := validator.Handle(ctx, query.ValidateQry{
+		DID:         req.Did,
+		ValidatedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	processData, err := s.CRepo.ReadProcessDataByDID(ctx, tx, req.Did)
+	if err != nil {
+		return nil, signaturemanagement.MakeBadRequest(err)
+	}
+	records, err := s.CRepo.LoadSignatures(ctx, tx, req.Did)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	signatures := make([]*signaturemanagement.SMSignatureViewItem, 0, len(records))
+	for _, rec := range records {
+		item := &signaturemanagement.SMSignatureViewItem{
+			SignerDid:      rec.SignerDID,
+			FieldName:      rec.FieldName,
+			CredentialType: rec.CredentialType,
+			Status:         rec.Status,
+			Format:         "PAdES (ETSI.CAdES.detached)",
+		}
+		if rec.SignedAt != nil {
+			t := rec.SignedAt.UTC().Format(time.RFC3339)
+			item.SignedAt = &t
+		}
+		if rec.RevokedAt != nil {
+			t := rec.RevokedAt.UTC().Format(time.RFC3339)
+			item.RevokedAt = &t
+		}
+		signatures = append(signatures, item)
+	}
+
+	return &signaturemanagement.SMSignatureViewResponse{
+		Did:               req.Did,
+		ContractState:     processData.State,
+		Signatures:        signatures,
+		IntegrityFindings: validation.Findings,
+	}, nil
 }
 
 func (s *signatureManagementsrvc) StartCeremony(ctx context.Context, req *signaturemanagement.SMSignatureRequestStartRequest) (res *signaturemanagement.SMSignatureRequestStartResponse, err error) {

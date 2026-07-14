@@ -272,6 +272,11 @@ type ContractRepo interface {
 	// the entry's snapshot/evidence stay immutable. Returns the number of
 	// entries annotated (0 if did has no live archive entries).
 	AnnotateArchiveEntry(ctx context.Context, tx *sqlx.Tx, did string, summary string, tags *datatype.JSON) (int, error)
+	// ReadSignedSignatureFieldNames returns the field names of all SIGNED
+	// (non-revoked) signatures on the contract — the deploy gate compares
+	// them against the contract document's declared signatureFields
+	// (DCS-FR-SM-07/-17, DCS-NFR-BR-03).
+	ReadSignedSignatureFieldNames(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error)
 	ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values SearchValues) ([]ContractMetadata, error)
 	ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractProcessData, error)

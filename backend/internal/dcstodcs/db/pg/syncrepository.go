@@ -4,6 +4,8 @@ package pq
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"digital-contracting-service/internal/dcstodcs/db"
 
@@ -68,4 +70,35 @@ func (r PostgresSyncRepository) GetPendingSyncFails(ctx context.Context, tx *sql
 		return nil, err
 	}
 	return syncFails, nil
+}
+
+func (r PostgresSyncRepository) UpsertSyncSignature(ctx context.Context, tx *sqlx.Tx, sig db.SyncSignature) error {
+	statement := `
+        INSERT INTO contract_sync_signatures (did, contract_version, from_peer_did, jades_signature, received_at)
+        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+        ON CONFLICT (did) DO UPDATE SET
+            contract_version = EXCLUDED.contract_version,
+            from_peer_did    = EXCLUDED.from_peer_did,
+            jades_signature  = EXCLUDED.jades_signature,
+            received_at      = CURRENT_TIMESTAMP
+    `
+	_, err := tx.ExecContext(ctx, statement, sig.DID, sig.ContractVersion, sig.FromPeerDID, sig.JadesSignature)
+	return err
+}
+
+func (r PostgresSyncRepository) GetSyncSignature(ctx context.Context, tx *sqlx.Tx, did string) (*db.SyncSignature, error) {
+	query := `
+        SELECT did, contract_version, from_peer_did, jades_signature, received_at
+        FROM contract_sync_signatures
+        WHERE did = $1
+    `
+	var sig db.SyncSignature
+	err := tx.GetContext(ctx, &sig, query, did)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sig, nil
 }

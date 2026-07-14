@@ -387,3 +387,13 @@ nodeExporter:
 
 kubeStateMetrics:
   enabled: false
+
+# EU DSS demonstration webapp (AdES validation alongside the PKCS#11 signing
+# path — DCS-FR-SM-18, DCS-IR-SI-10, DCS-IR-CI-08). DISABLED by default:
+# there is no official EU-published container image (the webapp ships as a
+# ZIP/WAR), so charts/dss wraps a pinned community image; enabling it — and
+# setting the backend's DSS_URL env (e.g. http://<release>-dss:8080) — is an
+# explicit operator decision. The backend HARD-FAILS signature validation if
+# DSS_URL is configured but the instance is unreachable.
+dss:
+  enabled: false

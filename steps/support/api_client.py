@@ -121,6 +121,10 @@ def archive_annotate_url(context) -> str:
     return f"{context.base_url}/archive/annotate"
 
 
+def signature_view_url(context) -> str:
+    return f"{context.base_url}/signature/view"
+
+
 def pac_audit_url(context) -> str:
     return f"{context.base_url}/pac/audit"
 
@@ -209,6 +213,10 @@ def template_update_url(context) -> str:
 
 def template_verify_url(context) -> str:
     return f"{context.base_url}/template/verify"
+
+
+def template_provenance_url(context, did: str) -> str:
+    return f"{context.base_url}/template/provenance/{did}"
 
 
 def template_approve_url(context) -> str:

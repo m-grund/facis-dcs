@@ -97,8 +97,21 @@ var DCSToDCSContractPostSyncRequest = Type("DCSToDCSContractPostSyncRequest", fu
 	Attribute("negotiation_tasks", ArrayOf(DCSToDCSContractNegotiationTaskItem), "The negotiation tasks for that contract")
 	Attribute("negotiation_items", ArrayOf(DCSToDCSContractNegotiationItem), "The negotiations for that contract")
 	Attribute("negotiation_decisions", ArrayOf(DCSToDCSContractNegotiationDecisionItem), "The decisions for the change requests")
+	Attribute("jades_signature", String, "JAdES baseline-B compact JWS by the sending peer over the canonical contract representation (DID, version, contract document) — DCS-FR-SM-02. The receiver verifies the signature, its binding to the sender's did:web key, and its payload against the synced contract before accepting the broadcast.")
 
-	Required("from_peer_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks", "secret_value", "secret_hash")
+	Required("from_peer_did", "contract", "review_tasks", "approval_tasks", "negotiation_tasks", "secret_value", "secret_hash", "jades_signature")
+})
+
+var DCSToDCSSyncProvenanceResponse = Type("DCSToDCSSyncProvenanceResponse", func() {
+	Description("The stored JAdES provenance artifact for a contract synced from a peer (DCS-FR-SM-02)")
+
+	Attribute("did", String, "DID of the synced contract")
+	Attribute("contract_version", Int, "Contract version the signature covers")
+	Attribute("from_peer_did", String, "The origin peer that signed the broadcast")
+	Attribute("jades_signature", String, "The verified JAdES baseline-B compact JWS as received")
+	Attribute("received_at", String, "When the signed broadcast was accepted")
+
+	Required("did", "contract_version", "from_peer_did", "jades_signature", "received_at")
 })
 
 var DCSToDCSContractPostSyncResponse = Type("DCSToDCSContractPostSyncResponse", func() {
@@ -166,6 +179,45 @@ var _ = Service("DcsToDcs", func() {
 			POST("/peer/contracts/")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("get_provenance", func() {
+		Description("Return the stored JAdES provenance artifact for a contract this instance received from a peer (DCS-FR-SM-02): the origin's baseline-B compact JWS over the canonical contract representation, verified at sync time and persisted for independent re-verification. JWT-secured — read by local users inspecting a synced contract's cross-instance provenance.")
+		Meta("dcs:cwe:components", "DCS-to-DCS Synchronization")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+		})
+
+		Payload(func() {
+			Token("token", String, "JWT token")
+			Attribute("did", String, "DID of the synced contract")
+			Required("did")
+		})
+		Result(DCSToDCSSyncProvenanceResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("not_found", ErrorResult, "No sync provenance stored for this contract")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/peer/contracts/provenance")
+			Param("did")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("not_found", StatusNotFound)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 import requests as _requests
-from behave import given, then, when
+from behave import given, step, then, when
 
 from steps.support.api_client import (
     contract_approve_url,
@@ -298,13 +298,28 @@ def _revoke_signature(context, name):
     # the EventRevoke transition and updates the contract's own state to
     # REVOKED after flipping the signature row's status, so
     # ContractState.Revoked is observable through ContractRepo.ReadDataByDID
-    # / the verify endpoint's lifecycle_status.
+    # / the verify endpoint's lifecycle_status. The revoked signer is read
+    # from /signature/view — revoking an unknown signer is a 400
+    # (db.ErrSignatureNotFound), not a silent no-op.
+    import requests as _requests  # noqa: PLC0415
+
+    from steps.support.api_client import signature_view_url  # noqa: PLC0415
+
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    view = _requests.get(
+        signature_view_url(context), params={"did": did}, headers=manager_h,
+        timeout=context.http_timeout_seconds,
+    )
+    assert view.status_code == 200, (
+        f"signature view failed while preparing REVOKED state for '{name}': {view.status_code} {view.text}"
+    )
+    signatures = view.json().get("signatures") or []
+    assert signatures, f"Expected an applied signature to revoke on '{name}', got: {view.json()}"
     resp = post_json(
         context,
         signature_revoke_url(context),
-        {"did": did, "signer_did": "did:example:bdd-counterparty-signer"},
+        {"did": did, "signer_did": signatures[0]["signer_did"]},
         headers=manager_h,
     )
     assert resp.status_code == 200, (
@@ -387,7 +402,17 @@ def step_given_contract_reached_state(context, name, state):
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
     assert retrieve.status_code == 200, retrieve.text
     actual_state = str(retrieve.json().get("state", "")).upper()
-    assert actual_state == state.strip().upper(), (
+    accepted = {state.strip().upper()}
+    if state.strip().upper() == "SIGNED":
+        # Signing completion triggers the automatic deployment dispatch
+        # (DCS-FR-CWE-06/SM-12), and the shipped ORCE contract-target-flow
+        # acknowledges it for real — so by the time this read lands the
+        # contract may already have taken the only edge out of SIGNED via
+        # EventDeploy (contractstate.Transitions: ACTIVE is reachable
+        # exclusively from SIGNED). Observing ACTIVE therefore PROVES the
+        # contract reached SIGNED; it is not a weaker check.
+        accepted.add("ACTIVE")
+    assert actual_state in accepted, (
         f"BDD setup could not reach state '{state}' for contract '{name}': "
         f"got '{actual_state}'"
     )
@@ -472,7 +497,9 @@ def step_when_withdraw_contract(context, name):
         ContractService._refresh_contract(context, name)
 
 
-@when('contract "{name}" is submitted, reviewed, and approved via the standard workflow')
+# @step: used both as a When (state-machine pack) and as a Given precondition
+# (multi-signer pack).
+@step('contract "{name}" is submitted, reviewed, and approved via the standard workflow')
 def step_when_full_approval_workflow(context, name):
     _advance_to_approved(context, name)
 
@@ -570,6 +597,25 @@ def step_then_contract_in_state(context, name, state):
     actual = str(retrieve.json().get("state", "")).upper()
     assert actual == state.strip().upper(), (
         f"Expected contract '{name}' to be in state '{state}', got '{actual}'"
+    )
+
+
+@then('the contract "{name}" has completed signing')
+def step_then_contract_completed_signing(context, name):
+    """Signing completion assertion that is stable under the REAL deployment
+    chain: EventSign lands the contract in SIGNED, the automatic dispatch
+    (DCS-FR-CWE-06/SM-12) goes to the shipped ORCE contract-target-flow, and
+    its acknowledgement callback may flip SIGNED -> ACTIVE within moments.
+    ACTIVE is reachable exclusively from SIGNED (contractstate.Transitions),
+    so either state proves the signature completed."""
+    did, _ = ContractService._contract_data(context, name)
+    headers = _seed_headers(context, name)
+    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
+    assert retrieve.status_code == 200, retrieve.text
+    actual = str(retrieve.json().get("state", "")).upper()
+    assert actual in ("SIGNED", "ACTIVE"), (
+        f"Expected contract '{name}' to have completed signing (SIGNED, or ACTIVE once "
+        f"the target acknowledged the automatic deployment), got '{actual}'"
     )
 
 

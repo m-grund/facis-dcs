@@ -91,16 +91,11 @@ func (s *Subscriber) handle(ctx context.Context, evt cloudevent.Event) error {
 		return nil
 	}
 
-	// The outbox processor publishes the event as json.Marshal([]byte) which
-	// JSON-encodes the payload bytes as a base64 string. DataAs(&[]byte) reverses
-	// this automatically.
-	var rawPayload []byte
-	if err := evt.DataAs(&rawPayload); err != nil {
-		return fmt.Errorf("decode event payload: %w", err)
-	}
-
+	// The outbox publisher passes the domain event straight through as
+	// json.RawMessage (cloudeventprovider.go: marshalling a RawMessage is the
+	// identity), so the CloudEvent data IS the domain event object.
 	var cweEvt minimalCWEEvent
-	if err := json.Unmarshal(rawPayload, &cweEvt); err != nil {
+	if err := json.Unmarshal(evt.Data(), &cweEvt); err != nil {
 		return fmt.Errorf("unmarshal CWE event: %w", err)
 	}
 	if cweEvt.DID == "" {

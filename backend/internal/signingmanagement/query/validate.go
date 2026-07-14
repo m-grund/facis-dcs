@@ -18,6 +18,7 @@ import (
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/signingmanagement/db"
+	"digital-contracting-service/internal/signingmanagement/dss"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
 	"digital-contracting-service/internal/signingmanagement/pidverify"
 )
@@ -66,6 +67,14 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 
 	findings = append(findings, h.crossCheckEmbeddedPID(ctx, tx, cmd.DID)...)
 
+	dssFindings, err := h.validateWithDSS(ctx, tx, cmd.DID)
+	if err != nil {
+		// A CONFIGURED DSS is a required validator: its unavailability is an
+		// error the caller sees, never a silently thinner findings list.
+		return nil, err
+	}
+	findings = append(findings, dssFindings...)
+
 	evt := signingmanagementevents.ValidateEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
@@ -87,6 +96,31 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 	return &ValidationResult{
 		Findings: findings,
 	}, nil
+}
+
+// validateWithDSS submits the stored signed PDF to the configured EU DSS
+// instance (DCS-FR-SM-18, DCS-IR-SI-10, DCS-IR-CI-08) and reports its ETSI
+// EN 319 102-1 indication as a finding. No DSS_URL means no DSS leg (the
+// internal PKCS#11-based checks stand alone); a configured-but-failing DSS
+// is an error. An unsigned contract (no stored PDF) yields no DSS finding.
+func (h *Validator) validateWithDSS(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error) {
+	dssURL := dss.URL()
+	if dssURL == "" {
+		return nil, nil
+	}
+	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
+	if err != nil || len(pdfBytes) == 0 {
+		return nil, nil
+	}
+	report, err := dss.New(dssURL).ValidatePDF(ctx, pdfBytes, did+".pdf")
+	if err != nil {
+		return nil, fmt.Errorf("EU DSS validation of %s failed: %w", did, err)
+	}
+	finding := fmt.Sprintf("EU DSS validation report: indication=%s", report.Indication)
+	if report.SubIndication != "" {
+		finding += fmt.Sprintf(" (subIndication=%s)", report.SubIndication)
+	}
+	return []string{finding}, nil
 }
 
 // crossCheckEmbeddedPID re-verifies the embedded PID presentation against the
@@ -113,17 +147,30 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 		return nil
 	}
 
-	presentation, subject := signingSummaryPIDFields(evidence)
-	if presentation == "" {
-		return []string{"Embedded signing evidence is missing the PID presentation"}
+	// The evidence attachment is a single ContractSigningSummaryCredential
+	// for single-signature contracts, or a JSON ARRAY of them for
+	// multi-signer contracts (one per declared field, all embedded before
+	// the first signature — DCS-FR-SM-07/-17).
+	documents := []json.RawMessage{evidence}
+	var bundle []json.RawMessage
+	if err := json.Unmarshal(evidence, &bundle); err == nil && len(bundle) > 0 {
+		documents = bundle
 	}
 
-	signerDID, _, err := pidverify.Verify(presentation)
-	if err != nil {
-		return []string{fmt.Sprintf("PID verification failed: %v", err)}
-	}
-	if subject != "" && subject != signerDID {
-		return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
+	verifiedSigners := map[string]bool{}
+	for _, doc := range documents {
+		presentation, subject := signingSummaryPIDFields(doc)
+		if presentation == "" {
+			return []string{"Embedded signing evidence is missing the PID presentation"}
+		}
+		signerDID, _, err := pidverify.Verify(presentation)
+		if err != nil {
+			return []string{fmt.Sprintf("PID verification failed: %v", err)}
+		}
+		if subject != "" && subject != signerDID {
+			return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
+		}
+		verifiedSigners[signerDID] = true
 	}
 
 	records, err := h.CRepo.LoadSignatures(ctx, tx, did)
@@ -132,7 +179,7 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 			if strings.EqualFold(strings.TrimSpace(rec.Status), "REVOKED") {
 				continue
 			}
-			if rec.SignerDID != "" && rec.SignerDID != signerDID {
+			if rec.SignerDID != "" && !verifiedSigners[rec.SignerDID] {
 				return []string{"Evidence mismatch: re-verified PID signer does not match the signature record"}
 			}
 		}

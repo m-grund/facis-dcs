@@ -1,13 +1,16 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/jades"
 
 	trustedpeer "digital-contracting-service/internal/dcstodcs"
 
@@ -410,6 +413,33 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 		return nil, contractworkflowengine.MakeBadRequest(err)
 	}
 
+	// Fourth trust layer (DCS-FR-SM-02): the broadcast itself must carry a
+	// JAdES signature by the SENDER over the canonical contract
+	// representation. The challenge-response secret above only authenticates
+	// the session — this binds the contract CONTENT to the sender's key and
+	// leaves an independently verifiable artifact behind.
+	jadesPayload, leafKey, err := jades.Verify(req.JadesSignature)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(fmt.Errorf("post_sync rejected: %w", err))
+	}
+	peerKey := remoteDIDDocument.PublicKey()
+	if peerKey == nil || leafKey.X.Cmp(peerKey.X) != 0 || leafKey.Y.Cmp(peerKey.Y) != 0 {
+		return nil, contractworkflowengine.MakeBadRequest(
+			fmt.Errorf("post_sync rejected: JAdES x5c leaf key does not match peer %s's did:web key", req.FromPeerDid))
+	}
+	contractDocBytes, err := json.Marshal(req.Contract.ContractData)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	expectedPayload, err := jades.BuildContractPayload(req.Contract.Did, req.Contract.ContractVersion, contractDocBytes)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if !bytes.Equal(jadesPayload, expectedPayload) {
+		return nil, contractworkflowengine.MakeBadRequest(
+			fmt.Errorf("post_sync rejected: JAdES payload does not match the synced contract %s", req.Contract.Did))
+	}
+
 	createAt, err := time.Parse(time.RFC3339, req.Contract.CreatedAt)
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
@@ -535,8 +565,57 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	// Persist the verified JAdES artifact so the synced contract's
+	// cross-instance provenance stays independently re-verifiable
+	// (GET /peer/contracts/provenance).
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.SRepo.UpsertSyncSignature(ctx, tx, db2.SyncSignature{
+		DID:             req.Contract.Did,
+		ContractVersion: req.Contract.ContractVersion,
+		FromPeerDID:     req.FromPeerDid,
+		JadesSignature:  req.JadesSignature,
+	}); err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
 	return &dcstodcs.DCSToDCSContractPostSyncResponse{
 		FromPeerDid: localPeer,
+	}, nil
+}
+
+// GetProvenance returns the stored JAdES provenance artifact for a contract
+// this instance received from a peer (DCS-FR-SM-02).
+func (s *dcsToDcssrvc) GetProvenance(ctx context.Context, p *dcstodcs.GetProvenancePayload) (res *dcstodcs.DCSToDCSSyncProvenanceResponse, err error) {
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	sig, err := s.SRepo.GetSyncSignature(ctx, tx, p.Did)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if sig == nil {
+		return nil, dcstodcs.MakeNotFound(fmt.Errorf("no sync provenance stored for contract %s", p.Did))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	return &dcstodcs.DCSToDCSSyncProvenanceResponse{
+		Did:             sig.DID,
+		ContractVersion: sig.ContractVersion,
+		FromPeerDid:     sig.FromPeerDID,
+		JadesSignature:  sig.JadesSignature,
+		ReceivedAt:      sig.ReceivedAt.UTC().Format(time.RFC3339),
 	}, nil
 }
 

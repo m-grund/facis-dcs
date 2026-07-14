@@ -1,0 +1,19 @@
+replicaCount: 1
+
+image:
+  # No official EU-published container exists for the DSS demonstration
+  # webapp (distributed as ZIP/WAR from ec.europa.eu / esig/dss-demonstrations);
+  # this community image packages it. Pinned — never :latest.
+  repository: ninjaneers/dss
+  tag: "5.5"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    memory: "512Mi"
+  limits:
+    memory: "1536Mi"

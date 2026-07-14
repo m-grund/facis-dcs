@@ -30,6 +30,10 @@ dependencies:
     version: "0.1.0"
     repository: "file://charts/orce"
     condition: orce.enabled
+  - name: dss
+    version: "0.1.0"
+    repository: "file://charts/dss"
+    condition: dss.enabled
   - name: federated-catalogue
     version: "0.1.0"
     repository: "file://charts/federated-catalogue"

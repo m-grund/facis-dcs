@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
+	"digital-contracting-service/internal/base/jades"
 
 	"digital-contracting-service/internal/base/conf"
 
@@ -29,6 +30,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
+	smeventtype "digital-contracting-service/internal/signingmanagement/datatype/eventtype"
 
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -109,6 +111,36 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 
 			err = s.doContractPeerSync(ctx, didString)
 			if err != nil {
+				log.Errorf(ctx, err, "failed to do peer sync, %s", evt.Data())
+			}
+		case componenttype.SignatureManagement:
+			// Signing and revocation change the CONTRACT's state (APPROVED ->
+			// SIGNED, SIGNED/ACTIVE -> REVOKED) but are SignatureManagement-
+			// sourced events, not workflow-engine ones — without this case a
+			// revocation never reaches peers (DCS-NFR-BR-06: revocation MUST
+			// take immediate effect). Only the two state-changing event types
+			// broadcast; lookups/validations stay local.
+			evtType, err := smeventtype.NewEventType(evt.Type())
+			if err != nil {
+				log.Errorf(ctx, err, "failed to parse signature management event type, %s", evt.Type())
+				return
+			}
+			if evtType != smeventtype.Applied && evtType != smeventtype.Revoke {
+				return
+			}
+
+			var data map[string]interface{}
+			if err := json.Unmarshal(evt.Data(), &data); err != nil {
+				log.Errorf(ctx, err, "failed to unmarshal event data, %s", evt.Data())
+				return
+			}
+			didString, ok := data["did"].(string)
+			if !ok {
+				log.Errorf(ctx, nil, "could not read did from signature management event")
+				return
+			}
+
+			if err := s.doContractPeerSync(ctx, didString); err != nil {
 				log.Errorf(ctx, err, "failed to do peer sync, %s", evt.Data())
 			}
 		}
@@ -399,6 +431,24 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 		return err
 	}
 
+	// JAdES-sign the canonical contract representation (DCS-FR-SM-02): every
+	// broadcast binds the contract content to this instance's HSM-backed key;
+	// the receiving peer verifies signature, key binding, and payload before
+	// accepting. A signing failure fails the whole sync (retry queue) — the
+	// broadcast must never go out unsigned.
+	contractDocBytes := []byte(`{}`)
+	if contractResult.ContractData != nil && contractResult.ContractData.IsNotNullValue() {
+		contractDocBytes = []byte(*contractResult.ContractData)
+	}
+	jadesPayload, err := jades.BuildContractPayload(contractResult.DID, contractResult.ContractVersion, contractDocBytes)
+	if err != nil {
+		return fmt.Errorf("could not build JAdES payload for %s: %w", contractResult.DID, err)
+	}
+	jadesSignature, err := jades.Sign(&s.DIDDocument, jadesPayload)
+	if err != nil {
+		return fmt.Errorf("could not JAdES-sign contract %s for peer broadcast: %w", contractResult.DID, err)
+	}
+
 	handleSync := func() error {
 		for _, responsible := range responsibleList {
 			if responsible == localPeer {
@@ -430,6 +480,7 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 				NegotiationDecisions: result.NegotiationDecisions,
 				SecretHash:           secretHash,
 				SecretValue:          secretValue,
+				JadesSignature:       jadesSignature,
 			})
 			if err != nil {
 				return err

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -36,10 +37,29 @@ import (
 // presentation ceremony (DCS-FR-SM-16, FR-SM-25, UC-04-02).
 var ErrCeremonyRequired = errors.New("a completed PID presentation ceremony is required before signing")
 
+// ErrCeremoniesIncomplete is returned by the multi-signer flow's
+// all-ceremonies-before-first-signature gate (DCS-FR-SM-07/-17): every
+// declared signature field needs a verified ceremony before the FIRST
+// signature is applied, because every signer's evidence must be embedded
+// into the PDF before any PAdES signature freezes it (embedding an
+// attachment after a signature trips standards-compliant diff analysis).
+var ErrCeremoniesIncomplete = errors.New("all declared signature fields need a completed PID presentation ceremony before the first signature")
+
+// ErrUnknownSignatureField rejects a ceremony/signature for a field the
+// contract document does not declare.
+var ErrUnknownSignatureField = errors.New("signature field is not declared by the contract document")
+
+// ErrFieldAlreadySigned rejects re-signing an already-signed field.
+var ErrFieldAlreadySigned = errors.New("signature field is already signed")
+
 // ApplyCmd carries the inputs for applying a digital signature.
 type ApplyCmd struct {
-	DID            string
-	SignerDID      string
+	DID       string
+	SignerDID string
+	// FieldName selects which declared signature field this signer covers
+	// on a multi-signer contract (DCS-FR-SM-07/-17). Empty = single-signer
+	// flow (resolve the signer's most recent verified ceremony).
+	FieldName      string
 	CredentialType string
 	AppliedBy      string
 	HolderDID      string
@@ -104,7 +124,17 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// presentation for this signer and contract must exist. Evaluated before
 	// the state-machine transition so a missing ceremony is reported as its own
 	// typed error rather than a state error.
-	ceremony, err := h.CeremonyRepo.FindVerifiedCeremony(ctx, tx, cmd.DID, cmd.SignerDID)
+	// Resolve the ceremony this signature applies to. On a multi-signer
+	// contract several fields may share one signer identity (e.g. one person
+	// signing two roles), so resolving by signer alone is ambiguous —
+	// FieldName disambiguates when provided; otherwise fall back to the
+	// signer's most recent verified ceremony (single-signer flow).
+	var ceremony *db.SignatureCeremony
+	if cmd.FieldName != "" {
+		ceremony, err = h.CeremonyRepo.FindVerifiedCeremonyByField(ctx, tx, cmd.DID, cmd.FieldName)
+	} else {
+		ceremony, err = h.CeremonyRepo.FindVerifiedCeremony(ctx, tx, cmd.DID, cmd.SignerDID)
+	}
 	if err != nil {
 		return fmt.Errorf("could not resolve signing ceremony: %w", err)
 	}
@@ -114,6 +144,61 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 
 	if err := contractstate.ValidateTransition(contractstate.ContractState(data.State), contractstate.EventSign); err != nil {
 		return err
+	}
+
+	// Multi-signer workflow (DCS-FR-SM-07/-17): contracts that declare
+	// signature fields require one ceremony+signature per field, applied
+	// SEQUENTIALLY (parallel signing is incompatible with PDF/A-3
+	// incremental updates — see the change request), with every ceremony
+	// completed BEFORE the first signature so all signers' evidence is
+	// embedded ahead of the signature that freezes the document.
+	requiredFields := validation.RequiredSignatureFields(*data.ContractData)
+	existingRecords, err := h.CRepo.LoadSignatures(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not load existing signatures: %w", err)
+	}
+	signedCount := 0
+	for _, rec := range existingRecords {
+		if rec.Status != "SIGNED" {
+			continue
+		}
+		signedCount++
+		if rec.FieldName != nil && *rec.FieldName == ceremony.FieldName {
+			return fmt.Errorf("%w: %s", ErrFieldAlreadySigned, ceremony.FieldName)
+		}
+	}
+	fieldCeremonies := map[string]*db.SignatureCeremony{ceremony.FieldName: ceremony}
+	if len(requiredFields) > 0 {
+		declared := false
+		for _, f := range requiredFields {
+			if f == ceremony.FieldName {
+				declared = true
+				break
+			}
+		}
+		if !declared {
+			return fmt.Errorf("%w: %s", ErrUnknownSignatureField, ceremony.FieldName)
+		}
+		if signedCount == 0 {
+			var missing []string
+			for _, f := range requiredFields {
+				c, err := h.CeremonyRepo.FindVerifiedCeremonyByField(ctx, tx, cmd.DID, f)
+				if err != nil {
+					return fmt.Errorf("could not resolve ceremony for field %q: %w", f, err)
+				}
+				if c == nil {
+					missing = append(missing, f)
+					continue
+				}
+				fieldCeremonies[f] = c
+			}
+			if _, ok := fieldCeremonies[ceremony.FieldName]; !ok {
+				fieldCeremonies[ceremony.FieldName] = ceremony
+			}
+			if len(missing) > 0 {
+				return fmt.Errorf("%w: missing ceremonies for %v", ErrCeremoniesIncomplete, missing)
+			}
+		}
 	}
 
 	if err := validation.ValidateContractPolicySatisfaction(
@@ -145,11 +230,18 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// the signature commits to the PDF's FINAL lifecycle-bearing content, so
 	// exportcontract.go/verifycontract.go never need to touch it again for the
 	// SIGNED/ACTIVE C2PA state (DCS-OR-C2PA-004, DCS-FR-SM-16).
-	stampedPDF, rendererVersion, err := stampLifecycleForSigning(ctx, cmd.DID, *data.ContractData, basePDF, h.PDFCore, h.VCIssuer, h.IssuerDID)
-	if err != nil {
-		return fmt.Errorf("stamp active lifecycle assertion before signing: %w", err)
+	rendererVersion := ""
+	if signedCount == 0 {
+		stampedPDF, rv, err := stampLifecycleForSigning(ctx, cmd.DID, *data.ContractData, basePDF, h.PDFCore, h.VCIssuer, h.IssuerDID)
+		if err != nil {
+			return fmt.Errorf("stamp active lifecycle assertion before signing: %w", err)
+		}
+		basePDF = stampedPDF
+		rendererVersion = rv
 	}
-	basePDF = stampedPDF
+	// A PDF that already carries a PAdES signature is never stamped again —
+	// it was stamped before the FIRST signature, and any later mutation
+	// besides an incremental signature is an illegal modification.
 
 	contentSum := sha256.Sum256(*data.ContractData)
 	contentHash := hex.EncodeToString(contentSum[:])
@@ -167,20 +259,77 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		kbSDHash = *ceremony.KbSdHash
 	}
 	signedAt := time.Now().UTC()
-	evidence, _, err := provenance.IssueSigningSummaryVC(ctx, h.VCSigner, h.IssuerDID, provenance.SigningSummary{
-		ContractID:      cmd.DID,
-		SignerDID:       cmd.SignerDID,
-		CeremonyID:      ceremony.ID,
-		FieldName:       ceremony.FieldName,
-		ContentHash:     contentHash,
-		PDFHash:         basePDFHash,
-		CredentialType:  cmd.CredentialType,
-		KBSDHash:        kbSDHash,
-		PIDPresentation: vpToken,
-		SignedAt:        signedAt,
-	})
-	if err != nil {
-		return fmt.Errorf("issue signing-summary VC: %w", err)
+	var evidence []byte
+	switch {
+	case len(requiredFields) == 0:
+		// Single-signature contract: one summary VC, the established shape.
+		evidence, _, err = provenance.IssueSigningSummaryVC(ctx, h.VCSigner, h.IssuerDID, provenance.SigningSummary{
+			ContractID:      cmd.DID,
+			SignerDID:       cmd.SignerDID,
+			CeremonyID:      ceremony.ID,
+			FieldName:       ceremony.FieldName,
+			ContentHash:     contentHash,
+			PDFHash:         basePDFHash,
+			CredentialType:  cmd.CredentialType,
+			KBSDHash:        kbSDHash,
+			PIDPresentation: vpToken,
+			SignedAt:        signedAt,
+		})
+		if err != nil {
+			return fmt.Errorf("issue signing-summary VC: %w", err)
+		}
+	case signedCount == 0:
+		// First signature on a multi-signer contract: embed EVERY declared
+		// field's summary VC as a JSON array, so no later signer needs a
+		// post-signature attachment (all-ceremonies-before-first-signature).
+		summaries := make([]json.RawMessage, 0, len(requiredFields))
+		for _, f := range requiredFields {
+			c := fieldCeremonies[f]
+			fieldVP := ""
+			if c.VpToken != nil {
+				fieldVP = *c.VpToken
+			}
+			fieldKB := ""
+			if c.KbSdHash != nil {
+				fieldKB = *c.KbSdHash
+			}
+			fieldSigner := ""
+			if c.SignerDID != nil {
+				fieldSigner = *c.SignerDID
+			}
+			credentialType := cmd.CredentialType
+			if f != ceremony.FieldName {
+				// The other signers' signature level is recorded when THEY
+				// apply; their embedded ceremony evidence carries the
+				// required default level (QES is out of scope per SRS).
+				credentialType = "AES"
+			}
+			vc, _, err := provenance.IssueSigningSummaryVC(ctx, h.VCSigner, h.IssuerDID, provenance.SigningSummary{
+				ContractID:      cmd.DID,
+				SignerDID:       fieldSigner,
+				CeremonyID:      c.ID,
+				FieldName:       f,
+				ContentHash:     contentHash,
+				PDFHash:         basePDFHash,
+				CredentialType:  credentialType,
+				KBSDHash:        fieldKB,
+				PIDPresentation: fieldVP,
+				SignedAt:        signedAt,
+			})
+			if err != nil {
+				return fmt.Errorf("issue signing-summary VC for field %q: %w", f, err)
+			}
+			summaries = append(summaries, vc)
+		}
+		evidence, err = json.Marshal(summaries)
+		if err != nil {
+			return fmt.Errorf("encode signing-summary evidence bundle: %w", err)
+		}
+	default:
+		// Later signature on a multi-signer contract: its evidence is
+		// already embedded (see above); the signed document must not be
+		// mutated beyond the incremental signature itself.
+		evidence = nil
 	}
 
 	signedPDF, err := h.Signer.SignPDF(ctx, basePDF, ceremony.FieldName, ceremony.FieldName, evidence)
@@ -222,6 +371,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	}
 
 	ceremonyID := ceremony.ID
+	fieldName := ceremony.FieldName
 	signature := db.ContractSignature{
 		ContractDID:    cmd.DID,
 		Status:         "SIGNED",
@@ -233,6 +383,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		CeremonyID:     &ceremonyID,
 		PDFHash:        &signedPDFHash,
 		ContentHash:    &contentHash,
+		FieldName:      &fieldName,
 	}
 	if err := h.CRepo.CreateSignature(ctx, tx, signature); err != nil {
 		return fmt.Errorf("could not create signature: %w", err)
@@ -242,8 +393,13 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("could not update contract state: %w", err)
 	}
 
-	if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy); err != nil {
-		return err
+	// The archive entry is created when the contract REACHES SIGNED (first
+	// signature); later multi-signer signatures update the stored artefact
+	// pointer above but never insert a second entry for the same version.
+	if signedCount == 0 {
+		if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy); err != nil {
+			return err
+		}
 	}
 
 	evt := event2.ApplyEvent{

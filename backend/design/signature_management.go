@@ -129,6 +129,7 @@ var SMContractApplyRequest = Type("SMContractApplyRequest", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("signer_did", String, "DID of the signer")
+	Attribute("field_name", String, "For multi-signer contracts (DCS-FR-SM-07/-17): the declared signature field this signer covers. When omitted, the signer's most recent verified ceremony is used (single-signer flow).")
 	Attribute("credential_type", String, "Type of credential to use (default: AES)")
 	Attribute("updated_at", String, "The timestamp when the contract was updated")
 
@@ -224,6 +225,39 @@ var SMContractComplianceResponse = Type("SMContractComplianceResponse", func() {
 	Attribute("findings", ArrayOf(String), "A list of findings")
 
 	Required("did")
+})
+
+var SMSignatureViewRequest = Type("SMSignatureViewRequest", func() {
+	Description("Signature Compliance Viewer request (DCS-FR-SM-26)")
+
+	Token("token", String, "JWT token")
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Required("did")
+})
+
+var SMSignatureViewItem = Type("SMSignatureViewItem", func() {
+	Description("One applied signature's metadata for the Signature Compliance Viewer (DCS-FR-SM-26): signer identity, credential class/signature level, status, and timestamps")
+
+	Attribute("signer_did", String, "DID of the signer the signature is bound to")
+	Attribute("field_name", String, "The declared signature field this signature covers (DCS-FR-SM-07/-17)")
+	Attribute("credential_type", String, "Signature level / credential class (e.g. AES)")
+	Attribute("status", String, "Signature status (SIGNED or REVOKED)")
+	Attribute("signed_at", String, "When the signature was applied")
+	Attribute("revoked_at", String, "When the signature was revoked, if it was")
+	Attribute("format", String, "Signature container format")
+
+	Required("signer_did", "credential_type", "status", "format")
+})
+
+var SMSignatureViewResponse = Type("SMSignatureViewResponse", func() {
+	Description("Signature Compliance Viewer data (DCS-FR-SM-26, DCS-IR-SM-05): every applied signature's metadata plus the contract's cryptographic integrity findings")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("contract_state", String, "Current contract lifecycle state")
+	Attribute("signatures", ArrayOf(SMSignatureViewItem), "All signatures applied to the contract")
+	Attribute("integrity_findings", ArrayOf(String), "Cryptographic integrity findings from the validation machinery (empty = intact)")
+
+	Required("did", "contract_state", "signatures", "integrity_findings")
 })
 
 var SMSignatureRequestStartRequest = Type("SMSignatureRequestStartRequest", func() {
@@ -554,8 +588,39 @@ var _ = Service("SignatureManagement", func() {
 		})
 	})
 
+	Method("view", func() {
+		Description("Signature Compliance Viewer (DCS-FR-SM-26): per-signature signer identity, credential class/signature level, status, and timestamps, plus the contract's cryptographic integrity findings — the data behind the viewer UI.")
+		Meta("dcs:requirements", "DCS-FR-SM-26", "DCS-IR-SM-05")
+		Meta("dcs:ui", "Signature Compliance Viewer")
+		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+			Scope("Contract Observer")
+			Scope("Auditor")
+			Scope("Compliance Officer")
+		})
+
+		Payload(SMSignatureViewRequest)
+		Result(SMSignatureViewResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/signature/view")
+			Param("did")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
 	Method("compliance", func() {
-		Description("Record that a compliance check has been requested for the contract; emits a ComplianceValidationEvent but does not itself compute or return findings (the response's findings list is currently always empty).")
+		Description("Run the signature compliance checks for the contract (DCS-FR-SM-21: signature level SES/AES/QES, signature status, presence of active signed credentials) and return the findings; the check — findings included — is recorded as a ComplianceValidationEvent in the audit trail.")
 		Meta("dcs:requirements", "DCS-IR-SM-07")
 		Meta("dcs:ui", "Signature Compliance Viewer")
 		Meta("dcs:sm:components", "Counterparty Contract Signature Verification")

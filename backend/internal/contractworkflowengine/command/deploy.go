@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -9,14 +10,20 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
+
+// ErrSigningIncomplete rejects deployment of a multi-signer contract whose
+// declared signature fields are not all signed yet (DCS-FR-SM-07/-17).
+var ErrSigningIncomplete = errors.New("signing workflow incomplete")
 
 // DeployCmd carries the inputs for deploying a SIGNED contract to the
 // configured Contract Target System (UC-05-01).
@@ -71,9 +78,46 @@ func (h *Deployer) Handle(ctx context.Context, cmd DeployCmd) (*DeployResult, er
 		return nil, err
 	}
 
+	// Multi-signer gate (DCS-FR-SM-07/-17, DCS-NFR-BR-03): a contract that
+	// declares signature fields may only deploy once EVERY declared field is
+	// signed. The auto-deploy subscriber fires after each signature, so a
+	// partially signed contract hits this gate until the last signatory
+	// signs.
+	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
+		required := validation.RequiredSignatureFields([]byte(*data.ContractData))
+		if len(required) > 0 {
+			signedFields, err := h.CRepo.ReadSignedSignatureFieldNames(ctx, tx, cmd.DID)
+			if err != nil {
+				return nil, fmt.Errorf("could not read signed signature fields: %w", err)
+			}
+			signed := make(map[string]bool, len(signedFields))
+			for _, f := range signedFields {
+				signed[f] = true
+			}
+			var missing []string
+			for _, f := range required {
+				if !signed[f] {
+					missing = append(missing, f)
+				}
+			}
+			if len(missing) > 0 {
+				return nil, fmt.Errorf("%w: unsigned signature fields: %s", ErrSigningIncomplete, strings.Join(missing, ", "))
+			}
+		}
+	}
+
 	contractDataBytes := []byte(`{}`)
 	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
 		contractDataBytes = []byte(*data.ContractData)
+	}
+	// Decode the contract document instead of embedding the raw jsonb bytes:
+	// the content hash must be reproducible by the RECEIVING target system
+	// from the parsed JSON (canonical form = recursively key-sorted, compact,
+	// no HTML escaping — see hashDeploymentPayload), and Postgres jsonb's
+	// length-then-bytewise key order would otherwise leak into the hash.
+	var contractDocument map[string]any
+	if err := json.Unmarshal(contractDataBytes, &contractDocument); err != nil {
+		return nil, fmt.Errorf("could not decode contract document for %s: %w", cmd.DID, err)
 	}
 
 	correlationID := uuid.NewString()
@@ -89,7 +133,7 @@ func (h *Deployer) Handle(ctx context.Context, cmd DeployCmd) (*DeployResult, er
 		"dcs:contractVersion":  data.ContractVersion,
 		"dcs:timestamp":        now.Format(time.RFC3339Nano),
 		"dcs:correlationId":    correlationID,
-		"dcs:contractDocument": json.RawMessage(contractDataBytes),
+		"dcs:contractDocument": contractDocument,
 		"odrl:policy": map[string]any{
 			"@id":   "urn:uuid:deployment-policy-" + correlationID,
 			"@type": "odrl:Set",
@@ -145,11 +189,19 @@ func (h *Deployer) Handle(ctx context.Context, cmd DeployCmd) (*DeployResult, er
 	}, nil
 }
 
+// hashDeploymentPayload computes the payload's canonical content hash:
+// recursively key-sorted (Go marshals maps sorted), compact, WITHOUT HTML
+// escaping — so a receiving target system can reproduce it from the parsed
+// JSON with a plain deep-sort + stringify (the shipped ORCE
+// contract-target-flow and the BDD harness both do exactly that).
 func hashDeploymentPayload(payload map[string]any) (string, error) {
-	canonical, err := json.Marshal(payload)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(payload); err != nil {
 		return "", err
 	}
+	canonical := bytes.TrimRight(buf.Bytes(), "\n")
 	sum := sha256.Sum256(canonical)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }

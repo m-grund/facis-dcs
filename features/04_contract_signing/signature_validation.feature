@@ -26,12 +26,42 @@ Feature: Signature validation, audit, and compliance
     # eventtype.go is defined but never published.
     And the signature audit log for contract "Signature Audit Contract" includes an action of type "APPLIED_SIGNATURE"
 
+  # /signature/compliance computes its findings (DCS-FR-SM-21:
+  # signature level SES/AES/QES, signature status, active signed
+  # credentials) and records the check — findings included — as a
+  # ComplianceValidationEvent in the audit trail.
   @clean_db @DCS-FR-SM-21
   Scenario: Contract Manager requests a compliance check for a signed contract
     Given contract "Signature Compliance Contract" has reached contract state "SIGNED"
     When the contract manager requests a compliance check for contract "Signature Compliance Contract"
     Then get http 200:Success code
-    And the compliance check for contract "Signature Compliance Contract" returns no findings
+    And the compliance check for contract "Signature Compliance Contract" reports that all checks passed
+
+  @clean_db @DCS-FR-SM-21 @DCS-FR-SM-20
+  Scenario: The compliance check flags a revoked signature
+    Given contract "Revoked Compliance Contract" has reached contract state "SIGNED"
+    When the applied signature of contract "Revoked Compliance Contract" is revoked
+    Then get http 200:Success code
+    When the contract manager requests a compliance check for contract "Revoked Compliance Contract"
+    Then get http 200:Success code
+    And the compliance check for contract "Revoked Compliance Contract" flags a revoked signature
+
+  # DCS-FR-SM-26 / DCS-IR-SM-05: the Signature Compliance Viewer's data —
+  # per-signature signer identity, credential class, status, timestamps,
+  # container format, and the contract's cryptographic integrity findings.
+  @clean_db @DCS-FR-SM-26 @DCS-IR-SM-05
+  Scenario: The signature view exposes signer identity, credential class, timestamp, and integrity
+    Given contract "Signature View Contract" has reached contract state "SIGNED"
+    When the signature view for contract "Signature View Contract" is requested as "Compliance Officer"
+    Then get http 200:Success code
+    And the signature view for contract "Signature View Contract" shows one "SIGNED" signature with signer identity, credential class "AES", timestamp, and intact integrity
+
+  @clean_db @DCS-FR-SM-26
+  Scenario: A role outside the signature-viewing scope cannot request the signature view
+    Given contract "Unauthorized Signature View Contract" has reached contract state "SIGNED"
+    And I am authenticated with roles: "Template Creator"
+    When I attempt to request the signature view for contract "Unauthorized Signature View Contract" with my current role
+    Then the request is denied with a client error
 
   # DCS-FR-SM-27: signed contracts MUST be exportable in PDF/A format with
   # embedded metadata and signature containers. pdf-core compiles PDF/A-3A
@@ -45,3 +75,21 @@ Feature: Signature validation, audit, and compliance
     And contract "PDFA Signed Contract" has an exported PDF
     Then the exported PDF for contract "PDFA Signed Contract" declares PDF/A-3 conformance in its XMP metadata
     And the exported PDF for contract "PDFA Signed Contract" embeds the canonical JSON-LD payload as an associated file
+
+  # DECISION-ANCHORED SKIP (not a test limitation): the EU distributes the
+  # DSS demonstration webapp as a ZIP/WAR with NO official container image,
+  # so deployment/helm/charts/dss wraps a pinned community image and stays
+  # DISABLED by default — enabling an unofficial third-party image in the
+  # hermetic CI deployment is not defensible. The integration itself is
+  # implemented and unit-tested (backend/internal/signingmanagement/dss:
+  # report parsing, and the hard-fail when a CONFIGURED DSS is unreachable —
+  # a configured external validator is never silently skipped); flipping
+  # dss.enabled plus the backend's DSS_URL env activates this scenario's
+  # behavior without code changes.
+  @skip @DCS-FR-SM-18 @DCS-IR-SI-10 @DCS-IR-CI-08
+  Scenario: Signature validation reports the EU DSS indication when a DSS instance is deployed
+    Given contract "DSS Validated Contract" has reached contract state "SIGNED"
+    And an EU DSS instance is deployed and configured via DSS_URL
+    When the contract manager validates the signature for contract "DSS Validated Contract"
+    Then get http 200:Success code
+    And the signature validation findings include an EU DSS validation report indication

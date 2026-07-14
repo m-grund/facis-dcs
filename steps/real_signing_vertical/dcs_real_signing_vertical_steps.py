@@ -93,12 +93,18 @@ def _webhook_secret() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str):
+def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str, holder_private=None):
     """Build a real, protocol-correct PID SD-JWT VC + KB-JWT presentation
     using the same testWallet/dcs_wallet signing primitives already used by
     AuthService for the DCS role-credential OID4VP login flow — just with
     PID-shaped claims (vct urn:eudi:pid:1) instead of organization/roles.
     Returns (compact_presentation, issuer_jwt, disclosures, subject_did).
+
+    holder_private lets a scenario present as a DIFFERENT natural person than
+    the shared test wallet: the trusted test issuer binds the credential's cnf
+    to whatever holder key it is given, so a fresh ephemeral key yields a
+    fresh subject DID (needed by multi-signer scenarios, where two fields
+    must be signed by two distinct identities).
     """
     AuthService._ensure_dcs_wallet_importable()
     from dcs_wallet.issuer import (  # noqa: PLC0415
@@ -110,7 +116,8 @@ def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonc
     from dcs_wallet.sdjwt import join_sd_jwt, split_sd_jwt  # noqa: PLC0415
 
     keys = AuthService.load_wallet_keys()
-    holder_public = public_jwk(keys.wallet_private)
+    holder_key = holder_private or keys.wallet_private
+    holder_public = public_jwk(holder_key)
     subject_did = did_jwk_from_public_jwk(holder_public)
 
     now = int(time.time())
@@ -132,7 +139,7 @@ def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonc
     kb_jwt = sign_key_binding_jwt(
         issuer_jwt=issuer_jwt,
         disclosures=disclosures,
-        wallet_private=keys.wallet_private,
+        wallet_private=holder_key,
         aud=aud,
         nonce=nonce,
     )
@@ -173,7 +180,7 @@ def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_d
     return post_json(context, signature_request_webhook_url(context), payload, headers=headers)
 
 
-def _run_full_ceremony(context, name, field_name, signatory_name):
+def _run_full_ceremony(context, name, field_name, signatory_name, holder_private=None):
     """Start a ceremony, complete it headlessly via the assumed webhook
     contract (see module docstring point 3), and stash the presentation +
     ceremony id on context for later PDF-embedding assertions.
@@ -190,7 +197,8 @@ def _run_full_ceremony(context, name, field_name, signatory_name):
     nonce = str(uuid.uuid4())
     given_name, family_name = signatory_name, "BDD-Testperson"
     presentation, issuer_jwt, disclosures, subject_did = _build_pid_presentation(
-        given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce
+        given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce,
+        holder_private=holder_private,
     )
     webhook_resp = _complete_ceremony_via_webhook(
         context, ceremony_id, presentation, subject_did, given_name, family_name
@@ -214,20 +222,18 @@ def _run_full_ceremony(context, name, field_name, signatory_name):
     return ceremony_id, presentation, subject_did
 
 
-def _apply_signature(context, name, *, signer_did, credential_type="AES"):
+def _apply_signature(context, name, *, signer_did, credential_type="AES", field_name=None):
     did, updated_at = ContractService._contract_data(context, name)
     signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    return post_json(
-        context,
-        signature_apply_url(context),
-        {
-            "did": did,
-            "signer_did": signer_did,
-            "credential_type": credential_type,
-            "updated_at": updated_at,
-        },
-        headers=signer_h,
-    )
+    payload = {
+        "did": did,
+        "signer_did": signer_did,
+        "credential_type": credential_type,
+        "updated_at": updated_at,
+    }
+    if field_name is not None:
+        payload["field_name"] = field_name
+    return post_json(context, signature_apply_url(context), payload, headers=signer_h)
 
 
 # ---------------------------------------------------------------------------
@@ -316,12 +322,26 @@ def step_when_apply_with_ceremony_signer_did(context, name, credential_type):
 
 @when('the signature for contract "{name}" is revoked as a post-sign C2PA update')
 def step_when_revoke_post_sign_update(context, name):
-    from steps.support.api_client import signature_revoke_url  # noqa: PLC0415
+    import requests as _requests  # noqa: PLC0415
+
+    from steps.support.api_client import signature_revoke_url, signature_view_url  # noqa: PLC0415
 
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
     presentation = getattr(context, "pid_presentations", {}).get(name, {})
-    signer_did = presentation.get("subject_did", "did:example:bdd-no-ceremony-signer")
+    signer_did = presentation.get("subject_did")
+    if not signer_did:
+        # No ceremony ran in this scenario — resolve the actual signer from
+        # the signature view; a fabricated DID would be rejected with a 400
+        # (db.ErrSignatureNotFound) instead of silently revoking nothing.
+        view = _requests.get(
+            signature_view_url(context), params={"did": did}, headers=manager_h,
+            timeout=context.http_timeout_seconds,
+        )
+        assert view.status_code == 200, f"signature view failed: {view.status_code} {view.text}"
+        signatures = view.json().get("signatures") or []
+        assert signatures, f"Expected an applied signature to revoke on '{name}', got: {view.json()}"
+        signer_did = signatures[0]["signer_did"]
     context.requests_response = post_json(
         context,
         signature_revoke_url(context),
