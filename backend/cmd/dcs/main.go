@@ -30,6 +30,7 @@ import (
 	internalsigning "digital-contracting-service/gen/internal_signing"
 	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
+	semantichubgen "digital-contracting-service/gen/semantic_hub"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
@@ -44,6 +45,7 @@ import (
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
+	"digital-contracting-service/internal/base/validation"
 	contractworkflowengine2 "digital-contracting-service/internal/contractworkflowengine"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	cwerepo "digital-contracting-service/internal/contractworkflowengine/db/pg"
@@ -52,6 +54,7 @@ import (
 	pdfevent "digital-contracting-service/internal/pdfgeneration/event"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
+	"digital-contracting-service/internal/semantichub"
 	"digital-contracting-service/internal/service"
 	smrepo "digital-contracting-service/internal/signingmanagement/db/pg"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
@@ -138,6 +141,26 @@ func main() {
 		log.Fatalf(ctx, err, "Could not run database migrations")
 		os.Exit(1)
 	}
+
+	// Semantic Hub (DCS-FR-TR-03): seed the genesis FACIS DCS v1 profile
+	// (JSON-LD context, SHACL shapes, validation profile) and anchor every
+	// subsequently produced document to the hub's ACTIVE context version —
+	// its schemaRefs point at hub-served, versioned URLs, and documents
+	// redefining a hub-declared ontology prefix are rejected. Fatal on
+	// failure: the hub is a required dependency of document normalization.
+	if err := semantichub.Seed(ctx, db); err != nil {
+		log.Fatalf(ctx, err, "Could not seed the Semantic Hub genesis schemas")
+	}
+	hubIRIs, hubContextVersion, err := semantichub.ActiveOntologyIRIs(ctx, db)
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load the Semantic Hub's active context")
+	}
+	validation.SetCanonicalOntologyIRIs(hubIRIs)
+	validation.SetSchemaAnchorRefs(
+		semantichub.AnchorURL("context", semantichub.ContextName, hubContextVersion),
+		hubIRIs["dcs"],
+		semantichub.AnchorURL("shapes", semantichub.ShapesName, hubContextVersion),
+	)
 
 	// Open the PKCS#11 token that holds every private key (DCS-IR-HI-01). A
 	// wrong module path/token/PIN is fatal: there is no software fallback.
@@ -470,6 +493,7 @@ func main() {
 		didSrv                          didservice.Service
 		c2paSvc                         c2paservice.Service
 		internalSigningSvc              internalsigning.Service
+		semanticHubSvc                  semantichubgen.Service
 	)
 	{
 		presentationRepo := pg.NewPostgresPresentationAttemptRepo(db)
@@ -489,6 +513,7 @@ func main() {
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader)
 		didSrv = didService
 		internalSigningSvc = service.NewInternalSigning(jwtAuth, c2paSigner, padesSigner)
+		semanticHubSvc = service.NewSemanticHub(db, jwtAuth)
 	}
 
 	// Channel used by background workers and signal handler to notify main to exit.
@@ -564,6 +589,7 @@ func main() {
 		didEntpoints                          *didservice.Endpoints
 		c2paEndpoints                         *c2paservice.Endpoints
 		internalSigningEndpoints              *internalsigning.Endpoints
+		semanticHubEndpoints                  *semantichubgen.Endpoints
 	)
 	{
 		authEndpoints = genauth.NewEndpoints(authSvc)
@@ -602,6 +628,9 @@ func main() {
 		internalSigningEndpoints = internalsigning.NewEndpoints(internalSigningSvc)
 		internalSigningEndpoints.Use(debug.LogPayloads())
 		internalSigningEndpoints.Use(log.Endpoint)
+		semanticHubEndpoints = semantichubgen.NewEndpoints(semanticHubSvc)
+		semanticHubEndpoints.Use(debug.LogPayloads())
+		semanticHubEndpoints.Use(log.Endpoint)
 	}
 
 	// Setup interrupt handler. This optional step configures the process so
@@ -644,7 +673,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, internalSigningEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, internalSigningEndpoints, semanticHubEndpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:
