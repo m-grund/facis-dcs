@@ -290,7 +290,7 @@ not a coverage hole.
 | DCS-NFR-BR-03 | Legally Valid Signatures | ✅ Covered | 05 non-SIGNED deploy refusal (tagged @DCS-NFR-BR-03); AES default (22). |
 | DCS-NFR-BR-04 | Template Governance | ✅ Covered | Contract create only from REGISTERED templates (03 steps + 02 approval chain). |
 | DCS-NFR-BR-05 | Immutable Auditability | ✅ Covered | Hash-chained TSA/IPFS audit for all lifecycle actions (08) + RBAC on logs (08 non-auditor denial). |
-| DCS-NFR-BR-06 | Revocation & Termination Propagation | 🟡 Partial | Signature revocation → REVOKED immediately (15). Cross-system propagation (peer notification of revocation) not yet exercised — noted. |
+| DCS-NFR-BR-06 | Revocation & Termination Propagation | ✅ Covered | Signature revocation → REVOKED immediately (15); cross-instance propagation via the synchronizer's SignatureManagement broadcast (17 revocation-propagation scenario: revoke on A, REVOKED replicated on B through the JAdES-verified post_sync path). |
 | DCS-NFR-BR-07 | Token & API Control | 🟡 Partial | Role-scoped tokens enforced (01); explicit minimal-scope token issuance policy is IdP config — noted. |
 | DCS-NFR-BR-08 | DCS-to-DCS Interoperability Safeguards | ✅ Covered | 17 pack (tagged @NFR-BR-08): authenticated, trusted-peer-only exchanges with audit. |
 | DCS-NFR-BR-09 | Catalogue-Aligned Publishing | ✅ Covered | Catalogue publish/consume scenario (02/template_catalogue). |
