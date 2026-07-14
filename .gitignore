@@ -1,4 +1,5 @@
 tmp
+__debug_bin*
 
 .idea
 .vscode
@@ -23,6 +24,10 @@ frontend/ClientApp/.vite
 
 deployment/certs
 
+# Dev PKI provisioning artifacts (CA private key + generated x5chain), created
+# by scripts/c2pa-cert-provision.sh at dev-stack time. Never commit private keys.
+pdf-core/certs/
+
 testWallet/.venv
 
 # OID4VP demo secrets, generate via testWallet/scripts/generate_dev_keys.py
@@ -46,3 +51,4 @@ tests/bdd/.coverage.*
 # Root coverage artifacts
 .coverage
 .coverage.*
+.claude/*

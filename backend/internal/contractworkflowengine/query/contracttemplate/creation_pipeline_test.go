@@ -168,33 +168,39 @@ func creationPipelineRequirements() []any {
 	}
 }
 
-func creationPipelinePolicyDefinitions() []any {
-	return []any{
-		creationPipelinePolicy(
-			"provider-country-dach",
-			"provider",
-			"country",
-			"odrl:isAnyOf",
-			[]any{
-				map[string]any{"@value": "DEU", "@type": "xsd:string"},
-				map[string]any{"@value": "AUT", "@type": "xsd:string"},
-				map[string]any{"@value": "CHE", "@type": "xsd:string"},
-			},
-		),
-		creationPipelinePolicy(
-			"payment-currency-eur",
-			"payment",
-			"currency",
-			"odrl:eq",
-			map[string]any{"@value": "EUR", "@type": "xsd:string"},
-		),
-		creationPipelinePolicy(
-			"availability-minimum",
-			"availability",
-			"availability",
-			"odrl:gteq",
-			map[string]any{"@value": 99.9, "@type": "xsd:decimal"},
-		),
+func creationPipelinePolicyDefinitions() map[string]any {
+	return map[string]any{
+		"@id":          creationTemplateDID + "#policy-set-1",
+		"@type":        "odrl:Set",
+		"uid":          creationTemplateDID,
+		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+		"odrl:duty": []any{
+			creationPipelinePolicy(
+				"provider-country-dach",
+				"provider",
+				"country",
+				"odrl:isAnyOf",
+				[]any{
+					map[string]any{"@value": "DEU", "@type": "xsd:string"},
+					map[string]any{"@value": "AUT", "@type": "xsd:string"},
+					map[string]any{"@value": "CHE", "@type": "xsd:string"},
+				},
+			),
+			creationPipelinePolicy(
+				"payment-currency-eur",
+				"payment",
+				"currency",
+				"odrl:eq",
+				map[string]any{"@value": "EUR", "@type": "xsd:string"},
+			),
+			creationPipelinePolicy(
+				"availability-minimum",
+				"availability",
+				"availability",
+				"odrl:gteq",
+				map[string]any{"@value": 99.9, "@type": "xsd:decimal"},
+			),
+		},
 	}
 }
 
@@ -237,7 +243,8 @@ func assertCreationPipelinePolicies(t *testing.T, raw *datatype.JSON) {
 	t.Helper()
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
-	policies := data["dcs:policies"].([]any)
+	policySet := data["dcs:policies"].(map[string]any)
+	policies := policySet["odrl:duty"].([]any)
 
 	dach := creationPipelinePolicyBySuffix(t, policies, "policy-provider-country-dach")
 	dachConstraint := dach["odrl:constraint"].(map[string]any)
@@ -348,8 +355,12 @@ func creationPipelinePolicy(
 	rightOperand any,
 ) map[string]any {
 	return map[string]any{
-		"@id":   creationTemplateDID + "#policy-" + id,
-		"@type": "odrl:Duty",
+		"@id":           creationTemplateDID + "#policy-" + id,
+		"@type":         "odrl:Duty",
+		"odrl:action":   map[string]any{"@id": "dcs:provideCompliantValue"},
+		"odrl:assigner": map[string]any{"@id": creationTemplateDID + "#" + conditionID},
+		"odrl:assignee": map[string]any{"@id": creationTemplateDID},
+		"odrl:target":   map[string]any{"@id": creationTemplateDID},
 		"odrl:constraint": map[string]any{
 			"@type":             "odrl:Constraint",
 			"odrl:leftOperand":  map[string]any{"@id": creationPipelineFieldID(conditionID, parameterName)},

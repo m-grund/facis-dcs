@@ -48,11 +48,20 @@ spec:
             failureThreshold: 2
             timeoutSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /v1/metrics/health
-              port: http
+            # /v1/metrics/health only reports this container's own HTTP
+            # server is up — it does not verify the container can actually
+            # reach its IPFS backend. Without that, a pod whose network path
+            # to dcs-ipfs goes stale (observed after the IPFS deployment was
+            # restarted) stays "Healthy" forever and never gets recycled.
+            exec:
+              command:
+                - sh
+                - -c
+                - wget -q -O /dev/null --post-data='' "http://$(IPFS_HOST):$(IPFS_RPC_API_PORT)/api/v0/version"
             initialDelaySeconds: 15
             periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
           {{- if .Values.resources }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

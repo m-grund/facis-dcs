@@ -284,6 +284,10 @@ func extractDocumentModelFromCanonical(canonical []byte, hashHex string) (docume
 	}
 	collectRefs(model.Sections)
 
+	if section, ok := buildPolicySection(tmpl.Policies); ok {
+		model.Sections = append(model.Sections, section)
+	}
+
 	return model, nil
 }
 

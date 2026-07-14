@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-template'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -33,7 +33,7 @@ const catalogue = ref<TemplateCatalogueRetrieveByIdResponse | null>(null)
 
 const registerLoading = ref(false)
 
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 
 type CatalogueTabId = 'details' | 'meta' | 'preview'
 const activeTab = ref<CatalogueTabId>('details')

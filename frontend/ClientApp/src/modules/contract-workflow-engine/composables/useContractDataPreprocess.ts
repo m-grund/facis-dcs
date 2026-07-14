@@ -1,15 +1,20 @@
-import { getBlocksFromTemplateData, getLayoutFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import {
+  flattenPolicySet,
+  getBlocksFromTemplateData,
+  getLayoutFromTemplateData,
+} from '@template-repository/store/dcsDraftStore'
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { DcsBlock, DcsContractData, DcsLayoutNode } from '@/models/dcs-jsonld'
+import type { DcsBlock, DcsContractData, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export interface PreprocessedContractData {
   blocks: (DcsBlock | MergedApprovedTemplateBlock)[]
   layout: DcsLayoutNode[]
   contractData: DcsContractData['dcs:contractData']
-  policies: DcsContractData['dcs:policies']
+  /** Flattened from the stored enclosing odrl:Set — dcsDraftStore keeps the flat rule array as its internal source of truth. */
+  policies: OdrlRule[]
   semanticConditionValues: DcsContractData['semanticConditionValues']
   subTemplateSnapshots: SubTemplateSnapshot[]
   sourceTemplate?: DcsContractData['sourceTemplate']
@@ -88,7 +93,7 @@ export function useContractDataPreprocess() {
       blocks,
       layout,
       contractData: contractData['dcs:contractData'],
-      policies: contractData['dcs:policies'],
+      policies: flattenPolicySet(contractData['dcs:policies']),
       semanticConditionValues: contractData.semanticConditionValues ?? [],
       subTemplateSnapshots,
       sourceTemplate: contractData.sourceTemplate,

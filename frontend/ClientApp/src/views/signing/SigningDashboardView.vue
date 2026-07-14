@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, useTemplateRef } from 'vue'
+import SigningCeremonyDialog from '@/components/signing/SigningCeremonyDialog.vue'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import {
@@ -10,9 +11,12 @@ import {
   type SignatureValidateResult,
   type SignatureVerifyResult,
 } from '@/services/signature-management-service'
-import { useAuthStore } from '@/stores/auth-store'
 
-const authStore = useAuthStore()
+// AcroForm field name the signing ceremony binds to; the field itself is
+// created by the PDF renderer, so a single fixed name is sufficient here.
+const SIGNATURE_FIELD_NAME = 'Signature1'
+
+const ceremonyDialog = useTemplateRef<InstanceType<typeof SigningCeremonyDialog>>('ceremony-dialog')
 
 const contracts = ref<SignatureContract[]>([])
 const loading = ref(false)
@@ -67,9 +71,11 @@ function c2paStatus(contract: SignatureContract): C2PAStatus {
   const state = (contract.state ?? '').toLowerCase()
   const map: Record<string, C2PAStatus> = {
     active: { label: 'Active', cls: 'badge-success' },
-    approved: { label: 'Active', cls: 'badge-success' },
+    approved: { label: 'Draft', cls: 'badge-ghost' },
     draft: { label: 'Draft', cls: 'badge-ghost' },
+    signed: { label: 'Active', cls: 'badge-success' },
     suspended: { label: 'Suspended', cls: 'badge-warning' },
+    revoked: { label: 'Suspended', cls: 'badge-warning' },
     terminated: { label: 'Terminated', cls: 'badge-error' },
     replaced: { label: 'Replaced', cls: 'badge-neutral' },
     expired: { label: 'Expired', cls: 'badge-neutral' },
@@ -90,10 +96,16 @@ onMounted(async () => {
 })
 
 async function sign(contract: SignatureContract) {
-  const issuer = authStore.user?.issuer ?? 'unknown'
   signing.value[contract.did] = true
   try {
-    const env = await signatureManagementService.applySignature(contract.did, issuer)
+    const outcome = await ceremonyDialog.value?.reveal({
+      contractDid: contract.did,
+      fieldName: SIGNATURE_FIELD_NAME,
+    })
+    if (!outcome || outcome.isCanceled || !outcome.data) {
+      return
+    }
+    const env = await signatureManagementService.applySignature(contract.did, outcome.data.signerDid, 'AES')
     envelopes.value[contract.did] = env
   } catch (e: unknown) {
     error.value = `Failed to sign contract ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
@@ -215,4 +227,6 @@ async function compliance(contract: SignatureContract) {
       </table>
     </div>
   </div>
+
+  <SigningCeremonyDialog ref="ceremony-dialog" />
 </template>

@@ -86,8 +86,8 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 		return nil
 	}
 
-	if processData.State != contractstate.Negotiation.String() || processData.State == contractstate.Terminated.String() {
-		return errors.New("current contract state is invalid")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventRejectNegotiation); err != nil {
+		return err
 	}
 
 	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
@@ -96,7 +96,7 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid user")
+		return ErrNotAParty
 	}
 
 	err = h.NRepo.Reject(ctx, tx, cmd.ID, cmd.CauserDID, cmd.RejectionReason)

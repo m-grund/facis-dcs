@@ -21,6 +21,22 @@ func (r PostgresSyncRepository) IsTrustedPeer(ctx context.Context, tx *sqlx.Tx, 
 	return exists, nil
 }
 
+// UpsertTrustedPeer idempotently seeds peerDID into the trusted_peers
+// allowlist (peer_did is the primary key, see
+// backend/migrations/sql/20260626_synchronization.sql) — used both by
+// startup seeding from DCS_TRUSTED_PEERS and, potentially,
+// future admin tooling. Mirrors CreateOrUpdateSyncFailEntry's
+// ON CONFLICT ... DO NOTHING idempotency pattern above.
+func (r PostgresSyncRepository) UpsertTrustedPeer(ctx context.Context, tx *sqlx.Tx, peerDID string) error {
+	statement := `
+        INSERT INTO trusted_peers (peer_did)
+        VALUES ($1)
+        ON CONFLICT (peer_did) DO NOTHING
+    `
+	_, err := tx.ExecContext(ctx, statement, peerDID)
+	return err
+}
+
 func (r PostgresSyncRepository) CreateOrUpdateSyncFailEntry(ctx context.Context, tx *sqlx.Tx, did string) error {
 	statement := `
         INSERT INTO sync_fails (did, retry_count, created_at, last_tried_at)

@@ -105,8 +105,8 @@ var _ = Service("ContractStorageArchive", func() {
 	})
 
 	Method("delete", func() {
-		Description("permanently delete entry.")
-		Meta("dcs:requirements", "DCS-IR-CSA-03", "DCS-IR-CSA-06")
+		Description("Permanently delete an archived contract entry (DCS-FR-CSA-17). This is a soft delete: the archive entry is marked deleted_at/deleted_by/deletion_reason rather than physically removed, so evidence remains discoverable for compliance/dispute resolution, and requires a justification that is logged with the deletion's audit event.")
+		Meta("dcs:requirements", "DCS-IR-CSA-03", "DCS-IR-CSA-06", "DCS-FR-CSA-17")
 		Meta("dcs:ui", "Archive Manager Dashboard")
 		Meta("dcs:csa:components", "Signed Contract Archive", "Automated Alerts")
 		Security(JWTAuth, func() {
@@ -114,16 +114,27 @@ var _ = Service("ContractStorageArchive", func() {
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")
+			Attribute("did", String, "Decentralized Identifier of the archived contract to delete")
+			Attribute("justification", String, "Justification for the deletion (DCS-FR-CSA-17); logged with the deletion audit event")
+			Required("did", "justification")
 		})
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			DELETE("/archive/delete")
+			Param("did")
+			Param("justification")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
 		Result(Int)
 	})
 
 	Method("audit", func() {
-		Description("retrieve audit logs.")
+		Description("Retrieve the archive audit log: actor, timestamp, operation, and contract DID for every recorded archive-affecting event (store/retrieve/search/delete) — DCS-IR-CSA-04, UC-07-03.")
 		Meta("dcs:requirements", "DCS-IR-CSA-04")
 		Meta("dcs:ui", "Archive Manager Dashboard")
 		Meta("dcs:csa:components", "")
@@ -134,11 +145,17 @@ var _ = Service("ContractStorageArchive", func() {
 		Payload(func() {
 			Token("token", String, "JWT token")
 		})
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			GET("/archive/audit")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
-		Result(ArrayOf(String))
+		Result(ArrayOfRequired(ContractAuditResponse))
 	})
 
 })

@@ -83,6 +83,36 @@ func (h *ExportContractPdfHandler) Handle(ctx context.Context, qry ExportContrac
 		return io.NopCloser(bytes.NewReader(r.Data)), nil
 	}
 
+	if pdfState.IPFSCID != "" && isFrozenC2PAState(pdfState.C2PAState) {
+		// Already PAdES-signed: never mutate this PDF's embedded attachments
+		// again, even though its lifecycle state has since moved on (e.g.
+		// SIGNED/ACTIVE -> TERMINATED/EXPIRED/SUSPENDED). Any incremental
+		// update to the embedded C2PA manifest after signing is flagged as an
+		// illegal modification by standards-compliant PAdES validators (Adobe
+		// Reader, pyHanko), regardless of how carefully it preserves the CMS
+		// ByteRange. Serve the frozen signed bytes as-is and only refresh the
+		// bookkeeping columns so this branch doesn't keep re-triggering.
+		log.Printf("pdfgeneration: ExportContractPdf %s already signed (c2paState=%q); serving frozen PDF, no post-signature mutation", qry.DID, pdfState.C2PAState)
+		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
+		if err != nil || len(r.Data) == 0 {
+			return nil, fmt.Errorf("fetch frozen signed PDF from IPFS %s: %w", pdfState.IPFSCID, err)
+		}
+		if pdfState.C2PAState != currentC2PAState || pdfState.PayloadHash != currentPayloadHash {
+			if err := updater(ctx, tx, qry.DID, PDFStateData{
+				IPFSCID:         pdfState.IPFSCID,
+				RendererVersion: pdfState.RendererVersion,
+				C2PAState:       currentC2PAState,
+				PayloadHash:     currentPayloadHash,
+			}); err != nil {
+				return nil, fmt.Errorf("refresh frozen PDF bookkeeping for %s: %w", qry.DID, err)
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, fmt.Errorf("commit frozen PDF bookkeeping for %s: %w", qry.DID, err)
+			}
+		}
+		return io.NopCloser(bytes.NewReader(r.Data)), nil
+	}
+
 	if pdfState.IPFSCID != "" {
 		log.Printf("pdfgeneration: ExportContractPdf %s state/payload changed (state %q→%q, payloadHash %q→%q); appending", qry.DID, pdfState.C2PAState, currentC2PAState, pdfState.PayloadHash, currentPayloadHash)
 		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)

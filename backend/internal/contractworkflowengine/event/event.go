@@ -226,6 +226,47 @@ func (e SubmitEvent) GetDID() string {
 	return e.DID
 }
 
+// OfferEvent is emitted when a draft contract is offered to the counterparty.
+type OfferEvent struct {
+	DID             string             `json:"did"`
+	HolderDID       string             `json:"holder_did"`
+	ContractVersion int                `json:"contract_version"`
+	OfferedBy       string             `json:"offered_by"`
+	OccurredAt      time.Time          `json:"occurred_at"`
+	UserRoles       userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e OfferEvent) EventType() string {
+	return eventtype.Offer.String()
+}
+
+// GetDID implements the Event interface.
+func (e OfferEvent) GetDID() string {
+	return e.DID
+}
+
+// WithdrawEvent is emitted when the initiator withdraws a contract before
+// approval.
+type WithdrawEvent struct {
+	DID             string             `json:"did"`
+	HolderDID       string             `json:"holder_did"`
+	ContractVersion int                `json:"contract_version"`
+	WithdrawnBy     string             `json:"withdrawn_by"`
+	OccurredAt      time.Time          `json:"occurred_at"`
+	UserRoles       userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e WithdrawEvent) EventType() string {
+	return eventtype.Withdraw.String()
+}
+
+// GetDID implements the Event interface.
+func (e WithdrawEvent) GetDID() string {
+	return e.DID
+}
+
 // RetrieveByIDEvent is emitted when contract data is retrieved.
 type RetrieveByIDEvent struct {
 	DID         string             `json:"did"`
@@ -242,6 +283,28 @@ func (e RetrieveByIDEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e RetrieveByIDEvent) GetDID() string {
+	return e.DID
+}
+
+// RetrieveByIDDeniedEvent is emitted when a retrieve_by_id call is refused
+// because the caller is not an authorized party of the contract (party
+// read-scoping in query/contract/querybyid.go) — the denial itself is part
+// of the auditable access history.
+type RetrieveByIDDeniedEvent struct {
+	DID         string             `json:"did"`
+	HolderDID   string             `json:"holder_did"`
+	RetrievedBy string             `json:"retrieved_by"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e RetrieveByIDDeniedEvent) EventType() string {
+	return eventtype.AccessDenied.String()
+}
+
+// GetDID implements the Event interface.
+func (e RetrieveByIDDeniedEvent) GetDID() string {
 	return e.DID
 }
 
@@ -334,6 +397,27 @@ func (e StoreArchivedEvent) EventType() string {
 
 // GetDID implements [event.Event].
 func (e StoreArchivedEvent) GetDID() string {
+	return e.DID
+}
+
+// DeleteArchivedEvent is emitted when an archive entry is soft-deleted
+// (DCS-FR-CSA-17: deletion requires a justification and MUST be logged with
+// timestamp and user identity).
+type DeleteArchivedEvent struct {
+	DID           string    `json:"did"`
+	DeletedBy     string    `json:"deleted_by"`
+	Justification string    `json:"justification"`
+	EntriesMarked int       `json:"entries_marked"`
+	OccurredAt    time.Time `json:"occurred_at"`
+}
+
+// EventType implements [event.Event].
+func (e DeleteArchivedEvent) EventType() string {
+	return eventtype.DeleteArchived.String()
+}
+
+// GetDID implements [event.Event].
+func (e DeleteArchivedEvent) GetDID() string {
 	return e.DID
 }
 
@@ -492,6 +576,33 @@ func (e TerminateEvent) GetDID() string {
 	return e.DID
 }
 
+// RenewEvent is emitted on the newly created renewal contract when it is
+// derived from an existing (original) contract (DCS-FR-CWE-11/22,
+// DCS-FR-CSA-15). The original contract is not mutated and does not receive
+// a matching event; the link is one-directional (new -> original), recorded
+// both here and in the new contract's dcs:renewsContract JSON-LD reference.
+type RenewEvent struct {
+	DID                     string             `json:"did"`
+	HolderDID               string             `json:"holder_did"`
+	RenewedBy               string             `json:"renewed_by"`
+	OriginalDID             string             `json:"original_did"`
+	OriginalContractVersion int                `json:"original_contract_version"`
+	ContractData            *datatype.JSON     `json:"contract_data"`
+	OccurredAt              time.Time          `json:"occurred_at"`
+	UserRoles               userrole.UserRoles `json:"user_roles"`
+	Responsible             *db.Responsible    `json:"responsible,omitempty"`
+}
+
+// EventType implements the Event interface.
+func (e RenewEvent) EventType() string {
+	return eventtype.Renew.String()
+}
+
+// GetDID implements the Event interface.
+func (e RenewEvent) GetDID() string {
+	return e.DID
+}
+
 // RecordEvidenceEvent is emitted when an evidence is recorded
 type RecordEvidenceEvent struct {
 	DID             string             `json:"did"`
@@ -529,6 +640,28 @@ func (e AuditEvent) EventType() string {
 
 // GetDID implements the Event interface.
 func (e AuditEvent) GetDID() string {
+	return e.DID
+}
+
+// ExportEvent is emitted when a contract bundle (ZIP) is exported.
+// FR-CSA-18: an export is a retrieval-class action and is recorded in the
+// contract's audit trail.
+type ExportEvent struct {
+	DID        string             `json:"did"`
+	HolderDID  string             `json:"holder_did"`
+	ExportedBy string             `json:"exported_by"`
+	Format     string             `json:"format"`
+	OccurredAt time.Time          `json:"occurred_at"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e ExportEvent) EventType() string {
+	return eventtype.Export.String()
+}
+
+// GetDID implements the Event interface.
+func (e ExportEvent) GetDID() string {
 	return e.DID
 }
 

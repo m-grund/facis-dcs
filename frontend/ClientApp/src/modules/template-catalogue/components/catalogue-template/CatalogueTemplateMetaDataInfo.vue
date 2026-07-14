@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 
-const { customMetaData } = storeToRefs(useTemplateDraftStore())
+const { customMetaData } = storeToRefs(useDcsDraftStore())
 </script>
 
 <template>

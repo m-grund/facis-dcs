@@ -239,13 +239,17 @@ func (r *PostgresContractRepo) ReadProcessDataByDIDOrNil(ctx context.Context, tx
 }
 
 func (r *PostgresContractRepo) ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
+	// WITHDRAWN and REVOKED are excluded alongside the other terminal
+	// states: both are already-final/frozen states, so the
+	// expiry cron must not force-flip them to EXPIRED (see
+	// contracts_effective's matching exclusion list).
 	query := `
     SELECT did, origin, state, name, description, created_by, created_at, updated_at, contract_version, start_date,
            exp_date, exp_policy, exp_notice_period, responsible, template_did, template_version
     FROM contracts
     WHERE exp_date IS NOT NULL
     AND exp_date < NOW()
-    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED')
+    AND state NOT IN ('DRAFT', 'TERMINATED', 'REJECTED', 'EXPIRED', 'WITHDRAWN', 'REVOKED')
 `
 	var cts []db.ContractMetadata
 	err := tx.SelectContext(ctx, &cts, query)
@@ -297,9 +301,30 @@ func (r *PostgresContractRepo) ReadArchiveEntries(ctx context.Context, tx *sqlx.
 	return entries, nil
 }
 
+func (r *PostgresContractRepo) MarkArchiveEntryDeleted(ctx context.Context, tx *sqlx.Tx, did string, deletedBy string, reason string) (int, error) {
+	// archive_status must flip to DELETED together with the deletion
+	// metadata: the contract_archive_entries trigger
+	// (migrations/sql/20260305_create_contract_repository.sql) rejects
+	// deletion metadata on rows whose status is still STORED/RETAINED.
+	statement := `
+        UPDATE contract_archive_entries
+        SET archive_status = 'DELETED', deleted_at = NOW(), deleted_by = $1, deletion_reason = $2
+        WHERE did = $3 AND deleted_at IS NULL
+    `
+	result, err := tx.ExecContext(ctx, statement, deletedBy, reason, did)
+	if err != nil {
+		return 0, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(affected), nil
+}
+
 func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
-	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
+	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence
     FROM contracts_archive_metadata
 	`
 	var cts []db.ContractMetadata
@@ -313,7 +338,7 @@ func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sq
 
 func (r *PostgresContractRepo) ReadArchivedContractsByFilter(ctx context.Context, tx *sqlx.Tx, values db.SearchValues) ([]db.ContractMetadata, error) {
 	query := `
-	        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
+	        SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence
         FROM contracts_archive_metadata
     `
 	conditions, params, err := createSearchConditions(values)
@@ -412,6 +437,14 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 	if len(values.ContractData) > 0 {
 		conditions += ` search_vector @@ plainto_tsquery('english', $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.ContractData)
+		paramIndex++
+	}
+	if len(values.ParentDID) > 0 {
+		// Reverse-index over locally held children: match the child's stored
+		// dcs:parentContract @id in contracts_effective. Kept as a DID-scoped
+		// subquery so it composes with any outer metadata/archive table.
+		conditions += ` did IN (SELECT did FROM contracts_effective WHERE contract_data->'dcs:parentContract'->>'@id' = $` + strconv.Itoa(paramIndex) + `) AND`
+		params = append(params, values.ParentDID)
 	}
 	l := len(" AND")
 	if len(conditions) > l {

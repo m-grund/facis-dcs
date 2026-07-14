@@ -1,0 +1,28 @@
+@prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+
+# Structural shape for the canonical dcs:documentStructure JSON-LD envelope
+# (the single supported contract shape since the greenfield rewrite — see
+# CLAUDE.md "Template Editor — JSON-LD as Single Source of Truth"). Checked
+# by the PACM contract-content-audit pipeline (docs/policies/
+# facis-contract-content-audit-policies.json) alongside the structured
+# validation profile in docs/semantic-ontology/validation/.
+
+dcs:CanonicalContractShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:Contract ;
+  sh:property [
+    sh:path did ;
+    sh:minCount 1 ;
+    sh:message "A canonical contract requires a stable @id." ;
+  ] ;
+  sh:property [
+    sh:path dcs:metadata.dcs:title ;
+    sh:minCount 1 ;
+    sh:message "A canonical contract requires a title in dcs:metadata." ;
+  ] ;
+  sh:property [
+    sh:path dcs:documentStructure ;
+    sh:minCount 1 ;
+    sh:message "A canonical contract requires a dcs:documentStructure envelope." ;
+  ] .

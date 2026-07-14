@@ -104,6 +104,50 @@ func (constraint *valueConstraint) asMap() map[string]any {
 
 type documentData map[string]any
 
+// ErrContractHierarchyInvalid is the sentinel wrapped by every hierarchy
+// invariant violation (FR-TR-02/FR-CWE-02). The HTTP layer
+// (service.mapContractCommandError) maps it to a 4xx client error rather than
+// a 500, since it is caused by malformed client-supplied contract data.
+var ErrContractHierarchyInvalid = errors.New("contract hierarchy invariant violated")
+
+// childEnumeratingProperties are top-level document properties that would
+// enumerate child contracts from a parent document. The hierarchy is
+// child→parent only: a document may never list its children (that would leak
+// siblings to every receiver of the parent and force a document rewrite on
+// every new child). Note dcs:children is deliberately NOT listed here — it is
+// a legitimate documentStructure layout term, checked only at the top level.
+var childEnumeratingProperties = []string{
+	"dcs:childContracts", "childContracts",
+	"dcs:subContracts", "subContracts",
+	"dcs:hasPart", "hasPart",
+}
+
+// validateContractHierarchyInvariants enforces the structural hierarchy rules
+// on a decoded contract document (no DB access — the cycle check that needs
+// the parent chain lives in the command handler):
+//
+//   - at most one dcs:parentContract reference;
+//   - no child-enumerating top-level property.
+func validateContractHierarchyInvariants(data documentData) error {
+	for _, key := range []string{"dcs:parentContract", "parentContract"} {
+		value, ok := data[key]
+		if !ok {
+			continue
+		}
+		if list, isList := value.([]any); isList && len(list) > 1 {
+			return fmt.Errorf("%w: a contract may reference at most one dcs:parentContract, got %d",
+				ErrContractHierarchyInvalid, len(list))
+		}
+	}
+	for _, key := range childEnumeratingProperties {
+		if _, ok := data[key]; ok {
+			return fmt.Errorf("%w: contract documents must not enumerate children (found %q); the hierarchy is child→parent only",
+				ErrContractHierarchyInvalid, key)
+		}
+	}
+	return nil
+}
+
 // NormalizeTemplateData validates and normalizes template JSON-LD data.
 func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
@@ -135,6 +179,9 @@ func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datat
 func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateContractHierarchyInvariants(data); err != nil {
 		return nil, err
 	}
 	if isCanonicalEnvelope(data) {
@@ -328,8 +375,8 @@ func validateCanonicalEnvelope(data documentData) error {
 		}
 	}
 	if policies, exists := topLevelValueExists(data, "policies"); exists {
-		if _, ok := policies.([]any); !ok {
-			return errors.New("policies must be an array")
+		if err := validateODRLPoliciesShape(policies); err != nil {
+			return err
 		}
 	}
 	return validateCanonicalReferences(data, documentStructure)
@@ -470,14 +517,11 @@ func validateBlockPlaceholders(block map[string]any, fieldIDs map[string]bool) e
 }
 
 func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
-	policies, _ := topLevelValue(data, "policies").([]any)
-	for index, rawPolicy := range policies {
-		policy, ok := rawPolicy.(map[string]any)
-		if !ok {
-			return fmt.Errorf("policies.%d must be an object", index)
-		}
-		switch policy["@type"] {
-		case "odrl:Duty", "odrl:Permission", "odrl:Prohibition":
+	policies := topLevelValue(data, "policies")
+	rules := collectODRLPolicyRules(policies)
+	for index, policy := range rules {
+		switch compactTerm(fmt.Sprint(policy["@type"])) {
+		case "Duty", "Permission", "Prohibition":
 		default:
 			return fmt.Errorf("policies.%d has unsupported @type %q", index, policy["@type"])
 		}
@@ -489,6 +533,114 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 		fieldID, _ := leftOperand["@id"].(string)
 		if !fieldIDs[fieldID] {
 			return fmt.Errorf("policy references nonexistent contract data field %q", fieldID)
+		}
+	}
+	return nil
+}
+
+// odrlRuleBucketKeys are the ODRL 2.2 rule-bucket properties an enclosing
+// odrl:Set may carry.
+var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"}
+
+// collectODRLPolicyRules flattens dcs:policies into a plain list of rule
+// nodes. Only the canonical shape yields rules: a single enclosing odrl:Set
+// whose rules live in the odrl:duty/odrl:permission/odrl:prohibition/
+// odrl:obligation bucket properties. An array (the empty "no policies yet"
+// default; non-empty bare rule arrays are rejected by
+// validateODRLPoliciesShape before they can be persisted) yields none.
+func collectODRLPolicyRules(policies any) []map[string]any {
+	set, ok := policies.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return collectODRLSetRules(set)
+}
+
+func collectODRLSetRules(set map[string]any) []map[string]any {
+	rules := []map[string]any{}
+	for _, key := range odrlRuleBucketKeys {
+		bucket, ok := set[key]
+		if !ok {
+			continue
+		}
+		if items, ok := asArray(bucket); ok {
+			for _, item := range items {
+				if rule, ok := item.(map[string]any); ok {
+					rules = append(rules, rule)
+				}
+			}
+			continue
+		}
+		if rule, ok := bucket.(map[string]any); ok {
+			rules = append(rules, rule)
+		}
+	}
+	return rules
+}
+
+// validateODRLPoliciesShape enforces the structural contract for
+// dcs:policies:
+//
+//   - An empty array is accepted (no policies declared yet — the default
+//     normalizeCanonicalEnvelope produces for a brand-new document).
+//   - A non-empty bare rule array (Duty/Permission/Prohibition nodes with no
+//     odrl:action, no enclosing odrl:Set, no parties/target) is explicitly
+//     REJECTED — such a shape is not consumable by a standard ODRL processor.
+//   - A single enclosing odrl:Set object is validated structurally: it must
+//     declare odrl:profile and a uid, and every contained rule must declare
+//     exactly one odrl:action plus odrl:assigner/odrl:assignee/odrl:target.
+func validateODRLPoliciesShape(policies any) error {
+	switch typed := policies.(type) {
+	case []any:
+		if len(typed) == 0 {
+			return nil
+		}
+		return errors.New("dcs:policies is a bare rule array (no enclosing odrl:Set, " +
+			"no odrl:action, and no odrl:assigner/odrl:assignee/odrl:target), which is not accepted; " +
+			"policies must form a single enclosing odrl:Set declaring odrl:profile, whose rules each carry " +
+			"exactly one odrl:action plus odrl:assigner, odrl:assignee, and odrl:target")
+	case map[string]any:
+		return validateODRLPolicySet(typed)
+	default:
+		return fmt.Errorf("dcs:policies must be an odrl:Set object (or an empty array), got %T", policies)
+	}
+}
+
+func validateODRLPolicySet(set map[string]any) error {
+	if compactTerm(fmt.Sprint(set["@type"])) != "Set" {
+		return fmt.Errorf("dcs:policies enclosing node @type must be odrl:Set, got %v", set["@type"])
+	}
+	if uid, _ := set["uid"].(string); strings.TrimSpace(uid) == "" {
+		return errors.New("dcs:policies odrl:Set requires a uid")
+	}
+	if _, hasProfile := set["odrl:profile"]; !hasProfile {
+		return errors.New("dcs:policies odrl:Set must declare odrl:profile")
+	}
+	rules := collectODRLSetRules(set)
+	for index, rule := range rules {
+		if err := validateODRLRuleShape(rule); err != nil {
+			return fmt.Errorf("dcs:policies rule %d: %w", index, err)
+		}
+	}
+	return nil
+}
+
+func validateODRLRuleShape(rule map[string]any) error {
+	switch compactTerm(fmt.Sprint(rule["@type"])) {
+	case "Duty", "Permission", "Prohibition":
+	default:
+		return fmt.Errorf("unsupported rule @type %v", rule["@type"])
+	}
+	action, hasAction := rule["odrl:action"]
+	if !hasAction {
+		return errors.New("rule is missing odrl:action")
+	}
+	if items, ok := action.([]any); ok && len(items) != 1 {
+		return errors.New("rule must declare exactly one odrl:action")
+	}
+	for _, key := range []string{"odrl:assigner", "odrl:assignee", "odrl:target"} {
+		if _, ok := rule[key]; !ok {
+			return fmt.Errorf("rule is missing %s", key)
 		}
 	}
 	return nil

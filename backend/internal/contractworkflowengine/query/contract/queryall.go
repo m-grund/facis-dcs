@@ -30,6 +30,7 @@ import (
 type GetAllMetadataQry struct {
 	RetrievedBy string
 	HolderDID   string
+	ParentDID   string
 	Pagination  datatype.Pagination
 	UserRoles   userrole.UserRoles
 	DIDDocument identity.DIDDocument
@@ -100,6 +101,19 @@ func (h *GetAllMetadataHandler) Handle(ctx context.Context, query GetAllMetadata
 		if err != nil {
 			return nil, fmt.Errorf("could not read all contracts: %w", err)
 		}
+	}
+
+	// Full-scope hierarchy filter: keep only children whose
+	// dcs:parentContract references the requested parent DID. ReadAllMetaData
+	// already extracts parent_contract_did, so this is an in-memory narrowing.
+	if query.ParentDID != "" {
+		filtered := contractsMetadata[:0]
+		for _, c := range contractsMetadata {
+			if c.ParentContractDID != nil && *c.ParentContractDID == query.ParentDID {
+				filtered = append(filtered, c)
+			}
+		}
+		contractsMetadata = filtered
 	}
 
 	negotiationTasks, err := h.NTRepo.ReadAllByNegotiator(ctx, tx, did)

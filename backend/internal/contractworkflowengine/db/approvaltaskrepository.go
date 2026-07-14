@@ -27,6 +27,7 @@ type ApprovalTaskRepo interface {
 	ReopenTasks(ctx context.Context, tx *sqlx.Tx, did string) error
 	ReadAllByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ApprovalTaskData, error)
 	ReadAllByApprover(ctx context.Context, tx *sqlx.Tx, approver string) ([]ApprovalTaskData, error)
+	ReadAllInState(ctx context.Context, tx *sqlx.Tx, state string) ([]ApprovalTaskData, error)
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, approver string, state string) error
 	AnyTasksInState(ctx context.Context, tx *sqlx.Tx, did string, states ...string) (bool, error)
 	IsValidApprover(ctx context.Context, tx *sqlx.Tx, did string, approver string) (bool, error)

@@ -1,0 +1,39 @@
+# ADR-6: Real ODRL under a DCS profile, enforced server-side
+
+## Context
+
+The template builder's earlier machine-readable output was not ODRL by any
+reasonable reading: bare, actionless `odrl:Duty` nodes with no enclosing
+`odrl:Set`/`odrl:Policy`, no declared profile, and no parties or target.
+No standard policy engine or Contract Target System could consume it, and
+FR-PACM-03's constraint-satisfaction requirement was enforced (if at all)
+only in the frontend — trivially bypassable by anyone calling the API
+directly, which makes it a security gap, not a UX nicety.
+
+## Decision
+
+- Policies are emitted as a well-formed `odrl:Set` under a DCS-published
+  profile IRI (`https://w3id.org/facis/dcs/ontology/v1/odrl-profile`,
+  `frontend/ClientApp/src/modules/template-repository/utils/sla-ontology-catalog.ts`).
+- Rule types are concrete (`OdrlDuty`, `OdrlPermission`, `OdrlProhibition`
+  — `frontend/ClientApp/src/models/semantic/facis-dcs-semantic.ts`), never
+  the abstract `odrl:Rule`.
+- Constraint satisfaction is evaluated **server-side**
+  (`evaluateODRLConstraint`, `backend/internal/base/validation/contractcontentaudit.go`)
+  at acceptance and signing time — a client cannot submit a
+  constraint-violating value and have it silently accepted, because the
+  frontend is not the enforcement point.
+- The `odrl:Offer` → `odrl:Agreement` two-party upgrade and compound
+  (AND/OR-nested) constraint expressions are not implemented — every
+  shipped policy is a single-party `odrl:Set` with a flat constraint
+  list.
+
+## Consequences
+
+- A Contract Target System (DCS's example ORCE flow) can
+  consume the emitted `odrl:Set` as real ODRL, not a bespoke shape it has
+  to special-case.
+- Server-side enforcement is **not trimmable** (SRS DCS-FR-PACM-03) — it
+  is a security property, not a feature.
+- The emitted `odrl:Set` is validated against ODRL SHACL shapes in CI and
+  can express the SRS Appendix C example policy.

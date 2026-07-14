@@ -9,7 +9,9 @@ import (
 	pdfgen "digital-contracting-service/gen/pdf_generation"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/bundleexport"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
+	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	pdfquery "digital-contracting-service/internal/pdfgeneration/query"
@@ -23,6 +25,7 @@ type pdfGenerationSrvc struct {
 	IPFSClient *ipfs.APIClient
 	CRepo      cwedb.ContractRepo
 	TRepo      tpldb.ContractTemplateRepo
+	SignRepo   bundleexport.SignatureLoader
 	PDFCore    *pdfcore.Client
 	IssuerDID  string
 	VCIssuer   provenance.VCIssuer
@@ -35,6 +38,7 @@ func NewPDFGeneration(
 	ipfsClient *ipfs.APIClient,
 	cRepo cwedb.ContractRepo,
 	tRepo tpldb.ContractTemplateRepo,
+	signRepo bundleexport.SignatureLoader,
 	pdfCore *pdfcore.Client,
 	issuerDID string,
 	vcIssuer provenance.VCIssuer,
@@ -50,11 +54,70 @@ func NewPDFGeneration(
 		IPFSClient:       ipfsClient,
 		CRepo:            cRepo,
 		TRepo:            tRepo,
+		SignRepo:         signRepo,
 		PDFCore:          pdfCore,
 		IssuerDID:        issuerDID,
 		VCIssuer:         vcIssuer,
 		JWTAuthenticator: jwtAuth,
 	}
+}
+
+func (s *pdfGenerationSrvc) newBundler() *bundleexport.Bundler {
+	return &bundleexport.Bundler{
+		DB:         s.DB,
+		CRepo:      s.CRepo,
+		TRepo:      s.TRepo,
+		SignRepo:   s.SignRepo,
+		IPFSClient: s.IPFSClient,
+		PDFCore:    s.PDFCore,
+		VCIssuer:   s.VCIssuer,
+		IssuerDID:  s.IssuerDID,
+	}
+}
+
+// bundleZipContentType is the fixed media type of every bundle export body.
+const bundleZipContentType = "application/zip"
+
+func (s *pdfGenerationSrvc) ExportContractBundle(ctx context.Context, p *pdfgen.ExportContractBundlePayload) (*pdfgen.ExportContractBundleResult, io.ReadCloser, error) {
+	body, err := s.newBundler().ExportContract(ctx, p.Did, bundleexport.ExportContext{
+		ExportedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		if refused, ok := bundleexport.AsRefused(err); ok {
+			return nil, nil, &pdfgen.BundleExportRefusedError{
+				Name:     "refused",
+				Message:  fmt.Sprintf("contract bundle export for %s refused by structural-integrity pre-flight", p.Did),
+				Findings: refused.Findings,
+			}
+		}
+		if isNotFoundErr(err) {
+			return nil, nil, pdfgen.MakeNotFound(err)
+		}
+		return nil, nil, pdfgen.MakeInternalError(fmt.Errorf("export contract bundle %s: %w", p.Did, err))
+	}
+	ct := bundleZipContentType
+	return &pdfgen.ExportContractBundleResult{ContentType: &ct}, body, nil
+}
+
+func (s *pdfGenerationSrvc) ExportTemplateBundle(ctx context.Context, p *pdfgen.ExportTemplateBundlePayload) (*pdfgen.ExportTemplateBundleResult, io.ReadCloser, error) {
+	body, err := s.newBundler().ExportTemplate(ctx, p.Did)
+	if err != nil {
+		if refused, ok := bundleexport.AsRefused(err); ok {
+			return nil, nil, &pdfgen.BundleExportRefusedError{
+				Name:     "refused",
+				Message:  fmt.Sprintf("template bundle export for %s refused by structural-integrity pre-flight", p.Did),
+				Findings: refused.Findings,
+			}
+		}
+		if isNotFoundErr(err) {
+			return nil, nil, pdfgen.MakeNotFound(err)
+		}
+		return nil, nil, pdfgen.MakeInternalError(fmt.Errorf("export template bundle %s: %w", p.Did, err))
+	}
+	ct := bundleZipContentType
+	return &pdfgen.ExportTemplateBundleResult{ContentType: &ct}, body, nil
 }
 
 func (s *pdfGenerationSrvc) ExportContractPdf(ctx context.Context, p *pdfgen.ExportContractPdfPayload) (io.ReadCloser, error) {

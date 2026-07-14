@@ -25,17 +25,16 @@ Feature: Contract Approval
     And contract "Service Agreement" requires my approval
     When I reject contract "Service Agreement" with reason "Missing compliance clause"
     Then the rejection is logged with comments and timestamp
-    And the contract status returns to "Draft"
+    And the contract status shows "Rejected"
     And the contract is returned for revision
 
-  Scenario: All required approvals gathered
-    Given contract "Service Agreement" requires approvals from "Legal" and "Finance"
-    And "Legal" has approved the contract
-    And "Finance" has approved the contract
-    When the system evaluates approval status
-    Then all required approvals are recorded
-    And the contract content is locked
-    And the contract is marked as ready for execution
+  # "All required approvals gathered" (partial-quorum proof) lives in
+  # 17_peer_trust/two_instance_peer_trust.feature's approval-quorum scenario: approvers are PEERS
+  # (CauserDID is always the executing instance's own peer DID and
+  # UpdateState matches WHERE approver = CauserDID), so two observably
+  # distinct approvals require two instances — that scenario approves
+  # from A, proves the contract stays REVIEWED, approves from B, and proves
+  # APPROVED replicates with both approval tasks recorded.
 
   Scenario: Contract transitions to signing phase upon approval
     Given I am authenticated with roles: "Contract Manager"
@@ -60,12 +59,21 @@ Feature: Contract Approval
     And the system validates against organizational policies
     And compliance issues are flagged for review
 
+  # GET /pac/monitor (backend/internal/processauditandcompliance/query/
+  # querymonitor.go) sweeps OPEN approval tasks and flags contracts in an
+  # approval-pending state (SUBMITTED/REVIEWED) as MISSING_APPROVAL risks.
+  # Approvers are responsible peers (peer DIDs), not individual user roles,
+  # so the missing approval is attributed to a peer — the earlier draft of
+  # this scenario ("from Risk Officer") assumed per-user approvers the
+  # product does not have.
+  @DCS-FR-PACM-03 @DCS-IR-PACM-03
   Scenario: Compliance monitoring detects risk during approval
-    Given contract "Service Agreement" is pending approval
-    And the contract has a missing required approval from "Risk Officer"
-    When the system monitors compliance
-    Then a compliance risk is detected
-    And the risk is flagged and reported
+    Given contract "Monitor Risk Contract" is pending approval
+    And contract "Monitor Risk Contract" still has an open required approval task
+    When the Compliance Officer requests continuous monitoring
+    Then get http 200:Success code
+    And the monitoring sweep flags contract "Monitor Risk Contract" with a "MISSING_APPROVAL" compliance risk
+    And the flagged risk for contract "Monitor Risk Contract" is recorded in the PAC audit trail
 
   Scenario: Track approval routing status
     Given I am authenticated with roles: "Contract Manager"

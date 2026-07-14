@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
@@ -15,7 +15,7 @@ interface ComponentTemplateKey {
   document_number?: string
 }
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const templatesStore = useContractTemplatesStore()
 const { templateType, blocks, subTemplateSnapshots, state, version } = storeToRefs(store)

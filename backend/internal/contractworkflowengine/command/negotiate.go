@@ -98,8 +98,8 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return errors.New("contract was updated elsewhere, please reload")
 	}
 
-	if processData.State != contractstate.Negotiation.String() || processData.State == contractstate.Terminated.String() {
-		return errors.New("current contract state is invalid")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventNegotiate); err != nil {
+		return err
 	}
 
 	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
@@ -108,7 +108,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid permissions")
+		return ErrNotAParty
 	}
 
 	negotiators, err := h.NTRepo.ReadNegotiatorsForDID(ctx, tx, cmd.DID)

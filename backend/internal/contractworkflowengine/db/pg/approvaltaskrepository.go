@@ -101,6 +101,20 @@ func (r *PostgresApprovalTaskRepo) ReadAllByApprover(ctx context.Context, tx *sq
 	return approvalTasks, nil
 }
 
+func (r *PostgresApprovalTaskRepo) ReadAllInState(ctx context.Context, tx *sqlx.Tx, state string) ([]db.ApprovalTaskData, error) {
+	query := `
+        SELECT id, did, state, approver,
+               created_by, created_at
+        FROM contract_approval_task WHERE state = $1
+    `
+	var approvalTasks []db.ApprovalTaskData
+	err := tx.SelectContext(ctx, &approvalTasks, query, state)
+	if err != nil {
+		return nil, err
+	}
+	return approvalTasks, nil
+}
+
 func (r *PostgresApprovalTaskRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did string, approver string, state string) error {
 	statement := `
         UPDATE contract_approval_task SET state = $3

@@ -100,8 +100,13 @@ type ContractSignature struct {
 	Status         string     `db:"status"`
 	SignedAt       *time.Time `db:"signed_at"`
 	RevokedAt      *time.Time `db:"revoked_at"`
+	CertRevokedAt  *time.Time `db:"cert_revoked_at"`
 	IpfsCID        *string    `db:"ipfs_cid"`
 	SignatureBytes []byte     `db:"signature_bytes"`
+	KeyVersion     int        `db:"key_version"`
+	CeremonyID     *string    `db:"ceremony_id"`
+	PDFHash        *string    `db:"pdf_hash"`
+	ContentHash    *string    `db:"content_hash"`
 }
 
 type ContractSignatureEnvelope struct {
@@ -112,6 +117,7 @@ type ContractSignatureEnvelope struct {
 	SignedAt       *string `db:"signed_at"`
 	RevokedAt      *string `db:"revoked_at"`
 	IpfsCID        *string `db:"ipfs_cid"`
+	KeyVersion     int     `db:"key_version"`
 }
 
 type ContractSigningTask struct {
@@ -128,6 +134,7 @@ type SignatureRecord struct {
 	Status         string     `db:"status"`
 	SignedAt       *time.Time `db:"signed_at"`
 	RevokedAt      *time.Time `db:"revoked_at"`
+	CertRevokedAt  *time.Time `db:"cert_revoked_at"`
 }
 
 type ContractRepo interface {
@@ -137,7 +144,15 @@ type ContractRepo interface {
 	UpdateState(ctx context.Context, tx *sqlx.Tx, did string, state string) error
 
 	CreateSignature(ctx context.Context, tx *sqlx.Tx, signature ContractSignature) error
+	// SetSignedPDF points the contract at the PAdES-signed PDF artefact in IPFS
+	// and records its C2PA lifecycle state and payload hash so the export/verify
+	// endpoints recognize this artefact as already up to date and serve it
+	// frozen — never re-embedding a C2PA assertion into an already-signed PDF
+	// (any post-signature attachment mutation is flagged as an illegal
+	// modification by standards-compliant PAdES validators).
+	SetSignedPDF(ctx context.Context, tx *sqlx.Tx, did, ipfsCID, rendererVersion, c2paState, payloadHash string) error
 	RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error
+	ActiveKeyVersion(ctx context.Context, tx *sqlx.Tx, label string) (int, error)
 	ReadLatestEnvelopeByContractDID(ctx context.Context, tx *sqlx.Tx, did string) (*ContractSignatureEnvelope, error)
 	ReadAllSigningTasks(ctx context.Context, tx *sqlx.Tx) ([]ContractSigningTask, error)
 	CountSignatureForContractDID(ctx context.Context, tx *sqlx.Tx, did string) (int, error)

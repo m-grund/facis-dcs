@@ -29,16 +29,29 @@ const (
 	RetrieveAll              EventType = "RETRIEVE_ALL_CONTRACTS"
 	RetrieveArchived         EventType = "RETRIEVE_ARCHIVED_CONTRACTS"
 	StoreArchived            EventType = "STORE_ARCHIVED_CONTRACT"
+	DeleteArchived           EventType = "DELETE_ARCHIVED_CONTRACT"
 	RetrieveByID             EventType = "RETRIEVE_CONTRACT_BY_ID"
+	AccessDenied             EventType = "CONTRACT_ACCESS_DENIED"
 	RetrieveHistoryByDID     EventType = "RETRIEVE_CONTRACT_HISTORY_BY_DID"
 	Search                   EventType = "SEARCH_CONTRACT"
 	Review                   EventType = "REVIEW_CONTRACT"
 	Audit                    EventType = "AUDIT_CONTRACT"
 	Terminate                EventType = "TERMINATE_CONTRACT"
+	Renew                    EventType = "RENEW_CONTRACT"
 	RecordEvidence           EventType = "RECORD_EVIDENCE"
 	ContractExpired          EventType = "CONTRACT_EXPIRED"
 	RetrieveAllTemplates     EventType = "RETRIEVE_ALL_TEMPLATES"
 	RemoteActionRequestEvent EventType = "REMOTE_ACTION_REQUEST"
+	Offer                    EventType = "OFFER_CONTRACT"
+	Withdraw                 EventType = "WITHDRAW_CONTRACT"
+	// Export is emitted when a contract bundle (ZIP) is exported. An export
+	// is a retrieval-class action and is recorded in the audit log
+	// (FR-CSA-18). Kept as the bare "EXPORT" token so the audit trail
+	// surfaces it verbatim.
+	Export EventType = "EXPORT"
+	// Revoke marks the invalidation of a signed contract via signature
+	// revocation (FR-SM-20); no command emits it yet.
+	Revoke EventType = "REVOKE_CONTRACT"
 )
 
 var validStates = map[EventType]bool{
@@ -55,12 +68,15 @@ var validStates = map[EventType]bool{
 	RetrieveAll:              true,
 	RetrieveArchived:         true,
 	StoreArchived:            true,
+	DeleteArchived:           true,
 	RetrieveByID:             true,
+	AccessDenied:             true,
 	RetrieveHistoryByDID:     true,
 	Search:                   true,
 	Review:                   true,
 	Audit:                    true,
 	Terminate:                true,
+	Renew:                    true,
 	RecordEvidence:           true,
 	ContractExpired:          true,
 	RetrieveAllTemplates:     true,
@@ -68,6 +84,10 @@ var validStates = map[EventType]bool{
 	RemoteSyncRequest:        true,
 	OutdatedPeer:             true,
 	RemoteActionRequestEvent: true,
+	Offer:                    true,
+	Withdraw:                 true,
+	Revoke:                   true,
+	Export:                   true,
 }
 
 func NewEventType(s string) (EventType, error) {

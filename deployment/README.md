@@ -66,8 +66,10 @@ bash dev-stack.sh
 
 What this command does:
 1. Runs Helm dependency update and upgrade using `deployment/helm/values.dev.yml`
-2. Creates `backend/.env` from `backend/.env.dev` if missing
-3. Fetches the C2PA cert chain from Kubernetes secret `dcs-crypto-provider-dev-cert-chain` into `backend/certs/dev/chain.pem`
+2. Creates `backend/.env` from `backend/.env.dev1` if missing
+3. Provisions a local SoftHSM2 token with the five DCS keys and issues the
+   C2PA/PAdES x5chains for pdf-core (`scripts/hsm-provision.sh`,
+   `scripts/c2pa-cert-provision.sh`)
 4. Starts frontend Vite dev server
 5. Starts backend with air hot reload
 
@@ -92,11 +94,8 @@ helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml
 `helm uninstall dcs`
 ```
 
-The dev values enable automatic signer certificate-chain provisioning for C2PA:
-- Vault transit key is initialized as `ecdsa-p256`
-- a Helm hook job creates a local dev CA
-- a leaf certificate is issued for the active transit public key
-- the chain is stored in a Kubernetes Secret and auto-wired to DCS chart mounts/env
+The dev values run the backend natively (replicaCount 0), so the PKCS#11 token
+is provisioned locally by `dev-stack.sh` rather than in-cluster.
 
 This starts all dependencies as NodePort services forwarded to `localhost`:
 
@@ -117,17 +116,16 @@ The Keycloak `gaia-x` realm is imported automatically on first start.
 
 > To upgrade after chart changes: `helm upgrade dcs ./deployment/helm -f ./deployment/helm/values.dev.yml`
 
-#### 2. Prepare backend runtime config and cert-chain
+#### 2. Prepare backend runtime config and PKCS#11 token
 
 ```bash
-cp backend/.env.dev backend/.env
-mkdir -p backend/certs/dev
-kubectl -n default get secret dcs-crypto-provider-dev-cert-chain \
-  -o jsonpath='{.data.chain\.pem}' | base64 -d > backend/certs/dev/chain.pem
-test -s backend/certs/dev/chain.pem
+cp backend/.env.dev1 backend/.env
+bash scripts/hsm-provision.sh "$HOME/.dcs/softhsm-8991" dcs 1234 12345678
 ```
 
-The backend reads the C2PA signer certificate chain from `CRYPTO_PROVIDER_CERT_CHAIN_FILE` (set to `certs/dev/chain.pem` in `.env.dev`).
+This provisions the SoftHSM2 token with the five DCS keys; the backend opens it
+via the `PKCS11_*` / `SOFTHSM2_CONF` variables in `.env`. `dev-stack.sh` performs
+this step automatically.
 
 #### 3. Run backend and frontend
 
@@ -227,42 +225,30 @@ JUnit reports are published as check annotations and uploaded as workflow artifa
 
 ## Production Deployment
 
-### C2PA certificate chain (x5chain)
+### Signing keys (PKCS#11) and the C2PA x5chain
 
-DCS requires a signer certificate chain (PEM) for C2PA manifests. Configure it via Kubernetes Secret.
+Every DCS private key lives in a PKCS#11 token (DCS-IR-HI-01). For dev, staging
+and CI the chart co-deploys a SoftHSM2 software token and provisions it in-cluster
+(`pkcs11.provisioning.enabled=true`): a hook Job runs `scripts/hsm-provision.sh`
+(token + five ECDSA P-256 keys) and `scripts/c2pa-cert-provision.sh` (the C2PA
+x5chain bound to the `dcs-c2pa` key), publishing the x5chain as a Secret that
+pdf-core mounts. The backend waits for the token via an initContainer, then
+opens it using `PKCS11_MODULE_PATH` / `PKCS11_TOKEN_LABEL` / `PKCS11_PIN`.
 
-For local Helm development with the co-deployed crypto-provider, you can enable automatic in-chart provisioning instead of creating a secret manually:
-
-```yaml
-cryptoProvider:
-  enabled: true
-  devCertChain:
-    enabled: true
-```
-
-This creates/updates a secret named `<release>-crypto-provider-dev-cert-chain` by default and auto-wires `CRYPTO_PROVIDER_CERT_CHAIN_FILE` in the DCS deployment.
-
-Create the secret (example):
-
-```bash
-kubectl -n <namespace> create secret generic dcs-c2pa-cert-chain \
-  --from-file=chain.pem=./chain.pem
-```
-
-Enable it in your Helm values override:
+SoftHSM2 is a software token and is NOT a production HSM. For production set
+`pkcs11.provisioning.enabled=false` and point `pkcs11` at a real external PKCS#11
+module whose token already holds the keys:
 
 ```yaml
-signing:
-  certChain:
-    enabled: true
-    existingSecret:
-      name: dcs-c2pa-cert-chain
-      key: chain.pem
+pkcs11:
+  modulePath: /usr/lib/<vendor>/libpkcs11.so
+  tokenLabel: dcs
+  pinSecretRef:
+    name: dcs-hsm-pin
+    key: PKCS11_PIN
+  provisioning:
+    enabled: false
 ```
-
-When enabled, the chart automatically:
-- mounts the secret into the DCS container
-- sets `CRYPTO_PROVIDER_CERT_CHAIN_FILE` to the mounted PEM path
 
 ### Hydra
 - Enable `hydra.enabled` and set `hydra.config.selfIssuerURL` to the public issuer URL

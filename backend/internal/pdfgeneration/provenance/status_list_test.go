@@ -2,7 +2,7 @@ package provenance
 
 import (
 	"bytes"
-	"compress/zlib"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -18,32 +18,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// makeStatusListVC builds a minimal StatusList2021Credential JSON with a
-// bitstring of bitstringLen bytes where the bit at setIndex is 1 if revoked=true.
-func makeStatusListVC(bitstringLen int, setIndex uint32, revoked bool) []byte {
+// makeXFSCStatusListResponse builds a response matching the ACTUAL shape
+// returned by the deployed XFSC statuslist-service
+// (deployment/helm/charts/statuslist-service): a plain {"list", "listId",
+// "tenantId"} object, gzip-compressed, standard base64, LSB bit packing.
+func makeXFSCStatusListResponse(bitstringLen int, setIndex uint32, revoked bool) []byte {
 	bitstring := make([]byte, bitstringLen)
 	if revoked {
 		byteIdx := setIndex / 8
-		bitIdx := uint(7 - (setIndex % 8))
+		bitIdx := uint(setIndex % 8)
 		bitstring[byteIdx] |= 1 << bitIdx
 	}
 
 	var buf bytes.Buffer
-	w := zlib.NewWriter(&buf)
+	w := gzip.NewWriter(&buf)
 	_, _ = w.Write(bitstring)
 	_ = w.Close()
-	encoded := base64.RawURLEncoding.EncodeToString(buf.Bytes())
+	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
 
-	vc := map[string]interface{}{
-		"@context": []string{"https://www.w3.org/2018/credentials/v1"},
-		"type":     []string{"VerifiableCredential", "StatusList2021Credential"},
-		"credentialSubject": map[string]interface{}{
-			"type":          "StatusList2021",
-			"statusPurpose": "revocation",
-			"encodedList":   encoded,
-		},
+	resp := map[string]interface{}{
+		"list":     encoded,
+		"listId":   1,
+		"tenantId": "default",
 	}
-	b, _ := json.Marshal(vc)
+	b, _ := json.Marshal(resp)
 	return b
 }
 
@@ -122,7 +120,7 @@ func TestOCMWStatusListPublisher_RevokeStatus_CallsCorrectPath(t *testing.T) {
 	p := NewOCMWStatusListPublisher(srv.URL, "did:example:issuer", "default")
 	uri, err := p.RevokeStatus(context.Background(), "did:example:contractX")
 	require.NoError(t, err)
-	assert.Contains(t, capturedPath, "/v1/tenants/default/status/revoke/1/", "revoke path must contain tenant and list ID")
+	assert.Contains(t, capturedPath, "/v1/tenants/default/status/1/revoke/", "revoke path must contain tenant and list ID")
 	assert.Contains(t, uri, "/v1/tenants/default/status/1", "returned URI must point to status list endpoint")
 }
 
@@ -197,15 +195,16 @@ func TestStatusListURI_Format(t *testing.T) {
 }
 
 // TestQueryStatusListStatus_ActiveBitNotSet verifies "active" is returned when
-// the bitstring bit at the contract's index is 0.
+// the bitstring bit at the contract's index is 0, against the ACTUAL XFSC
+// statuslist-service response shape ({"list", "listId", "tenantId"}, gzip, LSB).
 func TestQueryStatusListStatus_ActiveBitNotSet(t *testing.T) {
 	contractID := "did:example:contract-active"
 	idx := StatusListIndex(contractID)
 
-	vcBody := makeStatusListVC(int(listSize/8), idx, false /* not revoked */)
+	body := makeXFSCStatusListResponse(int(listSize/8), idx, false /* not revoked */)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write(vcBody)
+		_, err := w.Write(body)
 		if err != nil {
 			log.Printf("could not write response: %v", err)
 		}
@@ -218,15 +217,16 @@ func TestQueryStatusListStatus_ActiveBitNotSet(t *testing.T) {
 }
 
 // TestQueryStatusListStatus_RevokedBitSet verifies "revoked" is returned when
-// the bit at the contract's index is 1.
+// the bit at the contract's index is 1, against the ACTUAL XFSC
+// statuslist-service response shape ({"list", "listId", "tenantId"}, gzip, LSB).
 func TestQueryStatusListStatus_RevokedBitSet(t *testing.T) {
 	contractID := "did:example:contract-revoked"
 	idx := StatusListIndex(contractID)
 
-	vcBody := makeStatusListVC(int(listSize/8), idx, true /* revoked */)
+	body := makeXFSCStatusListResponse(int(listSize/8), idx, true /* revoked */)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write(vcBody)
+		_, err := w.Write(body)
 		if err != nil {
 			log.Printf("could not write response: %v", err)
 		}
@@ -251,8 +251,8 @@ func TestQueryStatusListStatus_HTTPErrorPropagates(t *testing.T) {
 	assert.Contains(t, err.Error(), "503")
 }
 
-// TestQueryStatusListStatus_MissingEncodedList verifies that a VC without
-// encodedList in credentialSubject returns an error.
+// TestQueryStatusListStatus_MissingEncodedList verifies that a response with
+// neither "list" nor credentialSubject.encodedList returns an error.
 func TestQueryStatusListStatus_MissingEncodedList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte(`{"credentialSubject":{}}`))
@@ -264,5 +264,5 @@ func TestQueryStatusListStatus_MissingEncodedList(t *testing.T) {
 
 	_, err := QueryStatusListStatus(context.Background(), srv.Client(), srv.URL, 0)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "encodedList absent")
+	assert.Contains(t, err.Error(), "no list field")
 }

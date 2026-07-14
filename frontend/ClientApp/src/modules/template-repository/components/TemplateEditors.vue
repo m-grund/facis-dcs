@@ -7,7 +7,7 @@ import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
 import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
@@ -24,7 +24,7 @@ withDefaults(
 const route = useRoute()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const { activeTab } = storeToRefs(templateEditorUiStore)
 const { state, templateType } = storeToRefs(draftStore)
 const tabs = computed(() => {

@@ -14,6 +14,17 @@ spec:
         app.kubernetes.io/name: orce
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      {{- if .Values.localTSA.enabled }}
+      initContainers:
+        # openssl ts -reply needs a writable, pre-existing serial file.
+        - name: seed-tsa-serial
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          command: ["/bin/sh", "-c", "[ -f /data/tsa-state/serial ] || echo 01 > /data/tsa-state/serial"]
+          volumeMounts:
+            - name: tsa-state
+              mountPath: /data/tsa-state
+      {{- end }}
       containers:
         - name: orce
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -26,10 +37,28 @@ spec:
           env:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if .Values.persistence.enabled }}
+          {{- if or .Values.persistence.enabled .Values.localTSA.enabled .Values.flowsFile.enabled }}
           volumeMounts:
+            {{- if .Values.persistence.enabled }}
             - name: orce-data
               mountPath: /data
+            {{- end }}
+            {{- if .Values.flowsFile.enabled }}
+            - name: flows-merged
+              mountPath: /data/flows.json
+              subPath: flows.json
+              readOnly: true
+            {{- end }}
+            {{- if .Values.localTSA.enabled }}
+            - name: tsa-config
+              mountPath: /data/tsa
+              readOnly: true
+            - name: tsa-certs
+              mountPath: /data/tsa-certs
+              readOnly: true
+            - name: tsa-state
+              mountPath: /data/tsa-state
+            {{- end }}
           {{- end }}
           livenessProbe:
             httpGet:
@@ -47,9 +76,26 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- end }}
-      {{- if .Values.persistence.enabled }}
+      {{- if or .Values.persistence.enabled .Values.localTSA.enabled .Values.flowsFile.enabled }}
       volumes:
+        {{- if .Values.persistence.enabled }}
         - name: orce-data
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-orce
+        {{- end }}
+        {{- if .Values.flowsFile.enabled }}
+        - name: flows-merged
+          configMap:
+            name: {{ .Release.Name }}-orce-flows-merged
+        {{- end }}
+        {{- if .Values.localTSA.enabled }}
+        - name: tsa-config
+          configMap:
+            name: {{ .Release.Name }}-orce-tsa
+        - name: tsa-certs
+          secret:
+            secretName: {{ .Release.Name }}-orce-tsa-material
+        - name: tsa-state
+          emptyDir: {}
+        {{- end }}
       {{- end }}

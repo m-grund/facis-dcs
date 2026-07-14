@@ -28,7 +28,7 @@ type Params struct {
 // BuildJWT creates a signed OpenID4VP authorization request object (JAR).
 func BuildJWT(signer Signer, params Params) (string, error) {
 	if signer == nil {
-		return "", fmt.Errorf("request signer is not configured (set VAULT_ADDR and VAULT_TOKEN)")
+		return "", fmt.Errorf("request signer is not configured")
 	}
 
 	clientID := strings.TrimSpace(params.ClientID)

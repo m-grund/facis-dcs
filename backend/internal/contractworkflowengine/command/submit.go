@@ -108,11 +108,25 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		return errors.New("contract data can only be submitted in draft or rejected state")
 	}
 
+	// The transition table (contractstate.Transitions) is the single source
+	// of truth for which states Submit may be called from at all. It does
+	// NOT replace the imperative branching below — that logic stays,
+	// unchanged, to decide (given the current state and payload) exactly
+	// which of the table's allowed outcomes applies; see command package doc.
+	currentState := contractstate.ContractState(processData.State)
+	if err := contractstate.ValidateTransition(currentState, contractstate.EventSubmit); err != nil {
+		return err
+	}
+
 	// Submit is intentionally overloaded: its effect depends entirely on the
 	// contract's current state (state pattern via if/else, not polymorphism).
 	// See docs/backend architecture doc, section "Contract Workflow Engine".
 	var nextState contractstate.ContractState
-	if processData.State == contractstate.Draft.String() {
+	// Draft and Offered submit identically: both start the negotiation round
+	// (see transition.go's Draft -> Negotiation and Offered -> Negotiation
+	// edges). Submitting an already-offered contract simply mirrors submitting
+	// a draft.
+	if processData.State == contractstate.Draft.String() || processData.State == contractstate.Offered.String() {
 
 		if !cmd.UserRoles.HasRoles(userrole.ContractCreator) {
 			return errors.New("invalid user permission")
@@ -144,7 +158,13 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		}
 
 		resp := db.Responsible{
-			Creator:     processData.CreatedBy,
+			// Responsible.Creator is the ORIGIN PEER DID (see create.go,
+			// db.Responsible.GetUniqueResponsibleList treating it as a
+			// federation peer), not the human/org display name — using
+			// processData.CreatedBy here silently broke every subsequent
+			// PostSync broadcast for this contract, since a non-DID string
+			// fails CheckForUntrustedPeers and aborts the whole delivery.
+			Creator:     processData.Origin,
 			Reviewers:   cmd.Reviewers,
 			Approvers:   cmd.Approvers,
 			Negotiators: cmd.Negotiators,
@@ -355,10 +375,16 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 		nextState = contractstate.Submitted
 
 	} else {
-		return errors.New("current contract state is invalid")
+		// Unreachable: the ValidateTransition guard above already rejects any
+		// state without a declared EventSubmit outcome. Kept as a
+		// defense-in-depth fallback.
+		return fmt.Errorf("%w: submit is not allowed from state %s", contractstate.ErrInvalidTransition, processData.State)
 	}
 
 	if len(nextState) > 0 && processData.State != nextState.String() {
+		if err := contractstate.ValidateOutcome(currentState, contractstate.EventSubmit, nextState); err != nil {
+			return err
+		}
 		err = h.CRepo.UpdateState(ctx, tx, cmd.DID, nextState.String())
 		if err != nil {
 			return fmt.Errorf("could not update contract state: %w", err)

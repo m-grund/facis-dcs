@@ -50,6 +50,24 @@ export interface SignatureAuditEntry {
   global_log_pred_cid?: string
 }
 
+export type CeremonyStatus = 'pending' | 'verified' | 'expired' | 'failed'
+
+export interface CeremonyStartResult {
+  ceremony_id: string
+  wallet_uri: string
+  expires_at: string
+  status: CeremonyStatus
+}
+
+export interface CeremonyStatusResult {
+  ceremony_id: string
+  contract_did: string
+  field_name?: string
+  status: CeremonyStatus
+  signer_did?: string
+  expires_at?: string
+}
+
 export const signatureManagementService = {
   async retrieveContracts(): Promise<SignatureContract[]> {
     return http
@@ -57,11 +75,17 @@ export const signatureManagementService = {
       .then((res) => res.data.contracts ?? [])
   },
 
-  async applySignature(
-    did: string,
-    signerDid: string,
-    credentialType = 'stub',
-  ): Promise<SignatureEnvelope | undefined> {
+  async startCeremony(contractDid: string, fieldName: string): Promise<CeremonyStartResult> {
+    return http
+      .post<CeremonyStartResult>('/signature/request', { contract_did: contractDid, field_name: fieldName })
+      .then((res) => res.data)
+  },
+
+  async getCeremonyStatus(ceremonyId: string): Promise<CeremonyStatusResult> {
+    return http.get<CeremonyStatusResult>(`/signature/request/${ceremonyId}`).then((res) => res.data)
+  },
+
+  async applySignature(did: string, signerDid: string, credentialType: string): Promise<SignatureEnvelope | undefined> {
     return http
       .post<{ did: string; signature_envelope?: SignatureEnvelope }>('/signature/apply', {
         did,

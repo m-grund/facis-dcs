@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/tsa"
-	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 )
 
 type ArchiveTimestampIssuer interface {
@@ -55,20 +54,4 @@ func CanonicalArchiveTimestampEvidence(evidence ArchiveTimestampEvidence) ([]byt
 		return nil, fmt.Errorf("marshal archive TSA evidence: %w", err)
 	}
 	return data, nil
-}
-
-func archiveTSAEventReceipt(receipt *tsa.Receipt) *contractevents.ArchiveTSAReceipt {
-	if receipt == nil {
-		return nil
-	}
-	return &contractevents.ArchiveTSAReceipt{
-		ReceiptType:    "ARCHIVE_TSA_RECEIPT",
-		Token:          receipt.Token,
-		TokenEncoding:  receipt.TokenEncoding,
-		HashAlgorithm:  receipt.HashAlgorithm,
-		MessageImprint: receipt.MessageImprint,
-		GeneratedAt:    receipt.GeneratedAt,
-		Policy:         receipt.Policy,
-		SerialNumber:   receipt.SerialNumber,
-	}
 }

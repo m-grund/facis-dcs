@@ -72,6 +72,8 @@ func TestClientUpdate(t *testing.T) {
 		assert.NotEmpty(t, r.FormValue("payload"), "payload field must be present")
 		// no vc field in this call
 		assert.Empty(t, r.FormValue("vc"))
+		// no manifest_url in this call
+		assert.Empty(t, r.FormValue("manifest_url"))
 		w.Header().Set("Content-Type", "application/pdf")
 		w.Header().Set("X-PDF-Core-Version", testVersion)
 		_, _ = w.Write(fakePDF)
@@ -79,10 +81,28 @@ func TestClientUpdate(t *testing.T) {
 
 	c := pdfcore.New(srv.URL)
 	pdf, ver, err := c.Update(context.Background(),
-		[]byte("%PDF existing"), []byte(`{"@context":"test"}`), nil)
+		[]byte("%PDF existing"), []byte(`{"@context":"test"}`), nil, "")
 	require.NoError(t, err)
 	assert.Equal(t, fakePDF, pdf)
 	assert.Equal(t, testVersion, ver)
+}
+
+// TestClientUpdateWithManifestURL verifies that Update sends a "manifest_url"
+// multipart field when a remote manifest URL is supplied (DCS-OR-C2PA-008).
+func TestClientUpdateWithManifestURL(t *testing.T) {
+	const manifestURL = "https://dcs.example/c2pa/manifest/did:example:contract-1"
+	srv := stubServer(t, func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseMultipartForm(8<<20))
+		assert.Equal(t, manifestURL, r.FormValue("manifest_url"), "manifest_url field must match supplied URL")
+		w.Header().Set("X-PDF-Core-Version", testVersion)
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write([]byte("%PDF updated+manifesturl"))
+	})
+
+	c := pdfcore.New(srv.URL)
+	_, _, err := c.Update(context.Background(),
+		[]byte("%PDF existing"), []byte(`{"@context":"test"}`), nil, manifestURL)
+	require.NoError(t, err)
 }
 
 // TestClientUpdateWithVC verifies that Update sends a "vc" multipart field
@@ -99,7 +119,7 @@ func TestClientUpdateWithVC(t *testing.T) {
 
 	c := pdfcore.New(srv.URL)
 	_, _, err := c.Update(context.Background(),
-		[]byte("%PDF existing"), []byte(`{"@context":"test"}`), vcBytes)
+		[]byte("%PDF existing"), []byte(`{"@context":"test"}`), vcBytes, "")
 	require.NoError(t, err)
 }
 

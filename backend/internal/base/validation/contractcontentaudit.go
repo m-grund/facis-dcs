@@ -890,19 +890,20 @@ func shaclPropertyFindingWithDetails(policy ContractContentPolicy, shape Contrac
 	return finding
 }
 
+// extractContractODRLPolicies reads dcs:policies and flattens it into a
+// plain list of rule nodes for the ODRL enforcement/audit pipeline.
+// dcs:policies is a single enclosing odrl:Set object whose rules live in
+// the odrl:duty/odrl:permission/odrl:prohibition/odrl:obligation bucket
+// properties (an empty array means "no policies declared").
+//
+// Extraction is security-critical: if the emitted dcs:policies shape and
+// this function ever drift apart, ValidateContractPolicySatisfaction would
+// silently see zero policies and let every contract through unchecked —
+// which is why the BDD enforcement scenarios build their fixtures against
+// the same canonical shape the backend emits.
 func extractContractODRLPolicies(contract map[string]any) []map[string]any {
 	raw := topLevelValue(documentData(contract), "policies")
-	items, ok := asArray(raw)
-	if !ok {
-		return nil
-	}
-	result := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		if policy, ok := item.(map[string]any); ok {
-			result = append(result, policy)
-		}
-	}
-	return result
+	return collectODRLPolicyRules(raw)
 }
 
 func externalODRLPolicies(raw []any) []map[string]any {
@@ -1614,4 +1615,30 @@ func isEmptyAuditValue(value any) bool {
 	default:
 		return false
 	}
+}
+
+// shaclSeverity and shaclPredicateLine back the SHACL shapes reader above
+// (parseContractSHACLShapesTTL). Validation profiles themselves are
+// structured YAML/JSON, not SHACL (contractstatementvalidation.go).
+
+func shaclSeverity(statement string) string {
+	severity := ontologyResource(statement, "sh:severity")
+	switch severity {
+	case "sh:Warning":
+		return "warning"
+	case "sh:Info":
+		return "info"
+	default:
+		return "error"
+	}
+}
+
+func shaclPredicateLine(statement string, predicate string) string {
+	for _, line := range strings.Split(statement, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, predicate+" ") {
+			return line
+		}
+	}
+	return ""
 }

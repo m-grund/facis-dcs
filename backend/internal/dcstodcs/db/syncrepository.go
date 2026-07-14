@@ -24,6 +24,7 @@ type SyncFail struct {
 
 type SyncRepository interface {
 	IsTrustedPeer(ctx context.Context, tx *sqlx.Tx, peerDID string) (bool, error)
+	UpsertTrustedPeer(ctx context.Context, tx *sqlx.Tx, peerDID string) error
 
 	GetPendingSyncFails(ctx context.Context, tx *sqlx.Tx) ([]SyncFail, error)
 	CreateOrUpdateSyncFailEntry(ctx context.Context, tx *sqlx.Tx, did string) error

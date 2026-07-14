@@ -35,31 +35,31 @@ spec:
               value: {{ printf "0.0.0.0:%v" .Values.pdfCore.service.port | quote }}
             - name: DCS_PDF_CORE_ONTOLOGY_BASE_URL
               value: {{ .Values.pdfCore.ontologyBaseURL | default (include "digital-contracting-service.pdfCoreURL" .) | quote }}
-            {{- $cpURL := include "digital-contracting-service.pdfCoreCryptoProviderURL" . }}
-            {{- if $cpURL }}
-            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_URL
-              value: {{ $cpURL | quote }}
-            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_NAMESPACE
-              value: {{ include "digital-contracting-service.cryptoProviderNamespace" . | quote }}
-            - name: DCS_PDF_CORE_CRYPTO_PROVIDER_KEY
-              value: {{ include "digital-contracting-service.pdfCoreCryptoProviderKey" . | quote }}
+            # pdf-core holds no key material: it signs COSE Sig_structure bytes by
+            # calling the backend's authenticated internal endpoint, which uses the
+            # PKCS#11 dcs-c2pa key (DCS-IR-HI-01).
+            - name: DCS_PDF_CORE_C2PA_SIGNING_ENDPOINT
+              value: {{ printf "http://%s:%v%s/internal/c2pa/sign" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
             - name: DCS_PDF_CORE_C2PA_X5CHAIN_PEM
               valueFrom:
                 secretKeyRef:
                   name: {{ include "digital-contracting-service.pdfCoreX5ChainSecretName" . }}
                   key: {{ include "digital-contracting-service.pdfCoreX5ChainSecretKey" . | quote }}
-            {{- else }}
-            - name: DCS_PDF_CORE_C2PA_SIGNER_KEY_PEM
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "digital-contracting-service.pdfCoreSigningSecretName" . }}
-                  key: {{ .Values.pdfCore.signing.existingSecretSignerKeyKey | default "signer-key-pem" | quote }}
-            - name: DCS_PDF_CORE_C2PA_X5CHAIN_PEM
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "digital-contracting-service.pdfCoreSigningSecretName" . }}
-                  key: {{ .Values.pdfCore.signing.existingSecretX5ChainKey | default "x5chain-pem" | quote }}
-            {{- end }}
+            # pdf-core builds the CMS SignedAttributes of a PAdES signature and
+            # delegates the ECDSA operation to the backend's PKCS#11
+            # dcs-contract-pades key (DCS-IR-SI-10) — same pattern as C2PA above.
+            - name: DCS_PDF_CORE_PADES_SIGNING_ENDPOINT
+              value: {{ printf "http://%s:%v%s/internal/pades/sign" (include "digital-contracting-service.fullname" .) .Values.service.port (include "digital-contracting-service.apiPath" .) | quote }}
+            - name: DCS_PDF_CORE_PADES_X5CHAIN_PEM_FILE
+              value: /app/pades/pades-x5chain.pem
+            # RFC 3161 TSA endpoint for the PAdES-B-T timestamp — same TSA the
+            # backend uses (signing.tsaURL), so both sides agree on trust.
+            - name: DCS_PDF_CORE_TSA_URL
+              value: {{ .Values.signing.tsaURL | quote }}
+          volumeMounts:
+            - name: pades-x5chain
+              mountPath: /app/pades
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /swagger.json
@@ -72,4 +72,11 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15
+      volumes:
+        - name: pades-x5chain
+          secret:
+            secretName: {{ include "digital-contracting-service.pdfCoreX5ChainSecretName" . }}
+            items:
+              - key: {{ include "digital-contracting-service.pdfCorePadesX5ChainSecretKey" . | quote }}
+                path: pades-x5chain.pem
 {{- end }}

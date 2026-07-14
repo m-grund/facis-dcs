@@ -57,6 +57,6 @@ const searchFn = async (request: Record<string, unknown>) => {
     :empty-item="emptyTemplate"
     :search-fn="searchFn"
     placeholder="Search catalogue templates"
-    @search-result="(result) => emit('searchResult', result)"
+    @search-result="(result) => emit('searchResult', result ?? [])"
   />
 </template>

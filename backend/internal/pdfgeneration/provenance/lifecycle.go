@@ -58,20 +58,37 @@ func NewLifecycleAssertion(contractID, fileHash, status, reason, authority, vcID
 
 // MapCWEStateToC2PA maps a CWE contract state to the canonical C2PA lifecycle
 // vocabulary defined in DCS-OR-C2PA-003. Unsupported states return an error.
+//
+// OFFERED/NEGOTIATION/SUBMITTED/REVIEWED/APPROVED all map to "draft"
+// (pre-signing contract-formation states — there is no executable/binding
+// manifest yet), SIGNED/ACTIVE map to "active", REVOKED maps to
+// "suspended", TERMINATED/EXPIRED map 1:1. APPROVED deliberately maps to
+// "draft", not "active": approval alone does not make a contract binding.
+//
+// REJECTED and WITHDRAWN are not specified by DCS-OR-C2PA-003. Both are
+// pre-signing terminal states reached before any manifest would be expected
+// to exist, so both map to "draft" as the closest sensible SRS term.
 func MapCWEStateToC2PA(cweState string) (string, error) {
 	switch strings.ToUpper(cweState) {
 	case "DRAFT":
 		return "draft", nil
-	case "SUBMITTED", "REVIEWED", "APPROVED", "REGISTERED":
-		// Reviewed/submitted/approved/registered are intermediate steps toward an active
-		// contract; map to "active" as the closest SRS equivalent.
+	case "OFFERED", "NEGOTIATION", "SUBMITTED", "REVIEWED", "APPROVED":
+		// Pre-signing contract-formation states (C4): no binding manifest
+		// exists yet, so all map to "draft".
+		return "draft", nil
+	case "REJECTED", "WITHDRAWN":
+		// Not C2PA-003-specified; both are pre-signing terminal states, so
+		// treated the same as the other pre-signing states (see doc comment).
+		return "draft", nil
+	case "SIGNED", "ACTIVE":
 		return "active", nil
-	case "NEGOTIATION", "REJECTED":
-		// Negotiation and rejection are amendment/review cycles before the
-		// contract becomes active; treated as "amended" (under negotiation)
-		// or "active" (re-submitted after rejection).
-		// Use "amended" because the content may have changed.
-		return "amended", nil
+	case "REVOKED":
+		return "suspended", nil
+	case "REGISTERED":
+		// Template-only catalogue state (not a CWE contract state): a
+		// registered template is live/searchable, closest SRS equivalent is
+		// "active".
+		return "active", nil
 	case "TERMINATED":
 		return "terminated", nil
 	case "EXPIRED":
@@ -87,6 +104,6 @@ func MapCWEStateToC2PA(cweState string) (string, error) {
 		case "draft", "active", "amended", "suspended", "terminated", "expired", "replaced":
 			return lower, nil
 		}
-		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,SUBMITTED,REVIEWED,APPROVED,REGISTERED,NEGOTIATION,REJECTED,TERMINATED,EXPIRED,SUSPENDED,REPLACED,draft,active,amended,suspended,terminated,expired,replaced)", cweState)
+		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,OFFERED,NEGOTIATION,SUBMITTED,REVIEWED,APPROVED,REJECTED,WITHDRAWN,SIGNED,ACTIVE,REVOKED,REGISTERED,TERMINATED,EXPIRED,SUSPENDED,REPLACED,draft,active,amended,suspended,terminated,expired,replaced)", cweState)
 	}
 }

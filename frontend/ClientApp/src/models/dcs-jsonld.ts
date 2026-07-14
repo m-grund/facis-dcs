@@ -51,11 +51,18 @@ export interface DcsTextBlock {
   'dcs:text': string
 }
 
+export interface DcsSignatureField {
+  '@type': 'dcs:SignatureField'
+  'dcs:name': string
+  'dcs:label'?: string
+}
+
 export interface DcsClause {
   '@type': 'dcs:Clause'
   '@id': string
   'dcs:content': { '@list': DcsContentSegment[] } | string
   'dcs:title'?: string
+  'dcs:signatureFields'?: DcsSignatureField[]
 }
 
 export interface DcsApprovedTemplate {
@@ -120,7 +127,26 @@ export interface OdrlConstraint {
 export interface OdrlRule {
   '@id': string
   '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
+  /** Every rule declares exactly one action (DCS ODRL profile). */
+  'odrl:action': JsonLdReference
+  /** Bound party DIDs for a contract instance (ODRL Agreement); open/placeholder party references for a template (ODRL Offer). */
+  'odrl:assigner': JsonLdReference
+  'odrl:assignee': JsonLdReference
+  /** The contract/data-asset IRI this rule applies to. */
+  'odrl:target': JsonLdReference
   'odrl:constraint'?: OdrlConstraint
+}
+
+/** The single enclosing ODRL 2.2 policy container for a template/contract's `dcs:policies`. */
+export interface OdrlSet {
+  '@id': string
+  '@type': 'odrl:Set'
+  /** Equals the template/contract DID. */
+  uid: string
+  'odrl:profile': JsonLdReference
+  'odrl:duty'?: OdrlRule[]
+  'odrl:permission'?: OdrlRule[]
+  'odrl:prohibition'?: OdrlRule[]
 }
 
 export interface DcsSubTemplateSnapshot {
@@ -139,7 +165,7 @@ export interface DcsDocumentData {
   'dcs:metadata': DcsTemplateMetadata | DcsContractMetadata
   'dcs:documentStructure': DcsDocumentStructure
   'dcs:contractData': DcsDataRequirement[]
-  'dcs:policies': OdrlRule[]
+  'dcs:policies': OdrlSet
 }
 
 export interface DcsTemplateData extends DcsDocumentData {
@@ -189,12 +215,20 @@ export function isDcsPlaceholder(seg: DcsContentSegment): seg is DcsPlaceholder 
 export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {
   if (typeof raw !== 'object' || raw === null) return false
   const value = raw as Record<string, unknown>
+  const policies = value['dcs:policies']
   return (
     (value['@type'] === 'dcs:ContractTemplate' || value['@type'] === 'dcs:Contract') &&
     typeof value['dcs:documentStructure'] === 'object' &&
     Array.isArray(value['dcs:contractData']) &&
-    Array.isArray(value['dcs:policies'])
+    // Canonical shape: a single enclosing odrl:Set object.
+    // An empty array is still accepted as "no policies yet" (brand-new
+    // documents) — the legacy non-empty bare-rule array shape is not.
+    (isOdrlSet(policies) || (Array.isArray(policies) && policies.length === 0))
   )
+}
+
+function isOdrlSet(value: unknown): value is OdrlSet {
+  return typeof value === 'object' && value !== null && (value as Record<string, unknown>)['@type'] === 'odrl:Set'
 }
 
 export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {

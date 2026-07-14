@@ -65,9 +65,6 @@ oid4vp:
     enabled: true
     # Baked into the container image (see deployment/docker/Dockerfile).
     dataPath: /app/config/oid4vp/trust.dev.json
-    vaultAddr: ""
-    verifierSigningVaultMount: transit
-    verifierSigningVaultKey: dcs-oid4vp-verifier-signing
     statusListSkipJWSVerify: false
 
 customCA:
@@ -96,11 +93,28 @@ archiveNotary:
 route:
   basePath: "/digital-contracting-service"
   publicBaseURL: ""
+  # Explicit override for the did:web hostname (see the 'didHostname' helper
+  # in _helpers.tpl). Empty falls back to publicBaseURL's host. Only needed
+  # when the did:web identifier's hostname differs from publicBaseURL's host
+  # (e.g. a cluster-routable hostname resolved via a CoreDNS rewrite rather
+  # than being the literal ingress host, as in the BDD two-instance suite).
+  didHostname: ""
 
 # Override individual paths (derived from route.basePath if not set)
 paths:
   api: ""
   ui: ""
+
+# DID identity Secret mount (DCS_DID). Disabled by default: most deployments
+# derive their signing identity from the PKCS#11 token directly. Enabled by
+# the BDD kind harness, where a post-install hsm-provision Job publishes
+# did.json (freshly derived from the in-cluster SoftHSM2 token key) into the
+# Secret named by the 'identitySecretName' helper.
+identity:
+  enabled: false
+  # Override the auto-derived <fullname>-identity Secret name.
+  secretName: ""
+  mountPath: "/app/identity"
 
 # Keycloak realm URL for Federated Catalogue.
 fcKeycloak:
@@ -134,8 +148,8 @@ serviceDiscovery:
   keycloakPort: ""
 
 # ---- Signing / C2PA provenance ----------------------------------------
-# DCS never holds private keys (DCS-IR-HI-01). Set these when connecting to
-# an external Crypto Provider Service or relying on the co-deployed one below.
+# DCS never holds raw private keys (DCS-IR-HI-01): every key lives in the
+# PKCS#11 token configured under `pkcs11` below.
 
 signing:
   # DID of this DCS instance (embedded in C2PA lifecycle assertions as authority).
@@ -146,35 +160,41 @@ signing:
 
   # RFC 3161 Timestamp Authority (optional; activates real timestamps on C2PA manifests).
   tsaURL: ""
+  # Optional: Secret (key tsa-cert.pem) holding the TSA certificate to trust
+  # for RFC3161 token verification, overriding the embedded certs/tsa.crt
+  # (mounted at /etc/dcs/tsa-trust, wired as TSA_TRUST_CERT_FILE).
+  tsaTrustCertSecret: ""
 
-  # XFSC Crypto Provider Service URL. Leave empty when cryptoProvider.enabled=true
-  # (auto-derived from the co-deployed signer service).
-  cryptoProviderURL: ""
-  cryptoProviderURLSecretRef:
+# ---- PKCS#11 signing token (DCS-IR-HI-01) -----------------------------
+# Every private key is held in a PKCS#11 token. With provisioning.enabled a
+# SoftHSM2 software token is co-deployed and provisioned in-cluster — this is a
+# dev/staging/CI convenience ONLY and is NOT a production HSM. For production,
+# set provisioning.enabled=false and point modulePath/tokenLabel/pinSecretRef at
+# a real external PKCS#11 module (its keys must already exist in the token).
+pkcs11:
+  modulePath: "/usr/lib/softhsm/libsofthsm2.so"
+  tokenLabel: "dcs"
+  # PIN for the auto-created Secret. Ignored when pinSecretRef.name is set.
+  pin: "1234"
+  pinSecretRef:
     name: ""
-    key: "CRYPTO_PROVIDER_URL"
-
-  # Vault transit mount path and key name.
-  # Taken from cryptoProvider.transit.* when co-deploying.
-  cryptoProviderNamespace: ""
-  cryptoProviderKey: ""
-  cryptoProviderVCKey: ""
-
-  # VC proof suite used by the local Ed25519Signature2020 proof path.
-  vcSignatureType: "ed25519signature2020"
-
-  # Signer certificate chain (PEM) used for C2PA x5chain headers.
-  # When enabled, the chart mounts the secret and sets
-  # CRYPTO_PROVIDER_CERT_CHAIN_FILE automatically.
-  # With cryptoProvider.devCertChain.enabled=true, this is auto-wired even when
-  # certChain.enabled=false.
-  certChain:
-    enabled: false
-    existingSecret:
-      name: ""
-      key: "chain.pem"
-    mountPath: "/var/run/secrets/dcs"
-    fileName: "crypto-provider-cert-chain.pem"
+    key: "PKCS11_PIN"
+  provisioning:
+    enabled: true
+    # Volume path holding the SoftHSM2 token directory + softhsm2.conf.
+    tokenDir: "/var/lib/softhsm"
+    # SO (security officer) PIN used only during token initialization.
+    soPin: "12345678"
+    persistence:
+      size: "128Mi"
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: ""
+    # Provisioning job image; defaults to the DCS image, which bundles
+    # softhsm2/opensc/openssl and the provisioning scripts.
+    image:
+      repository: ""
+      tag: ""
+      pullPolicy: IfNotPresent
 
 # ---- Co-deployed dependencies ----------------------------------------
 # Each sub-chart owns its full set of configurable values.
@@ -205,38 +225,6 @@ nats:
 
 neo4j:
   enabled: false
-
-# XFSC Crypto Provider Service + HashiCorp Vault (transit engine).
-# When enabled, CRYPTO_PROVIDER_URL is auto-derived and wired into DCS.
-# See charts/crypto-provider/values.yaml for the full set of options.
-cryptoProvider:
-  enabled: false
-  vault:
-    dev:
-      enabled: true
-      rootToken: "root"
-    service:
-      port: 8200
-  transit:
-    mount: "transit"
-    key: "dcs-signing-key-p256"
-    keyType: "ecdsa-p256"
-    vcKey: "dcs-vc-signing-key"
-    vcKeyType: "ed25519"
-    c2paKey: "dcs-vc-signing-key"
-  devCertChain:
-    enabled: false
-    secretName: ""
-    secretKey: "chain.pem"
-    caCertKey: "ca.pem"
-    leafCommonName: "dcs-dev-signer"
-    caCommonName: "dcs-dev-local-ca"
-    validityDays: 3650
-    overwrite: true
-    image:
-      repository: alpine
-      tag: "3.20"
-      pullPolicy: IfNotPresent
 
 # BDD only: loopback proxy so DCS Pod fetches localhost statusListCredential via Traefik ingress.
 statusListLocalhostProxy:
@@ -320,41 +308,20 @@ pdfCore:
   # keeping it consistent with the contextIRI default above.
   ontologyBaseURL: ""
   signing:
-    # Dev self-signed Ed25519 key and cert chain — safe for testing, replace for production.
-    signerKeyPEM: |
-      -----BEGIN PRIVATE KEY-----
-      MC4CAQAwBQYDK2VwBCIEIMznz7D2Un+TH3DiK9glcGSP9Q6rxFjihMGqsTEW7awX
-      -----END PRIVATE KEY-----
-    x5ChainPEM: |
-      -----BEGIN CERTIFICATE-----
-      MIIBqDCCAVqgAwIBAgIUM9PuXdCa7mqXFjzXnvhTnnUMhjowBQYDK2VwMC0xGzAZ
-      BgNVBAMMEnBkZnVuIGMycGEgdGVzdCBDQTEOMAwGA1UECgwFcGRmdW4wHhcNMjYw
-      NjAzMTMzMzEzWhcNMzYwNTMxMTMzMzEzWjAsMRowGAYDVQQDDBFwZGZ1biBjMnBh
-      IHNpZ25lcjEOMAwGA1UECgwFcGRmdW4wKjAFBgMrZXADIQA7sS/jnmbqxqHcFi2t
-      7bZbREYxwQHD1kB+9pM7w1w2zaOBjDCBiTAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB
-      /wQEAwIHgDApBgNVHSUEIjAgBggrBgEFBQcDBAYIKwYBBQUHAyQGCisGAQQBg+he
-      AgEwHQYDVR0OBBYEFBVHg6RflTD1XD4N3cgojDMhpx0fMB8GA1UdIwQYMBaAFOSY
-      RbGZZwS3IRVmI1S2UmBrw71FMAUGAytlcANBAC3/N0dzgWUGpVrA7LmHVcxWOpFA
-      xhYhSsQfXNB4lwYM7GqoL6KH35569b6/yGSYaYvNWrf00UHGvQJubEWRtQo=
-      -----END CERTIFICATE-----
-      -----BEGIN CERTIFICATE-----
-      MIIBgjCCATSgAwIBAgIUc5iFXsue8tDJngSHTX5yRs00k8kwBQYDK2VwMC0xGzAZ
-      BgNVBAMMEnBkZnVuIGMycGEgdGVzdCBDQTEOMAwGA1UECgwFcGRmdW4wHhcNMjYw
-      NjAzMTMzMzEzWhcNMzYwNTMxMTMzMzEzWjAtMRswGQYDVQQDDBJwZGZ1biBjMnBh
-      IHRlc3QgQ0ExDjAMBgNVBAoMBXBkZnVuMCowBQYDK2VwAyEAH8U1I/LoaK7n8fKn
-      NTYPd+GZy4MN73Qac+sptG+L9LGjZjBkMB8GA1UdIwQYMBaAFOSYRbGZZwS3IRVm
-      I1S2UmBrw71FMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgEGMB0G
-      A1UdDgQWBBTkmEWxmWcEtyEVZiNUtlJga8O9RTAFBgMrZXADQQBLWt6SomwYBgIP
-      P1TpcKjIWT37PIwi0ofLy/7cVvkEFmflWydY3EZKAs3CmtoP1AVXBk0I9mrMo24g
-      b1CuzjcF
-      -----END CERTIFICATE-----
+    # No default key/cert ships in this chart (clean-product sweep freeze-day
+    # grep gate: no PEM private key material in committed values files). This
+    # path only matters when pkcs11.provisioning.enabled=false (SoftHSM2/PKCS#11
+    # provisioning is the default and does not use these values at all — see
+    # pdf-core-signing-secret.yaml's render guard). If you disable PKCS11
+    # provisioning, either set existingSecret below, or supply signerKeyPEM +
+    # x5ChainPEM explicitly via --set-file / a values overlay that is NOT
+    # committed to the chart.
+    signerKeyPEM: ""
+    x5ChainPEM: ""
     # Set to use an existing Secret instead of auto-creating one from the inline values above.
     existingSecret: ""
     existingSecretSignerKeyKey: "signer-key-pem"
     existingSecretX5ChainKey: "x5chain-pem"
-    cryptoProviderURL: ""
-    cryptoProviderNamespace: ""
-    cryptoProviderKey: ""
 
 ipfs:
   enabled: false

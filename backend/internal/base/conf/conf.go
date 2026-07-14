@@ -20,6 +20,14 @@ func OutboxProcessorTimeOut() time.Duration {
 	return 1 * time.Second
 }
 
+// OutboxPublishTimeOut is the poll interval for republishing outbox events
+// on NATS (see event.OutboxProcessor.startPublishingJob): much tighter than
+// OutboxProcessorTimeOut because publishing is a cheap, single NATS call per
+// event, unlike the TSA/IPFS round-trips the (slower) anchoring loop does.
+func OutboxPublishTimeOut() time.Duration {
+	return 100 * time.Millisecond
+}
+
 func EventBusTopic() string {
 	return "dcs"
 }

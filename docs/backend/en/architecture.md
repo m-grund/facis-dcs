@@ -130,11 +130,11 @@ The domain split is a **business-driven** decomposition (bounded contexts), not 
 | `contractworkflowengine` | ✅ (13) | ✅ (9) | Core domain: contract lifecycle, negotiation, approval |
 | `templaterepository` | ✅ (10) | ✅ (7) | Template lifecycle, versioning, catalogue publishing |
 | `templatecatalogueintegration` | ✅ (8) | ✅ (12) | Integration with the Gaia-X Federated Catalogue |
-| `signingmanagement` | ✅ (4) | ✅ (5) | Digital signing (DSS integration) |
+| `signingmanagement` | ✅ (4) | ✅ (5) | Digital signing (PAdES via PKCS#11/HSM, signing ceremonies) |
 | `pdfgeneration` | – | ✅ (5) | Purely event-driven (C2PA/provenance), no user commands |
 | `processauditandcompliance` | – | ✅ (7) | Read-only access to the cross-domain audit trail |
 | `dcstodcs` | – | – | Orchestration; the actual commands live in `contractworkflowengine/remotesync` |
-| `auth`, `webhookplatform`, `semantic`, `cryptoprovider`, `base`, `middleware` | – | – | Infrastructure, adapters, or stateless utilities — no business aggregate |
+| `auth`, `webhookplatform`, `semantic`, `base`, `middleware` | – | – | Infrastructure, adapters, or stateless utilities — no business aggregate |
 
 **Why some domains have no CQRS split:** `pdfgeneration` and `processauditandcompliance` are either purely event-driven (no direct user command) or purely read-only. `service/` is deliberately the thin translation layer between Goa and the domain handlers and contains no business logic of its own. `dcstodcs` only orchestrates — the actual state-mutating commands executed during sync deliberately live in the domain the data belongs to (`contractworkflowengine/remotesync/command`), not in the sync infrastructure domain.
 
@@ -202,24 +202,42 @@ Every audit entry references both the **previous CID of the same resource** and 
 
 ## 8. Contract Workflow Engine: State Machine
 
+The authoritative transition table is
+`backend/internal/contractworkflowengine/datatype/contractstate/transition.go`
+(see also [ADR-2](../../adr-2-contract-state-machine.md)); command handlers
+validate against it instead of re-implementing ad hoc state checks.
+
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> DRAFT: Create
+    DRAFT --> OFFERED: Offer (transmit to counterparty)
     DRAFT --> NEGOTIATION: Submit
+    OFFERED --> NEGOTIATION: Submit (negotiation round starts)
+    OFFERED --> WITHDRAWN: Withdraw
     REJECTED --> NEGOTIATION: Submit (tasks reopened)
     NEGOTIATION --> NEGOTIATION: Submit (new version after merge)
     NEGOTIATION --> SUBMITTED: Submit (all negotiations accepted)
+    NEGOTIATION --> WITHDRAWN: Withdraw
     SUBMITTED --> REVIEWED: Submit + ActionFlag=APPROVAL (all reviewers done)
     SUBMITTED --> NEGOTIATION: Submit + ActionFlag=REJECT
+    SUBMITTED --> WITHDRAWN: Withdraw
     REVIEWED --> APPROVED: Approve (all approvers done)
     REVIEWED --> REJECTED: Reject
     REVIEWED --> SUBMITTED: Submit (re-review)
+    REVIEWED --> WITHDRAWN: Withdraw
+    APPROVED --> SIGNED: Sign
+    SIGNED --> ACTIVE: Deploy (target ack)
+    SIGNED --> REVOKED: Revoke signature
+    ACTIVE --> REVOKED: Revoke signature
+    REVOKED --> APPROVED: Approve (re-signing path)
     APPROVED --> TERMINATED: Terminate
     NEGOTIATION --> TERMINATED: Terminate
     SUBMITTED --> TERMINATED: Terminate
     REVIEWED --> TERMINATED: Terminate
     DRAFT --> TERMINATED: Terminate
+    SIGNED --> TERMINATED: Terminate
+    ACTIVE --> TERMINATED: Terminate
     [*] --> EXPIRED: Cron (exp_date reached)
 ```
 

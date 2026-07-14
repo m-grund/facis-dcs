@@ -10,7 +10,7 @@ import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/co
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useTemplateDraftStore } from '@/modules/template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
@@ -26,7 +26,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const contractsStore = useContractsStore()
 const { contracts } = storeToRefs(contractsStore)
-const templateDraftStore = useTemplateDraftStore()
+const dcsDraftStore = useDcsDraftStore()
 const contractEditorUiStore = useContractEditorUiStore()
 const templateEditorUiStore = useTemplateEditorUiStore()
 const contractContentValuesStore = useContractContentValuesStore()
@@ -97,7 +97,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  templateDraftStore.reset({ workflow: 'contract' })
+  dcsDraftStore.reset({ workflow: 'contract' })
   contractContentValuesStore.reset()
   contractEditorUiStore.reset()
   templateEditorUiStore.reset({ workflow: 'contract' })
@@ -107,14 +107,14 @@ onUnmounted(() => {
 // Contract data includes the template data used to fill the contract template
 function applyContractDataToDraft(contractData?: unknown) {
   if (contractData == null) {
-    templateDraftStore.reset({ workflow: 'contract' })
+    dcsDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
     verificationResult.value = null
     return
   }
   const cd = preprocessContractData(contractData)
   if (cd) {
-    templateDraftStore.reset({
+    dcsDraftStore.reset({
       workflow: 'contract',
       blocks: cd.blocks,
       layout: cd.layout,
@@ -124,7 +124,7 @@ function applyContractDataToDraft(contractData?: unknown) {
     })
     contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   } else {
-    templateDraftStore.reset({ workflow: 'contract' })
+    dcsDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
   }
   verificationResult.value = null
@@ -174,6 +174,28 @@ const exportPDF = async () => {
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" disabled />
 
+                <!-- Deployment KPIs (DCS-FR-CWE-31, DCS-FR-CWE-09) -->
+                <div
+                  v-if="contract.kpis && contract.kpis.length > 0"
+                  class="card mt-4 border border-base-300 bg-base-100 shadow-sm"
+                >
+                  <div class="card-body gap-2">
+                    <h2 class="card-title text-sm">KPIs</h2>
+                    <ul class="flex flex-col gap-1">
+                      <li
+                        v-for="kpi in contract.kpis"
+                        :key="`${kpi.metric}-${kpi.observed_at}`"
+                        class="flex items-center gap-2 text-sm"
+                      >
+                        <span class="font-medium">{{ kpi.metric }}</span>
+                        <span>{{ kpi.value }}</span>
+                        <span class="text-xs text-base-content/40">{{ kpi.observed_at }}</span>
+                        <span v-if="kpi.violation" class="badge badge-sm badge-error">Violation</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
                 <!-- Parent contract -->
                 <div v-if="parentContract" class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
                   <div class="card-body gap-2">
@@ -210,12 +232,12 @@ const exportPDF = async () => {
                   <div class="card-body gap-5">
                     <div>
                       <TemplatePreview
-                        :layout="templateDraftStore.layout"
-                        :blocks="templateDraftStore.blocks"
-                        :semantic-conditions="templateDraftStore.semanticConditions"
+                        :layout="dcsDraftStore.layout"
+                        :blocks="dcsDraftStore.blocks"
+                        :semantic-conditions="dcsDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
-                        :sub-template-snapshots="templateDraftStore.subTemplateSnapshots"
+                        :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                       />
                     </div>
                   </div>

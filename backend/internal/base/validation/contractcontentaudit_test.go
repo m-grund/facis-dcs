@@ -6,6 +6,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// wrapODRLSet encloses rule nodes in the canonical odrl:Set shape
+// (validateODRLPoliciesShape rejects bare non-empty rule arrays); an empty
+// rule list yields the canonical empty "no policies yet" array.
+func wrapODRLSet(rules []any) any {
+	if len(rules) == 0 {
+		return []any{}
+	}
+	return map[string]any{
+		"@type":        "odrl:Set",
+		"uid":          "did:example:contract",
+		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+		"odrl:duty":    rules,
+	}
+}
+
 func odrlContract(fieldID, conditionID, parameterName string, policies []any, actualValue any) map[string]any {
 	return map[string]any{
 		"dcs:contractData": []any{
@@ -22,7 +37,7 @@ func odrlContract(fieldID, conditionID, parameterName string, policies []any, ac
 				},
 			},
 		},
-		"dcs:policies":            policies,
+		"dcs:policies":            wrapODRLSet(policies),
 		"semanticConditionValues": []any{map[string]any{"conditionId": conditionID, "parameterName": parameterName, "parameterValue": actualValue}},
 	}
 }
@@ -80,11 +95,11 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 				},
 			},
 		},
-		"dcs:policies": []any{
+		"dcs:policies": wrapODRLSet([]any{
 			odrlDuty("FACIS-CONTRACT-STATIC-001", countryFieldID, "odrl:isNoneOf", []any{"RUS"}),
 			odrlDuty("FACIS-CONTRACT-STATIC-002", lawFieldID, "odrl:isAnyOf", []any{"DE", "AT", "CH"}),
 			odrlDuty("FACIS-CONTRACT-STATIC-003", paymentFieldID, "odrl:lteq", float64(10000)),
-		},
+		}),
 		"semanticConditionValues": []any{
 			map[string]any{"conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
 			map[string]any{"conditionId": "contract", "parameterName": "governingLaw", "parameterValue": "DE"},
@@ -291,7 +306,7 @@ func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testi
 
 func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) {
 	contract := canonicalAuditContract()
-	policy := contract["dcs:policies"].([]any)[0].(map[string]any)
+	policy := contract["dcs:policies"].(map[string]any)["odrl:duty"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
 
@@ -590,14 +605,14 @@ func canonicalAuditContract() map[string]any {
 				},
 			},
 		},
-		"dcs:policies": []any{
+		"dcs:policies": wrapODRLSet([]any{
 			odrlDuty("urn:uuid:policy-country", countryFieldID, "odrl:isAnyOf", []any{
 				map[string]any{"@type": "xsd:string", "@value": "DEU"},
 				map[string]any{"@type": "xsd:string", "@value": "AUT"},
 				map[string]any{"@type": "xsd:string", "@value": "CHE"},
 			}),
 			odrlDuty("urn:uuid:policy-postal-code", postalCodeFieldID, "odrl:eq", map[string]any{"@type": "xsd:string", "@value": "91448"}),
-		},
+		}),
 		"semanticConditionValues": []any{
 			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
 			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "postalCode", "parameterValue": "91448"},

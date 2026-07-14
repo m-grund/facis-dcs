@@ -105,3 +105,8 @@ export interface ContractAuditRequest {
 export interface ContractHistoryRetrieveRequest {
   did: string
 }
+
+export interface ContractDeployRequest {
+  did: string
+  updated_at: string
+}

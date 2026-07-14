@@ -1,10 +1,17 @@
 SHELL := /bin/bash -eu -o pipefail
 
 PYTHON ?= python3
+# Unter WSL gegen /mnt/c liegt das Repo auf dem 9P-Dateisystem — ein venv dort
+# macht jeden Python-Import 5-20x langsamer. Default daher: venv im nativen
+# ext4-Home der Distro. Explizites VENV_PATH=... überschreibt weiterhin;
+# außerhalb von WSL (CI-Runner, macOS) bleibt der bisherige Default .venv.
+ifneq ($(wildcard /proc/sys/fs/binfmt_misc/WSLInterop),)
+VENV_PATH ?= $(HOME)/.dcs-bdd-venv
+endif
 VENV_PATH ?= .venv
 THIS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(THIS_DIR)../..)
-VENV_ABS := $(THIS_DIR)$(VENV_PATH)
+VENV_ABS := $(if $(filter /%,$(VENV_PATH)),$(VENV_PATH),$(THIS_DIR)$(VENV_PATH))
 REPORTS_ABS := $(THIS_DIR).reports
 BDD_EXECUTOR_REPO ?= https://github.com/eclipse-xfsc/bdd-executor.git
 BDD_EXECUTOR_PATH ?= ../../bdd-executor
@@ -50,13 +57,36 @@ KIND_BIN ?= kind
 KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
-CERT_CHAIN_SECRET ?= $(HELM_RELEASE)-crypto-provider-dev-cert-chain
+CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
+COREDNS_REWRITE_SCRIPT ?= scripts/kind_coredns_rewrite.sh
 
-.PHONY: setup_environment run_bdd_test run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_uninstall run_bdd_kind run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
+# Second DCS release ("dcs2", instance B) for the @two-instance peer-trust
+# scenarios (features/17_peer_trust) — see deployment/helm/values.bdd2.yml.
+# Deployed into the SAME kind namespace as the primary "dcs" release
+# (instance A), strictly after it.
+HELM_RELEASE_B ?= dcs2
+DCS_SERVICE_B ?= $(HELM_RELEASE_B)-digital-contracting-service
+DCS_DEPLOYMENT_B ?= $(DCS_SERVICE_B)
+BDD_PUBLIC_ORIGIN_B ?= http://dcs-b.localhost:$(BDD_INGRESS_PORT)
+BDD_DCS_BASE_URL_B ?= $(BDD_PUBLIC_ORIGIN_B)$(DCS_API_BASE_PATH)
+CERT_CHAIN_SECRET_B ?= $(DCS_SERVICE_B)-hsm-c2pa-x5chain
+# Mirrors BDD_HELM_SET, but for instance B's own Hydra/route pointed at the
+# dcs-b.localhost origin instead of dcs's plain localhost origin.
+BDD_HELM_SET_B := \
+	--set-string hydra.config.selfIssuerURL="$(BDD_PUBLIC_ORIGIN_B)" \
+	--set-string route.publicBaseURL="$(BDD_DCS_BASE_URL_B)" \
+	--set-string hydra.config.loginURL="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/ui/" \
+	--set-string hydra.config.consentURL="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/consent" \
+	--set-string hydra.config.logoutURL="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/logout-complete" \
+	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/callback" \
+	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/logout-complete"
+
+.PHONY: setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
 
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
-	@echo "make run_bdd_test		# Run all BDD scenarios"
+	@echo "make run_bdd_test		# Run all BDD scenarios (coverage + junit reports)"
+	@echo "make run_bdd_fast T=@tag	# Fast dev loop: tag-scoped, --stop, no coverage/junit"
 	@echo "make run_bdd_helm		# Run BDD via Traefik on http://localhost:18080"
 	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
 	@echo "make ensure_kind			# Validate kind is available in PATH"
@@ -85,13 +115,25 @@ setup_environment:
 	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary
 	"$(VENV_PATH)/bin/pip" install -q -r "$(PROJECT_ROOT)/testWallet/requirements.txt"
 
-run_bdd_test: setup_environment
-	@"$(VENV_PATH)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
-		(echo "ERROR: bdd-executor (eu.xfsc.bdd.core) not found in venv — run 'make setup_environment' first" && exit 1)
-	source "$(VENV_PATH)/bin/activate" && \
+# Bootstrappt das venv nur, wenn es fehlt/kaputt ist — der pip-Refresh bei
+# jedem Lauf kostete sonst 10-60s pro Testzyklus.
+ensure_venv:
+	@"$(VENV_ABS)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
+		$(MAKE) setup_environment
+
+run_bdd_test: ensure_venv
+	source "$(VENV_ABS)/bin/activate" && \
 	mkdir -p "$(REPORTS_ABS)/junit" && \
 	cd "$(PROJECT_ROOT)" && \
 	"$(VENV_ABS)/bin/coverage" run --append -m behave $(ARG_BDD_JUNIT) $(FEATURES_PATH) $(ARG_BDD)
+
+# Schneller Dev-Loop für die Implementierungs-Iteration: kein pip-Refresh,
+# kein coverage, kein junit; stoppt beim ersten Fehlschlag. Scope über
+# T=<tag-expression> (z. B. T=@two-instance) und/oder F=<feature-pfad>.
+# Der vollständige, berichtende Lauf bleibt run_bdd_test.
+run_bdd_fast: ensure_venv
+	@cd "$(PROJECT_ROOT)" && \
+	"$(VENV_ABS)/bin/behave" --stop $(if $(T),--tags=$(T)) $(if $(F),$(F),$(FEATURES_PATH)) $(ARG_BDD)
 
 run_bdd_helm: setup_environment ensure_k8s_tools
 	@VENV_PATH="$(VENV_ABS)" \
@@ -99,6 +141,7 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		FEATURES_PATH="$(FEATURES_PATH)" \
 		KUBECTL_BIN="$(KUBECTL_BIN)" \
 		K8S_NAMESPACE="$(K8S_NAMESPACE)" \
+		HELM_RELEASE="$(HELM_RELEASE)" \
 		DCS_DEPLOYMENT="$(DCS_DEPLOYMENT)" \
 		BDD_DCS_BASE_URL="$(BDD_DCS_BASE_URL)" \
 		BDD_PUBLIC_ORIGIN="$(BDD_PUBLIC_ORIGIN)" \
@@ -108,6 +151,9 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		SERVICE_PORT="$(SERVICE_PORT)" \
 		DCS_DID="$(DCS_DID)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
+		DCS_DEPLOYMENT_B="$(DCS_DEPLOYMENT_B)" \
+		BDD_DCS_BASE_URL_B="$(BDD_DCS_BASE_URL_B)" \
+		BDD_PUBLIC_ORIGIN_B="$(BDD_PUBLIC_ORIGIN_B)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
 		ARG_BDD="$(ARG_BDD)" \
 		bash "$(BDD_RUNNER_SCRIPT)"
@@ -116,7 +162,7 @@ build_dcs_image:
 	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
 build_pdf_core_image:
-	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../../pdf-core
+	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../..
 
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
@@ -165,10 +211,18 @@ kind_load_pdf_core_image: kind_create
 
 kind_deploy: kind_load_image kind_load_pdf_core_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
-	@"$(HELM_BIN)" repo add hashicorp https://helm.releases.hashicorp.com --force-update
+	@"$(HELM_BIN)" repo add traefik https://traefik.github.io/charts --force-update
 	@"$(HELM_BIN)" repo update
 	@"$(HELM_BIN)" dependency build "$(HELM_CHART_PATH)"
 	@"$(HELM_BIN)" show crds "$(HELM_CHART_PATH)/charts/kube-prometheus-stack-"*.tgz | "$(KUBECTL_BIN)" apply --server-side -f -
+	@# DID identity for DCS (DCS_DID is fatal on startup when missing);
+	@# mounted via identity.enabled in values.bdd.yml. The <fullname>-identity
+	@# Secret (did.json, identitySecretName helper) and the signing key itself
+	@# are both produced by the hsm-provision-job.yaml post-install hook from the freshly generated
+	@# SoftHSM token key — a static did.json fixture would mismatch a random
+	@# per-run token key and crash-loop the backend (identity.NewDIDDocument
+	@# is fatal on mismatch), so it is deliberately NOT pre-created here.
+	@"$(KUBECTL_BIN)" create namespace "$(KIND_NAMESPACE)" --dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
 	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
 	@# ready, but DCS can't become ready until the devCertChain post-install hook has
 	@# created its Secret — a deadlock. We break the cycle by letting helm return as
@@ -183,12 +237,19 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 		$(BDD_HELM_SET) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
+	@# CoreDNS must resolve dcs-a.localhost / dcs-b.localhost in-cluster to the
+	@# Traefik Service just created above (did:web challenge-response, both
+	@# self-peer and cross-instance — see kind_coredns_rewrite.sh). Runs on
+	@# every kind_deploy (idempotent) rather than only once at cluster-create
+	@# time: a prior version wired only to cluster creation was observed to
+	@# not reliably stick.
+	@$(MAKE) kind_coredns_rewrite
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
 		if [ $$(date +%s) -gt $$deadline ]; then \
 			echo "Timed out waiting for $(CERT_CHAIN_SECRET)"; \
-			"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -o wide || true; \
+			"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -l app.kubernetes.io/instance=$(HELM_RELEASE) -o wide || true; \
 			"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
 			exit 1; \
 		fi; \
@@ -197,26 +258,101 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@echo "Waiting for DCS deployment to become available..."
 	@if ! "$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout status \
 		deployment/"$(DCS_DEPLOYMENT)" --timeout "$(HELM_TIMEOUT)"; then \
-		echo "=== PODS ==="; \
-		"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -o wide || true; \
+		echo "=== PODS (instance A) ==="; \
+		"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -l app.kubernetes.io/instance=$(HELM_RELEASE) -o wide || true; \
 		echo "=== DEPLOYMENTS ==="; \
 		"$(KUBECTL_BIN)" get deployments -n "$(KIND_NAMESPACE)" || true; \
 		echo "=== EVENTS ==="; \
 		"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
-		echo "=== DCS LOGS ==="; \
-		"$(KUBECTL_BIN)" logs deployment/"$(DCS_DEPLOYMENT)" -n "$(KIND_NAMESPACE)" --tail=200 || true; \
+		echo "=== DCS LOGS (current, instance A) ==="; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=$(HELM_RELEASE)" \
+			-c digital-contracting-service --tail=200 --prefix || true; \
+		echo "=== DCS LOGS (previous crash, instance A) ==="; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=$(HELM_RELEASE)" \
+			-c digital-contracting-service --tail=200 --prefix --previous || true; \
+		echo "=== DCS POD DESCRIBE (instance A) ==="; \
+		"$(KUBECTL_BIN)" describe pod -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=$(HELM_RELEASE)" || true; \
+		echo "=== HSM PROVISION JOB LOGS (instance A) ==="; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			job/"$(DCS_DEPLOYMENT)"-hsm-provision --tail=100 || true; \
+		exit 1; \
+	fi
+
+# Idempotently patches CoreDNS with rewrite rules for the BDD did:web
+# hostnames (dcs-a.localhost, dcs-b.localhost) -> the shared Traefik Service,
+# and verifies in-cluster resolution actually took effect before returning.
+# See tests/bdd/scripts/kind_coredns_rewrite.sh for the full rationale.
+kind_coredns_rewrite: ensure_k8s_tools
+	@KUBECTL_BIN="$(KUBECTL_BIN)" KIND_NAMESPACE="$(KIND_NAMESPACE)" \
+		bash "$(COREDNS_REWRITE_SCRIPT)"
+
+# Deploys the SECOND DCS release (instance B, features/17_peer_trust) into
+# the same kind namespace, strictly after instance A: B probes
+# several of A's already-deployed shared services (Traefik, ORCE TSA, Status
+# List Service, IPFS) at its own startup, so it depends on kind_deploy rather
+# than only on kind_create/kind_load_image.
+kind_deploy_b: kind_deploy
+	@echo "Deploying instance B (release $(HELM_RELEASE_B)) after instance A ($(HELM_RELEASE))..."
+	@"$(HELM_BIN)" upgrade --install "$(HELM_RELEASE_B)" "$(HELM_CHART_PATH)" \
+		--namespace "$(KIND_NAMESPACE)" \
+		--create-namespace \
+		--timeout "$(HELM_TIMEOUT)" \
+		--values "$(HELM_CHART_PATH)/values.bdd2.yml" \
+		--set image.repository="$(DOCKER_IMAGE_REPOSITORY)" \
+		--set image.tag="$(DOCKER_IMAGE_TAG)" \
+		$(BDD_HELM_SET_B) \
+		$(KIND_HELM_VALUES) \
+		$(KIND_HELM_SET)
+	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET_B) (created by post-install hook)..."
+	@deadline=$$(( $$(date +%s) + 1200 )); \
+	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET_B)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
+		if [ $$(date +%s) -gt $$deadline ]; then \
+			echo "Timed out waiting for $(CERT_CHAIN_SECRET_B)"; \
+			"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -l app.kubernetes.io/instance=$(HELM_RELEASE_B) -o wide || true; \
+			"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
+			exit 1; \
+		fi; \
+		sleep 5; \
+	done
+	@echo "Waiting for DCS deployment (instance B) to become available..."
+	@if ! "$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout status \
+		deployment/"$(DCS_DEPLOYMENT_B)" --timeout "$(HELM_TIMEOUT)"; then \
+		echo "=== PODS (instance B) ==="; \
+		"$(KUBECTL_BIN)" get pods -n "$(KIND_NAMESPACE)" -l app.kubernetes.io/instance=$(HELM_RELEASE_B) -o wide || true; \
+		echo "=== DEPLOYMENTS ==="; \
+		"$(KUBECTL_BIN)" get deployments -n "$(KIND_NAMESPACE)" || true; \
+		echo "=== EVENTS ==="; \
+		"$(KUBECTL_BIN)" get events -n "$(KIND_NAMESPACE)" --sort-by=.lastTimestamp || true; \
+		echo "=== DCS LOGS (current, instance B) ==="; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=$(HELM_RELEASE_B)" \
+			-c digital-contracting-service --tail=200 --prefix || true; \
+		echo "=== DCS LOGS (previous crash, instance B) ==="; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=$(HELM_RELEASE_B)" \
+			-c digital-contracting-service --tail=200 --prefix --previous || true; \
+		echo "=== DCS POD DESCRIBE (instance B) ==="; \
+		"$(KUBECTL_BIN)" describe pod -n "$(KIND_NAMESPACE)" \
+			-l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=$(HELM_RELEASE_B)" || true; \
+		echo "=== HSM PROVISION JOB LOGS (instance B) ==="; \
+		"$(KUBECTL_BIN)" logs -n "$(KIND_NAMESPACE)" \
+			job/"$(DCS_DEPLOYMENT_B)"-hsm-provision --tail=100 || true; \
 		exit 1; \
 	fi
 
 kind_uninstall:
+	@"$(HELM_BIN)" uninstall "$(HELM_RELEASE_B)" --namespace "$(KIND_NAMESPACE)" >/dev/null 2>&1 || true
 	@"$(HELM_BIN)" uninstall "$(HELM_RELEASE)" --namespace "$(KIND_NAMESPACE)" >/dev/null 2>&1 || true
 
-run_bdd_kind: kind_deploy
+run_bdd_kind: kind_deploy_b
 	@$(MAKE) run_bdd_helm \
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
 
-run_bdd_kind_all: kind_deploy
+run_bdd_kind_all: kind_deploy_b
 	@$(MAKE) run_bdd_helm_all \
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
@@ -226,8 +362,9 @@ run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
-# start kind cluster, deploy DCS and dependencies, and prepare for BDD runs
-kind_up: build_dcs_image build_pdf_core_image kind_deploy setup_environment ensure_k8s_tools
+# start kind cluster, deploy DCS and dependencies (both instances), and
+# prepare for BDD runs
+kind_up: build_dcs_image build_pdf_core_image kind_deploy_b setup_environment ensure_k8s_tools
 	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with DCS deployed in namespace $(KIND_NAMESPACE)"
 	@echo "You can now run 'make run_bdd_kind_once' to execute the BDD suite against this cluster without redeploying between runs."
 

@@ -46,8 +46,13 @@ jobs:
           set -euo pipefail
           kubectl get pods -n dcs-bdd -o wide || true
           kubectl get events -n dcs-bdd --sort-by=.lastTimestamp || true
-          kubectl logs deployment/dcs-digital-contracting-service -n dcs-bdd --tail=200 || true
+          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=backend \
+            -c digital-contracting-service --tail=200 --prefix || true
+          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=backend \
+            -c digital-contracting-service --tail=200 --prefix --previous || true
+          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=pdf-core --tail=100 --prefix || true
           kubectl logs deployment/dcs-keycloak -n dcs-bdd --tail=200 || true
+          kubectl logs -n dcs-bdd job/dcs-digital-contracting-service-hsm-provision --tail=100 || true
 
       - name: Generate coverage XML and summary
         if: always()

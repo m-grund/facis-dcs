@@ -202,22 +202,22 @@ func TestLoadValidationProfileRejectsInvalidDefinitions(t *testing.T) {
 	require.ErrorContains(t, err, "requires a target")
 }
 
-func TestLoadValidationProfileSupportsSHACLJSONAndYAML(t *testing.T) {
-	shaclPath := filepath.Join("..", "..", "..", "..", "docs", "semantic-ontology", "validation", "facis.sla.basic.v1.ttl")
-	raw, err := os.ReadFile(shaclPath)
+func TestLoadValidationProfileSupportsDefaultYAMLJSONAndYAML(t *testing.T) {
+	yamlPath := filepath.Join("..", "..", "..", "..", "docs", "semantic-ontology", "validation", "facis.sla.basic.v1.yaml")
+	raw, err := os.ReadFile(yamlPath)
 	require.NoError(t, err)
 
-	shaclProfile, err := LoadValidationProfileSHACL(raw)
+	defaultProfile, err := LoadValidationProfileYAML(raw)
 	require.NoError(t, err)
-	require.Equal(t, "facis.sla.basic.v1", shaclProfile.ID)
+	require.Equal(t, "facis.sla.basic.v1", defaultProfile.ID)
 	require.Contains(t, validationIssueIDs(ValidateContractStatements(
 		[]map[string]any{{"@id": "payment-main", "@type": statementTypeByStatementField("payment.amount"), "amount": 0}},
-		shaclProfile,
+		defaultProfile,
 	)), "payment-amount-positive")
 
-	fileProfile, err := LoadValidationProfileFile(shaclPath)
+	fileProfile, err := LoadValidationProfileFile(yamlPath)
 	require.NoError(t, err)
-	require.Equal(t, shaclProfile.ID, fileProfile.ID)
+	require.Equal(t, defaultProfile.ID, fileProfile.ID)
 
 	jsonProfile, err := LoadValidationProfileJSON([]byte(`{
 		"id": "facis.marketplace.contract.v1",

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 
 const uiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 
 const { isPreviewDialogOpen } = storeToRefs(uiStore)
 const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)

@@ -12,6 +12,8 @@ import (
 type ContractTemplateQueryResult struct {
 	TemplateData    *datatype.JSON `db:"template_data"`
 	TemplateVersion int            `db:"version"`
+	Name            *string        `db:"name"`
+	Description     *string        `db:"description"`
 }
 
 type ContractTemplateMetadata struct {

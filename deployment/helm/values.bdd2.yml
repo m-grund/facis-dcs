@@ -1,0 +1,215 @@
+# BDD test values for the SECOND DCS release ("dcs2", instance B) used by
+# the @two-instance peer-trust scenarios (features/17_peer_trust).
+# Deployed into the SAME namespace (dcs-bdd) as the primary "dcs" release
+# (values.bdd.yml, instance A) by tests/bdd/Makefile's kind_deploy_b target,
+# strictly AFTER kind_deploy — this instance shares several of instance A's
+# already-deployed services rather than duplicating them (see the per-block
+# comments below); it probes those shared services at startup.
+#
+# Structural reference: deployment/helm/values.dev2.yml (the native,
+# non-kind "instance B" launched by dev-stack2.sh) — this file is the
+# kind/BDD analogue, kept lean for the CI runner (4 vCPU / 16GB): no second
+# Traefik, Keycloak, Neo4j, Federated Catalogue, ORCE, IPFS, or Status List
+# Service.
+
+# Shares instance A's already-deployed Traefik (namespaceOverride: kube-system,
+# fullnameOverride: traefik, see values.bdd.yml) — do not deploy a second
+# ingress controller. ingress.className below points at that shared,
+# cluster-scoped IngressClass.
+traefik:
+  enabled: false
+
+image:
+  pullPolicy: Never
+
+# Own pdf-core: this instance's own PKCS#11 token (see pkcs11 below) issues
+# its own C2PA/PAdES leaf certs, so pdf-core needs its own signing secret —
+# sharing instance A's pdf-core would sign B's PDFs under A's identity.
+pdfCore:
+  enabled: true
+  image:
+    repository: pdf-core
+    tag: bdd
+    pullPolicy: Never
+
+extraEnv:
+  - name: JWT_ALG_NONE_SUPPORTED
+    value: "true"
+  - name: AUTH_INSECURE_COOKIES
+    value: "true"
+  # Reciprocal trust: instance A's DID (see values.bdd.yml's own
+  # DCS_TRUSTED_PEERS for the other half of this pair). Seeded at startup by
+  # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv (~:304/665).
+  - name: DCS_TRUSTED_PEERS
+    value: "did:web:dcs-a.localhost%3A18080"
+
+# DID identity (fatal on startup when missing). The <fullname>-identity
+# Secret (identitySecretName helper — unique per release, so this doesn't
+# collide with instance A's own identity Secret in the same namespace) is
+# published by this release's own hsm-provision post-install hook job, from
+# its own freshly provisioned in-cluster HSM token key.
+identity:
+  enabled: true
+
+oid4vp:
+  trust:
+    statusListSkipJWSVerify: true
+
+# Own PostgreSQL: this instance's own DCS database plus its own Hydra's
+# database. No "fc" or "statuslist" database — B doesn't run the Federated
+# Catalogue or its own Status List Service (see below).
+postgresql:
+  enabled: true
+  auth:
+    username: dcs
+    password: dcs
+    database: dcs
+  additionalDatabases: ["hydra"]
+  persistence:
+    enabled: false
+
+# Federated Catalogue / Keycloak / Neo4j: intentionally disabled. The backend
+# only initializes the FC client when FEDERATED_CATALOGUE_API_URL is
+# non-empty (backend/cmd/dcs/main.go ~:346-367 — fatal only if apiURL AND
+# clientID AND clientSecret are all set but FC_KEYCLOAK_REALM_URL is missing;
+# leaving apiURL empty skips FC entirely, no hard fail). Keycloak is only
+# needed by Hydra when NOT running in dev mode and by FC for its OAuth2
+# client-credentials flow — B's own Hydra (below) runs with config.dev: true
+# (self-issues tokens, no external IdP), so neither Keycloak nor Neo4j
+# (required only by the FC graph store) is needed.
+federatedCatalogue:
+  enabled: false
+keycloak:
+  enabled: false
+neo4j:
+  enabled: false
+
+nats:
+  enabled: true
+
+# Own Hydra: own issuer at dcs-b.localhost, own database (the "hydra"
+# additional database on this release's own postgresql, above).
+hydra:
+  enabled: true
+  config:
+    dsn: "postgres://dcs:dcs@dcs2-postgresql:5432/hydra?sslmode=disable"
+    dev: true
+    selfIssuerURL: "http://dcs-b.localhost:18080"
+    loginURL: "http://dcs-b.localhost:18080/digital-contracting-service/ui/"
+    consentURL: "http://dcs-b.localhost:18080/digital-contracting-service/api/auth/consent"
+    logoutURL: "http://dcs-b.localhost:18080/digital-contracting-service/api/auth/logout-complete"
+  secrets:
+    system: "bdd-hydra-system-secret-b-change-me"
+  clients:
+    - client_id: dcs-client
+      client_secret: dcs-secret
+      grant_types: ["authorization_code", "refresh_token"]
+      response_types: ["code"]
+      scope: "openid offline_access"
+      redirect_uris: ["http://dcs-b.localhost:18080/digital-contracting-service/api/auth/callback"]
+      post_logout_redirect_uris: ["http://dcs-b.localhost:18080/digital-contracting-service/api/auth/logout-complete"]
+      token_endpoint_auth_method: client_secret_post
+      skip_consent: true
+
+# Ingress: Host-only rule for dcs-b.localhost (API + domain-level did.json),
+# same path shape as instance A's dcs-a.localhost rule (values.bdd.yml),
+# routed through instance A's shared Traefik: ingressClassName "traefik" is a
+# cluster-scoped resource, reachable even though this release doesn't deploy
+# the traefik chart itself.
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: dcs-b.localhost
+      paths:
+        - path: /digital-contracting-service
+          pathType: Prefix
+        - path: /.well-known/did.json
+          pathType: Prefix
+
+# SoftHSM2 software token: own DID + own C2PA/PAdES signing keys, distinct
+# from instance A's. See values.bdd.yml's pkcs11 block for the full rationale.
+pkcs11:
+  tokenLabel: dcs
+  pin: "1234"
+  provisioning:
+    enabled: true
+    soPin: "12345678"
+
+# XFSC Status List Service: shared with instance A rather than a second
+# co-deployed instance — url/tenantID point at A's already-running service.
+# Release "dcs" (instance A) -> Service name "dcs-statuslist-service", per
+# the 'statuslistServiceURL' helper's own naming convention (mirrored
+# explicitly here since statuslistService.enabled=false on this release, so
+# the helper's auto-wired branch never fires).
+statuslistService:
+  enabled: false
+  url: "http://dcs-statuslist-service:8080"
+  tenantID: c2pa
+
+# Same loopback proxy as instance A (values.bdd.yml): status list credential
+# IDs embedded by the shared Status List Service are public-origin URLs
+# (http://localhost:18080/statuslist/..., host-agnostic per instance A's
+# ingress) that this pod must also be able to resolve back to the shared
+# Traefik from inside the cluster.
+statusListLocalhostProxy:
+  enabled: true
+  upstream: "http://traefik.kube-system.svc.cluster.local:18080"
+  ingressHost: localhost
+
+# IPFS / IPFS Document Manager: shared with instance A via explicit URL
+# overrides rather than a second co-deployed instance. Both override fields
+# live under ipfsClient (see the 'ipfsTenantBaseURL' / 'ipfsMfsBaseURL'
+# helpers in _helpers.tpl, which check these before falling back to
+# auto-wiring from an in-chart ipfs/ipfsDocumentManager sub-chart). Release
+# "dcs" (instance A) -> Service names "dcs-ipfs" / "dcs-ipfs-document-manager".
+ipfs:
+  enabled: false
+ipfsDocumentManager:
+  enabled: false
+ipfsClient:
+  tenantBaseURL: "http://dcs-ipfs-document-manager:8080/v1/tenants/tenant_space"
+  mfsBaseURL: "http://dcs-ipfs:5001"
+
+# ORCE (Timestamp Authority): shared with instance A's TSA rather than a
+# second co-deployed instance — see signing.tsaURL below.
+orce:
+  enabled: false
+
+signing:
+  # Shared with instance A: same RFC 3161 TSA, so both instances' C2PA/PAdES
+  # timestamps agree on trust. Wired as TSA_URL (backend) and
+  # DCS_PDF_CORE_TSA_URL (this release's own pdf-core); fatal on startup if
+  # empty.
+  tsaURL: "http://dcs-orce:1880/tsa/"
+  # Shares instance A's in-cluster dev TSA - trust the same provisioned cert.
+  tsaTrustCertSecret: "dcs-orce-tsa-material"
+  # did:web host, reachable both host-side (environment.py's *.localhost
+  # fallback resolver) and in-cluster (CoreDNS rewrite,
+  # tests/bdd/scripts/kind_coredns_rewrite.sh) to the shared Traefik Service,
+  # which routes it to THIS instance (see the ingress host rule above).
+  # Percent-encoded colon per did:web spec. Must equal route.didHostname below.
+  issuerDID: "did:web:dcs-b.localhost%3A18080"
+
+route:
+  basePath: "/digital-contracting-service"
+  publicBaseURL: "http://dcs-b.localhost:18080/digital-contracting-service/api"
+  # Explicit did:web hostname override (see the 'didHostname' helper) — must
+  # match signing.issuerDID's host component above.
+  didHostname: "dcs-b.localhost:18080"
+
+# Monitoring disabled: same reasoning as values.bdd.yml (kind has no
+# 'local-path' default StorageClass), and instance B doesn't need its own
+# stack regardless.
+monitoring:
+  enabled: false
+grafana:
+  enabled: false
+prometheus:
+  enabled: false
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+kubeStateMetrics:
+  enabled: false

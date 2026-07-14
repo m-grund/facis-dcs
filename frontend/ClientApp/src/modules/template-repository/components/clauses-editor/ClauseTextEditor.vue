@@ -14,7 +14,7 @@ import {
   usePlaceholderDropdownPosition,
 } from '@template-repository/composables/usePlaceholderDropdownPosition'
 import { getBlocksFromTemplateData } from '@template-repository/store/dcsDraftStore'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import { storeToRefs } from 'pinia'
@@ -35,7 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const uiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const { clausePlaceholderHighlight } = storeToRefs(uiStore)
 const { blocks, subTemplateSnapshots } = storeToRefs(draftStore)
 

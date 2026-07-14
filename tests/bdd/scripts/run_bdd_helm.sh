@@ -5,6 +5,12 @@ cleanup() {
   if [[ -f .tmp/port-forward-db.pid ]]; then
     kill "$(cat .tmp/port-forward-db.pid)" >/dev/null 2>&1 || true
   fi
+  if [[ -f .tmp/port-forward-dcs.pid ]]; then
+    kill "$(cat .tmp/port-forward-dcs.pid)" >/dev/null 2>&1 || true
+  fi
+  if [[ -f .tmp/port-forward-orce.pid ]]; then
+    kill "$(cat .tmp/port-forward-orce.pid)" >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT
@@ -16,13 +22,86 @@ trap cleanup EXIT
 : "${DCS_DEPLOYMENT:?DCS_DEPLOYMENT is required}"
 : "${BDD_DCS_BASE_URL:?BDD_DCS_BASE_URL is required}"
 : "${PROJECT_ROOT:?PROJECT_ROOT is required}"
+# Scopes every pod/label lookup below to THIS release: the two-instance BDD
+# suite deploys a second DCS release (dcs2) into the SAME namespace
+# (tests/bdd/Makefile's kind_deploy_b), and app.kubernetes.io/component=backend
+# alone matches both releases' backend pods — an unscoped selector previously
+# caused a wrong-pod log dump / signing-exec pick here.
+: "${HELM_RELEASE:?HELM_RELEASE is required}"
 
 BDD_PUBLIC_ORIGIN="${BDD_PUBLIC_ORIGIN:-http://localhost:18080}"
 export BDD_PUBLIC_ORIGIN
 export STATUSLIST_SERVICE_URL="${STATUSLIST_SERVICE_URL:-${BDD_PUBLIC_ORIGIN}/statuslist}"
 
+# BDD_DCS_BASE_URL_A / _B: the two-instance (@two-instance) peer-trust
+# scenarios (steps/peer_trust/dcs_peer_trust_steps.py) address instance A and
+# instance B independently of the single-instance BDD_DCS_BASE_URL used by
+# every other scenario. Instance A is conventionally "the" default instance
+# in this Helm/kind harness, so _A is just an alias for BDD_DCS_BASE_URL;
+# _B defaults to the dcs2 release's public origin (values.bdd2.yml).
+export BDD_DCS_BASE_URL_A="$BDD_DCS_BASE_URL"
+export BDD_DCS_BASE_URL_B="${BDD_DCS_BASE_URL_B:-http://dcs-b.localhost:18080/digital-contracting-service/api}"
+
+# Sign did:web challenges through the in-cluster token: the BDD harness has no
+# local SoftHSM token in the Helm/kind harness (keys are
+# non-extractable, PKCS#11-only). Resolve the pod by label rather than
+# `exec deploy/...`: the DCS deployment's selector also matches pdf-core pods
+# (no component label in matchLabels), so kubectl's deploy→pod resolution can
+# pick a pod that has no digital-contracting-service container. Scoped by
+# instance (see HELM_RELEASE above) so this always signs through instance A's
+# own token, never instance B's, when both releases share the namespace.
+DCS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
+  -l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=${HELM_RELEASE}" \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].metadata.name}')"
+export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c digital-contracting-service --"
+
+# IPFS CID-swap tamper seam (steps/support/tamper_seam.py): several
+# verify-shaped endpoints always re-fetch the SERVER'S OWN stored PDF from
+# IPFS by CID, so tampered-artifact scenarios inject bytes as a NEW CID via
+# `ipfs add` exec'd inside the shared IPFS pod, then repoint the owning row's
+# CID column at it (via the existing context.db test-DB connection). IPFS is
+# a SINGLE instance shared across both BDD releases (values.bdd2.yml's
+# ipfsClient.mfsBaseURL points at "dcs-ipfs" regardless of caller instance),
+# so this is not release-scoped the way BDD_HSMSIGN_EXEC is.
+IPFS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
+  -l "app.kubernetes.io/name=ipfs,app.kubernetes.io/instance=dcs" \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].metadata.name}')"
+# -i/--stdin is required (not just harmless) here: `ipfs add -` reads its
+# content from stdin, and without --stdin the API server may not have a
+# stdin stream attached before the remote command starts reading — observed
+# in practice as an intermittent race where `ipfs add` silently succeeds
+# against an EMPTY stdin (producing the well-known empty-file CID
+# Qmb...4Q7Vs-style hash) instead of the intended bytes, rather than a
+# reliable failure.
+export BDD_IPFS_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec -i ${IPFS_POD} --"
+
 mkdir -p .tmp .reports/junit
 REPORTS_JUNIT_DIR="$PWD/.reports/junit"
+
+# Emits `--resolve <host>:<port>:127.0.0.1` for a URL's host[:port], so
+# *.localhost hostnames the host machine's own resolver may not know (e.g.
+# dcs-b.localhost, which nothing registers anywhere) resolve to loopback for
+# curl's own DNS resolution without /etc/hosts or sudo (USER CONSTRAINT: no
+# /etc/hosts writes, no sudo anywhere in this harness). This is independent
+# of environment.py's socket.getaddrinfo fallback, which only covers the
+# Python behave process, not shell-level curl calls like the ones below.
+resolve_args_for_url() {
+  local url="$1" hostport host port
+  hostport="${url#*://}"
+  hostport="${hostport%%/*}"
+  host="${hostport%%:*}"
+  if [[ "$hostport" == *:* ]]; then
+    port="${hostport##*:}"
+  else
+    case "$url" in
+      https://*) port=443 ;;
+      *) port=80 ;;
+    esac
+  fi
+  printf '%s\n' "--resolve" "${host}:${port}:127.0.0.1"
+}
 
 DCS_HEALTH_URL="${BDD_DCS_BASE_URL%/}/auth/login"
 
@@ -60,7 +139,7 @@ echo "Waiting for DCS deployment ($DCS_DEPLOYMENT) to be available"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=180s "deployment/$DCS_DEPLOYMENT"
 echo "Waiting for DCS backend pod to accept traffic"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=ready pod \
-  -l "app.kubernetes.io/name=digital-contracting-service,app.kubernetes.io/component=backend" \
+  -l "app.kubernetes.io/name=digital-contracting-service,app.kubernetes.io/component=backend,app.kubernetes.io/instance=${HELM_RELEASE}" \
   --timeout=180s
 
 echo "Waiting for DCS HTTP via Traefik ingress at $DCS_HEALTH_URL ..."
@@ -69,6 +148,40 @@ if ! verify_host_ingress; then
 fi
 wait_for_dcs_http
 echo "DCS is reachable at $DCS_HEALTH_URL"
+
+# Instance B (dcs2, features/17_peer_trust @two-instance): only checked when
+# the caller tells us it exists (DCS_DEPLOYMENT_B set AND actually present in
+# this namespace) — never silently skipped without saying so, since a
+# missing/unready instance B means every @two-instance scenario will fail
+# with a much less obvious error later.
+if [[ -n "${DCS_DEPLOYMENT_B:-}" ]] && "$KUBECTL_BIN" -n "$K8S_NAMESPACE" get "deployment/$DCS_DEPLOYMENT_B" >/dev/null 2>&1; then
+  echo "Waiting for DCS deployment B ($DCS_DEPLOYMENT_B) to be available"
+  "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=180s "deployment/$DCS_DEPLOYMENT_B"
+
+  BDD_PUBLIC_ORIGIN_B="${BDD_PUBLIC_ORIGIN_B:-http://dcs-b.localhost:18080}"
+  DCS_HEALTH_URL_B="${BDD_DCS_BASE_URL_B%/}/auth/login"
+  mapfile -t CURL_RESOLVE_B < <(resolve_args_for_url "$BDD_PUBLIC_ORIGIN_B")
+
+  echo "Waiting for DCS HTTP via Traefik ingress (instance B) at $DCS_HEALTH_URL_B ..."
+  deadline_b=$(( $(date +%s) + 120 ))
+  http_code_b=""
+  until http_code_b=$(curl -s "${CURL_RESOLVE_B[@]}" -o /dev/null -w "%{http_code}" -X POST "$DCS_HEALTH_URL_B" \
+      -H 'Content-Type: application/json' -d '{}' 2>/dev/null) \
+      && [[ "$http_code_b" =~ ^[24][0-9]{2}$ ]] && [[ "$http_code_b" != 404 ]]; do
+    if [ "$(date +%s)" -gt "$deadline_b" ]; then
+      echo "WARNING: timed out waiting for instance B's DCS HTTP on $DCS_HEALTH_URL_B — @two-instance scenarios will fail." >&2
+      break
+    fi
+    sleep 2
+  done
+  if [[ "$http_code_b" =~ ^[24][0-9]{2}$ ]] && [[ "$http_code_b" != 404 ]]; then
+    echo "DCS instance B is reachable at $DCS_HEALTH_URL_B"
+  fi
+else
+  echo "WARNING: DCS_DEPLOYMENT_B is not set or not present in namespace $K8S_NAMESPACE — instance B" >&2
+  echo "readiness was NOT verified. @two-instance BDD scenarios will fail if they run. Deploy it with" >&2
+  echo "'make -C tests/bdd kind_deploy_b' (or kind_up, which now includes it) if you need instance B." >&2
+fi
 
 echo "Starting port-forward for PostgreSQL"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/dcs-postgresql" 5432:5432 > .tmp/port-forward-db.log 2>&1 &
@@ -84,6 +197,47 @@ until nc -z 127.0.0.1 5432 2>/dev/null; do
   sleep 1
 done
 echo "Port-forward on 5432 is ready"
+
+# Direct service access for endpoints Traefik does not route (e.g. /metrics,
+# which the backend serves at its root, outside the API prefix).
+DCS_SERVICE="${DCS_SERVICE:-$DCS_DEPLOYMENT}"
+LOCAL_FORWARD_PORT="${LOCAL_FORWARD_PORT:-18991}"
+SERVICE_PORT="${SERVICE_PORT:-8991}"
+echo "Starting port-forward for DCS service ($DCS_SERVICE)"
+"$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/$DCS_SERVICE" \
+  "$LOCAL_FORWARD_PORT:$SERVICE_PORT" > .tmp/port-forward-dcs.log 2>&1 &
+echo $! > .tmp/port-forward-dcs.pid
+
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 "$LOCAL_FORWARD_PORT" 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for port-forward on $LOCAL_FORWARD_PORT"
+    cat .tmp/port-forward-dcs.log || true
+    exit 1
+  fi
+  sleep 1
+done
+export BDD_DCS_INTERNAL_ORIGIN="http://localhost:$LOCAL_FORWARD_PORT"
+echo "Port-forward on $LOCAL_FORWARD_PORT is ready"
+
+# ORCE (Node-RED) hosts the contract-target-flow the deployment scenarios POST
+# to directly; the BDD values route it through the shared Traefik ingress
+# (orce.ingress in values.bdd.yml), so it is reachable at the public origin —
+# same path locally and on CI, no port-forward. An empty POST must yield the
+# flow's own 400 validation error; a Traefik 404 means the route is missing.
+export BDD_ORCE_TARGET_URL="${BDD_ORCE_TARGET_URL:-${BDD_PUBLIC_ORIGIN}/contract-target/deploy}"
+echo "Waiting for ORCE contract-target flow at $BDD_ORCE_TARGET_URL ..."
+deadline=$(( $(date +%s) + 60 ))
+until orce_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BDD_ORCE_TARGET_URL" \
+    -H 'Content-Type: application/json' -d '{}' 2>/dev/null) \
+    && [[ "$orce_code" =~ ^[24][0-9]{2}$|^400$ ]] && [[ "$orce_code" != 404 ]]; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for ORCE contract-target flow at $BDD_ORCE_TARGET_URL (last HTTP $orce_code)"
+    exit 1
+  fi
+  sleep 2
+done
+echo "ORCE contract-target flow is reachable (HTTP $orce_code); BDD_ORCE_TARGET_URL=$BDD_ORCE_TARGET_URL"
 
 source "$VENV_PATH/bin/activate"
 export BDD_DCS_BASE_URL

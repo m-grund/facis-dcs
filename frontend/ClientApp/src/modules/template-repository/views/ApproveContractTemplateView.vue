@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { computed, type Ref, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -17,7 +17,7 @@ const route = useRoute()
 const navStore = useNavStore()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 
 const decisionNoteDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('decision-note-dialog')
 

@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -68,7 +69,7 @@ func (r PostgresNegotiationRepo) Accept(ctx context.Context, tx *sqlx.Tx, id str
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("no negotiations accepted")
+		return db.ErrNoMatchingDecision
 	}
 
 	return nil
@@ -101,10 +102,28 @@ func (r PostgresNegotiationRepo) Reject(ctx context.Context, tx *sqlx.Tx, id str
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("no negotiations rejected")
+		return db.ErrNoMatchingDecision
 	}
 
 	return nil
+}
+
+// ReadCreatedByByNegotiationID returns the created_by of the
+// contract_negotiations row identified by id — the individual/organization
+// identity that authored the change_request, used by the conflict-of-
+// interest check (FR-CWE-07: a reviewer may not approve their own redline
+// proposal, see command.NegotiationAcceptor.Handle).
+func (r PostgresNegotiationRepo) ReadCreatedByByNegotiationID(ctx context.Context, tx *sqlx.Tx, id string) (string, error) {
+	query := `SELECT created_by FROM contract_negotiations WHERE id = $1`
+	var createdBy string
+	err := tx.GetContext(ctx, &createdBy, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", db.ErrNoMatchingDecision
+		}
+		return "", err
+	}
+	return createdBy, nil
 }
 
 func (r PostgresNegotiationRepo) ReadAllByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]db.NegotiationData, error) {

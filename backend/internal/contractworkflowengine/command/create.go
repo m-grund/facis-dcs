@@ -3,10 +3,12 @@ package command
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/identity"
 
 	"digital-contracting-service/internal/contractworkflowengine/datatype/reviewtaskstate"
@@ -31,6 +33,7 @@ type CreateCmd struct {
 	Reviewers   []string           `json:"reviewers"`
 	Approvers   []string           `json:"approvers"`
 	Negotiators []string           `json:"negotiators"`
+	Parties     []string           `json:"parties"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
 }
 
@@ -87,6 +90,8 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 	return nil
 }
 
+// Handle has no entry in contractstate.Transitions: creation establishes the
+// initial DRAFT state, it is not a transition from a prior state.
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 
 	if len(cmd.Reviewers) == 0 {
@@ -120,6 +125,16 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}
+	// Parties are attached after normalization for the same reason renewal's
+	// dcs:renewsContract is (see attachRenewsContractReference): the rebase
+	// pass must not touch them. They gate party read-scoping in
+	// query/contract/querybyid.go.
+	if len(cmd.Parties) > 0 {
+		normalizedContractData, err = attachContractParties(normalizedContractData, cmd.Parties)
+		if err != nil {
+			return fmt.Errorf("could not attach contract parties: %w", err)
+		}
+	}
 
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
@@ -144,6 +159,8 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		ContractData:    normalizedContractData,
 		TemplateDID:     cmd.TemplateDID,
 		TemplateVersion: contractTemplate.TemplateVersion,
+		Name:            contractTemplate.Name,
+		Description:     contractTemplate.Description,
 		Responsible:     &resp,
 	}
 	err = h.CRepo.Create(ctx, tx, data)
@@ -160,6 +177,8 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		DID:          cmd.DID,
 		TemplateDID:  cmd.TemplateDID,
 		CreatedBy:    cmd.CreatedBy,
+		Name:         contractTemplate.Name,
+		Description:  contractTemplate.Description,
 		ContractData: normalizedContractData,
 		OccurredAt:   data.CreatedAt,
 		HolderDID:    cmd.HolderDID,
@@ -172,4 +191,21 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	}
 
 	return tx.Commit()
+}
+
+// attachContractParties records the organizations that are parties to this
+// contract as a plain top-level "dcs:parties" JSON-LD property. Party
+// membership (organization names, the same value the OID4VP organization
+// claim discloses) gates read access in query/contract/querybyid.go.
+func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(*raw, &doc); err != nil {
+		return nil, fmt.Errorf("could not decode contract data: %w", err)
+	}
+	doc["dcs:parties"] = parties
+	encoded, err := datatype.NewJSON(doc)
+	if err != nil {
+		return nil, fmt.Errorf("could not encode contract data: %w", err)
+	}
+	return &encoded, nil
 }

@@ -100,8 +100,8 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 		return nil
 	}
 
-	if processData.State != contractstate.Negotiation.String() || processData.State == contractstate.Terminated.String() {
-		return errors.New("current contract state is invalid")
+	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventAcceptNegotiation); err != nil {
+		return err
 	}
 
 	isValidNegotiator, err := h.NTRepo.IsValidNegotiator(ctx, tx, cmd.DID, cmd.CauserDID)
@@ -110,7 +110,21 @@ func (h *NegotiationAcceptor) Handle(ctx context.Context, cmd AcceptNegotiationC
 	}
 
 	if !isValidNegotiator {
-		return errors.New("invalid user")
+		return ErrNotAParty
+	}
+
+	// Conflict-of-interest guard (FR-CWE-07): the identity that authored this
+	// negotiation's change_request may not be the same identity now accepting
+	// it. created_by/AcceptedBy are both the caller's participant identity
+	// (middleware.GetParticipantID — the organization claim from the OID4VP
+	// credential, see internal/middleware/oidc.go), independent of the
+	// peer-DID-scoped CauserDID checked above.
+	createdBy, err := h.NRepo.ReadCreatedByByNegotiationID(ctx, tx, cmd.ID)
+	if err != nil {
+		return fmt.Errorf("could not read negotiation author: %w", err)
+	}
+	if createdBy != "" && createdBy == cmd.AcceptedBy {
+		return ErrConflictOfInterest
 	}
 
 	err = h.NRepo.Accept(ctx, tx, cmd.ID, cmd.CauserDID)

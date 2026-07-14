@@ -3,9 +3,7 @@ package compiler
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
@@ -256,7 +254,7 @@ func renderC2PAManifestStore(ctx context.Context, contractID string, payloadHash
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	// Tag(18) COSE_Sign1 with protected headers containing:
-	//   1 -> -8   (alg=EdDSA)
+	//   1 -> -7   (alg=ES256)
 	//   33 -> [certDer]  (x5chain per RFC 9360)
 	// plus empty unprotected map, detached payload and a real signature over claim bytes.
 	protected := buildCoseProtectedHeadersWithX5Chain()
@@ -275,7 +273,7 @@ func renderC2PAManifestStore(ctx context.Context, contractID string, payloadHash
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", [][]byte{manifestBox}), nil
 }
 
-func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, contractID string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
+func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, manifestLabel string, contractID string, payloadHash string, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time, remoteManifestURL string) ([]byte, error) {
 	manifestBoxes, err := extractTopLevelManifestBoxes(originalC2PA)
 	if err != nil {
 		return nil, err
@@ -295,7 +293,7 @@ func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, m
 	originalManifestHash := sha256.Sum256(originalManifestBox[8:])
 	originalSignatureHash := sha256.Sum256(originalSignatureBox[8:])
 
-	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, contractID, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions, compiledAt)
+	updateManifestBox, err := renderVerificationUpdateManifest(ctx, manifestLabel, contractID, payloadHash, originalManifestLabel, originalManifestHash[:], originalSignatureHash[:], hardBindingHash, exclusions, compiledAt, remoteManifestURL)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +303,7 @@ func renderVerificationManifestStore(ctx context.Context, originalC2PA []byte, m
 	return renderJUMBFSuperbox(c2paStoreUUID, 0x03, "c2pa", children), nil
 }
 
-func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, contractID string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time) ([]byte, error) {
+func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string, contractID string, payloadHash string, parentManifestLabel string, parentManifestHash []byte, _ []byte, hardBindingHash []byte, exclusions []c2paExclusion, compiledAt time.Time, remoteManifestURL string) ([]byte, error) {
 	updateLabel := manifestLabel
 	hardBindingLabel := "c2pa.hash.data"
 	hardBindingPayload := renderMinimalDataHashAssertionCBOR(hardBindingHash, exclusions)
@@ -335,8 +333,17 @@ func renderVerificationUpdateManifest(ctx context.Context, manifestLabel string,
 		lifecycleURI = absoluteAssertionURI(updateLabel, "dcs.lifecycle")
 		assertionChildren = append(assertionChildren, lifecycleBox)
 	}
+	var remoteManifestsURI string
+	var remoteManifestsHash [32]byte
+	if remoteManifestURL != "" {
+		remoteManifestsPayload := renderRemoteManifestsAssertionCBOR(remoteManifestURL)
+		remoteManifestsBox := renderJUMBFSuperbox(cborUUID, 0x03, "dcs.remote_manifests", [][]byte{renderBMFFBox("cbor", remoteManifestsPayload)})
+		remoteManifestsHash = sha256.Sum256(remoteManifestsBox[8:])
+		remoteManifestsURI = absoluteAssertionURI(updateLabel, "dcs.remote_manifests")
+		assertionChildren = append(assertionChildren, remoteManifestsBox)
+	}
 	assertionStore := renderJUMBFSuperbox(c2paAsrtUUID, 0x03, "c2pa.assertions", assertionChildren)
-	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:], lifecycleURI, lifecycleHash[:])
+	claimPayload := renderVerificationClaimCBOR(payloadHash, updateLabel, hardBindingURI, hardBindingAssertionHash[:], ingredientURI, ingredientHash[:], actionsURI, actionsHash[:], lifecycleURI, lifecycleHash[:], remoteManifestsURI, remoteManifestsHash[:])
 	claimBox := renderJUMBFSuperbox(c2paClmUUID, 0x03, "c2pa.claim.v2", [][]byte{renderBMFFBox("cbor", claimPayload)})
 
 	protected := buildCoseProtectedHeadersWithX5Chain()
@@ -561,7 +568,7 @@ func renderVerificationActionsAssertionCBOR(ingredientURI string, ingredientHash
 	)
 }
 
-func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte, lifecycleURI string, lifecycleHash []byte) []byte {
+func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardBindingURI string, hardBindingHash []byte, ingredientURI string, ingredientHash []byte, actionsURI string, actionsHash []byte, lifecycleURI string, lifecycleHash []byte, remoteManifestsURI string, remoteManifestsHash []byte) []byte {
 	instanceID := "xmp:iid:" + uuidFromHashPrefix(payloadHash)
 	hardBindingRef := cborMap(
 		cborText("url"), cborText(hardBindingURI),
@@ -587,12 +594,46 @@ func renderVerificationClaimCBOR(payloadHash string, manifestLabel string, hardB
 		cborText("name"), cborText("DCS-PDF-CORE"),
 		cborText("version"), cborText("1.0"),
 	)
-	return cborMap(
+	// Remote-manifest discovery (DCS-OR-C2PA-008 AC3) is NOT expressed here as a
+	// standalone "remote_manifests" claim field: c2pa-rs 0.85.1 / c2patool
+	// 0.26.61 reject an unrecognized "remote_manifests" V2 claim field outright
+	// ("claim could not be converted from CBOR"), breaking every DCS PDF that
+	// ever carried one. Instead, when a manifest URL is supplied, a normal
+	// named assertion — "dcs.remote_manifests", holding {"remote_manifests":
+	// [url]} — is added to the assertion store (see
+	// renderRemoteManifestsAssertionCBOR) and referenced here as a
+	// hashed-URI in created_assertions, exactly like any other assertion
+	// (mirroring dcs.lifecycle). The C2PA-normative discovery mechanism — a
+	// dcterms:provenance link in the XMP metadata — is emitted in addition,
+	// by renderXMPMetadata via the update appendix builders in update.go.
+	// See pdf-core/features/manifest_url.feature.
+	createdAssertions := [][]byte{hardBindingRef, ingredientRef, actionsRef, lifecycleRef}
+	if remoteManifestsURI != "" {
+		remoteManifestsRef := cborMap(
+			cborText("url"), cborText(remoteManifestsURI),
+			cborText("alg"), cborText("sha256"),
+			cborText("hash"), cborBytes(remoteManifestsHash),
+		)
+		createdAssertions = append(createdAssertions, remoteManifestsRef)
+	}
+	pairs := [][]byte{
 		cborText("instanceID"), cborText(instanceID),
 		cborText("claim_generator_info"), claimGenInfo,
 		cborText("alg"), cborText("sha256"),
 		cborText("signature"), cborText(absoluteSignatureURI(manifestLabel)),
-		cborText("created_assertions"), cborArray(hardBindingRef, ingredientRef, actionsRef, lifecycleRef),
+		cborText("created_assertions"), cborArray(createdAssertions...),
+	}
+	return cborMap(pairs...)
+}
+
+// renderRemoteManifestsAssertionCBOR builds the dcs.remote_manifests named
+// assertion payload: {"remote_manifests": [url]}. This is a normal C2PA
+// assertion (mirroring renderLifecycleAssertionCBOR), NOT a claim field —
+// see the comment in renderVerificationClaimCBOR for why the two must not
+// be conflated.
+func renderRemoteManifestsAssertionCBOR(url string) []byte {
+	return cborMap(
+		cborText("remote_manifests"), cborArray(cborText(url)),
 	)
 }
 
@@ -604,10 +645,49 @@ func buildCoseProtectedHeadersWithX5Chain() []byte {
 	}
 
 	headers := cborMap(
-		cborUint(1), cborNegInt(-8),
+		cborUint(1), cborNegInt(-7),
 		cborUint(33), cborArray(chainItems...),
 	)
 	return headers
+}
+
+// coseDetachedSig64Marker is the CBOR framing that immediately precedes the
+// 64-byte ES256 signature inside every COSE_Sign1 the compiler emits:
+//
+//	0xA0  empty map  (unprotected headers)
+//	0xF6  null       (detached payload)
+//	0x58 0x40  byte string of length 64  (the signature)
+//
+// The signature bytes themselves are the only non-deterministic part of a
+// compiled PDF: ES256 over the HSM key is randomized, so two signings of the
+// same claim differ. The determinism guarantee pdf-core relies on covers the
+// human-readable content (fully determined by the JSON-LD), not the signature,
+// which is verified separately against its x5chain. ZeroCOSESignatures masks
+// those 64-byte runs so the deterministic re-render comparison ignores them.
+var coseDetachedSig64Marker = []byte{0xA0, 0xF6, 0x58, 0x40}
+
+// ZeroCOSESignatures returns a copy of pdf with every COSE_Sign1 ES256 signature
+// (the 64 bytes following coseDetachedSig64Marker) zeroed, so byte comparisons
+// of deterministically re-rendered PDFs are stable across randomized signings.
+func ZeroCOSESignatures(pdf []byte) []byte {
+	out := append([]byte(nil), pdf...)
+	from := 0
+	for {
+		idx := bytes.Index(out[from:], coseDetachedSig64Marker)
+		if idx < 0 {
+			break
+		}
+		sigStart := from + idx + len(coseDetachedSig64Marker)
+		sigEnd := sigStart + 64
+		if sigEnd > len(out) {
+			break
+		}
+		for i := sigStart; i < sigEnd; i++ {
+			out[i] = 0
+		}
+		from = sigEnd
+	}
+	return out
 }
 
 func signClaimSigStructure(ctx context.Context, protected []byte, claimPayload []byte) ([]byte, error) {
@@ -632,77 +712,25 @@ func mustSigningMaterial() signingMaterial {
 }
 
 func loadSigningMaterialFromEnv(getenv func(string) string, readFile func(string) ([]byte, error)) (signingMaterial, error) {
-	cryptoURL := strings.TrimSpace(getenv(envCryptoProviderURL))
-	if cryptoURL != "" {
-		ns := strings.TrimSpace(getenv(envCryptoProviderNamespace))
-		key := strings.TrimSpace(getenv(envCryptoProviderKey))
-		if ns == "" {
-			return signingMaterial{}, fmt.Errorf("%s is required when %s is set", envCryptoProviderNamespace, envCryptoProviderURL)
-		}
-		if key == "" {
-			return signingMaterial{}, fmt.Errorf("%s is required when %s is set", envCryptoProviderKey, envCryptoProviderURL)
-		}
-		chainInline := strings.TrimSpace(getenv(envX5ChainPEM))
-		chainFile := strings.TrimSpace(getenv(envX5ChainPEMFile))
-		chainPEM, chainProvided, err := resolveSigningConfigValue(readFile, chainInline, chainFile, envX5ChainPEM, envX5ChainPEMFile)
-		if err != nil {
-			return signingMaterial{}, err
-		}
-		if !chainProvided {
-			return signingMaterial{}, fmt.Errorf("x5chain must be provided when using transit signer; set %s or %s", envX5ChainPEM, envX5ChainPEMFile)
-		}
-		certs, err := parseCertificateChainPEM([]byte(chainPEM))
-		if err != nil {
-			return signingMaterial{}, err
-		}
-		return signingMaterial{signer: newTransitSigner(cryptoURL, ns, key), certChainDER: certs}, nil
+	endpoint := strings.TrimSpace(getenv(envSigningEndpoint))
+	if endpoint == "" {
+		return signingMaterial{}, fmt.Errorf("%s is required: pdf-core signs C2PA manifests via the backend's internal signing endpoint", envSigningEndpoint)
 	}
 
-	keyInline := strings.TrimSpace(getenv(envSignerKeyPEM))
-	keyFile := strings.TrimSpace(getenv(envSignerKeyPEMFile))
-	keyPEM, keyProvided, err := resolveSigningConfigValue(
-		readFile,
-		keyInline,
-		keyFile,
-		envSignerKeyPEM,
-		envSignerKeyPEMFile,
-	)
-	if err != nil {
-		return signingMaterial{}, err
-	}
 	chainInline := strings.TrimSpace(getenv(envX5ChainPEM))
 	chainFile := strings.TrimSpace(getenv(envX5ChainPEMFile))
-	chainPEM, chainProvided, err := resolveSigningConfigValue(
-		readFile,
-		chainInline,
-		chainFile,
-		envX5ChainPEM,
-		envX5ChainPEMFile,
-	)
+	chainPEM, chainProvided, err := resolveSigningConfigValue(readFile, chainInline, chainFile, envX5ChainPEM, envX5ChainPEMFile)
 	if err != nil {
 		return signingMaterial{}, err
 	}
-
-	requireExternal := strings.EqualFold(strings.TrimSpace(getenv(envRequireExternalSigningMaterial)), "true")
-	if !keyProvided && !chainProvided {
-		if requireExternal {
-			return signingMaterial{}, fmt.Errorf("external signing material required but not provided")
-		}
-		return signingMaterial{}, fmt.Errorf("signing material not configured; set %s or %s and %s or %s", envSignerKeyPEM, envSignerKeyPEMFile, envX5ChainPEM, envX5ChainPEMFile)
-	}
-	if !keyProvided || !chainProvided {
-		return signingMaterial{}, fmt.Errorf("both signing key and x5chain must be provided together")
-	}
-
-	priv, err := parsePKCS8Ed25519PrivateKeyPEM([]byte(keyPEM))
-	if err != nil {
-		return signingMaterial{}, err
+	if !chainProvided {
+		return signingMaterial{}, fmt.Errorf("x5chain must be provided; set %s or %s", envX5ChainPEM, envX5ChainPEMFile)
 	}
 	certs, err := parseCertificateChainPEM([]byte(chainPEM))
 	if err != nil {
 		return signingMaterial{}, err
 	}
-	return signingMaterial{signer: localSigner{priv: priv}, certChainDER: certs}, nil
+	return signingMaterial{signer: newHTTPCallbackSigner(endpoint), certChainDER: certs}, nil
 }
 
 func resolveSigningConfigValue(readFile func(string) ([]byte, error), inlineValue string, filePath string, inlineName string, fileName string) (string, bool, error) {
@@ -720,22 +748,6 @@ func resolveSigningConfigValue(readFile func(string) ([]byte, error), inlineValu
 		return "", false, fmt.Errorf("read %s: %w", filePath, err)
 	}
 	return string(content), true, nil
-}
-
-func parsePKCS8Ed25519PrivateKeyPEM(pemBytes []byte) (ed25519.PrivateKey, error) {
-	block, _ := pem.Decode(pemBytes)
-	if block == nil {
-		return nil, fmt.Errorf("signer key PEM block not found")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse signer PKCS8 key: %w", err)
-	}
-	priv, ok := parsed.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("signer key is not Ed25519")
-	}
-	return priv, nil
 }
 
 func parseCertificateChainPEM(pemBytes []byte) ([][]byte, error) {
@@ -871,6 +883,34 @@ func extractLifecycleEffectiveAt(c2paBytes []byte, manifestIdx int) (time.Time, 
 	}
 	return t, nil
 }
+
+// extractRemoteManifestURLFromXMP returns the dcterms:provenance URL from the
+// PDF's current XMP metadata object (obj 13), or "" when none is present
+// (DCS-OR-C2PA-008 AC3). The deterministic verify re-render
+// (VerifyIncrementalUpdate) uses this so the re-applied amendment reproduces
+// an XMP packet carrying the same provenance link — otherwise the stored PDF
+// (which embeds it) would fail the byte-for-byte determinism check. See
+// renderXMPMetadata's doc comment for why this replaced a C2PA claim field.
+func extractRemoteManifestURLFromXMP(pdf []byte) string {
+	const metadataObjID = 13
+	start, length, found := findLastObjectStreamRange(pdf, metadataObjID)
+	if !found {
+		return ""
+	}
+	xmp := pdf[start : start+length]
+	marker := []byte(`dcterms:provenance="`)
+	idx := bytes.Index(xmp, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := xmp[idx+len(marker):]
+	end := bytes.IndexByte(rest, '"')
+	if end < 0 {
+		return ""
+	}
+	return string(rest[:end])
+}
+
 
 // parseCBORTextMap decodes a CBOR map whose keys and values are all text strings.
 func parseCBORTextMap(data []byte) (map[string]string, error) {

@@ -31,6 +31,7 @@ type processAuditAndCompliancesrvc struct {
 	ATrailReader base.AuditTrailReader
 	CTRepo       templatedb.ContractTemplateRepo
 	CRepo        cwedb.ContractRepo
+	ATRepo       cwedb.ApprovalTaskRepo
 	auth.JWTAuthenticator
 }
 
@@ -45,8 +46,8 @@ type auditScopeConfig struct {
 	includeArchiveTrail            bool
 }
 
-func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, auditTrailReader base.AuditTrailReader, ctRepo templatedb.ContractTemplateRepo, cRepo cwedb.ContractRepo) processauditandcompliance.Service {
-	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader, CTRepo: ctRepo, CRepo: cRepo}
+func NewProcessAuditAndCompliance(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, auditTrailReader base.AuditTrailReader, ctRepo templatedb.ContractTemplateRepo, cRepo cwedb.ContractRepo, atRepo cwedb.ApprovalTaskRepo) processauditandcompliance.Service {
+	return &processAuditAndCompliancesrvc{DB: db, JWTAuthenticator: jwtAuth, ATrailReader: auditTrailReader, CTRepo: ctRepo, CRepo: cRepo, ATRepo: atRepo}
 }
 
 func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processauditandcompliance.PACAuditRequest) (res []*processauditandcompliance.PACAuditResponse, err error) {
@@ -462,9 +463,38 @@ func (s *processAuditAndCompliancesrvc) persistReportGeneratedEvent(ctx context.
 	return nil
 }
 
-func (s *processAuditAndCompliancesrvc) Monitor(ctx context.Context, p *processauditandcompliance.MonitorPayload) (res any, err error) {
-	log.Printf(ctx, "processAuditAndCompliance.monitor")
-	return
+func (s *processAuditAndCompliancesrvc) Monitor(ctx context.Context, p *processauditandcompliance.MonitorPayload) (res *processauditandcompliance.PACMonitorResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	handler := qry2.ComplianceMonitor{
+		DB:     s.DB,
+		ATRepo: s.ATRepo,
+		CRepo:  s.CRepo,
+	}
+	result, err := handler.Handle(ctx, qry2.MonitorQry{
+		MonitoredBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		return nil, processauditandcompliance.MakeInternalError(err)
+	}
+
+	risks := make([]*processauditandcompliance.PACComplianceRisk, 0, len(result.Risks))
+	for _, risk := range result.Risks {
+		risks = append(risks, &processauditandcompliance.PACComplianceRisk{
+			Did:        risk.DID,
+			RiskType:   risk.RiskType,
+			Detail:     risk.Detail,
+			DetectedAt: risk.DetectedAt.Format(time.RFC3339),
+		})
+	}
+	return &processauditandcompliance.PACMonitorResponse{
+		CheckedAt: result.CheckedAt.Format(time.RFC3339),
+		Risks:     risks,
+	}, nil
 }
 
 func (s *processAuditAndCompliancesrvc) IncidentReport(ctx context.Context, p *processauditandcompliance.IncidentReportPayload) (res any, err error) {

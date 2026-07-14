@@ -15,7 +15,7 @@ import {
   getBlocksFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import {
@@ -55,7 +55,7 @@ interface RequirementDraft {
   parameterValidity: Record<string, boolean>
 }
 
-const store = useTemplateDraftStore()
+const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { semanticConditions: mainSemanticConditions, blocks, subTemplateSnapshots } = storeToRefs(store)
 

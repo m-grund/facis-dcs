@@ -2,8 +2,8 @@
 import EditorBlock from '@template-repository/components/builder-editor/document-block/EditorBlock.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import { type FlattenedOutlineItem, useFlattenedOutline } from '@template-repository/composables/useFlattenedOutline'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { isDcsMergedApprovedTemplate, type MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { getOwnerBlockIdFromMergedBlockId, isMergedBlockId } from '@template-repository/utils/template-data-ref'
 import { storeToRefs } from 'pinia'
@@ -12,7 +12,7 @@ import { isDcsApprovedTemplate, isDcsSection } from '@/models/dcs-jsonld'
 import type { DcsBlock, DcsLayoutNode } from '@/models/dcs-jsonld'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
 const { layout, blocks } = storeToRefs(draftStore)
 const { isInFadeOutSet, effectiveIndentWidth, horizontalPreviewFor, horizontalArrowIcon } =
@@ -145,7 +145,7 @@ function enrichFlatItem(
       :key="item.blockId"
       :class="[
         'flex min-w-0 items-stretch',
-        'transition-[opacity] duration-200 ease-out',
+        'transition-opacity duration-200 ease-out',
         isInFadeOutSet(item.blockId) && 'opacity-50',
       ]"
     >
@@ -153,7 +153,7 @@ function enrichFlatItem(
       <div
         v-if="item.block && !isDcsMergedApprovedTemplate(item.block)"
         :class="[
-          'relative flex min-h-[2.5rem] flex-shrink-0 items-center',
+          'relative flex min-h-10 shrink-0 items-center',
           'transition-[width] duration-300 ease-out',
           item.depthLevel > 0 && !horizontalPreviewFor(item) && 'border-l-2 border-base-300',
           horizontalPreviewFor(item) && 'border-l-2 border-primary',

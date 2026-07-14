@@ -28,7 +28,20 @@ persistence:
 
 extraEnv: []
 
+# Local RFC3161 dev TSA: the /tsa flow signs timestamp replies in-pod with a
+# provisioned dev cert (see configmap-tsa.yaml) instead of forwarding to an
+# external TSA. Self-contained for dev/BDD/CI — no internet dependency.
+localTSA:
+  enabled: true
+
 resources: {}
+
+# Mount the chart's merged flows/*.json as Node-RED's startup flows file —
+# deterministic, rollout-race-free. When enabled, the flowImport hook job is
+# skipped for chart flows (flows.json is a read-only mount; runtime /flows
+# deploys would fail to persist anyway).
+flowsFile:
+  enabled: true
 
 flowImport:
   enabled: true

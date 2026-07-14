@@ -8,12 +8,12 @@ import {
   parseSegmentsFromContent,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import {
   getBlocksFromTemplateData,
   getLayoutFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 const uiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const { selectedBlockId } = storeToRefs(uiStore)
 const { semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
 const { isSwapPreviewTarget } = useBlockMovementPreview()

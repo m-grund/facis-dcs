@@ -35,7 +35,7 @@ const ROLE_LABEL_TO_USER_ROLE: Record<string, UserRole> = {
   Auditor: 'AUDITOR',
   'Sys. Administrator': 'SYSTEM_ADMINISTRATOR',
   'Compliance Officer': 'COMPLIANCE_OFFICER',
-  'Ingestion Manager': 'INTEGRATION_MANAGER',
+  'Integration Manager': 'INTEGRATION_MANAGER',
   'Process Orchestrator': 'PROCESS_ORCHESTRATOR',
   Validator: 'VALIDATOR',
 }

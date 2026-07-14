@@ -2,7 +2,7 @@
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import TemplateTypeSelect from '@template-repository/components/TemplateTypeSelect.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -15,7 +15,7 @@ const router = useRouter()
 const route = useRoute()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
-const draftStore = useTemplateDraftStore()
+const draftStore = useDcsDraftStore()
 const { templateType } = storeToRefs(draftStore)
 
 const isEditMode = computed(() => !!route.params.did)

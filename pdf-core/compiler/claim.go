@@ -30,7 +30,7 @@ func StripEmbeddedJSONLD(pdf []byte) ([]byte, error) {
 // JSON-LD stream content inside the first definition of the embedded-file
 // object.  It is used by both StripEmbeddedJSONLD and the extraction helpers.
 func findEmbeddedJSONLDStreamRange(pdf []byte) (start, length int, err error) {
-	fileSpecPos := bytes.Index(pdf, []byte("/F (payload.jsonld)"))
+	fileSpecPos := bytes.Index(pdf, []byte("/F (contract.jsonld)"))
 	if fileSpecPos < 0 {
 		return 0, 0, fmt.Errorf("embedded JSON-LD filespec not found")
 	}

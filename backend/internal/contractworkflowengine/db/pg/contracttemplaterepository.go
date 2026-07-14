@@ -16,7 +16,7 @@ type PostgresContractTemplateRepo struct {
 
 func (r *PostgresContractTemplateRepo) ReadContractTemplateDataByID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractTemplateQueryResult, error) {
 	statement := `
-        SELECT template_data, version
+        SELECT template_data, version, name, description
         FROM contract_templates
         WHERE
             did = $1

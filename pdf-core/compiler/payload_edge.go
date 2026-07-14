@@ -3,6 +3,7 @@ package compiler
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -65,6 +66,28 @@ func canonicalContextArgs() (iri string, loader ld.DocumentLoader, err error) {
 	return iri, &inProcessLoader{iri: iri, doc: doc}, nil
 }
 
+// baseIRIFromContextIRI derives a JSON-LD API "base IRI" (scheme://host/) from
+// the registered context IRI, for use as the base argument to
+// ld.NewJsonLdOptions. Every DCS document's @id (and nested @ids, e.g.
+// "<did>#metadata") is a bare identifier with no URI scheme at all — unlike
+// pdf-core's own feature-test fixtures, which always use a properly
+// scheme-prefixed absolute @id ("urn:doc:..."). Without an API-level base IRI,
+// json-gold's Expand leaves such relative @ids unresolved, and a node whose
+// @id isn't an absolute IRI or blank node is silently dropped during RDF
+// conversion (not an error — URDNA2015 normalization just omits it), producing
+// zero N-Quads and a payload hash of sha256("") for every document the real
+// backend compiles. This must be passed as ld.NewJsonLdOptions's base
+// argument specifically — embedding "@base" in the context document's own
+// JSON-LD @context is NOT equivalent and does not fix this (verified: Expand
+// still left @ids unresolved with only the context-level @base set).
+func baseIRIFromContextIRI(contextIRI string) string {
+	u, err := url.Parse(contextIRI)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + "/"
+}
+
 // inProcessLoader serves the registered context document for its IRI without
 // making any network request, and falls back to json-gold's default HTTP loader
 // for all other URLs.
@@ -120,9 +143,10 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	baseIRI := baseIRIFromContextIRI(ctxIRI)
 
 	proc := ld.NewJsonLdProcessor()
-	expandOpts := ld.NewJsonLdOptions("")
+	expandOpts := ld.NewJsonLdOptions(baseIRI)
 	expandOpts.DocumentLoader = loader
 	expanded, err := proc.Expand(doc, expandOpts)
 	if err != nil {
@@ -135,7 +159,7 @@ func CanonicalizePayload(raw []byte) ([]byte, error) {
 	// the input uses compact-IRI prefix notation (e.g. dcs:blocks, dcs:children).
 	normalizeExpandedProps(expanded)
 
-	compactOpts := ld.NewJsonLdOptions("")
+	compactOpts := ld.NewJsonLdOptions(baseIRI)
 	compactOpts.DocumentLoader = loader
 	compacted, err := proc.Compact(expanded, ctxIRI, compactOpts)
 	if err != nil {

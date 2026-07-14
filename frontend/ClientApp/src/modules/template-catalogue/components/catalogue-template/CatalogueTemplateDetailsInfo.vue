@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { TemplateType } from '@template-repository/models/contract-template'
-import { useTemplateDraftStore } from '@template-repository/store/templateDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 
-const { templateType, name, description, version } = storeToRefs(useTemplateDraftStore())
+const { templateType, name, description, version } = storeToRefs(useDcsDraftStore())
 </script>
 
 <template>

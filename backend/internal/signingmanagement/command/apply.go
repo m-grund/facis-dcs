@@ -4,27 +4,42 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/hsm"
+	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/validation"
+	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
+	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
+	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
+	cweevent "digital-contracting-service/internal/contractworkflowengine/event"
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	"digital-contracting-service/internal/signingmanagement/db"
-	"digital-contracting-service/internal/signingmanagement/dss"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
+	"digital-contracting-service/internal/signingmanagement/signer"
 
 	"github.com/jmoiron/sqlx"
 )
 
+// ErrCeremonyRequired is the typed precondition failure returned when a
+// signature is applied for a signer/contract that has no completed PID
+// presentation ceremony (DCS-FR-SM-16, FR-SM-25, UC-04-02).
+var ErrCeremonyRequired = errors.New("a completed PID presentation ceremony is required before signing")
+
 // ApplyCmd carries the inputs for applying a digital signature.
 type ApplyCmd struct {
 	DID            string
+	SignerDID      string
 	CredentialType string
 	AppliedBy      string
 	HolderDID      string
@@ -33,13 +48,35 @@ type ApplyCmd struct {
 
 // Applier handles the ApplyCmd command.
 type Applier struct {
-	DB       *sqlx.DB
-	CRepo    db.ContractRepo
-	DSClient dss.Client
+	DB           *sqlx.DB
+	CRepo        db.ContractRepo
+	CeremonyRepo db.CeremonyRepo
+	Signer       signer.ContractSigner
+	PDFCore      *pdfcore.Client
+	IPFSClient   *ipfs.APIClient
+	VCSigner     provenance.VCSigner
+	// VCIssuer issues the C2PA lifecycle-assertion VC stamped into the base
+	// PDF before signing (DCS-OR-C2PA-004) — see stampActiveLifecycle below.
+	VCIssuer  provenance.VCIssuer
+	IssuerDID string
+	// ArchiveRepo, IPFSStorer, ArchiveNotary, and ArchiveTSA back the
+	// archive-entry creation that now happens on reaching SIGNED (DCS-FR-
+	// CWE-20), not on APPROVED. ArchiveRepo is the contractworkflowengine
+	// repo (same contracts/contract_archive_entries tables as CRepo above,
+	// a different package's repo interface) reused purely for its
+	// StoreArchiveEntry/ReadDataByDID methods.
+	ArchiveRepo   cwedb.ContractRepo
+	IPFSStorer    cwecommand.ArchiveSnapshotStorer
+	ArchiveNotary cwecommand.ArchiveNotary
+	ArchiveTSA    cwecommand.ArchiveTimestampIssuer
 }
 
-// Handle applies a digital signature to a contract (DCS-FR-SM-16, DCS-IR-SI-10).
-// The contract must be in APPROVED state; this is enforced by the repo query.
+// Handle applies a PAdES digital signature to a contract (DCS-FR-SM-16,
+// DCS-IR-SI-10). It first enforces the PID-presentation ceremony precondition
+// (orthogonal to, and evaluated before, the APPROVED -> SIGNED state gate),
+// then embeds the presentation and a ContractSigningSummaryCredential into the
+// PDF and signs it (embed-first-sign-second), stores the signed artefact in
+// IPFS, and binds both the signed-PDF hash and the JSON-LD content hash.
 func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
@@ -55,14 +92,28 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		}
 	}(tx)
 
-	// Validates APPROVED state; errors if not found.
 	data, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract %s: %w", cmd.DID, err)
 	}
-
 	if data.ContractData == nil {
 		return fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
+	}
+
+	// Ceremony precondition (DCS-FR-SM-16): a completed (verified) PID
+	// presentation for this signer and contract must exist. Evaluated before
+	// the state-machine transition so a missing ceremony is reported as its own
+	// typed error rather than a state error.
+	ceremony, err := h.CeremonyRepo.FindVerifiedCeremony(ctx, tx, cmd.DID, cmd.SignerDID)
+	if err != nil {
+		return fmt.Errorf("could not resolve signing ceremony: %w", err)
+	}
+	if ceremony == nil {
+		return ErrCeremonyRequired
+	}
+
+	if err := contractstate.ValidateTransition(contractstate.ContractState(data.State), contractstate.EventSign); err != nil {
+		return err
 	}
 
 	if err := validation.ValidateContractPolicySatisfaction(
@@ -77,36 +128,122 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return err
 	}
 
-	// Compute SHA-256 of the JSON-LD as the canonical signing payload.
-	sum := sha256.Sum256(*data.ContractData)
-	payload, err := json.Marshal(map[string]string{
-		"contract_did": cmd.DID,
-		"jsonld_hash":  fmt.Sprintf("%x", sum),
+	// Load (or generate) the base PDF to be signed.
+	basePDF, err := h.loadBasePDF(ctx, tx, cmd.DID, *data.ContractData)
+	if err != nil {
+		return err
+	}
+
+	// Stamp the "active" C2PA lifecycle assertion into the base PDF BEFORE
+	// signing it (update-then-sign), not after. The signed artefact must never
+	// be mutated again once it carries a PAdES signature: any subsequent
+	// incremental update to a referenced embedded-file object (the C2PA
+	// manifest attachment) — however carefully byte-range-preserving — is
+	// flagged as an unexplained/illegal modification by standards-compliant
+	// PAdES validators (Adobe Reader, pyHanko's diff-analysis), even though the
+	// CMS signature itself stays cryptographically valid. Stamping here means
+	// the signature commits to the PDF's FINAL lifecycle-bearing content, so
+	// exportcontract.go/verifycontract.go never need to touch it again for the
+	// SIGNED/ACTIVE C2PA state (DCS-OR-C2PA-004, DCS-FR-SM-16).
+	stampedPDF, rendererVersion, err := stampLifecycleForSigning(ctx, cmd.DID, *data.ContractData, basePDF, h.PDFCore, h.VCIssuer, h.IssuerDID)
+	if err != nil {
+		return fmt.Errorf("stamp active lifecycle assertion before signing: %w", err)
+	}
+	basePDF = stampedPDF
+
+	contentSum := sha256.Sum256(*data.ContractData)
+	contentHash := hex.EncodeToString(contentSum[:])
+	basePDFSum := sha256.Sum256(basePDF)
+	basePDFHash := hex.EncodeToString(basePDFSum[:])
+
+	// Issue the signing-summary credential carrying the verbatim PID
+	// presentation, then embed it and sign (embed-first-sign-second).
+	vpToken := ""
+	if ceremony.VpToken != nil {
+		vpToken = *ceremony.VpToken
+	}
+	kbSDHash := ""
+	if ceremony.KbSdHash != nil {
+		kbSDHash = *ceremony.KbSdHash
+	}
+	signedAt := time.Now().UTC()
+	evidence, _, err := provenance.IssueSigningSummaryVC(ctx, h.VCSigner, h.IssuerDID, provenance.SigningSummary{
+		ContractID:      cmd.DID,
+		SignerDID:       cmd.SignerDID,
+		CeremonyID:      ceremony.ID,
+		FieldName:       ceremony.FieldName,
+		ContentHash:     contentHash,
+		PDFHash:         basePDFHash,
+		CredentialType:  cmd.CredentialType,
+		KBSDHash:        kbSDHash,
+		PIDPresentation: vpToken,
+		SignedAt:        signedAt,
 	})
 	if err != nil {
-		return fmt.Errorf("marshal signing payload: %w", err)
+		return fmt.Errorf("issue signing-summary VC: %w", err)
 	}
 
-	sigBytes, err := h.DSClient.Sign(ctx, payload, cmd.CredentialType)
+	signedPDF, err := h.Signer.SignPDF(ctx, basePDF, ceremony.FieldName, ceremony.FieldName, evidence)
 	if err != nil {
-		return fmt.Errorf("DSS sign: %w", err)
+		return fmt.Errorf("pades sign: %w", err)
 	}
 
-	status := "SIGNED"
-	if len(sigBytes) == 0 {
-		status = "PENDING"
+	signedPDFSum := sha256.Sum256(signedPDF)
+	signedPDFHash := hex.EncodeToString(signedPDFSum[:])
+
+	ipfsRes, err := h.IPFSClient.CreateFile(ctx, signedPDF)
+	if err != nil {
+		return fmt.Errorf("store signed PDF in IPFS: %w", err)
+	}
+	cid := ipfsRes.Identifier.Value
+
+	// Confirm the artefact resolves through the read path before persisting its
+	// CID. The tenant store is eventually consistent, so a CID CreateFile has
+	// just returned is not always immediately retrievable; persisting it early
+	// would let a later export/verify fetch the contract's PDF and fail
+	// (DCS-FR-SM-16). FetchFile retries the transient not-yet-resolvable window.
+	readback, err := h.IPFSClient.FetchFile(cid)
+	if err != nil || readback == nil || len(readback.Data) == 0 {
+		return fmt.Errorf("signed PDF CID %s not resolvable after store: %w", cid, err)
 	}
 
+	// contentHash (computed above from *data.ContractData) is the same payload
+	// hash exportcontract.go/verifycontract.go compare against, so recording it
+	// here means the first export/verify after signing sees a matching hash
+	// and serves the frozen signed PDF as-is instead of appending a
+	// post-signature revision.
+	if err := h.CRepo.SetSignedPDF(ctx, tx, cmd.DID, cid, rendererVersion, "active", contentHash); err != nil {
+		return err
+	}
+
+	keyVersion, err := h.CRepo.ActiveKeyVersion(ctx, tx, hsm.KeyLabelPADES())
+	if err != nil {
+		return fmt.Errorf("could not resolve active key version: %w", err)
+	}
+
+	ceremonyID := ceremony.ID
 	signature := db.ContractSignature{
 		ContractDID:    cmd.DID,
-		Status:         status,
-		SignatureBytes: sigBytes,
-		SignerDID:      cmd.AppliedBy,
+		Status:         "SIGNED",
+		SignatureBytes: signedPDFSum[:],
+		SignerDID:      cmd.SignerDID,
 		CredentialType: cmd.CredentialType,
+		KeyVersion:     keyVersion,
+		IpfsCID:        &cid,
+		CeremonyID:     &ceremonyID,
+		PDFHash:        &signedPDFHash,
+		ContentHash:    &contentHash,
 	}
-	err = h.CRepo.CreateSignature(ctx, tx, signature)
-	if err != nil {
+	if err := h.CRepo.CreateSignature(ctx, tx, signature); err != nil {
 		return fmt.Errorf("could not create signature: %w", err)
+	}
+
+	if err := h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Signed.String()); err != nil {
+		return fmt.Errorf("could not update contract state: %w", err)
+	}
+
+	if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy); err != nil {
+		return err
 	}
 
 	evt := event2.ApplyEvent{
@@ -116,12 +253,175 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		UserRoles:       cmd.UserRoles,
 		CredentialType:  cmd.CredentialType,
 		AppliedBy:       cmd.AppliedBy,
-		OccurredAt:      time.Now().UTC(),
+		OccurredAt:      signedAt,
 	}
-	err = event.Create(ctx, tx, evt, componenttype.SignatureManagement)
-	if err != nil {
+	if err := event.Create(ctx, tx, evt, componenttype.SignatureManagement); err != nil {
 		return fmt.Errorf("could not create event: %w", err)
 	}
 
 	return tx.Commit()
+}
+
+// archiveSignedContract creates the archive entry for a contract that just
+// reached SIGNED (DCS-FR-CWE-20: the archive-entry trigger is gated to
+// SIGNED, not APPROVED), notarizing and RFC-3161-TSA-timestamping it exactly
+// as the former APPROVED-time trigger did.
+func (h *Applier) archiveSignedContract(ctx context.Context, tx *sqlx.Tx, did string, appliedBy string) error {
+	signedContract, err := h.ArchiveRepo.ReadDataByDID(ctx, tx, did)
+	if err != nil {
+		return fmt.Errorf("could not read signed contract for archive storage: %w", err)
+	}
+
+	archiveEntry, err := cwecommand.BuildArchiveEntry(signedContract, appliedBy)
+	if err != nil {
+		return fmt.Errorf("could not build archive entry: %w", err)
+	}
+	if h.IPFSStorer == nil {
+		return errors.New("archive snapshot IPFS storer is required")
+	}
+	snapshotResult, err := h.IPFSStorer.CreateFile(ctx, archiveEntry.ContractSnapshot)
+	if err != nil {
+		return fmt.Errorf("could not store archive snapshot in IPFS: %w", err)
+	}
+	if snapshotResult == nil || snapshotResult.Identifier.Value == "" {
+		return errors.New("archive snapshot IPFS storer returned empty CID")
+	}
+	archiveEntry.SnapshotCID = snapshotResult.Identifier.Value
+
+	archiveEntryID := fmt.Sprintf("%s#%d", did, signedContract.ContractVersion)
+	notaryPayload := cwecommand.ArchiveNotaryPayload{
+		EventType:       "ARCHIVE_STORED",
+		ArchiveEntryID:  archiveEntryID,
+		DID:             did,
+		ContractVersion: signedContract.ContractVersion,
+		ContentHash:     archiveEntry.ContentHash,
+		SnapshotCID:     archiveEntry.SnapshotCID,
+		StoredBy:        appliedBy,
+		StoredAt:        archiveEntry.StoredAt,
+	}
+	var notaryReceipt *cwecommand.ArchiveNotaryReceipt
+	if h.ArchiveNotary != nil {
+		notaryReceipt, err = h.ArchiveNotary.NotarizeArchiveEntry(ctx, notaryPayload)
+		if err != nil {
+			return fmt.Errorf("could not notarize archive entry: %w", err)
+		}
+	}
+
+	var tsaReceipt *cweevent.ArchiveTSAReceipt
+	if h.ArchiveTSA != nil && h.ArchiveTSA.Enabled() && notaryReceipt != nil {
+		evidence, err := cwecommand.BuildArchiveTimestampEvidence(notaryPayload, notaryReceipt)
+		if err != nil {
+			return fmt.Errorf("could not build archive TSA evidence: %w", err)
+		}
+		evidenceBytes, err := cwecommand.CanonicalArchiveTimestampEvidence(evidence)
+		if err != nil {
+			return err
+		}
+		rawReceipt, err := h.ArchiveTSA.TimestampBytes(ctx, evidenceBytes)
+		if err != nil {
+			return fmt.Errorf("could not timestamp archive entry: %w", err)
+		}
+		tsaReceipt = &cweevent.ArchiveTSAReceipt{
+			ReceiptType:    "ARCHIVE_TSA_RECEIPT",
+			Token:          rawReceipt.Token,
+			TokenEncoding:  rawReceipt.TokenEncoding,
+			HashAlgorithm:  rawReceipt.HashAlgorithm,
+			MessageImprint: rawReceipt.MessageImprint,
+			GeneratedAt:    rawReceipt.GeneratedAt,
+			Policy:         rawReceipt.Policy,
+			SerialNumber:   rawReceipt.SerialNumber,
+		}
+		tsaReceiptJSON, err := datatype.NewJSON(tsaReceipt)
+		if err != nil {
+			return fmt.Errorf("could not encode archive TSA receipt: %w", err)
+		}
+		archiveEntry.TSAReceipt = &tsaReceiptJSON
+	}
+
+	if err := h.ArchiveRepo.StoreArchiveEntry(ctx, tx, archiveEntry); err != nil {
+		return fmt.Errorf("could not store contract in archive: %w", err)
+	}
+
+	var notaryEventReceipt *cweevent.ArchiveNotaryReceipt
+	if notaryReceipt != nil {
+		notaryEventReceipt = &cweevent.ArchiveNotaryReceipt{
+			ReceiptType:    notaryReceipt.ReceiptType,
+			ArchiveEntryID: notaryReceipt.ArchiveEntryID,
+			EventHash:      notaryReceipt.EventHash,
+			PreviousHash:   notaryReceipt.PreviousHash,
+			ReceivedAt:     notaryReceipt.ReceivedAt,
+		}
+	}
+	archiveEvt := cweevent.StoreArchivedEvent{
+		DID:             did,
+		ContractVersion: signedContract.ContractVersion,
+		StoredBy:        appliedBy,
+		ContentHash:     archiveEntry.ContentHash,
+		SnapshotCID:     archiveEntry.SnapshotCID,
+		ArchiveStatus:   "STORED",
+		NotaryReceipt:   notaryEventReceipt,
+		TSAReceipt:      tsaReceipt,
+		EvidenceSummary: cweevent.ArchiveEvidenceSummary{
+			SnapshotHashAlgorithm: "SHA-256",
+			SignatureStatus:       "SIGNED",
+			CredentialHashStatus:  "PENDING",
+		},
+		OccurredAt: time.Now().UTC(),
+	}
+	if err := event.Create(ctx, tx, archiveEvt, componenttype.ContractStorageArchive); err != nil {
+		return fmt.Errorf("could not create archive store event: %w", err)
+	}
+
+	return nil
+}
+
+// loadBasePDF returns the current PDF for the contract, generating a fresh base
+// render from the JSON-LD when none is cached yet.
+func (h *Applier) loadBasePDF(ctx context.Context, tx *sqlx.Tx, did string, jsonld []byte) ([]byte, error) {
+	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
+	if err != nil {
+		return nil, fmt.Errorf("fetch contract PDF: %w", err)
+	}
+	if len(pdfBytes) == 0 {
+		pdfBytes, _, err = h.PDFCore.Download(ctx, jsonld)
+		if err != nil {
+			return nil, fmt.Errorf("render base PDF: %w", err)
+		}
+	}
+	return pdfBytes, nil
+}
+
+// stampLifecycleForSigning embeds the "active" C2PA lifecycle assertion
+// (DCS-OR-C2PA-004) into pdfBytes and returns the updated PDF plus the
+// renderer version pdf-core reports. It is the update-then-sign counterpart of
+// pdfgeneration/query.stampLifecycle: called BEFORE PAdES-signing so the
+// signature commits to the PDF's final lifecycle-bearing content, and the
+// signed artefact never needs a post-signature revision for the SIGNED/ACTIVE
+// transition (see the Applier.VCIssuer field doc comment).
+func stampLifecycleForSigning(
+	ctx context.Context,
+	did string,
+	jsonldBytes, pdfBytes []byte,
+	pdfCore *pdfcore.Client,
+	vcIssuer provenance.VCIssuer,
+	issuerDID string,
+) ([]byte, string, error) {
+	const c2paState = "active"
+	const reason = "Contract activated for execution"
+
+	h := sha256.Sum256(pdfBytes)
+	assetHash := hex.EncodeToString(h[:])
+
+	_, vcBytes, err := vcIssuer.IssueContractLifecycleVC(
+		ctx, did, assetHash, c2paState, reason, issuerDID, time.Now().UTC(),
+	)
+	if err != nil {
+		return pdfBytes, "", fmt.Errorf("issue lifecycle VC (DCS-OR-C2PA-004): %w", err)
+	}
+
+	updatedPDF, rendererVersion, err := pdfCore.Update(ctx, pdfBytes, jsonldBytes, vcBytes, provenance.RemoteManifestURL(did))
+	if err != nil {
+		return pdfBytes, "", fmt.Errorf("pdf-core update for %s: %w", did, err)
+	}
+	return updatedPDF, rendererVersion, nil
 }
