@@ -54,6 +54,10 @@ from steps.support.api_client import (
     did_document_url,
     get_with_headers,
     post_json,
+    signature_apply_url,
+    signature_request_url,
+    signature_revoke_url,
+    signature_view_url,
 )
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
@@ -666,6 +670,119 @@ def step_then_approved_replicated_both(context):
             time.sleep(1)
         assert actual_state == "APPROVED", (
             f"Expected contract state APPROVED to be replicated on instance {label}, last "
+            f"observed state: '{actual_state}' (last response: "
+            f"{last_resp.status_code if last_resp else 'n/a'} {last_resp.text if last_resp else ''})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Revocation propagation across instances (DCS-NFR-BR-06)
+# ---------------------------------------------------------------------------
+
+
+@when("instance A applies a ceremony-backed signature to the contract")
+def step_when_sign_cross_instance(context):
+    # Reuses the real-signing pack's ceremony machinery verbatim — every URL
+    # builder reads context.base_url, which _as_instance swaps to A.
+    from steps.real_signing_vertical.dcs_real_signing_vertical_steps import (  # noqa: PLC0415
+        _build_pid_presentation,
+        _complete_ceremony_via_webhook,
+    )
+
+    with _as_instance(context, context.base_url_a):
+        c_did = context.cross_instance_contract_did
+        signer_h = AuthService.get_headers_for_roles(["Contract Signer"], api_base=context.base_url_a)
+        start = post_json(
+            context,
+            signature_request_url(context),
+            {"contract_did": c_did, "field_name": "PeerRevocationSigner"},
+            headers=signer_h,
+        )
+        assert start.status_code == 200, (
+            f"POST /signature/request failed on instance A: {start.status_code} {start.text}"
+        )
+        ceremony_id = start.json().get("ceremony_id")
+        assert ceremony_id, f"/signature/request response has no ceremony_id: {start.text}"
+
+        given_name, family_name = "PeerRevocation", "BDD-Testperson"
+        presentation, _issuer_jwt, _disclosures, subject_did = _build_pid_presentation(
+            given_name=given_name, family_name=family_name,
+            aud="dcs-signature-ceremony", nonce=str(uuid.uuid4()),
+        )
+        webhook = _complete_ceremony_via_webhook(
+            context, ceremony_id, presentation, subject_did, given_name, family_name
+        )
+        assert webhook.status_code == 200, (
+            f"ceremony webhook failed on instance A: {webhook.status_code} {webhook.text}"
+        )
+
+        manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_a)
+        retrieve = get_with_headers(
+            context, contract_retrieve_by_id_url(context, c_did), headers=manager_h
+        )
+        assert retrieve.status_code == 200, retrieve.text
+        apply_resp = post_json(
+            context,
+            signature_apply_url(context),
+            {
+                "did": c_did,
+                "signer_did": subject_did,
+                "credential_type": "AES",
+                "updated_at": retrieve.json().get("updated_at"),
+            },
+            headers=signer_h,
+        )
+        assert apply_resp.status_code == 200, (
+            f"signature apply failed on instance A: {apply_resp.status_code} {apply_resp.text}"
+        )
+        context.requests_response = apply_resp
+
+
+@when("instance A revokes the applied signature of the cross-instance contract")
+def step_when_revoke_cross_instance(context):
+    with _as_instance(context, context.base_url_a):
+        c_did = context.cross_instance_contract_did
+        manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_a)
+        view = _requests.get(
+            signature_view_url(context), params={"did": c_did}, headers=manager_h,
+            timeout=context.http_timeout_seconds,
+        )
+        assert view.status_code == 200, f"signature view failed on instance A: {view.status_code} {view.text}"
+        signatures = view.json().get("signatures") or []
+        assert signatures, f"Expected an applied signature to revoke, got: {view.json()}"
+        revoke = post_json(
+            context,
+            signature_revoke_url(context),
+            {"did": c_did, "signer_did": signatures[0]["signer_did"]},
+            headers=manager_h,
+        )
+        assert revoke.status_code == 200, (
+            f"signature revoke failed on instance A: {revoke.status_code} {revoke.text}"
+        )
+        context.requests_response = revoke
+
+
+@then('the contract state "{state}" is replicated on both instance A and instance B')
+def step_then_state_replicated_both(context, state):
+    c_did = context.cross_instance_contract_did
+    expected = state.upper()
+    for label, base_url in (("A", context.base_url_a), ("B", context.base_url_b)):
+        manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=base_url)
+        deadline = time.monotonic() + 15
+        actual_state = None
+        last_resp = None
+        while time.monotonic() < deadline:
+            last_resp = _requests.get(
+                f"{base_url}/contract/retrieve/{c_did}", headers=manager_h,
+                timeout=context.http_timeout_seconds,
+            )
+            if last_resp.status_code == 200:
+                actual_state = str(last_resp.json().get("state", "")).upper()
+                if actual_state == expected:
+                    break
+            time.sleep(1)
+        assert actual_state == expected, (
+            f"Expected contract state {expected} to be replicated on instance {label}, last "
             f"observed state: '{actual_state}' (last response: "
             f"{last_resp.status_code if last_resp else 'n/a'} {last_resp.text if last_resp else ''})"
         )

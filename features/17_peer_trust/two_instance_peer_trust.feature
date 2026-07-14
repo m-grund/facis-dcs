@@ -76,6 +76,25 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     When the parties complete negotiation acceptance, submit, review, and approval on both sides
     Then the contract state APPROVED is replicated on both instance A and instance B
 
+  # DCS-NFR-BR-06 Revocation & Termination Propagation: revoking a signature
+  # MUST take immediate effect — including across instances. Revocation is a
+  # SignatureManagement-sourced event (signingmanagement/command/revoke.go),
+  # so the dcs-to-dcs synchronizer must broadcast it exactly like the
+  # workflow-engine state changes it already replicates; the peer adopts the
+  # full contract state (REVOKED) through the same verified post_sync path.
+  # SIGNED replication is deliberately not asserted in between: auto-deploy
+  # can race SIGNED to ACTIVE, and EventRevoke is valid from either state.
+  @DCS-NFR-BR-06 @two-instance
+  Scenario: Signature revocation on instance A propagates REVOKED to instance B
+    Given instance A and instance B are both running and trust each other
+    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    Then the contract appears on instance B in state OFFERED within a few seconds
+    When the parties complete negotiation acceptance, submit, review, and approval on both sides
+    Then the contract state APPROVED is replicated on both instance A and instance B
+    When instance A applies a ceremony-backed signature to the contract
+    And instance A revokes the applied signature of the cross-instance contract
+    Then the contract state "REVOKED" is replicated on both instance A and instance B
+
   # DCS-FR-CWE-15 approval quorum: approve.go flips a contract to APPROVED
   # only once NO approval task remains OPEN, and each approve call flips only
   # the CALLING peer's task (UpdateState matches WHERE approver = CauserDID,
