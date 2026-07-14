@@ -60,9 +60,12 @@ type Repo struct{}
 // set, makes it the active version. Returns the assigned version.
 func (Repo) Register(ctx context.Context, tx *sqlx.Tx, name, kind, mediaType, content, createdBy string, activate bool) (int, error) {
 	var version int
+	// Explicit casts: $1/$2 appear both as inserted VALUES and inside the
+	// version subselect, and Postgres refuses to deduce one type for a
+	// parameter used in two positions (42P08) without them.
 	err := tx.QueryRowContext(ctx, `
         INSERT INTO semantic_schemas (name, version, kind, media_type, content, active, created_by)
-        VALUES ($1, COALESCE((SELECT MAX(version) FROM semantic_schemas WHERE name = $1 AND kind = $2), 0) + 1, $2, $3, $4, FALSE, $5)
+        VALUES ($1::varchar, COALESCE((SELECT MAX(version) FROM semantic_schemas WHERE name = $1::varchar AND kind = $2::varchar), 0) + 1, $2::varchar, $3, $4, FALSE, $5)
         RETURNING version
     `, name, kind, mediaType, content, createdBy).Scan(&version)
 	if err != nil {
