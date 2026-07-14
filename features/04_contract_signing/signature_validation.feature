@@ -73,3 +73,21 @@ Feature: Signature validation, audit, and compliance
     And contract "PDFA Signed Contract" has an exported PDF
     Then the exported PDF for contract "PDFA Signed Contract" declares PDF/A-3 conformance in its XMP metadata
     And the exported PDF for contract "PDFA Signed Contract" embeds the canonical JSON-LD payload as an associated file
+
+  # DECISION-ANCHORED SKIP (not a test limitation): the EU distributes the
+  # DSS demonstration webapp as a ZIP/WAR with NO official container image,
+  # so deployment/helm/charts/dss wraps a pinned community image and stays
+  # DISABLED by default — enabling an unofficial third-party image in the
+  # hermetic CI deployment is not defensible. The integration itself is
+  # implemented and unit-tested (backend/internal/signingmanagement/dss:
+  # report parsing, and the hard-fail when a CONFIGURED DSS is unreachable —
+  # a configured external validator is never silently skipped); flipping
+  # dss.enabled plus the backend's DSS_URL env activates this scenario's
+  # behavior without code changes.
+  @skip @DCS-FR-SM-18 @DCS-IR-SI-10 @DCS-IR-CI-08
+  Scenario: Signature validation reports the EU DSS indication when a DSS instance is deployed
+    Given contract "DSS Validated Contract" has reached contract state "SIGNED"
+    And an EU DSS instance is deployed and configured via DSS_URL
+    When the contract manager validates the signature for contract "DSS Validated Contract"
+    Then get http 200:Success code
+    And the signature validation findings include an EU DSS validation report indication
