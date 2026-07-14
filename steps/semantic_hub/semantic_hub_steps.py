@@ -68,7 +68,18 @@ def step_then_resolved_context(context):
 @when('the Template Manager registers a new active version of the "{kind}" schema "{name}" extending the genesis context')
 def step_when_register_schema(context, kind, name):
     # Fetch the genesis content and extend it — a plausible new version, not
-    # a fabricated unrelated document.
+    # a fabricated unrelated document. The hub's registered versions persist
+    # across suite runs (the BDD deployment is not re-seeded per run), so
+    # remember how many versions existed beforehand and assert RELATIVE to
+    # that, never against absolute version numbers.
+    before = _requests.get(
+        _hub_url(context, "/semantic/schema/versions"),
+        params={"name": name, "kind": kind},
+        timeout=context.http_timeout_seconds,
+    )
+    assert before.status_code == 200, f"versions listing failed: {before.status_code} {before.text}"
+    context.hub_versions_before = [v["version"] for v in before.json()]
+
     genesis = _requests.get(
         _hub_url(context, "/semantic/schema/retrieve"),
         params={"name": name, "kind": kind, "version": 1},
@@ -92,15 +103,37 @@ def step_when_register_schema(context, kind, name):
     )
 
 
-@then("the schema registration reports version {version:d} as active")
-def step_then_registration_version(context, version):
+@then("the schema registration reports a version above the genesis version as active")
+def step_then_registration_version(context):
     body = context.requests_response.json()
-    assert body.get("version") == version, f"Expected version {version}, got: {body}"
+    expected = max(context.hub_versions_before) + 1
+    assert body.get("version") == expected, (
+        f"Expected the registration to mint version {expected} "
+        f"(pre-existing: {sorted(context.hub_versions_before)}), got: {body}"
+    )
     assert body.get("active") is True, f"Expected the registered version to be active: {body}"
+    context.hub_registered_version = body["version"]
 
 
-@then('the Semantic Hub lists {count:d} versions of the "{kind}" schema "{name}" with version {active:d} active')
-def step_then_versions_listing(context, count, kind, name, active):
+@then('the Semantic Hub lists the registered version of the "{kind}" schema "{name}" as the single active one')
+def step_then_versions_listing_registered_active(context, kind, name):
+    _assert_versions_listing(
+        context, kind, name,
+        expect_active=context.hub_registered_version,
+        expect_count=len(context.hub_versions_before) + 1,
+    )
+
+
+@then('the Semantic Hub lists version {active:d} of the "{kind}" schema "{name}" as the single active one')
+def step_then_versions_listing_absolute_active(context, active, kind, name):
+    _assert_versions_listing(
+        context, kind, name,
+        expect_active=active,
+        expect_count=len(context.hub_versions_before) + 1,
+    )
+
+
+def _assert_versions_listing(context, kind, name, *, expect_active, expect_count):
     resp = _requests.get(
         _hub_url(context, "/semantic/schema/versions"),
         params={"name": name, "kind": kind},
@@ -108,9 +141,11 @@ def step_then_versions_listing(context, count, kind, name, active):
     )
     assert resp.status_code == 200, f"versions listing failed: {resp.status_code} {resp.text}"
     versions = resp.json()
-    assert len(versions) == count, f"Expected {count} versions, got: {[v.get('version') for v in versions]}"
+    assert len(versions) == expect_count, (
+        f"Expected {expect_count} versions, got: {[v.get('version') for v in versions]}"
+    )
     actives = [v["version"] for v in versions if v.get("active")]
-    assert actives == [active], f"Expected exactly version {active} active, got: {actives}"
+    assert actives == [expect_active], f"Expected exactly version {expect_active} active, got: {actives}"
 
 
 @when('the Template Manager rolls the "{kind}" schema "{name}" back to version {version:d}')

@@ -51,7 +51,15 @@ def step_given_dual_field_draft(context, name, field_one, field_two):
 
 @given('a completed signing ceremony exists for field "{field}" of contract "{name}"')
 def step_given_field_ceremony(context, name, field):
-    _ceremony_id, _presentation, subject_did = _run_full_ceremony(context, name, field, field)
+    # Each field's ceremony presents with a FRESH ephemeral holder key, so
+    # the two fields are signed by two distinct natural-person identities —
+    # the shared test wallet key would collapse both into one subject DID.
+    AuthService._ensure_dcs_wallet_importable()
+    from dcs_wallet.keys import generate_ec_private_jwk  # noqa: PLC0415
+
+    _ceremony_id, _presentation, subject_did = _run_full_ceremony(
+        context, name, field, field, holder_private=generate_ec_private_jwk()
+    )
     signers = getattr(context, "multi_signer_dids", None)
     if signers is None:
         signers = {}

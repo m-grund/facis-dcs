@@ -93,12 +93,18 @@ def _webhook_secret() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str):
+def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str, holder_private=None):
     """Build a real, protocol-correct PID SD-JWT VC + KB-JWT presentation
     using the same testWallet/dcs_wallet signing primitives already used by
     AuthService for the DCS role-credential OID4VP login flow — just with
     PID-shaped claims (vct urn:eudi:pid:1) instead of organization/roles.
     Returns (compact_presentation, issuer_jwt, disclosures, subject_did).
+
+    holder_private lets a scenario present as a DIFFERENT natural person than
+    the shared test wallet: the trusted test issuer binds the credential's cnf
+    to whatever holder key it is given, so a fresh ephemeral key yields a
+    fresh subject DID (needed by multi-signer scenarios, where two fields
+    must be signed by two distinct identities).
     """
     AuthService._ensure_dcs_wallet_importable()
     from dcs_wallet.issuer import (  # noqa: PLC0415
@@ -110,7 +116,8 @@ def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonc
     from dcs_wallet.sdjwt import join_sd_jwt, split_sd_jwt  # noqa: PLC0415
 
     keys = AuthService.load_wallet_keys()
-    holder_public = public_jwk(keys.wallet_private)
+    holder_key = holder_private or keys.wallet_private
+    holder_public = public_jwk(holder_key)
     subject_did = did_jwk_from_public_jwk(holder_public)
 
     now = int(time.time())
@@ -132,7 +139,7 @@ def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonc
     kb_jwt = sign_key_binding_jwt(
         issuer_jwt=issuer_jwt,
         disclosures=disclosures,
-        wallet_private=keys.wallet_private,
+        wallet_private=holder_key,
         aud=aud,
         nonce=nonce,
     )
@@ -173,7 +180,7 @@ def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_d
     return post_json(context, signature_request_webhook_url(context), payload, headers=headers)
 
 
-def _run_full_ceremony(context, name, field_name, signatory_name):
+def _run_full_ceremony(context, name, field_name, signatory_name, holder_private=None):
     """Start a ceremony, complete it headlessly via the assumed webhook
     contract (see module docstring point 3), and stash the presentation +
     ceremony id on context for later PDF-embedding assertions.
@@ -190,7 +197,8 @@ def _run_full_ceremony(context, name, field_name, signatory_name):
     nonce = str(uuid.uuid4())
     given_name, family_name = signatory_name, "BDD-Testperson"
     presentation, issuer_jwt, disclosures, subject_did = _build_pid_presentation(
-        given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce
+        given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce,
+        holder_private=holder_private,
     )
     webhook_resp = _complete_ceremony_via_webhook(
         context, ceremony_id, presentation, subject_did, given_name, family_name

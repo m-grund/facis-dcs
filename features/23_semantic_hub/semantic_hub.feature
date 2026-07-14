@@ -25,15 +25,19 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
     Then get http 200:Success code
     And the retrieved schema is version 1, active, of kind "shapes"
 
+  # Registered versions persist across suite runs (the hub is seeded once at
+  # startup, not per run), so the assertions are relative to the versions
+  # that existed when the scenario started — only the rollback target is
+  # absolute, because version 1 is always the seeded genesis.
   @UC-02-08
   Scenario: A Template Manager registers a new context version and rolls back to the genesis version
     When the Template Manager registers a new active version of the "context" schema "facis-dcs" extending the genesis context
     Then get http 200:Success code
-    And the schema registration reports version 2 as active
-    And the Semantic Hub lists 2 versions of the "context" schema "facis-dcs" with version 2 active
+    And the schema registration reports a version above the genesis version as active
+    And the Semantic Hub lists the registered version of the "context" schema "facis-dcs" as the single active one
     When the Template Manager rolls the "context" schema "facis-dcs" back to version 1
     Then get http 200:Success code
-    And the Semantic Hub lists 2 versions of the "context" schema "facis-dcs" with version 1 active
+    And the Semantic Hub lists version 1 of the "context" schema "facis-dcs" as the single active one
 
   Scenario: A role outside the schema-management scope cannot register a schema version
     Given I am authenticated with roles: "Template Creator"

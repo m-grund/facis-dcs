@@ -23,13 +23,18 @@ type PostgresContractRepo struct {
 	PDFCore    *pdfcore.Client
 }
 
+// ReadDataByDID reads the contract regardless of lifecycle state — like
+// ReadProcessDataByDID, state gating is decided in Go against
+// contractstate.Transitions (command/apply.go), not by a hardcoded SQL state
+// literal. Signature evidence in particular stays retrievable for the
+// contract's whole post-signing life (ACTIVE after deployment, REVOKED after
+// revocation, ...), not only while it sits in APPROVED/SIGNED.
 func (r *PostgresContractRepo) ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.Contract, error) {
 	query := `
         SELECT did, state, name, description,
                created_by, created_at, updated_at, contract_version, contract_data, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts
         WHERE did = $1
-         AND state IN ('APPROVED', 'SIGNED')
     `
 	var ct db.Contract
 	err := tx.GetContext(ctx, &ct, query, did)
@@ -155,7 +160,7 @@ func (r *PostgresContractRepo) ActiveKeyVersion(ctx context.Context, tx *sqlx.Tx
 
 func (r *PostgresContractRepo) RevokeSignature(ctx context.Context, tx *sqlx.Tx, did string, signerDID string) error {
 	now := time.Now().UTC()
-	_, err := tx.ExecContext(ctx,
+	result, err := tx.ExecContext(ctx,
 		`UPDATE contract_signatures
 		    SET status = 'REVOKED', revoked_at = $1
 		  WHERE contract_did = $2 AND signer_did = $3 AND status != 'REVOKED'`,
@@ -163,6 +168,13 @@ func (r *PostgresContractRepo) RevokeSignature(ctx context.Context, tx *sqlx.Tx,
 	)
 	if err != nil {
 		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("%w: no revocable signature by signer %s on contract %s", db.ErrSignatureNotFound, signerDID, did)
 	}
 	return nil
 }

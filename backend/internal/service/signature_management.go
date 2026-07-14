@@ -44,7 +44,8 @@ func mapSignatureCommandError(err error) error {
 	}
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, command.ErrUnknownSignatureField) ||
-		errors.Is(err, command.ErrFieldAlreadySigned) {
+		errors.Is(err, command.ErrFieldAlreadySigned) ||
+		errors.Is(err, db.ErrSignatureNotFound) {
 		return signaturemanagement.MakeBadRequest(err)
 	}
 	return signaturemanagement.MakeInternalError(err)
@@ -356,6 +357,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 
 	qry := command.RevokeCmd{
 		DID:       req.Did,
+		SignerDID: req.SignerDid,
 		RevokedBy: middleware.GetParticipantID(ctx),
 		HolderDID: middleware.GetHolderDID(ctx),
 		UserRoles: middleware.GetUserRoles(ctx),
@@ -367,8 +369,7 @@ func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemana
 
 	err = queryHandler.Handle(ctx, qry)
 	if err != nil {
-		return nil, signaturemanagement.MakeInternalError(err)
-
+		return nil, mapSignatureCommandError(err)
 	}
 
 	return &signaturemanagement.SMContractRevokeResponse{}, nil

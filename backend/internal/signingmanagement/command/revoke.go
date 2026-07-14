@@ -22,6 +22,7 @@ import (
 
 type RevokeCmd struct {
 	DID       string
+	SignerDID string
 	RevokedBy string
 	HolderDID string
 	UserRoles userrole.UserRoles
@@ -52,7 +53,7 @@ func (h *Revoker) Handle(ctx context.Context, cmd RevokeCmd) error {
 		return fmt.Errorf("could not read process data: %w", err)
 	}
 
-	err = h.CRepo.RevokeSignature(ctx, tx, cmd.DID, cmd.RevokedBy)
+	err = h.CRepo.RevokeSignature(ctx, tx, cmd.DID, cmd.SignerDID)
 	if err != nil {
 		return fmt.Errorf("could not revoke signature: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 
 	"digital-contracting-service/internal/base/datatype"
 )
+
+// ErrSignatureNotFound reports a revocation (or lookup) that named a signer
+// with no matching signature row on the contract — surfaced instead of
+// letting a zero-row UPDATE pass as success.
+var ErrSignatureNotFound = errors.New("signature not found")
 
 type Responsible struct {
 	Creator     string   `json:"creator"`
