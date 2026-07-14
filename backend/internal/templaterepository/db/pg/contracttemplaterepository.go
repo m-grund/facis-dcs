@@ -428,3 +428,57 @@ func createQuery(data db.ContractTemplateUpdateData) (*string, []interface{}, er
 
 	return &fullQuery, params, nil
 }
+
+// InsertProvenanceCredential stores one registered version's signed
+// provenance VC (DCS-FR-TR-09). The UNIQUE (did, version) constraint makes a
+// duplicate registration of the same version a hard error, not a silent
+// overwrite of issued evidence.
+func (r *PostgresContractTemplateRepo) InsertProvenanceCredential(ctx context.Context, tx *sqlx.Tx, data db.TemplateProvenanceCredential) error {
+	_, err := tx.ExecContext(ctx,
+		`INSERT INTO template_provenance_credentials (did, version, vc_id, previous_vc_id, credential)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		data.DID, data.Version, data.VCID, data.PreviousVCID, data.Credential,
+	)
+	if err != nil {
+		return fmt.Errorf("insert template provenance credential for %s v%d: %w", data.DID, data.Version, err)
+	}
+	return nil
+}
+
+// ReadProvenanceCredentials returns all issued provenance credentials for a
+// template, oldest version first — the walkable version history.
+func (r *PostgresContractTemplateRepo) ReadProvenanceCredentials(ctx context.Context, tx *sqlx.Tx, did string) ([]db.TemplateProvenanceCredential, error) {
+	var rows []db.TemplateProvenanceCredential
+	err := tx.SelectContext(ctx, &rows,
+		`SELECT did, version, vc_id, previous_vc_id, credential, created_at
+		   FROM template_provenance_credentials
+		  WHERE did = $1
+		  ORDER BY version ASC`,
+		did,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("read template provenance credentials for %s: %w", did, err)
+	}
+	return rows, nil
+}
+
+// ReadLatestProvenanceVCID returns the newest issued credential's vc_id for
+// linkage, or nil when this is the first registered version.
+func (r *PostgresContractTemplateRepo) ReadLatestProvenanceVCID(ctx context.Context, tx *sqlx.Tx, did string) (*string, error) {
+	var vcID string
+	err := tx.GetContext(ctx, &vcID,
+		`SELECT vc_id
+		   FROM template_provenance_credentials
+		  WHERE did = $1
+		  ORDER BY version DESC
+		  LIMIT 1`,
+		did,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read latest template provenance vc_id for %s: %w", did, err)
+	}
+	return &vcID, nil
+}

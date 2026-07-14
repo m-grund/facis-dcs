@@ -215,6 +215,10 @@ def template_verify_url(context) -> str:
     return f"{context.base_url}/template/verify"
 
 
+def template_provenance_url(context, did: str) -> str:
+    return f"{context.base_url}/template/provenance/{did}"
+
+
 def template_approve_url(context) -> str:
     return f"{context.base_url}/template/approve"
 

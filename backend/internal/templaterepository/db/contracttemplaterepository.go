@@ -109,4 +109,18 @@ type ContractTemplateRepo interface {
 	Update(ctx context.Context, tx *sqlx.Tx, data ContractTemplateUpdateData) error
 	ReadPDFState(ctx context.Context, tx *sqlx.Tx, did string) (*ContractTemplatePDFState, error)
 	UpdatePDFState(ctx context.Context, tx *sqlx.Tx, did string, data ContractTemplatePDFState) error
+	InsertProvenanceCredential(ctx context.Context, tx *sqlx.Tx, data TemplateProvenanceCredential) error
+	ReadProvenanceCredentials(ctx context.Context, tx *sqlx.Tx, did string) ([]TemplateProvenanceCredential, error)
+	ReadLatestProvenanceVCID(ctx context.Context, tx *sqlx.Tx, did string) (*string, error)
+}
+
+// TemplateProvenanceCredential is one registered template version's signed
+// W3C provenance VC (DCS-FR-TR-09), linked to its predecessor by vc_id.
+type TemplateProvenanceCredential struct {
+	DID          string        `db:"did"`
+	Version      int           `db:"version"`
+	VCID         string        `db:"vc_id"`
+	PreviousVCID *string       `db:"previous_vc_id"`
+	Credential   datatype.JSON `db:"credential"`
+	CreatedAt    time.Time     `db:"created_at"`
 }
