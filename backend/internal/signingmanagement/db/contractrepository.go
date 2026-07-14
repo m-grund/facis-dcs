@@ -107,6 +107,7 @@ type ContractSignature struct {
 	CeremonyID     *string    `db:"ceremony_id"`
 	PDFHash        *string    `db:"pdf_hash"`
 	ContentHash    *string    `db:"content_hash"`
+	FieldName      *string    `db:"field_name"`
 }
 
 type ContractSignatureEnvelope struct {
@@ -135,6 +136,9 @@ type SignatureRecord struct {
 	SignedAt       *time.Time `db:"signed_at"`
 	RevokedAt      *time.Time `db:"revoked_at"`
 	CertRevokedAt  *time.Time `db:"cert_revoked_at"`
+	// FieldName is the declared signature field this signature covers
+	// (DCS-FR-SM-07/-17); nil for signatures predating multi-signer support.
+	FieldName *string `db:"field_name"`
 }
 
 type ContractRepo interface {

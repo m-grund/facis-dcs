@@ -103,10 +103,10 @@ func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx,
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO contract_signatures
 			(contract_did, signer_did, credential_type, signature_bytes, status, key_version,
-			 ipfs_cid, ceremony_id, pdf_hash, content_hash)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			 ipfs_cid, ceremony_id, pdf_hash, content_hash, field_name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		signature.ContractDID, signature.SignerDID, signature.CredentialType, signature.SignatureBytes, signature.Status, signature.KeyVersion,
-		signature.IpfsCID, signature.CeremonyID, signature.PDFHash, signature.ContentHash,
+		signature.IpfsCID, signature.CeremonyID, signature.PDFHash, signature.ContentHash, signature.FieldName,
 	)
 	if err != nil {
 		return fmt.Errorf("could not create contract signature: %w", err)
@@ -123,9 +123,11 @@ func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx,
 // PDF, which breaks standards-compliant PAdES validation even though the CMS
 // signature itself stays intact.
 func (r *PostgresContractRepo) SetSignedPDF(ctx context.Context, tx *sqlx.Tx, did, ipfsCID, rendererVersion, c2paState, payloadHash string) error {
+	// NULLIF/COALESCE: a later multi-signer signature skips lifecycle
+	// stamping (no fresh renderer version) — keep the stored one.
 	_, err := tx.ExecContext(ctx, `
 		UPDATE contracts
-		   SET pdf_ipfs_cid = $2, pdf_renderer_version = $3, pdf_c2pa_state = $4, pdf_payload_hash = $5
+		   SET pdf_ipfs_cid = $2, pdf_renderer_version = COALESCE(NULLIF($3, ''), pdf_renderer_version), pdf_c2pa_state = $4, pdf_payload_hash = $5
 		 WHERE did = $1`,
 		did, ipfsCID, rendererVersion, c2paState, payloadHash,
 	)
@@ -303,7 +305,7 @@ func (r *PostgresContractRepo) CollectValidationFindings(ctx context.Context, tx
 func (r *PostgresContractRepo) LoadSignatures(ctx context.Context, tx *sqlx.Tx, did string) ([]db.SignatureRecord, error) {
 	var records []db.SignatureRecord
 	err := tx.SelectContext(ctx, &records,
-		`SELECT signer_did, credential_type, status, signed_at, revoked_at, cert_revoked_at
+		`SELECT signer_did, credential_type, status, signed_at, revoked_at, cert_revoked_at, field_name
 		   FROM contract_signatures
 		  WHERE contract_did = $1
 		  ORDER BY created_at`, did,

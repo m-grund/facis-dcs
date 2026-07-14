@@ -132,6 +132,11 @@ var Transitions = map[ContractState]map[Event][]ContractState{
 		// NOTE: Withdraw is intentionally NOT allowed once Approved.
 	},
 	Signed: {
+		// Signed -> Signed: a further signatory applies their signature on a
+		// multi-signer contract (DCS-FR-SM-07/-17). The deploy command gates
+		// on ALL declared signature fields being signed, so a partially
+		// signed contract can never activate.
+		EventSign:      {Signed},
 		EventDeploy:    {Active},
 		EventRevoke:    {Revoked},
 		EventTerminate: {Terminated},

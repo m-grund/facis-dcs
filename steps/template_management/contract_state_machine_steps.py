@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 import requests as _requests
-from behave import given, then, when
+from behave import given, step, then, when
 
 from steps.support.api_client import (
     contract_approve_url,
@@ -482,7 +482,9 @@ def step_when_withdraw_contract(context, name):
         ContractService._refresh_contract(context, name)
 
 
-@when('contract "{name}" is submitted, reviewed, and approved via the standard workflow')
+# @step: used both as a When (state-machine pack) and as a Given precondition
+# (multi-signer pack).
+@step('contract "{name}" is submitted, reviewed, and approved via the standard workflow')
 def step_when_full_approval_workflow(context, name):
     _advance_to_approved(context, name)
 

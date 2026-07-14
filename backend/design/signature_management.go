@@ -238,6 +238,7 @@ var SMSignatureViewItem = Type("SMSignatureViewItem", func() {
 	Description("One applied signature's metadata for the Signature Compliance Viewer (DCS-FR-SM-26): signer identity, credential class/signature level, status, and timestamps")
 
 	Attribute("signer_did", String, "DID of the signer the signature is bound to")
+	Attribute("field_name", String, "The declared signature field this signature covers (DCS-FR-SM-07/-17)")
 	Attribute("credential_type", String, "Signature level / credential class (e.g. AES)")
 	Attribute("status", String, "Signature status (SIGNED or REVOKED)")
 	Attribute("signed_at", String, "When the signature was applied")

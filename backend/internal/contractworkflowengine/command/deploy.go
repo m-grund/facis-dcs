@@ -10,14 +10,20 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
+
+// ErrSigningIncomplete rejects deployment of a multi-signer contract whose
+// declared signature fields are not all signed yet (DCS-FR-SM-07/-17).
+var ErrSigningIncomplete = errors.New("signing workflow incomplete")
 
 // DeployCmd carries the inputs for deploying a SIGNED contract to the
 // configured Contract Target System (UC-05-01).
@@ -70,6 +76,34 @@ func (h *Deployer) Handle(ctx context.Context, cmd DeployCmd) (*DeployResult, er
 
 	if err := contractstate.ValidateTransition(contractstate.ContractState(data.State), contractstate.EventDeploy); err != nil {
 		return nil, err
+	}
+
+	// Multi-signer gate (DCS-FR-SM-07/-17, DCS-NFR-BR-03): a contract that
+	// declares signature fields may only deploy once EVERY declared field is
+	// signed. The auto-deploy subscriber fires after each signature, so a
+	// partially signed contract hits this gate until the last signatory
+	// signs.
+	if data.ContractData != nil && data.ContractData.IsNotNullValue() {
+		required := validation.RequiredSignatureFields([]byte(*data.ContractData))
+		if len(required) > 0 {
+			signedFields, err := h.CRepo.ReadSignedSignatureFieldNames(ctx, tx, cmd.DID)
+			if err != nil {
+				return nil, fmt.Errorf("could not read signed signature fields: %w", err)
+			}
+			signed := make(map[string]bool, len(signedFields))
+			for _, f := range signedFields {
+				signed[f] = true
+			}
+			var missing []string
+			for _, f := range required {
+				if !signed[f] {
+					missing = append(missing, f)
+				}
+			}
+			if len(missing) > 0 {
+				return nil, fmt.Errorf("%w: unsigned signature fields: %s", ErrSigningIncomplete, strings.Join(missing, ", "))
+			}
+		}
 	}
 
 	contractDataBytes := []byte(`{}`)

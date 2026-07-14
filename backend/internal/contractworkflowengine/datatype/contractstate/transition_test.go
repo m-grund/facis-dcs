@@ -124,6 +124,23 @@ func TestDeployAllowedFromSignedAndActive(t *testing.T) {
 	}
 }
 
+// TestSignReentryFromSigned: a further signatory on a multi-signer contract
+// signs from SIGNED (DCS-FR-SM-07/-17); the pre-signing states still reject
+// Sign except Approved.
+func TestSignReentryFromSigned(t *testing.T) {
+	if err := ValidateTransition(Signed, EventSign); err != nil {
+		t.Fatalf("expected Sign to be allowed from Signed (multi-signer re-entry), got: %v", err)
+	}
+	if !IsAllowed(Signed, EventSign, Signed) {
+		t.Fatalf("expected Signed -Sign-> Signed to be a declared outcome")
+	}
+	for _, from := range []ContractState{Draft, Offered, Negotiation, Submitted, Reviewed, Active, Terminated} {
+		if err := ValidateTransition(from, EventSign); err == nil {
+			t.Fatalf("expected Sign from %s to be rejected", from)
+		}
+	}
+}
+
 func TestValidateOutcomeRejectsUndeclaredTarget(t *testing.T) {
 	// Submit from Draft may only reach Negotiation, never e.g. Approved.
 	if err := ValidateOutcome(Draft, EventSubmit, Approved); err == nil {

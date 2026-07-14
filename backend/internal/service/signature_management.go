@@ -39,10 +39,12 @@ func mapSignatureCommandError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, command.ErrCeremonyRequired) {
+	if errors.Is(err, command.ErrCeremonyRequired) || errors.Is(err, command.ErrCeremoniesIncomplete) {
 		return signaturemanagement.MakeCeremonyRequired(err)
 	}
-	if errors.Is(err, contractstate.ErrInvalidTransition) {
+	if errors.Is(err, contractstate.ErrInvalidTransition) ||
+		errors.Is(err, command.ErrUnknownSignatureField) ||
+		errors.Is(err, command.ErrFieldAlreadySigned) {
 		return signaturemanagement.MakeBadRequest(err)
 	}
 	return signaturemanagement.MakeInternalError(err)
@@ -478,6 +480,7 @@ func (s *signatureManagementsrvc) View(ctx context.Context, req *signaturemanage
 	for _, rec := range records {
 		item := &signaturemanagement.SMSignatureViewItem{
 			SignerDid:      rec.SignerDID,
+			FieldName:      rec.FieldName,
 			CredentialType: rec.CredentialType,
 			Status:         rec.Status,
 			Format:         "PAdES (ETSI.CAdES.detached)",

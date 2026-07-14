@@ -113,17 +113,30 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 		return nil
 	}
 
-	presentation, subject := signingSummaryPIDFields(evidence)
-	if presentation == "" {
-		return []string{"Embedded signing evidence is missing the PID presentation"}
+	// The evidence attachment is a single ContractSigningSummaryCredential
+	// for single-signature contracts, or a JSON ARRAY of them for
+	// multi-signer contracts (one per declared field, all embedded before
+	// the first signature — DCS-FR-SM-07/-17).
+	documents := []json.RawMessage{evidence}
+	var bundle []json.RawMessage
+	if err := json.Unmarshal(evidence, &bundle); err == nil && len(bundle) > 0 {
+		documents = bundle
 	}
 
-	signerDID, _, err := pidverify.Verify(presentation)
-	if err != nil {
-		return []string{fmt.Sprintf("PID verification failed: %v", err)}
-	}
-	if subject != "" && subject != signerDID {
-		return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
+	verifiedSigners := map[string]bool{}
+	for _, doc := range documents {
+		presentation, subject := signingSummaryPIDFields(doc)
+		if presentation == "" {
+			return []string{"Embedded signing evidence is missing the PID presentation"}
+		}
+		signerDID, _, err := pidverify.Verify(presentation)
+		if err != nil {
+			return []string{fmt.Sprintf("PID verification failed: %v", err)}
+		}
+		if subject != "" && subject != signerDID {
+			return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
+		}
+		verifiedSigners[signerDID] = true
 	}
 
 	records, err := h.CRepo.LoadSignatures(ctx, tx, did)
@@ -132,7 +145,7 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 			if strings.EqualFold(strings.TrimSpace(rec.Status), "REVOKED") {
 				continue
 			}
-			if rec.SignerDID != "" && rec.SignerDID != signerDID {
+			if rec.SignerDID != "" && !verifiedSigners[rec.SignerDID] {
 				return []string{"Evidence mismatch: re-verified PID signer does not match the signature record"}
 			}
 		}

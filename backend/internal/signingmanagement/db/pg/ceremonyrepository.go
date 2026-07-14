@@ -66,6 +66,26 @@ func (r *PostgresCeremonyRepo) MarkCeremonyVerified(ctx context.Context, tx *sql
 	return nil
 }
 
+func (r *PostgresCeremonyRepo) FindVerifiedCeremonyByField(ctx context.Context, tx *sqlx.Tx, contractDID, fieldName string) (*db.SignatureCeremony, error) {
+	var c db.SignatureCeremony
+	err := tx.GetContext(ctx, &c, `
+		SELECT id, contract_did, field_name, requested_by, status, wallet_uri, nonce,
+		       signer_did, vp_token, pid_claims, kb_sd_hash, created_at, verified_at, expires_at
+		  FROM signature_ceremonies
+		 WHERE contract_did = $1 AND field_name = $2 AND status = $3
+		 ORDER BY verified_at DESC NULLS LAST
+		 LIMIT 1`,
+		contractDID, fieldName, db.CeremonyVerified,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find verified ceremony for %s field %q: %w", contractDID, fieldName, err)
+	}
+	return &c, nil
+}
+
 func (r *PostgresCeremonyRepo) FindVerifiedCeremony(ctx context.Context, tx *sqlx.Tx, contractDID, signerDID string) (*db.SignatureCeremony, error) {
 	var c db.SignatureCeremony
 	err := tx.GetContext(ctx, &c, `

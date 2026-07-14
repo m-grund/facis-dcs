@@ -44,4 +44,9 @@ type CeremonyRepo interface {
 	// FindVerifiedCeremony returns the most recent verified ceremony for the
 	// given contract and signer, or (nil, nil) when none exists.
 	FindVerifiedCeremony(ctx context.Context, tx *sqlx.Tx, contractDID, signerDID string) (*SignatureCeremony, error)
+	// FindVerifiedCeremonyByField returns the most recent verified ceremony
+	// for the given contract and signature FIELD, or (nil, nil) when none
+	// exists — the all-ceremonies-before-first-signature gate of the
+	// multi-signer flow (DCS-FR-SM-07/-17) checks every declared field.
+	FindVerifiedCeremonyByField(ctx context.Context, tx *sqlx.Tx, contractDID, fieldName string) (*SignatureCeremony, error)
 }
