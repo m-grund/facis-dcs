@@ -99,6 +99,31 @@ func TestTerminateAllowedFromEveryNonTerminalState(t *testing.T) {
 	}
 }
 
+// TestDeployAllowedFromSignedAndActive: signing completion auto-deploys and
+// the real contract target acknowledges within moments (DCS-FR-CWE-06/SM-12),
+// so a manual /contract/deploy — and the second ack it produces — must stay
+// valid for an already-activated contract (idempotent ACTIVE -> ACTIVE
+// re-dispatch). Deploy remains rejected from every pre-signing state.
+func TestDeployAllowedFromSignedAndActive(t *testing.T) {
+	if err := ValidateTransition(Signed, EventDeploy); err != nil {
+		t.Fatalf("expected Deploy to be allowed from Signed, got: %v", err)
+	}
+	if !IsAllowed(Signed, EventDeploy, Active) {
+		t.Fatalf("expected Signed -Deploy-> Active to be a declared outcome")
+	}
+	if err := ValidateTransition(Active, EventDeploy); err != nil {
+		t.Fatalf("expected Deploy to be allowed from Active (idempotent re-dispatch), got: %v", err)
+	}
+	if !IsAllowed(Active, EventDeploy, Active) {
+		t.Fatalf("expected Active -Deploy-> Active to be a declared outcome")
+	}
+	for _, from := range []ContractState{Draft, Offered, Negotiation, Submitted, Reviewed, Approved, Terminated} {
+		if err := ValidateTransition(from, EventDeploy); err == nil {
+			t.Fatalf("expected Deploy from %s to be rejected", from)
+		}
+	}
+}
+
 func TestValidateOutcomeRejectsUndeclaredTarget(t *testing.T) {
 	// Submit from Draft may only reach Negotiation, never e.g. Approved.
 	if err := ValidateOutcome(Draft, EventSubmit, Approved); err == nil {

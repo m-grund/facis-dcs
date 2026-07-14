@@ -48,7 +48,11 @@ const (
 	// EventDeploy: drives the SIGNED -> ACTIVE transition. The deploy command
 	// (command/deploy.go) validates this edge before dispatching to the
 	// Contract Target System, and the target's ack callback (command/callback.go)
-	// validates it again before flipping the contract to ACTIVE.
+	// validates it again before flipping the contract to ACTIVE. From ACTIVE
+	// the same event is an idempotent re-dispatch (ACTIVE -> ACTIVE): signing
+	// completion auto-deploys and the real target acknowledges within moments
+	// (DCS-FR-CWE-06/SM-12), so a manual /contract/deploy — and the second
+	// ack it produces — must stay valid for an already-activated contract.
 	EventDeploy Event = "DEPLOY"
 
 	// EventRevoke: signingmanagement/command/revoke.go transitions the contract
@@ -133,6 +137,7 @@ var Transitions = map[ContractState]map[Event][]ContractState{
 		EventTerminate: {Terminated},
 	},
 	Active: {
+		EventDeploy:    {Active},
 		EventRevoke:    {Revoked},
 		EventTerminate: {Terminated},
 	},

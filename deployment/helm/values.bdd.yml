@@ -45,6 +45,15 @@ extraEnv:
   # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv.
   - name: DCS_TRUSTED_PEERS
     value: "did:web:dcs-b.localhost%3A18080"
+  # Real deployment dispatch to the shipped ORCE contract-target-flow
+  # (UC-05-01): the flow verifies the payload hash, acks synchronously, and
+  # then POSTs the authoritative acknowledgement + a measured KPI back to
+  # /contract/deployment/callback (see orce.extraEnv below for its half of
+  # the wiring). Only instance A dispatches — signing commands forward to the
+  # contract's Origin peer, so deployments always originate here; instance B
+  # deliberately keeps CONTRACT_TARGET_URL unset.
+  - name: CONTRACT_TARGET_URL
+    value: "http://dcs-orce:1880/contract-target/deploy"
 
 # DID identity (fatal on startup when missing). The <fullname>-identity
 # Secret (identitySecretName helper) is published by the hsm-provision
@@ -233,6 +242,16 @@ orce:
   enabled: true
   persistence:
     enabled: false
+  # The contract-target-flow's callback legs (deployment ack + measured KPI,
+  # flows/contract-target-flow.json) post to this instance's backend with the
+  # shared deployment-callback secret (command/callback.go's
+  # DeploymentCallbackSecret; the value below is its BDD default, stated
+  # explicitly so the pairing is visible in one place).
+  extraEnv:
+    - name: DCS_URL
+      value: "http://dcs-digital-contracting-service:8991"
+    - name: DEPLOYMENT_CALLBACK_SECRET
+      value: "bdd-deployment-callback-secret"
   ingress:
     enabled: true
     hosts:

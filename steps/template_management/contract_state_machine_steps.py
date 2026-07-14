@@ -387,7 +387,17 @@ def step_given_contract_reached_state(context, name, state):
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
     assert retrieve.status_code == 200, retrieve.text
     actual_state = str(retrieve.json().get("state", "")).upper()
-    assert actual_state == state.strip().upper(), (
+    accepted = {state.strip().upper()}
+    if state.strip().upper() == "SIGNED":
+        # Signing completion triggers the automatic deployment dispatch
+        # (DCS-FR-CWE-06/SM-12), and the shipped ORCE contract-target-flow
+        # acknowledges it for real — so by the time this read lands the
+        # contract may already have taken the only edge out of SIGNED via
+        # EventDeploy (contractstate.Transitions: ACTIVE is reachable
+        # exclusively from SIGNED). Observing ACTIVE therefore PROVES the
+        # contract reached SIGNED; it is not a weaker check.
+        accepted.add("ACTIVE")
+    assert actual_state in accepted, (
         f"BDD setup could not reach state '{state}' for contract '{name}': "
         f"got '{actual_state}'"
     )
@@ -570,6 +580,25 @@ def step_then_contract_in_state(context, name, state):
     actual = str(retrieve.json().get("state", "")).upper()
     assert actual == state.strip().upper(), (
         f"Expected contract '{name}' to be in state '{state}', got '{actual}'"
+    )
+
+
+@then('the contract "{name}" has completed signing')
+def step_then_contract_completed_signing(context, name):
+    """Signing completion assertion that is stable under the REAL deployment
+    chain: EventSign lands the contract in SIGNED, the automatic dispatch
+    (DCS-FR-CWE-06/SM-12) goes to the shipped ORCE contract-target-flow, and
+    its acknowledgement callback may flip SIGNED -> ACTIVE within moments.
+    ACTIVE is reachable exclusively from SIGNED (contractstate.Transitions),
+    so either state proves the signature completed."""
+    did, _ = ContractService._contract_data(context, name)
+    headers = _seed_headers(context, name)
+    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
+    assert retrieve.status_code == 200, retrieve.text
+    actual = str(retrieve.json().get("state", "")).upper()
+    assert actual in ("SIGNED", "ACTIVE"), (
+        f"Expected contract '{name}' to have completed signing (SIGNED, or ACTIVE once "
+        f"the target acknowledged the automatic deployment), got '{actual}'"
     )
 
 

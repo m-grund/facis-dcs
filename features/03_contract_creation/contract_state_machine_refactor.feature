@@ -99,7 +99,7 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     And contract "Signing Flow" has reached contract state "APPROVED"
     When the counterparty signer applies a signature to contract "Signing Flow"
     Then get http 200:Success code
-    And the contract "Signing Flow" is in state "SIGNED"
+    And the contract "Signing Flow" has completed signing
 
   @SRS-2.2.6 @DCS-NFR-BR-08
   Scenario: Offering a contract emits a typed OFFER outbox event

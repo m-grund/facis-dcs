@@ -75,31 +75,44 @@ Feature: Contract deployment, execution evidence, and KPIs
     When a deployment payload for contract "ORCE Ack Contract" is posted directly to the ORCE contract-target-flow
     Then the ORCE flow acknowledges with correlation_id, payload_hash, and activated_at matching the sent payload
 
-  @DCS-FR-SM-10
+  # The acknowledgement below is sent by the REAL contract target: the
+  # backend dispatches to the shipped ORCE contract-target-flow
+  # (CONTRACT_TARGET_URL), which verifies the payload hash and POSTs the
+  # authoritative ack callback itself — no harness-simulated callback.
+  @DCS-FR-SM-10 @DCS-IR-SI-02
   Scenario: The execution-evidence receipt is TSA-timestamped and appended to the archive entry
     Given contract "TSA Evidence Contract" has reached contract state "SIGNED"
     And an authorized user deploys contract "TSA Evidence Contract" to the configured contract target
     And get http 200:Success code
-    When the target sends a deployment acknowledgement for contract "TSA Evidence Contract" with the correct shared secret
-    Then get http 200:Success code
-    And the archive entry for contract "TSA Evidence Contract" contains an RFC-3161 TSA timestamp over the execution-evidence receipt
+    When the contract target acknowledges the deployment of contract "TSA Evidence Contract"
+    Then the archive entry for contract "TSA Evidence Contract" contains an RFC-3161 TSA timestamp over the execution-evidence receipt
 
-  @DCS-FR-SM-12
+  @DCS-FR-SM-12 @DCS-IR-SI-02
   Scenario: An acknowledged deployment moves the contract from SIGNED to ACTIVE
     Given contract "Ack Activates Contract" has reached contract state "SIGNED"
     And an authorized user deploys contract "Ack Activates Contract" to the configured contract target
     And get http 200:Success code
-    When the target sends a deployment acknowledgement for contract "Ack Activates Contract" with the correct shared secret
-    Then get http 200:Success code
-    And the contract "Ack Activates Contract" is in state "ACTIVE"
+    When the contract target acknowledges the deployment of contract "Ack Activates Contract"
+    Then the contract "Ack Activates Contract" is in state "ACTIVE"
+
+  # The target system itself reports a KPI it genuinely measures — the
+  # latency between receiving the dispatch and activating the contract —
+  # over the shared-secret callback channel (DCS-FR-CWE-31: "KPIs ... sent
+  # from the target system").
+  @DCS-FR-CWE-31 @DCS-FR-CWE-09 @DCS-IR-SI-02 @DCS-IR-SI-05
+  Scenario: The contract target itself reports a measured KPI over the callback channel
+    Given contract "Target Reported KPI Contract" has reached contract state "SIGNED"
+    And an authorized user deploys contract "Target Reported KPI Contract" to the configured contract target
+    And get http 200:Success code
+    When the contract target acknowledges the deployment of contract "Target Reported KPI Contract"
+    Then the contract detail for "Target Reported KPI Contract" shows a target-reported KPI "activation_latency_ms"
 
   @DCS-FR-CWE-31 @DCS-FR-CWE-09
   Scenario: A KPI reported via callback for an ACTIVE contract appears on the contract detail
     Given contract "KPI Dashboard Contract" has reached contract state "SIGNED"
     And an authorized user deploys contract "KPI Dashboard Contract" to the configured contract target
     And get http 200:Success code
-    And the target sends a deployment acknowledgement for contract "KPI Dashboard Contract" with the correct shared secret
-    And get http 200:Success code
+    And the contract target acknowledges the deployment of contract "KPI Dashboard Contract"
     When the target reports a KPI value "uptime_percent" = "99.5" for contract "KPI Dashboard Contract"
     Then get http 200:Success code
     And the contract detail for "KPI Dashboard Contract" shows KPI "uptime_percent" with value "99.5"
@@ -110,8 +123,7 @@ Feature: Contract deployment, execution evidence, and KPIs
     And contract "KPI Violation Contract" is submitted, reviewed, approved, and signed via the standard workflow
     And an authorized user deploys contract "KPI Violation Contract" to the configured contract target
     And get http 200:Success code
-    And the target sends a deployment acknowledgement for contract "KPI Violation Contract" with the correct shared secret
-    And get http 200:Success code
+    And the contract target acknowledges the deployment of contract "KPI Violation Contract"
     When the target reports a KPI value "coverage" = "80" for contract "KPI Violation Contract"
     Then get http 200:Success code
     And the contract detail for "KPI Violation Contract" shows a KPI violation flag for "coverage"
