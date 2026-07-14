@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ROUTES } from '@/router/router'
-import { authenticationService } from '@/services/authentication-service'
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ROUTES } from '@/router/router'
+import { authenticationService } from '@/services/authentication-service'
 
 const router = useRouter()
 

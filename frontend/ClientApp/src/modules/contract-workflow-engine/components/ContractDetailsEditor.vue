@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Contract } from '@/models/contract/contract'
 import { ref } from 'vue'
+import type { Contract } from '@/models/contract/contract'
 
 defineProps<{
   disabled?: boolean

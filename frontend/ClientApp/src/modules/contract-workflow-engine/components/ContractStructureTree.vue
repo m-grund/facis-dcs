@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { Contract } from '@/models/contract/contract'
-import { ROUTES } from '@/router/router'
 import { computed, ref } from 'vue'
+import { ROUTES } from '@/router/router'
+import type { Contract } from '@/models/contract/contract'
 
 defineOptions({ name: 'ContractStructureTree' })
 

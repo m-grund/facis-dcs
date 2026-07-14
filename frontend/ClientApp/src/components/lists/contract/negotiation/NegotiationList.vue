@@ -1,12 +1,12 @@
 <script setup lang="ts">
+import { computed, ref, useTemplateRef } from 'vue'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import type { Contract } from '@/models/contract/contract'
-import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
-import type { ContractNegotiationDecision } from '@/models/contract/contract-negotiation-decision'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
-import { computed, ref, useTemplateRef } from 'vue'
+import type { Contract } from '@/models/contract/contract'
+import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
+import type { ContractNegotiationDecision } from '@/models/contract/contract-negotiation-decision'
 
 const props = defineProps<{
   contract: Contract

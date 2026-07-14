@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { PartialContractTemplate } from '@/models/contract-template'
-import type { ContractTemplateSearchResponse } from '@/models/responses/template-response'
 import { contractTemplateService } from '@/services/contract-template-service'
 import ListSearch from '../ListSearch.vue'
+import type { PartialContractTemplate } from '@/models/contract-template'
+import type { ContractTemplateSearchResponse } from '@/models/responses/template-response'
 
 defineProps<{
   templates: PartialContractTemplate[]

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useQRCode } from '@vueuse/integrations/useQRCode'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   clearOid4vpBrowserSession,
   flushPendingLoginChallenge,
@@ -11,9 +14,6 @@ import {
 import { isLoginPollError, isLoginStatusResponse, LOGIN_POLL_ERROR } from '@/models/responses/auth-response'
 import { ROUTES } from '@/router/router'
 import { authenticationService } from '@/services/authentication-service'
-import { useQRCode } from '@vueuse/integrations/useQRCode'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()

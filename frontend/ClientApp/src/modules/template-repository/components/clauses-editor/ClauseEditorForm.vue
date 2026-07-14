@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import ClauseTextEditor from '@template-repository/components/clauses-editor/ClauseTextEditor.vue'
 import {
   conditionIdsInContent,
   usedPlaceholderKeysInContent,
 } from '@template-repository/composables/useClauseTextChips'
-import type { DcsContentSegment } from '@/models/dcs-jsonld'
 import { stringToContent } from '@template-repository/composables/useClauseTextChips'
+import { computed, ref, watch } from 'vue'
+import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 
 const props = defineProps<{
   mode: 'create' | 'edit'

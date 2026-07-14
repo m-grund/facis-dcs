@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth-store'
 import { toProperCase } from '@/utils/string'
-import { computed } from 'vue'
 
 const authStore = useAuthStore()
 const roles = computed(() => [...(authStore.user?.roles ?? [])].sort())

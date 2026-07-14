@@ -1,8 +1,9 @@
+import type { ContractTemplateData } from './contract-template'
+import type { ContractTemplateResponsible } from './contract-template-responsible'
 import type { ComponentType } from '@/types/component-type'
 import type { ContractTemplateActionFlag } from '@/types/contract-template-action-flag'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { UserRole } from '@/types/user-role'
-import type { ContractTemplateData } from './contract-template'
 
 export interface ContractTemplateCreateEvent {
   did: string
@@ -35,7 +36,7 @@ export interface ContractTemplateSubmitEvent {
   action_flag: ContractTemplateActionFlag
   comments?: string[]
   occurred_at: string
-  responsible?: unknown
+  responsible?: ContractTemplateResponsible
   holder_did: string
   user_roles: UserRole[]
 }

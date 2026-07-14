@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import {
-  clearPidPresentationSession,
-  OID4VP_PID_PRESENTATION_URL_KEY,
-  OID4VP_PID_STATE_KEY,
-} from '@/pid-presentation-session'
+import { useQRCode } from '@vueuse/integrations/useQRCode'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   isPidPresentationPollError,
   isPidPresentationStatusResponse,
   PID_POLL_ERROR,
 } from '@/models/responses/pid-presentation-response'
+import {
+  clearPidPresentationSession,
+  OID4VP_PID_PRESENTATION_URL_KEY,
+  OID4VP_PID_STATE_KEY,
+} from '@/pid-presentation-session'
 import { pidPresentationService } from '@/services/pid-presentation-service'
-import { useQRCode } from '@vueuse/integrations/useQRCode'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const emit = defineEmits<{
   success: []

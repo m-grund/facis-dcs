@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import { type Ref, ref, watch } from 'vue'
+import TemplateAuditList from '@/components/lists/template/TemplateAuditList.vue'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useDcsDraftStore } from '../store/dcsDraftStore'
-import { ref, watch, type Ref } from 'vue'
 import { useTemplateEditorUiStore } from '../store/templateEditorUiStore'
 import type { ContractTemplateAuditResponse } from '@/models/responses/template-response'
-import TemplateAuditList from '@/components/lists/template/TemplateAuditList.vue'
 
 const store = useDcsDraftStore()
 const editorStore = useTemplateEditorUiStore()

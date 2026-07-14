@@ -1,24 +1,24 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { storeToRefs } from 'pinia'
-import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
+import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
-import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
+import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
+import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import {
-  parseSegmentsFromContent,
   getPlaceholderLabelFromConditions,
+  parseSegmentsFromContent,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
-import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
-import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import {
   getBlocksFromTemplateData,
   getLayoutFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed, ref, watch } from 'vue'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const props = defineProps<{
   item: EnrichedBlockItem

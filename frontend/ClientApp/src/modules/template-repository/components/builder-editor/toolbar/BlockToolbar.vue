@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
+import { computed } from 'vue'
 import IconInsertAbove from './icons/IconInsertAbove.vue'
 import IconInsertBelow from './icons/IconInsertBelow.vue'
 import IconInsertNestBelow from './icons/IconInsertNestBelow.vue'
-import IconTrash from './icons/IconTrash.vue'
-import IconMoveUp from './icons/IconMoveUp.vue'
 import IconMoveDown from './icons/IconMoveDown.vue'
 import IconMoveLeft from './icons/IconMoveLeft.vue'
 import IconMoveRight from './icons/IconMoveRight.vue'
+import IconMoveUp from './icons/IconMoveUp.vue'
+import IconTrash from './icons/IconTrash.vue'
+import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const btnIcon = 'btn btn-ghost btn-xs btn-square'
 

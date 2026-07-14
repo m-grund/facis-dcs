@@ -1,5 +1,6 @@
-import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
+import type { DcsBlock, DcsDataRequirement, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'
 import type {
   PlaceholderBinding,
   PolicyBundle,
@@ -9,13 +10,12 @@ import type {
 } from '@/models/semantic/facis-dcs-semantic'
 import type {
   MetaData,
-  TemplateTypeValue,
   PolicyReference,
   SchemaReferenceSet,
+  TemplateTypeValue,
   ValidationProfile,
 } from '@/modules/template-repository/models/contract-template'
-import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
-import type { DcsBlock, DcsLayoutNode, DcsDataRequirement, OdrlRule } from '@/models/dcs-jsonld'
+import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const

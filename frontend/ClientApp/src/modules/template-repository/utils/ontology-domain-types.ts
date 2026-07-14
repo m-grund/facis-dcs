@@ -1,10 +1,10 @@
+import { ONTOLOGY_DOMAIN_FIELDS, ONTOLOGY_ENTITY_ROLES, ONTOLOGY_ENTITY_TYPES } from './ontology-domain-fields'
 import type {
   DomainFieldDefinition,
   SemanticConditionParameter,
   SemanticEntityRole,
   SemanticValueConstraint,
 } from '@/modules/template-repository/models/contract-template'
-import { ONTOLOGY_DOMAIN_FIELDS, ONTOLOGY_ENTITY_ROLES, ONTOLOGY_ENTITY_TYPES } from './ontology-domain-fields'
 
 export interface OntologyDomainType {
   id: string

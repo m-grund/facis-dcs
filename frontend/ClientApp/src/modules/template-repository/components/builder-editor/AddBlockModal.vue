@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
-import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
-import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
+import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import {
-  parseSegmentsFromContent,
   getPlaceholderLabelFromConditions,
+  parseSegmentsFromContent,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
-import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
-import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed, ref, watch } from 'vue'
+import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { TemplateType } from '../../models/contract-template.ts'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsClause } from '@/models/dcs-jsonld'
 import type { NewBlockType } from '@template-repository/models/template-draft-store'
 
@@ -156,7 +156,7 @@ function handleAddClause(clauseBlockId: string) {
               <p class="mb-2 text-xs font-semibold text-primary">Selected clause</p>
               <button
                 type="button"
-                class="flex min-h-[44px] w-full cursor-pointer flex-col justify-center rounded-lg border border-primary/40 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+                class="flex min-h-11 w-full cursor-pointer flex-col justify-center rounded-lg border border-primary/40 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
                 @click="handleAddClause(pendingPlacementClause['@id'])"
               >
                 <span class="text-sm font-medium text-base-content">
@@ -185,7 +185,7 @@ function handleAddClause(clauseBlockId: string) {
                 v-for="clause in filteredUnusedClauses"
                 :key="clause['@id']"
                 type="button"
-                class="flex min-h-[44px] cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+                class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
                 @click="handleAddClause(clause['@id'])"
               >
                 <span class="text-sm font-medium text-base-content">

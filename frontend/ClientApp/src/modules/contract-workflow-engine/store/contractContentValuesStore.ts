@@ -32,8 +32,14 @@ export const useContractContentValuesStore = defineStore(storeId, {
       )
     },
     reset(overrides?: Partial<ContractContentValuesState>) {
-      Object.assign(this, getInitialState())
-      if (overrides) Object.assign(this, overrides)
+      const nextState = getInitialState()
+      if (overrides) {
+        Object.assign(nextState, overrides)
+        if (overrides.semanticConditionValues) {
+          nextState.semanticConditionValues = overrides.semanticConditionValues.map((value) => ({ ...value }))
+        }
+      }
+      Object.assign(this, nextState)
     },
   },
 })

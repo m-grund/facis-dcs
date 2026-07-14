@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useRouter } from 'vue-router'
-import { useDcsDraftStore } from '../store/dcsDraftStore'
 import { useTemplatePermissions } from '../composables/useTemplatePermissions'
+import { useDcsDraftStore } from '../store/dcsDraftStore'
 
 const router = useRouter()
 const draftStore = useDcsDraftStore()

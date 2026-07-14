@@ -1,5 +1,6 @@
 import pluginVue from 'eslint-plugin-vue'
 import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
+import simpleImportSort from 'eslint-plugin-simple-import-sort'
 import skipFormattingConfig from '@vue/eslint-config-prettier/skip-formatting'
 
 export default defineConfigWithVueTs(
@@ -11,6 +12,9 @@ export default defineConfigWithVueTs(
   vueTsConfigs.stylisticTypeChecked,
   {
     files: ['**/*.vue', '**/*.ts'],
+    plugins: {
+      'simple-import-sort': simpleImportSort,
+    },
     rules: {
       'vue/require-default-prop': 'off',
       '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
@@ -34,6 +38,12 @@ export default defineConfigWithVueTs(
         },
       ],
       'no-warning-comments': 'warn',
+      'simple-import-sort/imports': [
+        'error',
+        {
+          groups: [['^\\u0000', '^node:', '^@?\\w', '^@/', '^\\.', '^\\.\\.', '^.*\\u0000$']],
+        },
+      ],
     },
   },
   skipFormattingConfig,

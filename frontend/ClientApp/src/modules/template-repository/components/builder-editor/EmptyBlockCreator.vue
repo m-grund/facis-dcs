@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 
 const { layout } = storeToRefs(useDcsDraftStore())
 const uiStore = useTemplateEditorUiStore()

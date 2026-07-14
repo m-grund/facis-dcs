@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { PartialContractTemplate } from '@/models/contract-template'
+import { computed } from 'vue'
 import { useTemplatePermissions } from '@/modules/template-repository/composables/useTemplatePermissions'
 import { ROUTES } from '@/router/router'
 import { TemplateState } from '@/types/contract-template-state'
 import { toProperCase } from '@/utils/string'
-import { computed } from 'vue'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 const props = defineProps<{
   template: PartialContractTemplate

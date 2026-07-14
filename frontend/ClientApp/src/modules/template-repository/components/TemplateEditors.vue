@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
+import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
 import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
-import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
-import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'

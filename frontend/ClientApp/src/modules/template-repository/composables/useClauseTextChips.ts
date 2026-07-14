@@ -1,8 +1,8 @@
-import type { Ref } from 'vue'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
-import type { ClausePlaceholderHighlight } from '@template-repository/models/template-editor-ui-store'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
 import type { DcsContentSegment, DcsPlaceholder } from '@/models/dcs-jsonld'
+import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { ClausePlaceholderHighlight } from '@template-repository/models/template-editor-ui-store'
+import type { Ref } from 'vue'
 
 export type Segment =
   | { type: 'text'; value: string }

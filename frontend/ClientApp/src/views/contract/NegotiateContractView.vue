@@ -1,35 +1,35 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, nextTick, onMounted, onUnmounted, type Ref, ref, useTemplateRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
 import NegotiationList from '@/components/lists/contract/negotiation/NegotiationList.vue'
 import { useScrollStore } from '@/core/store/scroll'
-import type { ContractData, SemanticConditionValue } from '@/models/contract-data'
-import type { Contract, ContractChangeRequest } from '@/models/contract/contract'
-import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import ContractHistoryDiffView from '@/modules/contract-workflow-engine/components/ContractHistoryDiffView.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
+import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
-import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
-import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import {
   buildContractDocument,
   getSemanticConditionsFromTemplateData,
 } from '@/modules/template-repository/store/dcsDraftStore'
+import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
+import type { Contract, ContractChangeRequest } from '@/models/contract/contract'
+import type { ContractNegotiation } from '@/models/contract/contract-negotiation'
+import type { ContractData, SemanticConditionValue } from '@/models/contract-data'
+import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { UserRole } from '@/types/user-role'
-import { storeToRefs } from 'pinia'
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch, type Ref } from 'vue'
-import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -95,6 +95,8 @@ const hasChangeRequest = computed(() => {
   )
 })
 
+const contractSemanticConditionValueSnapshot: Ref<SemanticConditionValue[]> = ref([])
+
 const changedName = computed(() => editedContract.value?.name !== contract.value?.name)
 const changedDescription = computed(() => editedContract.value?.description !== contract.value?.description)
 const changeExpNoticePeriod = computed(
@@ -103,9 +105,7 @@ const changeExpNoticePeriod = computed(
 const changeExpPolicy = computed(() => editedContract.value?.exp_policy != contract.value?.exp_policy)
 const changedContractData = computed(() => {
   const storedValues = contractContentValuesStore.semanticConditionValues
-  const contractValues = contract.value?.contract_data?.semanticConditionValues ?? []
-
-  return !semanticConditionValuesEqual(storedValues, contractValues)
+  return !semanticConditionValuesEqual(storedValues, contractSemanticConditionValueSnapshot.value)
 })
 
 const semanticConditionValuesEqual = (a: SemanticConditionValue[], b: SemanticConditionValue[]) => {
@@ -256,6 +256,10 @@ onUnmounted(() => {
 
 // Contract data includes the template data used to fill the contract template
 function applyContractDataToDraft(contractData?: unknown) {
+  const semanticConditionValues = (contractData as { semanticConditionValues?: SemanticConditionValue[] } | undefined)
+    ?.semanticConditionValues
+  contractSemanticConditionValueSnapshot.value = (semanticConditionValues ?? []).map((value) => ({ ...value }))
+
   if (contractData == null) {
     dcsDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { signatureManagementService, type CeremonyStatus } from '@/services/signature-management-service'
 import { useConfirmDialog } from '@vueuse/core'
 import { useQRCode } from '@vueuse/integrations/useQRCode'
 import { computed, ref, useTemplateRef, watch } from 'vue'
+import { type CeremonyStatus, signatureManagementService } from '@/services/signature-management-service'
 
 interface CeremonyRequest {
   contractDid: string

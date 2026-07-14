@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { auditingService } from '@/services/auditing-service'
 import type { AuditReportFormat, AuditScope } from '@/models/requests/auditing-request'
 import type {
   AuditFinding,
@@ -6,8 +8,6 @@ import type {
   AuditReportDownload,
   AuditReportResponse,
 } from '@/models/responses/auditing-response'
-import { auditingService } from '@/services/auditing-service'
-import { computed, ref, watch } from 'vue'
 
 const auditFindingsByScope = ref<Partial<Record<AuditScope, AuditFinding[]>>>({})
 const auditReportsByScope = ref<Partial<Record<AuditScope, AuditReportResponse>>>({})

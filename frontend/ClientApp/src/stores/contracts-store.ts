@@ -1,12 +1,12 @@
-import type { PartialContractTemplate } from '@/models/contract-template'
+import { defineStore } from 'pinia'
+import { computed, type Ref, ref } from 'vue'
+import { contractWorkflowService } from '@/services/contract-workflow-service'
+import { TemplateState } from '@/types/contract-template-state'
 import type { Contract } from '@/models/contract/contract'
 import type { ContractApprovalTask } from '@/models/contract/contract-approval-task'
 import type { ContractNegotiationTask } from '@/models/contract/contract-negotiation-task'
 import type { ContractReviewTask } from '@/models/contract/contract-review-task'
-import { TemplateState } from '@/types/contract-template-state'
-import { defineStore } from 'pinia'
-import { computed, ref, type Ref } from 'vue'
-import { contractWorkflowService } from '@/services/contract-workflow-service'
+import type { PartialContractTemplate } from '@/models/contract-template'
 
 export const useContractsStore = defineStore('contracts', () => {
   const contracts: Ref<Contract[]> = ref([])

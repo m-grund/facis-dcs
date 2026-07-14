@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import NegotiationPartiesTabView from '@/modules/template-catalogue/components/negotiation/NegotiationPartiesTabView.vue'
-import type { Participant } from '@/modules/template-catalogue/models/participant'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import NegotiationPartiesTabView from '@/modules/template-catalogue/components/negotiation/NegotiationPartiesTabView.vue'
+import type { Participant } from '@/modules/template-catalogue/models/participant'
 
 const router = useRouter()
 const activeTab = ref<'parties' | 'contractFilling' | 'preview'>('parties')

@@ -1,16 +1,16 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
 import Pagination from '@/components/Pagination.vue'
-import type { Contract } from '@/models/contract/contract'
 import { useContractsStore } from '@/stores/contracts-store.ts'
 import { useContractStateFilterStore } from '@/stores/state-filter-store'
 import { contractStates } from '@/types/contract-state'
 import { compareValues } from '@/utils/comparison'
-import { storeToRefs } from 'pinia'
-import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
-import ListSort from '../ListSort.vue'
-import ListStateFilter from '../ListStateFilter.vue'
 import ContractListItem from './ContractListItem.vue'
 import ContractListSearch from './ContractListSearch.vue'
+import ListSort from '../ListSort.vue'
+import ListStateFilter from '../ListStateFilter.vue'
+import type { Contract } from '@/models/contract/contract'
 
 const contractsStore = useContractsStore()
 const { loading, error } = storeToRefs(contractsStore)
@@ -18,7 +18,7 @@ const { loading, error } = storeToRefs(contractsStore)
 const contracts: Ref<Contract[]> = ref([])
 
 const pageLimits = ref([25, 50, 100])
-const limit = computed(() => pageLimits.value[0] ?? 25)
+const limit = ref(pageLimits.value[0] ?? 25)
 const currentPage = ref(1)
 const hasNextPage = ref(true)
 
