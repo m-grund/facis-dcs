@@ -26,12 +26,40 @@ Feature: Signature validation, audit, and compliance
     # eventtype.go is defined but never published.
     And the signature audit log for contract "Signature Audit Contract" includes an action of type "APPLIED_SIGNATURE"
 
+  # /signature/compliance computes its findings (DCS-FR-SM-21:
+  # signature level SES/AES/QES, signature status, active signed
+  # credentials) and records the check — findings included — as a
+  # ComplianceValidationEvent in the audit trail.
   @clean_db @DCS-FR-SM-21
   Scenario: Contract Manager requests a compliance check for a signed contract
     Given contract "Signature Compliance Contract" has reached contract state "SIGNED"
     When the contract manager requests a compliance check for contract "Signature Compliance Contract"
     Then get http 200:Success code
-    And the compliance check for contract "Signature Compliance Contract" returns no findings
+    And the compliance check for contract "Signature Compliance Contract" reports that all checks passed
+
+  @clean_db @DCS-FR-SM-21 @DCS-FR-SM-20
+  Scenario: The compliance check flags a revoked signature
+    Given contract "Revoked Compliance Contract" has reached contract state "REVOKED"
+    When the contract manager requests a compliance check for contract "Revoked Compliance Contract"
+    Then get http 200:Success code
+    And the compliance check for contract "Revoked Compliance Contract" flags a revoked signature
+
+  # DCS-FR-SM-26 / DCS-IR-SM-05: the Signature Compliance Viewer's data —
+  # per-signature signer identity, credential class, status, timestamps,
+  # container format, and the contract's cryptographic integrity findings.
+  @clean_db @DCS-FR-SM-26 @DCS-IR-SM-05
+  Scenario: The signature view exposes signer identity, credential class, timestamp, and integrity
+    Given contract "Signature View Contract" has reached contract state "SIGNED"
+    When the signature view for contract "Signature View Contract" is requested as "Compliance Officer"
+    Then get http 200:Success code
+    And the signature view for contract "Signature View Contract" shows one "SIGNED" signature with signer identity, credential class "AES", timestamp, and intact integrity
+
+  @clean_db @DCS-FR-SM-26
+  Scenario: A role outside the signature-viewing scope cannot request the signature view
+    Given contract "Unauthorized Signature View Contract" has reached contract state "SIGNED"
+    And I am authenticated with roles: "Template Creator"
+    When I attempt to request the signature view for contract "Unauthorized Signature View Contract" with my current role
+    Then the request is denied with a client error
 
   # DCS-FR-SM-27: signed contracts MUST be exportable in PDF/A format with
   # embedded metadata and signature containers. pdf-core compiles PDF/A-3A

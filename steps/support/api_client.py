@@ -121,6 +121,10 @@ def archive_annotate_url(context) -> str:
     return f"{context.base_url}/archive/annotate"
 
 
+def signature_view_url(context) -> str:
+    return f"{context.base_url}/signature/view"
+
+
 def pac_audit_url(context) -> str:
     return f"{context.base_url}/pac/audit"
 

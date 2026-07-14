@@ -149,6 +149,7 @@ type ComplianceValidationEvent struct {
 	DID             string             `json:"did"`
 	ContractVersion int                `json:"contract_version,omitempty"`
 	CheckedBy       string             `json:"checked_by"`
+	Findings        []string           `json:"findings"`
 	OccurredAt      time.Time          `json:"occurred_at"`
 	HolderDID       string             `json:"holder_did"`
 	UserRoles       userrole.UserRoles `json:"user_roles"`

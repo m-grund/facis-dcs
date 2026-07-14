@@ -17,6 +17,7 @@ from steps.support.api_client import (
     post_json,
     signature_audit_url,
     signature_compliance_url,
+    signature_view_url,
     signature_validate_url,
 )
 from steps.support.services.auth_service import AuthService
@@ -74,20 +75,84 @@ def step_then_validation_no_findings(context, name):
     )
 
 
-@then('the compliance check for contract "{name}" returns no findings')
-def step_then_compliance_no_findings(context, name):
+@then('the compliance check for contract "{name}" reports that all checks passed')
+def step_then_compliance_all_passed(context, name):
     assert context.requests_response.status_code == 200, (
         f"Expected 200, got {context.requests_response.status_code}: {context.requests_response.text}"
     )
     body = context.requests_response.json()
     findings = body.get("findings") or []
-    # The compliance endpoint's own design description
-    # (backend/design/signature_management.go's "compliance" method) is
-    # explicit that it records the compliance-check request and emits a
-    # ComplianceValidationEvent, but does not itself compute findings: "the
-    # response's findings list is currently always empty". Asserting emptiness
-    # here is therefore the accurate claim, not an under-test of the endpoint.
-    assert findings == [], f"Expected an empty findings list from /signature/compliance, got: {findings}"
+    # /signature/compliance now COMPUTES its findings (DCS-FR-SM-21:
+    # signature level SES/AES/QES, signature status, active signed
+    # credentials — CollectComplianceFindings) and reports "Compliance
+    # checks passed" as the single positive confirmation when nothing is
+    # flagged. An empty list would itself be a bug.
+    assert findings == ["Compliance checks passed"], (
+        f"Expected the compliance check to report exactly the positive confirmation, got: {findings}"
+    )
+
+
+@then('the compliance check for contract "{name}" flags a revoked signature')
+def step_then_compliance_flags_revoked(context, name):
+    assert context.requests_response.status_code == 200, (
+        f"Expected 200, got {context.requests_response.status_code}: {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    findings = body.get("findings") or []
+    assert any("revoked" in str(f).lower() for f in findings), (
+        f"Expected a revoked-signature compliance finding, got: {findings}"
+    )
+
+
+@when('the signature view for contract "{name}" is requested as "{role}"')
+def step_when_signature_view(context, name, role):
+    import requests as _requests  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    headers = AuthService.get_headers_for_roles([role])
+    context.requests_response = _requests.get(
+        signature_view_url(context),
+        params={"did": did},
+        headers=headers,
+        timeout=context.http_timeout_seconds,
+    )
+
+
+@when('I attempt to request the signature view for contract "{name}" with my current role')
+def step_when_attempt_signature_view(context, name):
+    import requests as _requests  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    context.requests_response = _requests.get(
+        signature_view_url(context),
+        params={"did": did},
+        headers=getattr(context, "headers", {}),
+        timeout=context.http_timeout_seconds,
+    )
+
+
+@then('the signature view for contract "{name}" shows one "{status}" signature with signer identity, credential class "{cred}", timestamp, and intact integrity')
+def step_then_signature_view_contents(context, name, status, cred):
+    assert context.requests_response.status_code == 200, (
+        f"Expected 200, got {context.requests_response.status_code}: {context.requests_response.text}"
+    )
+    body = context.requests_response.json()
+    did, _ = ContractService._contract_data(context, name)
+    assert body.get("did") == did
+    signatures = body.get("signatures") or []
+    assert len(signatures) == 1, f"Expected exactly one signature, got: {signatures}"
+    sig = signatures[0]
+    assert sig.get("status") == status, f"Expected status {status!r}, got: {sig.get('status')!r}"
+    assert sig.get("signer_did"), f"Expected a signer identity, got: {sig}"
+    assert sig.get("credential_type") == cred, (
+        f"Expected credential class {cred!r}, got: {sig.get('credential_type')!r}"
+    )
+    assert sig.get("signed_at"), f"Expected a signing timestamp, got: {sig}"
+    assert "PAdES" in str(sig.get("format")), f"Expected a PAdES container format, got: {sig.get('format')}"
+    findings = body.get("integrity_findings") or []
+    assert findings and all(f in _PASSING_VALIDATION_FINDINGS for f in findings), (
+        f"Expected only passing integrity confirmations in the signature view, got: {findings}"
+    )
 
 
 @then('the signature audit log for contract "{name}" includes an action of type "{event_type}"')
