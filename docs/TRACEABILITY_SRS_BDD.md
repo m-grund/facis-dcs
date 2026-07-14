@@ -380,13 +380,13 @@ not a coverage hole.
 | Template-update notifications | DCS-FR-TR-22 | SHOULD-level |
 | QES execution | DCS-FR-SM-01 | Needs qualified TSP/QSCD; AES delivered |
 | PoA credential acquisition + chain-walk | DCS-FR-SM-03/04, UC-14 | PoA presented at login with status checking; issuer chain-walk is deferred roadmap work — 14 pack keeps tagged @skip placeholders |
-| Archive summary/tags | DCS-FR-CSA-11 | No tag/summary fields in archive API |
-| Full-text contract search | DCS-FR-CSA-13 | Metadata/state search only |
 | Configurable expiry/alert notifications | DCS-FR-CSA-04/20 | Detection covered; delivery channels absent |
 | FIDO2/WebAuthn | DCS-IR-HI-02 | No WebAuthn endpoints |
 | TPM sealing / remote attestation | DCS-IR-HI-03, DCS-NFR-SEC-17 | Platform concern, not implemented |
 | "Replaced" C2PA lifecycle banner | (19 lifecycle-banner subset) | Explicit scope decision, tracked in 19 pack header |
 
-Multi-signer signing flows (DCS-FR-SM-07/17) and OID4VP-as-login (DCS-IR-SI-08, DCS-NFR-BR-01)
-are implemented-but-underasserted areas queued as follow-up scenarios, not deviations.
+OID4VP-as-login (DCS-IR-SI-08, DCS-NFR-BR-01) is exercised implicitly by every scenario's
+authentication but remains underasserted as dedicated scenarios — follow-up work, not a deviation.
+Multi-signer flows (DCS-FR-SM-07/17) graduated from this list: 22/multi_signer asserts them
+end-to-end, including two distinct signer identities and the deploy gate.
 
