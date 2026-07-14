@@ -35,6 +35,7 @@ same-peer guard.
 """
 
 import base64
+import json
 import os
 import time
 import uuid
@@ -189,6 +190,11 @@ def step_when_post_sync_new_contract(context):
     contract_did = f"did:example:bdd-peer-sync-{uuid.uuid4()}"
     context.peer_sync_contract_did = contract_did
     payload = _minimal_remote_contract_payload(context.peer_from_did, contract_did)
+    # Every broadcast must carry the sender's JAdES over the canonical
+    # contract representation (DCS-FR-SM-02) — sign with this instance's own
+    # key, exactly like the challenge-response secret below.
+    jades_payload = _canonical_jades_payload(contract_did, 1, payload["contract"]["contract_data"])
+    payload["jades_signature"] = _jades_sign_as_own_instance(context, jades_payload)
     payload["from_peer_did"] = context.peer_from_did
     payload["secret_value"] = context.peer_secret_value
     payload["secret_hash"] = context.peer_secret_hash
@@ -818,3 +824,159 @@ def step_then_both_approvals_recorded(context):
             f"Expected instance {label}'s own approval task (approver={peer_did}) to be "
             f"recorded APPROVED on instance {label}, got tasks: {states}"
         )
+
+
+# ---------------------------------------------------------------------------
+# JAdES sync provenance (DCS-FR-SM-02)
+# ---------------------------------------------------------------------------
+
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _canonical_jades_payload(contract_did: str, contract_version: int, contract_document: dict) -> bytes:
+    """The canonical contract representation the backend signs
+    (internal/base/jades.BuildContractPayload): recursively key-sorted,
+    compact, no ASCII escaping."""
+    payload = {
+        "dcs:contractDid": contract_did,
+        "dcs:contractVersion": contract_version,
+        "dcs:contractDocument": contract_document,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _der_to_jose(der: bytes) -> bytes:
+    """Convert an ASN.1 DER ECDSA signature (what hsmsign emits, mirroring
+    DIDDocument.Sign) into the 64-byte r||s form JWS ES256 requires."""
+    assert der[0] == 0x30, "expected a DER SEQUENCE"
+    idx = 2
+    if der[1] & 0x80:
+        idx = 2 + (der[1] & 0x7F)
+    assert der[idx] == 0x02, "expected DER INTEGER (r)"
+    rlen = der[idx + 1]
+    r = der[idx + 2 : idx + 2 + rlen]
+    idx = idx + 2 + rlen
+    assert der[idx] == 0x02, "expected DER INTEGER (s)"
+    slen = der[idx + 1]
+    s = der[idx + 2 : idx + 2 + slen]
+    r = r.lstrip(b"\x00").rjust(32, b"\x00")
+    s = s.lstrip(b"\x00").rjust(32, b"\x00")
+    return r + s
+
+
+def _own_x5c(context):
+    did_url = did_document_url(context.base_url)
+    resp = _requests.get(did_url, timeout=context.http_timeout_seconds)
+    assert resp.status_code == 200, f"could not fetch own did.json: {resp.status_code} {resp.text}"
+    methods = resp.json().get("verificationMethod") or []
+    assert methods, "own did.json has no verificationMethod"
+    x5c = (methods[0].get("publicKeyJwk") or {}).get("x5c") or []
+    if isinstance(x5c, str):
+        x5c = [x5c]
+    assert x5c, "own did.json carries no x5c certificate chain"
+    return x5c
+
+
+def _jades_sign_as_own_instance(context, payload_bytes: bytes) -> str:
+    """Produce a genuine JAdES baseline-B compact JWS with this instance's
+    own dev/HSM key and x5c chain — the same trick the synthetic-peer
+    challenge-response signature uses (the synthetic DID resolves to this
+    instance's own did.json and key)."""
+    _real_did, token_dir = _own_identity(context)
+    header = {
+        "alg": "ES256",
+        "typ": "jose",
+        "cty": "application/json",
+        "x5c": _own_x5c(context),
+        "sigT": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "crit": ["sigT"],
+    }
+    signing_input = _b64url(json.dumps(header, separators=(",", ":")).encode()) + "." + _b64url(payload_bytes)
+    der = _sign_secret_value_with_dev_key(token_dir, signing_input)
+    return signing_input + "." + _b64url(_der_to_jose(der))
+
+
+@when("that peer posts a full-state sync whose JAdES signature covers a different contract document")
+def step_when_post_sync_tampered_jades(context):
+    """The challenge-response secret and trust listing are VALID here — only
+    the JAdES payload binding is wrong (it signs a different contract
+    document than the one being synced), so a rejection can only come from
+    the receiver's JAdES payload check (DCS-FR-SM-02)."""
+    contract_did = f"did:example:bdd-peer-sync-{uuid.uuid4()}"
+    context.peer_sync_contract_did = contract_did
+    payload = _minimal_remote_contract_payload(context.peer_from_did, contract_did)
+    tampered_document = {"@type": "dcs:Contract", "dcs:name": "a different document than the synced one"}
+    jades_payload = _canonical_jades_payload(contract_did, 1, tampered_document)
+    payload["jades_signature"] = _jades_sign_as_own_instance(context, jades_payload)
+    payload["from_peer_did"] = context.peer_from_did
+    payload["secret_value"] = context.peer_secret_value
+    payload["secret_hash"] = context.peer_secret_hash
+    context.requests_response = post_json(context, contract_peer_post_sync_url(context), payload, headers={})
+
+
+@then("the post_sync request is rejected because the JAdES payload does not match")
+def step_then_post_sync_rejected_jades(context):
+    resp = context.requests_response
+    assert resp.status_code == 400, (
+        f"Expected post_sync with a mismatching JAdES payload to be rejected with 400, got "
+        f"{resp.status_code}: {resp.text}"
+    )
+    assert "jades" in resp.text.lower(), (
+        f"Expected the rejection to name the JAdES check, got: {resp.text}"
+    )
+
+
+@then("instance B stores a JAdES sync-provenance artifact for that contract signed by instance A")
+def step_then_provenance_on_b(context):
+    """GET /peer/contracts/provenance on instance B (DCS-FR-SM-02): the
+    stored artifact must be a structurally valid JAdES baseline-B compact
+    JWS from instance A whose payload binds exactly the synced contract.
+    (Cryptographic verification already happened server-side — the sync
+    would have been rejected otherwise; see the tampered-JAdES scenario.)"""
+    c_did = context.cross_instance_contract_did
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
+    resp = None
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        resp = _requests.get(
+            f"{context.base_url_b}/peer/contracts/provenance",
+            params={"did": c_did},
+            headers=manager_h,
+            timeout=context.http_timeout_seconds,
+        )
+        if resp.status_code == 200:
+            break
+        time.sleep(1)
+    assert resp is not None and resp.status_code == 200, (
+        f"Expected instance B to store sync provenance for {c_did}, got "
+        f"{resp.status_code if resp else 'n/a'}: {resp.text if resp else ''}"
+    )
+    body = resp.json()
+    assert body.get("did") == c_did
+    assert body.get("from_peer_did") == context.peer_did_a, (
+        f"Expected the provenance to name instance A ({context.peer_did_a}) as signer, got: "
+        f"{body.get('from_peer_did')}"
+    )
+    jws = body.get("jades_signature") or ""
+    parts = jws.split(".")
+    assert len(parts) == 3, f"Expected a compact JWS with three segments, got: {jws[:120]}"
+
+    def _b64url_decode(segment: str) -> bytes:
+        return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+    header = json.loads(_b64url_decode(parts[0]))
+    assert header.get("alg") == "ES256", f"Expected alg ES256, got: {header.get('alg')}"
+    assert header.get("sigT"), "Expected a sigT claimed-signing-time header"
+    assert header.get("crit") == ["sigT"], f"Expected crit [sigT], got: {header.get('crit')}"
+    assert header.get("x5c"), "Expected an x5c certificate chain in the protected header"
+
+    payload = json.loads(_b64url_decode(parts[1]))
+    assert payload.get("dcs:contractDid") == c_did, (
+        f"Expected the JAdES payload to bind contract {c_did}, got: {payload.get('dcs:contractDid')}"
+    )
+    assert payload.get("dcs:contractVersion") == body.get("contract_version"), (
+        "Expected the JAdES payload's version to match the stored provenance version"
+    )
+    assert "dcs:contractDocument" in payload, "Expected the JAdES payload to embed the contract document"

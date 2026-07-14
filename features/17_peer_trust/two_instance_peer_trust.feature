@@ -34,6 +34,18 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     When that peer posts a full-state sync for a brand-new contract to this instance
     Then the contract data is accepted and stored locally with state "DRAFT"
 
+  # DCS-FR-SM-02 (JAdES): every peer broadcast must carry the SENDER's JAdES
+  # baseline-B signature over the canonical contract representation. The
+  # challenge-response secret only authenticates the session; this scenario
+  # holds session auth and trust listing VALID and breaks only the JAdES
+  # payload binding, so the rejection can only come from the receiver's
+  # content-signature check.
+  @NFR-BR-08 @DCS-FR-SM-02
+  Scenario: post_sync whose JAdES signature covers a different contract document is rejected
+    Given a cryptographically valid peer DID that is listed in trusted_peers
+    When that peer posts a full-state sync whose JAdES signature covers a different contract document
+    Then the post_sync request is rejected because the JAdES payload does not match
+
   Scenario: A raw peer DID can be entered as Reviewer, Approver, and Negotiator without a JWT-sub binding
     Given I am authenticated with roles: "Contract Creator"
     When the initiator creates a contract with a raw peer DID as reviewer, approver, and negotiator
@@ -45,6 +57,16 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     Given instance A and instance B are both running and trust each other
     When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
     Then the contract appears on instance B in state OFFERED within a few seconds
+
+  # The stored JAdES artifact (verified at sync time, persisted for
+  # independent re-verification) is the contract's cross-instance provenance:
+  # instance B can prove WHO sent it the contract content it holds.
+  @NFR-BR-08 @DCS-FR-SM-02 @two-instance
+  Scenario: A contract synced from instance A carries instance A's verifiable JAdES provenance on B
+    Given instance A and instance B are both running and trust each other
+    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    Then the contract appears on instance B in state OFFERED within a few seconds
+    And instance B stores a JAdES sync-provenance artifact for that contract signed by instance A
 
   @NFR-BR-08 @two-instance
   Scenario: Contract state APPROVED replicates to both instances after negotiation/submit/review/approve

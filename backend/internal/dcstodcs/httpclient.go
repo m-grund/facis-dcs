@@ -43,7 +43,8 @@ func NewDCSToDCSHttpClient(host string) *dcstodcs.Client {
 		false,
 	)
 	postSync := c.PostSync()
+	getProvenance := c.GetProvenance()
 	getSync := c.GetSync()
 	postAction := c.Action()
-	return dcstodcs.NewClient(postSync, getSync, postAction)
+	return dcstodcs.NewClient(postSync, getProvenance, getSync, postAction)
 }

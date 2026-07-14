@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/identity"
+	"digital-contracting-service/internal/base/jades"
 
 	"digital-contracting-service/internal/base/conf"
 
@@ -399,6 +400,24 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 		return err
 	}
 
+	// JAdES-sign the canonical contract representation (DCS-FR-SM-02): every
+	// broadcast binds the contract content to this instance's HSM-backed key;
+	// the receiving peer verifies signature, key binding, and payload before
+	// accepting. A signing failure fails the whole sync (retry queue) — the
+	// broadcast must never go out unsigned.
+	contractDocBytes := []byte(`{}`)
+	if contractResult.ContractData != nil && contractResult.ContractData.IsNotNullValue() {
+		contractDocBytes = []byte(*contractResult.ContractData)
+	}
+	jadesPayload, err := jades.BuildContractPayload(contractResult.DID, contractResult.ContractVersion, contractDocBytes)
+	if err != nil {
+		return fmt.Errorf("could not build JAdES payload for %s: %w", contractResult.DID, err)
+	}
+	jadesSignature, err := jades.Sign(&s.DIDDocument, jadesPayload)
+	if err != nil {
+		return fmt.Errorf("could not JAdES-sign contract %s for peer broadcast: %w", contractResult.DID, err)
+	}
+
 	handleSync := func() error {
 		for _, responsible := range responsibleList {
 			if responsible == localPeer {
@@ -430,6 +449,7 @@ func (s *DCSToDCSSynchronizer) doContractPeerSync(ctx context.Context, did strin
 				NegotiationDecisions: result.NegotiationDecisions,
 				SecretHash:           secretHash,
 				SecretValue:          secretValue,
+				JadesSignature:       jadesSignature,
 			})
 			if err != nil {
 				return err

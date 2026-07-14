@@ -22,6 +22,17 @@ type SyncFail struct {
 	LastTriedAt time.Time `db:"last_tried_at"`
 }
 
+// SyncSignature is the origin peer's JAdES signature over a synced
+// contract's canonical representation (DCS-FR-SM-02), persisted on the
+// receiving instance as the contract's cross-instance provenance artifact.
+type SyncSignature struct {
+	DID             string    `db:"did"`
+	ContractVersion int       `db:"contract_version"`
+	FromPeerDID     string    `db:"from_peer_did"`
+	JadesSignature  string    `db:"jades_signature"`
+	ReceivedAt      time.Time `db:"received_at"`
+}
+
 type SyncRepository interface {
 	IsTrustedPeer(ctx context.Context, tx *sqlx.Tx, peerDID string) (bool, error)
 	UpsertTrustedPeer(ctx context.Context, tx *sqlx.Tx, peerDID string) error
@@ -29,4 +40,9 @@ type SyncRepository interface {
 	GetPendingSyncFails(ctx context.Context, tx *sqlx.Tx) ([]SyncFail, error)
 	CreateOrUpdateSyncFailEntry(ctx context.Context, tx *sqlx.Tx, did string) error
 	DeleteSyncFailEntry(ctx context.Context, tx *sqlx.Tx, peerDID string) error
+
+	// UpsertSyncSignature stores the latest verified JAdES signature received
+	// for a synced contract; GetSyncSignature returns nil when none exists.
+	UpsertSyncSignature(ctx context.Context, tx *sqlx.Tx, sig SyncSignature) error
+	GetSyncSignature(ctx context.Context, tx *sqlx.Tx, did string) (*SyncSignature, error)
 }
