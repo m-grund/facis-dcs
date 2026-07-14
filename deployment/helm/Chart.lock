@@ -17,6 +17,9 @@ dependencies:
 - name: orce
   repository: file://charts/orce
   version: 0.1.0
+- name: dss
+  repository: file://charts/dss
+  version: 0.1.0
 - name: federated-catalogue
   repository: file://charts/federated-catalogue
   version: 0.1.0
@@ -35,5 +38,5 @@ dependencies:
 - name: traefik
   repository: https://traefik.github.io/charts
   version: 41.0.0
-digest: sha256:a0e19163be179e76bb95aa27ca2a6de417aaa8d9f894f4dfaf1e631c07819183
-generated: "2026-07-09T12:18:55.29268329+02:00"
+digest: sha256:f1590ae201fcab7adf52390c94a730559bcdbe14672bf3e470918367243c2be7
+generated: "2026-07-14T17:47:10.915206287+02:00"
