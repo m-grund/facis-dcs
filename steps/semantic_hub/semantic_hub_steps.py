@@ -387,7 +387,10 @@ def step_then_clause_catalog_lists_type(context, clause_type, properties):
         f"Expected the clause catalog to list clause type {clause_type!r}, got types: "
         f"{[c.get('type') for c in clauses]}"
     )
-    expected_paths = {p.strip() for p in properties.split(",")}
+    # behave's {properties} capture keeps the INNER quotes of a
+    # '"a", "b", "c"' list (only the outermost pair belongs to the step
+    # pattern) — strip them per item.
+    expected_paths = {p.strip().strip('"') for p in properties.split(",")}
     actual_paths = {p.get("path") for p in (matching.get("properties") or [])}
     assert expected_paths <= actual_paths, (
         f"Expected {clause_type!r} to declare properties {expected_paths}, got: {actual_paths}"

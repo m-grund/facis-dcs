@@ -151,24 +151,12 @@ func main() {
 	if err := semantichub.Seed(ctx, db); err != nil {
 		log.Fatalf(ctx, err, "Could not seed the Semantic Hub genesis schemas")
 	}
-	hubIRIs, hubContextVersion, err := semantichub.ActiveOntologyIRIs(ctx, db)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not load the Semantic Hub's active context")
+	// Anchor refresh is shared with the SemanticHub service, which re-runs
+	// it after every activation/rollback so newly produced documents pin to
+	// the version active NOW, not the one active at process start (ADR-8).
+	if err := service.RefreshValidationAnchors(ctx, db); err != nil {
+		log.Fatalf(ctx, err, "Could not anchor validation to the Semantic Hub's active schemas")
 	}
-	// Shapes version independently of the context's — they diverge as soon
-	// as either is registered/rolled back on its own (ADR-8); reusing the
-	// context version here would anchor documents' dcs:schemaRefs at the
-	// wrong shapes version.
-	hubShapesVersion, err := semantichub.ActiveVersion(ctx, db, semantichub.ShapesName, "shapes")
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not load the Semantic Hub's active shapes version")
-	}
-	validation.SetCanonicalOntologyIRIs(hubIRIs)
-	validation.SetSchemaAnchorRefs(
-		semantichub.AnchorURL("context", semantichub.ContextName, hubContextVersion),
-		hubIRIs["dcs"],
-		semantichub.AnchorURL("shapes", semantichub.ShapesName, hubShapesVersion),
-	)
 
 	// DCS-FR-TR-03 / ADR-8: enforcement (AuditContractContent) reads its
 	// SHACL shapes and validation profile from the Semantic Hub — the only

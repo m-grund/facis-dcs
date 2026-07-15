@@ -10,6 +10,7 @@ import (
 	semantichubgen "digital-contracting-service/gen/semantic_hub"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/semantichub"
 
@@ -65,6 +66,11 @@ func (s *semanticHubsrvc) Register(ctx context.Context, p *semantichubgen.Regist
 	if err := tx.Commit(); err != nil {
 		return nil, semantichubgen.MakeInternalError(err)
 	}
+	if activate {
+		if err := RefreshValidationAnchors(ctx, s.DB); err != nil {
+			return nil, semantichubgen.MakeInternalError(fmt.Errorf("schema version %d activated but re-anchoring failed: %w", version, err))
+		}
+	}
 
 	return &semantichubgen.SemanticSchemaRegisterResponse{
 		Name:    p.Name,
@@ -92,6 +98,9 @@ func (s *semanticHubsrvc) Rollback(ctx context.Context, p *semantichubgen.Rollba
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, semantichubgen.MakeInternalError(err)
+	}
+	if err := RefreshValidationAnchors(ctx, s.DB); err != nil {
+		return nil, semantichubgen.MakeInternalError(fmt.Errorf("schema version %d activated but re-anchoring failed: %w", p.Version, err))
 	}
 
 	return &semantichubgen.SemanticSchemaRegisterResponse{
@@ -235,6 +244,34 @@ func (s *semanticHubsrvc) List(ctx context.Context) (res []*semantichubgen.Seman
 		})
 	}
 	return out, nil
+}
+
+// RefreshValidationAnchors re-points the validation layer's process-wide
+// schema anchors (validation.SetSchemaAnchorRefs / SetCanonicalOntologyIRIs)
+// at the hub's CURRENT active versions. Called at startup (cmd/dcs/main.go)
+// and after every activation (register-with-activate, rollback) — without
+// the post-activation refresh, documents produced after an activation would
+// keep pinning to the version that was active at process start, and the
+// UC-02-08 loop (activate a stricter shapes version -> new contracts get
+// flagged; roll back -> they stop) would silently not close (ADR-8).
+// Single-process by design: activation happens through this service in the
+// same process that normalizes documents.
+func RefreshValidationAnchors(ctx context.Context, db *sqlx.DB) error {
+	hubIRIs, contextVersion, err := semantichub.ActiveOntologyIRIs(ctx, db)
+	if err != nil {
+		return fmt.Errorf("load active hub context: %w", err)
+	}
+	shapesVersion, err := semantichub.ActiveVersion(ctx, db, semantichub.ShapesName, "shapes")
+	if err != nil {
+		return fmt.Errorf("load active hub shapes version: %w", err)
+	}
+	validation.SetCanonicalOntologyIRIs(hubIRIs)
+	validation.SetSchemaAnchorRefs(
+		semantichub.AnchorURL("context", semantichub.ContextName, contextVersion),
+		hubIRIs["dcs"],
+		semantichub.AnchorURL("shapes", semantichub.ShapesName, shapesVersion),
+	)
+	return nil
 }
 
 func (s *semanticHubsrvc) getSchema(ctx context.Context, name, kind string, version *int) (*semantichub.Schema, error) {
