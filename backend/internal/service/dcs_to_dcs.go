@@ -366,6 +366,22 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 	}, nil
 }
 
+// verifyAgainstOriginatorHubAnyScheme tries https then http, mirroring
+// identity.FetchDIDDocumentFromHostname's convention for reaching a peer's
+// origin — the BDD/dev two-instance deployment serves plain HTTP (no TLS
+// termination), while a real deployment is HTTPS-only.
+func verifyAgainstOriginatorHubAnyScheme(ctx context.Context, contractDocument any, hostname string) ([]validation.PolicyFinding, error) {
+	var lastErr error
+	for _, scheme := range []string{"https", "http"} {
+		findings, err := validation.VerifyAgainstOriginatorHub(ctx, contractDocument, scheme+"://"+hostname)
+		if err == nil {
+			return findings, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
 func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContractPostSyncRequest) (res *dcstodcs.DCSToDCSContractPostSyncResponse, err error) {
 
 	senderHostname, err := identity.DIDWebToHostname(req.FromPeerDid)
@@ -573,8 +589,8 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 	// non-blocking: a peer's hub being briefly unreachable must never fail
 	// an otherwise-trusted, JAdES-verified sync; the outcome is logged for
 	// audit, the four trust layers above already gated acceptance.
-	if findings, err := validation.VerifyAgainstOriginatorHub(ctx, req.Contract.ContractData, "https://"+senderHostname); err != nil {
-		log.Printf(ctx, "post_sync: could not verify %s against originator %s's Semantic Hub: %v", req.Contract.Did, senderHostname, err)
+	if findings, verifyErr := verifyAgainstOriginatorHubAnyScheme(ctx, req.Contract.ContractData, senderHostname); verifyErr != nil {
+		log.Printf(ctx, "post_sync: could not verify %s against originator %s's Semantic Hub: %v", req.Contract.Did, senderHostname, verifyErr)
 	} else if len(findings) > 0 {
 		log.Printf(ctx, "post_sync: %s has %d SHACL finding(s) against originator %s's own Semantic Hub", req.Contract.Did, len(findings), senderHostname)
 	} else {
