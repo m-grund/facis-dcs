@@ -213,6 +213,19 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return err
 	}
 
+	// SHACL evidence (Phase 4, ADR-9): the hub schema version this contract
+	// validates against and a stable hash of the resulting findings, bound
+	// into the signing-summary credential below — an external verifier
+	// resolves dcs:schemaRefs to fetch those exact pinned shapes, re-runs
+	// validation, and compares hashes to detect drift. Best-effort: a
+	// legacy non-canonical-envelope document has no schemaRefs to pin, and
+	// signing must not hard-fail just because evidence enrichment couldn't
+	// run.
+	schemaVersion, validationReportHash, err := validation.SHACLEvidence(ctx, *data.ContractData)
+	if err != nil {
+		schemaVersion, validationReportHash = 0, ""
+	}
+
 	// Load (or generate) the base PDF to be signed.
 	basePDF, err := h.loadBasePDF(ctx, tx, cmd.DID, *data.ContractData)
 	if err != nil {
@@ -264,16 +277,18 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	case len(requiredFields) == 0:
 		// Single-signature contract: one summary VC, the established shape.
 		evidence, _, err = provenance.IssueSigningSummaryVC(ctx, h.VCSigner, h.IssuerDID, provenance.SigningSummary{
-			ContractID:      cmd.DID,
-			SignerDID:       cmd.SignerDID,
-			CeremonyID:      ceremony.ID,
-			FieldName:       ceremony.FieldName,
-			ContentHash:     contentHash,
-			PDFHash:         basePDFHash,
-			CredentialType:  cmd.CredentialType,
-			KBSDHash:        kbSDHash,
-			PIDPresentation: vpToken,
-			SignedAt:        signedAt,
+			ContractID:           cmd.DID,
+			SignerDID:            cmd.SignerDID,
+			CeremonyID:           ceremony.ID,
+			FieldName:            ceremony.FieldName,
+			ContentHash:          contentHash,
+			PDFHash:              basePDFHash,
+			CredentialType:       cmd.CredentialType,
+			KBSDHash:             kbSDHash,
+			PIDPresentation:      vpToken,
+			SignedAt:             signedAt,
+			SchemaVersion:        schemaVersion,
+			ValidationReportHash: validationReportHash,
 		})
 		if err != nil {
 			return fmt.Errorf("issue signing-summary VC: %w", err)
@@ -305,16 +320,18 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 				credentialType = "AES"
 			}
 			vc, _, err := provenance.IssueSigningSummaryVC(ctx, h.VCSigner, h.IssuerDID, provenance.SigningSummary{
-				ContractID:      cmd.DID,
-				SignerDID:       fieldSigner,
-				CeremonyID:      c.ID,
-				FieldName:       f,
-				ContentHash:     contentHash,
-				PDFHash:         basePDFHash,
-				CredentialType:  credentialType,
-				KBSDHash:        fieldKB,
-				PIDPresentation: fieldVP,
-				SignedAt:        signedAt,
+				ContractID:           cmd.DID,
+				SignerDID:            fieldSigner,
+				CeremonyID:           c.ID,
+				FieldName:            f,
+				ContentHash:          contentHash,
+				PDFHash:              basePDFHash,
+				CredentialType:       credentialType,
+				KBSDHash:             fieldKB,
+				PIDPresentation:      fieldVP,
+				SignedAt:             signedAt,
+				SchemaVersion:        schemaVersion,
+				ValidationReportHash: validationReportHash,
 			})
 			if err != nil {
 				return fmt.Errorf("issue signing-summary VC for field %q: %w", f, err)

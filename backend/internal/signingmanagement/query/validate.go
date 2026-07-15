@@ -16,6 +16,7 @@ import (
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
@@ -66,6 +67,7 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 	}
 
 	findings = append(findings, h.crossCheckEmbeddedPID(ctx, tx, cmd.DID)...)
+	findings = append(findings, h.crossCheckSHACLDrift(ctx, tx, cmd.DID)...)
 
 	dssFindings, err := h.validateWithDSS(ctx, tx, cmd.DID)
 	if err != nil {
@@ -186,6 +188,76 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 	}
 
 	return []string{"Embedded PID presentation re-verified and cross-checked against the signature record"}
+}
+
+// crossCheckSHACLDrift (Phase 4, ADR-9) re-runs the Semantic Hub SHACL
+// validation the contract was signed under and compares the resulting
+// finding hash against the one embedded in the signing-summary credential
+// at signing time (validation.SHACLEvidence). A mismatch means the
+// contract's stored data has changed since it was signed — a real
+// modification, not just a hub schema version bump (evidence is pinned to
+// the version active at signing time, ADR-8, so rolling the hub forward
+// never causes a false drift finding). Absence of embedded evidence (a
+// legacy document with no SHACL evidence, or an unsigned contract) yields
+// no finding.
+func (h *Validator) crossCheckSHACLDrift(ctx context.Context, tx *sqlx.Tx, did string) []string {
+	if h.PDFCore == nil {
+		return nil
+	}
+	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
+	if err != nil || len(pdfBytes) == 0 {
+		return nil
+	}
+	evidence, found, err := h.PDFCore.ExtractEvidence(ctx, pdfBytes)
+	if err != nil || !found || len(evidence) == 0 {
+		return nil
+	}
+
+	documents := []json.RawMessage{evidence}
+	var bundle []json.RawMessage
+	if err := json.Unmarshal(evidence, &bundle); err == nil && len(bundle) > 0 {
+		documents = bundle
+	}
+
+	embeddedHash := ""
+	for _, doc := range documents {
+		if hash := signingSummarySHACLHash(doc); hash != "" {
+			embeddedHash = hash
+			break
+		}
+	}
+	if embeddedHash == "" {
+		return nil
+	}
+
+	contract, err := h.CRepo.ReadDataByDID(ctx, tx, did)
+	if err != nil || contract == nil || contract.ContractData == nil {
+		return []string{"Could not re-run SHACL validation for drift comparison: contract data unavailable"}
+	}
+	_, currentHash, err := validation.SHACLEvidence(ctx, *contract.ContractData)
+	if err != nil {
+		return []string{fmt.Sprintf("Could not re-run SHACL validation for drift comparison: %v", err)}
+	}
+	if currentHash != embeddedHash {
+		return []string{"SHACL drift detected: the contract's stored data no longer matches the validation report embedded at signing time"}
+	}
+	return []string{"SHACL validation report re-verified against the pinned hub schema version — no drift"}
+}
+
+// signingSummarySHACLHash extracts the validation_report_hash field from a
+// ContractSigningSummaryCredential evidence document (empty for documents
+// signed before Phase 4, or where evidence enrichment was best-effort
+// skipped).
+func signingSummarySHACLHash(evidence []byte) string {
+	var vc struct {
+		CredentialSubject struct {
+			ValidationReportHash string `json:"validation_report_hash"`
+		} `json:"credentialSubject"`
+	}
+	if err := json.Unmarshal(evidence, &vc); err != nil {
+		return ""
+	}
+	return vc.CredentialSubject.ValidationReportHash
 }
 
 // signingSummaryPIDFields extracts the verbatim PID presentation and credential

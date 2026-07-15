@@ -26,7 +26,16 @@ func validateAgainstHubShapes(ctx context.Context, contract map[string]any) ([]P
 	if err != nil {
 		return nil, 0, err
 	}
+	return validateAgainstShapeSource(ctx, contract, source)
+}
 
+// validateAgainstShapeSource is validateAgainstHubShapes generalized over an
+// explicit ShapeSource — used directly (bypassing the process-wide
+// activeShapeSource) by VerifyAgainstOriginatorHub (Phase 4, DCS-to-DCS),
+// so a one-off remote-hub validation never mutates shared process state
+// under concurrent request handling.
+func validateAgainstShapeSource(ctx context.Context, contract map[string]any, source ShapeSource) ([]PolicyFinding, int, error) {
+	var err error
 	var shapesTTL string
 	var shapesVersion int
 	if pinned := pinnedHubShapesVersion(contract); pinned > 0 {
