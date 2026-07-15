@@ -183,6 +183,10 @@ func (s *semanticHubsrvc) Clauses(ctx context.Context) (res *semantichubgen.Clau
 				datatype := p.Datatype
 				prop.Datatype = &datatype
 			}
+			if p.Pattern != "" {
+				pattern := p.Pattern
+				prop.Pattern = &pattern
+			}
 			prop.MinCount = p.MinCount
 			prop.MaxCount = p.MaxCount
 			properties = append(properties, prop)
@@ -199,6 +203,38 @@ func (s *semanticHubsrvc) Clauses(ctx context.Context) (res *semantichubgen.Clau
 		Clauses: clauses,
 		Shapes:  schema.Content,
 	}, nil
+}
+
+// List serves the hub's (name, kind) inventory for the management UI.
+func (s *semanticHubsrvc) List(ctx context.Context) (res []*semantichubgen.SemanticSchemaListEntry, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	entries, err := s.Repo.List(ctx, tx)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, semantichubgen.MakeInternalError(err)
+	}
+	out := make([]*semantichubgen.SemanticSchemaListEntry, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, &semantichubgen.SemanticSchemaListEntry{
+			Name:          e.Name,
+			Kind:          e.Kind,
+			MediaType:     e.MediaType,
+			ActiveVersion: e.ActiveVersion,
+			LatestVersion: e.LatestVersion,
+			UpdatedAt:     e.UpdatedAt,
+		})
+	}
+	return out, nil
 }
 
 func (s *semanticHubsrvc) getSchema(ctx context.Context, name, kind string, version *int) (*semantichub.Schema, error) {

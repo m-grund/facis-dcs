@@ -24,6 +24,7 @@ type ClauseCatalogPropertyEntry struct {
 	MaxCount     *int
 	MinInclusive *float64
 	MaxInclusive *float64
+	Pattern      string
 }
 
 // ParseClauseCatalog reads the clause-catalog SHACL Turtle and digests every
@@ -81,6 +82,7 @@ func parseClauseProperty(g *shacl.Graph, propNode shacl.Term) ClauseCatalogPrope
 	maxCountPred := shacl.IRI(shacl.SH + "maxCount")
 	minInclusivePred := shacl.IRI(shacl.SH + "minInclusive")
 	maxInclusivePred := shacl.IRI(shacl.SH + "maxInclusive")
+	patternPred := shacl.IRI(shacl.SH + "pattern")
 
 	entry := ClauseCatalogPropertyEntry{}
 	if paths := g.Objects(propNode, pathPred); len(paths) > 0 {
@@ -95,6 +97,9 @@ func parseClauseProperty(g *shacl.Graph, propNode shacl.Term) ClauseCatalogPrope
 			values = append(values, v.Value())
 		}
 		entry.In = values
+	}
+	if patterns := g.Objects(propNode, patternPred); len(patterns) > 0 {
+		entry.Pattern = patterns[0].Value()
 	}
 	entry.MinCount = parseClauseInt(g, propNode, minCountPred)
 	entry.MaxCount = parseClauseInt(g, propNode, maxCountPred)

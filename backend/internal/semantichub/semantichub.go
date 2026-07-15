@@ -133,6 +133,35 @@ func (Repo) Get(ctx context.Context, tx *sqlx.Tx, name, kind string, version int
 	return &s, nil
 }
 
+// ListEntry summarizes one (name, kind) hub entry for the management UI.
+type ListEntry struct {
+	Name          string `db:"name"`
+	Kind          string `db:"kind"`
+	MediaType     string `db:"media_type"`
+	ActiveVersion int    `db:"active_version"`
+	LatestVersion int    `db:"latest_version"`
+	UpdatedAt     string `db:"updated_at"`
+}
+
+// List returns every distinct (name, kind) entry with its active/latest
+// version summary, ordered by kind then name.
+func (Repo) List(ctx context.Context, tx *sqlx.Tx) ([]ListEntry, error) {
+	var out []ListEntry
+	err := tx.SelectContext(ctx, &out, `
+        SELECT s.name, s.kind,
+               MAX(s.version) AS latest_version,
+               COALESCE(MAX(s.version) FILTER (WHERE s.active), 0) AS active_version,
+               MAX(s.created_at)::text AS updated_at,
+               (ARRAY_AGG(s.media_type ORDER BY s.version DESC))[1] AS media_type
+        FROM semantic_schemas s
+        GROUP BY s.name, s.kind
+        ORDER BY s.kind, s.name`)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Versions lists all stored versions of (name, kind), oldest first.
 func (Repo) Versions(ctx context.Context, tx *sqlx.Tx, name, kind string) ([]Schema, error) {
 	var out []Schema

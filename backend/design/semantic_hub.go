@@ -29,6 +29,7 @@ var ClauseCatalogProperty = Type("ClauseCatalogProperty", func() {
 	Attribute("max_count", Int, "sh:maxCount, 0 if unconstrained")
 	Attribute("min_inclusive", Float64, "sh:minInclusive, present only if declared")
 	Attribute("max_inclusive", Float64, "sh:maxInclusive, present only if declared")
+	Attribute("pattern", String, "sh:pattern regular expression, empty if unconstrained")
 
 	Required("path")
 })
@@ -51,6 +52,19 @@ var ClauseCatalogResponse = Type("ClauseCatalogResponse", func() {
 	Attribute("shapes", String, "The raw SHACL Turtle the catalog was derived from")
 
 	Required("version", "clauses", "shapes")
+})
+
+var SemanticSchemaListEntry = Type("SemanticSchemaListEntry", func() {
+	Description("One (name, kind) Semantic Hub entry with its version summary")
+
+	Attribute("name", String, "Schema name")
+	Attribute("kind", String, "Schema kind: context, shapes, or profile")
+	Attribute("media_type", String, "Media type of the active version's content")
+	Attribute("active_version", Int, "The currently active version")
+	Attribute("latest_version", Int, "The highest registered version")
+	Attribute("updated_at", String, "When the latest version was registered")
+
+	Required("name", "kind", "media_type", "active_version", "latest_version", "updated_at")
 })
 
 var SemanticSchemaRegisterResponse = Type("SemanticSchemaRegisterResponse", func() {
@@ -212,6 +226,23 @@ var _ = Service("SemanticHub", func() {
 			Param("version")
 			Response(StatusOK)
 			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("list", func() {
+		Description("List every (name, kind) entry the hub holds, with active/latest version summary. Public like retrieve: the hub's inventory is not more sensitive than its content.")
+		Meta("dcs:requirements", "DCS-FR-TR-03")
+		Meta("dcs:ui", "Semantic Hub Dashboard")
+		NoSecurity()
+
+		Result(ArrayOf(SemanticSchemaListEntry))
+
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/semantic/schema/list")
+			Response(StatusOK)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

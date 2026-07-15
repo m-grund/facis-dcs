@@ -36,4 +36,10 @@ dcs:PaymentClauseShape
     sh:minInclusive 0 ;
     sh:maxInclusive 365 ;
     sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:invoiceReference ;
+    sh:datatype xsd:string ;
+    sh:pattern "^INV-[0-9]{4,}$" ;
+    sh:maxCount 1 ;
   ] .
