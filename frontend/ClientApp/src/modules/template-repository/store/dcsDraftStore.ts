@@ -7,6 +7,7 @@ import {
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
+import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { defineStore } from 'pinia'
 import {
   DCS_JSONLD_CONTEXT,
@@ -209,13 +210,22 @@ export const useDcsDraftStore = defineStore(storeId, {
     deleteBlock(blockId: string): void {
       deleteBlock(this.layout, this.blocks, blockId)
     },
-    updateBlock(blockId: string, payload: { title?: string; text?: string; content?: DcsContentSegment[] }): void {
+    updateBlock(
+      blockId: string,
+      payload: {
+        title?: string
+        text?: string
+        content?: DcsContentSegment[]
+        typedClause?: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+      },
+    ): void {
       const block = this.blocks.find((b) => b['@id'] === blockId)
       if (!block) return
       if (isDcsClause(block as DcsBlock)) {
         const clause = block as DcsClause
         if (payload.title !== undefined) clause['dcs:title'] = payload.title || undefined
         if (payload.content !== undefined) clause['dcs:content'] = { '@list': payload.content }
+        if (payload.typedClause !== undefined) clause['dcs:typedClause'] = payload.typedClause
       } else if ((block as DcsBlock)['@type'] === 'dcs:TextBlock') {
         const tb = block as DcsTextBlock
         if (payload.text !== undefined) tb['dcs:text'] = payload.text
@@ -353,12 +363,16 @@ export const useDcsDraftStore = defineStore(storeId, {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
       const title = payload.title?.trim() || payload.clauseType.replace(/^dcs:/, '')
+      const instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance = {
+        '@type': payload.clauseType,
+        ...payload.values,
+      }
       const block: import('@/models/dcs-jsonld').DcsClause = {
         '@type': 'dcs:Clause',
         '@id': id,
         'dcs:title': title,
-        'dcs:content': { '@list': [`[Typed clause: ${title}]`] },
-        'dcs:typedClause': { '@type': payload.clauseType, ...payload.values },
+        'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
+        'dcs:typedClause': instance,
       }
       this.blocks.push(block)
       return id
@@ -775,6 +789,7 @@ function createBlock(id: string, payload: AddBlockPayload): DcsBlock | MergedApp
         '@id': id,
         'dcs:content': { '@list': payload.content ?? [] },
         ...(payload.title ? { 'dcs:title': payload.title } : {}),
+        ...(payload.typedClause ? { 'dcs:typedClause': payload.typedClause } : {}),
       }
     case 'dcs:ApprovedTemplate':
       return {

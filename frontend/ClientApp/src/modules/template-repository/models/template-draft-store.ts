@@ -65,6 +65,8 @@ export interface AddBlockPayload {
   // #### For Clause ####
   clauseBlockId?: string
   content?: import('@/models/dcs-jsonld').DcsContentSegment[]
+  /** Typed clause instance (ADR-10) nested into the new dcs:Clause block. */
+  typedClause?: import('@/models/dcs-jsonld').DcsTypedClauseInstance
   blockCatalogueId?: string
   schemaRef?: string
   semanticPath?: string

@@ -2,6 +2,8 @@
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
+import TypedClauseForm from '@template-repository/components/clauses-editor/TypedClauseForm.vue'
+import { typedClauseEntries, typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import {
   getPlaceholderLabelFromConditions,
@@ -16,8 +18,9 @@ import {
 } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
+import { useClauseCatalogStore } from '@/stores/clause-catalog-store'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const props = defineProps<{
@@ -57,6 +60,42 @@ const clauseSegments = computed((): Segment[] => {
 
 function getPlaceholderLabel(seg: Segment): string {
   return getPlaceholderLabelFromConditions(seg, semanticConditions.value)
+}
+
+// Typed clause (ADR-10): a dcs:Clause carrying a dcs:typedClause instance
+// renders its label from the Semantic Hub catalog and its values read-only;
+// editing reopens the SHACL-generated form prefilled with the instance.
+const clauseCatalog = useClauseCatalogStore()
+onMounted(() => clauseCatalog.ensureLoaded())
+
+const typedClauseInstance = computed(() => clauseBlock.value?.['dcs:typedClause'])
+const typedClauseCatalogEntry = computed(() => {
+  const instance = typedClauseInstance.value
+  if (!instance) return undefined
+  return clauseCatalog.byType.get(instance['@type'])
+})
+const typedClauseLabel = computed(() => {
+  const instance = typedClauseInstance.value
+  if (!instance) return ''
+  return clauseCatalog.labelFor(instance['@type'])
+})
+const typedClauseValueEntries = computed(() => {
+  const instance = typedClauseInstance.value
+  return instance ? typedClauseEntries(instance) : []
+})
+const isEditingTypedClause = ref(false)
+
+function saveTypedClause(payload: { clauseType: string; title: string; values: Record<string, unknown> }) {
+  const instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance = {
+    '@type': payload.clauseType,
+    ...payload.values,
+  }
+  draftStore.updateBlock(props.item.blockId, {
+    title: payload.title,
+    typedClause: instance,
+    content: [typedClauseValuesSummary(instance)],
+  })
+  isEditingTypedClause.value = false
 }
 
 const isSelected = computed(() => selectedBlockId.value === props.item.blockId)
@@ -174,6 +213,50 @@ function revertToSaved() {
           placeholder="Text content"
           rows="2"
         />
+      </template>
+      <!-- Typed clause (ADR-10): catalog label + values, click to edit via the generated form -->
+      <template v-else-if="block && block['@type'] === 'dcs:Clause' && typedClauseInstance">
+        <div class="flex items-start justify-between gap-2">
+          <label class="text-[10px] font-bold uppercase opacity-60">
+            Typed clause
+            <span class="mt-0.5 text-[10px] font-semibold text-base-content">({{ typedClauseLabel }})</span>
+          </label>
+          <button
+            v-if="uiStore.isTemplateEditable && typedClauseCatalogEntry && !isEditingTypedClause"
+            type="button"
+            class="btn btn-ghost btn-xs"
+            @click.stop="isEditingTypedClause = true"
+          >
+            Edit values
+          </button>
+        </div>
+        <template v-if="isEditingTypedClause && typedClauseCatalogEntry">
+          <div class="mt-2 rounded-md border border-base-300 bg-base-200/40 p-3">
+            <TypedClauseForm
+              :clause="typedClauseCatalogEntry"
+              :initial-values="typedClauseInstance"
+              :initial-title="clauseBlock?.['dcs:title'] ?? ''"
+              submit-label="Save"
+              show-cancel
+              @submit="saveTypedClause"
+              @cancel="isEditingTypedClause = false"
+            />
+          </div>
+        </template>
+        <template v-else>
+          <p v-if="clauseBlock?.['dcs:title']" class="mt-1 text-sm font-medium text-base-content">
+            {{ clauseBlock?.['dcs:title'] }}
+          </p>
+          <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+            <template v-for="entry in typedClauseValueEntries" :key="entry.key">
+              <dt class="text-xs text-base-content/60">{{ entry.key }}</dt>
+              <dd class="text-xs font-medium text-base-content/80">{{ entry.value }}</dd>
+            </template>
+          </dl>
+          <p v-if="!typedClauseCatalogEntry" class="mt-1 text-[10px] text-warning">
+            Clause type {{ typedClauseInstance['@type'] }} is not in the hub's active clause catalog.
+          </p>
+        </template>
       </template>
       <!-- Clause: read-only -->
       <template v-else-if="block && block['@type'] === 'dcs:Clause'">
