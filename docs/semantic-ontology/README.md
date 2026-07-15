@@ -629,4 +629,4 @@ WHERE contract_data @? '$.sla.services[*].slos[*] ? (@.sloType == "availability"
 3. Extend template verification responses with semantic validation findings.
 4. Emit semantic NATS/CloudEvents for validation, lifecycle, signing, deployment, and revocation.
 5. Export deployment policy bundles from approved/signed contracts.
-6. Add optional SHACL validation in PACM/CI once RDF expansion is operational.
+6. Done: SHACL validation runs in PACM contract-content audits via goRDFlib (a conformant SHACL-core processor, ADR-9), fed from the Semantic Hub's versioned shapes (ADR-8) rather than a fixed disk file.
