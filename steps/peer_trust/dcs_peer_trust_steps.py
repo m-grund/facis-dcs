@@ -53,6 +53,7 @@ from steps.support.api_client import (
     contract_retrieve_by_id_url,
     did_document_url,
     get_with_headers,
+    origin_url,
     post_json,
     signature_apply_url,
     signature_request_url,
@@ -1043,6 +1044,37 @@ def step_then_post_sync_rejected_jades(context):
     assert "jades" in resp.text.lower(), (
         f"Expected the rejection to name the JAdES check, got: {resp.text}"
     )
+
+
+@then("the contract's schemaRefs anchor, as stored on instance B, resolves against instance A's Semantic Hub")
+def step_then_schema_ref_resolves_against_a(context):
+    """Phase 4 (DCS-to-DCS): dcs:schemaRefs.dcs:shaclShapes is set once, at
+    production time on instance A, and synced verbatim — it never gets
+    re-anchored to instance B's own hub. This confirms it's still resolvable
+    from outside instance A (the reachability precondition
+    validation.VerifyAgainstOriginatorHub, called from post_sync, depends
+    on): host-relative anchors (no DCS_PUBLIC_URL configured, the BDD
+    default) are resolved against instance A's origin, never instance B's."""
+    c_did = context.cross_instance_contract_did
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
+    retrieve = _requests.get(
+        f"{context.base_url_b}/contract/retrieve/{c_did}",
+        headers=manager_h,
+        timeout=context.http_timeout_seconds,
+    )
+    assert retrieve.status_code == 200, retrieve.text
+    refs = (retrieve.json().get("contract_data") or {}).get("dcs:schemaRefs") or {}
+    anchor = refs.get("dcs:shaclShapes")
+    assert anchor, f"Expected the contract stored on instance B to carry a dcs:schemaRefs.dcs:shaclShapes anchor, got: {refs}"
+
+    url = anchor if anchor.startswith("http") else f"{origin_url(context.base_url_a)}{anchor}"
+    resp = _requests.get(url, timeout=context.http_timeout_seconds)
+    assert resp.status_code == 200, (
+        f"Expected the schemaRefs anchor {anchor!r} to resolve against instance A's Semantic Hub "
+        f"({url}), got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    assert body.get("content"), f"Expected instance A's hub to return SHACL shape content, got: {body}"
 
 
 @then("instance B stores a JAdES sync-provenance artifact for that contract signed by instance A")

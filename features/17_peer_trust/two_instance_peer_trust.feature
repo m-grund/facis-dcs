@@ -68,6 +68,21 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
     Then the contract appears on instance B in state OFFERED within a few seconds
     And instance B stores a JAdES sync-provenance artifact for that contract signed by instance A
 
+  # Phase 4 (DCS-FR-TR-03, DCS-to-DCS): on receiving a synced contract,
+  # instance B resolves its dcs:schemaRefs back to instance A's PUBLIC
+  # Semantic Hub and re-validates against those exact shapes
+  # (validation.VerifyAgainstOriginatorHub, called from post_sync) — not
+  # its own local hub, which may run a different active version. This
+  # proves the reachability precondition that makes that possible: the
+  # schemaRefs anchor instance B received from A really does resolve
+  # against instance A's own hub, from outside instance A.
+  @NFR-BR-08 @DCS-FR-TR-03 @two-instance
+  Scenario: A contract synced from instance A carries a schemaRefs anchor resolvable against instance A's own Semantic Hub
+    Given instance A and instance B are both running and trust each other
+    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    Then the contract appears on instance B in state OFFERED within a few seconds
+    And the contract's schemaRefs anchor, as stored on instance B, resolves against instance A's Semantic Hub
+
   @NFR-BR-08 @two-instance
   Scenario: Contract state APPROVED replicates to both instances after negotiation/submit/review/approve
     Given instance A and instance B are both running and trust each other
