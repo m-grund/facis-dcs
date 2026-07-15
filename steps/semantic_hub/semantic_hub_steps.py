@@ -244,3 +244,120 @@ def step_then_rejection_names_hub(context):
         f"Expected the rejection to name the Semantic Hub's active context, got: "
         f"{context.requests_response.text}"
     )
+
+
+# Phase 1 / ADR-8: enforcement (AuditContractContent) now reads its SHACL
+# shapes from the hub's ACTIVE (or, for revalidation, PINNED) version rather
+# than a fixed disk file — proving activate/rollback actually changes what
+# gets enforced (steps/semantic_hub/semantic_hub.feature "Activating a
+# stricter SHACL shapes version..."). Validation itself runs on goRDFlib, a
+# conformant SHACL-core processor (ADR-9) — it reports only non-conformance,
+# so a passing contract has no finding for a rule at all, not an "info" one.
+
+_BDD_STRICT_TITLE_IN_VALUE = "IMPOSSIBLE-BDD-TITLE-VALUE-NO-CONTRACT-HAS-THIS"
+
+
+@when('the Template Manager registers a stricter version of the "shapes" schema "facis-dcs" that narrows the canonical contract title')
+def step_when_register_stricter_shapes(context):
+    name, kind = "facis-dcs", "shapes"
+
+    before = _requests.get(
+        _hub_url(context, "/semantic/schema/versions"),
+        params={"name": name, "kind": kind},
+        timeout=context.http_timeout_seconds,
+    )
+    assert before.status_code == 200, f"versions listing failed: {before.status_code} {before.text}"
+    context.hub_versions_before = [v["version"] for v in before.json()]
+
+    def _restore_genesis_active():
+        _requests.post(
+            _hub_url(context, "/semantic/schema/rollback"),
+            json={"name": name, "kind": kind, "version": 1},
+            headers=AuthService.get_headers_for_roles(["Template Manager"]),
+            timeout=context.http_timeout_seconds,
+        )
+
+    context.add_cleanup(_restore_genesis_active)
+
+    genesis = _requests.get(
+        _hub_url(context, "/semantic/schema/retrieve"),
+        params={"name": name, "kind": kind, "version": 1},
+        timeout=context.http_timeout_seconds,
+    )
+    assert genesis.status_code == 200, f"could not fetch genesis shapes: {genesis.text}"
+    ttl = genesis.json()["content"]
+
+    # dcs:ContractMetadataShape's dcs:title property (see
+    # docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl)
+    # requires xsd:string + minCount 1 today. Adding an sh:in restriction no
+    # real contract title satisfies turns "no finding" into a real SHACL
+    # sh:in violation (rule ID "title-InConstraintComponent" — goRDFlib rule
+    # IDs are <path local name>-<constraint component local name>).
+    anchor = "sh:path dcs:title ;"
+    assert anchor in ttl, f"Expected the genesis shapes to declare {anchor!r}, got:\n{ttl}"
+    stricter_ttl = ttl.replace(
+        anchor,
+        f'{anchor}\n    sh:in ( "{_BDD_STRICT_TITLE_IN_VALUE}" ) ;',
+        1,
+    )
+    assert stricter_ttl != ttl, "Expected the sh:in injection to change the shapes content"
+
+    headers = AuthService.get_headers_for_roles(["Template Manager"])
+    context.requests_response = post_json(
+        context,
+        _hub_url(context, "/semantic/schema/register"),
+        {
+            "name": name,
+            "kind": kind,
+            "media_type": "text/turtle",
+            "content": stricter_ttl,
+            "activate": True,
+        },
+        headers=headers,
+    )
+
+
+def _content_audit_trail_rule_severities(context, name, rule_id):
+    assert context.requests_response.status_code == 200, (
+        f"Expected 200 from /pac/audit, got {context.requests_response.status_code}: "
+        f"{context.requests_response.text}"
+    )
+    did, _ = ContractService._contract_data(context, name)
+    body = context.requests_response.json()
+    resource = next((r for r in body if r.get("did") == did), None)
+    assert resource is not None, (
+        f"Expected a contract-content audit trail entry for '{name}' (did={did}), "
+        f"got DIDs: {[r.get('did') for r in body]}"
+    )
+    severities = []
+    for entry in resource.get("audit_trail") or []:
+        if entry.get("event_type") != "CONTRACT_CONTENT_POLICY_AUDIT_FINDING":
+            continue
+        event_data = entry.get("event_data")
+        if isinstance(event_data, str):
+            event_data = json.loads(event_data)
+        if event_data.get("ruleId") == rule_id:
+            severities.append(event_data.get("severity"))
+    return did, severities
+
+
+@then('the contract content audit trail for "{name}" reports rule "{rule_id}" with severity "{severity}"')
+def step_then_content_audit_trail_reports_rule(context, name, rule_id, severity):
+    did, severities = _content_audit_trail_rule_severities(context, name, rule_id)
+    assert severity in severities, (
+        f"Expected contract '{name}' (did={did}) to report rule {rule_id!r} with severity "
+        f"{severity!r}, got severities: {severities}"
+    )
+
+
+@then('the contract content audit trail for "{name}" does not report an error for rule "{rule_id}"')
+def step_then_content_audit_trail_no_error_for_rule(context, name, rule_id):
+    # goRDFlib (ADR-9) only reports non-conformance — a fully compliant
+    # contract has NO finding for a conformant rule at all (not an "info"
+    # one), so this asserts absence-of-violation rather than a specific
+    # passing severity.
+    did, severities = _content_audit_trail_rule_severities(context, name, rule_id)
+    assert "error" not in severities, (
+        f"Expected contract '{name}' (did={did}) to report no error for rule {rule_id!r}, "
+        f"got severities: {severities}"
+    )

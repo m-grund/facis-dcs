@@ -155,12 +155,28 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not load the Semantic Hub's active context")
 	}
+	// Shapes version independently of the context's — they diverge as soon
+	// as either is registered/rolled back on its own (ADR-8); reusing the
+	// context version here would anchor documents' dcs:schemaRefs at the
+	// wrong shapes version.
+	hubShapesVersion, err := semantichub.ActiveVersion(ctx, db, semantichub.ShapesName, "shapes")
+	if err != nil {
+		log.Fatalf(ctx, err, "Could not load the Semantic Hub's active shapes version")
+	}
 	validation.SetCanonicalOntologyIRIs(hubIRIs)
 	validation.SetSchemaAnchorRefs(
 		semantichub.AnchorURL("context", semantichub.ContextName, hubContextVersion),
 		hubIRIs["dcs"],
-		semantichub.AnchorURL("shapes", semantichub.ShapesName, hubContextVersion),
+		semantichub.AnchorURL("shapes", semantichub.ShapesName, hubShapesVersion),
 	)
+
+	// DCS-FR-TR-03 / ADR-8: enforcement (AuditContractContent) reads its
+	// SHACL shapes and validation profile from the Semantic Hub — the only
+	// source; registering/activating/rolling back a hub schema version
+	// actually changes what gets enforced. There is no disk-file fallback:
+	// docs/semantic-ontology/... exists solely to seed the hub at startup
+	// (semantichub.Seed above).
+	validation.SetShapeSource(semantichub.HubShapeSource{DB: db})
 
 	// Open the PKCS#11 token that holds every private key (DCS-IR-HI-01). A
 	// wrong module path/token/PIN is fatal: there is no software fallback.

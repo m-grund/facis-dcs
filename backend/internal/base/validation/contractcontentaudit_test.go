@@ -1,10 +1,59 @@
 package validation
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// fixtureShapeSource is a ShapeSource backed by the real Semantic Hub
+// authoring files (docs/semantic-ontology/...) — the same content the hub
+// seeds itself with (ADR-8) — installed process-wide in TestMain
+// (documentdata_test.go) so tests exercise the real goRDFlib SHACL engine
+// (ADR-9) end to end without needing a live database.
+type fixtureShapeSource struct {
+	shapesTTL   string
+	profileYAML string
+	contextJSON string
+}
+
+func (f fixtureShapeSource) ActiveShapes(context.Context) (string, int, error) {
+	return f.shapesTTL, 1, nil
+}
+
+func (f fixtureShapeSource) ActiveProfile(context.Context) (string, int, error) {
+	return f.profileYAML, 1, nil
+}
+
+func (f fixtureShapeSource) ActiveContext(context.Context) (string, int, error) {
+	return f.contextJSON, 1, nil
+}
+
+func (f fixtureShapeSource) ShapesAt(_ context.Context, _ int) (string, error) {
+	return f.shapesTTL, nil
+}
+
+// mustReadRepoFile climbs from the package directory to find a repo-root
+// relative path (go test's working directory is the package source
+// directory) — hard-fails loudly rather than silently skipping if the
+// authoring file has moved, matching the "never soft-fail a required
+// dependency" rule.
+func mustReadRepoFile(relPath string) string {
+	candidates := []string{
+		relPath,
+		filepath.Join("..", "..", "..", relPath),
+		filepath.Join("..", "..", "..", "..", relPath),
+	}
+	for _, candidate := range candidates {
+		if data, err := os.ReadFile(candidate); err == nil {
+			return string(data)
+		}
+	}
+	panic("test fixture: could not find " + relPath + " from any candidate path")
+}
 
 // wrapODRLSet encloses rule nodes in the canonical odrl:Set shape
 // (validateODRLPoliciesShape rejects bare non-empty rule arrays); an empty
@@ -66,7 +115,7 @@ func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
 		"RUS",
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.Contains(t, policyFindingRuleIDs(findings), "FACIS-CONTRACT-STATIC-001")
@@ -107,7 +156,7 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 		},
 	}
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	for _, finding := range findings {
@@ -122,7 +171,7 @@ func TestAuditContractContentFlagsExceededMaximum(t *testing.T) {
 		float64(150000),
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-003", "error"))
@@ -135,7 +184,7 @@ func TestAuditContractContentFlagsInvalidJurisdiction(t *testing.T) {
 		"ZZZ",
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "error"))
@@ -148,7 +197,7 @@ func TestAuditContractContentAcceptsValidJurisdiction(t *testing.T) {
 		"DEU",
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "info"))
@@ -164,86 +213,72 @@ func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 		map[string]any{"conditionId": "condition-signature", "parameterName": "signature.requiredLevel", "parameterValue": "AES"},
 	)
 
-	findings, err := AuditContractContent(contract, nil, ContractContentAuditMetadata{})
-	policy, policyErr := normalizeContractContentPolicy(nil, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, nil, ContractContentAuditMetadata{})
+	policy, policyErr := normalizeContractContentPolicy(context.Background(), nil, ContractContentAuditMetadata{})
 
 	require.NoError(t, err)
 	require.NoError(t, policyErr)
-	require.NotEmpty(t, policy.SHACLFiles)
-	require.NotEmpty(t, policy.SHACLShapes)
+	require.True(t, policy.EnforceCanonicalShapes)
+	require.True(t, policy.EnforceValidationProfile)
 	require.NotEmpty(t, findings)
-	require.Contains(t, policyFindingRuleIDs(findings), "dcs:CanonicalContractShape-PROP-002")
+	// The default policy document enables both the Semantic Hub's canonical
+	// SHACL shapes (goRDFlib, ADR-9) and the SLA validation profile — a
+	// fully compliant canonical contract produces zero SHACL violations
+	// (SHACL only reports non-conformance) and an "info" profile finding.
+	for _, finding := range findings {
+		if finding.ShapesVersion > 0 {
+			require.NotEqual(t, "error", finding.Severity, finding.Message)
+		}
+	}
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-POLICY-003", "info"))
 }
 
-func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
-	contract := map[string]any{
-		"@context": []any{"https://w3id.org/facis/sla/ontology"},
-		"@id":      "urn:facis:dcs:contract:sla:example-001",
-		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
-		"parties": []any{
-			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier"},
-			map[string]any{"@type": "dcs:CompanyParty", "role": "customer"},
-		},
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shaclShapes": []any{
-			map[string]any{
-				"id":          "FACIS-CONTRACT-SHACL-SLA",
-				"title":       "SLA contract must satisfy semantic shape",
-				"targetClass": "dcs:Contract",
-				"properties": []any{
-					map[string]any{"path": "contract.jurisdiction", "minCount": 1, "datatype": "xsd:string", "name": "Jurisdiction"},
-					map[string]any{"path": "parties", "minCount": 2, "class": "dcs:CompanyParty", "name": "Contract parties"},
-				},
-			},
-		},
+func TestAuditContractContentSHACLReportsRealSHACLCoreViolations(t *testing.T) {
+	// dcs:metadata is missing dcs:title entirely — a real SHACL sh:minCount
+	// violation the deleted hand-rolled subset matcher's replacement
+	// (goRDFlib, ADR-9) must catch via the hub's canonical shapes.
+	contract := canonicalAuditContract()
+	contract["dcs:metadata"] = map[string]any{
+		"@type":       "dcs:ContractMetadata",
+		"dcs:version": 1,
 	}
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "info"))
-	require.False(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
+	shaclFindings := shaclOnlyFindings(findings)
+	require.NotEmpty(t, shaclFindings)
+	titleFinding := requirePolicyFinding(t, shaclFindings, "title-MinCountConstraintComponent")
+	require.Equal(t, "error", titleFinding.Severity)
+	require.Contains(t, titleFinding.Message, "requires a title")
 }
 
-func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
-	contract := map[string]any{
-		"@context": "https://w3id.org/facis/sla/ontology",
-		"@id":      "urn:facis:dcs:contract:sla:example-001",
-		"@type":    "dcs:Contract",
-		"parties": []any{
-			map[string]any{"@type": "dcs:Organization", "role": "supplier"},
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shacl": map[string]any{
-			"shapes": []any{
-				map[string]any{
-					"id":          "FACIS-CONTRACT-SHACL-SLA",
-					"title":       "SLA contract must satisfy semantic shape",
-					"targetClass": "dcs:Contract",
-					"property": []any{
-						map[string]any{"path": "contract.jurisdiction", "minCount": 1, "name": "Jurisdiction"},
-						map[string]any{"path": "parties", "class": "dcs:CompanyParty", "name": "Contract parties"},
-					},
-				},
-			},
-		},
-	}
+func TestAuditContractContentSHACLAcceptsCompliantCanonicalContract(t *testing.T) {
+	contract := canonicalAuditContract()
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "error"))
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
+	require.Empty(t, shaclOnlyFindings(findings))
+}
+
+func mapPolicy(enforceShapes, enforceProfile bool) map[string]any {
+	return map[string]any{
+		"policySetId":              "facis.dcs.contract.structure-semantics",
+		"version":                  "test",
+		"enforceCanonicalShapes":   enforceShapes,
+		"enforceValidationProfile": enforceProfile,
+	}
+}
+
+func shaclOnlyFindings(findings []PolicyFinding) []PolicyFinding {
+	out := make([]PolicyFinding, 0, len(findings))
+	for _, f := range findings {
+		if f.ShapesVersion > 0 {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
@@ -258,7 +293,7 @@ func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
 		},
 	}
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, policy, ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-EXT-001", "error"))
@@ -267,7 +302,7 @@ func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
 func TestAuditContractContentAcceptsCanonicalContractODRLValues(t *testing.T) {
 	contract := canonicalAuditContract()
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "info"))
@@ -282,7 +317,7 @@ func TestAuditContractContentFlagsCanonicalContractODRLViolation(t *testing.T) {
 	values := contract["semanticConditionValues"].([]any)
 	values[0].(map[string]any)["parameterValue"] = "USA"
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
@@ -292,7 +327,7 @@ func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testi
 	contract := canonicalAuditContract()
 	contract["semanticConditionValues"] = []any{}
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
@@ -310,7 +345,7 @@ func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) 
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
@@ -350,52 +385,6 @@ func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLVal
 	require.Len(t, policyErr.Findings, 2)
 	require.Equal(t, "urn:uuid:policy-country", policyErr.Findings[0].RuleID)
 	require.Equal(t, "urn:uuid:policy-postal-code", policyErr.Findings[1].RuleID)
-}
-
-func TestAuditContractContentMapsCanonicalSemanticValuesToPartyShape(t *testing.T) {
-	contract := canonicalAuditContractWithTemplateParties()
-	minCount := 2
-	maxCount := 2
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shacl": map[string]any{
-			"shapes": []any{
-				map[string]any{
-					"id":          "dcs:ContractShape",
-					"title":       "Contract shape",
-					"targetClass": "dcs:Contract",
-					"property": []any{
-						map[string]any{
-							"id":       "dcs:ContractShape-PARTY",
-							"path":     "dcs:party",
-							"minCount": minCount,
-							"maxCount": maxCount,
-							"class":    "dcs:CompanyParty",
-							"node":     "dcs:CompanyPartyShape",
-						},
-					},
-				},
-				map[string]any{
-					"id":          "dcs:CompanyPartyShape",
-					"title":       "Company party shape",
-					"targetClass": "dcs:CompanyParty",
-					"property": []any{
-						map[string]any{"id": "dcs:CompanyPartyShape-ROLE", "path": "dcs:role", "minCount": 1, "maxCount": 1, "datatype": "xsd:string", "in": []any{"provider", "customer"}},
-						map[string]any{"id": "dcs:CompanyPartyShape-LEGAL", "path": "dcs:legalName", "minCount": 1, "maxCount": 1, "datatype": "xsd:string"},
-					},
-				},
-			},
-		},
-	}
-
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
-	require.NoError(t, err)
-
-	for _, finding := range findings {
-		require.NotEqual(t, "error", finding.Severity, finding.Message)
-	}
-	require.True(t, hasFindingSeverity(findings, "dcs:ContractShape-PARTY", "info"))
 }
 
 func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testing.T) {
@@ -493,7 +482,7 @@ func TestAuditContractContentShowsPolicyDetailsForLowRuntimeValue(t *testing.T) 
 func TestAuditContractContentShowsPolicyDetailsForTypedODRLRightOperand(t *testing.T) {
 	contract := canonicalAuditContract()
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	finding := requirePolicyFinding(t, findings, "urn:uuid:policy-postal-code")
@@ -503,45 +492,66 @@ func TestAuditContractContentShowsPolicyDetailsForTypedODRLRightOperand(t *testi
 	require.Equal(t, "urn:uuid:field-company-postal-code must equal 91448", finding.Requirement)
 }
 
-func TestAuditContractContentShowsPolicyDetailsForSHACLConstraints(t *testing.T) {
-	contract := map[string]any{
-		"@type": "dcs:Contract",
-		"parties": []any{
-			map[string]any{"@type": "dcs:CompanyParty"},
-		},
-		"service": map[string]any{"sla": map[string]any{"availability": 98.5}},
-	}
-	minCount := 2
-	minInclusive := 99.9
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shaclShapes": []any{
-			map[string]any{
-				"id":          "FACIS-CONTRACT-SHACL-SLA",
-				"title":       "SLA contract must satisfy semantic shape",
-				"targetClass": "dcs:Contract",
-				"properties": []any{
-					map[string]any{"id": "party-count", "path": "parties", "minCount": minCount, "name": "Contract parties"},
-					map[string]any{"id": "availability-min", "path": "service.sla.availability", "minInclusive": minInclusive, "name": "Availability"},
-				},
-			},
-		},
-	}
+// TestAuditContractContentSHACLRejectsWrongDatatype is the Phase 2 (ADR-9)
+// acceptance criterion: a genuine xsd:integer datatype constraint the
+// deleted subset matcher's replacement (goRDFlib) enforces, with a finding
+// naming the focus node and the violated constraint. Uses its own
+// ShapeSource (not the package fixture) to exercise a shapes graph the
+// hub-seeded canonical shape doesn't declare — standing in for "register a
+// stricter hub shapes version" without a live database.
+func TestAuditContractContentSHACLRejectsWrongDatatype(t *testing.T) {
+	const slaShapesTTL = `
+@prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+dcs:SLAAgreementShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:SLAAgreement ;
+  sh:property [
+    sh:path dcs:availability ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+  ] .
+`
+	restore := swapShapeSource(t, fixtureShapeSource{shapesTTL: slaShapesTTL, profileYAML: "id: t\nversion: t\nrules: []\n", contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld")})
+	defer restore()
+
+	badContract := map[string]any{
+		"@context": map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
+		"@id":      "urn:facis:dcs:sla:example-001",
+		"@type":    "dcs:SLAAgreement",
+		"dcs:availability": map[string]any{
+			"@value": "ninety-nine",
+		},
+	}
+	findings, err := AuditContractContent(context.Background(), badContract, mapPolicy(true, false), ContractContentAuditMetadata{})
 	require.NoError(t, err)
+	finding := requirePolicyFinding(t, findings, "availability-DatatypeConstraintComponent")
+	require.Equal(t, "error", finding.Severity)
+	require.Contains(t, finding.Path, "availability")
+	require.Contains(t, finding.Message, "urn:facis:dcs:sla:example-001") // names the focus node
 
-	partyFinding := requirePolicyFinding(t, findings, "party-count")
-	require.Equal(t, "minCount", partyFinding.Operator)
-	require.Equal(t, 1, partyFinding.ActualValue)
-	require.Equal(t, minCount, partyFinding.ExpectedValue)
-	require.Equal(t, "parties requires at least 2 value(s)", partyFinding.Requirement)
-	availabilityFinding := requirePolicyFinding(t, findings, "availability-min")
-	require.Equal(t, "gte", availabilityFinding.Operator)
-	require.Equal(t, 98.5, availabilityFinding.ActualValue)
-	require.Equal(t, minInclusive, availabilityFinding.ExpectedValue)
-	require.Equal(t, "service.sla.availability must be >= 99.9", availabilityFinding.Requirement)
+	goodContract := map[string]any{
+		"@context":         map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "xsd": "http://www.w3.org/2001/XMLSchema#"},
+		"@id":              "urn:facis:dcs:sla:example-002",
+		"@type":            "dcs:SLAAgreement",
+		"dcs:availability": map[string]any{"@value": 99, "@type": "xsd:integer"},
+	}
+	okFindings, err := AuditContractContent(context.Background(), goodContract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Empty(t, okFindings)
+}
+
+// swapShapeSource installs a temporary ShapeSource for the duration of a
+// single test and returns a restore func for the shared fixture — the
+// package var is process-wide, so tests using a different shapes graph must
+// not run in Parallel with each other.
+func swapShapeSource(t *testing.T, s ShapeSource) func() {
+	t.Helper()
+	original := activeShapeSource
+	SetShapeSource(s)
+	return func() { activeShapeSource = original }
 }
 
 func canonicalAuditContract() map[string]any {

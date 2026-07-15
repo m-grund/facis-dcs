@@ -70,7 +70,7 @@ func (h *ContractContentTrailAuditor) Handle(ctx context.Context, query GetContr
 			AuditedBy:       middleware.GetParticipantID(ctx),
 			HolderDID:       middleware.GetHolderDID(ctx),
 		}
-		findings, err := validation.AuditContractContent(contract.ContractData, nil, auditMetadata)
+		findings, err := validation.AuditContractContent(ctx, contract.ContractData, nil, auditMetadata)
 		if err != nil {
 			return nil, fmt.Errorf("could not audit contract: %w", err)
 		}

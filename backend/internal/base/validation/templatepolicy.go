@@ -34,6 +34,11 @@ type PolicyFinding struct {
 	ExpectedValue  any    `json:"expectedValue,omitempty"`
 	ExpectedValues []any  `json:"expectedValues,omitempty"`
 	Operator       string `json:"operator,omitempty"`
+	// ShapesVersion is the Semantic Hub SHACL shapes version (kind="shapes")
+	// this finding was produced against — set only for findings produced by
+	// validateAgainstHubShapes (shaclengine.go, ADR-8/ADR-9); zero for
+	// findings from other audit sources (ODRL, the SLA validation profile).
+	ShapesVersion int `json:"shapesVersion,omitempty"`
 }
 
 type templatePolicySet struct {

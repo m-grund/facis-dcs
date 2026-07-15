@@ -13,6 +13,16 @@ import (
 
 func TestMain(m *testing.M) {
 	SetJSONLDContextIRI(SchemaJSONLDContextV1)
+	// ADR-8/ADR-9: AuditContractContent's SHACL/profile enforcement reads
+	// from the Semantic Hub only (no disk fallback) — tests install a
+	// ShapeSource fixture backed by the real hub authoring files so the
+	// real goRDFlib SHACL engine runs end to end without a live database
+	// (see contractcontentaudit_test.go).
+	SetShapeSource(fixtureShapeSource{
+		shapesTTL:   mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl"),
+		profileYAML: mustReadRepoFile("docs/semantic-ontology/validation/facis.sla.basic.v1.yaml"),
+		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+	})
 	os.Exit(m.Run())
 }
 

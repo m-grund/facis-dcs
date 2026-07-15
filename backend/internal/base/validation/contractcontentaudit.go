@@ -1,13 +1,12 @@
 package validation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -20,52 +19,35 @@ type ContractContentAuditMetadata struct {
 }
 
 type ContractContentPolicy struct {
-	PolicySetID string               `json:"policySetId"`
-	Version     string               `json:"version"`
-	Policies    []any                `json:"dcs:policies"`
-	SHACLShapes []ContractSHACLShape `json:"shaclShapes"`
-	SHACLFiles  []string             `json:"shaclShapeFiles"`
-	Profiles    []string             `json:"validationProfiles"`
-	profiles    []ValidationProfile
-	SHACL       *ContractSHACLPolicy `json:"shacl"`
+	PolicySetID string `json:"policySetId"`
+	Version     string `json:"version"`
+	Policies    []any  `json:"dcs:policies"`
+	// EnforceCanonicalShapes/EnforceValidationProfile opt a given audit call
+	// into the Semantic Hub's canonical SHACL shapes / SLA validation
+	// profile (the default disk policy document sets both; ad-hoc/test
+	// policies that want to exercise only ODRL evaluation leave them unset).
+	// The hub is the only source for their content — there is no
+	// alternative/inline shape format anymore (ADR-8, ADR-9).
+	EnforceCanonicalShapes   bool `json:"enforceCanonicalShapes"`
+	EnforceValidationProfile bool `json:"enforceValidationProfile"`
+	profiles                 []ValidationProfile
+	// ShapesVersion/ProfileVersion record which hub version this audit ran
+	// against (the pinned version for revalidation, or the currently-active
+	// one for newly produced documents) — ADR-8.
+	ShapesVersion  int `json:"-"`
+	ProfileVersion int `json:"-"`
 }
 
-type ContractSHACLPolicy struct {
-	Shapes []ContractSHACLShape `json:"shapes"`
-}
-
-type ContractSHACLShape struct {
-	ID           string                  `json:"id"`
-	Title        string                  `json:"title"`
-	Severity     string                  `json:"severity"`
-	TargetClass  string                  `json:"targetClass"`
-	OntologyTerm string                  `json:"ontologyTerm"`
-	Properties   []ContractSHACLProperty `json:"properties"`
-	Property     []ContractSHACLProperty `json:"property"`
-}
-
-type ContractSHACLProperty struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Path         string   `json:"path"`
-	MinCount     *int     `json:"minCount"`
-	MaxCount     *int     `json:"maxCount"`
-	MinInclusive *float64 `json:"minInclusive"`
-	Datatype     string   `json:"datatype"`
-	Class        string   `json:"class"`
-	Node         string   `json:"node"`
-	In           []string `json:"in"`
-	Severity     string   `json:"severity"`
-	Message      string   `json:"message"`
-	OntologyTerm string   `json:"ontologyTerm"`
-}
-
-func AuditContractContent(contractDocument any, policyDocument any, metadata ContractContentAuditMetadata) ([]PolicyFinding, error) {
+// AuditContractContent checks a produced contract document against its
+// governing policies: the Semantic Hub's SHACL shapes (goRDFlib, ADR-9,
+// version-pinned per ADR-8), the SLA validation profile, and the contract's
+// own embedded ODRL policies.
+func AuditContractContent(ctx context.Context, contractDocument any, policyDocument any, metadata ContractContentAuditMetadata) ([]PolicyFinding, error) {
 	contract, err := normalizeObject(contractDocument)
 	if err != nil {
 		return nil, fmt.Errorf("decode contract document: %w", err)
 	}
-	policy, err := normalizeContractContentPolicy(policyDocument, metadata)
+	policy, err := normalizeContractContentPolicy(ctx, policyDocument, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -74,13 +56,18 @@ func AuditContractContent(contractDocument any, policyDocument any, metadata Con
 	}
 
 	findings := []PolicyFinding{}
-	shapes := contractSHACLShapes(policy)
-	shapeIndex := contractSHACLShapeIndex(shapes)
-	for _, shape := range shapes {
-		if !isRootContractAuditShape(contract, shape) {
-			continue
+	if policy.EnforceCanonicalShapes {
+		// ADR-8 version pinning: a document is revalidated against the hub
+		// SHACL shapes version it was anchored to at creation time
+		// (dcs:schemaRefs.dcs:shaclShapes), not whatever the hub's active
+		// version has since moved on to — rolling the hub forward never
+		// retroactively breaks an already-produced artifact.
+		shaclFindings, shapesVersion, err := validateAgainstHubShapes(ctx, contract)
+		if err != nil {
+			return nil, fmt.Errorf("SHACL validation: %w", err)
 		}
-		findings = append(findings, auditContractSHACLShape(contract, policy, shape, shapeIndex)...)
+		policy.ShapesVersion = shapesVersion
+		findings = append(findings, shaclFindings...)
 	}
 	for _, profile := range policy.profiles {
 		findings = append(findings, auditContractValidationProfile(contract, profile)...)
@@ -152,7 +139,7 @@ func isBlockingContractPolicyFinding(finding PolicyFinding) bool {
 	}
 }
 
-func normalizeContractContentPolicy(raw any, metadata ContractContentAuditMetadata) (ContractContentPolicy, error) {
+func normalizeContractContentPolicy(ctx context.Context, raw any, metadata ContractContentAuditMetadata) (ContractContentPolicy, error) {
 	if raw == nil {
 		loaded, err := loadDefaultContractContentPolicyDocument()
 		if err != nil {
@@ -182,16 +169,26 @@ func normalizeContractContentPolicy(raw any, metadata ContractContentAuditMetada
 			policy.Version = defaultContractPolicyVersion
 		}
 	}
-	fileShapes, err := loadContractSHACLShapeFiles(policy.SHACLFiles)
-	if err != nil {
-		return ContractContentPolicy{}, err
+
+	// EnforceCanonicalShapes drives validateAgainstHubShapes (called from
+	// AuditContractContent, where the document being audited — needed for
+	// ADR-8 version pinning — is in scope). Here, only the validation
+	// profile: content always comes from the hub (ADR-8/ADR-9 — no disk
+	// fallback), the currently-active version (profile pinning is not part
+	// of the ShapeSource contract, unlike shapes).
+	if policy.EnforceValidationProfile {
+		profileContent, profileVersion, err := activeShapeSource.ActiveProfile(ctx)
+		if err != nil {
+			return ContractContentPolicy{}, fmt.Errorf("load validation profile: %w", err)
+		}
+		hubProfile, err := LoadValidationProfileYAML([]byte(profileContent))
+		if err != nil {
+			return ContractContentPolicy{}, fmt.Errorf("parse validation profile (hub version %d): %w", profileVersion, err)
+		}
+		policy.profiles = append(policy.profiles, hubProfile)
+		policy.ProfileVersion = profileVersion
 	}
-	policy.SHACLShapes = append(policy.SHACLShapes, fileShapes...)
-	profiles, err := loadContractValidationProfiles(policy.Profiles)
-	if err != nil {
-		return ContractContentPolicy{}, err
-	}
-	policy.profiles = profiles
+
 	return policy, nil
 }
 
@@ -234,187 +231,6 @@ func resolveContractContentPolicyFile() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("contract content policy file not found")
-}
-
-func loadContractSHACLShapeFiles(files []string) ([]ContractSHACLShape, error) {
-	shapes := []ContractSHACLShape{}
-	for _, file := range files {
-		path, err := resolveContractContentDocumentFile(file)
-		if err != nil {
-			return nil, err
-		}
-		bytes, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read contract SHACL shapes file %q: %w", path, err)
-		}
-		parsed, err := parseContractSHACLShapesTTL(string(bytes))
-		if err != nil {
-			return nil, fmt.Errorf("parse contract SHACL shapes file %q: %w", path, err)
-		}
-		shapes = append(shapes, parsed...)
-	}
-	return shapes, nil
-}
-
-func loadContractValidationProfiles(files []string) ([]ValidationProfile, error) {
-	profiles := []ValidationProfile{}
-	for _, file := range files {
-		path, err := resolveContractContentDocumentFile(file)
-		if err != nil {
-			return nil, err
-		}
-		profile, err := LoadValidationProfileFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("load contract validation profile %q: %w", path, err)
-		}
-		profiles = append(profiles, profile)
-	}
-	return profiles, nil
-}
-
-func resolveContractContentDocumentFile(path string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", fmt.Errorf("contract content document path is required")
-	}
-	if filepath.IsAbs(path) {
-		return path, nil
-	}
-	candidates := []string{
-		path,
-		filepath.Join("..", path),
-		filepath.Join("..", "..", path),
-		filepath.Join("..", "..", "..", path),
-		filepath.Join("..", "..", "..", "..", path),
-	}
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("contract content document file %q not found", path)
-}
-
-func parseContractSHACLShapesTTL(content string) ([]ContractSHACLShape, error) {
-	shapes := []ContractSHACLShape{}
-	for _, statement := range ontologyStatements(content) {
-		if !contractSHACLStatementHasType(statement, "sh:NodeShape") {
-			continue
-		}
-		targetClass := ontologyResource(statement, "sh:targetClass")
-		if targetClass == "" {
-			continue
-		}
-		subject := ontologySubject(statement)
-		shape := ContractSHACLShape{
-			ID:          subject,
-			Title:       fmt.Sprintf("%s SHACL shape", compactTerm(targetClass)),
-			Severity:    shaclSeverity(statement),
-			TargetClass: targetClass,
-			Properties:  parseContractSHACLPropertiesTTL(subject, statement),
-		}
-		shapes = append(shapes, shape)
-	}
-	return shapes, nil
-}
-
-func contractSHACLStatementHasType(statement string, class string) bool {
-	expandedClass := expandOntologyResource(class)
-	for _, line := range strings.Split(statement, "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) < 2 {
-			continue
-		}
-		var candidates []string
-		switch {
-		case fields[0] == "a":
-			candidates = fields[1:]
-		case len(fields) >= 3 && fields[1] == "a":
-			candidates = fields[2:]
-		default:
-			continue
-		}
-		for _, rawClass := range candidates {
-			candidate := strings.TrimSuffix(strings.TrimSuffix(rawClass, ";"), ",")
-			if expandOntologyResource(candidate) == expandedClass {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func parseContractSHACLPropertiesTTL(shapeID string, statement string) []ContractSHACLProperty {
-	properties := []ContractSHACLProperty{}
-	remaining := statement
-	for {
-		start := strings.Index(remaining, "sh:property [")
-		if start < 0 {
-			break
-		}
-		blockStart := start + len("sh:property [")
-		end := strings.Index(remaining[blockStart:], "]")
-		if end < 0 {
-			break
-		}
-		block := remaining[blockStart : blockStart+end]
-		index := len(properties)
-		property := ContractSHACLProperty{
-			ID:           fmt.Sprintf("%s-PROP-%03d", shapeID, index+1),
-			Path:         ontologyResource(block, "sh:path"),
-			Datatype:     ontologyResource(block, "sh:datatype"),
-			Class:        ontologyResource(block, "sh:class"),
-			Node:         ontologyResource(block, "sh:node"),
-			Message:      ontologyString(block, "sh:message"),
-			In:           parseContractSHACLInValues(block),
-			MinCount:     ontologyInt(block, "sh:minCount"),
-			MaxCount:     ontologyInt(block, "sh:maxCount"),
-			MinInclusive: ontologyNumber(block, "sh:minInclusive"),
-		}
-		properties = append(properties, property)
-		remaining = remaining[blockStart+end+1:]
-	}
-	return properties
-}
-
-func parseContractSHACLInValues(block string) []string {
-	line := shaclPredicateLine(block, "sh:in")
-	if line == "" {
-		return nil
-	}
-	start := strings.Index(line, "(")
-	end := strings.LastIndex(line, ")")
-	if start < 0 || end <= start {
-		return nil
-	}
-	content := line[start+1 : end]
-	values := []string{}
-	quoted := regexp.MustCompile(`"([^"]*)"`)
-	for _, match := range quoted.FindAllStringSubmatch(content, -1) {
-		values = append(values, match[1])
-	}
-	content = quoted.ReplaceAllString(content, " ")
-	for _, token := range strings.Fields(content) {
-		values = append(values, strings.TrimSpace(token))
-	}
-	return values
-}
-
-func ontologyInt(statement string, predicate string) *int {
-	for _, line := range strings.Split(statement, "\n") {
-		if !strings.HasPrefix(strings.TrimSpace(line), predicate+" ") {
-			continue
-		}
-		match := ontologyNumberValue.FindString(line)
-		if match == "" {
-			return nil
-		}
-		value, err := strconv.Atoi(match)
-		if err == nil {
-			return &value
-		}
-	}
-	return nil
 }
 
 func auditContractValidationProfile(contract map[string]any, profile ValidationProfile) []PolicyFinding {
@@ -717,177 +533,6 @@ func compactAuditValue(value any) any {
 	default:
 		return typed
 	}
-}
-
-func contractSHACLShapes(policy ContractContentPolicy) []ContractSHACLShape {
-	shapes := make([]ContractSHACLShape, 0, len(policy.SHACLShapes))
-	shapes = append(shapes, policy.SHACLShapes...)
-	if policy.SHACL != nil {
-		shapes = append(shapes, policy.SHACL.Shapes...)
-	}
-	return shapes
-}
-
-func contractSHACLShapeIndex(shapes []ContractSHACLShape) map[string]ContractSHACLShape {
-	index := make(map[string]ContractSHACLShape, len(shapes))
-	for _, shape := range shapes {
-		normalized := normalizeContractSHACLShape(shape)
-		index[normalized.ID] = normalized
-		index[compactTerm(normalized.ID)] = normalized
-	}
-	return index
-}
-
-func isRootContractAuditShape(contract map[string]any, shape ContractSHACLShape) bool {
-	targetClass := strings.TrimSpace(shape.TargetClass)
-	if targetClass == "" {
-		return true
-	}
-	if compactTerm(targetClass) == "Contract" {
-		return true
-	}
-	return jsonLDTypeMatches(valuesAtPath(contract, "@type"), targetClass)
-}
-
-func auditContractSHACLShape(contract map[string]any, policy ContractContentPolicy, shape ContractSHACLShape, shapeIndex map[string]ContractSHACLShape) []PolicyFinding {
-	shape = normalizeContractSHACLShape(shape)
-	if shape.TargetClass != "" && !jsonLDTypeMatches(valuesAtPath(contract, "@type"), shape.TargetClass) {
-		return []PolicyFinding{contractStructureFinding(policy, shape.ID, shape.Title, shape.Severity, fmt.Sprintf("target class %q does not match contract @type", shape.TargetClass), "@type", shape.TargetClass)}
-	}
-
-	properties := shape.Properties
-	properties = append(properties, shape.Property...)
-	findings := []PolicyFinding{}
-	for index, property := range properties {
-		findings = append(findings, auditContractSHACLProperty(contract, policy, shape, normalizeContractSHACLProperty(shape, property, index), shapeIndex)...)
-	}
-	if len(findings) == 0 {
-		findings = append(findings, contractStructureFinding(policy, shape.ID, shape.Title, "info", "SHACL shape conforms", shape.TargetClass, shape.TargetClass))
-	}
-	return findings
-}
-
-func auditContractSHACLProperty(contract map[string]any, policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty, shapeIndex map[string]ContractSHACLShape) []PolicyFinding {
-	values := valuesAtPath(contract, property.Path)
-	nonEmpty := nonEmptyValues(values)
-	findings := []PolicyFinding{}
-	if property.MinCount != nil && len(nonEmpty) < *property.MinCount {
-		findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s requires at least %d value(s)", propertyLabel(property), *property.MinCount), len(nonEmpty), *property.MinCount, nil, "minCount"))
-	}
-	if property.MaxCount != nil && len(nonEmpty) > *property.MaxCount {
-		findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s allows at most %d value(s)", propertyLabel(property), *property.MaxCount), len(nonEmpty), *property.MaxCount, nil, "maxCount"))
-	}
-	if len(nonEmpty) == 0 {
-		return findings
-	}
-	if property.Datatype != "" {
-		for _, value := range values {
-			if !valueConformsDatatype(value, property.Datatype) {
-				findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must use datatype %s", propertyLabel(property), property.Datatype), compactJSONLDValue(value), property.Datatype, nil, "datatype"))
-				break
-			}
-		}
-	}
-	if property.MinInclusive != nil {
-		for _, value := range values {
-			number, ok := toFloat(value)
-			if !ok || number+floatTolerance < *property.MinInclusive {
-				findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must be at least %.4g", propertyLabel(property), *property.MinInclusive), compactJSONLDValue(value), *property.MinInclusive, nil, "gte"))
-				break
-			}
-		}
-	}
-	if len(property.In) > 0 {
-		allowed := normalizedSet(property.In)
-		matched := false
-		for _, value := range values {
-			if allowed[strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(value))))] {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must be one of %s", propertyLabel(property), strings.Join(property.In, ", ")), compactAuditValues(values), nil, anySliceFromStrings(property.In), "in"))
-		}
-	}
-	if property.Class != "" {
-		for _, value := range values {
-			if !valueHasClass(value, property.Class) {
-				findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must reference class %s", propertyLabel(property), property.Class), compactJSONLDValue(value), property.Class, nil, "class"))
-				break
-			}
-		}
-	}
-	if property.Node != "" {
-		if nestedShape, ok := shapeIndex[property.Node]; ok {
-			for _, value := range values {
-				nested, ok := value.(map[string]any)
-				if !ok {
-					findings = append(findings, shaclPropertyFindingWithDetails(policy, shape, property, fmt.Sprintf("%s must be an object conforming to %s", propertyLabel(property), property.Node), compactJSONLDValue(value), property.Node, nil, "node"))
-					break
-				}
-				for _, nestedFinding := range auditContractSHACLShape(nested, policy, nestedShape, shapeIndex) {
-					if nestedFinding.Severity == "info" {
-						continue
-					}
-					if nestedFinding.Path != "" {
-						nestedFinding.Path = property.Path + "." + nestedFinding.Path
-						nestedFinding.SemanticPath = nestedFinding.Path
-					}
-					findings = append(findings, nestedFinding)
-				}
-			}
-		}
-	}
-	if len(findings) == 0 {
-		return []PolicyFinding{contractFinding(property.ID, shape.Title, "info", fmt.Sprintf("%s conforms", propertyLabel(property)), property.Path, property.Path, property.OntologyTerm)}
-	}
-	return findings
-}
-
-func normalizeContractSHACLShape(shape ContractSHACLShape) ContractSHACLShape {
-	if strings.TrimSpace(shape.ID) == "" {
-		shape.ID = "FACIS-CONTRACT-SHACL-CUSTOM"
-	}
-	if strings.TrimSpace(shape.Title) == "" {
-		shape.Title = shape.ID
-	}
-	if strings.TrimSpace(shape.Severity) == "" {
-		shape.Severity = "error"
-	}
-	return shape
-}
-
-func normalizeContractSHACLProperty(shape ContractSHACLShape, property ContractSHACLProperty, index int) ContractSHACLProperty {
-	if strings.TrimSpace(property.ID) == "" {
-		property.ID = fmt.Sprintf("%s-PROP-%03d", shape.ID, index+1)
-	}
-	if strings.TrimSpace(property.Severity) == "" {
-		property.Severity = shape.Severity
-	}
-	if strings.TrimSpace(property.OntologyTerm) == "" {
-		property.OntologyTerm = shape.OntologyTerm
-	}
-	return property
-}
-
-func contractStructureFinding(policy ContractContentPolicy, ruleID, title, severity, message, path, ontologyTerm string) PolicyFinding {
-	finding := contractFinding(ruleID, title, severity, message, path, path, ontologyTerm)
-	finding.PolicySetID = policy.PolicySetID
-	finding.PolicyVersion = policy.Version
-	return finding
-}
-
-func shaclPropertyFindingWithDetails(policy ContractContentPolicy, shape ContractSHACLShape, property ContractSHACLProperty, fallbackMessage string, actualValue any, expectedValue any, expectedValues []any, operator string) PolicyFinding {
-	message := property.Message
-	if strings.TrimSpace(message) == "" {
-		message = fallbackMessage
-	}
-	finding := contractFinding(property.ID, shape.Title, property.Severity, message, property.Path, property.Path, property.OntologyTerm)
-	finding.PolicySetID = policy.PolicySetID
-	finding.PolicyVersion = policy.Version
-	applyPolicyDetails(&finding, property.Path, operator, actualValue, expectedValue, expectedValues)
-	return finding
 }
 
 // extractContractODRLPolicies reads dcs:policies and flattens it into a
@@ -1475,88 +1120,6 @@ func compactJSONLDValue(value any) any {
 	return value
 }
 
-func validIRIOrURN(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return false
-	}
-	return strings.Contains(trimmed, "://") || strings.HasPrefix(strings.ToLower(trimmed), "urn:")
-}
-
-func jsonLDTypeMatches(values []any, targetClass string) bool {
-	target := compactTerm(strings.TrimSpace(targetClass))
-	for _, value := range values {
-		text, ok := value.(string)
-		if !ok {
-			continue
-		}
-		if text == targetClass || compactTerm(text) == target {
-			return true
-		}
-	}
-	return false
-}
-
-func nonEmptyValues(values []any) []any {
-	result := make([]any, 0, len(values))
-	for _, value := range values {
-		if !isEmptyAuditValue(compactJSONLDValue(value)) {
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
-func valueConformsDatatype(value any, datatype string) bool {
-	value = compactJSONLDValue(value)
-	normalized := strings.ToLower(compactTerm(datatype))
-	switch normalized {
-	case "string":
-		_, ok := value.(string)
-		return ok
-	case "integer", "int", "long":
-		float, ok := toFloat(value)
-		return ok && math.Trunc(float) == float
-	case "decimal", "double", "float":
-		_, ok := toFloat(value)
-		return ok
-	case "boolean":
-		_, ok := value.(bool)
-		return ok
-	case "anyuri", "uri":
-		text, ok := value.(string)
-		return ok && validIRIOrURN(text)
-	default:
-		return true
-	}
-}
-
-func valueHasClass(value any, class string) bool {
-	obj, ok := value.(map[string]any)
-	if !ok {
-		return false
-	}
-	return jsonLDTypeMatches(valuesAtObjectPath(obj, "@type"), class)
-}
-
-func valuesAtObjectPath(obj map[string]any, semanticPath string) []any {
-	value, ok := contractValue(obj, semanticPath)
-	if !ok {
-		return nil
-	}
-	if values, ok := value.([]any); ok {
-		return values
-	}
-	return []any{value}
-}
-
-func propertyLabel(property ContractSHACLProperty) string {
-	if strings.TrimSpace(property.Name) != "" {
-		return property.Name
-	}
-	return property.Path
-}
-
 func toFloat(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case float64:
@@ -1615,30 +1178,4 @@ func isEmptyAuditValue(value any) bool {
 	default:
 		return false
 	}
-}
-
-// shaclSeverity and shaclPredicateLine back the SHACL shapes reader above
-// (parseContractSHACLShapesTTL). Validation profiles themselves are
-// structured YAML/JSON, not SHACL (contractstatementvalidation.go).
-
-func shaclSeverity(statement string) string {
-	severity := ontologyResource(statement, "sh:severity")
-	switch severity {
-	case "sh:Warning":
-		return "warning"
-	case "sh:Info":
-		return "info"
-	default:
-		return "error"
-	}
-}
-
-func shaclPredicateLine(statement string, predicate string) string {
-	for _, line := range strings.Split(statement, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, predicate+" ") {
-			return line
-		}
-	}
-	return ""
 }

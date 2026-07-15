@@ -1,28 +1,41 @@
 @prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Structural shape for the canonical dcs:documentStructure JSON-LD envelope
 # (the single supported contract shape since the greenfield rewrite — see
-# CLAUDE.md "Template Editor — JSON-LD as Single Source of Truth"). Checked
-# by the PACM contract-content-audit pipeline (docs/policies/
-# facis-contract-content-audit-policies.json) alongside the structured
-# validation profile in docs/semantic-ontology/validation/.
+# CLAUDE.md "Template Editor — JSON-LD as Single Source of Truth"). This is
+# the Semantic Hub's kind="shapes" seed (backend/internal/semantichub/assets,
+# ADR-8) — the sole source AuditContractContent's goRDFlib SHACL engine
+# validates produced contracts against (ADR-9). A contract's own IRI ("@id")
+# is its RDF subject already; sh:nodeKind checks it is a real IRI, not a
+# blank node — SHACL's equivalent of "requires a stable @id".
 
 dcs:CanonicalContractShape
   a sh:NodeShape ;
   sh:targetClass dcs:Contract ;
+  sh:nodeKind sh:IRI ;
   sh:property [
-    sh:path did ;
+    sh:path dcs:metadata ;
     sh:minCount 1 ;
-    sh:message "A canonical contract requires a stable @id." ;
-  ] ;
-  sh:property [
-    sh:path dcs:metadata.dcs:title ;
-    sh:minCount 1 ;
-    sh:message "A canonical contract requires a title in dcs:metadata." ;
+    sh:maxCount 1 ;
+    sh:node dcs:ContractMetadataShape ;
+    sh:message "A canonical contract requires dcs:metadata with a title." ;
   ] ;
   sh:property [
     sh:path dcs:documentStructure ;
     sh:minCount 1 ;
+    sh:maxCount 1 ;
     sh:message "A canonical contract requires a dcs:documentStructure envelope." ;
+  ] .
+
+dcs:ContractMetadataShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:ContractMetadata ;
+  sh:property [
+    sh:path dcs:title ;
+    sh:datatype xsd:string ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "A canonical contract requires a title in dcs:metadata." ;
   ] .
