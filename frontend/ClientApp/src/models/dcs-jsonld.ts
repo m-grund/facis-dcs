@@ -63,6 +63,23 @@ export interface DcsClause {
   'dcs:content': { '@list': DcsContentSegment[] } | string
   'dcs:title'?: string
   'dcs:signatureFields'?: DcsSignatureField[]
+  /**
+   * Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): an optional typed clause instance
+   * nested inside a free-text dcs:Clause block. The nested object carries
+   * its own @type (e.g. "dcs:PaymentClause", from the Semantic Hub clause
+   * catalog, GET /semantic/clauses) and becomes its own JSON-LD/RDF node —
+   * server-side SHACL validation (validateAgainstHubShapes) targets it by
+   * that @type regardless of nesting, so the palette-generated form and
+   * enforcement share one source of truth without a new top-level block
+   * shape (kept additive/backward-compatible with every existing DcsClause
+   * consumer).
+   */
+  'dcs:typedClause'?: DcsTypedClauseInstance
+}
+
+export interface DcsTypedClauseInstance {
+  '@type': string
+  [property: string]: unknown
 }
 
 export interface DcsApprovedTemplate {

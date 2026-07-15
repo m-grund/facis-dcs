@@ -1,0 +1,39 @@
+@prefix dcs:  <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Clause catalog (DCS-FR-TR-03/TR-04, Phase 3 / ADR-10): typed clause
+# instances the template builder's palette generates a form from
+# (GET /semantic/clauses) and server-side validation checks the same way it
+# checks the rest of a contract's SHACL shapes (concatenated with the
+# canonical shapes graph — see validateAgainstHubShapes, ADR-9). One source
+# of truth: authoring a clause type here changes both the generated form and
+# what's enforced. Versions independently of the canonical shapes
+# (kind="shapes", name="clause-catalog" vs. name="facis-dcs").
+
+dcs:PaymentClauseShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:PaymentClause ;
+  rdfs:label "Payment terms" ;
+  sh:property [
+    sh:path dcs:amount ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:currency ;
+    sh:datatype xsd:string ;
+    sh:in ( "EUR" "USD" ) ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:dueDays ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+    sh:maxInclusive 365 ;
+    sh:maxCount 1 ;
+  ] .

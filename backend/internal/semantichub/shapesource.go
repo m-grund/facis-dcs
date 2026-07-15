@@ -17,8 +17,23 @@ type HubShapeSource struct {
 	DB *sqlx.DB
 }
 
+// ActiveShapes returns the canonical contract shapes concatenated with the
+// clause catalog (Phase 3, ADR-10) — one shapes graph, so a document's
+// typed clauses (dcs:PaymentClause etc.) are checked by the same
+// validateAgainstHubShapes pass as the rest of the contract, not a second
+// one. The clause catalog is always its own current active version even
+// during ADR-8 pinned revalidation (only the canonical contract shapes'
+// pin is tracked via dcs:schemaRefs today).
 func (h HubShapeSource) ActiveShapes(ctx context.Context) (string, int, error) {
-	return h.active(ctx, ShapesName, "shapes")
+	content, version, err := h.active(ctx, ShapesName, "shapes")
+	if err != nil {
+		return "", 0, err
+	}
+	merged, err := h.withClauseCatalog(ctx, content)
+	if err != nil {
+		return "", 0, err
+	}
+	return merged, version, nil
 }
 
 func (h HubShapeSource) ActiveProfile(ctx context.Context) (string, int, error) {
@@ -45,7 +60,21 @@ func (h HubShapeSource) ShapesAt(ctx context.Context, version int) (string, erro
 	if err := tx.Commit(); err != nil {
 		return "", err
 	}
-	return s.Content, nil
+	return h.withClauseCatalog(ctx, s.Content)
+}
+
+// withClauseCatalog appends the clause catalog's current active shapes to a
+// canonical shapes document — both are self-contained Turtle documents with
+// identical @prefix declarations, so concatenation parses as one graph.
+// Hard-fails like everything else in the enforcement path: the clause
+// catalog is a startup-seeded genesis entry (Seed), so its absence means the
+// hub itself is misconfigured, not a normal "no clauses yet" state.
+func (h HubShapeSource) withClauseCatalog(ctx context.Context, canonicalShapesTTL string) (string, error) {
+	catalog, _, err := h.active(ctx, ClauseCatalogName, "shapes")
+	if err != nil {
+		return "", fmt.Errorf("clause catalog: %w", err)
+	}
+	return canonicalShapesTTL + "\n\n" + catalog, nil
 }
 
 func (h HubShapeSource) active(ctx context.Context, name, kind string) (string, int, error) {

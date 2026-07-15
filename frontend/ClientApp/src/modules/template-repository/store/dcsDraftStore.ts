@@ -341,6 +341,28 @@ export const useDcsDraftStore = defineStore(storeId, {
       this.blocks.push(block)
       return id
     },
+    /**
+     * Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): adds a typed clause instance
+     * generated from the Semantic Hub's clause catalog (TypedClausePalette
+     * .vue). Nested inside a plain dcs:Clause block (dcs:typedClause) so it
+     * renders/places/persists through the existing free-text clause
+     * machinery, while still becoming its own JSON-LD node server-side
+     * validation (validateAgainstHubShapes) targets by its @type.
+     */
+    addTypedClause(payload: { clauseType: string; title?: string; values: Record<string, unknown> }): string {
+      const blockId = crypto.randomUUID()
+      const id = blockIri(blockId, this.did ?? undefined)
+      const title = payload.title?.trim() || payload.clauseType.replace(/^dcs:/, '')
+      const block: import('@/models/dcs-jsonld').DcsClause = {
+        '@type': 'dcs:Clause',
+        '@id': id,
+        'dcs:title': title,
+        'dcs:content': { '@list': [`[Typed clause: ${title}]`] },
+        'dcs:typedClause': { '@type': payload.clauseType, ...payload.values },
+      }
+      this.blocks.push(block)
+      return id
+    },
     deleteClause(blockId: string): void {
       removeClauseFromLayout(this.layout, blockId)
       this.blocks = this.blocks.filter((b) => b['@id'] !== blockId)

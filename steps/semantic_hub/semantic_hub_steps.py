@@ -361,3 +361,43 @@ def step_then_content_audit_trail_no_error_for_rule(context, name, rule_id):
         f"Expected contract '{name}' (did={did}) to report no error for rule {rule_id!r}, "
         f"got severities: {severities}"
     )
+
+
+# Phase 3 / ADR-10: the clause catalog endpoint (backend/design/
+# semantic_hub.go "clauses") serves a pre-digested form-schema derived
+# server-side from the hub's clause-catalog SHACL shapes
+# (backend/internal/semantichub/clausecatalog.go) — the same shapes
+# validateAgainstHubShapes concatenates into contract validation.
+
+
+@when("the Semantic Hub clause catalog is requested without authentication")
+def step_when_request_clause_catalog(context):
+    context.requests_response = _requests.get(
+        _hub_url(context, "/semantic/clauses"),
+        timeout=context.http_timeout_seconds,
+    )
+
+
+@then('the clause catalog lists a "{clause_type}" clause type with properties "{properties}"')
+def step_then_clause_catalog_lists_type(context, clause_type, properties):
+    body = context.requests_response.json()
+    clauses = body.get("clauses") or []
+    matching = next((c for c in clauses if c.get("type") == clause_type), None)
+    assert matching is not None, (
+        f"Expected the clause catalog to list clause type {clause_type!r}, got types: "
+        f"{[c.get('type') for c in clauses]}"
+    )
+    expected_paths = {p.strip() for p in properties.split(",")}
+    actual_paths = {p.get("path") for p in (matching.get("properties") or [])}
+    assert expected_paths <= actual_paths, (
+        f"Expected {clause_type!r} to declare properties {expected_paths}, got: {actual_paths}"
+    )
+
+
+@then("the clause catalog response carries the raw SHACL shapes it was derived from")
+def step_then_clause_catalog_carries_shapes(context):
+    body = context.requests_response.json()
+    shapes = body.get("shapes") or ""
+    assert "sh:NodeShape" in shapes and "PaymentClause" in shapes, (
+        f"Expected the clause catalog response to carry the raw SHACL shapes, got: {shapes[:200]!r}"
+    )

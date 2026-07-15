@@ -262,6 +262,47 @@ func TestAuditContractContentSHACLAcceptsCompliantCanonicalContract(t *testing.T
 	require.Empty(t, shaclOnlyFindings(findings))
 }
 
+// TestAuditContractContentValidatesTypedClauses is the Phase 3 (ADR-10)
+// acceptance criterion: a dcs:PaymentClause instance is validated by the
+// SAME shapes graph as the rest of a contract (semantichub.HubShapeSource
+// concatenates the canonical shapes with the clause catalog at runtime;
+// this test mirrors that by concatenating the two authoring files) — one
+// source of truth between the template builder's palette
+// (GET /semantic/clauses) and server-side enforcement.
+func TestAuditContractContentValidatesTypedClauses(t *testing.T) {
+	canonicalTTL := mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl")
+	clauseCatalogTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-clause-catalog.ttl")
+	restore := swapShapeSource(t, fixtureShapeSource{
+		shapesTTL:   canonicalTTL + "\n\n" + clauseCatalogTTL,
+		profileYAML: "id: t\nversion: t\nrules: []\n",
+		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+	})
+	defer restore()
+
+	invalidClause := map[string]any{
+		"@context":     map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "xsd": "http://www.w3.org/2001/XMLSchema#"},
+		"@id":          "urn:facis:dcs:clause:payment-001",
+		"@type":        "dcs:PaymentClause",
+		"dcs:amount":   map[string]any{"@value": -5, "@type": "xsd:integer"},
+		"dcs:currency": "EUR",
+	}
+	findings, err := AuditContractContent(context.Background(), invalidClause, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	finding := requirePolicyFinding(t, findings, "amount-MinInclusiveConstraintComponent")
+	require.Equal(t, "error", finding.Severity)
+
+	validClause := map[string]any{
+		"@context":     map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "xsd": "http://www.w3.org/2001/XMLSchema#"},
+		"@id":          "urn:facis:dcs:clause:payment-002",
+		"@type":        "dcs:PaymentClause",
+		"dcs:amount":   map[string]any{"@value": 100, "@type": "xsd:integer"},
+		"dcs:currency": "EUR",
+	}
+	okFindings, err := AuditContractContent(context.Background(), validClause, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Empty(t, okFindings)
+}
+
 func mapPolicy(enforceShapes, enforceProfile bool) map[string]any {
 	return map[string]any{
 		"policySetId":              "facis.dcs.contract.structure-semantics",

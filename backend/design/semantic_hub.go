@@ -19,6 +19,40 @@ var SemanticSchemaItem = Type("SemanticSchemaItem", func() {
 	Required("name", "version", "kind", "media_type", "content", "active", "created_by", "created_at")
 })
 
+var ClauseCatalogProperty = Type("ClauseCatalogProperty", func() {
+	Description("One typed clause property (a SHACL sh:property on a clause NodeShape), pre-digested for form generation")
+
+	Attribute("path", String, "Property path (compact local name, e.g. \"amount\")")
+	Attribute("datatype", String, "XSD datatype local name (e.g. \"integer\", \"string\"), empty if unconstrained")
+	Attribute("in", ArrayOf(String), "Allowed value set (sh:in), empty if unconstrained")
+	Attribute("min_count", Int, "sh:minCount, 0 if unconstrained")
+	Attribute("max_count", Int, "sh:maxCount, 0 if unconstrained")
+	Attribute("min_inclusive", Float64, "sh:minInclusive, present only if declared")
+	Attribute("max_inclusive", Float64, "sh:maxInclusive, present only if declared")
+
+	Required("path")
+})
+
+var ClauseCatalogType = Type("ClauseCatalogType", func() {
+	Description("One typed clause (a SHACL NodeShape targeting a clause class), pre-digested for the template builder's palette")
+
+	Attribute("type", String, "The clause's dcs:type (e.g. \"dcs:PaymentClause\")")
+	Attribute("label", String, "Human-readable label (rdfs:label on the shape, falls back to the type's local name)")
+	Attribute("properties", ArrayOf(ClauseCatalogProperty), "The clause's typed properties")
+
+	Required("type", "label", "properties")
+})
+
+var ClauseCatalogResponse = Type("ClauseCatalogResponse", func() {
+	Description("The active clause catalog: a pre-digested JSON form-schema plus the raw SHACL shapes it was derived from")
+
+	Attribute("version", Int, "The clause-catalog hub version this catalog was read from")
+	Attribute("clauses", ArrayOf(ClauseCatalogType), "Pre-digested clause type form-schemas")
+	Attribute("shapes", String, "The raw SHACL Turtle the catalog was derived from")
+
+	Required("version", "clauses", "shapes")
+})
+
 var SemanticSchemaRegisterResponse = Type("SemanticSchemaRegisterResponse", func() {
 	Description("Result of registering a Semantic Hub schema version")
 
@@ -178,6 +212,23 @@ var _ = Service("SemanticHub", func() {
 			Param("version")
 			Response(StatusOK)
 			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("clauses", func() {
+		Description("List the active clause catalog (DCS-FR-TR-03/TR-04, Phase 3, ADR-10): typed clause NodeShapes the template builder's palette generates a form from, pre-digested into a JSON form-schema server-side (each clause type's target class, label, and properties with their datatype/sh:in/min-max constraints) plus the raw SHACL Turtle for a future shacl-form-style client. Public, like resolve_context: a produced contract's typed clauses are validated against these same shapes (validateAgainstHubShapes), and an external verifier resolving dcs:schemaRefs needs to read them too.")
+		Meta("dcs:requirements", "DCS-FR-TR-03", "DCS-FR-TR-04")
+		Meta("dcs:ui", "Template Management Dashboard")
+		NoSecurity()
+
+		Result(ClauseCatalogResponse)
+
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/semantic/clauses")
+			Response(StatusOK)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

@@ -90,3 +90,20 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
     Given contract "Hub Restored Post-Rollback Contract" is in "Draft" status
     When the Auditor triggers a process audit with scope "contracts"
     Then the contract content audit trail for "Hub Restored Post-Rollback Contract" does not report an error for rule "title-InConstraintComponent"
+
+  # Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): the template builder's clause
+  # palette is generated from this endpoint, not hand-authored — a clause
+  # type is a real SHACL NodeShape in the hub (clause-catalog), pre-digested
+  # server-side into a form-schema so the palette and what
+  # validateAgainstHubShapes actually enforces on a submitted clause share
+  # one source of truth. Typed-clause SHACL enforcement itself (a negative
+  # sh:minInclusive amount rejected, a valid one accepted) is proven at the
+  # Go unit level (TestAuditContractContentValidatesTypedClauses,
+  # backend/internal/base/validation/contractcontentaudit_test.go), which
+  # exercises the exact same concatenated shapes graph this endpoint serves.
+  @DCS-FR-TR-03 @DCS-FR-TR-04
+  Scenario: The clause catalog is seeded and publicly served as a generated form-schema
+    When the Semantic Hub clause catalog is requested without authentication
+    Then get http 200:Success code
+    And the clause catalog lists a "dcs:PaymentClause" clause type with properties "dcs:amount", "dcs:currency", "dcs:dueDays"
+    And the clause catalog response carries the raw SHACL shapes it was derived from

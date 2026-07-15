@@ -152,6 +152,55 @@ func (s *semanticHubsrvc) ResolveContext(ctx context.Context, p *semantichubgen.
 	return doc, nil
 }
 
+// Clauses serves the pre-digested clause catalog form-schema (Phase 3,
+// ADR-10): the same shapes graph validateAgainstHubShapes concatenates into
+// contract validation, so the template builder's palette and server-side
+// enforcement never drift apart.
+func (s *semanticHubsrvc) Clauses(ctx context.Context) (res *semantichubgen.ClauseCatalogResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, semantichub.ClauseCatalogName, "shapes", nil)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := semantichub.ParseClauseCatalog(schema.Content)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(fmt.Errorf("parse clause catalog v%d: %w", schema.Version, err))
+	}
+
+	clauses := make([]*semantichubgen.ClauseCatalogType, 0, len(entries))
+	for _, entry := range entries {
+		properties := make([]*semantichubgen.ClauseCatalogProperty, 0, len(entry.Properties))
+		for _, p := range entry.Properties {
+			prop := &semantichubgen.ClauseCatalogProperty{
+				Path:         p.Path,
+				In:           p.In,
+				MinInclusive: p.MinInclusive,
+				MaxInclusive: p.MaxInclusive,
+			}
+			if p.Datatype != "" {
+				datatype := p.Datatype
+				prop.Datatype = &datatype
+			}
+			prop.MinCount = p.MinCount
+			prop.MaxCount = p.MaxCount
+			properties = append(properties, prop)
+		}
+		clauses = append(clauses, &semantichubgen.ClauseCatalogType{
+			Type:       entry.Type,
+			Label:      entry.Label,
+			Properties: properties,
+		})
+	}
+
+	return &semantichubgen.ClauseCatalogResponse{
+		Version: schema.Version,
+		Clauses: clauses,
+		Shapes:  schema.Content,
+	}, nil
+}
+
 func (s *semanticHubsrvc) getSchema(ctx context.Context, name, kind string, version *int) (*semantichub.Schema, error) {
 	tx, err := s.DB.BeginTxx(ctx, nil)
 	if err != nil {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
+import TypedClausePalette from '@template-repository/components/clauses-editor/TypedClausePalette.vue'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
@@ -85,6 +86,10 @@ function deleteClause(blockId: string) {
   if (editingBlockId.value === blockId) cancelEdit()
 }
 
+function addTypedClause(payload: { clauseType: string; title: string; values: Record<string, unknown> }) {
+  store.addTypedClause(payload)
+}
+
 function placeClause(blockId: string) {
   const root = rootBlock.value
   if (!root) return
@@ -107,6 +112,12 @@ function placeClause(blockId: string) {
         @submit="addClause"
         @cancel="cancelPendingClauseDraft"
       />
+    </section>
+
+    <!-- Section 1b: Typed clauses (Semantic Hub clause catalog, DCS-FR-TR-03/TR-04) -->
+    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Typed clauses</h3>
+      <TypedClausePalette @submit="addTypedClause" />
     </section>
 
     <!-- Section 2: Existing clauses -->
