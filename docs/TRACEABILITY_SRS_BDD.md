@@ -5,6 +5,15 @@
 mapping metadata, not requirements). Coverage: `features/**/*.feature` (behave suite run on every
 CI push, kind-in-docker).
 
+**2026-07-17 wave note.** First fully green combined CI run: behave (312 scenarios) and the
+Playwright suite (11 specs) pass in the same kind-stack job (run 29541989685 @ 27c0a1be).
+Since the 2026-07-16 note the E2E layer grew the Semantic Hub management specs
+(e2e/semantic-hub-publish.spec.ts) and surfaced a fifth UI defect (shacl-form fragments one
+subject across several @id-sharing node objects; merged before emission) plus one product
+concurrency bug: the async PDF/C2PA pipeline's cache write bumped contracts.updated_at and
+tripped optimistic concurrency for racing editors — fixed so updated_at moves only on
+non-cache column changes (migration 20260717, caught by the C2PA chain scenario).
+
 **2026-07-16 wave note.** A Playwright E2E layer now covers the browser UI
 (frontend/ClientApp/e2e, run in CI after behave against the same kind stack): real OID4VP
 sessions per test, API-seeded fixtures, 9/9 specs green. It surfaced and fixed four real UI
@@ -38,9 +47,9 @@ not a coverage hole.
 
 | Status | Meaning | Count |
 |---|---|---|
-| ✅ Covered | scenario(s) or Playwright specs assert the requirement end-to-end | 152 |
+| ✅ Covered | scenario(s) or Playwright specs assert the requirement end-to-end | 156 |
 | 🔧 In progress | being implemented | 0 |
-| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 46 |
+| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 42 |
 | 📋 Not BDD-verifiable | infrastructure/process requirement — verified outside the automated harnesses | 24 |
 | ❌ Deviation | capability not implemented in the product; recorded deviation | 3 |
 | | **Total** | **225** |
@@ -51,7 +60,7 @@ not a coverage hole.
 |---|---|---|---|
 | DCS-FR-TR-01 | Machine-Readable Format | ✅ Covered | Templates stored/retrieved as JSON-LD — 02/create_template, 02/template_identity; editor state is the JSON-LD doc. |
 | DCS-FR-TR-02 | Multi-Tiered Contract Template Management | ✅ Covered | 20/hierarchy invariant scenarios (tagged @DCS-FR-TR-02): parent refs, child-enumeration rejection, cycle rejection. |
-| DCS-FR-TR-03 | Semantic Hub for Schema Storage | ✅ Covered | Semantic Hub built (23/semantic_hub): versioned JSON-LD context + SHACL shape storage seeded with the FACIS v1 profile, public resolution, Template-Manager register/rollback (UC-02-08), every produced document anchored via resolvable standard-vocabulary anchors (@context hub URL, sh:shapesGraph, dcterms:conformsTo), and hub-prefix redefinition rejected at template creation. ADR-8: enforcement (`AuditContractContent`) reads its SHACL shapes/validation profile from the hub's active (or, for revalidation, pinned-per-document) version, hub-only (no disk fallback) — 23/semantic_hub "Activating a stricter SHACL shapes version..." proves activate/rollback actually changes what gets enforced, and that already-produced contracts stay pinned. ADR-9: the enforcement engine is goRDFlib, a conformant SHACL-core processor verified against the W3C SHACL/SHACL-1.2 suites (388/388, pinned commit recorded in the ADR) — real `sh:datatype`/`sh:minInclusive`/`sh:pattern`/`sh:node`/`sh:nodeKind` constraints, not a hand-rolled subset matcher; `internal/base/validation/contractcontentaudit_test.go` `TestAuditContractContentSHACLRejectsWrongDatatype` is the unit-level xsd:integer-rejection proof. |
+| DCS-FR-TR-03 | Semantic Hub for Schema Storage | ✅ Covered | Semantic Hub built (23/semantic_hub): versioned JSON-LD context + SHACL shape storage seeded with the FACIS v1 profile, public resolution, Template-Manager register/rollback (UC-02-08), every produced document anchored via resolvable standard-vocabulary anchors (@context hub URL, sh:shapesGraph, dcterms:conformsTo), and hub-prefix redefinition rejected at template creation. Hub management UI asserted: e2e/semantic-hub.spec.ts (dashboard lists every registered artifact from the live inventory; clause catalog served with labeled, shape-backed entries) and e2e/semantic-hub-publish.spec.ts (an operator publishes a brand-new shapes entry through the UI and it resolves immediately on the public route — the Gaia-X case; register + activate a new version of an existing entry). ADR-8: enforcement (`AuditContractContent`) reads its SHACL shapes/validation profile from the hub's active (or, for revalidation, pinned-per-document) version, hub-only (no disk fallback) — 23/semantic_hub "Activating a stricter SHACL shapes version..." proves activate/rollback actually changes what gets enforced, and that already-produced contracts stay pinned. ADR-9: the enforcement engine is goRDFlib, a conformant SHACL-core processor verified against the W3C SHACL/SHACL-1.2 suites (388/388, pinned commit recorded in the ADR) — real `sh:datatype`/`sh:minInclusive`/`sh:pattern`/`sh:node`/`sh:nodeKind` constraints, not a hand-rolled subset matcher; `internal/base/validation/contractcontentaudit_test.go` `TestAuditContractContentSHACLRejectsWrongDatatype` is the unit-level xsd:integer-rejection proof. |
 | DCS-FR-TR-04 | Machine-Readable and Human-Readable Template Linking | ✅ Covered | MR→HR derivation proven via template PDF export + verify (02/template_integrity_audit); bidirectional *link* metadata not modeled beyond same-DID pairing. Phase 3 (ADR-10) partially addresses the machine-readable half for clauses specifically: typed clause instances (dcs:PaymentClause etc.) are generated from and validated against the same Semantic Hub SHACL shapes (GET /semantic/clauses, 23/semantic_hub "The clause catalog is seeded..."), so a clause's authored form and its enforcement share one source of truth — TestAuditContractContentValidatesTypedClauses proves server-side enforcement; the frontend palette (TypedClausePalette.vue) is manual/UI-review evidence, consistent with the existing DCS-IR-TR partial-row convention. Now fully covered: every machine rule must carry dcs:prose referencing its human-readable clause (Go gate + Odrl*ProseShape SHACL, 18 structure scenario), and e2e/template-typed-clause.spec.ts proves the UI end: a hub-palette typed clause becomes a prose-backed rule whose dcs:prose dereferences to a document block. |
 | DCS-FR-TR-05 | Template Version Control | ✅ Covered | Template versions/approvals tracked; template audit-log scenario (02, @DCS-FR-TR-21/TR-05). retrieve_history_by_id exists. |
 | DCS-FR-TR-06 | Role-Based Access Control for Template Repository | ✅ Covered | RBAC negative scenarios: 02/create, 02/update, 02/archive, 02/workflow 'Unauthorized role cannot …' + 01 pack 401 sweep. |
@@ -225,8 +234,8 @@ not a coverage hole.
 
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
-| DCS-IR-TR-01 | Template Builder MUST allow Template Creator to create new contract… | 🟡 Partial | API: 02 create/update template. Builder UI out of harness (22 UI-gap precedent). |
-| DCS-IR-TR-02 | Template Builder MUST allow searching and retrieving existing templ… | 🟡 Partial | API: 02 search/retrieve. UI out of harness. |
+| DCS-IR-TR-01 | Template Builder MUST allow Template Creator to create new contract… | ✅ Covered | API: 02 create/update template. Builder UI now asserted: e2e/template-typed-clause.spec.ts creates a brand-new template through the visual builder (/ui/templates/new → hub typed-clause palette → shacl-form → save) and verifies the emitted /template/create envelope. |
+| DCS-IR-TR-02 | Template Builder MUST allow searching and retrieving existing templ… | 🟡 Partial | API: 02 search/retrieve. Template listing UI asserted (e2e/dashboards.spec.ts); in-UI search interaction unasserted. |
 | DCS-IR-TR-03 | Template Review MUST allow Reviewers to retrieve, verify, update, a… | 🟡 Partial | API: 02 workflow review steps. UI out of harness. |
 | DCS-IR-TR-04 | Template Review MUST support forwarding a verified template to appr… | 🟡 Partial | API: 02 approve/reject/resubmit transitions. UI out of harness. |
 | DCS-IR-TR-05 | Template Approval MUST allow Approvers to retrieve, approve, reject… | 🟡 Partial | API: 02 approval set. UI out of harness. |
@@ -239,7 +248,7 @@ not a coverage hole.
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
 | DCS-IR-CWE-01 | Contract Creation UI MUST allow Contract Creators to create and sub… | 🟡 Partial | API: 03 create from approved template. UI out of harness. |
-| DCS-IR-CWE-02 | Contract Creation UI MUST enable population of contract data, inclu… | 🟡 Partial | API: parties/policies/evidence populated at create (03, 18, 05 evidence). UI out of harness. |
+| DCS-IR-CWE-02 | Contract Creation UI MUST enable population of contract data, inclu… | ✅ Covered | API: parties/policies/evidence populated at create (03, 18, 05 evidence). UI now asserted: e2e/contract-fill.spec.ts fills a placeholder through the edit UI and the emitted document carries the forField-bound typed value in an odrl:Offer, with no editor-internal keys leaking. |
 | DCS-IR-CWE-03 | Contract Negotiation UI MUST allow parties to exchange responses, r… | 🟡 Partial | API: negotiation responses/redlines/comments (03). UI out of harness. |
 | DCS-IR-CWE-04 | Contract Negotiation UI MUST support comparison of contract version… | 🟡 Partial | API: version history compare (03). UI out of harness. |
 | DCS-IR-CWE-05 | Contract Review UI MUST allow Reviewers to retrieve, inspect, and v… | ✅ Covered | 03 state-machine invalid-transition + approval-chain scenarios (tagged @DCS-IR-CWE-05): review path enforced. |
@@ -248,7 +257,7 @@ not a coverage hole.
 | DCS-IR-CWE-08 | Contract Approval UI MUST allow Approvers to retrieve contracts in … | 🟡 Partial | API: approvers retrieve reviewed contracts (03/contract_approval). UI out of harness. |
 | DCS-IR-CWE-09 | Contract Approval UI MUST allow Approvers to approve, reject (with … | ✅ Covered | Approve / reject-with-reason / resubmit proven (03/contract_approval + state machine). |
 | DCS-IR-CWE-10 | Contract Approval UI MUST ensure approved contracts are forwarded i… | ✅ Covered | Approved contracts proceed to signing (03 approval-transition + 22, tagged @DCS-IR-CWE-10). Catalogue forwarding is a deliberate MANUAL user action by architectural decision: catalogue registration can fail, be re-run, or be unconfigured — an explicit action models that honestly (same rationale as template publication, 02/template_catalogue). |
-| DCS-IR-CWE-11 | Contract Management Dashboard UI MUST allow Managers to retrieve an… | 🟡 Partial | API: lifecycle-wide search (03 state-filtered search). Dashboard UI out of harness. |
+| DCS-IR-CWE-11 | Contract Management Dashboard UI MUST allow Managers to retrieve an… | ✅ Covered | API: lifecycle-wide search (03 state-filtered search). Dashboard UI now asserted: e2e/dashboards.spec.ts (contract dashboard lists contracts with their lifecycle state for the Contract Manager role). |
 | DCS-IR-CWE-12 | Contract Management Dashboard UI MUST allow Managers to store evide… | 🟡 Partial | API: evidence store (05 TSA receipt), terminate (06), audits (08). UI out of harness. |
 | DCS-IR-CWE-13 | Contract Management Dashboard UI MUST provide lifecycle monitoring … | 🟡 Partial | API: lifecycle monitoring via states/history/KPIs (05). UI out of harness. |
 
@@ -267,7 +276,7 @@ not a coverage hole.
 
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
-| DCS-IR-SM-01 | Secure Contract Viewer UI MUST allow Signers and Managers to retrie… | 🟡 Partial | API: approved-contract retrieval for signing (22). Viewer UI out of harness. |
+| DCS-IR-SM-01 | Secure Contract Viewer UI MUST allow Signers and Managers to retrie… | ✅ Covered | API: approved-contract retrieval for signing (22). Viewer UI now asserted: e2e/dashboards.spec.ts renders the human-readable document from the machine-readable JSON-LD in the contract view (Contract Content tab). |
 | DCS-IR-SM-02 | Secure Contract Viewer UI MUST allow verification of contract integ… | ✅ Covered | Integrity/envelope verification via verify endpoints (08, 19, 22 verify cross-check). |
 | DCS-IR-SM-03 | Secure Contract Viewer UI MUST allow applying signatures with appro… | ✅ Covered | Signature application with verified credentials (22 ceremony-gate + webhook/PID scenarios). |
 | DCS-IR-SM-04 | Secure Contract Viewer UI MUST allow validation of applied signatur… | ✅ Covered | Applied-signature validation endpoint scenario (04, tagged @DCS-FR-SM-18). |
