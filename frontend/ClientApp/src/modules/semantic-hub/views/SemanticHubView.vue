@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import PublishEntryForm from '@/modules/semantic-hub/components/PublishEntryForm.vue'
 import RegisterVersionForm from '@/modules/semantic-hub/components/RegisterVersionForm.vue'
 import {
   getSchemaVersions,
@@ -84,6 +85,12 @@ async function onRegistered() {
   await afterMutation()
 }
 
+async function onPublished(name: string, kind: string) {
+  await loadEntries()
+  const entry = entries.value.find((candidate) => candidate.name === name && candidate.kind === kind)
+  if (entry) select(entry)
+}
+
 async function afterMutation() {
   await Promise.all([loadEntries(), loadVersions()])
   // A clause-catalog change must reach the template builder's palette
@@ -109,7 +116,8 @@ onMounted(loadEntries)
 
     <div class="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_2fr]">
       <!-- Entry list -->
-      <section class="rounded-lg border border-base-300 bg-base-100 shadow-sm">
+      <section class="space-y-4">
+        <div class="rounded-lg border border-base-300 bg-base-100 shadow-sm">
         <div class="border-b border-base-300 px-4 py-3">
           <h2 class="text-sm font-semibold text-base-content/80">Entries</h2>
         </div>
@@ -137,6 +145,13 @@ onMounted(loadEntries)
           </li>
           <li v-if="!entries.length" class="px-4 py-3 text-sm text-base-content/50">No hub entries.</li>
         </ul>
+        </div>
+
+        <!-- Publish new entry -->
+        <div class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+          <h2 class="mb-3 text-sm font-semibold text-base-content/80">Publish new entry</h2>
+          <PublishEntryForm @published="onPublished" />
+        </div>
       </section>
 
       <!-- Detail -->
