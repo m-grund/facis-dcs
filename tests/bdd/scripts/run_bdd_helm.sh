@@ -149,6 +149,43 @@ fi
 wait_for_dcs_http
 echo "DCS is reachable at $DCS_HEALTH_URL"
 
+# The Federated Catalogue's /verification endpoint needs Neo4j and its
+# schema cache warm before it answers within the DCS client timeout;
+# template registration flows (features/02, template_archive) fail with
+# gateway timeouts when the suite starts against a cold FC. Warm it with
+# real verification requests through a temporary port-forward until one
+# completes, however it completes.
+wait_for_fc_verification() {
+  local fc_deploy="${HELM_RELEASE}-federated-catalogue"
+  if ! "$KUBECTL_BIN" -n "$K8S_NAMESPACE" get "deployment/$fc_deploy" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "Warming the Federated Catalogue verification endpoint ($fc_deploy)"
+  "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=300s "deployment/$fc_deploy"
+  "$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "deployment/$fc_deploy" 18581:8081 >/dev/null 2>&1 &
+  local pf_pid=$!
+  local deadline=$(( $(date +%s) + 300 ))
+  local warmed=1
+  sleep 2
+  until curl -s -o /dev/null --max-time 8 -X POST \
+      "http://localhost:18581/verification?verifySchema=true&verifySemantics=true&verifySignatures=false&verifyVCSignature=false&verifyVPSignature=false" \
+      -H 'Content-Type: application/json' -d '{}' 2>/dev/null; do
+    if [ "$(date +%s)" -gt "$deadline" ]; then
+      echo "Timed out warming the Federated Catalogue verification endpoint"
+      warmed=0
+      break
+    fi
+    sleep 5
+  done
+  kill "$pf_pid" >/dev/null 2>&1 || true
+  if [ "$warmed" -eq 1 ]; then
+    echo "Federated Catalogue verification endpoint is responding"
+  else
+    return 1
+  fi
+}
+wait_for_fc_verification
+
 # Instance B (dcs2, features/17_peer_trust @two-instance): only checked when
 # the caller tells us it exists (DCS_DEPLOYMENT_B set AND actually present in
 # this namespace) — never silently skipped without saying so, since a

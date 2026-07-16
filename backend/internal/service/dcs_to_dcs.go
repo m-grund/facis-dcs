@@ -582,20 +582,23 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	// Phase 4 (DCS-to-DCS, DCS-FR-TR-03): resolve the synced contract's own
-	// sh:shapesGraph back to the ORIGINATOR's public Semantic Hub — not this
-	// instance's local one, which may run a different active version — and
-	// re-validate against those exact pinned shapes. Best-effort and
-	// non-blocking: a peer's hub being briefly unreachable must never fail
-	// an otherwise-trusted, JAdES-verified sync; the outcome is logged for
-	// audit, the four trust layers above already gated acceptance.
-	if findings, verifyErr := verifyAgainstOriginatorHubAnyScheme(ctx, req.Contract.ContractData, senderHostname); verifyErr != nil {
-		log.Printf(ctx, "post_sync: could not verify %s against originator %s's Semantic Hub: %v", req.Contract.Did, senderHostname, verifyErr)
-	} else if len(findings) > 0 {
-		log.Printf(ctx, "post_sync: %s has %d SHACL finding(s) against originator %s's own Semantic Hub", req.Contract.Did, len(findings), senderHostname)
-	} else {
-		log.Printf(ctx, "post_sync: %s validates cleanly against originator %s's own Semantic Hub", req.Contract.Did, senderHostname)
-	}
+	// Resolve the synced contract's own sh:shapesGraph back to the
+	// ORIGINATOR's public Semantic Hub and re-validate against those exact
+	// pinned shapes. Advisory, logged, and detached from the request: the
+	// remote fetches and SHACL run must not delay sync replication, and a
+	// peer's hub being briefly unreachable must never fail an
+	// otherwise-trusted, JAdES-verified sync.
+	go func(contractDID string, contractDocument any) {
+		verifyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+		defer cancel()
+		if findings, verifyErr := verifyAgainstOriginatorHubAnyScheme(verifyCtx, contractDocument, senderHostname); verifyErr != nil {
+			log.Printf(verifyCtx, "post_sync: could not verify %s against originator %s's Semantic Hub: %v", contractDID, senderHostname, verifyErr)
+		} else if len(findings) > 0 {
+			log.Printf(verifyCtx, "post_sync: %s has %d SHACL finding(s) against originator %s's own Semantic Hub", contractDID, len(findings), senderHostname)
+		} else {
+			log.Printf(verifyCtx, "post_sync: %s validates cleanly against originator %s's own Semantic Hub", contractDID, senderHostname)
+		}
+	}(req.Contract.Did, req.Contract.ContractData)
 
 	// Persist the verified JAdES artifact so the synced contract's
 	// cross-instance provenance stays independently re-verifiable
