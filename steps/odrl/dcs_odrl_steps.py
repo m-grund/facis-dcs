@@ -253,9 +253,13 @@ def step_then_policies_form_enclosing_set(context, name):
         f"expected the enclosing policy node's @type to be 'odrl:Agreement' "
         f"(a party-bound contract instance), got {policies.get('@type')!r}"
     )
-    assert policies.get("uid") == did, (
-        f"expected the odrl:Agreement's uid to equal the contract DID {did!r}, got "
-        f"{policies.get('uid')!r}"
+    policy_id = policies.get("@id") or ""
+    assert did in policy_id, (
+        f"expected the odrl:Agreement's @id (its odrl:uid) to be anchored to the "
+        f"contract DID {did!r}, got {policy_id!r}"
+    )
+    assert "uid" not in policies, (
+        f"a separate uid key duplicates the policy identity (@id): {policies.get('uid')!r}"
     )
     profile = policies.get("odrl:profile")
     assert profile, f"expected odrl:profile to be declared on the enclosing odrl:Agreement, got: {profile!r}"

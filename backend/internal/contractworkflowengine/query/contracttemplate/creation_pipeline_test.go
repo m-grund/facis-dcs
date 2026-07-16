@@ -172,7 +172,6 @@ func creationPipelinePolicyDefinitions() map[string]any {
 	return map[string]any{
 		"@id":          creationTemplateDID + "#policy-set-1",
 		"@type":        "odrl:Offer",
-		"uid":          creationTemplateDID,
 		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
 		"odrl:obligation": []any{
 			creationPipelinePolicy(

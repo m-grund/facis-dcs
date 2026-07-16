@@ -154,8 +154,6 @@ export interface OdrlRule {
 export interface OdrlSet {
   '@id': string
   '@type': 'odrl:Offer' | 'odrl:Agreement'
-  /** Equals the template/contract DID. */
-  uid: string
   'odrl:profile': JsonLdReference
   /** Policy-level Duty rules (ODRL 2.2: a Policy carries obligation, never duty — duty nests under a Permission). */
   'odrl:obligation'?: OdrlRule[]

@@ -77,7 +77,6 @@ func wrapODRLSet(rules []any) any {
 	}
 	return map[string]any{
 		"@type":           "odrl:Agreement",
-		"uid":             "did:example:contract",
 		"odrl:profile":    map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
 		"odrl:obligation": rules,
 	}

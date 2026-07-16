@@ -67,7 +67,6 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		"dcs:policies": map[string]any{
 			"@id":          "did:web:facis.example:template:1#policy-set-1",
 			"@type":        "odrl:Offer",
-			"uid":          "did:web:facis.example:template:1",
 			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
 			"odrl:obligation": []any{
 				map[string]any{

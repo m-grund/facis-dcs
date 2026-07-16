@@ -10,7 +10,7 @@ carrying either:
     `odrl:constraint` — no `odrl:action`, no enclosing policy node, no
     parties/target), or
   - the canonical ODRL 2.2 shape (docs/adr-6-odrl-profile-enforcement.md):
-    one enclosing `odrl:Agreement` (`uid` == the contract DID, `odrl:profile`
+    one enclosing `odrl:Agreement` (its @id is its odrl:uid, `odrl:profile`
     declared),
     whose rules each carry exactly one `odrl:action` plus
     `odrl:assigner`/`odrl:assignee`/`odrl:target`.
@@ -105,7 +105,6 @@ def odrl_set_policies(
     return {
         "@id": "urn:uuid:policy-set-1",
         "@type": "odrl:Agreement",
-        "uid": contract_did,
         "odrl:profile": {"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
         rule_bucket: [rule],
     }

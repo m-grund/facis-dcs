@@ -541,7 +541,6 @@ function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string, d
   const set: OdrlSet = {
     '@id': policySetIri(documentId),
     '@type': documentType === 'dcs:Contract' ? 'odrl:Agreement' : 'odrl:Offer',
-    uid: documentId ?? policySetIri(documentId),
     'odrl:profile': { '@id': DCS_ODRL_PROFILE_IRI },
   }
   const duties = policies.filter((p) => p['@type'] === 'odrl:Duty')

@@ -499,7 +499,7 @@ def step_when_post_to_orce_directly(context, name):
             "@type": "dcs:Contract",
             "dcs:contractDid": did,
         },
-        "odrl:policy": {"@id": "urn:uuid:bdd-orce-policy-set", "@type": "odrl:Set", "uid": did},
+        "odrl:policy": {"@id": "urn:uuid:bdd-orce-policy-set", "@type": "odrl:Set"},
     }
     content_hash = "sha256:" + hashlib.sha256(jcs.canonicalize(envelope)).hexdigest()
     envelope["dcs:contentHash"] = content_hash

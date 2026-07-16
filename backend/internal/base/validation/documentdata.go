@@ -703,8 +703,11 @@ func validateODRLPolicySet(set map[string]any, policyType string) error {
 	if _, hasDutyBucket := set["odrl:duty"]; hasDutyBucket {
 		return errors.New("odrl:duty is not a policy-level property in ODRL 2.2 (a Duty hangs under a Permission); policy-level duties belong under odrl:obligation")
 	}
-	if uid, _ := set["uid"].(string); strings.TrimSpace(uid) == "" {
-		return fmt.Errorf("dcs:policies odrl:%s requires a uid", policyType)
+	if _, hasUID := set["uid"]; hasUID {
+		return errors.New("the policy's identity is its @id (the ODRL JSON-LD context maps uid to @id); a separate uid key is not accepted")
+	}
+	if id, _ := set["@id"].(string); strings.TrimSpace(id) == "" {
+		return fmt.Errorf("dcs:policies odrl:%s requires an @id (its odrl:uid)", policyType)
 	}
 	if _, hasProfile := set["odrl:profile"]; !hasProfile {
 		return fmt.Errorf("dcs:policies odrl:%s must declare odrl:profile", policyType)

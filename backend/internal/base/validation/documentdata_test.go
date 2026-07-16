@@ -117,7 +117,6 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 		"dcs:policies": map[string]any{
 			"@id":          "urn:uuid:policy-set-1",
 			"@type":        "odrl:Offer",
-			"uid":          "urn:uuid:policy-set-1",
 			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
 			"odrl:obligation": []any{
 				map[string]any{
