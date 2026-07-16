@@ -507,29 +507,29 @@ function requirementForField(
   return contractData.find((r) => r['dcs:fields'].some((f) => f['@id'] === fieldId))
 }
 
-/** Assembles the single enclosing odrl:Set (DCS ODRL profile) from the flat internal rule array. */
-function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string): OdrlSet {
+/** Assembles the single enclosing ODRL policy (Offer on templates, Agreement on contracts) from the flat internal rule array. */
+function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string, documentType?: string): OdrlSet {
   const set: OdrlSet = {
     '@id': policySetIri(documentId),
-    '@type': 'odrl:Set',
+    '@type': documentType === 'dcs:Contract' ? 'odrl:Agreement' : 'odrl:Offer',
     uid: documentId ?? policySetIri(documentId),
     'odrl:profile': { '@id': DCS_ODRL_PROFILE_IRI },
   }
   const duties = policies.filter((p) => p['@type'] === 'odrl:Duty')
   const permissions = policies.filter((p) => p['@type'] === 'odrl:Permission')
   const prohibitions = policies.filter((p) => p['@type'] === 'odrl:Prohibition')
-  if (duties.length) set['odrl:duty'] = duties
+  if (duties.length) set['odrl:obligation'] = duties
   if (permissions.length) set['odrl:permission'] = permissions
   if (prohibitions.length) set['odrl:prohibition'] = prohibitions
   return set
 }
 
-/** Flattens the enclosing odrl:Set (or the empty "no policies yet" array) into the flat internal rule array. */
+/** Flattens the enclosing ODRL policy (or the empty "no policies yet" array) into the flat internal rule array. */
 export function flattenPolicySet(policies: OdrlSet | OdrlRule[] | undefined): OdrlRule[] {
   if (!policies) return []
   if (Array.isArray(policies)) return policies
   return [
-    ...(policies['odrl:duty'] ?? []),
+    ...(policies['odrl:obligation'] ?? []),
     ...(policies['odrl:permission'] ?? []),
     ...(policies['odrl:prohibition'] ?? []),
   ]
@@ -593,7 +593,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       'dcs:layout': canonicalLayout,
     },
     'dcs:contractData': input.contractData,
-    'dcs:policies': assemblePolicySet(input.policies, input.documentId),
+    'dcs:policies': assemblePolicySet(input.policies, input.documentId, input.documentType),
     ...(input.documentType === 'dcs:Contract'
       ? {
           semanticConditionValues: input.semanticConditionValues ?? [],

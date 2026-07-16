@@ -87,6 +87,9 @@ func ConvertTemplateDataToContractData(raw *datatype.JSON, templateDID string, t
 	if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {
 		metadata["@type"] = "dcs:ContractMetadata"
 	}
+	if policies, ok := templateDataMap["dcs:policies"].(map[string]interface{}); ok {
+		policies["@type"] = "odrl:Agreement"
+	}
 	templateDataMap["sourceTemplate"] = map[string]interface{}{
 		"did": templateDID,
 	}

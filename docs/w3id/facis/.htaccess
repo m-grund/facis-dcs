@@ -2,6 +2,9 @@ Header set Access-Control-Allow-Origin *
 Options +FollowSymLinks
 RewriteEngine on
 
+# DCS ODRL profile (must precede the ontology rule — same path prefix)
+RewriteRule ^dcs/ontology/v1/odrl-profile$ FACIS_PUBLIC_HOST/semantic/ontology/dcs-odrl-profile [R=302,L]
+
 # FACIS DCS ontology (terms are fragments on the served document)
 RewriteRule ^dcs/ontology/v1$ FACIS_PUBLIC_HOST/semantic/ontology/facis-dcs [R=302,L]
 

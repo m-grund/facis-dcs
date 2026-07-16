@@ -76,10 +76,10 @@ func wrapODRLSet(rules []any) any {
 		return []any{}
 	}
 	return map[string]any{
-		"@type":        "odrl:Set",
+		"@type":        "odrl:Agreement",
 		"uid":          "did:example:contract",
 		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-		"odrl:duty":    rules,
+		"odrl:obligation": rules,
 	}
 }
 
@@ -394,7 +394,7 @@ func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testi
 
 func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) {
 	contract := canonicalAuditContract()
-	policy := contract["dcs:policies"].(map[string]any)["odrl:duty"].([]any)[0].(map[string]any)
+	policy := contract["dcs:policies"].(map[string]any)["odrl:obligation"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
 

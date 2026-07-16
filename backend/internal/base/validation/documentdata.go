@@ -235,7 +235,7 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 	if err := validateExternalContextsResolvable(data); err != nil {
 		return nil, err
 	}
-	if err := validateCanonicalEnvelope(data); err != nil {
+	if err := validateCanonicalEnvelope(data, expectedPolicyType("dcs:ContractTemplate")); err != nil {
 		return nil, err
 	}
 	return encodeDocumentData(data)
@@ -272,7 +272,7 @@ func NormalizeContractData(raw *datatype.JSON, _ bool) (*datatype.JSON, error) {
 	if err := validateExternalContextsResolvable(data); err != nil {
 		return nil, err
 	}
-	if err := validateCanonicalEnvelope(data); err != nil {
+	if err := validateCanonicalEnvelope(data, expectedPolicyType("dcs:Contract")); err != nil {
 		return nil, err
 	}
 	return encodeDocumentData(data)
@@ -297,7 +297,7 @@ func ValidateContractSemantics(raw *datatype.JSON) error {
 	if !isCanonicalEnvelope(data) {
 		return errors.New("contract data must use the canonical dcs:documentStructure envelope")
 	}
-	return validateCanonicalEnvelope(data)
+	return validateCanonicalEnvelope(data, expectedPolicyType("dcs:Contract"))
 }
 
 func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error) {
@@ -439,7 +439,14 @@ func validateExternalContextsResolvable(data documentData) error {
 	return nil
 }
 
-func validateCanonicalEnvelope(data documentData) error {
+func expectedPolicyType(documentType string) string {
+	if documentType == "dcs:Contract" {
+		return "Agreement"
+	}
+	return "Offer"
+}
+
+func validateCanonicalEnvelope(data documentData, policyType string) error {
 	documentStructure, ok := topLevelValue(data, "documentStructure").(map[string]any)
 	if !ok {
 		return errors.New("documentStructure must be an object")
@@ -458,7 +465,7 @@ func validateCanonicalEnvelope(data documentData) error {
 		}
 	}
 	if policies, exists := topLevelValueExists(data, "policies"); exists {
-		if err := validateODRLPoliciesShape(policies); err != nil {
+		if err := validateODRLPoliciesShape(policies, policyType); err != nil {
 			return err
 		}
 	}
@@ -623,7 +630,7 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 
 // odrlRuleBucketKeys are the ODRL 2.2 rule-bucket properties an enclosing
 // odrl:Set may carry.
-var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"}
+var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:obligation"}
 
 // collectODRLPolicyRules flattens dcs:policies into a plain list of rule
 // nodes. Only the canonical shape yields rules: a single enclosing odrl:Set
@@ -672,32 +679,35 @@ func collectODRLSetRules(set map[string]any) []map[string]any {
 //   - A single enclosing odrl:Set object is validated structurally: it must
 //     declare odrl:profile and a uid, and every contained rule must declare
 //     exactly one odrl:action plus odrl:assigner/odrl:assignee/odrl:target.
-func validateODRLPoliciesShape(policies any) error {
+func validateODRLPoliciesShape(policies any, policyType string) error {
 	switch typed := policies.(type) {
 	case []any:
 		if len(typed) == 0 {
 			return nil
 		}
-		return errors.New("dcs:policies is a bare rule array (no enclosing odrl:Set, " +
+		return errors.New("dcs:policies is a bare rule array (no enclosing policy node, " +
 			"no odrl:action, and no odrl:assigner/odrl:assignee/odrl:target), which is not accepted; " +
-			"policies must form a single enclosing odrl:Set declaring odrl:profile, whose rules each carry " +
+			"policies must form a single enclosing odrl:" + policyType + " declaring odrl:profile, whose rules each carry " +
 			"exactly one odrl:action plus odrl:assigner, odrl:assignee, and odrl:target")
 	case map[string]any:
-		return validateODRLPolicySet(typed)
+		return validateODRLPolicySet(typed, policyType)
 	default:
-		return fmt.Errorf("dcs:policies must be an odrl:Set object (or an empty array), got %T", policies)
+		return fmt.Errorf("dcs:policies must be an odrl:%s object (or an empty array), got %T", policyType, policies)
 	}
 }
 
-func validateODRLPolicySet(set map[string]any) error {
-	if compactTerm(fmt.Sprint(set["@type"])) != "Set" {
-		return fmt.Errorf("dcs:policies enclosing node @type must be odrl:Set, got %v", set["@type"])
+func validateODRLPolicySet(set map[string]any, policyType string) error {
+	if compactTerm(fmt.Sprint(set["@type"])) != policyType {
+		return fmt.Errorf("dcs:policies enclosing node @type must be odrl:%s, got %v", policyType, set["@type"])
+	}
+	if _, hasDutyBucket := set["odrl:duty"]; hasDutyBucket {
+		return errors.New("odrl:duty is not a policy-level property in ODRL 2.2 (a Duty hangs under a Permission); policy-level duties belong under odrl:obligation")
 	}
 	if uid, _ := set["uid"].(string); strings.TrimSpace(uid) == "" {
-		return errors.New("dcs:policies odrl:Set requires a uid")
+		return fmt.Errorf("dcs:policies odrl:%s requires a uid", policyType)
 	}
 	if _, hasProfile := set["odrl:profile"]; !hasProfile {
-		return errors.New("dcs:policies odrl:Set must declare odrl:profile")
+		return fmt.Errorf("dcs:policies odrl:%s must declare odrl:profile", policyType)
 	}
 	rules := collectODRLSetRules(set)
 	for index, rule := range rules {

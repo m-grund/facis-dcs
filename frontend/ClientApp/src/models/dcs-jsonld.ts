@@ -148,14 +148,15 @@ export interface OdrlRule {
   'odrl:constraint'?: OdrlConstraint
 }
 
-/** The single enclosing ODRL 2.2 policy container for a template/contract's `dcs:policies`. */
+/** The single enclosing ODRL 2.2 policy for a template (Offer) or contract (Agreement). */
 export interface OdrlSet {
   '@id': string
-  '@type': 'odrl:Set'
+  '@type': 'odrl:Offer' | 'odrl:Agreement'
   /** Equals the template/contract DID. */
   uid: string
   'odrl:profile': JsonLdReference
-  'odrl:duty'?: OdrlRule[]
+  /** Policy-level Duty rules (ODRL 2.2: a Policy carries obligation, never duty — duty nests under a Permission). */
+  'odrl:obligation'?: OdrlRule[]
   'odrl:permission'?: OdrlRule[]
   'odrl:prohibition'?: OdrlRule[]
 }

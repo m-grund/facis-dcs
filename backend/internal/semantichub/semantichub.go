@@ -39,6 +39,9 @@ var genesisOntology []byte
 //go:embed assets/facis-sla-ontology.ttl
 var genesisSLAOntology []byte
 
+//go:embed assets/dcs-odrl-profile.ttl
+var genesisODRLProfile []byte
+
 // Canonical hub schema names. ContextName is the JSON-LD context every DCS
 // document resolves its prefixes against. ClauseCatalogName is a second,
 // independently-versioned kind="shapes" entry (Phase 3, ADR-10): typed
@@ -50,6 +53,7 @@ const (
 	ProfileName       = "facis.sla.basic"
 	OntologyName      = "facis-dcs"
 	SLAOntologyName   = "facis-sla"
+	ODRLProfileName   = "dcs-odrl-profile"
 	ClauseCatalogName = "clause-catalog"
 )
 
@@ -203,6 +207,7 @@ func Seed(ctx context.Context, db *sqlx.DB) error {
 		{ClauseCatalogName, "shapes", "text/turtle", genesisClauseCatalog},
 		{OntologyName, "ontology", "text/turtle", genesisOntology},
 		{SLAOntologyName, "ontology", "text/turtle", genesisSLAOntology},
+		{ODRLProfileName, "ontology", "text/turtle", genesisODRLProfile},
 	}
 	for _, g := range genesis {
 		var exists bool

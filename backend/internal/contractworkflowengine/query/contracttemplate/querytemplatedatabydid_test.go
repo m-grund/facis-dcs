@@ -66,10 +66,10 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		},
 		"dcs:policies": map[string]any{
 			"@id":          "did:web:facis.example:template:1#policy-set-1",
-			"@type":        "odrl:Set",
+			"@type":        "odrl:Offer",
 			"uid":          "did:web:facis.example:template:1",
 			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-			"odrl:duty": []any{
+			"odrl:obligation": []any{
 				map[string]any{
 					"@id":           "did:web:facis.example:template:1#policy-cond-1-percent-0",
 					"@type":         "odrl:Duty",
@@ -121,7 +121,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		placeholder["dcs:bindsTo"].(map[string]any)["@id"],
 	)
 	policySet := data["dcs:policies"].(map[string]any)
-	policy := policySet["odrl:duty"].([]any)[0].(map[string]any)
+	policy := policySet["odrl:obligation"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	require.Equal(
 		t,

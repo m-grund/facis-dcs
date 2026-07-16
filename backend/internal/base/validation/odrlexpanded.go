@@ -152,13 +152,12 @@ func expandedTypeLocalName(node map[string]any) string {
 var odrlRuleBucketIRIs = []string{
 	odrlIRI + "permission",
 	odrlIRI + "prohibition",
-	odrlIRI + "duty",
 	odrlIRI + "obligation",
 }
 
 // expandedODRLPolicyRules flattens the document's policies into rule nodes:
-// a single enclosing odrl:Set whose rules live in the
-// permission/prohibition/duty/obligation bucket properties.
+// a single enclosing policy (odrl:Offer on templates, odrl:Agreement on
+// contracts) whose rules live under permission/prohibition/obligation.
 func expandedODRLPolicyRules(root map[string]any) []map[string]any {
 	rules := []map[string]any{}
 	for _, rawSet := range expandedValues(root, dcsNamespace()+"policies") {
@@ -340,7 +339,7 @@ func expandExternalODRLRules(ctx context.Context, rules []map[string]any, source
 	if len(rules) == 0 {
 		return nil, nil
 	}
-	wrapper := map[string]any{"dcs:policies": map[string]any{"odrl:duty": anySlice(rules)}}
+	wrapper := map[string]any{"dcs:policies": map[string]any{"odrl:obligation": anySlice(rules)}}
 	root, err := expandForAudit(ctx, wrapper, source)
 	if err != nil {
 		return nil, fmt.Errorf("expand external ODRL policies: %w", err)

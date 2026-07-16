@@ -116,10 +116,10 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 		},
 		"dcs:policies": map[string]any{
 			"@id":          "urn:uuid:policy-set-1",
-			"@type":        "odrl:Set",
+			"@type":        "odrl:Offer",
 			"uid":          "urn:uuid:policy-set-1",
 			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-			"odrl:duty": []any{
+			"odrl:obligation": []any{
 				map[string]any{
 					"@id":           "urn:uuid:policy-provider-country-0",
 					"@type":         "odrl:Duty",
@@ -145,7 +145,7 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 // dcs:policies odrl:Set structure produced by canonicalTemplateData.
 func firstPolicyDuty(data map[string]any) map[string]any {
 	set := data["dcs:policies"].(map[string]any)
-	duties := set["odrl:duty"].([]any)
+	duties := set["odrl:obligation"].([]any)
 	return duties[0].(map[string]any)
 }
 
@@ -374,6 +374,7 @@ func TestValidateContractSemanticsAcceptsCanonicalContract(t *testing.T) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
 	data["@type"] = "dcs:Contract"
+	data["dcs:policies"].(map[string]any)["@type"] = "odrl:Agreement"
 	data["semanticConditionValues"] = []any{}
 	contract, err := datatype.NewJSON(data)
 	require.NoError(t, err)

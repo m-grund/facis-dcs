@@ -2,7 +2,7 @@
 DCS-FR-PACM-03).
 
 The structure and enforcement scenarios build their fixtures against the
-canonical odrl:Set-enclosed shape the backend emits and validates
+canonical Offer/Agreement-enclosed ODRL shape the backend emits and validates
 (`extractContractODRLPolicies`,
 backend/internal/base/validation/contractcontentaudit.go). Testing
 enforcement against the enclosed shape is what catches the regression where
@@ -226,7 +226,7 @@ def step_then_policy_update_rejected_legacy(context, name):
     resp = context.requests_response
     assert resp.status_code != 200, (
         f"expected the legacy bare-Duty policy shape (no odrl:action, no "
-        f"enclosing odrl:Set, no parties/target) to be explicitly rejected "
+        f"enclosing policy node, no parties/target) to be explicitly rejected "
         f"by structural validation for '{name}', but the update succeeded: "
         f"{resp.status_code} {resp.text}"
     )
@@ -239,26 +239,26 @@ def step_then_policy_update_rejected_legacy(context, name):
 
 @then(
     'the stored policies of contract "{name}" form a single enclosing '
-    "odrl:Set whose uid equals the contract DID and which declares an "
+    "odrl:Agreement whose uid equals the contract DID and which declares an "
     "odrl:profile"
 )
 def step_then_policies_form_enclosing_set(context, name):
     did, _ = ContractService._contract_data(context, name)
     policies = _stored_policies(context, name)
     assert isinstance(policies, dict), (
-        f"expected dcs:policies to be ONE enclosing object (odrl:Set), got a "
+        f"expected dcs:policies to be ONE enclosing policy object, got a "
         f"{type(policies).__name__}: {policies!r}"
     )
-    assert policies.get("@type") == "odrl:Set", (
-        f"expected the enclosing policy node's @type to be 'odrl:Set', got "
-        f"{policies.get('@type')!r}"
+    assert policies.get("@type") == "odrl:Agreement", (
+        f"expected the enclosing policy node's @type to be 'odrl:Agreement' "
+        f"(a party-bound contract instance), got {policies.get('@type')!r}"
     )
     assert policies.get("uid") == did, (
-        f"expected the odrl:Set's uid to equal the contract DID {did!r}, got "
+        f"expected the odrl:Agreement's uid to equal the contract DID {did!r}, got "
         f"{policies.get('uid')!r}"
     )
     profile = policies.get("odrl:profile")
-    assert profile, f"expected odrl:profile to be declared on the enclosing odrl:Set, got: {profile!r}"
+    assert profile, f"expected odrl:profile to be declared on the enclosing odrl:Agreement, got: {profile!r}"
 
 
 @then('every stored policy rule of contract "{name}" declares exactly one odrl:action')

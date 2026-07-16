@@ -7,10 +7,10 @@ carrying either:
 
   - the legacy bare-Duty `dcs:policies` shape (flat array of
     `odrl:Duty`/`odrl:Permission`/`odrl:Prohibition` nodes, each with only an
-    `odrl:constraint` — no `odrl:action`, no enclosing `odrl:Set`, no
+    `odrl:constraint` — no `odrl:action`, no enclosing policy node, no
     parties/target), or
   - the canonical ODRL 2.2 shape (docs/adr-6-odrl-profile-enforcement.md):
-    one enclosing `odrl:Set` (`uid` == the contract DID, `odrl:profile`
+    one enclosing `odrl:Agreement` (`uid` == the contract DID, `odrl:profile`
     declared),
     whose rules each carry exactly one `odrl:action` plus
     `odrl:assigner`/`odrl:assignee`/`odrl:target`.
@@ -77,13 +77,13 @@ def odrl_set_policies(
     right_operand,
     rule_type: str = "odrl:Duty",
 ) -> dict:
-    """The canonical ODRL 2.2 shape: one enclosing `odrl:Set` (`uid` ==
+    """The canonical ODRL 2.2 shape: one enclosing `odrl:Agreement` (`uid` ==
     contract DID), `odrl:profile` declared, rule carries exactly one
     `odrl:action` plus assigner/assignee/target.
     """
     field_id, _, _ = _FIELD_BY_NAME[field_name]
     rule_bucket = {
-        "odrl:Duty": "odrl:duty",
+        "odrl:Duty": "odrl:obligation",
         "odrl:Permission": "odrl:permission",
         "odrl:Prohibition": "odrl:prohibition",
     }[rule_type]
@@ -103,7 +103,7 @@ def odrl_set_policies(
     }
     return {
         "@id": "urn:uuid:policy-set-1",
-        "@type": "odrl:Set",
+        "@type": "odrl:Agreement",
         "uid": contract_did,
         "odrl:profile": {"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
         rule_bucket: [rule],
@@ -175,15 +175,15 @@ def extract_policy_rules(policies) -> list:
     """Flattens either policy shape into a plain list of rule dicts.
 
     - Legacy shape: `policies` IS already the flat list of rules.
-    - Target odrl:Set shape: `policies` is a single dict; rules live under
-      `odrl:permission` / `odrl:prohibition` / `odrl:duty` (or `odrl:obligation`)
+    - Target policy shape: `policies` is a single dict; rules live under
+      `odrl:permission` / `odrl:prohibition` / `odrl:obligation`
       array properties.
     """
     if isinstance(policies, list):
         return [item for item in policies if isinstance(item, dict)]
     if isinstance(policies, dict):
         rules = []
-        for key in ("odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"):
+        for key in ("odrl:permission", "odrl:prohibition", "odrl:obligation"):
             bucket = policies.get(key)
             if isinstance(bucket, list):
                 rules.extend(item for item in bucket if isinstance(item, dict))

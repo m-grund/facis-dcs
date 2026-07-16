@@ -1,7 +1,7 @@
 # Machine-readable ODRL soundness and server-side policy enforcement
 # (SRS: DCS-FR-PACM-03).
 #
-# Scope: a contract's rules live inside ONE enclosing odrl:Set (uid = the
+# Scope: a contract's rules live inside ONE enclosing odrl:Agreement (uid = the
 # contract DID, odrl:profile declared); every rule carries exactly one
 # odrl:action plus odrl:assigner/odrl:assignee/odrl:target; and constraint
 # violations are enforced server-side at both the approval and the signing
@@ -28,11 +28,11 @@
 Feature: Machine-readable ODRL soundness and server-side policy enforcement
 
   @DCS-FR-PACM-03
-  Scenario: A contract's ODRL policies form one enclosing Set with profile, action, parties, and target
+  Scenario: A contract's ODRL policies form one enclosing Agreement with profile, action, parties, and target
     Given a fresh draft contract "ODRL Structure Contract"
     When the policies of contract "ODRL Structure Contract" are updated to a real ODRL 2.2 policy set (rule "Duty", field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
     Then the policy update for contract "ODRL Structure Contract" is accepted
-    And the stored policies of contract "ODRL Structure Contract" form a single enclosing odrl:Set whose uid equals the contract DID and which declares an odrl:profile
+    And the stored policies of contract "ODRL Structure Contract" form a single enclosing odrl:Agreement whose uid equals the contract DID and which declares an odrl:profile
     And every stored policy rule of contract "ODRL Structure Contract" declares exactly one odrl:action
     And every stored policy rule of contract "ODRL Structure Contract" declares an odrl:assigner, odrl:assignee, and odrl:target
 

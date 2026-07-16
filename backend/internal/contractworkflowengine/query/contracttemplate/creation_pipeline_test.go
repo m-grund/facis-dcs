@@ -171,10 +171,10 @@ func creationPipelineRequirements() []any {
 func creationPipelinePolicyDefinitions() map[string]any {
 	return map[string]any{
 		"@id":          creationTemplateDID + "#policy-set-1",
-		"@type":        "odrl:Set",
+		"@type":        "odrl:Offer",
 		"uid":          creationTemplateDID,
 		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-		"odrl:duty": []any{
+		"odrl:obligation": []any{
 			creationPipelinePolicy(
 				"provider-country-dach",
 				"provider",
@@ -244,7 +244,7 @@ func assertCreationPipelinePolicies(t *testing.T, raw *datatype.JSON) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
 	policySet := data["dcs:policies"].(map[string]any)
-	policies := policySet["odrl:duty"].([]any)
+	policies := policySet["odrl:obligation"].([]any)
 
 	dach := creationPipelinePolicyBySuffix(t, policies, "policy-provider-country-dach")
 	dachConstraint := dach["odrl:constraint"].(map[string]any)
