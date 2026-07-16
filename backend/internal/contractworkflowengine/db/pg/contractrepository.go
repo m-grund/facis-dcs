@@ -483,7 +483,7 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		// Reverse-index over locally held children: match the child's stored
 		// dcs:parentContract @id in contracts_effective. Kept as a DID-scoped
 		// subquery so it composes with any outer metadata/archive table.
-		conditions += ` did IN (SELECT did FROM contracts_effective WHERE contract_data->'dcs:parentContract'->>'@id' = $` + strconv.Itoa(paramIndex) + `) AND`
+		conditions += ` did IN (SELECT did FROM contracts_effective WHERE regexp_replace(contract_data->'dcs:parentContract'->>'@id', '^.*/', '') = $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.ParentDID)
 	}
 	l := len(" AND")

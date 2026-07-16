@@ -40,6 +40,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -487,14 +488,14 @@ func extractParentContractDID(data *datatype.JSON) string {
 	switch typed := value.(type) {
 	case map[string]any:
 		id, _ := typed["@id"].(string)
-		return id
+		return base.ResourceKey(id)
 	case []any:
 		if len(typed) == 0 {
 			return ""
 		}
 		if first, ok := typed[0].(map[string]any); ok {
 			id, _ := first["@id"].(string)
-			return id
+			return base.ResourceKey(id)
 		}
 	}
 	return ""

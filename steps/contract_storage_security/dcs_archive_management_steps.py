@@ -11,6 +11,7 @@ import time
 from behave import given, then, when
 
 from steps.support.api_client import (
+    pac_audit_url,
     archive_annotate_url,
     archive_audit_url,
     archive_delete_url,
@@ -130,16 +131,24 @@ def step_then_archive_deletion_audited(context, name):
     event_types_for_did = []
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
-        resp = get_with_headers(context, archive_audit_url(context) + "?justification=BDD%20archive%20audit%20review", headers=headers)
+        # Workflow events (delete/annotate) live in the PAC audit trail under
+        # the CONTRACT_STORAGE_ARCHIVE component; /archive/audit serves the
+        # archive-integrity view (entries + notary-chain checks).
+        resp = post_json(
+            context,
+            pac_audit_url(context),
+            {"scope": "CONTRACT_STORAGE_ARCHIVE", "justification": "BDD archive audit review"},
+            headers=headers,
+        )
         assert resp.status_code == 200, f"Archive audit query failed: {resp.status_code} {resp.text}"
         entries = resp.json()
-        assert isinstance(entries, list), f"Expected a list of audit log entries, got: {entries}"
+        assert isinstance(entries, list), f"Expected a list of audit scopes, got: {entries}"
         event_types_for_did = [
             str(entry.get("event_type", "")).upper()
             for scope_result in entries
-            if isinstance(scope_result, dict) and scope_result.get("did") == did
+            if isinstance(scope_result, dict)
             for entry in (scope_result.get("audit_trail") or [])
-            if isinstance(entry, dict)
+            if isinstance(entry, dict) and entry.get("did") == did
         ]
         if "DELETE_ARCHIVED_CONTRACT" in event_types_for_did:
             return
@@ -281,16 +290,24 @@ def step_then_archive_annotation_audited(context, name):
     event_types_for_did = []
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
-        resp = get_with_headers(context, archive_audit_url(context) + "?justification=BDD%20archive%20audit%20review", headers=headers)
+        # Workflow events (delete/annotate) live in the PAC audit trail under
+        # the CONTRACT_STORAGE_ARCHIVE component; /archive/audit serves the
+        # archive-integrity view (entries + notary-chain checks).
+        resp = post_json(
+            context,
+            pac_audit_url(context),
+            {"scope": "CONTRACT_STORAGE_ARCHIVE", "justification": "BDD archive audit review"},
+            headers=headers,
+        )
         assert resp.status_code == 200, f"Archive audit query failed: {resp.status_code} {resp.text}"
         entries = resp.json()
-        assert isinstance(entries, list), f"Expected a list of audit log entries, got: {entries}"
+        assert isinstance(entries, list), f"Expected a list of audit scopes, got: {entries}"
         event_types_for_did = [
             str(entry.get("event_type", "")).upper()
             for scope_result in entries
-            if isinstance(scope_result, dict) and scope_result.get("did") == did
+            if isinstance(scope_result, dict)
             for entry in (scope_result.get("audit_trail") or [])
-            if isinstance(entry, dict)
+            if isinstance(entry, dict) and entry.get("did") == did
         ]
         if "ANNOTATE_ARCHIVED_CONTRACT" in event_types_for_did:
             return

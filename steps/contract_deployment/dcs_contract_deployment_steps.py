@@ -555,6 +555,9 @@ def step_then_semantic_kpi_observations(context, name, metric):
     assert any(node.get("dcs:violation") is True for node in matching), (
         f"Expected a violated {metric!r} observation, got: {matching}"
     )
-    assert all(node.get("dcs:aboutContract", {}).get("@id") == did for node in matching), (
-        f"Expected every observation to reference contract {did}, got: {matching}"
-    )
+    # The observation references the contract's dereferenceable resource IRI,
+    # whose last path segment is the system key.
+    assert all(
+        str(node.get("dcs:aboutContract", {}).get("@id", "")).rstrip("/").rsplit("/", 1)[-1] == did
+        for node in matching
+    ), f"Expected every observation to reference contract {did}, got: {matching}"
