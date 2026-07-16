@@ -1,6 +1,7 @@
 import {
   ArrowsRightLeftIcon,
   CheckCircleIcon,
+  CircleStackIcon,
   ClipboardDocumentListIcon,
   DocumentTextIcon,
   EyeIcon,
@@ -33,6 +34,7 @@ import ReviewContractView from '@/views/contract/ReviewContractView.vue'
 import ViewContractView from '@/views/contract/ViewContractView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import FrontPageView from '@/views/FrontPageView.vue'
+import SemanticHubView from '@/modules/semantic-hub/views/SemanticHubView.vue'
 import SigningDashboardView from '@/views/signing/SigningDashboardView.vue'
 import TaskListView from '@/views/task/TaskListView.vue'
 
@@ -74,6 +76,9 @@ const ROUTES = {
   },
   SIGNING: {
     DASHBOARD: 'signing.dashboard',
+  },
+  SEMANTIC_HUB: {
+    DASHBOARD: 'semantic_hub.dashboard',
   },
 } as const
 
@@ -378,6 +383,19 @@ const routes: RouteRecordRaw[] = [
       title: 'DCS - Signing Dashboard',
       order: 5,
       roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+    },
+  },
+  {
+    path: '/semantic-hub',
+    name: ROUTES.SEMANTIC_HUB.DASHBOARD,
+    component: SemanticHubView,
+    meta: {
+      name: 'Semantic Hub',
+      icon: CircleStackIcon,
+      requiresAuth: true,
+      title: 'DCS - Semantic Hub',
+      order: 6,
+      roles: ['TEMPLATE_MANAGER'],
     },
   },
   {
