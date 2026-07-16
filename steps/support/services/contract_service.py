@@ -461,6 +461,9 @@ class ContractService:
 
     @staticmethod
     def _prepare_contract_under_review(context, contract_name: str):
+        # Refresh first: async writers (the PDF/C2PA pipeline) may have
+        # touched the row since the cached updated_at was taken.
+        ContractService._refresh_contract(context, contract_name)
         did, updated_at = ContractService._contract_data(context, contract_name)
         creator_h = context.contract_seed_headers[contract_name]
         submit_to_negotiation = post_json(
