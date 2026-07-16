@@ -222,6 +222,15 @@ else
   echo "'make -C tests/bdd kind_deploy_b' (or kind_up, which now includes it) if you need instance B." >&2
 fi
 
+# The harness owns these loopback ports. A survivor forward from an earlier
+# run — possibly against a DIFFERENT cluster/kubeconfig — binds first, the
+# nc readiness check below then passes against the squatter, and every
+# DB/ORCE test seam silently talks to the wrong stack.
+for harness_port in 5432 18991 18880; do
+  fuser -k -n tcp "$harness_port" >/dev/null 2>&1 || true
+done
+sleep 1
+
 echo "Starting port-forward for PostgreSQL"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" port-forward "svc/dcs-postgresql" 5432:5432 > .tmp/port-forward-db.log 2>&1 &
 echo $! > .tmp/port-forward-db.pid
