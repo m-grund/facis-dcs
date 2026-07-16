@@ -257,6 +257,61 @@ done
 export BDD_DCS_INTERNAL_ORIGIN="http://localhost:$LOCAL_FORWARD_PORT"
 echo "Port-forward on $LOCAL_FORWARD_PORT is ready"
 
+# Archive notary and audit-log endpoints are intentionally not exposed by the
+# public ORCE ingress. Reach the release-scoped service directly and obtain the
+# configured token from the running pod rather than duplicating it here.
+ORCE_DEPLOYMENT="${HELM_RELEASE}-orce"
+ORCE_SERVICE="${HELM_RELEASE}-orce"
+ORCE_LOCAL_FORWARD_PORT="${ORCE_LOCAL_FORWARD_PORT:-18880}"
+echo "Waiting for ORCE deployment ($ORCE_DEPLOYMENT) to be available"
+"$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=180s "deployment/$ORCE_DEPLOYMENT"
+ORCE_POD="$("$KUBECTL_BIN" -n "$K8S_NAMESPACE" get pod \
+  -l "app.kubernetes.io/name=orce,app.kubernetes.io/instance=${HELM_RELEASE}" \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].metadata.name}')"
+ORCE_TOKEN="$("$KUBECTL_BIN" -n "$K8S_NAMESPACE" exec "$ORCE_POD" -- \
+  printenv ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN)"
+if [[ -z "$ORCE_TOKEN" ]]; then
+  echo "ORCE archive audit token is not configured in pod $ORCE_POD" >&2
+  exit 1
+fi
+
+echo "Starting port-forward for ORCE service ($ORCE_SERVICE)"
+KUBECTL_BIN="$KUBECTL_BIN" K8S_NAMESPACE="$K8S_NAMESPACE" \
+  SERVICE_NAME="$ORCE_SERVICE" PORT_MAPPING="$ORCE_LOCAL_FORWARD_PORT:1880" \
+  bash "$PWD/scripts/keep_port_forward.sh" > .tmp/port-forward-orce.log 2>&1 &
+echo $! > .tmp/port-forward-orce.pid
+
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 "$ORCE_LOCAL_FORWARD_PORT" 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for ORCE port-forward on $ORCE_LOCAL_FORWARD_PORT"
+    cat .tmp/port-forward-orce.log || true
+    exit 1
+  fi
+  sleep 1
+done
+export BDD_ORCE_ARCHIVE_NOTARY_URL="http://localhost:${ORCE_LOCAL_FORWARD_PORT}/archive/notary"
+export BDD_ORCE_ARCHIVE_AUDIT_LOG_URL="http://localhost:${ORCE_LOCAL_FORWARD_PORT}/archive-audit-events.jsonl"
+export BDD_ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN="$ORCE_TOKEN"
+export BDD_ORCE_NAMESPACE="$K8S_NAMESPACE"
+export BDD_ORCE_DEPLOYMENT="$ORCE_DEPLOYMENT"
+export BDD_KUBECTL="$KUBECTL_BIN"
+
+echo "Waiting for authenticated ORCE archive audit-log endpoint"
+deadline=$(( $(date +%s) + 60 ))
+orce_archive_code=""
+until orce_archive_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $ORCE_TOKEN" "$BDD_ORCE_ARCHIVE_AUDIT_LOG_URL" 2>/dev/null) \
+    && [[ "$orce_archive_code" == "200" || "$orce_archive_code" == "404" ]]; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for ORCE archive audit log (last HTTP $orce_archive_code)"
+    exit 1
+  fi
+  sleep 2
+done
+echo "ORCE archive endpoints are reachable"
+
 # ORCE (Node-RED) hosts the contract-target-flow the deployment scenarios POST
 # to directly; the BDD values route it through the shared Traefik ingress
 # (orce.ingress in values.bdd.yml), so it is reachable at the public origin —

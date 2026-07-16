@@ -33,9 +33,22 @@ spec:
             - name: http
               containerPort: 1880
               protocol: TCP
+          {{- if or .Values.global.archiveAuditTokenSecretRef.name .Values.global.archiveAuditToken }}
+          env:
+            - name: ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN
+              {{- if .Values.global.archiveAuditTokenSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.archiveAuditTokenSecretRef.name | quote }}
+                  key: {{ .Values.global.archiveAuditTokenSecretRef.key | quote }}
+              {{- else }}
+              value: {{ .Values.global.archiveAuditToken | quote }}
+              {{- end }}
+          {{- else }}
           {{- with .Values.extraEnv }}
           env:
             {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           {{- if or .Values.persistence.enabled .Values.localTSA.enabled .Values.flowsFile.enabled }}
           volumeMounts:

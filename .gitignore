@@ -5,7 +5,7 @@ __debug_bin*
 .vscode
 .DS_Store
 .claude/
-.codex
+.codex/
 node_modules
 backend/gen
 
@@ -16,6 +16,7 @@ frontend/.env.local
 frontend/.env.development
 frontend/.env.production
 frontend/.env.test
+backend/certs/dev/orce-tsa-cert.pem
 frontend/.DS_Store
 frontend/.eslintcache
 frontend/.prettiercache
@@ -42,9 +43,6 @@ tests/bdd/.reports
 steps/__pycache__
 steps/**/__pycache__
 
-tests/bdd/.venv
-tests/bdd/.tmp
-tests/bdd/.reports
 tests/bdd/.coverage
 tests/bdd/.coverage.*
 
@@ -52,3 +50,5 @@ tests/bdd/.coverage.*
 .coverage
 .coverage.*
 .claude/*
+docs/anforderung.md
+/AGENTS.md

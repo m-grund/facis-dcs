@@ -225,13 +225,13 @@ spec:
             - name: ORCE_ARCHIVE_AUDIT_LOG_URL
               value: {{ $archiveAuditLogURL | quote }}
             - name: ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN
-              {{- if .Values.archiveNotary.auditLogBearerTokenSecretRef.name }}
+              {{- if .Values.global.archiveAuditTokenSecretRef.name }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.archiveNotary.auditLogBearerTokenSecretRef.name | quote }}
-                  key: {{ .Values.archiveNotary.auditLogBearerTokenSecretRef.key | quote }}
+                  name: {{ .Values.global.archiveAuditTokenSecretRef.name | quote }}
+                  key: {{ .Values.global.archiveAuditTokenSecretRef.key | quote }}
               {{- else }}
-              value: {{ .Values.archiveNotary.auditLogBearerToken | quote }}
+              value: {{ .Values.global.archiveAuditToken | quote }}
               {{- end }}
             # ---- PDF-Core (C2PA PDF compiler/verifier) --------------------------
             - name: PDF_CORE_URL

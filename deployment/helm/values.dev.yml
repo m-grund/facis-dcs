@@ -193,7 +193,9 @@ orce:
 archiveNotary:
   notaryPath: "/archive/notary"
   auditLogPath: "/archive-audit-events.jsonl"
-  auditLogBearerToken: "dev-archive-audit-token"
+
+global:
+  archiveAuditToken: "dev-archive-audit-token"
 
 ipfs:
   enabled: true

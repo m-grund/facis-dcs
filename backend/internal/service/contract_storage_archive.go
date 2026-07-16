@@ -22,7 +22,6 @@ import (
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/contractworkflowengine/query/contract"
 	"digital-contracting-service/internal/middleware"
-	pacquery "digital-contracting-service/internal/processauditandcompliance/query"
 
 	"github.com/jmoiron/sqlx"
 	"goa.design/clue/log"
@@ -255,45 +254,28 @@ func (s *contractStorageArchivesrvc) Annotate(ctx context.Context, p *contractst
 // DID-less "*" chain used by component-wide operations (retrieve/search) —
 // reusing the same cross-component reader process_audit_and_compliance's
 // own audit method is built on (qry.Auditor / ReadAuditLogEntriesByComponent).
-func (s *contractStorageArchivesrvc) Audit(ctx context.Context, p *contractstoragearchive.AuditPayload) (res []*contractstoragearchive.ContractAuditResponse, err error) {
+func (s *contractStorageArchivesrvc) Audit(ctx context.Context, p *contractstoragearchive.AuditPayload) (res []*contractstoragearchive.PACAuditResponse, err error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	handler := pacquery.Auditor{
-		DB:           s.DB,
-		ATrailReader: s.ATrailReader,
-	}
-	chains, err := handler.Handle(ctx, pacquery.GetAuditLogQry{
-		Scope:     componenttype.ContractStorageArchive,
-		AuditedBy: middleware.GetParticipantID(ctx),
-		HolderDID: middleware.GetHolderDID(ctx),
-		UserRoles: middleware.GetUserRoles(ctx),
-	})
+	core := processAuditAndCompliancesrvc{DB: s.DB, CRepo: s.CRepo, ATrailReader: s.ATrailReader}
+	entriesByDID, err := core.auditArchiveTrailEntries(ctx)
 	if err != nil {
 		return nil, contractstoragearchive.MakeInternalError(err)
 	}
-
-	history := make([]*contractstoragearchive.ContractAuditResponse, 0)
-	for _, chain := range chains {
-		for _, entry := range chain {
-			if !base.IsAuditVisibleEventType(entry.EventType) {
-				continue
-			}
-			history = append(history, &contractstoragearchive.ContractAuditResponse{
-				ID:               entry.ID,
-				Component:        entry.Component,
-				EventType:        entry.EventType,
-				EventData:        entry.EventData,
-				Did:              entry.DID,
-				CreatedAt:        entry.CreatedAt.String(),
-				GlobalLogPredCid: entry.GlobalLogPredCID,
-				ResLogPredCid:    entry.ResLogPredCID,
-			})
+	result := make([]*contractstoragearchive.PACAuditResponse, 0, len(entriesByDID))
+	for did, entries := range entriesByDID {
+		if p.Did != nil && strings.TrimSpace(*p.Did) != "" && did != strings.TrimSpace(*p.Did) {
+			continue
 		}
+		trail := make([]*contractstoragearchive.PACResourceAuditTrailEntry, 0, len(entries))
+		for _, entry := range entries {
+			trail = append(trail, &contractstoragearchive.PACResourceAuditTrailEntry{ID: entry.ID, Component: entry.Component, EventType: entry.EventType, EventData: entry.EventData, Did: entry.Did, CreatedAt: entry.CreatedAt, ResLogPredCid: entry.ResLogPredCid, GlobalLogPredCid: entry.GlobalLogPredCid, Kind: entry.Kind, Result: entry.Result, RuleID: entry.RuleID, Reason: entry.Reason})
+		}
+		result = append(result, &contractstoragearchive.PACAuditResponse{Did: did, Component: componenttype.ContractStorageArchive.String(), CreatedAt: time.Now().UTC().Format(time.RFC3339), AuditTrail: trail})
 	}
-
-	return history, nil
+	return result, nil
 }
 
 func toArchiveContractItem(item db.ContractMetadata) *contractstoragearchive.ContractItem {

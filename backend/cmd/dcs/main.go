@@ -351,7 +351,7 @@ func main() {
 	archiveNotaryURL := strings.TrimSpace(os.Getenv("ORCE_ARCHIVE_NOTARY_URL"))
 	var archiveNotaryClient cwecommand.ArchiveNotary
 	if archiveNotaryURL != "" {
-		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL)
+		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL, os.Getenv("ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN"))
 	}
 
 	// Contract deployment (UC-05-01): the Contract Target
@@ -608,6 +608,7 @@ func main() {
 		pdfGenerationEndpoints.Use(debug.LogPayloads())
 		pdfGenerationEndpoints.Use(log.Endpoint)
 		processAuditAndComplianceEndpoints = processauditandcompliance.NewEndpoints(processAuditAndComplianceSvc)
+		processAuditAndComplianceEndpoints.Use(auth.AccessMetadataMiddleware)
 		processAuditAndComplianceEndpoints.Use(debug.LogPayloads())
 		processAuditAndComplianceEndpoints.Use(log.Endpoint)
 		signatureManagementEndpoints = signaturemanagement.NewEndpoints(signatureManagementSvc)

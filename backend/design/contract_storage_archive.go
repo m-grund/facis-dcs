@@ -180,10 +180,13 @@ var _ = Service("ContractStorageArchive", func() {
 		Meta("dcs:csa:components", "")
 		Security(JWTAuth, func() {
 			Scope("Auditor")
-			Scope("Compliance Officer")
+			Scope("Archive Manager")
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")
+			Attribute("did", String, "Optional archived contract DID filter")
+			Attribute("justification", String, "Required audit justification", func() { MinLength(1) })
+			Required("justification")
 		})
 
 		Error("bad_request", ErrorResult, "Bad request")
@@ -191,11 +194,13 @@ var _ = Service("ContractStorageArchive", func() {
 
 		HTTP(func() {
 			GET("/archive/audit")
+			Param("did")
+			Param("justification")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
 		})
-		Result(ArrayOfRequired(ContractAuditResponse))
+		Result(ArrayOfRequired(PACAuditResponse))
 	})
 
 })
