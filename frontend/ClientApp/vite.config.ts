@@ -67,6 +67,10 @@ export default defineConfig(({ mode, command }) => {
         '/api': {
           target: env.DCS_API_TARGET || 'http://localhost:8991',
           changeOrigin: true,
+          // Deployed instances mount the API under a base path (e.g. the BDD
+          // cluster's /digital-contracting-service/api); the dev backend
+          // serves /api directly.
+          rewrite: (path) => path.replace(/^\/api/, env.DCS_API_TARGET_PATH || '/api'),
         },
         // Proxy Hydra's public OIDC paths so the browser never needs a direct
         // Hydra address. Set DCS_HYDRA_TARGET to the Hydra public port
