@@ -302,7 +302,7 @@ func verifyBitstringStatusListReference(ctx context.Context, ref statusListRefer
 	return verifyJSONBitstringStatusList(ctx, ref, "bitstring status list")
 }
 
-// verifyStatusList2021 checks legacy StatusList2021Entry-compatible JSON lists with default options.
+// verifyStatusList2021 checks W3C StatusList2021Entry JSON lists (the pre-VC-2.0 status-list spec external credentials may still carry) with default options.
 func verifyStatusList2021(ctx context.Context, uri string, index uint32) error {
 	return verifyStatusList2021Reference(ctx, statusListReference{
 		kind: statusKindStatusList2021, uri: uri, index: index, statusSize: defaultStatusSize,

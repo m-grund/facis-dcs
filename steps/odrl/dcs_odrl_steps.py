@@ -9,11 +9,11 @@ enforcement against the enclosed shape is what catches the regression where
 the emitted shape and the extraction drift apart — approve/apply would then
 silently see zero policies and let everything through.
 
-The operator Scenario Outline and the legacy-shape rejection scenario use
+The operator Scenario Outline and the bare-shape rejection scenario use
 the bare flat-array fixture instead: operator evaluation is independent of
 the enclosing Set (and additionally covered by the Go unit tests in
 backend/internal/base/validation/contractcontentaudit_test.go), and the
-bare-Duty legacy shape must be REJECTED by structural validation.
+bare-Duty shape (no action, no enclosing policy node) must be REJECTED by structural validation.
 
 The peer-action entry path is not separately re-tested: it dispatches
 through the same command.Approver handler as the UI/API path (see the
@@ -127,14 +127,14 @@ def step_when_policies_updated_to_odrl_set(context, name, rule_type, field, oper
 
 
 @when(
-    'the policies of contract "{name}" are updated to the legacy bare-Duty '
+    'the policies of contract "{name}" are updated to the bare-Duty '
     'form (field "{field}", operator "{operator}") requiring "{right_operand}" '
     'while the actual value is "{actual_value}"'
 )
-def step_when_policies_updated_to_legacy_form(context, name, field, operator, right_operand, actual_value):
+def step_when_policies_updated_to_bare_duty_form(context, name, field, operator, right_operand, actual_value):
     right = _parse_operand(right_operand)
     actual = _parse_operand(actual_value)
-    policies = odrl.legacy_bare_duty_policies(field, operator, right)
+    policies = odrl.bare_duty_policies(field, operator, right)
     context.requests_response = _update_contract_policies(context, name, field, policies, actual)
 
 
@@ -144,8 +144,8 @@ def step_when_policies_updated_to_legacy_form(context, name, field, operator, ri
     'while the actual value is "{actual_value}"'
 )
 def step_given_operator_fixture(context, name, field, operator, right_operand, actual_value):
-    # Deliberately the canonical odrl:Set shape (not the legacy flat form):
-    # a fixture identical in shape to the rejected legacy form cannot also
+    # Deliberately the canonical enclosing-policy shape (not the bare flat form):
+    # a fixture identical in shape to the rejected bare form cannot also
     # be the accepted fixture the operator scenarios approve against; the
     # two would be mutually unsatisfiable otherwise. Operator-evaluation
     # correctness is exercised identically regardless of the enclosing
@@ -219,13 +219,13 @@ def step_then_policy_update_accepted(context, name):
 
 
 @then(
-    'the policy update for contract "{name}" is rejected because the legacy '
+    'the policy update for contract "{name}" is rejected because the '
     "bare-Duty form lacks an action and enclosing policy"
 )
-def step_then_policy_update_rejected_legacy(context, name):
+def step_then_policy_update_rejected_bare_duty(context, name):
     resp = context.requests_response
     assert resp.status_code != 200, (
-        f"expected the legacy bare-Duty policy shape (no odrl:action, no "
+        f"expected the bare-Duty policy shape (no odrl:action, no "
         f"enclosing policy node, no parties/target) to be explicitly rejected "
         f"by structural validation for '{name}', but the update succeeded: "
         f"{resp.status_code} {resp.text}"

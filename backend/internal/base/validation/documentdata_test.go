@@ -241,12 +241,12 @@ func semanticValue(blockID string, conditionID string, parameterName string, val
 	}
 }
 
-func TestNormalizeTemplateDataRejectsLegacyStructure(t *testing.T) {
+func TestNormalizeTemplateDataRejectsNonCanonicalStructure(t *testing.T) {
 	_, err := NormalizeTemplateData(validTemplateData(t))
 	require.ErrorContains(t, err, "canonical dcs:documentStructure envelope")
 }
 
-func TestNormalizeContractDataRejectsLegacyStructure(t *testing.T) {
+func TestNormalizeContractDataRejectsNonCanonicalStructure(t *testing.T) {
 	_, err := NormalizeContractData(validTemplateData(t), false)
 	require.ErrorContains(t, err, "canonical dcs:documentStructure envelope")
 }

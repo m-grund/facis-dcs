@@ -31,7 +31,7 @@ type SigningSummary struct {
 	// sh:shapesGraph to fetch those exact pinned shapes from the public hub
 	// endpoints, re-runs validation, and compares hashes to detect drift.
 	// Optional: zero/empty when SHACL evidence could not be produced (e.g.
-	// a legacy non-canonical-envelope document with no sh:shapesGraph anchor to pin).
+	// signing evidence is mandatory).
 	SchemaVersion        int
 	ValidationReportHash string
 }

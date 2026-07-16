@@ -97,7 +97,7 @@ func TestQueryEntryStatusFromEncodedList_MSB(t *testing.T) {
 	assert.Equal(t, "active", status)
 }
 
-func TestQueryEntryStatusFromBody_LegacyZlib_MSB(t *testing.T) {
+func TestQueryEntryStatusFromBody_StatusList2021Zlib_MSB(t *testing.T) {
 	bitstring := make([]byte, 16)
 	idx := uint32(5)
 	byteIdx := idx / 8

@@ -136,7 +136,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	)
 }
 
-func TestConvertTemplateDataToContractDataRejectsLegacyTemplate(t *testing.T) {
+func TestConvertTemplateDataToContractDataRejectsNonCanonicalTemplate(t *testing.T) {
 	raw, err := datatype.NewJSON(map[string]any{"documentBlocks": []any{}})
 	require.NoError(t, err)
 

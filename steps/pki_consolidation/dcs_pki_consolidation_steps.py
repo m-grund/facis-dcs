@@ -58,9 +58,8 @@ def step_then_did_jwk_is_ec_p256(context):
         f"Expected the DID key's publicKeyJwk.crv to be 'P-256', got: {jwk}"
     )
     assert "n" not in jwk and "e" not in jwk, (
-        "DID key's publicKeyJwk still carries RSA fields ('n'/'e') alongside/instead of "
-        f"EC fields - the legacy identity.PublicKeyJWK{{Kty, N, E}} struct has not been "
-        f"migrated to EC (x/y): {jwk}"
+        "DID key's publicKeyJwk carries RSA fields ('n'/'e') alongside/instead of "
+        f"the EC (x/y) fields the P-256 dcs-did key publishes: {jwk}"
     )
     assert jwk.get("x") and jwk.get("y"), (
         f"Expected EC JWK 'x' and 'y' coordinates to be present, got: {jwk}"

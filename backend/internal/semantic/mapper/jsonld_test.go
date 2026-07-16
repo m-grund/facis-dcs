@@ -105,7 +105,7 @@ func TestBuildTemplateJSONLDPassesThrough(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestBuildTemplateJSONLDRejectsLegacyFormat(t *testing.T) {
+func TestBuildTemplateJSONLDRejectsNonCanonicalFormat(t *testing.T) {
 	template := templatedb.ContractTemplate{
 		DID:       "did:web:example:template:1",
 		CreatedAt: fixedTime(),
@@ -146,7 +146,7 @@ func TestBuildContractJSONLDPassesThrough(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestBuildContractJSONLDRejectsLegacyFormat(t *testing.T) {
+func TestBuildContractJSONLDRejectsNonCanonicalFormat(t *testing.T) {
 	contract := contractdb.Contract{
 		DID:       "did:web:example:contract:1",
 		CreatedAt: fixedTime(),

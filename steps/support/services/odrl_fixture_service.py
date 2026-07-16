@@ -5,10 +5,10 @@ These build canonical `dcs:documentStructure`-enveloped contract documents
 (see backend/internal/base/validation/documentdata.go `isCanonicalEnvelope`)
 carrying either:
 
-  - the legacy bare-Duty `dcs:policies` shape (flat array of
+  - the bare-Duty `dcs:policies` shape (flat array of
     `odrl:Duty`/`odrl:Permission`/`odrl:Prohibition` nodes, each with only an
     `odrl:constraint` — no `odrl:action`, no enclosing policy node, no
-    parties/target), or
+    parties/target), which structural validation must reject, or
   - the canonical ODRL 2.2 shape (docs/adr-6-odrl-profile-enforcement.md):
     one enclosing `odrl:Offer` while unsigned (its @id is its odrl:uid, `odrl:profile`
     declared),
@@ -18,7 +18,7 @@ carrying either:
 Both shapes constrain the SAME field (`urn:uuid:field-provider-country`, a
 string, or `urn:uuid:field-provider-coverage`, a number) so the same fixture
 family can drive the structure, enforcement, operator-matrix, and
-legacy-shape-rejection scenarios.
+bare-shape-rejection scenarios.
 """
 
 FIELD_COUNTRY = "urn:uuid:field-provider-country"
@@ -50,9 +50,10 @@ def _requirement_field(field_name: str) -> dict:
     }
 
 
-def legacy_bare_duty_policies(field_name: str, operator: str, right_operand) -> list:
-    """The shape the codebase emits/accepts TODAY (no action/parties/target,
-    no enclosing Set) — bare `odrl:Duty` nodes each holding one constraint.
+def bare_duty_policies(field_name: str, operator: str, right_operand) -> list:
+    """Bare `odrl:Duty` nodes each holding one constraint — no action, no
+    parties/target, no enclosing policy node. Exists to prove structural
+    validation rejects it.
     """
     field_id, _, _ = _FIELD_BY_NAME[field_name]
     return [
@@ -173,8 +174,8 @@ def build_contract_document(contract_did: str, field_name: str, policies, actual
 def extract_policy_rules(policies) -> list:
     """Flattens either policy shape into a plain list of rule dicts.
 
-    - Legacy shape: `policies` IS already the flat list of rules.
-    - Target policy shape: `policies` is a single dict; rules live under
+    - Bare shape: `policies` IS already the flat list of rules.
+    - Canonical policy shape: `policies` is a single dict; rules live under
       `odrl:permission` / `odrl:prohibition` / `odrl:obligation`
       array properties.
     """

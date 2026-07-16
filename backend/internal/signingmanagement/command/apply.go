@@ -234,13 +234,10 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// validates against and a stable hash of the resulting findings, bound
 	// into the signing-summary credential below — an external verifier
 	// resolves sh:shapesGraph to fetch those exact pinned shapes, re-runs
-	// validation, and compares hashes to detect drift. Best-effort: a
-	// legacy non-canonical-envelope document has no sh:shapesGraph anchor to pin, and
-	// signing must not hard-fail just because evidence enrichment couldn't
-	// run.
+	// validation, and compares hashes to detect drift.
 	schemaVersion, validationReportHash, err := validation.SHACLEvidence(ctx, *data.ContractData)
 	if err != nil {
-		schemaVersion, validationReportHash = 0, ""
+		return fmt.Errorf("SHACL evidence for signing-summary credential: %w", err)
 	}
 
 	// Load (or generate) the base PDF to be signed.

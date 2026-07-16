@@ -109,57 +109,8 @@ func mergeContractDataChange(contractData map[string]any, rawChange json.RawMess
 	if changeData == nil {
 		return contractData, nil
 	}
-	if isCanonicalContractData(changeData) {
-		return changeData, nil
+	if _, canonical := changeData["dcs:documentStructure"]; !canonical {
+		return nil, fmt.Errorf("change request contract data must use the canonical dcs:documentStructure envelope")
 	}
-
-	var partial ContractDataChange
-	if err := json.Unmarshal(rawChange, &partial); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal semantic condition value changes: %w", err)
-	}
-	semanticConditionValues, err := readSemanticConditionValues(contractData)
-	if err != nil {
-		return nil, err
-	}
-	for _, value := range partial.SemanticConditionValues {
-		semanticConditionValues = upsertSemanticConditionValue(semanticConditionValues, value)
-	}
-	contractData["semanticConditionValues"] = semanticConditionValues
-	return contractData, nil
-}
-
-func isCanonicalContractData(contractData map[string]any) bool {
-	_, hasPrefixedDocumentStructure := contractData["dcs:documentStructure"]
-	_, hasDocumentStructure := contractData["documentStructure"]
-	return hasPrefixedDocumentStructure || hasDocumentStructure
-}
-
-func readSemanticConditionValues(contractData map[string]any) ([]SemanticConditionValue, error) {
-	raw, ok := contractData["semanticConditionValues"]
-	if !ok || raw == nil {
-		return []SemanticConditionValue{}, nil
-	}
-	bytes, err := json.Marshal(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal semantic condition values: %w", err)
-	}
-	var values []SemanticConditionValue
-	if err := json.Unmarshal(bytes, &values); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal semantic condition values: %w", err)
-	}
-	return values, nil
-}
-
-// upsertSemanticConditionValue applies last-write-wins at the level of a
-// single (BlockID, ForField) value, which is finer grained than the
-// field-level merge used for the other contract attributes above, but
-// still without explicit conflict detection.
-func upsertSemanticConditionValue(values []SemanticConditionValue, newValue SemanticConditionValue) []SemanticConditionValue {
-	for i, existing := range values {
-		if existing.BlockID == newValue.BlockID && existing.ForField == newValue.ForField {
-			values[i] = newValue // update
-			return values
-		}
-	}
-	return append(values, newValue) // insert
+	return changeData, nil
 }

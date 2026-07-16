@@ -10,7 +10,7 @@
 # ODRL operators (eq, neq, isAnyOf, isNoneOf, gteq, lteq, gt, lt); operator
 # evaluation is additionally covered by the Go unit tests in
 # backend/internal/base/validation/contractcontentaudit_test.go. The bare-
-# Duty legacy shape (no action, no enclosing Set) is rejected by structural
+# Duty shape (no action, no enclosing policy node) is rejected by structural
 # validation.
 #
 # The "direct raw API call" scenario attempts the sign call BEFORE the
@@ -71,10 +71,10 @@ Feature: Machine-readable ODRL soundness and server-side policy enforcement
     Then the contract "ODRL Satisfied Contract" reaches SIGNED state
 
   @DCS-FR-PACM-03
-  Scenario: The legacy bare-Duty policy shape is rejected by structural validation
-    Given a fresh draft contract "ODRL Legacy Shape Contract"
-    When the policies of contract "ODRL Legacy Shape Contract" are updated to the legacy bare-Duty form (field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
-    Then the policy update for contract "ODRL Legacy Shape Contract" is rejected because the legacy bare-Duty form lacks an action and enclosing policy
+  Scenario: A bare-Duty policy shape is rejected by structural validation
+    Given a fresh draft contract "ODRL Bare Shape Contract"
+    When the policies of contract "ODRL Bare Shape Contract" are updated to the bare-Duty form (field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
+    Then the policy update for contract "ODRL Bare Shape Contract" is rejected because the bare-Duty form lacks an action and enclosing policy
 
   @DCS-FR-PACM-03
   Scenario Outline: Server-side operator evaluation covers all 8 ODRL operators correctly

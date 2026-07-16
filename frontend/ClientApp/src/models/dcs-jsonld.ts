@@ -58,15 +58,12 @@ export interface DcsClause {
   'dcs:title'?: string
   'dcs:signatureFields'?: DcsSignatureField[]
   /**
-   * Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): an optional typed clause instance
-   * nested inside a free-text dcs:Clause block. The nested object carries
-   * its own @type (e.g. "dcs:PaymentClause", from the Semantic Hub clause
-   * catalog, GET /semantic/clauses) and becomes its own JSON-LD/RDF node —
-   * server-side SHACL validation (validateAgainstHubShapes) targets it by
+   * An optional typed clause instance nested inside a free-text dcs:Clause
+   * block. The nested object carries its own @type (e.g. "dcs:PaymentClause",
+   * from the Semantic Hub clause catalog, GET /semantic/clauses) and becomes
+   * its own JSON-LD/RDF node — server-side SHACL validation targets it by
    * that @type regardless of nesting, so the palette-generated form and
-   * enforcement share one source of truth without a new top-level block
-   * shape (kept additive/backward-compatible with every existing DcsClause
-   * consumer).
+   * enforcement share one source of truth.
    */
   'dcs:typedClause'?: DcsTypedClauseInstance
 }
@@ -241,7 +238,7 @@ export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {
     Array.isArray(value['dcs:contractData']) &&
     // Canonical shape: a single enclosing odrl:Set object.
     // An empty array is still accepted as "no policies yet" (brand-new
-    // documents) — the legacy non-empty bare-rule array shape is not.
+    // documents); a non-empty bare-rule array is not.
     (isOdrlSet(policies) || (Array.isArray(policies) && policies.length === 0))
   )
 }

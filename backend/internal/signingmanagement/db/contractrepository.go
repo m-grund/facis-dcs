@@ -143,7 +143,7 @@ type SignatureRecord struct {
 	RevokedAt      *time.Time `db:"revoked_at"`
 	CertRevokedAt  *time.Time `db:"cert_revoked_at"`
 	// FieldName is the declared signature field this signature covers
-	// (DCS-FR-SM-07/-17); nil for signatures predating multi-signer support.
+	// (DCS-FR-SM-07/-17); nil on the single-signer flow.
 	FieldName *string `db:"field_name"`
 }
 

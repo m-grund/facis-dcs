@@ -197,9 +197,8 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 // contract's stored data has changed since it was signed — a real
 // modification, not just a hub schema version bump (evidence is pinned to
 // the version active at signing time, ADR-8, so rolling the hub forward
-// never causes a false drift finding). Absence of embedded evidence (a
-// legacy document with no SHACL evidence, or an unsigned contract) yields
-// no finding.
+// never causes a false drift finding). Absence of embedded evidence (an
+// unsigned contract) yields no finding.
 func (h *Validator) crossCheckSHACLDrift(ctx context.Context, tx *sqlx.Tx, did string) []string {
 	if h.PDFCore == nil {
 		return nil
