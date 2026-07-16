@@ -146,6 +146,21 @@ func (s *semanticHubsrvc) Versions(ctx context.Context, p *semantichubgen.Versio
 	return out, nil
 }
 
+// ResolveShapes serves SHACL shapes at the pretty anchor path
+// (/semantic/shapes/{name}?version=N) that semantichub.AnchorURL embeds
+// into every produced document's dcs:schemaRefs.dcs:shaclShapes (ADR-8) —
+// without it, the anchors external verifiers dereference would 404.
+func (s *semanticHubsrvc) ResolveShapes(ctx context.Context, p *semantichubgen.ResolveShapesPayload) (res *semantichubgen.SemanticSchemaItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, p.Name, "shapes", p.Version)
+	if err != nil {
+		return nil, err
+	}
+	return toSchemaItem(schema), nil
+}
+
 func (s *semanticHubsrvc) ResolveContext(ctx context.Context, p *semantichubgen.ResolveContextPayload) (res any, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()

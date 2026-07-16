@@ -230,6 +230,30 @@ var _ = Service("SemanticHub", func() {
 		})
 	})
 
+	Method("resolve_shapes", func() {
+		Description("Serve a registered SHACL shapes version at the anchor URL produced documents carry (dcs:schemaRefs.dcs:shaclShapes, ADR-8) — semantichub.AnchorURL emits /semantic/shapes/{name}?version=N, so this path must dereference for external verifiers the same way /semantic/context/{name} does for the JSON-LD context.")
+		Meta("dcs:requirements", "DCS-FR-TR-03")
+		NoSecurity()
+
+		Payload(func() {
+			Attribute("name", String, "Shapes schema name")
+			Attribute("version", Int, "Specific version; active version when omitted")
+			Required("name")
+		})
+		Result(SemanticSchemaItem)
+
+		Error("not_found", ErrorResult, "No such shapes schema")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/semantic/shapes/{name}")
+			Param("version")
+			Response(StatusOK)
+			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
 	Method("list", func() {
 		Description("List every (name, kind) entry the hub holds, with active/latest version summary. Public like retrieve: the hub's inventory is not more sensitive than its content.")
 		Meta("dcs:requirements", "DCS-FR-TR-03")
