@@ -143,6 +143,8 @@ spec:
             {{- if .Values.route.publicBaseURL }}
             - name: DCS_PUBLIC_BASE_URL
               value: {{ .Values.route.publicBaseURL | quote }}
+            - name: DCS_PUBLIC_URL
+              value: {{ include "digital-contracting-service.publicAnchorBaseURL" . | quote }}
             {{- end }}
             {{- if .Values.oid4vp.trust.enabled }}
             - name: OID4VP_TRUST_DATA_PATH

@@ -142,29 +142,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Semantic Hub (DCS-FR-TR-03): seed the genesis FACIS DCS v1 profile
-	// (JSON-LD context, SHACL shapes, validation profile) and anchor every
-	// subsequently produced document to the hub's ACTIVE context version —
-	// its anchors (@context, sh:shapesGraph, dcterms:conformsTo) point at
-	// hub-served, versioned URLs, and documents
-	// redefining a hub-declared ontology prefix are rejected. Fatal on
-	// failure: the hub is a required dependency of document normalization.
+	// DCS_PUBLIC_URL is the base of every absolute IRI a produced document
+	// carries (@context, sh:shapesGraph, dcterms:conformsTo anchors, C2PA
+	// remote manifests) — these must dereference for external consumers.
+	if strings.TrimSpace(os.Getenv("DCS_PUBLIC_URL")) == "" {
+		log.Fatalf(ctx, errors.New("dcs configuration missing"), "DCS_PUBLIC_URL must be set: produced documents carry absolute, resolvable IRIs based on it")
+	}
+
+	// Seed the Semantic Hub genesis schemas (JSON-LD context, SHACL shapes,
+	// validation profile) and anchor document production to the active
+	// versions. The SemanticHub service re-runs the anchor refresh after
+	// every activation/rollback.
 	if err := semantichub.Seed(ctx, db); err != nil {
 		log.Fatalf(ctx, err, "Could not seed the Semantic Hub genesis schemas")
 	}
-	// Anchor refresh is shared with the SemanticHub service, which re-runs
-	// it after every activation/rollback so newly produced documents pin to
-	// the version active NOW, not the one active at process start (ADR-8).
 	if err := service.RefreshValidationAnchors(ctx, db); err != nil {
 		log.Fatalf(ctx, err, "Could not anchor validation to the Semantic Hub's active schemas")
 	}
 
-	// DCS-FR-TR-03 / ADR-8: enforcement (AuditContractContent) reads its
-	// SHACL shapes and validation profile from the Semantic Hub — the only
-	// source; registering/activating/rolling back a hub schema version
-	// actually changes what gets enforced. There is no disk-file fallback:
-	// docs/semantic-ontology/... exists solely to seed the hub at startup
-	// (semantichub.Seed above).
 	validation.SetShapeSource(semantichub.HubShapeSource{DB: db})
 
 	// Open the PKCS#11 token that holds every private key (DCS-IR-HI-01). A
