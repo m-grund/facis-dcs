@@ -251,6 +251,11 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@# time: a prior version wired only to cluster creation was observed to
 	@# not reliably stick.
 	@$(MAKE) kind_coredns_rewrite
+	@# The image tag is static, so an unchanged manifest never rolls the pods
+	@# even though kind load just replaced the node image — restart both
+	@# freshly-built workloads so the run tests the image that was built.
+	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout restart \
+		deployment/"$(DCS_DEPLOYMENT)" deployment/"$(DCS_DEPLOYMENT)"-pdf-core 2>/dev/null || true
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
@@ -313,6 +318,8 @@ kind_deploy_b: kind_deploy
 		$(BDD_HELM_SET_B) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
+	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout restart \
+		deployment/"$(DCS_DEPLOYMENT_B)" 2>/dev/null || true
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET_B) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET_B)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
