@@ -14,10 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testContextIRI = "https://w3id.org/facis/dcs/context/v1"
+// testContextIRI mirrors validation.SchemaJSONLDContextV1, the package
+// default every produced document's @context is anchored with until the
+// Semantic Hub re-points it at startup (SetSchemaAnchorRefs).
+const testContextIRI = validation.SchemaJSONLDContextV1
 
 func TestMain(m *testing.M) {
-	validation.SetJSONLDContextIRI(testContextIRI)
 	os.Exit(m.Run())
 }
 

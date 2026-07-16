@@ -81,7 +81,7 @@ var SemanticSchemaRegisterResponse = Type("SemanticSchemaRegisterResponse", func
 // Semantic Hub Service (/semantic/...) — DCS-FR-TR-03, UC-02-08: versioned
 // storage for the JSON-LD contexts, SHACL shapes, and validation profiles
 // every DCS document is produced against. Reads are public (like
-// /.well-known/did.json): produced artifacts carry hub-served schemaRefs
+// /.well-known/did.json): produced artifacts carry hub-served anchors
 // that external verifiers must be able to resolve without a DCS login.
 var _ = Service("SemanticHub", func() {
 	Description("Semantic Hub APIs (/semantic/...): versioned JSON-LD context, SHACL shape, and validation-profile storage (DCS-FR-TR-03, UC-02-08)")
@@ -153,7 +153,7 @@ var _ = Service("SemanticHub", func() {
 	})
 
 	Method("retrieve", func() {
-		Description("Retrieve a schema version (the active one when version is omitted). Public, like /.well-known/did.json — produced artifacts carry hub schemaRefs external verifiers resolve without a DCS login.")
+		Description("Retrieve a schema version (the active one when version is omitted). Public, like /.well-known/did.json — produced artifacts carry hub anchors external verifiers resolve without a DCS login.")
 		Meta("dcs:requirements", "DCS-FR-TR-03")
 		NoSecurity()
 
@@ -207,7 +207,7 @@ var _ = Service("SemanticHub", func() {
 	})
 
 	Method("resolve_context", func() {
-		Description("Serve a registered JSON-LD context document itself (the resolvable anchor produced documents' schemaRefs.jsonLdContext points at). Returns the parsed JSON-LD document as the response body.")
+		Description("Serve a registered JSON-LD context document itself (the resolvable anchor produced documents' @context points at). Returns the parsed JSON-LD document as the response body.")
 		Meta("dcs:requirements", "DCS-FR-TR-03")
 		NoSecurity()
 
@@ -231,7 +231,7 @@ var _ = Service("SemanticHub", func() {
 	})
 
 	Method("resolve_shapes", func() {
-		Description("Serve a registered SHACL shapes version at the anchor URL produced documents carry (dcs:schemaRefs.dcs:shaclShapes, ADR-8) — semantichub.AnchorURL emits /semantic/shapes/{name}?version=N, so this path must dereference for external verifiers the same way /semantic/context/{name} does for the JSON-LD context.")
+		Description("Serve a registered SHACL shapes version at the anchor URL produced documents carry (sh:shapesGraph, ADR-8) — semantichub.AnchorURL emits /semantic/shapes/{name}?version=N, so this path must dereference for external verifiers the same way /semantic/context/{name} does for the JSON-LD context.")
 		Meta("dcs:requirements", "DCS-FR-TR-03")
 		NoSecurity()
 
@@ -247,6 +247,30 @@ var _ = Service("SemanticHub", func() {
 
 		HTTP(func() {
 			GET("/semantic/shapes/{name}")
+			Param("version")
+			Response(StatusOK)
+			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("resolve_profile", func() {
+		Description("Serve a registered validation-profile version at the anchor URL produced documents carry (dcterms:conformsTo) — semantichub.AnchorURL emits /semantic/profile/{name}?version=N, so this path must dereference for external verifiers the same way /semantic/shapes/{name} does.")
+		Meta("dcs:requirements", "DCS-FR-TR-03")
+		NoSecurity()
+
+		Payload(func() {
+			Attribute("name", String, "Profile schema name")
+			Attribute("version", Int, "Specific version; active version when omitted")
+			Required("name")
+		})
+		Result(SemanticSchemaItem)
+
+		Error("not_found", ErrorResult, "No such profile schema")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/semantic/profile/{name}")
 			Param("version")
 			Response(StatusOK)
 			Response("not_found", StatusNotFound)
@@ -272,7 +296,7 @@ var _ = Service("SemanticHub", func() {
 	})
 
 	Method("clauses", func() {
-		Description("List the active clause catalog (DCS-FR-TR-03/TR-04, Phase 3, ADR-10): typed clause NodeShapes the template builder's palette generates a form from, pre-digested into a JSON form-schema server-side (each clause type's target class, label, and properties with their datatype/sh:in/min-max constraints) plus the raw SHACL Turtle for a future shacl-form-style client. Public, like resolve_context: a produced contract's typed clauses are validated against these same shapes (validateAgainstHubShapes), and an external verifier resolving dcs:schemaRefs needs to read them too.")
+		Description("List the active clause catalog (DCS-FR-TR-03/TR-04, Phase 3, ADR-10): typed clause NodeShapes the template builder's palette generates a form from, pre-digested into a JSON form-schema server-side (each clause type's target class, label, and properties with their datatype/sh:in/min-max constraints) plus the raw SHACL Turtle for a future shacl-form-style client. Public, like resolve_context: a produced contract's typed clauses are validated against these same shapes (validateAgainstHubShapes), and an external verifier resolving sh:shapesGraph needs to read them too.")
 		Meta("dcs:requirements", "DCS-FR-TR-03", "DCS-FR-TR-04")
 		Meta("dcs:ui", "Template Management Dashboard")
 		NoSecurity()

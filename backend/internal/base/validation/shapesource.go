@@ -30,9 +30,14 @@ type ShapeSource interface {
 	ActiveContext(ctx context.Context) (content string, version int, err error)
 	// ShapesAt returns the SHACL shapes document pinned at a specific
 	// version — used to revalidate a document against the hub version that
-	// was active when it was produced (dcs:schemaRefs.dcs:shaclShapes),
-	// not whatever is active now (ADR-8).
+	// was active when it was produced (its sh:shapesGraph anchor), not
+	// whatever is active now (ADR-8).
 	ShapesAt(ctx context.Context, version int) (content string, err error)
+	// ContextAt returns the JSON-LD context pinned at a specific version —
+	// a document's "@context" carries the versioned hub context URL it was
+	// authored under, and expansion during validation resolves exactly that
+	// version (ADR-8), hub versions being immutable.
+	ContextAt(ctx context.Context, version int) (content string, err error)
 }
 
 // activeShapeSource is the process-wide enforcement source, installed once
@@ -62,32 +67,55 @@ func requireShapeSource() (ShapeSource, error) {
 	return activeShapeSource, nil
 }
 
-// pinnedShapesVersionPattern extracts the ?version=N (or &version=N) query
+// pinnedVersionPattern extracts the ?version=N (or &version=N) query
 // parameter semantichub.AnchorURL encodes into a hub-served schema URL.
-var pinnedShapesVersionPattern = regexp.MustCompile(`[?&]version=(\d+)`)
+var pinnedVersionPattern = regexp.MustCompile(`[?&]version=(\d+)`)
 
 // pinnedHubShapesVersion reads the hub SHACL shapes version a produced
-// document was anchored to at creation time (ADR-8: dcs:schemaRefs is set
-// once, at production time, and never re-normalized — so this is stable for
-// the document's lifetime even after the hub's active version moves on).
-// Returns 0 (no pin) for documents with no schemaRefs, or ones using the
-// legacy non-hub-anchored schemaRefs shape.
+// document was anchored to at creation time via its sh:shapesGraph link
+// (ADR-8: anchors are set once, at production time, and never
+// re-normalized — so this is stable for the document's lifetime even after
+// the hub's active version moves on). Returns 0 (no pin) for documents
+// with no sh:shapesGraph or a non-hub-versioned one.
 func pinnedHubShapesVersion(contract map[string]any) int {
-	refs, ok := contract["dcs:schemaRefs"].(map[string]any)
-	if !ok {
-		refs, ok = contract["schemaRefs"].(map[string]any)
-		if !ok {
-			return 0
+	return anchorVersion(anchorIRI(contract["sh:shapesGraph"]))
+}
+
+// pinnedHubContextVersion reads the hub JSON-LD context version a produced
+// document's "@context" is anchored to — the hub context URL is either the
+// whole @context or the string entry of its array form
+// (normalizeCanonicalContext).
+func pinnedHubContextVersion(contract map[string]any) int {
+	switch context := contract["@context"].(type) {
+	case string:
+		return anchorVersion(context)
+	case []any:
+		for _, entry := range context {
+			if url, ok := entry.(string); ok {
+				if v := anchorVersion(url); v > 0 {
+					return v
+				}
+			}
 		}
 	}
-	ref, ok := refs["dcs:shaclShapes"].(string)
-	if !ok {
-		ref, ok = refs["shaclShapes"].(string)
-		if !ok {
-			return 0
-		}
+	return 0
+}
+
+// anchorIRI reads the IRI out of a JSON-LD object reference ({"@id": ...})
+// or a plain string.
+func anchorIRI(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case map[string]any:
+		iri, _ := typed["@id"].(string)
+		return iri
 	}
-	match := pinnedShapesVersionPattern.FindStringSubmatch(ref)
+	return ""
+}
+
+func anchorVersion(iri string) int {
+	match := pinnedVersionPattern.FindStringSubmatch(iri)
 	if match == nil {
 		return 0
 	}

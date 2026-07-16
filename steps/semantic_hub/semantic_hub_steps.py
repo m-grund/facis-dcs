@@ -1,7 +1,7 @@
 """BDD steps for the Semantic Hub (DCS-FR-TR-03, UC-02-08,
 backend/design/semantic_hub.go): versioned schema storage
 (/semantic/schema/...), public context resolution (/semantic/context/...),
-document anchoring (dcs:schemaRefs injected by the normalization layer), and
+document anchoring (@context hub URL + sh:shapesGraph injected by the normalization layer), and
 ontology-prefix enforcement at template creation."""
 
 import json
@@ -195,10 +195,23 @@ def step_then_contract_anchored(context, name):
     headers = context.contract_seed_headers[name]
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
     assert retrieve.status_code == 200, retrieve.text
-    refs = (retrieve.json().get("contract_data") or {}).get("dcs:schemaRefs") or {}
-    anchor = refs.get("dcs:jsonLdContext")
-    assert anchor and "/semantic/context/" in anchor, (
-        f"Expected a hub-served dcs:schemaRefs.dcs:jsonLdContext anchor, got: {refs}"
+    contract_data = retrieve.json().get("contract_data") or {}
+    # The context anchor IS the document's @context (or the string entry of
+    # its array form) — standard JSON-LD, resolvable by external tooling.
+    raw_context = contract_data.get("@context")
+    candidates = raw_context if isinstance(raw_context, list) else [raw_context]
+    anchor = next(
+        (c for c in candidates if isinstance(c, str) and "/semantic/context/" in c),
+        None,
+    )
+    assert anchor, (
+        f"Expected @context to carry a hub-served versioned context URL, got: {raw_context}"
+    )
+    # The shapes pin rides on sh:shapesGraph (ADR-8).
+    shapes_ref = contract_data.get("sh:shapesGraph") or {}
+    shapes_anchor = shapes_ref.get("@id") if isinstance(shapes_ref, dict) else shapes_ref
+    assert shapes_anchor and "/semantic/shapes/" in shapes_anchor, (
+        f"Expected a hub-served sh:shapesGraph anchor, got: {shapes_ref}"
     )
     context.hub_anchor_url = anchor
 

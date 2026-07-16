@@ -59,7 +59,7 @@ func AuditContractContent(ctx context.Context, contractDocument any, policyDocum
 	if policy.EnforceCanonicalShapes {
 		// ADR-8 version pinning: a document is revalidated against the hub
 		// SHACL shapes version it was anchored to at creation time
-		// (dcs:schemaRefs.dcs:shaclShapes), not whatever the hub's active
+		// (sh:shapesGraph), not whatever the hub's active
 		// version has since moved on to — rolling the hub forward never
 		// retroactively breaks an already-produced artifact.
 		shaclFindings, shapesVersion, err := validateAgainstHubShapes(ctx, contract)

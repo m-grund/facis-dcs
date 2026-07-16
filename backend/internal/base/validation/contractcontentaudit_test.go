@@ -36,6 +36,10 @@ func (f fixtureShapeSource) ShapesAt(_ context.Context, _ int) (string, error) {
 	return f.shapesTTL, nil
 }
 
+func (f fixtureShapeSource) ContextAt(_ context.Context, _ int) (string, error) {
+	return f.contextJSON, nil
+}
+
 // mustReadRepoFile climbs from the package directory to find a repo-root
 // relative path (go test's working directory is the package source
 // directory) — hard-fails loudly rather than silently skipping if the

@@ -12,7 +12,6 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	SetJSONLDContextIRI(SchemaJSONLDContextV1)
 	// ADR-8/ADR-9: AuditContractContent's SHACL/profile enforcement reads
 	// from the Semantic Hub only (no disk fallback) — tests install a
 	// ShapeSource fixture backed by the real hub authoring files so the
@@ -255,7 +254,14 @@ func TestNormalizeTemplateDataAcceptsCanonicalJSONLDEnvelope(t *testing.T) {
 	require.NoError(t, json.Unmarshal(*normalized, &result))
 	require.Contains(t, result, "dcs:documentStructure")
 	require.NotContains(t, result, "documentOutline")
-	require.Equal(t, "http://www.w3.org/2001/XMLSchema#", result["@context"].(map[string]any)["xsd"])
+	// normalizeCanonicalContext anchors @context as [hub context URL,
+	// submitted inline prefix map] (ADR-8).
+	anchored := result["@context"].([]any)
+	require.Equal(t, SchemaJSONLDContextV1, anchored[0])
+	require.Equal(t, "https://w3id.org/facis/dcs/ontology/v1#", anchored[1].(map[string]any)["dcs"])
+	// The shapes pin rides on sh:shapesGraph (the ADR-8 anchor).
+	require.Equal(t, SchemaSHACLShapesV1, result["sh:shapesGraph"].(map[string]any)["@id"])
+	require.NotContains(t, result, "dcs:schemaRefs")
 }
 
 func TestNormalizeContractDataAddsJSONLDContractType(t *testing.T) {

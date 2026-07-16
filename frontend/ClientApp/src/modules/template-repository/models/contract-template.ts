@@ -79,17 +79,6 @@ export interface SemanticValueOption {
 
 // ---- Validation Metadata ----
 
-export const FACIS_SCHEMA_REFS = {
-  documentStructure: 'facis.dcs.document-structure.v1',
-  templateData: 'facis.dcs.template-data.v1',
-  contractData: 'facis.dcs.contract-data.v1',
-  semanticCondition: 'facis.dcs.semantic-condition.v1',
-  party: 'facis.dcs.party.v1',
-  contract: 'facis.dcs.contract.v1',
-  service: 'facis.dcs.service.v1',
-  signature: 'facis.dcs.signature.v1',
-} as const
-
 export type DomainSemanticPath = string
 
 export interface DomainFieldDefinition {
@@ -101,16 +90,6 @@ export interface DomainFieldDefinition {
   statementType?: string
   statementTypeLabel?: string
   valueConstraint?: SemanticValueConstraint
-}
-
-export interface SchemaReferenceSet {
-  documentStructure: string
-  semanticCondition: string
-  templateData?: string
-  contractData?: string
-  jsonLdContext?: string
-  ontology?: string
-  shaclShapes?: string
 }
 
 export interface PolicyReference {

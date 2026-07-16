@@ -145,7 +145,8 @@ func main() {
 	// Semantic Hub (DCS-FR-TR-03): seed the genesis FACIS DCS v1 profile
 	// (JSON-LD context, SHACL shapes, validation profile) and anchor every
 	// subsequently produced document to the hub's ACTIVE context version —
-	// its schemaRefs point at hub-served, versioned URLs, and documents
+	// its anchors (@context, sh:shapesGraph, dcterms:conformsTo) point at
+	// hub-served, versioned URLs, and documents
 	// redefining a hub-declared ontology prefix are rejected. Fatal on
 	// failure: the hub is a required dependency of document normalization.
 	if err := semantichub.Seed(ctx, db); err != nil {

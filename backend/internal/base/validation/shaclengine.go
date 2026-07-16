@@ -18,7 +18,7 @@ import (
 // the hand-rolled structural-subset matcher this package used to carry.
 //
 // The shapes version is the one pinned in the document's own
-// dcs:schemaRefs.dcs:shaclShapes anchor when present (ADR-8 revalidation),
+// sh:shapesGraph anchor when present (ADR-8 revalidation),
 // otherwise the hub's currently-active version (new document validation).
 // Returns the findings and the shapes version they were produced against.
 func validateAgainstHubShapes(ctx context.Context, contract map[string]any) ([]PolicyFinding, int, error) {
@@ -48,9 +48,20 @@ func validateAgainstShapeSource(ctx context.Context, contract map[string]any, so
 		return nil, 0, fmt.Errorf("load SHACL shapes: %w", err)
 	}
 
-	contextContent, _, err := source.ActiveContext(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("load active JSON-LD context: %w", err)
+	// The document's "@context" pins the hub context version it was
+	// authored under (ADR-8) — expansion resolves exactly that version, the
+	// hub's currently-active one only for unpinned documents.
+	var contextContent string
+	if pinnedContext := pinnedHubContextVersion(contract); pinnedContext > 0 {
+		contextContent, err = source.ContextAt(ctx, pinnedContext)
+		if err != nil {
+			return nil, 0, fmt.Errorf("load pinned JSON-LD context v%d: %w", pinnedContext, err)
+		}
+	} else {
+		contextContent, _, err = source.ActiveContext(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("load active JSON-LD context: %w", err)
+		}
 	}
 	loader, err := hermeticContextLoader(contextContent)
 	if err != nil {
@@ -203,7 +214,10 @@ type staticContextLoader struct {
 }
 
 func (l staticContextLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
-	if strings.Contains(u, schemaRefJSONLDContext) || (schemaRefJSONLDContext != "" && u == schemaRefJSONLDContext) {
+	// Serve any hub context anchor URL (validateAgainstShapeSource already
+	// loaded the exact pinned version this loader holds) and the historical
+	// w3id identifier — anything else would be a live network fetch.
+	if strings.Contains(u, "/semantic/context/") || strings.Contains(u, schemaRefJSONLDContext) || u == SchemaJSONLDContextV1 {
 		return &ld.RemoteDocument{DocumentURL: u, Document: l.document}, nil
 	}
 	return nil, fmt.Errorf("SHACL validation: JSON-LD context %q is not the offline hub cache; network fetch during validation is disallowed", u)

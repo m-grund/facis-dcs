@@ -11,12 +11,12 @@ import (
 // SHACLEvidence runs the Semantic Hub SHACL validation pass
 // (validateAgainstHubShapes, ADR-9) for a document and returns the schema
 // version it validated against (pinned per ADR-8 when the document already
-// carries dcs:schemaRefs, otherwise the hub's active version) and a stable
+// carries sh:shapesGraph, otherwise the hub's active version) and a stable
 // hash of the resulting findings.
 //
 // Phase 4: this is what gets embedded into signed evidence (the
 // ContractSigningSummaryCredential, the C2PA manifest) — an external
-// verifier resolves dcs:schemaRefs to fetch the exact pinned shapes from
+// verifier resolves sh:shapesGraph to fetch the exact pinned shapes from
 // the public hub endpoints, re-runs validation, and compares the hash it
 // gets against the one embedded at signing time. A mismatch means the
 // document was mutated (or the hub's pinned version became unavailable)

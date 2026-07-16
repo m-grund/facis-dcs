@@ -12,7 +12,7 @@ import (
 
 // TestVerifyAgainstOriginatorHub is the Phase 4 DCS-to-DCS acceptance
 // criterion: a counterparty resolves the originator's public hub URLs from
-// a received document's dcs:schemaRefs and validates against THOSE shapes
+// a received document's sh:shapesGraph and validates against THOSE shapes
 // — a fake HTTP server here stands in for a peer DCS instance's public
 // Semantic Hub endpoints (GET /semantic/schema/retrieve).
 func TestVerifyAgainstOriginatorHub(t *testing.T) {

@@ -48,13 +48,15 @@ and `shapes` is the raw Turtle it was derived from.
 - `GET /semantic/clauses` is a Semantic Hub read, public like
   `resolve_context` — a produced contract's typed clauses need to be
   independently re-verifiable by an external party the same way the rest of
-  `dcs:schemaRefs` is.
-- The clause catalog's own hub version is not tracked in a produced
-  document's `dcs:schemaRefs` (only the canonical shapes' version is,
+  the document's hub anchors (`@context` URL, `sh:shapesGraph`,
+  `dcterms:conformsTo`) are.
+- The clause catalog's own hub version is not pinned in a produced
+  document (only the canonical shapes' version is, via `sh:shapesGraph`,
   ADR-8) — `HubShapeSource.ActiveShapes`/`ShapesAt` always concatenate the
   clause catalog's *current* active version, even during a pinned
   canonical-shapes revalidation. Acceptable for this phase: clause
   instances are new, additive content, not yet a first-class pinned
   artifact the way the canonical contract shape is. A future phase could
-  extend `dcs:schemaRefs` with a `dcs:clauseCatalog` anchor if that
+  add a second `sh:shapesGraph` entry (the property is naturally
+  multi-valued) naming the pinned clause-catalog version if that
   divergence needs closing.

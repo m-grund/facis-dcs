@@ -242,7 +242,7 @@ func ActiveOntologyIRIs(ctx context.Context, db *sqlx.DB) (map[string]string, in
 }
 
 // AnchorURL builds the hub-served, versioned URL a produced document's
-// schemaRefs anchor to. Mirrors provenance.RemoteManifestURL's DCS_PUBLIC_URL
+// schema anchors to. Mirrors provenance.RemoteManifestURL's DCS_PUBLIC_URL
 // convention: without a configured public URL the reference stays
 // host-relative (still resolvable against the serving instance).
 func AnchorURL(kind, name string, version int) string {

@@ -10,21 +10,19 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 )
 
-var jsonLDContextIRI string
-
-func SetJSONLDContextIRI(iri string) {
-	jsonLDContextIRI = iri
-}
-
-// Semantic Hub anchoring (DCS-FR-TR-03): the schemaRefs every produced
-// document carries default to the historical w3id identifiers and are
-// re-pointed at startup to the hub's ACTIVE, versioned, hub-served URLs
-// (semantichub.AnchorURL) — so each artifact resolvably anchors the exact
-// schema version it was produced against.
+// Semantic Hub anchoring (DCS-FR-TR-03, ADR-8) in standard linked-data
+// vocabulary, so external JSON-LD tooling understands a produced document
+// outright: "@context" carries the hub-served, versioned context URL
+// itself; "sh:shapesGraph" (w3.org/ns/shacl#shapesGraph) links the data
+// graph to the exact SHACL shapes version it was produced against — the
+// ADR-8 pin; "dcterms:conformsTo" names the validation profile. The
+// defaults below are the historical w3id identifiers and are re-pointed at
+// startup (and on every hub activation) to the hub's ACTIVE, versioned,
+// hub-served URLs (semantichub.AnchorURL).
 var (
 	schemaRefJSONLDContext = SchemaJSONLDContextV1
-	schemaRefOntology      = SchemaOntologyV1
 	schemaRefSHACLShapes   = SchemaSHACLShapesV1
+	schemaRefProfile       = ""
 	// canonicalOntologyIRIs holds the ACTIVE hub context's prefix -> IRI
 	// map; when set, a document supplying a CONFLICTING IRI for one of
 	// these prefixes is rejected (the hub is authoritative for what the
@@ -32,17 +30,19 @@ var (
 	canonicalOntologyIRIs map[string]string
 )
 
-// SetSchemaAnchorRefs re-points the schemaRefs of newly produced documents
-// at the Semantic Hub's served URLs.
-func SetSchemaAnchorRefs(contextRef, ontologyRef, shapesRef string) {
+// SetSchemaAnchorRefs re-points the anchors of newly produced documents at
+// the Semantic Hub's served URLs: the JSON-LD context ("@context"), the
+// SHACL shapes ("sh:shapesGraph", the ADR-8 pin carrier), and the
+// validation profile ("dcterms:conformsTo").
+func SetSchemaAnchorRefs(contextRef, shapesRef, profileRef string) {
 	if contextRef != "" {
 		schemaRefJSONLDContext = contextRef
 	}
-	if ontologyRef != "" {
-		schemaRefOntology = ontologyRef
-	}
 	if shapesRef != "" {
 		schemaRefSHACLShapes = shapesRef
+	}
+	if profileRef != "" {
+		schemaRefProfile = profileRef
 	}
 }
 
@@ -59,10 +59,25 @@ func enforceCanonicalOntologyIRIs(data documentData) error {
 	if len(canonicalOntologyIRIs) == 0 {
 		return nil
 	}
-	context, ok := data["@context"].(map[string]any)
-	if !ok {
-		return nil
+	switch context := data["@context"].(type) {
+	case map[string]any:
+		return enforceCanonicalOntologyIRIMap(context)
+	case []any:
+		// normalizeCanonicalContext's anchored form: [hub context URL,
+		// inline prefix map(s)] — string entries are hub URLs, map entries
+		// are client-declared prefixes to check.
+		for _, entry := range context {
+			if inline, ok := entry.(map[string]any); ok {
+				if err := enforceCanonicalOntologyIRIMap(inline); err != nil {
+					return err
+				}
+			}
+		}
 	}
+	return nil
+}
+
+func enforceCanonicalOntologyIRIMap(context map[string]any) error {
 	for prefix, iri := range context {
 		supplied, ok := iri.(string)
 		if !ok {
@@ -268,9 +283,6 @@ func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*dat
 	if err := normalizeSemanticConditions(data); err != nil {
 		return nil, err
 	}
-	if err := validateSchemaRefs(data, false); err != nil {
-		return nil, err
-	}
 	if err := validatePolicyRefs(data, false); err != nil {
 		return nil, err
 	}
@@ -396,17 +408,19 @@ func normalizeCanonicalEnvelope(data documentData, documentType string) {
 	if rawType, _ := data["@type"].(string); strings.TrimSpace(rawType) == "" {
 		data["@type"] = documentType
 	}
-	// Semantic Hub anchoring (DCS-FR-TR-03): every produced canonical
-	// document records the hub-served, versioned schema URLs it was
-	// produced against. Set once at production time — a document keeps the
-	// anchor of the version it was authored under (synced copies arrive
-	// verbatim and are never re-normalized).
-	if _, exists := data["dcs:schemaRefs"]; !exists {
-		data["dcs:schemaRefs"] = map[string]any{
-			"dcs:jsonLdContext": schemaRefJSONLDContext,
-			"dcs:ontology":      schemaRefOntology,
-			"dcs:shaclShapes":   schemaRefSHACLShapes,
-		}
+	// Semantic Hub anchoring (DCS-FR-TR-03, ADR-8): every produced
+	// canonical document records the hub-served, versioned schema URLs it
+	// was produced against, in standard vocabulary — sh:shapesGraph is the
+	// version pin, dcterms:conformsTo the validation profile (the context
+	// pin rides in "@context" itself, see normalizeCanonicalContext). Set
+	// once at production time — a document keeps the anchor of the version
+	// it was authored under (synced copies arrive verbatim and are never
+	// re-normalized).
+	if _, exists := data["sh:shapesGraph"]; !exists {
+		data["sh:shapesGraph"] = map[string]any{"@id": schemaRefSHACLShapes}
+	}
+	if _, exists := data["dcterms:conformsTo"]; !exists && schemaRefProfile != "" {
+		data["dcterms:conformsTo"] = map[string]any{"@id": schemaRefProfile}
 	}
 	if _, ok := topLevelValue(data, "contractData").([]any); !ok {
 		if _, exists := topLevelValueExists(data, "contractData"); !exists {
@@ -420,24 +434,28 @@ func normalizeCanonicalEnvelope(data documentData, documentType string) {
 	}
 }
 
+// normalizeCanonicalContext anchors "@context" to the Semantic Hub's
+// versioned context URL (the context half of ADR-8's pin). A submitted
+// inline prefix map is kept alongside the URL in standard JSON-LD array
+// form — it may carry client-declared prefixes beyond the hub's, and
+// enforceCanonicalOntologyIRIs has already rejected any that CONFLICT with
+// the hub context. Set once: a document whose @context already carries a
+// hub URL (a string entry) keeps the version it was authored under.
 func normalizeCanonicalContext(data documentData) {
-	context, ok := data["@context"].(map[string]any)
-	if !ok {
-		data["@context"] = map[string]any{
-			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
-			"odrl": "http://www.w3.org/ns/odrl/2/",
-			"xsd":  "http://www.w3.org/2001/XMLSchema#",
-		}
+	switch context := data["@context"].(type) {
+	case string:
 		return
-	}
-	if _, ok := context["dcs"]; !ok {
-		context["dcs"] = "https://w3id.org/facis/dcs/ontology/v1#"
-	}
-	if _, ok := context["odrl"]; !ok {
-		context["odrl"] = "http://www.w3.org/ns/odrl/2/"
-	}
-	if _, ok := context["xsd"]; !ok {
-		context["xsd"] = "http://www.w3.org/2001/XMLSchema#"
+	case []any:
+		for _, entry := range context {
+			if _, ok := entry.(string); ok {
+				return
+			}
+		}
+		data["@context"] = append([]any{schemaRefJSONLDContext}, context...)
+	case map[string]any:
+		data["@context"] = []any{schemaRefJSONLDContext, context}
+	default:
+		data["@context"] = schemaRefJSONLDContext
 	}
 }
 
@@ -787,15 +805,14 @@ func containsODRLTerms(value any) bool {
 }
 
 func normalizeContractMetadata(data documentData) {
-	data["@context"] = jsonLDContextIRI
+	data["@context"] = schemaRefJSONLDContext
 	data["@type"] = "Contract"
-	data["schemaRefs"] = map[string]any{
-		"documentStructure": SchemaDocumentStructureV1,
-		"semanticCondition": SchemaSemanticConditionV1,
-		"contractData":      SchemaContractDataV1,
-		"jsonLdContext":     schemaRefJSONLDContext,
-		"ontology":          schemaRefOntology,
-		"shaclShapes":       schemaRefSHACLShapes,
+	// Same hub anchors as the canonical envelope (ONE vocabulary for every
+	// produced document, ADR-8): the version-pinned shapes graph and the
+	// validation profile.
+	data["sh:shapesGraph"] = map[string]any{"@id": schemaRefSHACLShapes}
+	if schemaRefProfile != "" {
+		data["dcterms:conformsTo"] = map[string]any{"@id": schemaRefProfile}
 	}
 	data["policyRefs"] = contractPolicyRefs
 	data["validation"] = map[string]any{
@@ -824,28 +841,6 @@ func normalizeContractSemanticRuntime(data documentData) {
 	generated := buildSemanticRules(data)
 	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], generated)
 	data["policyBundle"] = buildODRLPolicyBundle(data["semanticRules"])
-}
-
-func validateSchemaRefs(data documentData, template bool) error {
-	refs, ok := data["schemaRefs"].(map[string]any)
-	if !ok {
-		return errors.New("schemaRefs must be an object")
-	}
-	required := map[string]string{
-		"documentStructure": SchemaDocumentStructureV1,
-		"semanticCondition": SchemaSemanticConditionV1,
-	}
-	if template {
-		required["templateData"] = SchemaTemplateDataV1
-	} else {
-		required["contractData"] = SchemaContractDataV1
-	}
-	for key, expected := range required {
-		if actual, _ := refs[key].(string); actual != expected {
-			return fmt.Errorf("schemaRefs.%s must be %q", key, expected)
-		}
-	}
-	return nil
 }
 
 func validatePolicyRefs(data documentData, template bool) error {

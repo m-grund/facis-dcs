@@ -1046,9 +1046,9 @@ def step_then_post_sync_rejected_jades(context):
     )
 
 
-@then("the contract's schemaRefs anchor, as stored on instance B, resolves against instance A's Semantic Hub")
+@then("the contract's sh:shapesGraph anchor, as stored on instance B, resolves against instance A's Semantic Hub")
 def step_then_schema_ref_resolves_against_a(context):
-    """Phase 4 (DCS-to-DCS): dcs:schemaRefs.dcs:shaclShapes is set once, at
+    """Phase 4 (DCS-to-DCS): the sh:shapesGraph anchor is set once, at
     production time on instance A, and synced verbatim — it never gets
     re-anchored to instance B's own hub. This confirms it's still resolvable
     from outside instance A (the reachability precondition
@@ -1063,14 +1063,14 @@ def step_then_schema_ref_resolves_against_a(context):
         timeout=context.http_timeout_seconds,
     )
     assert retrieve.status_code == 200, retrieve.text
-    refs = (retrieve.json().get("contract_data") or {}).get("dcs:schemaRefs") or {}
-    anchor = refs.get("dcs:shaclShapes")
-    assert anchor, f"Expected the contract stored on instance B to carry a dcs:schemaRefs.dcs:shaclShapes anchor, got: {refs}"
+    shapes_ref = (retrieve.json().get("contract_data") or {}).get("sh:shapesGraph") or {}
+    anchor = shapes_ref.get("@id") if isinstance(shapes_ref, dict) else shapes_ref
+    assert anchor, f"Expected the contract stored on instance B to carry a sh:shapesGraph anchor, got: {shapes_ref}"
 
     url = anchor if anchor.startswith("http") else f"{origin_url(context.base_url_a)}{anchor}"
     resp = _requests.get(url, timeout=context.http_timeout_seconds)
     assert resp.status_code == 200, (
-        f"Expected the schemaRefs anchor {anchor!r} to resolve against instance A's Semantic Hub "
+        f"Expected the sh:shapesGraph anchor {anchor!r} to resolve against instance A's Semantic Hub "
         f"({url}), got {resp.status_code}: {resp.text}"
     )
     body = resp.json()

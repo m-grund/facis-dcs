@@ -3,9 +3,9 @@
 # profiles every DCS document is produced against. Seeded at startup with the
 # FACIS DCS v1 profile (backend/internal/semantichub/assets, authored under
 # docs/semantic-ontology). Reads are public — produced artifacts carry
-# hub-served schemaRefs external verifiers resolve without a DCS login —
+# hub-served anchors external verifiers resolve without a DCS login —
 # writes are Template Manager-scoped. The normalization layer anchors every
-# produced canonical document to the hub (dcs:schemaRefs) and rejects
+# produced canonical document to the hub (@context URL, sh:shapesGraph, dcterms:conformsTo) and rejects
 # documents that redefine a hub-declared ontology prefix.
 
 @DCS-FR-TR-03 @UC-02-08
@@ -46,7 +46,7 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
 
   # The anchoring half of DCS-FR-TR-03: every produced canonical document
   # records the hub-served, versioned schema URLs it was produced against
-  # (dcs:schemaRefs, injected by the normalization layer), and that anchor
+  # (@context hub URL + sh:shapesGraph, injected by the normalization layer), and that anchor
   # RESOLVES against this instance's Semantic Hub.
   @DCS-FR-TR-03
   Scenario: A produced contract document is anchored to the Semantic Hub and the anchor resolves
@@ -70,7 +70,7 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
   # what was enforced. This is the scenario that proves the loop is closed:
   # activating a stricter shapes version changes findings for contracts
   # created afterward, while contracts already produced under the old
-  # version keep revalidating exactly as before (dcs:schemaRefs pins each
+  # version keep revalidating exactly as before (sh:shapesGraph pins each
   # document to the hub version active at its own creation time). The engine
   # (ADR-9, goRDFlib) only reports non-conformance — a passing contract
   # produces no finding for a rule at all, not an "info" one.

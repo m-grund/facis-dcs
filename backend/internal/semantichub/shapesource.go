@@ -23,7 +23,7 @@ type HubShapeSource struct {
 // validateAgainstHubShapes pass as the rest of the contract, not a second
 // one. The clause catalog is always its own current active version even
 // during ADR-8 pinned revalidation (only the canonical contract shapes'
-// pin is tracked via dcs:schemaRefs today).
+// pin is tracked via sh:shapesGraph today).
 func (h HubShapeSource) ActiveShapes(ctx context.Context) (string, int, error) {
 	content, version, err := h.active(ctx, ShapesName, "shapes")
 	if err != nil {
@@ -63,6 +63,25 @@ func (h HubShapeSource) ShapesAt(ctx context.Context, version int) (string, erro
 	return h.withClauseCatalog(ctx, s.Content)
 }
 
+// ContextAt returns the JSON-LD context pinned at a specific version —
+// the version a document's "@context" hub URL names (ADR-8). Hub versions
+// are immutable, so this stays resolvable forever.
+func (h HubShapeSource) ContextAt(ctx context.Context, version int) (string, error) {
+	tx, err := h.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+	s, err := (Repo{}).Get(ctx, tx, ContextName, "context", version)
+	if err != nil {
+		return "", fmt.Errorf("semantic hub: pinned context v%d: %w", version, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+	return s.Content, nil
+}
+
 // withClauseCatalog appends the clause catalog's current active shapes to a
 // canonical shapes document — both are self-contained Turtle documents with
 // identical @prefix declarations, so concatenation parses as one graph.
@@ -94,7 +113,7 @@ func (h HubShapeSource) active(ctx context.Context, name, kind string) (string, 
 }
 
 // ActiveVersion returns the version number of the ACTIVE (name, kind) entry.
-// Used at startup to anchor produced documents' schemaRefs to each schema
+// Used at startup to anchor produced documents' schema anchors to each schema
 // kind's OWN active version — context, shapes, and profile version numbers
 // diverge as soon as any one of them is registered/rolled back independently
 // of the others (ADR-8).

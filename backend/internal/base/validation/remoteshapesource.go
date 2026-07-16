@@ -14,15 +14,15 @@ import (
 // public Semantic Hub endpoints (Phase 4, DCS-to-DCS: DCS-FR-TR-03).
 // GET /semantic/schema/retrieve is public and unauthenticated (same as
 // resolve_context) precisely so that a counterparty instance receiving a
-// contract can resolve dcs:schemaRefs back to the ORIGINATOR's hub and
+// contract can resolve sh:shapesGraph back to the ORIGINATOR's hub and
 // re-run validation against the exact shapes/profile/context it was
 // produced under — not the receiver's own local hub, which may be running
 // a different active version. This is what a produced document's
-// dcs:schemaRefs anchor (semantichub.AnchorURL) exists to make possible.
+// sh:shapesGraph anchor (semantichub.AnchorURL) exists to make possible.
 type RemoteShapeSource struct {
 	// BaseURL is the originator instance's public origin (e.g.
 	// "https://dcs-a.example.org" or, in the BDD two-instance deployment,
-	// "http://dcs-a.localhost:18080") — schemaRefs anchors are host-relative
+	// "http://dcs-a.localhost:18080") — hub anchors are host-relative
 	// when the originator has no DCS_PUBLIC_URL configured
 	// (semantichub.AnchorURL), so the caller supplies the origin the
 	// contract was actually received from.
@@ -57,6 +57,11 @@ func (r RemoteShapeSource) ActiveContext(ctx context.Context) (string, int, erro
 
 func (r RemoteShapeSource) ShapesAt(ctx context.Context, version int) (string, error) {
 	content, _, err := r.retrieve(ctx, r.ShapesName, "shapes", version)
+	return content, err
+}
+
+func (r RemoteShapeSource) ContextAt(ctx context.Context, version int) (string, error) {
+	content, _, err := r.retrieve(ctx, r.ContextName, "context", version)
 	return content, err
 }
 
@@ -99,7 +104,7 @@ func (r RemoteShapeSource) retrieve(ctx context.Context, name, kind string, vers
 
 // VerifyAgainstOriginatorHub (Phase 4, DCS-to-DCS) validates a received
 // document against the ORIGINATOR's Semantic Hub rather than the local
-// instance's — resolving dcs:schemaRefs back to originatorBaseURL. An
+// instance's — resolving sh:shapesGraph back to originatorBaseURL. An
 // external verifier (or a counterparty DCS instance receiving a synced
 // contract) uses this to confirm the document validates against the exact
 // shapes it was actually produced under, independent of what the local

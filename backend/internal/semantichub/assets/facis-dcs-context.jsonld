@@ -2,9 +2,11 @@
   "@context": {
     "@version": 1.1,
     "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+    "dcterms": "http://purl.org/dc/terms/",
     "dcst": "https://w3id.org/facis/dcs/taxonomy/v1#",
     "odrl": "http://www.w3.org/ns/odrl/2/",
     "prov": "http://www.w3.org/ns/prov#",
+    "sh": "http://www.w3.org/ns/shacl#",
     "vc": "https://www.w3.org/2018/credentials#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "id": "@id",

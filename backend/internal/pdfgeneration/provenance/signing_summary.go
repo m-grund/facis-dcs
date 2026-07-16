@@ -28,10 +28,10 @@ type SigningSummary struct {
 	// SHACL shapes version this contract validated against at signing time,
 	// and a stable hash of the resulting findings
 	// (validation.SHACLEvidence) — an external verifier resolves
-	// dcs:schemaRefs to fetch those exact pinned shapes from the public hub
+	// sh:shapesGraph to fetch those exact pinned shapes from the public hub
 	// endpoints, re-runs validation, and compares hashes to detect drift.
 	// Optional: zero/empty when SHACL evidence could not be produced (e.g.
-	// a legacy non-canonical-envelope document with no schemaRefs to pin).
+	// a legacy non-canonical-envelope document with no sh:shapesGraph anchor to pin).
 	SchemaVersion        int
 	ValidationReportHash string
 }

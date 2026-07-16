@@ -26,18 +26,40 @@ enforced — the hub was a write-only ledger.
   unconfigured, `AuditContractContent` hard-fails
   (`requireShapeSource`/`SetShapeSource`) rather than silently falling back
   to anything — there is no `SEMANTIC_ENFORCEMENT_SOURCE` flag.
+- **Anchor vocabulary — standard linked-data terms only**: a produced
+  document carries its hub anchors in vocabulary external JSON-LD tooling
+  understands outright, not a proprietary `dcs:schemaRefs` object:
+  - `"@context"` **is** the context anchor: the hub-served, versioned
+    context URL itself (`/semantic/context/{name}?version=N`), kept in
+    standard array form alongside any client-supplied inline prefix map
+    (`normalizeCanonicalContext`). Dereferencing it yields the exact
+    registered JSON-LD context document.
+  - `"sh:shapesGraph"` (`http://www.w3.org/ns/shacl#shapesGraph` — SHACL's
+    own data-graph→shapes-graph link) carries the versioned shapes URL
+    (`/semantic/shapes/{name}?version=N`) and is the **pin carrier** for
+    revalidation.
+  - `"dcterms:conformsTo"` (Dublin Core, as used by DCAT/PROF) names the
+    versioned validation profile URL
+    (`/semantic/profile/{name}?version=N`).
+  - The former `dcs:ontology` ref is dropped: ontology terms are
+    follow-your-nose dereferenceable from the context's term IRIs.
+  All three anchor paths are public, unauthenticated hub routes
+  (`resolve_context`/`resolve_shapes`/`resolve_profile`), so an external
+  verifier can resolve everything a document claims without a DCS login.
 - **Version pinning**: a document is validated against the hub SHACL shapes
-  version that was **active at the document's own creation time**. This was
-  already implicit in how `dcs:schemaRefs` is set — `normalizeCanonicalEnvelope`
-  writes it once, "at production time... never re-normalized" — this ADR
-  makes it load-bearing: `AuditContractContent` parses the pinned version out
-  of the document's own `dcs:schemaRefs.dcs:shaclShapes` anchor
+  version that was **active at the document's own creation time**. Anchors
+  are written once, at production time, never re-normalized — this ADR
+  makes it load-bearing: `AuditContractContent` parses the pinned version
+  out of the document's own `sh:shapesGraph` anchor
   (`pinnedHubShapesVersion`) and, when present, revalidates against that
-  exact version via `ShapeSource.ShapesAt`, not whatever is active now. New
-  documents (no existing pin) validate against whatever is currently active.
-  Hub versions are immutable (no deletion), so a pinned version is always
-  resolvable — an already-produced artifact never silently starts failing
-  (or silently starts passing) because someone changed the hub later.
+  exact version via `ShapeSource.ShapesAt`, not whatever is active now.
+  JSON-LD expansion during validation likewise resolves the context version
+  pinned in the document's own `@context` URL (`ShapeSource.ContextAt`),
+  hermetically (no network fetch). New documents (no existing pin) validate
+  against whatever is currently active. Hub versions are immutable (no
+  deletion), so a pinned version is always resolvable — an already-produced
+  artifact never silently starts failing (or silently starts passing)
+  because someone changed the hub later.
 - Fixed a latent bug this pinning depends on: `cmd/dcs/main.go` was anchoring
   the SHACL shapes ref to the **context's** active version
   (`hubContextVersion`) rather than the shapes' own — harmless while both

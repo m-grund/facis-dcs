@@ -583,7 +583,7 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 	}
 
 	// Phase 4 (DCS-to-DCS, DCS-FR-TR-03): resolve the synced contract's own
-	// dcs:schemaRefs back to the ORIGINATOR's public Semantic Hub — not this
+	// sh:shapesGraph back to the ORIGINATOR's public Semantic Hub — not this
 	// instance's local one, which may run a different active version — and
 	// re-validate against those exact pinned shapes. Best-effort and
 	// non-blocking: a peer's hub being briefly unreachable must never fail

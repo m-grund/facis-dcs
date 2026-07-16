@@ -11,7 +11,6 @@ import type {
 import type {
   MetaData,
   PolicyReference,
-  SchemaReferenceSet,
   TemplateTypeValue,
   ValidationProfile,
 } from '@/modules/template-repository/models/contract-template'
@@ -35,7 +34,6 @@ interface TemplateDraftState {
   /** JSON-LD ODRL policies (operator constraints). */
   policies: OdrlRule[]
   customMetaData: MetaData[]
-  schemaRefs: SchemaReferenceSet
   policyRefs: PolicyReference[]
   validation: ValidationProfile
   templateVariables: TemplateVariable[]

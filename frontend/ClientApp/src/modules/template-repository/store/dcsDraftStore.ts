@@ -1,5 +1,4 @@
 import {
-  FACIS_SCHEMA_REFS,
   FACIS_TEMPLATE_POLICY_REFS,
   FACIS_TEMPLATE_VALIDATION_PROFILE,
   TemplateType,
@@ -880,11 +879,6 @@ const defaultState: Readonly<Omit<TemplateDraftState, 'blocks' | 'layout'>> = {
   contractData: [],
   policies: [],
   customMetaData: [],
-  schemaRefs: {
-    documentStructure: FACIS_SCHEMA_REFS.documentStructure,
-    semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
-    templateData: FACIS_SCHEMA_REFS.templateData,
-  },
   policyRefs: FACIS_TEMPLATE_POLICY_REFS,
   validation: FACIS_TEMPLATE_VALIDATION_PROFILE,
   templateVariables: [],
@@ -911,7 +905,6 @@ function getInitialState(): TemplateDraftState {
     contractData: [],
     policies: [],
     customMetaData: [],
-    schemaRefs: { ...defaultState.schemaRefs },
     policyRefs: defaultState.policyRefs.map((p) => ({ ...p })),
     validation: { ...defaultState.validation, requiredPolicies: [...defaultState.validation.requiredPolicies] },
     templateVariables: [],

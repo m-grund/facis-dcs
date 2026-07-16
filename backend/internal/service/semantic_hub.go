@@ -148,13 +148,27 @@ func (s *semanticHubsrvc) Versions(ctx context.Context, p *semantichubgen.Versio
 
 // ResolveShapes serves SHACL shapes at the pretty anchor path
 // (/semantic/shapes/{name}?version=N) that semantichub.AnchorURL embeds
-// into every produced document's dcs:schemaRefs.dcs:shaclShapes (ADR-8) —
+// into every produced document's sh:shapesGraph (ADR-8) —
 // without it, the anchors external verifiers dereference would 404.
 func (s *semanticHubsrvc) ResolveShapes(ctx context.Context, p *semantichubgen.ResolveShapesPayload) (res *semantichubgen.SemanticSchemaItem, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
 	schema, err := s.getSchema(ctx, p.Name, "shapes", p.Version)
+	if err != nil {
+		return nil, err
+	}
+	return toSchemaItem(schema), nil
+}
+
+// ResolveProfile serves validation profiles at the anchor path
+// (/semantic/profile/{name}?version=N) that semantichub.AnchorURL embeds
+// into every produced document's dcterms:conformsTo.
+func (s *semanticHubsrvc) ResolveProfile(ctx context.Context, p *semantichubgen.ResolveProfilePayload) (res *semantichubgen.SemanticSchemaItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, p.Name, "profile", p.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -280,11 +294,15 @@ func RefreshValidationAnchors(ctx context.Context, db *sqlx.DB) error {
 	if err != nil {
 		return fmt.Errorf("load active hub shapes version: %w", err)
 	}
+	profileVersion, err := semantichub.ActiveVersion(ctx, db, semantichub.ProfileName, "profile")
+	if err != nil {
+		return fmt.Errorf("load active hub profile version: %w", err)
+	}
 	validation.SetCanonicalOntologyIRIs(hubIRIs)
 	validation.SetSchemaAnchorRefs(
 		semantichub.AnchorURL("context", semantichub.ContextName, contextVersion),
-		hubIRIs["dcs"],
 		semantichub.AnchorURL("shapes", semantichub.ShapesName, shapesVersion),
+		semantichub.AnchorURL("profile", semantichub.ProfileName, profileVersion),
 	)
 	return nil
 }

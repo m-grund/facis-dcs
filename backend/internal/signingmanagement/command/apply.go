@@ -216,9 +216,9 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// SHACL evidence (Phase 4, ADR-9): the hub schema version this contract
 	// validates against and a stable hash of the resulting findings, bound
 	// into the signing-summary credential below — an external verifier
-	// resolves dcs:schemaRefs to fetch those exact pinned shapes, re-runs
+	// resolves sh:shapesGraph to fetch those exact pinned shapes, re-runs
 	// validation, and compares hashes to detect drift. Best-effort: a
-	// legacy non-canonical-envelope document has no schemaRefs to pin, and
+	// legacy non-canonical-envelope document has no sh:shapesGraph anchor to pin, and
 	// signing must not hard-fail just because evidence enrichment couldn't
 	// run.
 	schemaVersion, validationReportHash, err := validation.SHACLEvidence(ctx, *data.ContractData)
