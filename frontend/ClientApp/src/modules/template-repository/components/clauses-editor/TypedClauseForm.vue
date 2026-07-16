@@ -72,6 +72,40 @@ function isInstanceNode(node: unknown): node is DcsTypedClauseInstance {
   return typeof node === 'object' && node !== null && Object.keys(node).length > 1
 }
 
+/** shacl-form serializes one subject as several fragment node objects
+ *  sharing an @id; in JSON-LD those are the same node — merge them. */
+function mergeNodesById(nodes: unknown[]): Record<string, unknown>[] {
+  const byId = new Map<string, Record<string, unknown>>()
+  const anonymous: Record<string, unknown>[] = []
+  for (const raw of nodes) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const node = raw as Record<string, unknown>
+    const id = node['@id']
+    if (typeof id !== 'string' || !id) {
+      anonymous.push(node)
+      continue
+    }
+    const target = byId.get(id)
+    if (!target) {
+      byId.set(id, { ...node })
+      continue
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === '@id') continue
+      const existing = target[key]
+      if (existing === undefined) {
+        target[key] = value
+      } else {
+        target[key] = [
+          ...(Array.isArray(existing) ? existing : [existing]),
+          ...(Array.isArray(value) ? value : [value]),
+        ]
+      }
+    }
+  }
+  return [...byId.values(), ...anonymous]
+}
+
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
 
 /** shacl-form serializes the type as an expanded rdf:type property; JSON-LD
@@ -96,7 +130,7 @@ async function submit() {
   }
   try {
     const serialized = JSON.parse(formEl.serialize('application/ld+json')) as unknown
-    const nodes = Array.isArray(serialized) ? serialized : [serialized]
+    const nodes = mergeNodesById(Array.isArray(serialized) ? serialized : [serialized])
     const instance = nodes.find(isInstanceNode)
     if (!instance) {
       formError.value = 'The form produced no values'

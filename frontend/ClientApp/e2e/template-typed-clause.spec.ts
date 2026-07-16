@@ -43,23 +43,12 @@ test('typed clause from the hub palette lands as a prose-backed ODRL rule in an 
   const shaclForm = modal.locator('shacl-form')
   await expect(shaclForm).toBeVisible()
 
-  // Fill every control the shape generated: selects (sh:in constraints)
-  // get their first real option, text/number inputs a plausible value.
-  const selects = shaclForm.locator('select')
-  for (let i = 0; i < (await selects.count()); i++) {
-    const select = selects.nth(i)
-    const values = await select.locator('option').evaluateAll((opts) =>
-      opts.map((o) => (o as HTMLOptionElement).value).filter((v) => v !== ''),
-    )
-    if (values.length > 0) await select.selectOption(values[0]).catch(() => {})
-  }
-  const inputs = shaclForm.locator('input[type="text"], input[type="number"], input:not([type])')
-  const count = await inputs.count()
-  for (let i = 0; i < count; i++) {
-    const input = inputs.nth(i)
-    const type = await input.getAttribute('type')
-    await input.fill(type === 'number' ? '42' : 'E2E value').catch(() => {})
-  }
+  // The required sh:in Action renders as a combobox widget: open it and
+  // pick the DCS profile's own action from the shape's declared vocabulary.
+  const actionWidget = shaclForm.locator('button').first()
+  await actionWidget.waitFor({ state: 'visible', timeout: 30_000 })
+  await actionWidget.click()
+  await modal.getByRole('option', { name: /provideCompliantValue/ }).click()
 
   await modal.getByRole('button', { name: 'Add to document' }).click()
   await expect(page.getByRole('dialog')).toBeHidden()
