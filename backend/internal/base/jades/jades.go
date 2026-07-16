@@ -9,7 +9,6 @@
 package jades
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -21,6 +20,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/gowebpki/jcs"
 
 	"digital-contracting-service/internal/base/identity"
 )
@@ -37,10 +38,10 @@ type protectedHeader struct {
 	Crit []string `json:"crit"`
 }
 
-// BuildContractPayload canonicalizes the signed contract representation:
-// DID, version, and the full JSON-LD contract document, as recursively
-// key-sorted compact JSON without HTML escaping (the same canonical form the
-// deployment dispatch uses, reproducible from any JSON parser).
+// BuildContractPayload canonicalizes the signed contract representation —
+// DID, version, and the full JSON-LD contract document — with the JSON
+// Canonicalization Scheme (RFC 8785), reproducible bit-for-bit from any
+// conforming JCS implementation in any language.
 func BuildContractPayload(did string, contractVersion int, contractData []byte) ([]byte, error) {
 	var document any
 	if len(contractData) == 0 {
@@ -54,13 +55,11 @@ func BuildContractPayload(did string, contractVersion int, contractData []byte) 
 		"dcs:contractVersion":  contractVersion,
 		"dcs:contractDocument": document,
 	}
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(payload); err != nil {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
 		return nil, err
 	}
-	return bytes.TrimRight(buf.Bytes(), "\n"), nil
+	return jcs.Transform(encoded)
 }
 
 // Sign produces a JAdES baseline-B compact JWS over payload using the DID

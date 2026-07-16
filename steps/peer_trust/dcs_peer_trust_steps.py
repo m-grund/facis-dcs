@@ -35,6 +35,7 @@ same-peer guard.
 """
 
 import base64
+import jcs
 import json
 import os
 import time
@@ -955,14 +956,14 @@ def _b64url(raw: bytes) -> str:
 
 def _canonical_jades_payload(contract_did: str, contract_version: int, contract_document: dict) -> bytes:
     """The canonical contract representation the backend signs
-    (internal/base/jades.BuildContractPayload): recursively key-sorted,
-    compact, no ASCII escaping."""
+    (internal/base/jades.BuildContractPayload): RFC 8785 JSON
+    Canonicalization Scheme."""
     payload = {
         "dcs:contractDid": contract_did,
         "dcs:contractVersion": contract_version,
         "dcs:contractDocument": contract_document,
     }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return jcs.canonicalize(payload)
 
 
 def _der_to_jose(der: bytes) -> bytes:

@@ -65,6 +65,8 @@ a second DCS instance, so it is NOT tagged @two-instance.
 
 import base64
 import hashlib
+
+import jcs
 import json
 import os
 import time
@@ -481,10 +483,9 @@ def step_given_orce_reachable(context):
 def step_when_post_to_orce_directly(context, name):
     """Posts the SAME envelope shape the backend dispatches
     (command/deploy.go): a JSON-LD document whose dcs:contentHash covers the
-    whole envelope minus the hash field itself, canonicalized as recursively
-    key-sorted compact JSON without ASCII escaping (matching Go's
-    hashDeploymentPayload with SetEscapeHTML(false) and the flow's
-    sortKeysDeep + JSON.stringify)."""
+    whole envelope minus the hash field itself, canonicalized per RFC 8785
+    (JCS) — matching Go's hashDeploymentPayload and the flow's
+    sortKeysDeep + JSON.stringify."""
     did, updated_at = ContractService._contract_data(context, name)
     correlation_id = f"bdd-orce-{did}-{updated_at}".replace(":", "-").replace(" ", "-")
     envelope = {
@@ -500,8 +501,7 @@ def step_when_post_to_orce_directly(context, name):
         },
         "odrl:policy": {"@id": "urn:uuid:bdd-orce-policy-set", "@type": "odrl:Set", "uid": did},
     }
-    canonical = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    content_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    content_hash = "sha256:" + hashlib.sha256(jcs.canonicalize(envelope)).hexdigest()
     envelope["dcs:contentHash"] = content_hash
     context.orce_sent_correlation_id = correlation_id
     context.orce_sent_content_hash = content_hash

@@ -112,7 +112,7 @@ setup_environment:
 	fi; \
 	"$(VENV_PATH)/bin/pip" install -q --upgrade pip wheel; \
 	"$(VENV_PATH)/bin/pip" install -q -e "$$SRC_PATH[dev]"; \
-	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary
+	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary jcs
 	"$(VENV_PATH)/bin/pip" install -q -r "$(PROJECT_ROOT)/testWallet/requirements.txt"
 
 # Bootstrappt das venv nur, wenn es fehlt/kaputt ist — der pip-Refresh bei
