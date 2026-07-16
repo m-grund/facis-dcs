@@ -443,6 +443,30 @@ func normalizeCanonicalEnvelope(data documentData, documentType string) {
 			setTopLevelValue(data, "dcs:policies", []any{})
 		}
 	}
+	typeLayoutNodes(data)
+}
+
+// typeLayoutNodes asserts rdf:type on the document's layout nodes — the
+// hub shapes constrain dcs:layout values with sh:class dcs:LayoutNode, and
+// SHACL class targeting needs the explicit type assertion.
+func typeLayoutNodes(data documentData) {
+	structure, ok := topLevelValue(data, "documentStructure").(map[string]any)
+	if !ok {
+		return
+	}
+	nodes, ok := topLevelValue(documentData(structure), "layout").([]any)
+	if !ok {
+		return
+	}
+	for _, rawNode := range nodes {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			continue
+		}
+		if existing, _ := node["@type"].(string); existing == "" {
+			node["@type"] = "dcs:LayoutNode"
+		}
+	}
 }
 
 // normalizeCanonicalContext anchors "@context" to the Semantic Hub's

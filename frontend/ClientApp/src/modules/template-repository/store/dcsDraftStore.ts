@@ -670,6 +670,7 @@ function canonicalizeLayout(layout: DcsLayoutNode[]): DcsLayoutNode[] {
     return [
       {
         ...node,
+        '@type': 'dcs:LayoutNode',
         'dcs:children': {
           '@list': node['dcs:children']['@list'].filter((ref) => !isMergedBlockId(ref['@id'])),
         },

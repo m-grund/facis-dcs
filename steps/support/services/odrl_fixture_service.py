@@ -149,6 +149,7 @@ def build_contract_document(contract_did: str, field_name: str, policies, actual
             "dcs:layout": [
                 {
                     "@id": "urn:uuid:block-root",
+                    "@type": "dcs:LayoutNode",
                     "dcs:isRoot": True,
                     "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
                 }
