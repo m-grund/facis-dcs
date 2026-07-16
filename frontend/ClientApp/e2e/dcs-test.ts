@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test as base } from '@playwright/test'
 
 type DcsRole =
@@ -17,7 +18,7 @@ export interface SeededFixtures {
 }
 
 export function seededFixtures(): SeededFixtures {
-  return JSON.parse(readFileSync(path.join(__dirname, '.auth', 'fixtures.json'), 'utf-8'))
+  return JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '.auth', 'fixtures.json'), 'utf-8'))
 }
 
 interface DcsFixtures {
@@ -28,7 +29,7 @@ interface DcsFixtures {
 export const test = base.extend<DcsFixtures>({
   loginAs: async ({ page }, use) => {
     const tokens: Record<string, string> = JSON.parse(
-      readFileSync(path.join(__dirname, '.auth', 'tokens.json'), 'utf-8'),
+      readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '.auth', 'tokens.json'), 'utf-8'),
     )
     await use(async (role: DcsRole) => {
       const token = tokens[role]
