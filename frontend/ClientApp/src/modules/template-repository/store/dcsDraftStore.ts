@@ -537,11 +537,11 @@ function requirementForField(
   return contractData.find((r) => r['dcs:fields'].some((f) => f['@id'] === fieldId))
 }
 
-/** Assembles the single enclosing ODRL policy (Offer on templates, Agreement on contracts) from the flat internal rule array. */
-function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string, documentType?: string): OdrlSet {
+/** Assembles the single enclosing odrl:Offer from the flat internal rule array; the first signature seals it into an odrl:Agreement server-side. */
+function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string): OdrlSet {
   const set: OdrlSet = {
     '@id': policySetIri(documentId),
-    '@type': documentType === 'dcs:Contract' ? 'odrl:Agreement' : 'odrl:Offer',
+    '@type': 'odrl:Offer',
     'odrl:profile': { '@id': DCS_ODRL_PROFILE_IRI },
   }
   const duties = policies.filter((p) => p['@type'] === 'odrl:Duty')
@@ -621,7 +621,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       'dcs:layout': canonicalLayout,
     },
     'dcs:contractData': input.contractData,
-    'dcs:policies': assemblePolicySet(input.policies, input.documentId, input.documentType),
+    'dcs:policies': assemblePolicySet(input.policies, input.documentId),
     ...(input.documentType === 'dcs:Contract'
       ? {
           semanticConditionValues: toDocumentSemanticValues(

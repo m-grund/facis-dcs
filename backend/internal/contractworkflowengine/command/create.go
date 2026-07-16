@@ -28,20 +28,20 @@ import (
 )
 
 type CreateCmd struct {
-	DID         string             `json:"did"`
-	TemplateDID string             `json:"template_did"`
-	CreatedBy   string             `json:"created_by"`
-	HolderDID   string             `json:"holder_did"`
-	Reviewers   []string           `json:"reviewers"`
-	Approvers   []string           `json:"approvers"`
-	Negotiators []string           `json:"negotiators"`
-	Parties     []ContractParty    `json:"parties"`
-	UserRoles   userrole.UserRoles `json:"user_roles"`
-}
-
-type ContractParty struct {
-	Name string `json:"name"`
-	Role string `json:"role,omitempty"`
+	DID         string   `json:"did"`
+	TemplateDID string   `json:"template_did"`
+	CreatedBy   string   `json:"created_by"`
+	HolderDID   string   `json:"holder_did"`
+	Reviewers   []string `json:"reviewers"`
+	Approvers   []string `json:"approvers"`
+	Negotiators []string `json:"negotiators"`
+	Parties     []string `json:"parties"`
+	// OriginatorRole is the contractual role the creating organization
+	// declares for itself; it binds the origin DID to that role's party
+	// node in the contract's ODRL rules. The counterpart role stays open
+	// until the counterparty accepts by signing.
+	OriginatorRole string             `json:"originator_role"`
+	UserRoles      userrole.UserRoles `json:"user_roles"`
 }
 
 type Creator struct {
@@ -152,6 +152,13 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not get DID: %w", err)
 	}
 
+	if cmd.OriginatorRole != "" {
+		normalizedContractData, err = bindOriginatorParty(normalizedContractData, localPeer, cmd.OriginatorRole)
+		if err != nil {
+			return fmt.Errorf("could not bind originator party: %w", err)
+		}
+	}
+
 	// Reviewers/Approvers/Negotiators are peer DIDs (other DCS instances), not
 	// individual users — task ownership is peer-scoped. Origin below marks
 	// this node as the single writer for this contract (see package doc).
@@ -204,39 +211,24 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 	return tx.Commit()
 }
 
-// attachContractParties records the organizations that are parties to this
+// attachContractParties records the organizations authorized to read this
 // contract as typed dcs:CompanyParty nodes under "dcs:parties". The legal
 // name (the same value the OID4VP organization claim discloses) gates read
-// access in query/contract/querybyid.go. A party carrying a role is bound
-// to the role-derived node the contract's ODRL rules reference as
-// odrl:assigner/odrl:assignee, so rule parties resolve to the named
-// organization.
-func attachContractParties(raw *datatype.JSON, parties []ContractParty) (*datatype.JSON, error) {
+// access in query/contract/querybyid.go. Read authorization only: ODRL rule
+// parties are bound from workflow evidence (bindOriginatorParty at
+// creation, the counterparty when signing completes).
+func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(*raw, &doc); err != nil {
 		return nil, fmt.Errorf("could not decode contract data: %w", err)
 	}
 	nodes, _ := doc["dcs:parties"].([]any)
-	for index, party := range parties {
-		if party.Role != "" {
-			if node := partyNodeByRoleFragment(nodes, party.Role); node != nil {
-				node["dcs:legalName"] = party.Name
-				continue
-			}
-		}
-		fragment := fmt.Sprintf("party-%d", index)
-		if party.Role != "" {
-			fragment = "party-" + party.Role
-		}
-		node := map[string]any{
-			"@id":           fmt.Sprintf("%s#%s", doc["@id"], fragment),
+	for index, name := range parties {
+		nodes = append(nodes, map[string]any{
+			"@id":           fmt.Sprintf("%s#party-%d", doc["@id"], index),
 			"@type":         "dcs:CompanyParty",
-			"dcs:legalName": party.Name,
-		}
-		if party.Role != "" {
-			node["dcs:role"] = party.Role
-		}
-		nodes = append(nodes, node)
+			"dcs:legalName": name,
+		})
 	}
 	doc["dcs:parties"] = nodes
 	encoded, err := datatype.NewJSON(doc)
@@ -246,15 +238,64 @@ func attachContractParties(raw *datatype.JSON, parties []ContractParty) (*dataty
 	return &encoded, nil
 }
 
-func partyNodeByRoleFragment(nodes []any, role string) map[string]any {
+// bindOriginatorParty rewrites the role-derived placeholder party IRI for
+// the role the creating organization declares for itself to the origin
+// DID, so the contract's ODRL rules reference the originator as a real,
+// resolvable identity from the moment the offer exists. If the rules do
+// not reference the role, a party node is still recorded so the
+// declaration is part of the document.
+func bindOriginatorParty(raw *datatype.JSON, originDID, role string) (*datatype.JSON, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(*raw, &doc); err != nil {
+		return nil, fmt.Errorf("could not decode contract data: %w", err)
+	}
+	placeholder := partyPlaceholderIRI(doc, role)
+	if placeholder != "" {
+		replaceNodeIRI(doc, placeholder, originDID)
+	} else {
+		nodes, _ := doc["dcs:parties"].([]any)
+		doc["dcs:parties"] = append(nodes, map[string]any{
+			"@id":      originDID,
+			"@type":    "dcs:CompanyParty",
+			"dcs:role": role,
+		})
+	}
+	encoded, err := datatype.NewJSON(doc)
+	if err != nil {
+		return nil, fmt.Errorf("could not encode contract data: %w", err)
+	}
+	return &encoded, nil
+}
+
+// partyPlaceholderIRI finds the dcs:parties node whose IRI carries the
+// #party-<role> fragment and returns its IRI ("" when absent).
+func partyPlaceholderIRI(doc map[string]any, role string) string {
+	nodes, _ := doc["dcs:parties"].([]any)
 	for _, rawNode := range nodes {
 		node, ok := rawNode.(map[string]any)
 		if !ok {
 			continue
 		}
 		if iri, _ := node["@id"].(string); strings.HasSuffix(iri, "#party-"+role) {
-			return node
+			return iri
 		}
 	}
-	return nil
+	return ""
+}
+
+// replaceNodeIRI rewrites every "@id" equal to old with new, recursively.
+func replaceNodeIRI(current any, old, new string) {
+	switch value := current.(type) {
+	case map[string]any:
+		if iri, _ := value["@id"].(string); iri == old {
+			value["@id"] = new
+		}
+		for _, nested := range value {
+			replaceNodeIRI(nested, old, new)
+		}
+	case []any:
+		for _, nested := range value {
+			replaceNodeIRI(nested, old, new)
+		}
+	}
 }

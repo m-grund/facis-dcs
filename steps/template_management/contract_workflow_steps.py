@@ -566,10 +566,7 @@ def step_given_contract_with_parties(context, name, party_a, party_b):
             "reviewers": [peer_did],
             "negotiators": [peer_did],
             "approvers": [peer_did],
-            "parties": [
-                {"name": party_a, "role": "provider"},
-                {"name": party_b, "role": "customer"},
-            ],
+            "parties": [party_a, party_b],
         },
         headers=creator_h,
     )
@@ -580,14 +577,11 @@ def step_given_contract_with_parties(context, name, party_a, party_b):
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
     assert retrieve.status_code == 200, retrieve.text
     party_nodes = (retrieve.json().get("contract_data") or {}).get("dcs:parties") or []
-    by_role = {node.get("dcs:role"): node for node in party_nodes}
+    legal_names = [node.get("dcs:legalName") for node in party_nodes if node.get("dcs:legalName")]
     types = {node.get("@type") for node in party_nodes}
-    assert types == {"dcs:CompanyParty"}, f"Expected only dcs:CompanyParty nodes, got: {party_nodes}"
-    assert by_role.get("provider", {}).get("dcs:legalName") == party_a, (
-        f"Expected the provider party node to carry legal name {party_a!r}, got: {party_nodes}"
-    )
-    assert by_role.get("customer", {}).get("dcs:legalName") == party_b, (
-        f"Expected the customer party node to carry legal name {party_b!r}, got: {party_nodes}"
+    assert legal_names == [party_a, party_b] and types == {"dcs:CompanyParty"}, (
+        f"Expected the created contract's JSON-LD to record dcs:CompanyParty nodes for "
+        f"{[party_a, party_b]}, got: {party_nodes}"
     )
     ContractService._ensure_store(context, "contract_dids", {})
     ContractService._ensure_store(context, "contract_updated_at", {})

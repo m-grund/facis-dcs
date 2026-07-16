@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/conf"
@@ -199,6 +201,21 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 				return fmt.Errorf("%w: missing ceremonies for %v", ErrCeremoniesIncomplete, missing)
 			}
 		}
+	}
+
+	// The first signature is the acceptance act: the offered policy set
+	// becomes the odrl:Agreement the signatures bind, sealed into the
+	// contract document BEFORE the content hash and PDF are computed so the
+	// signed artefact and the machine-readable document are the same bytes.
+	if signedCount == 0 {
+		sealed, err := sealAgreementForSigning(*data.ContractData, data.Responsible, cmd.SignerDID)
+		if err != nil {
+			return fmt.Errorf("seal agreement for signing: %w", err)
+		}
+		if err := h.CRepo.UpdateContractData(ctx, tx, cmd.DID, sealed); err != nil {
+			return fmt.Errorf("persist sealed agreement: %w", err)
+		}
+		data.ContractData = &sealed
 	}
 
 	if err := validation.ValidateContractPolicySatisfaction(
@@ -597,4 +614,116 @@ func stampLifecycleForSigning(
 		return pdfBytes, "", fmt.Errorf("pdf-core update for %s: %w", did, err)
 	}
 	return updatedPDF, rendererVersion, nil
+}
+
+// sealAgreementForSigning turns the offered policy set into the
+// odrl:Agreement the signatures bind: the enclosing policy node retypes,
+// and a still-open role-derived party placeholder is rewritten to the
+// accepting counterparty's identity — the one workflow peer distinct from
+// the originator when there is exactly one, otherwise the signer's
+// verified DID — with the signing identity recorded as dcs:hasSignatory.
+// Binding only happens while exactly one placeholder remains open, so an
+// undeclared originator role never gets mislabeled as the counterparty.
+func sealAgreementForSigning(raw datatype.JSON, responsible *db.Responsible, signerDID string) (datatype.JSON, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("decode contract data: %w", err)
+	}
+
+	if policies, ok := doc["dcs:policies"].(map[string]any); ok {
+		policies["@type"] = "odrl:Agreement"
+	}
+
+	if placeholder := singleOpenPartyPlaceholder(doc); placeholder != "" {
+		counterparty := counterpartyIdentity(responsible, signerDID)
+		replaceNodeIRI(doc, placeholder, counterparty)
+		if node := partyNodeByID(doc, counterparty); node != nil {
+			node["dcs:hasSignatory"] = map[string]any{"@id": signerDID}
+		}
+	}
+
+	return datatype.NewJSON(doc)
+}
+
+// counterpartyIdentity resolves who accepted the offer: the single workflow
+// peer that is not the originating instance, or the verified signer when
+// the workflow ran on one instance.
+func counterpartyIdentity(responsible *db.Responsible, signerDID string) string {
+	if responsible == nil {
+		return signerDID
+	}
+	peers := map[string]bool{}
+	for _, group := range [][]string{responsible.Reviewers, responsible.Approvers, responsible.Negotiators} {
+		for _, peer := range group {
+			if peer != "" && peer != responsible.Creator {
+				peers[peer] = true
+			}
+		}
+	}
+	if len(peers) == 1 {
+		for peer := range peers {
+			return peer
+		}
+	}
+	return signerDID
+}
+
+// singleOpenPartyPlaceholder returns the IRI of the only dcs:parties node
+// still carrying a role-derived #party-<role> placeholder ("" when none or
+// several remain).
+func singleOpenPartyPlaceholder(doc map[string]any) string {
+	nodes, _ := doc["dcs:parties"].([]any)
+	open := []string{}
+	for _, rawNode := range nodes {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			continue
+		}
+		iri, _ := node["@id"].(string)
+		if _, role, found := strings.Cut(iri, "#party-"); found {
+			if _, isIndexed := strconvAtoiOK(role); !isIndexed {
+				open = append(open, iri)
+			}
+		}
+	}
+	if len(open) == 1 {
+		return open[0]
+	}
+	return ""
+}
+
+// strconvAtoiOK reports whether s is a plain index (an attachContractParties
+// read-authorization node, never a role placeholder).
+func strconvAtoiOK(s string) (int, bool) {
+	n, err := strconv.Atoi(s)
+	return n, err == nil
+}
+
+func partyNodeByID(doc map[string]any, id string) map[string]any {
+	nodes, _ := doc["dcs:parties"].([]any)
+	for _, rawNode := range nodes {
+		if node, ok := rawNode.(map[string]any); ok {
+			if iri, _ := node["@id"].(string); iri == id {
+				return node
+			}
+		}
+	}
+	return nil
+}
+
+// replaceNodeIRI rewrites every "@id" equal to old with new, recursively.
+func replaceNodeIRI(current any, old, new string) {
+	switch value := current.(type) {
+	case map[string]any:
+		if iri, _ := value["@id"].(string); iri == old {
+			value["@id"] = new
+		}
+		for _, nested := range value {
+			replaceNodeIRI(nested, old, new)
+		}
+	case []any:
+		for _, nested := range value {
+			replaceNodeIRI(nested, old, new)
+		}
+	}
 }

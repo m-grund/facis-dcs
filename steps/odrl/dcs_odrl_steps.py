@@ -239,30 +239,33 @@ def step_then_policy_update_rejected_legacy(context, name):
 
 @then(
     'the stored policies of contract "{name}" form a single enclosing '
-    "odrl:Agreement whose uid equals the contract DID and which declares an "
-    "odrl:profile"
+    '{policy_type} whose @id is anchored to the contract DID and which '
+    "declares an odrl:profile"
 )
-def step_then_policies_form_enclosing_set(context, name):
+def step_then_policies_form_enclosing_set(context, name, policy_type):
+    """policy_type reflects the ODRL policy lifecycle: an unsigned contract
+    instance carries an odrl:Offer (parties still open); the first signature
+    seals it into the odrl:Agreement the signatures bind."""
     did, _ = ContractService._contract_data(context, name)
     policies = _stored_policies(context, name)
     assert isinstance(policies, dict), (
         f"expected dcs:policies to be ONE enclosing policy object, got a "
         f"{type(policies).__name__}: {policies!r}"
     )
-    assert policies.get("@type") == "odrl:Agreement", (
-        f"expected the enclosing policy node's @type to be 'odrl:Agreement' "
-        f"(a party-bound contract instance), got {policies.get('@type')!r}"
+    assert policies.get("@type") == policy_type, (
+        f"expected the enclosing policy node's @type to be {policy_type!r}, "
+        f"got {policies.get('@type')!r}"
     )
     policy_id = policies.get("@id") or ""
     assert did in policy_id, (
-        f"expected the odrl:Agreement's @id (its odrl:uid) to be anchored to the "
+        f"expected the {policy_type}'s @id (its odrl:uid) to be anchored to the "
         f"contract DID {did!r}, got {policy_id!r}"
     )
     assert "uid" not in policies, (
         f"a separate uid key duplicates the policy identity (@id): {policies.get('uid')!r}"
     )
     profile = policies.get("odrl:profile")
-    assert profile, f"expected odrl:profile to be declared on the enclosing odrl:Agreement, got: {profile!r}"
+    assert profile, f"expected odrl:profile to be declared on the enclosing {policy_type}, got: {profile!r}"
 
 
 @then('every stored policy rule of contract "{name}" declares exactly one odrl:action')

@@ -163,7 +163,7 @@ def step_given_force_state(context, name, state):
 # ---------------------------------------------------------------------------
 
 
-@given('contract "{name}" is submitted, reviewed, approved, and signed via the standard workflow')
+@step('contract "{name}" is submitted, reviewed, approved, and signed via the standard workflow')
 def step_given_full_workflow_to_signed(context, name):
     # Reuses the ceremony-aware helpers from contract_state_machine_steps.py
     # / real_signing_vertical rather than re-implementing the
