@@ -21,10 +21,12 @@
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
     "@heroicons/vue": "^2.2.0",
+    "@ulb-darmstadt/shacl-form": "^3.1.1",
     "@vueuse/core": "^14.2.1",
     "@vueuse/integrations": "^14.2.1",
     "axios": "^1.13.6",
     "fast-myers-diff": "^3.2.0",
+    "jsonld": "^9.0.0",
     "jwt-decode": "^4.0.0",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
@@ -33,6 +35,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
+    "@types/jsonld": "^1.5.15",
     "@types/node": "^24.12.4",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/eslint-config-prettier": "^10.2.0",

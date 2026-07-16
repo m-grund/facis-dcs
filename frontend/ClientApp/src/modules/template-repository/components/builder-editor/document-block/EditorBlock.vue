@@ -85,11 +85,8 @@ const typedClauseValueEntries = computed(() => {
 })
 const isEditingTypedClause = ref(false)
 
-function saveTypedClause(payload: { clauseType: string; title: string; values: Record<string, unknown> }) {
-  const instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance = {
-    '@type': payload.clauseType,
-    ...payload.values,
-  }
+function saveTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+  const instance = payload.instance
   draftStore.updateBlock(props.item.blockId, {
     title: payload.title,
     typedClause: instance,
@@ -234,6 +231,7 @@ function revertToSaved() {
           <div class="mt-2 rounded-md border border-base-300 bg-base-200/40 p-3">
             <TypedClauseForm
               :clause="typedClauseCatalogEntry"
+              :shapes="clauseCatalog.shapes"
               :initial-values="typedClauseInstance"
               :initial-title="clauseBlock?.['dcs:title'] ?? ''"
               submit-label="Save"

@@ -12,6 +12,7 @@ import { getClauseCatalog, type ClauseCatalogType } from '@/services/semantic-hu
  */
 export const useClauseCatalogStore = defineStore('clause-catalog', () => {
   const clauses = ref<ClauseCatalogType[]>([])
+  const shapes = ref('')
   const version = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -24,6 +25,7 @@ export const useClauseCatalogStore = defineStore('clause-catalog', () => {
     inflight = getClauseCatalog()
       .then((catalog) => {
         clauses.value = catalog.clauses
+        shapes.value = catalog.shapes
         version.value = catalog.version
       })
       .catch((err: unknown) => {
@@ -52,5 +54,5 @@ export const useClauseCatalogStore = defineStore('clause-catalog', () => {
     return byType.value.get(clauseType)?.label ?? clauseType.replace(/^dcs:/, '')
   }
 
-  return { clauses, version, loading, error, refresh, ensureLoaded, byType, labelFor }
+  return { clauses, shapes, version, loading, error, refresh, ensureLoaded, byType, labelFor }
 })

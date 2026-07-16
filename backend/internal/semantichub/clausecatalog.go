@@ -1,48 +1,37 @@
 package semantichub
 
 import (
-	"strconv"
+	"sort"
 	"strings"
 
 	"github.com/tggo/goRDFlib/shacl"
 )
 
-// ClauseCatalogEntry is one typed clause NodeShape, pre-digested from SHACL
-// for form generation (GET /semantic/clauses, Phase 3, ADR-10).
+// ClauseCatalogEntry is one typed clause NodeShape: the palette listing for
+// GET /semantic/clauses. Form generation itself happens client-side from
+// the raw shapes Turtle (shacl-form); the server only enumerates which
+// shapes exist and validates submitted instances against the same graph.
 type ClauseCatalogEntry struct {
-	Type       string
-	Label      string
-	Properties []ClauseCatalogPropertyEntry
+	Type  string
+	Label string
+	Shape string
 }
 
-// ClauseCatalogPropertyEntry is one sh:property on a clause NodeShape.
-type ClauseCatalogPropertyEntry struct {
-	Path         string
-	Datatype     string
-	In           []string
-	MinCount     *int
-	MaxCount     *int
-	MinInclusive *float64
-	MaxInclusive *float64
-	Pattern      string
-}
-
-// ParseClauseCatalog reads the clause-catalog SHACL Turtle and digests every
-// sh:NodeShape with a sh:targetClass into a form-schema entry: the same
-// shapes graph validateAgainstHubShapes concatenates into contract
-// validation (ADR-9), so the palette a template author sees and what a
-// submitted clause is actually checked against never drift apart.
-func ParseClauseCatalog(shapesTTL string) ([]ClauseCatalogEntry, error) {
+// ParseClauseCatalog lists every sh:NodeShape with a sh:targetClass in a
+// clause-catalog SHACL Turtle. prefixes (the active hub context's
+// prefix → IRI map) drives type compaction; terms outside every declared
+// namespace keep their full IRI.
+func ParseClauseCatalog(shapesTTL string, prefixes map[string]string) ([]ClauseCatalogEntry, error) {
 	g, err := shacl.LoadTurtleString(shapesTTL, "urn:dcs:hub:clause-catalog")
 	if err != nil {
 		return nil, err
 	}
+	compact := newTermCompactor(prefixes)
 
 	nodeShapeType := shacl.IRI(shacl.SH + "NodeShape")
 	rdfTypePred := shacl.IRI(shacl.RDFType)
 	targetClassPred := shacl.IRI(shacl.SH + "targetClass")
 	labelPred := shacl.IRI(shacl.RDFS + "label")
-	propertyPred := shacl.IRI(shacl.SH + "property")
 
 	shapeSubjects := g.Subjects(rdfTypePred, nodeShapeType)
 	entries := make([]ClauseCatalogEntry, 0, len(shapeSubjects))
@@ -53,83 +42,18 @@ func ParseClauseCatalog(shapesTTL string) ([]ClauseCatalogEntry, error) {
 		}
 		targetClass := targetClasses[0]
 
-		label := targetClass.Value()
+		label := localName(targetClass.Value())
 		if labels := g.Objects(shape, labelPred); len(labels) > 0 {
 			label = labels[0].Value()
-		} else {
-			label = localName(targetClass.Value())
-		}
-
-		properties := make([]ClauseCatalogPropertyEntry, 0)
-		for _, propNode := range g.Objects(shape, propertyPred) {
-			properties = append(properties, parseClauseProperty(g, propNode))
 		}
 
 		entries = append(entries, ClauseCatalogEntry{
-			Type:       compactClauseTerm(targetClass.Value()),
-			Label:      label,
-			Properties: properties,
+			Type:  compact(targetClass.Value()),
+			Label: label,
+			Shape: shape.Value(),
 		})
 	}
 	return entries, nil
-}
-
-func parseClauseProperty(g *shacl.Graph, propNode shacl.Term) ClauseCatalogPropertyEntry {
-	pathPred := shacl.IRI(shacl.SH + "path")
-	datatypePred := shacl.IRI(shacl.SH + "datatype")
-	inPred := shacl.IRI(shacl.SH + "in")
-	minCountPred := shacl.IRI(shacl.SH + "minCount")
-	maxCountPred := shacl.IRI(shacl.SH + "maxCount")
-	minInclusivePred := shacl.IRI(shacl.SH + "minInclusive")
-	maxInclusivePred := shacl.IRI(shacl.SH + "maxInclusive")
-	patternPred := shacl.IRI(shacl.SH + "pattern")
-
-	entry := ClauseCatalogPropertyEntry{}
-	if paths := g.Objects(propNode, pathPred); len(paths) > 0 {
-		entry.Path = compactClauseTerm(paths[0].Value())
-	}
-	if datatypes := g.Objects(propNode, datatypePred); len(datatypes) > 0 {
-		entry.Datatype = localName(datatypes[0].Value())
-	}
-	if inLists := g.Objects(propNode, inPred); len(inLists) > 0 {
-		values := make([]string, 0)
-		for _, v := range g.RDFList(inLists[0]) {
-			values = append(values, v.Value())
-		}
-		entry.In = values
-	}
-	if patterns := g.Objects(propNode, patternPred); len(patterns) > 0 {
-		entry.Pattern = patterns[0].Value()
-	}
-	entry.MinCount = parseClauseInt(g, propNode, minCountPred)
-	entry.MaxCount = parseClauseInt(g, propNode, maxCountPred)
-	entry.MinInclusive = parseClauseFloat(g, propNode, minInclusivePred)
-	entry.MaxInclusive = parseClauseFloat(g, propNode, maxInclusivePred)
-	return entry
-}
-
-func parseClauseInt(g *shacl.Graph, subject, predicate shacl.Term) *int {
-	objects := g.Objects(subject, predicate)
-	if len(objects) == 0 {
-		return nil
-	}
-	value, err := strconv.Atoi(strings.TrimSpace(objects[0].Value()))
-	if err != nil {
-		return nil
-	}
-	return &value
-}
-
-func parseClauseFloat(g *shacl.Graph, subject, predicate shacl.Term) *float64 {
-	objects := g.Objects(subject, predicate)
-	if len(objects) == 0 {
-		return nil
-	}
-	value, err := strconv.ParseFloat(strings.TrimSpace(objects[0].Value()), 64)
-	if err != nil {
-		return nil
-	}
-	return &value
 }
 
 // localName extracts the fragment/last-segment local name from a full IRI.
@@ -143,13 +67,24 @@ func localName(iri string) string {
 	return iri
 }
 
-// compactClauseTerm renders a full ontology IRI as a "dcs:Term"-style
-// compact name for readability in the API response (all clause-catalog
-// terms live under the dcs: ontology namespace today).
-func compactClauseTerm(iri string) string {
-	const dcsNS = "https://w3id.org/facis/dcs/ontology/v1#"
-	if strings.HasPrefix(iri, dcsNS) {
-		return "dcs:" + strings.TrimPrefix(iri, dcsNS)
+// newTermCompactor renders full IRIs as prefix:LocalName using the given
+// prefix → namespace map; IRIs outside every declared namespace stay whole
+// (still valid JSON-LD keys/types). Longest namespace wins.
+func newTermCompactor(prefixes map[string]string) func(string) string {
+	type binding struct{ prefix, namespace string }
+	bindings := make([]binding, 0, len(prefixes))
+	for prefix, namespace := range prefixes {
+		if namespace != "" {
+			bindings = append(bindings, binding{prefix, namespace})
+		}
 	}
-	return iri
+	sort.Slice(bindings, func(i, j int) bool { return len(bindings[i].namespace) > len(bindings[j].namespace) })
+	return func(iri string) string {
+		for _, b := range bindings {
+			if strings.HasPrefix(iri, b.namespace) && len(iri) > len(b.namespace) {
+				return b.prefix + ":" + strings.TrimPrefix(iri, b.namespace)
+			}
+		}
+		return iri
+	}
 }

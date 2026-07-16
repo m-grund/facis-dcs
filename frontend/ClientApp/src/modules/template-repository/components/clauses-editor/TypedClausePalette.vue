@@ -12,11 +12,11 @@ import type { ClauseCatalogType } from '@/services/semantic-hub-service'
  * the hub is available here immediately — no reload or redeploy.
  */
 const emit = defineEmits<{
-  submit: [payload: { clauseType: string; title: string; values: Record<string, unknown> }]
+  submit: [payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }]
 }>()
 
 const catalog = useClauseCatalogStore()
-const { clauses, loading, error } = storeToRefs(catalog)
+const { clauses, shapes, loading, error } = storeToRefs(catalog)
 onMounted(() => catalog.refresh())
 
 const selectedType = ref<string | null>(null)
@@ -28,7 +28,7 @@ function selectClauseType(type: string) {
   selectedType.value = selectedType.value === type ? null : type
 }
 
-function handleSubmit(payload: { clauseType: string; title: string; values: Record<string, unknown> }) {
+function handleSubmit(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
   emit('submit', payload)
   selectedType.value = null
 }
@@ -56,7 +56,7 @@ function handleSubmit(payload: { clauseType: string; title: string; values: Reco
       </div>
 
       <div v-if="selectedClause" class="rounded border border-base-300 p-3">
-        <TypedClauseForm :clause="selectedClause" @submit="handleSubmit" />
+        <TypedClauseForm :clause="selectedClause" :shapes="shapes" @submit="handleSubmit" />
       </div>
     </template>
   </div>

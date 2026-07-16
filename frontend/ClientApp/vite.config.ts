@@ -46,7 +46,12 @@ export default defineConfig(({ mode, command }) => {
   return {
     // during build, use relative paths such that we respect <base href>
     base: command === 'build' ? './' : basePath,
-    plugins: [uiRedirectPlugin, baseHrefPlugin, vue(), tailwindcss()],
+    plugins: [
+      uiRedirectPlugin,
+      baseHrefPlugin,
+      vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === "shacl-form" } } }),
+      tailwindcss(),
+    ],
     envPrefix: 'DCS_',
     resolve: {
       alias: {

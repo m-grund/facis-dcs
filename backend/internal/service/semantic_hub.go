@@ -212,37 +212,21 @@ func (s *semanticHubsrvc) Clauses(ctx context.Context) (res *semantichubgen.Clau
 	if err != nil {
 		return nil, err
 	}
-	entries, err := semantichub.ParseClauseCatalog(schema.Content)
+	prefixes, _, err := semantichub.ActiveOntologyIRIs(ctx, s.DB)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(fmt.Errorf("load active hub context prefixes: %w", err))
+	}
+	entries, err := semantichub.ParseClauseCatalog(schema.Content, prefixes)
 	if err != nil {
 		return nil, semantichubgen.MakeInternalError(fmt.Errorf("parse clause catalog v%d: %w", schema.Version, err))
 	}
 
 	clauses := make([]*semantichubgen.ClauseCatalogType, 0, len(entries))
 	for _, entry := range entries {
-		properties := make([]*semantichubgen.ClauseCatalogProperty, 0, len(entry.Properties))
-		for _, p := range entry.Properties {
-			prop := &semantichubgen.ClauseCatalogProperty{
-				Path:         p.Path,
-				In:           p.In,
-				MinInclusive: p.MinInclusive,
-				MaxInclusive: p.MaxInclusive,
-			}
-			if p.Datatype != "" {
-				datatype := p.Datatype
-				prop.Datatype = &datatype
-			}
-			if p.Pattern != "" {
-				pattern := p.Pattern
-				prop.Pattern = &pattern
-			}
-			prop.MinCount = p.MinCount
-			prop.MaxCount = p.MaxCount
-			properties = append(properties, prop)
-		}
 		clauses = append(clauses, &semantichubgen.ClauseCatalogType{
-			Type:       entry.Type,
-			Label:      entry.Label,
-			Properties: properties,
+			Type:  entry.Type,
+			Label: entry.Label,
+			Shape: entry.Shape,
 		})
 	}
 

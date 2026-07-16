@@ -127,5 +127,5 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
   Scenario: The clause catalog is seeded and publicly served as a generated form-schema
     When the Semantic Hub clause catalog is requested without authentication
     Then get http 200:Success code
-    And the clause catalog lists a "dcs:PaymentClause" clause type with properties "dcs:amount", "dcs:currency", "dcs:dueDays"
+    And the clause catalog lists a "dcs:PaymentClause" clause type whose shape declares "dcs:amount", "dcs:currency", "dcs:dueDays"
     And the clause catalog response carries the raw SHACL shapes it was derived from

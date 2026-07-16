@@ -357,14 +357,11 @@ export const useDcsDraftStore = defineStore(storeId, {
      * machinery, while still becoming its own JSON-LD node server-side
      * validation (validateAgainstHubShapes) targets by its @type.
      */
-    addTypedClause(payload: { clauseType: string; title?: string; values: Record<string, unknown> }): string {
+    addTypedClause(payload: { clauseType: string; title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): string {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
-      const title = payload.title?.trim() || payload.clauseType.replace(/^dcs:/, '')
-      const instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance = {
-        '@type': payload.clauseType,
-        ...payload.values,
-      }
+      const title = payload.title?.trim() || payload.clauseType.split(/[#/:]/).pop() || payload.clauseType
+      const instance = payload.instance
       const block: import('@/models/dcs-jsonld').DcsClause = {
         '@type': 'dcs:Clause',
         '@id': id,

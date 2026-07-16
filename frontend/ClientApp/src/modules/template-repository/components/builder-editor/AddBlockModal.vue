@@ -85,13 +85,10 @@ watch(addBlockModalContext, (ctx) => {
   if (ctx !== null) void clauseCatalog.refresh()
 })
 
-function handleAddTypedClause(payload: { clauseType: string; title: string; values: Record<string, unknown> }) {
+function handleAddTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
-  const instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance = {
-    '@type': payload.clauseType,
-    ...payload.values,
-  }
+  const instance = payload.instance
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
     blockType: 'dcs:Clause',
     title: payload.title || clauseCatalog.labelFor(payload.clauseType),
@@ -197,6 +194,7 @@ function handleAddClause(clauseBlockId: string) {
             <div v-if="selectedTypedClause" class="mt-3 rounded-lg border border-base-300 bg-base-200/40 p-3">
               <TypedClauseForm
                 :clause="selectedTypedClause"
+                :shapes="clauseCatalog.shapes"
                 submit-label="Add to document"
                 @submit="handleAddTypedClause"
               />

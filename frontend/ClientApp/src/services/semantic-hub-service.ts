@@ -1,26 +1,16 @@
 import http from '@/api/http'
 
 /**
- * Semantic Hub clause catalog (DCS-FR-TR-03/TR-04, Phase 3, ADR-10):
- * typed clause NodeShapes pre-digested into a form-schema, plus the raw
- * SHACL Turtle they were derived from. Public endpoint (no auth), like
- * resolve_context — see backend/design/semantic_hub.go "clauses".
+ * Semantic Hub clause catalog: the palette listing of typed clause
+ * NodeShapes plus the raw SHACL Turtle they live in — forms are generated
+ * client-side from the Turtle (shacl-form). Public endpoint (no auth),
+ * like resolve_context — see backend/design/semantic_hub.go "clauses".
  */
-export interface ClauseCatalogProperty {
-  path: string
-  datatype?: string
-  in?: string[]
-  min_count?: number
-  max_count?: number
-  min_inclusive?: number
-  max_inclusive?: number
-  pattern?: string
-}
-
 export interface ClauseCatalogType {
   type: string
   label: string
-  properties: ClauseCatalogProperty[]
+  /** The NodeShape's IRI within the shapes graph. */
+  shape: string
 }
 
 export interface ClauseCatalogResponse {

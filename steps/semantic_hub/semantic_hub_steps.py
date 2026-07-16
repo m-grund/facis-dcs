@@ -438,7 +438,7 @@ def step_when_request_clause_catalog(context):
     )
 
 
-@then('the clause catalog lists a "{clause_type}" clause type with properties "{properties}"')
+@then('the clause catalog lists a "{clause_type}" clause type whose shape declares "{properties}"')
 def step_then_clause_catalog_lists_type(context, clause_type, properties):
     body = context.requests_response.json()
     clauses = body.get("clauses") or []
@@ -447,14 +447,17 @@ def step_then_clause_catalog_lists_type(context, clause_type, properties):
         f"Expected the clause catalog to list clause type {clause_type!r}, got types: "
         f"{[c.get('type') for c in clauses]}"
     )
+    assert matching.get("shape"), f"Expected a NodeShape IRI on the listing, got: {matching}"
+    # The form is generated client-side (shacl-form) from the response's raw
+    # shapes Turtle — assert the declared property paths are present there.
     # behave's {properties} capture keeps the INNER quotes of a
     # '"a", "b", "c"' list (only the outermost pair belongs to the step
     # pattern) — strip them per item.
-    expected_paths = {p.strip().strip('"') for p in properties.split(",")}
-    actual_paths = {p.get("path") for p in (matching.get("properties") or [])}
-    assert expected_paths <= actual_paths, (
-        f"Expected {clause_type!r} to declare properties {expected_paths}, got: {actual_paths}"
-    )
+    shapes = body.get("shapes") or ""
+    for path in (p.strip().strip('"') for p in properties.split(",")):
+        assert f"sh:path {path}" in shapes, (
+            f"Expected the raw shapes to declare 'sh:path {path}', got:\n{shapes[:800]}"
+        )
 
 
 @then("the clause catalog response carries the raw SHACL shapes it was derived from")

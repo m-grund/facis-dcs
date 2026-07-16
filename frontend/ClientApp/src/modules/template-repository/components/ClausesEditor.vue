@@ -86,7 +86,7 @@ function deleteClause(blockId: string) {
   if (editingBlockId.value === blockId) cancelEdit()
 }
 
-function addTypedClause(payload: { clauseType: string; title: string; values: Record<string, unknown> }) {
+function addTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
   store.addTypedClause(payload)
 }
 

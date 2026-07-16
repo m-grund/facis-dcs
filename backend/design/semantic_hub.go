@@ -19,29 +19,14 @@ var SemanticSchemaItem = Type("SemanticSchemaItem", func() {
 	Required("name", "version", "kind", "media_type", "content", "active", "created_by", "created_at")
 })
 
-var ClauseCatalogProperty = Type("ClauseCatalogProperty", func() {
-	Description("One typed clause property (a SHACL sh:property on a clause NodeShape), pre-digested for form generation")
-
-	Attribute("path", String, "Property path (compact local name, e.g. \"amount\")")
-	Attribute("datatype", String, "XSD datatype local name (e.g. \"integer\", \"string\"), empty if unconstrained")
-	Attribute("in", ArrayOf(String), "Allowed value set (sh:in), empty if unconstrained")
-	Attribute("min_count", Int, "sh:minCount, 0 if unconstrained")
-	Attribute("max_count", Int, "sh:maxCount, 0 if unconstrained")
-	Attribute("min_inclusive", Float64, "sh:minInclusive, present only if declared")
-	Attribute("max_inclusive", Float64, "sh:maxInclusive, present only if declared")
-	Attribute("pattern", String, "sh:pattern regular expression, empty if unconstrained")
-
-	Required("path")
-})
-
 var ClauseCatalogType = Type("ClauseCatalogType", func() {
-	Description("One typed clause (a SHACL NodeShape targeting a clause class), pre-digested for the template builder's palette")
+	Description("One typed clause (a SHACL NodeShape targeting a class) — the palette listing; the form itself is generated client-side from the response's raw shapes Turtle")
 
-	Attribute("type", String, "The clause's dcs:type (e.g. \"dcs:PaymentClause\")")
+	Attribute("type", String, "The clause's target class, compacted against the active hub context's prefixes (full IRI when outside every declared namespace)")
 	Attribute("label", String, "Human-readable label (rdfs:label on the shape, falls back to the type's local name)")
-	Attribute("properties", ArrayOf(ClauseCatalogProperty), "The clause's typed properties")
+	Attribute("shape", String, "The NodeShape's IRI within the shapes graph")
 
-	Required("type", "label", "properties")
+	Required("type", "label", "shape")
 })
 
 var ClauseCatalogResponse = Type("ClauseCatalogResponse", func() {
