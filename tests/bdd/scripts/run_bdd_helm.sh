@@ -119,7 +119,9 @@ verify_host_ingress() {
 }
 
 wait_for_dcs_http() {
-  local deadline=$(( $(date +%s) + 120 ))
+  # Generous: on a cold cluster the backend blocks its HTTP server on the
+  # Federated Catalogue schema sync, and FC's own first boot takes minutes.
+  local deadline=$(( $(date +%s) + 900 ))
   local http_code
   until http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$DCS_HEALTH_URL" \
       -H 'Content-Type: application/json' -d '{}' 2>/dev/null) \
