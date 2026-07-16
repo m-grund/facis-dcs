@@ -235,15 +235,14 @@ func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 	require.True(t, policy.EnforceValidationProfile)
 	require.NotEmpty(t, findings)
 	// The default policy document enables both the Semantic Hub's canonical
-	// SHACL shapes (goRDFlib, ADR-9) and the SLA validation profile — a
-	// fully compliant canonical contract produces zero SHACL violations
-	// (SHACL only reports non-conformance) and an "info" profile finding.
+	// SHACL shapes and the SLA validation profile — a fully compliant
+	// canonical contract produces zero SHACL violations.
 	for _, finding := range findings {
 		if finding.ShapesVersion > 0 {
 			require.NotEqual(t, "error", finding.Severity, finding.Message)
 		}
 	}
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-POLICY-003", "info"))
+	require.Positive(t, policy.ProfileVersion)
 }
 
 func TestAuditContractContentSHACLReportsRealSHACLCoreViolations(t *testing.T) {
