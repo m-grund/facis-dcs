@@ -72,6 +72,21 @@ function isInstanceNode(node: unknown): node is DcsTypedClauseInstance {
   return typeof node === 'object' && node !== null && Object.keys(node).length > 1
 }
 
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+
+/** shacl-form serializes the type as an expanded rdf:type property; JSON-LD
+ *  keyword form (@type) is what every consumer targets. */
+function canonicalizeInstanceType(instance: DcsTypedClauseInstance): void {
+  if (instance['@type'] || !(RDF_TYPE in instance)) return
+  const raw = instance[RDF_TYPE]
+  const ids = (Array.isArray(raw) ? raw : [raw])
+    .map((node) => (typeof node === 'object' && node !== null ? (node as { '@id'?: string })['@id'] : String(node)))
+    .filter((id): id is string => !!id)
+  if (ids.length === 0) return
+  instance['@type'] = (ids.length === 1 ? ids[0] : ids) as DcsTypedClauseInstance['@type']
+  delete instance[RDF_TYPE]
+}
+
 async function submit() {
   if (!formEl) return
   formError.value = null
@@ -87,6 +102,7 @@ async function submit() {
       formError.value = 'The form produced no values'
       return
     }
+    canonicalizeInstanceType(instance)
     emit('submit', { clauseType: props.clause.type, title: title.value.trim(), instance })
   } catch (err: unknown) {
     formError.value = err instanceof Error ? err.message : 'Could not serialize the form values'

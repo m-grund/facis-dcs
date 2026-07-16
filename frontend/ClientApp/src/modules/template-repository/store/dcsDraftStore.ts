@@ -379,6 +379,12 @@ export const useDcsDraftStore = defineStore(storeId, {
           'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
         }
         this.blocks.push(block)
+        const root = this.layout.find((node) => node['dcs:isRoot'])
+        if (root) {
+          const children = root['dcs:children']['@list'].map((ref) => ref['@id'])
+          children.push(id)
+          root['dcs:children'] = { '@list': children.map((childId) => ({ '@id': childId })) }
+        }
         const documentId = this.documentIri ?? this.did ?? undefined
         this.policies.push({
           'odrl:assigner': partyReference(undefined, documentId),
