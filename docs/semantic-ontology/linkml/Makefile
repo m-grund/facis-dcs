@@ -23,7 +23,8 @@ IRI_SET_PROPS := layout signatureFields
 VALID_TESTS   := $(wildcard tests/valid/*.jsonld)
 INVALID_TESTS := $(wildcard tests/invalid/*.jsonld)
 
-GEN_OWL_FLAGS := --skip-vacuous-min-zero-cardinality-axioms \
+GEN_OWL_FLAGS := --no-use-native-uris \
+                  --skip-vacuous-min-zero-cardinality-axioms \
                   --skip-vacuous-local-range-axioms \
                   --consolidate-cardinality-axioms
 

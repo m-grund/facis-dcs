@@ -528,3 +528,33 @@ def step_then_orce_acknowledges(context):
         f"verified ({context.orce_sent_content_hash!r}), got {ack.get('payload_hash')!r}: {ack!r}"
     )
     assert ack.get("activated_at"), f"Expected a non-empty 'activated_at' in the ORCE ack: {ack!r}"
+
+
+@then('the semantic KPI observations for "{name}" record a violated "{metric}" observation')
+def step_then_semantic_kpi_observations(context, name, metric):
+    """GET /contract/kpis/{did} (DCS-FR-CWE-09/-31): the reported KPIs as a
+    JSON-LD observation set — dcs:KPIObservation nodes anchored to the
+    Semantic Hub's versioned context, consumable by external tooling."""
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    resp = get_with_headers(context, f"{context.base_url}/contract/kpis/{did}", headers=manager_h)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert isinstance(body.get("@context"), str) and "/semantic/context/" in body["@context"], (
+        f"Expected the observation set's @context to be the hub's versioned context URL, got: {body.get('@context')}"
+    )
+    assert body.get("@type") == "dcs:KPIObservationSet", f"Expected a dcs:KPIObservationSet, got: {body.get('@type')}"
+    observations = body.get("dcs:observation") or []
+    matching = [
+        node for node in observations
+        if node.get("@type") == "dcs:KPIObservation" and node.get("dcs:metricName") == metric
+    ]
+    assert matching, (
+        f"Expected a dcs:KPIObservation for metric {metric!r}, got: {observations}"
+    )
+    assert any(node.get("dcs:violation") is True for node in matching), (
+        f"Expected a violated {metric!r} observation, got: {matching}"
+    )
+    assert all(node.get("dcs:aboutContract", {}).get("@id") == did for node in matching), (
+        f"Expected every observation to reference contract {did}, got: {matching}"
+    )

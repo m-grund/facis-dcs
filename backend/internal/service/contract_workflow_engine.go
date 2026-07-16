@@ -10,6 +10,7 @@ import (
 
 	"digital-contracting-service/internal/dcstodcs"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
+	"digital-contracting-service/internal/semantichub"
 
 	contracttemplate2 "digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 
@@ -572,6 +573,52 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		Responsible:     contractResult.Responsible,
 		Kpis:            kpis,
 		KpiViolations:   kpiViolations,
+	}, nil
+}
+
+// KpiObservations serves the reported KPI values as a JSON-LD observation
+// set: dcs:KPIObservation nodes anchored to the Semantic Hub's versioned
+// context, each naming the observed metric, value, time, violation
+// verdict, and the contract it observes (DCS-FR-CWE-09/-31).
+func (s *contractWorkflowEnginesrvc) KpiObservations(ctx context.Context, req *contractworkflowengine.ContractRetrieveByIDRequest) (any, error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	entries, err := s.DeploymentRepo.ReadKPIsByDID(ctx, tx, req.Did)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(fmt.Errorf("could not read KPIs for contract %s: %w", req.Did, err))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	contextVersion, err := semantichub.ActiveVersion(ctx, s.DB, semantichub.ContextName, "context")
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(fmt.Errorf("load active hub context version: %w", err))
+	}
+
+	observations := make([]any, 0, len(entries))
+	for _, entry := range entries {
+		observations = append(observations, map[string]any{
+			"@id":               fmt.Sprintf("%s#kpi-%d", req.Did, entry.ID),
+			"@type":             "dcs:KPIObservation",
+			"dcs:metricName":    entry.Metric,
+			"dcs:observedValue": entry.Value,
+			"dcs:observedAt":    entry.ObservedAt.Format(time.RFC3339),
+			"dcs:violation":     entry.Violation,
+			"dcs:aboutContract": map[string]any{"@id": req.Did},
+		})
+	}
+	return map[string]any{
+		"@context":        semantichub.AnchorURL("context", semantichub.ContextName, contextVersion),
+		"@id":             req.Did + "#kpi-observations",
+		"@type":           "dcs:KPIObservationSet",
+		"dcs:observation": observations,
 	}, nil
 }
 
