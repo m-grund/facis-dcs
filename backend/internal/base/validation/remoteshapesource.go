@@ -59,6 +59,11 @@ func (r RemoteShapeSource) ContextAt(ctx context.Context, version int) (string, 
 	return content, err
 }
 
+func (r RemoteShapeSource) ContextByIRI(ctx context.Context, iri string) (string, error) {
+	content, _, err := r.retrieve(ctx, iri, "context", 0)
+	return content, err
+}
+
 type remoteSchemaItem struct {
 	Version int    `json:"version"`
 	Content string `json:"content"`

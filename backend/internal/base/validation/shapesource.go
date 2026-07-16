@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // ShapeSource is the enforcement-time source for the SHACL shapes,
@@ -27,6 +28,10 @@ type ShapeSource interface {
 	// ContextAt returns the JSON-LD context at a specific version — the
 	// version a document's "@context" hub URL pins.
 	ContextAt(ctx context.Context, version int) (content string, err error)
+	// ContextByIRI returns the active version of a context registered
+	// under the given IRI as its name — how externally anchored contexts
+	// a document references are resolved without a network fetch.
+	ContextByIRI(ctx context.Context, iri string) (content string, err error)
 }
 
 // activeShapeSource is the process-wide enforcement source, installed at
@@ -57,16 +62,26 @@ func pinnedHubShapesVersion(contract map[string]any) int {
 	return anchorVersion(anchorIRI(contract["sh:shapesGraph"]))
 }
 
+// hubContextAnchorPath marks a hub-served context URL
+// (semantichub.AnchorURL) among a document's @context entries.
+const hubContextAnchorPath = "/semantic/context/"
+
+func isHubContextAnchor(iri string) bool {
+	return strings.Contains(iri, hubContextAnchorPath) || iri == SchemaJSONLDContextV1 || iri == schemaRefJSONLDContext
+}
+
 // pinnedHubContextVersion reads the hub context version pinned by the
 // document's "@context" — the hub URL is either the whole @context or a
 // string entry of its array form.
 func pinnedHubContextVersion(contract map[string]any) int {
 	switch context := contract["@context"].(type) {
 	case string:
-		return anchorVersion(context)
+		if isHubContextAnchor(context) {
+			return anchorVersion(context)
+		}
 	case []any:
 		for _, entry := range context {
-			if url, ok := entry.(string); ok {
+			if url, ok := entry.(string); ok && isHubContextAnchor(url) {
 				if v := anchorVersion(url); v > 0 {
 					return v
 				}
@@ -74,6 +89,26 @@ func pinnedHubContextVersion(contract map[string]any) int {
 		}
 	}
 	return 0
+}
+
+// externalContextIRIs returns the non-hub string entries of a document's
+// "@context".
+func externalContextIRIs(data map[string]any) []string {
+	var iris []string
+	collect := func(entry any) {
+		if iri, ok := entry.(string); ok && !isHubContextAnchor(iri) {
+			iris = append(iris, iri)
+		}
+	}
+	switch context := data["@context"].(type) {
+	case string:
+		collect(context)
+	case []any:
+		for _, entry := range context {
+			collect(entry)
+		}
+	}
+	return iris
 }
 
 // anchorIRI reads the IRI out of a JSON-LD object reference ({"@id": ...})

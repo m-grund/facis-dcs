@@ -1,10 +1,12 @@
 package validation
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"digital-contracting-service/internal/base/datatype"
 )
@@ -230,6 +232,9 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 		return nil, err
 	}
 	normalizeCanonicalEnvelope(data, "dcs:ContractTemplate")
+	if err := validateExternalContextsResolvable(data); err != nil {
+		return nil, err
+	}
 	if err := validateCanonicalEnvelope(data); err != nil {
 		return nil, err
 	}
@@ -264,6 +269,9 @@ func NormalizeContractData(raw *datatype.JSON, _ bool) (*datatype.JSON, error) {
 		return nil, err
 	}
 	normalizeCanonicalEnvelope(data, "dcs:Contract")
+	if err := validateExternalContextsResolvable(data); err != nil {
+		return nil, err
+	}
 	if err := validateCanonicalEnvelope(data); err != nil {
 		return nil, err
 	}
@@ -394,10 +402,13 @@ func normalizeCanonicalEnvelope(data documentData, documentType string) {
 func normalizeCanonicalContext(data documentData) {
 	switch context := data["@context"].(type) {
 	case string:
-		return
+		if isHubContextAnchor(context) {
+			return
+		}
+		data["@context"] = []any{schemaRefJSONLDContext, context}
 	case []any:
 		for _, entry := range context {
-			if _, ok := entry.(string); ok {
+			if url, ok := entry.(string); ok && isHubContextAnchor(url) {
 				return
 			}
 		}
@@ -407,6 +418,25 @@ func normalizeCanonicalContext(data documentData) {
 	default:
 		data["@context"] = schemaRefJSONLDContext
 	}
+}
+
+// validateExternalContextsResolvable rejects documents whose "@context"
+// references an external context IRI that is not registered in the Semantic
+// Hub — validation resolves contexts hermetically, so an unregistered IRI
+// would make every later audit of the document fail.
+func validateExternalContextsResolvable(data documentData) error {
+	iris := externalContextIRIs(data)
+	if len(iris) == 0 || activeShapeSource == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, iri := range iris {
+		if _, err := activeShapeSource.ContextByIRI(ctx, iri); err != nil {
+			return fmt.Errorf("%w: @context references %q, which is not registered in the Semantic Hub", ErrDocumentSchemaConflict, iri)
+		}
+	}
+	return nil
 }
 
 func validateCanonicalEnvelope(data documentData) error {

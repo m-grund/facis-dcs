@@ -251,6 +251,45 @@ def step_when_create_conflicting_template(context, prefix, iri):
     )
 
 
+def _external_context_template_payload(iri: str) -> dict:
+    doc = TemplateService.canonical_document_data("BDD External Context Template")
+    doc["@context"] = [doc["@context"], iri]
+    return {
+        "template_type": TemplateService.template_type_for_category("legal"),
+        "name": "BDD External Context Template",
+        "description": "references an externally anchored context",
+        "template_data": doc,
+    }
+
+
+@when('a template is created whose "@context" references the external context "{iri}"')
+def step_when_create_external_context_template(context, iri):
+    headers = AuthService.get_headers_for_roles(["Template Creator"])
+    context.requests_response = post_json(
+        context,
+        template_create_url(context),
+        _external_context_template_payload(iri),
+        headers=headers,
+    )
+
+
+@when('the Template Manager registers the external JSON-LD context "{iri}" in the Semantic Hub')
+def step_when_register_external_context(context, iri):
+    headers = AuthService.get_headers_for_roles(["Template Manager"])
+    context.requests_response = post_json(
+        context,
+        _hub_url(context, "/semantic/schema/register"),
+        {
+            "name": iri,
+            "kind": "context",
+            "media_type": "application/ld+json",
+            "content": json.dumps({"@context": {"ex": "https://example.org/ns#"}}),
+            "activate": True,
+        },
+        headers=headers,
+    )
+
+
 @then("the rejection names the Semantic Hub's active context")
 def step_then_rejection_names_hub(context):
     assert "Semantic Hub" in context.requests_response.text, (

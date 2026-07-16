@@ -64,6 +64,19 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
     Then the request is denied with a client error
     And the rejection names the Semantic Hub's active context
 
+  # Externally anchored contexts: a document may reference context IRIs
+  # beyond the hub's own, provided they are registered in the hub under
+  # their original IRI — validation resolves them hermetically, never over
+  # the network, so an unregistered IRI is rejected at creation.
+  @DCS-FR-TR-03
+  Scenario: A document can use an externally anchored context once it is registered in the hub
+    When a template is created whose "@context" references the external context "https://example.org/bdd/unregistered-context"
+    Then the request is denied with a client error
+    When the Template Manager registers the external JSON-LD context "https://example.org/bdd/external-context" in the Semantic Hub
+    Then get http 200:Success code
+    When a template is created whose "@context" references the external context "https://example.org/bdd/external-context"
+    Then get http 200:Success code
+
   # Phase 1 / ADR-8: before this, the SHACL shapes enforcing contract content
   # (PACM contract-content audit) were read straight off disk — registering,
   # activating, or rolling back a hub schema version changed nothing about

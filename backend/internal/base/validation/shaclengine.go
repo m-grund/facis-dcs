@@ -54,7 +54,7 @@ func validateAgainstShapeSource(ctx context.Context, contract map[string]any, so
 			return nil, 0, fmt.Errorf("load active JSON-LD context: %w", err)
 		}
 	}
-	loader, err := hermeticContextLoader(contextContent)
+	loader, err := hermeticContextLoader(ctx, contextContent, source)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -183,23 +183,34 @@ func shaclLocalName(iri string) string {
 }
 
 // hermeticContextLoader returns a JSON-LD document loader that serves the
-// given hub context content in-process; any non-hub context IRI fails
-// instead of triggering a network fetch during validation.
-func hermeticContextLoader(activeContextJSON string) (ld.DocumentLoader, error) {
-	doc, err := ld.DocumentFromReader(strings.NewReader(activeContextJSON))
+// given hub context content for hub anchor URLs and resolves any other
+// context IRI through the ShapeSource's registered contexts — never a
+// network fetch during validation.
+func hermeticContextLoader(ctx context.Context, hubContextJSON string, source ShapeSource) (ld.DocumentLoader, error) {
+	doc, err := ld.DocumentFromReader(strings.NewReader(hubContextJSON))
 	if err != nil {
-		return nil, fmt.Errorf("parse active JSON-LD context: %w", err)
+		return nil, fmt.Errorf("parse hub JSON-LD context: %w", err)
 	}
-	return staticContextLoader{document: doc}, nil
+	return hubContextLoader{ctx: ctx, hubDocument: doc, source: source}, nil
 }
 
-type staticContextLoader struct {
-	document any
+type hubContextLoader struct {
+	ctx         context.Context
+	hubDocument any
+	source      ShapeSource
 }
 
-func (l staticContextLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
-	if strings.Contains(u, "/semantic/context/") || strings.Contains(u, schemaRefJSONLDContext) || u == SchemaJSONLDContextV1 {
-		return &ld.RemoteDocument{DocumentURL: u, Document: l.document}, nil
+func (l hubContextLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
+	if isHubContextAnchor(u) {
+		return &ld.RemoteDocument{DocumentURL: u, Document: l.hubDocument}, nil
 	}
-	return nil, fmt.Errorf("SHACL validation: JSON-LD context %q is not the offline hub cache; network fetch during validation is disallowed", u)
+	content, err := l.source.ContextByIRI(l.ctx, u)
+	if err != nil {
+		return nil, fmt.Errorf("SHACL validation: JSON-LD context %q is not registered in the Semantic Hub and network fetches during validation are disallowed: %w", u, err)
+	}
+	doc, err := ld.DocumentFromReader(strings.NewReader(content))
+	if err != nil {
+		return nil, fmt.Errorf("registered context %q is not valid JSON: %w", u, err)
+	}
+	return &ld.RemoteDocument{DocumentURL: u, Document: doc}, nil
 }

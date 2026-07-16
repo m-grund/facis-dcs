@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,9 +16,10 @@ import (
 // (documentdata_test.go) so tests exercise the real goRDFlib SHACL engine
 // (ADR-9) end to end without needing a live database.
 type fixtureShapeSource struct {
-	shapesTTL   string
-	profileYAML string
-	contextJSON string
+	shapesTTL        string
+	profileYAML      string
+	contextJSON      string
+	externalContexts map[string]string
 }
 
 func (f fixtureShapeSource) ActiveShapes(context.Context) (string, int, error) {
@@ -38,6 +40,13 @@ func (f fixtureShapeSource) ShapesAt(_ context.Context, _ int) (string, error) {
 
 func (f fixtureShapeSource) ContextAt(_ context.Context, _ int) (string, error) {
 	return f.contextJSON, nil
+}
+
+func (f fixtureShapeSource) ContextByIRI(_ context.Context, iri string) (string, error) {
+	if content, ok := f.externalContexts[iri]; ok {
+		return content, nil
+	}
+	return "", fmt.Errorf("context %q is not registered", iri)
 }
 
 // mustReadRepoFile climbs from the package directory to find a repo-root

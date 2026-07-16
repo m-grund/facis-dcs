@@ -52,6 +52,17 @@ func (h HubShapeSource) ShapesAt(ctx context.Context, version int) (string, erro
 	return h.withClauseCatalog(ctx, content)
 }
 
+// ContextByIRI returns the active version of a context registered under the
+// given IRI as its name — externally anchored contexts a document
+// references.
+func (h HubShapeSource) ContextByIRI(ctx context.Context, iri string) (string, error) {
+	content, _, err := h.active(ctx, iri, "context")
+	if err != nil {
+		return "", fmt.Errorf("context %q: %w", iri, err)
+	}
+	return content, nil
+}
+
 // ContextAt returns the JSON-LD context at a specific version.
 func (h HubShapeSource) ContextAt(ctx context.Context, version int) (string, error) {
 	content, err := h.versionContent(ctx, ContextName, "context", version)

@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"digital-contracting-service/internal/base/datatype"
 	"strings"
 	"testing"
 
@@ -39,4 +40,54 @@ func TestAuditContractContentFlagsShInNarrowedTitle(t *testing.T) {
 
 	finding := requirePolicyFinding(t, findings, "title-InConstraintComponent")
 	require.Equal(t, "error", finding.Severity)
+}
+
+func TestAuditContractContentResolvesRegisteredExternalContext(t *testing.T) {
+	external := "https://example.org/bdd/external-context"
+	restore := swapShapeSource(t, fixtureShapeSource{
+		shapesTTL:   mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl"),
+		profileYAML: "id: t\nversion: t\nrules: []\n",
+		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		externalContexts: map[string]string{
+			external: `{"@context": {"ex": "https://example.org/ns#"}}`,
+		},
+	})
+	defer restore()
+
+	contract := canonicalAuditContract()
+	contract["@context"] = []any{contract["@context"], external}
+	contract["ex:externalNote"] = "annotated via an externally anchored context"
+
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Empty(t, shaclOnlyFindings(findings))
+}
+
+func TestAuditContractContentRejectsUnregisteredExternalContext(t *testing.T) {
+	contract := canonicalAuditContract()
+	contract["@context"] = []any{contract["@context"], "https://example.org/never-registered"}
+
+	_, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.ErrorContains(t, err, "not registered in the Semantic Hub")
+}
+
+func TestNormalizeTemplateDataRejectsUnregisteredExternalContext(t *testing.T) {
+	doc := map[string]any{
+		"@context": []any{
+			map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
+			"https://example.org/never-registered",
+		},
+		"@type":        "dcs:ContractTemplate",
+		"dcs:metadata": map[string]any{"@type": "dcs:TemplateMetadata", "dcs:title": "External ctx"},
+		"dcs:documentStructure": map[string]any{
+			"@type":      "dcs:DocumentStructure",
+			"dcs:blocks": map[string]any{"@list": []any{}},
+			"dcs:layout": []any{map[string]any{"@id": "urn:uuid:block-root", "dcs:isRoot": true, "dcs:children": map[string]any{"@list": []any{}}}},
+		},
+	}
+	raw, err := datatype.NewJSON(doc)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&raw)
+	require.ErrorContains(t, err, "not registered in the Semantic Hub")
 }
