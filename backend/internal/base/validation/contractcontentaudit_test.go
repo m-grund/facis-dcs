@@ -443,7 +443,7 @@ func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLVal
 
 func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
-	findings := auditContractValidationProfile(contract, ValidationProfile{
+	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
 		Version: "test",
 		Rules: []ValidationRule{
@@ -483,7 +483,7 @@ func TestAuditContractContentShowsPolicyDetailsForMissingRuntimeValue(t *testing
 	values := contract["semanticConditionValues"].([]any)
 	contract["semanticConditionValues"] = values[:len(values)-2]
 
-	findings := auditContractValidationProfile(contract, ValidationProfile{
+	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
 		Version: "test",
 		Rules: []ValidationRule{
@@ -510,7 +510,7 @@ func TestAuditContractContentShowsPolicyDetailsForMissingRuntimeValue(t *testing
 func TestAuditContractContentShowsPolicyDetailsForLowRuntimeValue(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
 
-	findings := auditContractValidationProfile(contract, ValidationProfile{
+	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
 		Version: "test",
 		Rules: []ValidationRule{

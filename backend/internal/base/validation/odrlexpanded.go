@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/piprate/json-gold/ld"
 )
@@ -353,4 +354,82 @@ func anySlice[T any](items []T) []any {
 		out[i] = item
 	}
 	return out
+}
+
+// expandedStatements flattens the expanded graph into statement rows for
+// the validation-profile engine: every typed node becomes
+// {"@id", "@type" (first class IRI), <property local name>: value}.
+func expandedStatements(root map[string]any) []map[string]any {
+	statements := []map[string]any{}
+	var walk func(node map[string]any)
+	walk = func(node map[string]any) {
+		if types, ok := node["@type"].([]any); ok && len(types) > 0 {
+			statement := map[string]any{}
+			if id, ok := node["@id"].(string); ok {
+				statement["@id"] = id
+			}
+			if iri, ok := types[0].(string); ok {
+				statement["@type"] = iri
+			}
+			for property, raw := range node {
+				if strings.HasPrefix(property, "@") {
+					continue
+				}
+				values, ok := raw.([]any)
+				if !ok || len(values) == 0 {
+					continue
+				}
+				if len(values) == 1 {
+					statement[shaclLocalName(property)] = expandedLiteral(values[0])
+				} else {
+					statement[shaclLocalName(property)] = expandedLiterals(values)
+				}
+			}
+			statements = append(statements, statement)
+		}
+		for property, raw := range node {
+			if strings.HasPrefix(property, "@") && property != "@graph" {
+				continue
+			}
+			values, ok := raw.([]any)
+			if !ok {
+				continue
+			}
+			for _, value := range values {
+				child, ok := value.(map[string]any)
+				if !ok {
+					continue
+				}
+				if list, ok := child["@list"].([]any); ok {
+					for _, item := range list {
+						if node, ok := item.(map[string]any); ok {
+							walk(node)
+						}
+					}
+					continue
+				}
+				walk(child)
+			}
+		}
+	}
+	walk(root)
+	return statements
+}
+
+// statementsCoverProfile reports whether any statement carries one of the
+// profile's appliesTo class IRIs; a profile without appliesTo covers
+// everything.
+func statementsCoverProfile(statements []map[string]any, appliesTo []string) bool {
+	if len(appliesTo) == 0 {
+		return true
+	}
+	for _, statement := range statements {
+		typeIRI, _ := statement["@type"].(string)
+		for _, class := range appliesTo {
+			if typeIRI == class {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -70,13 +70,13 @@ func AuditContractContent(ctx context.Context, contractDocument any, policyDocum
 		policy.ShapesVersion = shapesVersion
 		findings = append(findings, shaclFindings...)
 	}
-	for _, profile := range policy.profiles {
-		findings = append(findings, auditContractValidationProfile(contract, profile)...)
-	}
-
 	root, err := expandForAudit(ctx, contract, source)
 	if err != nil {
-		return nil, fmt.Errorf("ODRL evaluation: %w", err)
+		return nil, fmt.Errorf("JSON-LD expansion: %w", err)
+	}
+
+	for _, profile := range policy.profiles {
+		findings = append(findings, auditContractValidationProfile(contract, root, profile)...)
 	}
 	findings = append(findings, auditExpandedODRLPolicies(root, expandedODRLPolicyRules(root))...)
 	externalRules, err := expandExternalODRLRules(ctx, externalODRLPolicies(policy.Policies), source)
@@ -254,7 +254,7 @@ func resolveContractContentPolicyFile() (string, error) {
 	return "", fmt.Errorf("contract content policy file not found")
 }
 
-func auditContractValidationProfile(contract map[string]any, profile ValidationProfile) []PolicyFinding {
+func auditContractValidationProfile(contract map[string]any, root map[string]any, profile ValidationProfile) []PolicyFinding {
 	findings := []PolicyFinding{}
 	statementRules := []ValidationRule{}
 	for _, rule := range profile.Rules {
@@ -265,10 +265,11 @@ func auditContractValidationProfile(contract map[string]any, profile ValidationP
 		findings = append(findings, auditContractValidationRule(contract, rule)...)
 	}
 	if len(statementRules) > 0 {
-		findings = append(findings, auditContractStatementValidationRules(contract, ValidationProfile{
+		findings = append(findings, auditContractStatementValidationRules(root, ValidationProfile{
 			ID:          profile.ID,
 			Version:     profile.Version,
 			Description: profile.Description,
+			AppliesTo:   profile.AppliesTo,
 			Rules:       statementRules,
 		})...)
 	}
@@ -322,9 +323,9 @@ func auditContractValidationRule(contract map[string]any, rule ValidationRule) [
 	}
 }
 
-func auditContractStatementValidationRules(contract map[string]any, profile ValidationProfile) []PolicyFinding {
-	statements := contractStatementsFromDocument(contract)
-	if len(statements) == 0 {
+func auditContractStatementValidationRules(root map[string]any, profile ValidationProfile) []PolicyFinding {
+	statements := expandedStatements(root)
+	if len(statements) == 0 || !statementsCoverProfile(statements, profile.AppliesTo) {
 		return nil
 	}
 	issues := ValidateContractStatements(statements, profile)
@@ -333,24 +334,6 @@ func auditContractStatementValidationRules(contract map[string]any, profile Vali
 		findings = append(findings, contractFinding(issue.RuleID, issue.RuleID, issue.Severity, issue.Message, issue.StatementID, issue.StatementID, "dcs:ContractStatement"))
 	}
 	return findings
-}
-
-func contractStatementsFromDocument(contract map[string]any) []map[string]any {
-	statementSet, ok := contract[statementSetDocumentProperty()].(map[string]any)
-	if !ok {
-		return nil
-	}
-	rawStatements, ok := asArray(statementSet["statements"])
-	if !ok {
-		return nil
-	}
-	statements := make([]map[string]any, 0, len(rawStatements))
-	for _, raw := range rawStatements {
-		if statement, ok := raw.(map[string]any); ok {
-			statements = append(statements, statement)
-		}
-	}
-	return statements
 }
 
 func validationRuleFinding(rule ValidationRule, path string, severity string, message string) PolicyFinding {

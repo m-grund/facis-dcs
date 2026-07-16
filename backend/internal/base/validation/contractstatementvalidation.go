@@ -24,10 +24,14 @@ const (
 const defaultContractStatementValidationProfileFile = "docs/semantic-ontology/validation/facis.sla.basic.v1.yaml"
 
 type ValidationProfile struct {
-	ID          string           `json:"id" yaml:"id"`
-	Version     string           `json:"version" yaml:"version"`
-	Description string           `json:"description,omitempty" yaml:"description,omitempty"`
-	Rules       []ValidationRule `json:"rules" yaml:"rules"`
+	ID          string `json:"id" yaml:"id"`
+	Version     string `json:"version" yaml:"version"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// AppliesTo scopes the profile's statement rules: they evaluate only
+	// when the document's expanded graph contains a node typed with one of
+	// these class IRIs.
+	AppliesTo []string         `json:"appliesTo,omitempty" yaml:"appliesTo,omitempty"`
+	Rules     []ValidationRule `json:"rules" yaml:"rules"`
 }
 
 type ValidationRule struct {

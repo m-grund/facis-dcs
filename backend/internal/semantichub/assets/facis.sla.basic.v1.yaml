@@ -1,6 +1,8 @@
 id: facis.sla.basic.v1
 version: "1"
 description: Basic FACIS SLA contract statement validation profile.
+appliesTo:
+  - "https://w3id.org/facis/dcs/ontology/v1#SLAAgreement"
 rules:
   - id: exactly-one-provider
     type: count

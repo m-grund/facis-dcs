@@ -187,3 +187,82 @@ func TestAuditContractContentFlagsGaiaXParticipantViolations(t *testing.T) {
 	wrongCountry := requirePolicyFinding(t, findings, "headquarterAddress-NodeConstraintComponent")
 	require.Equal(t, "error", wrongCountry.Severity)
 }
+
+// slaAuditContract is a canonical contract carrying real SLA content —
+// typed CompanyParty, PaymentTerm, SLAAgreement, and SLO nodes — the
+// facis.sla.basic profile's statement rules evaluate against.
+func slaAuditContract() map[string]any {
+	contract := canonicalAuditContract()
+	contract["dcs:hasSLA"] = map[string]any{
+		"@id":    "urn:uuid:sla-1",
+		"@type":  "dcs:SLAAgreement",
+		"dcs:hasService": map[string]any{
+			"@id":   "urn:uuid:service-1",
+			"@type": "dcs:Service",
+			"dcs:hasSLO": map[string]any{
+				"@id":              "urn:uuid:slo-availability",
+				"@type":            "dcs:SLO",
+				"dcs:availability": 99.9,
+			},
+		},
+	}
+	contract["dcs:contractParties"] = []any{
+		map[string]any{
+			"@id":           "urn:uuid:party-provider",
+			"@type":         "dcs:CompanyParty",
+			"dcs:role":      map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"},
+			"dcs:legalName": "Provider GmbH",
+		},
+		map[string]any{
+			"@id":           "urn:uuid:party-customer",
+			"@type":         "dcs:CompanyParty",
+			"dcs:role":      map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"},
+			"dcs:legalName": "Customer GmbH",
+		},
+	}
+	contract["dcs:paymentTerm"] = map[string]any{
+		"@id":          "urn:uuid:payment-1",
+		"@type":        "dcs:PaymentTerm",
+		"dcs:amount":   1000.0,
+		"dcs:currency": "EUR",
+		"dcs:dueDate":  "2026-12-01",
+	}
+	return contract
+}
+
+var slaStatementRuleIDs = []string{
+	"exactly-one-provider", "exactly-one-customer",
+	"availability-slo-required", "payment-required", "payment-amount-positive",
+}
+
+func TestAuditContractContentEvaluatesSLAProfileStatements(t *testing.T) {
+	contract := slaAuditContract()
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(false, true), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		if finding.Severity == "error" {
+			require.NotContains(t, slaStatementRuleIDs, finding.RuleID, finding.Message)
+		}
+	}
+
+	broken := slaAuditContract()
+	broken["dcs:paymentTerm"].(map[string]any)["dcs:amount"] = 0.0
+	broken["dcs:contractParties"] = append(broken["dcs:contractParties"].([]any), map[string]any{
+		"@id":           "urn:uuid:party-provider-2",
+		"@type":         "dcs:CompanyParty",
+		"dcs:role":      map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"},
+		"dcs:legalName": "Second Provider GmbH",
+	})
+	findings, err = AuditContractContent(context.Background(), broken, mapPolicy(false, true), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Contains(t, policyFindingRuleIDs(findings), "payment-amount-positive")
+	require.Contains(t, policyFindingRuleIDs(findings), "exactly-one-provider")
+
+	// A contract without SLA content stays out of the SLA profile's scope.
+	plain := canonicalAuditContract()
+	findings, err = AuditContractContent(context.Background(), plain, mapPolicy(false, true), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotContains(t, slaStatementRuleIDs, finding.RuleID, finding.Message)
+	}
+}

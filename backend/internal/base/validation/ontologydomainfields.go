@@ -266,10 +266,6 @@ func expandOntologyResource(value string) string {
 	}
 }
 
-func statementSetDocumentProperty() string {
-	return ontologyRuntime.StatementSetProperty
-}
-
 func compactEntityRole(value string) string {
 	prefix := ontologyRuntime.EntityRoleValuePrefix
 	if prefix != "" && strings.HasPrefix(value, prefix) {
