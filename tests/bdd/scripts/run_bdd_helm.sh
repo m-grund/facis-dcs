@@ -265,16 +265,29 @@ ORCE_SERVICE="${HELM_RELEASE}-orce"
 ORCE_LOCAL_FORWARD_PORT="${ORCE_LOCAL_FORWARD_PORT:-18880}"
 echo "Waiting for ORCE deployment ($ORCE_DEPLOYMENT) to be available"
 "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=180s "deployment/$ORCE_DEPLOYMENT"
-ORCE_POD="$("$KUBECTL_BIN" -n "$K8S_NAMESPACE" get pod \
-  -l "app.kubernetes.io/name=orce,app.kubernetes.io/instance=${HELM_RELEASE}" \
-  --field-selector=status.phase=Running \
-  -o jsonpath='{.items[0].metadata.name}')"
-ORCE_TOKEN="$("$KUBECTL_BIN" -n "$K8S_NAMESPACE" exec "$ORCE_POD" -- \
-  printenv ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN)"
-if [[ -z "$ORCE_TOKEN" ]]; then
-  echo "ORCE archive audit token is not configured in pod $ORCE_POD" >&2
-  exit 1
-fi
+# During a rollout the terminating pod still reports phase Running while its
+# containers are already gone — pick the newest running pod and retry the
+# exec until it answers.
+ORCE_TOKEN=""
+deadline=$(( $(date +%s) + 120 ))
+while [[ -z "$ORCE_TOKEN" ]]; do
+  ORCE_POD="$("$KUBECTL_BIN" -n "$K8S_NAMESPACE" get pod \
+    -l "app.kubernetes.io/name=orce,app.kubernetes.io/instance=${HELM_RELEASE}" \
+    --field-selector=status.phase=Running \
+    --sort-by=.metadata.creationTimestamp \
+    -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || true)"
+  if [[ -n "$ORCE_POD" ]]; then
+    ORCE_TOKEN="$("$KUBECTL_BIN" -n "$K8S_NAMESPACE" exec "$ORCE_POD" -c orce -- \
+      printenv ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN 2>/dev/null || true)"
+  fi
+  if [[ -z "$ORCE_TOKEN" ]]; then
+    if [ "$(date +%s)" -gt "$deadline" ]; then
+      echo "ORCE archive audit token is not configured in pod ${ORCE_POD:-<none>}" >&2
+      exit 1
+    fi
+    sleep 3
+  fi
+done
 
 echo "Starting port-forward for ORCE service ($ORCE_SERVICE)"
 KUBECTL_BIN="$KUBECTL_BIN" K8S_NAMESPACE="$K8S_NAMESPACE" \
