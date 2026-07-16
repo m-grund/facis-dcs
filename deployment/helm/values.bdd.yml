@@ -45,6 +45,15 @@ extraEnv:
   # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv.
   - name: DCS_TRUSTED_PEERS
     value: "did:web:dcs-b.localhost%3A18080"
+  # Real deployment dispatch to the shipped ORCE contract-target-flow
+  # (UC-05-01): the flow verifies the payload hash, acks synchronously, and
+  # then POSTs the authoritative acknowledgement + a measured KPI back to
+  # /contract/deployment/callback (see orce.extraEnv below for its half of
+  # the wiring). Only instance A dispatches — signing commands forward to the
+  # contract's Origin peer, so deployments always originate here; instance B
+  # deliberately keeps CONTRACT_TARGET_URL unset.
+  - name: CONTRACT_TARGET_URL
+    value: "http://dcs-orce:1880/contract-target/deploy"
 
 # DID identity (fatal on startup when missing). The <fullname>-identity
 # Secret (identitySecretName helper) is published by the hsm-provision
@@ -55,7 +64,7 @@ identity:
 
 oid4vp:
   trust:
-    statusListSkipJWSVerify: true
+    xfscAllowUnsignedFallback: true
 
 postgresql:
   enabled: true
@@ -111,6 +120,11 @@ ingress:
         # /.well-known prefix for OIDC discovery, and the longer path wins.
         - path: /.well-known/did.json
           pathType: Prefix
+        # Webhook platform (DCS-FR-TR-22 template-update notifications):
+        # backend/cmd/dcs/http.go mounts it at /orce/ on the service root,
+        # outside DCS_API_PATH, so subscribers need it routed explicitly.
+        - path: /orce
+          pathType: Prefix
     # Cluster-routable did:web hostname for this instance (@two-instance
     # peer-trust suite, features/17_peer_trust): dcs-a.localhost
     # resolves in-cluster via a CoreDNS rewrite to the shared Traefik Service
@@ -123,6 +137,8 @@ ingress:
         - path: /digital-contracting-service
           pathType: Prefix
         - path: /.well-known/did.json
+          pathType: Prefix
+        - path: /orce
           pathType: Prefix
 
 hydra:
@@ -233,6 +249,19 @@ orce:
   enabled: true
   persistence:
     enabled: false
+  # The contract-target-flow's callback legs (deployment ack + measured KPI,
+  # flows/contract-target-flow.json) post to this instance's backend with the
+  # shared deployment-callback secret (command/callback.go's
+  # DeploymentCallbackSecret; the value below is its BDD default, stated
+  # explicitly so the pairing is visible in one place).
+  extraEnv:
+    # DCS_URL must carry the API base path (DCS_API_PATH mounts every app
+    # endpoint under /digital-contracting-service/api) — the flow's callback
+    # legs append /contract/deployment/callback to it.
+    - name: DCS_URL
+      value: "http://dcs-digital-contracting-service:8991/digital-contracting-service/api"
+    - name: DEPLOYMENT_CALLBACK_SECRET
+      value: "bdd-deployment-callback-secret"
   ingress:
     enabled: true
     hosts:

@@ -23,7 +23,7 @@ Feature: Contract lifecycle driven entirely through the API
     And the contract "API Lifecycle Contract" has an audit event of type "APPROVE_CONTRACT"
     When the counterparty signer applies a signature to contract "API Lifecycle Contract"
     Then get http 200:Success code
-    And the contract "API Lifecycle Contract" is in state "SIGNED"
+    And the contract "API Lifecycle Contract" has completed signing
     And the archive has an entry for contract "API Lifecycle Contract"
 
   @UC-12-04

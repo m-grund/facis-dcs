@@ -123,6 +123,21 @@ DCS_TRUSTED_PEERS=did:web:partner-a.example.org,did:web:partner-b.example.org
 - **IPFS:** contract/template documents pinned to IPFS are content-addressed;
   losing the pin (not the content) is recoverable by re-pinning from the
   database's stored copy.
+- **Audit trail (IPFS is the primary copy):** audit-log entries live ONLY in
+  IPFS — the database (`audit_trail_log`) stores just each chain's head CID,
+  and every entry links its predecessor by CID. Losing IPFS block storage
+  therefore punches permanent holes in existing chains: anchoring continues
+  (the head CID is read from the database, so new entries append past the
+  gap), but any read that walks a chain across the gap hard-fails on the
+  first missing link — deliberately, since a partial answer would present an
+  incomplete trail as complete. Component-wide audit queries walk EVERY
+  resource's chain, so a single damaged chain fails them all. IPFS block
+  storage must be on durable volumes and backed up from the same point in
+  time as the database; after an unrecoverable loss, the only reset is to
+  clear the affected `audit_trail_log` rows, acknowledging the evidence
+  loss. While IPFS is merely unavailable (rather than lost), the outbox
+  processor retries in order and anchors the backlog once it returns —
+  events are never dropped.
 
 ## Environment variable reference
 

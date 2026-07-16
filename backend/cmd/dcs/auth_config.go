@@ -52,11 +52,13 @@ func loadAuthConfig(ctx context.Context) (service.AuthConfig, error) {
 		return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: %w", err)
 	}
 
-	skipStatusListJWS := false
-	if v := strings.TrimSpace(os.Getenv("OID4VP_STATUSLIST_SKIP_JWS_VERIFY")); strings.EqualFold(v, "true") {
-		skipStatusListJWS = true
+	xfscAllowUnsignedFallback := false
+	if v := strings.TrimSpace(os.Getenv("OID4VP_XFSC_ALLOW_UNSIGNED_FALLBACK")); strings.EqualFold(v, "true") {
+		xfscAllowUnsignedFallback = true
 	}
-	oid4vp.ConfigureStatusListJWTVerification(trustCfg, skipStatusListJWS)
+	if err := oid4vp.ConfigureStatusListVerification(trustDataPath, xfscAllowUnsignedFallback); err != nil {
+		return service.AuthConfig{}, fmt.Errorf("oid4vp configuration error: %w", err)
+	}
 
 	dcqlQuery, err := oid4vp.LoadDCQLQuery(os.Getenv("OID4VP_DCQL_QUERY"))
 	if err != nil {

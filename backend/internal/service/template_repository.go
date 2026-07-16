@@ -2,7 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
+
+	"digital-contracting-service/internal/base/validation"
 
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	qry2 "digital-contracting-service/internal/processauditandcompliance/query"
@@ -16,6 +21,7 @@ import (
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/middleware"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 	fcclient "digital-contracting-service/internal/templatecatalogueintegration/client"
 	"digital-contracting-service/internal/templaterepository/command"
@@ -37,13 +43,17 @@ type templateRepositorysrvc struct {
 	ATRepo       db.ApprovalTaskRepo
 	FCClient     *fcclient.FederatedCatalogueClient
 	ATrailReader base.AuditTrailReader
+	// VCSigner + IssuerDID issue the per-version template provenance VCs at
+	// registration (DCS-FR-TR-09, command/provenance.go).
+	VCSigner  provenance.VCSigner
+	IssuerDID string
 	auth.JWTAuthenticator
 }
 
 // NewTemplateRepository returns the TemplateRepository service implementation.
 func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db.ContractTemplateRepo,
 	RTRepo db.ReviewTaskRepo, ATRepo db.ApprovalTaskRepo, fcClient *fcclient.FederatedCatalogueClient,
-	auditTrailReader base.AuditTrailReader) templaterepository.Service {
+	auditTrailReader base.AuditTrailReader, vcSigner provenance.VCSigner, issuerDID string) templaterepository.Service {
 	return &templateRepositorysrvc{
 		DB:               db,
 		JWTAuthenticator: jwtAuth,
@@ -52,10 +62,22 @@ func NewTemplateRepository(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, CTRepo db
 		ATRepo:           ATRepo,
 		FCClient:         fcClient,
 		ATrailReader:     auditTrailReader,
+		VCSigner:         vcSigner,
+		IssuerDID:        issuerDID,
 	}
 }
 
 // Create a new template.
+// mapTemplateCommandError maps a client-input document error (a Semantic Hub
+// ontology-prefix conflict, DCS-FR-TR-03) to bad_request; everything else
+// stays an internal error.
+func mapTemplateCommandError(err error) error {
+	if errors.Is(err, validation.ErrDocumentSchemaConflict) {
+		return templaterepository.MakeBadRequest(err)
+	}
+	return templaterepository.MakeInternalError(err)
+}
+
 func (s *templateRepositorysrvc) Create(ctx context.Context, req *templaterepository.ContractTemplateCreateRequest) (*templaterepository.ContractTemplateCreateResponse, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
@@ -93,7 +115,7 @@ func (s *templateRepositorysrvc) Create(ctx context.Context, req *templatereposi
 	}
 	err = createHandler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateCreateResponse{
@@ -125,7 +147,7 @@ func (s *templateRepositorysrvc) Copy(ctx context.Context, req *templatereposito
 	}
 	err = copyHandler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateCopyResponse{
@@ -171,7 +193,7 @@ func (s *templateRepositorysrvc) Submit(ctx context.Context, req *templatereposi
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateSubmitResponse{
@@ -224,7 +246,7 @@ func (s *templateRepositorysrvc) Update(ctx context.Context, req *templatereposi
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateUpdateResponse{
@@ -287,7 +309,7 @@ func (s *templateRepositorysrvc) UpdateManage(ctx context.Context, req *template
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateUpdateManageResponse{
@@ -581,7 +603,7 @@ func (s *templateRepositorysrvc) Approve(ctx context.Context, req *templaterepos
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateApproveResponse{
@@ -616,7 +638,7 @@ func (s *templateRepositorysrvc) Reject(ctx context.Context, req *templatereposi
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateRejectResponse{
@@ -638,9 +660,13 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 		UserRoles:    middleware.GetUserRoles(ctx),
 	}
 	handler := command.Registrar{
-		DB:       s.DB,
-		CTRepo:   s.CTRepo,
-		FCClient: s.FCClient,
+		DB:        s.DB,
+		CTRepo:    s.CTRepo,
+		RTRepo:    s.RTRepo,
+		ATRepo:    s.ATRepo,
+		FCClient:  s.FCClient,
+		VCSigner:  s.VCSigner,
+		IssuerDID: s.IssuerDID,
 	}
 	did, err := handler.Handle(ctx, cmd)
 	if err != nil {
@@ -650,6 +676,45 @@ func (s *templateRepositorysrvc) Register(ctx context.Context, req *templaterepo
 	return &templaterepository.ContractTemplateRegisterResponse{
 		Did: *did,
 	}, nil
+}
+
+// Provenance serves the per-version signed W3C provenance credentials of a
+// template (DCS-FR-TR-09) — the artifacts a template user verifies a
+// template's creator/reviewer/approver trail with.
+func (s *templateRepositorysrvc) Provenance(ctx context.Context, req *templaterepository.TemplateProvenanceRetrieveRequest) (res []*templaterepository.TemplateProvenanceCredentialResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+	defer func(tx *sqlx.Tx) {
+		_ = tx.Rollback()
+	}(tx)
+
+	rows, err := s.CTRepo.ReadProvenanceCredentials(ctx, tx, req.Did)
+	if err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, templaterepository.MakeInternalError(err)
+	}
+
+	res = make([]*templaterepository.TemplateProvenanceCredentialResponse, 0, len(rows))
+	for _, row := range rows {
+		var credential any
+		if err := json.Unmarshal(row.Credential, &credential); err != nil {
+			return nil, templaterepository.MakeInternalError(fmt.Errorf("decode stored provenance credential %s: %w", row.VCID, err))
+		}
+		res = append(res, &templaterepository.TemplateProvenanceCredentialResponse{
+			Version:      row.Version,
+			VcID:         row.VCID,
+			PreviousVcID: row.PreviousVCID,
+			Credential:   credential,
+		})
+	}
+	return res, nil
 }
 
 // archive obsolete template.
@@ -678,7 +743,7 @@ func (s *templateRepositorysrvc) Archive(ctx context.Context, req *templaterepos
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplateArchiveResponse{
@@ -780,7 +845,7 @@ func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepos
 	}
 	err = handler.Handle(ctx, cmd)
 	if err != nil {
-		return nil, templaterepository.MakeInternalError(err)
+		return nil, mapTemplateCommandError(err)
 	}
 
 	return &templaterepository.ContractTemplatePublishResponse{

@@ -343,6 +343,18 @@ func (r *PostgresContractRepo) AnnotateArchiveEntry(ctx context.Context, tx *sql
 	return int(affected), nil
 }
 
+func (r *PostgresContractRepo) ReadSignedSignatureFieldNames(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error) {
+	var fields []string
+	err := tx.SelectContext(ctx, &fields, `
+        SELECT field_name FROM contract_signatures
+        WHERE contract_did = $1 AND status = 'SIGNED' AND field_name IS NOT NULL
+    `, did)
+	if err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
 func (r *PostgresContractRepo) ReadArchivedContracts(ctx context.Context, tx *sqlx.Tx) ([]db.ContractMetadata, error) {
 	query := `
 	    SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible, evidence, archive_summary, archive_tags

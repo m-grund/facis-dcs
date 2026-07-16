@@ -29,14 +29,16 @@ WORKDIR /build
 # Copy go mod files
 COPY backend/go.mod backend/go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Download dependencies ("all" also covers cmd/goa's tool-only deps so the
+# gen step below runs entirely from the module cache).
+RUN go mod download all
 
 # Copy source code
 COPY backend/ ./
 
-# Generate Goa transport/types from the design package.
-RUN go run goa.design/goa/v3/cmd/goa@v3.24.2 gen digital-contracting-service/design
+# Generate Goa transport/types from the design package, at the goa version
+# pinned in go.mod. GOPROXY=off keeps the step hermetic.
+RUN GOPROXY=off go run goa.design/goa/v3/cmd/goa gen digital-contracting-service/design
 
 # Build binary (cgo enabled so the PKCS#11 signing path links).
 RUN CGO_ENABLED=1 GOOS=linux go build -o dcs ./cmd/dcs

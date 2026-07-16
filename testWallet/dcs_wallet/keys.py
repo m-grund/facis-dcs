@@ -12,22 +12,28 @@ DEFAULT_EC_CRV = "P-256"
 REQUIRED_EC_PUBLIC_FIELDS = ("kty", "x", "y")
 
 
-def b64url_uint(value: int) -> str:
-    length = (value.bit_length() + 7) // 8 or 1
+def b64url_uint(value: int, length: int | None = None) -> str:
+    if length is None:
+        length = (value.bit_length() + 7) // 8 or 1
     raw = value.to_bytes(length, "big")
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
 def generate_ec_private_jwk() -> dict[str, Any]:
+    # RFC 7518 §6.2: EC coordinates are FIXED-length (the curve's full octet
+    # size, 32 for P-256) — a coordinate whose leading byte happens to be
+    # zero must stay zero-padded or strict JWK consumers (e.g. PyJWT) reject
+    # the key with "Coords should be 32 bytes for curve P-256".
+    coord_len = (ec.SECP256R1().key_size + 7) // 8
     private_key = ec.generate_private_key(ec.SECP256R1())
     numbers = private_key.private_numbers()
     public = numbers.public_numbers
     return {
         "kty": "EC",
         "crv": "P-256",
-        "x": b64url_uint(public.x),
-        "y": b64url_uint(public.y),
-        "d": b64url_uint(numbers.private_value),
+        "x": b64url_uint(public.x, coord_len),
+        "y": b64url_uint(public.y, coord_len),
+        "d": b64url_uint(numbers.private_value, coord_len),
     }
 
 

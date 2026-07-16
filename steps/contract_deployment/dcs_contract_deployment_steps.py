@@ -67,6 +67,7 @@ import base64
 import hashlib
 import json
 import os
+import time
 
 import requests as _requests
 from behave import given, step, then, when
@@ -291,30 +292,38 @@ def step_then_callback_rejected(context):
 
 
 # ---------------------------------------------------------------------------
-# When — valid-secret ack + KPI callbacks
+# When — the REAL target acknowledgement (ORCE flow callback legs)
 # ---------------------------------------------------------------------------
 
 
-@step('the target sends a deployment acknowledgement for contract "{name}" with the correct shared secret')
-def step_when_callback_valid_ack(context, name):
-    # Some scenarios use this step as an "And" continuing a Given block, for
-    # the same reason documented on `step_when_deploy_contract` above:
-    # `@step` registers it as given/when/then alike.
+@step('the contract target acknowledges the deployment of contract "{name}"')
+def step_when_target_acknowledges(context, name):
+    """The real acknowledgement path (DCS-FR-SM-10/-12, DCS-IR-SI-02): the
+    backend dispatched the deployment to the shipped ORCE
+    contract-target-flow (CONTRACT_TARGET_URL), whose callback legs POST the
+    authoritative ack (status + execution-evidence receipt) back to
+    /contract/deployment/callback with the shared secret. Nothing is
+    simulated here — this step only waits for that ack to land, observable
+    as the SIGNED -> ACTIVE transition it drives. Registered as @step so it
+    reads naturally in Given ("And the contract target acknowledges ...")
+    and When positions alike."""
     did, _ = ContractService._contract_data(context, name)
-    payload = {
-        "did": did,
-        "correlation_id": getattr(context, "deployment_correlation_id", None) or "bdd-unknown-correlation",
-        "status": "ACKNOWLEDGED",
-        "receipt": {
-            "correlation_id": getattr(context, "deployment_correlation_id", None) or "bdd-unknown-correlation",
-            "payload_hash": getattr(context, "deployment_content_hash", None) or "sha256:bdd-unknown-hash",
-            "activated_at": "2026-01-01T00:00:00Z",
-        },
-    }
-    headers = {"Content-Type": "application/json", DEPLOYMENT_CALLBACK_SECRET_HEADER: _callback_secret()}
-    context.requests_response = post_json(context, contract_deployment_callback_url(context), payload, headers=headers)
-    if context.requests_response.status_code == 200:
-        ContractService._refresh_contract(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    actual_state = None
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=manager_h)
+        assert retrieve.status_code == 200, retrieve.text
+        actual_state = str(retrieve.json().get("state", "")).upper()
+        if actual_state == "ACTIVE":
+            ContractService._refresh_contract(context, name)
+            return
+        time.sleep(2)
+    raise AssertionError(
+        f"Expected the ORCE contract-target-flow's acknowledgement callback to move "
+        f"contract '{name}' ({did}) to ACTIVE within 90s of deployment, state is still "
+        f"'{actual_state}'"
+    )
 
 
 @then('the archive entry for contract "{name}" contains an RFC-3161 TSA timestamp over the execution-evidence receipt')
@@ -365,6 +374,34 @@ def step_when_target_reports_kpi(context, metric, value, name):
     }
     headers = {"Content-Type": "application/json", DEPLOYMENT_CALLBACK_SECRET_HEADER: _callback_secret()}
     context.requests_response = post_json(context, contract_deployment_callback_url(context), payload, headers=headers)
+
+
+@then('the contract detail for "{name}" shows a target-reported KPI "{metric}"')
+def step_then_contract_detail_shows_target_kpi(context, name, metric):
+    """DCS-FR-CWE-31 ("KPIs sent from the target system"): the metric below
+    is measured and reported by the ORCE contract-target-flow itself (its
+    activation latency), not by any harness callback — so its value is only
+    known to be a positive number, and it may land moments after the ack."""
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    kpis = []
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=manager_h)
+        assert retrieve.status_code == 200, retrieve.text
+        kpis = _kpi_entries(retrieve.json())
+        matching = [k for k in kpis if str(k.get("metric")) == metric]
+        if matching:
+            value = str(matching[-1].get("value"))
+            assert value and float(value) > 0, (
+                f"Expected the target-measured KPI '{metric}' to carry a positive number, got {value!r}"
+            )
+            return
+        time.sleep(2)
+    raise AssertionError(
+        f"Expected the ORCE contract-target-flow to report KPI '{metric}' for contract "
+        f"'{name}' ({did}) via the deployment callback within 60s, got kpis: {kpis!r}"
+    )
 
 
 @then('the contract detail for "{name}" shows KPI "{metric}" with value "{value}"')
@@ -442,29 +479,35 @@ def step_given_orce_reachable(context):
 
 @when('a deployment payload for contract "{name}" is posted directly to the ORCE contract-target-flow')
 def step_when_post_to_orce_directly(context, name):
+    """Posts the SAME envelope shape the backend dispatches
+    (command/deploy.go): a JSON-LD document whose dcs:contentHash covers the
+    whole envelope minus the hash field itself, canonicalized as recursively
+    key-sorted compact JSON without ASCII escaping (matching Go's
+    hashDeploymentPayload with SetEscapeHTML(false) and the flow's
+    sortKeysDeep + JSON.stringify)."""
     did, updated_at = ContractService._contract_data(context, name)
     correlation_id = f"bdd-orce-{did}-{updated_at}".replace(":", "-").replace(" ", "-")
-    inner_payload = {
+    envelope = {
         "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "odrl": "http://www.w3.org/ns/odrl/2/"},
-        "@type": "dcs:Contract",
+        "@type": "dcs:ContractDeployment",
         "dcs:contractDid": did,
+        "dcs:contractVersion": 1,
+        "dcs:timestamp": "2026-01-01T00:00:00Z",
+        "dcs:correlationId": correlation_id,
+        "dcs:contractDocument": {
+            "@type": "dcs:Contract",
+            "dcs:contractDid": did,
+        },
         "odrl:policy": {"@id": "urn:uuid:bdd-orce-policy-set", "@type": "odrl:Set", "uid": did},
     }
-    canonical = json.dumps(inner_payload, sort_keys=True, separators=(",", ":")).encode()
+    canonical = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     content_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    envelope["dcs:contentHash"] = content_hash
     context.orce_sent_correlation_id = correlation_id
     context.orce_sent_content_hash = content_hash
 
-    body = {
-        "contract_did": did,
-        "contract_version": 1,
-        "correlation_id": correlation_id,
-        "content_hash": content_hash,
-        "timestamp": "2026-01-01T00:00:00Z",
-        "payload": inner_payload,
-    }
     context.requests_response = _requests.post(
-        context.orce_target_url, json=body, timeout=context.http_timeout_seconds
+        context.orce_target_url, json=envelope, timeout=context.http_timeout_seconds
     )
 
 

@@ -26,12 +26,14 @@ import (
 	internalsigningsvr "digital-contracting-service/gen/http/internal_signing/server"
 	pdfgenerationsvr "digital-contracting-service/gen/http/pdf_generation/server"
 	processauditandcompliancesvr "digital-contracting-service/gen/http/process_audit_and_compliance/server"
+	semantichubsvr "digital-contracting-service/gen/http/semantic_hub/server"
 	signaturemanagementsvr "digital-contracting-service/gen/http/signature_management/server"
 	templatecatalogueintegrationsvr "digital-contracting-service/gen/http/template_catalogue_integration/server"
 	templaterepositorysvr "digital-contracting-service/gen/http/template_repository/server"
 	internalsigning "digital-contracting-service/gen/internal_signing"
 	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
+	semantichubgen "digital-contracting-service/gen/semantic_hub"
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	templatecatalogueintegration "digital-contracting-service/gen/template_catalogue_integration"
 	templaterepository "digital-contracting-service/gen/template_repository"
@@ -117,7 +119,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	contractStorageArchiveEndpoints *contractstoragearchive.Endpoints, contractWorkflowEngineEndpoints *contractworkflowengine.Endpoints,
 	dcsToDcsEndpoints *dcstodcs.Endpoints, pdfGenerationEndpoints *pdfgeneration.Endpoints, processAuditAndComplianceEndpoints *processauditandcompliance.Endpoints,
 	signatureManagementEndpoints *signaturemanagement.Endpoints, templateCatalogueIntegrationEndpoints *templatecatalogueintegration.Endpoints,
-	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, c2paEndpoints *c2paservice.Endpoints, internalSigningEndpoints *internalsigning.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
+	templateRepositoryEndpoints *templaterepository.Endpoints, didEnpoints *didservice.Endpoints, c2paEndpoints *c2paservice.Endpoints, internalSigningEndpoints *internalsigning.Endpoints, semanticHubEndpoints *semantichubgen.Endpoints, webhookPlatform *webhookplatform.Platform, wg *sync.WaitGroup,
 	errc chan error, dbg bool) {
 
 	// Provide the transport specific request decoder and response encoder.
@@ -161,6 +163,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		didServer                          *didsvr.Server
 		c2paServer                         *c2pasvr.Server
 		internalSigningServer              *internalsigningsvr.Server
+		semanticHubServer                  *semantichubsvr.Server
 	)
 	{
 		eh := errorHandler(ctx)
@@ -177,6 +180,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		didServer = didsvr.New(didEnpoints, apiMux, dec, enc, eh, ef)
 		c2paServer = c2pasvr.New(c2paEndpoints, apiMux, dec, enc, eh, ef)
 		internalSigningServer = internalsigningsvr.New(internalSigningEndpoints, apiMux, dec, enc, eh, ef)
+		semanticHubServer = semantichubsvr.New(semanticHubEndpoints, apiMux, dec, enc, eh, ef)
 	}
 
 	didsvr.Mount(mux, didServer)
@@ -193,6 +197,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	signaturemanagementsvr.Mount(apiMux, signatureManagementServer)
 	templatecatalogueintegrationsvr.Mount(apiMux, templateCatalogueIntegrationServer)
 	templaterepositorysvr.Mount(apiMux, templateRepositoryServer)
+	semantichubsvr.Mount(apiMux, semanticHubServer)
 
 	// Mount Swagger UI on /swagger and OpenAPI spec on /openapi3.json.
 	mountSwaggerUI(apiMux)
@@ -244,6 +249,9 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range templateRepositoryServer.Mounts {
+		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
+	}
+	for _, m := range semanticHubServer.Mounts {
 		log.Printf(ctx, "HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
 	for _, m := range didServer.Mounts {
