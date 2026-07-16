@@ -7,23 +7,15 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// HubShapeSource is the Semantic Hub-backed enforcement source
-// (DCS-FR-TR-03, ADR-8): it structurally satisfies
-// validation.ShapeSource without semantichub importing the validation
-// package (main.go wires the two together), so registering/activating/
-// rolling back a hub schema version changes what AuditContractContent
-// actually enforces.
+// HubShapeSource is the Semantic Hub-backed enforcement source; it
+// structurally satisfies validation.ShapeSource (main.go wires the two
+// together).
 type HubShapeSource struct {
 	DB *sqlx.DB
 }
 
 // ActiveShapes returns the canonical contract shapes concatenated with the
-// clause catalog (Phase 3, ADR-10) — one shapes graph, so a document's
-// typed clauses (dcs:PaymentClause etc.) are checked by the same
-// validateAgainstHubShapes pass as the rest of the contract, not a second
-// one. The clause catalog is always its own current active version even
-// during ADR-8 pinned revalidation (only the canonical contract shapes'
-// pin is tracked via sh:shapesGraph today).
+// clause catalog's active version into one shapes graph.
 func (h HubShapeSource) ActiveShapes(ctx context.Context) (string, int, error) {
 	content, version, err := h.active(ctx, ShapesName, "shapes")
 	if err != nil {
@@ -44,9 +36,8 @@ func (h HubShapeSource) ActiveContext(ctx context.Context) (string, int, error) 
 	return h.active(ctx, ContextName, "context")
 }
 
-// ShapesAt returns the SHACL shapes pinned at a specific version — used to
-// revalidate a document against the hub version that was active when it was
-// produced. Hub versions are immutable, so this stays resolvable forever.
+// ShapesAt returns the SHACL shapes at a specific version, concatenated
+// with the clause catalog's active version.
 func (h HubShapeSource) ShapesAt(ctx context.Context, version int) (string, error) {
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -63,9 +54,7 @@ func (h HubShapeSource) ShapesAt(ctx context.Context, version int) (string, erro
 	return h.withClauseCatalog(ctx, s.Content)
 }
 
-// ContextAt returns the JSON-LD context pinned at a specific version —
-// the version a document's "@context" hub URL names (ADR-8). Hub versions
-// are immutable, so this stays resolvable forever.
+// ContextAt returns the JSON-LD context at a specific version.
 func (h HubShapeSource) ContextAt(ctx context.Context, version int) (string, error) {
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -82,12 +71,9 @@ func (h HubShapeSource) ContextAt(ctx context.Context, version int) (string, err
 	return s.Content, nil
 }
 
-// withClauseCatalog appends the clause catalog's current active shapes to a
-// canonical shapes document — both are self-contained Turtle documents with
-// identical @prefix declarations, so concatenation parses as one graph.
-// Hard-fails like everything else in the enforcement path: the clause
-// catalog is a startup-seeded genesis entry (Seed), so its absence means the
-// hub itself is misconfigured, not a normal "no clauses yet" state.
+// withClauseCatalog appends the clause catalog's active shapes to a
+// canonical shapes document; both declare identical @prefix headers, so
+// the concatenation parses as one Turtle graph.
 func (h HubShapeSource) withClauseCatalog(ctx context.Context, canonicalShapesTTL string) (string, error) {
 	catalog, _, err := h.active(ctx, ClauseCatalogName, "shapes")
 	if err != nil {

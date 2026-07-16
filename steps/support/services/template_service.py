@@ -35,11 +35,12 @@ class TemplateService:
         NormalizeTemplateData/NormalizeContractData, see
         backend/internal/base/validation/documentdata.go isCanonicalEnvelope).
         """
+        metadata_type = "dcs:ContractMetadata" if document_type == "dcs:Contract" else "dcs:TemplateMetadata"
         return {
             "@context": {"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
             "@type": document_type,
             "dcs:metadata": {
-                "@type": "dcs:TemplateMetadata",
+                "@type": metadata_type,
                 "dcs:title": title,
             },
             "dcs:documentStructure": {

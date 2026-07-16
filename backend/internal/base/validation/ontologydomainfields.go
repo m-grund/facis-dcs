@@ -134,19 +134,6 @@ func entityRoleAllowedValues() []string {
 	return nil
 }
 
-func domainFieldByStatementField(statementField string) domainField {
-	for _, field := range ontologyDomainFieldIndex {
-		if field.StatementField == statementField {
-			return field
-		}
-	}
-	return domainField{}
-}
-
-func statementTypeByStatementField(statementField string) string {
-	return domainFieldByStatementField(statementField).StatementType
-}
-
 func statementSetRuntime() (string, string) {
 	for class, statement := range ontologyClassIndex {
 		if property := ontologyString(statement, "dcs:documentProperty"); property != "" {
@@ -279,105 +266,14 @@ func expandOntologyResource(value string) string {
 	}
 }
 
-func statementSetOntologyType() string {
-	return ontologyRuntime.StatementSetType
-}
-
 func statementSetDocumentProperty() string {
 	return ontologyRuntime.StatementSetProperty
-}
-
-func ontologyIdentifier(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || strings.EqualFold(value, "none") {
-		return ""
-	}
-	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") || strings.Contains(value, ":") {
-		return expandOntologyResource(value)
-	}
-	if class := ontologyClassByLocalName(value); class != "" {
-		return class
-	}
-	return value
-}
-
-func ontologyClassByLocalName(value string) string {
-	for class := range ontologyClassIndex {
-		if ontologyLocalName(class) == value {
-			return class
-		}
-	}
-	return ""
-}
-
-func ontologyLocalName(value string) string {
-	if hash := strings.LastIndex(value, "#"); hash >= 0 && hash < len(value)-1 {
-		return value[hash+1:]
-	}
-	if slash := strings.LastIndex(value, "/"); slash >= 0 && slash < len(value)-1 {
-		return value[slash+1:]
-	}
-	return value
-}
-
-func canonicalStatementEntityType(value string) string {
-	identifier := ontologyIdentifier(value)
-	if _, ok := ontologyClassIndex[identifier]; ok {
-		return identifier
-	}
-	return ""
-}
-
-func statementEntityTypeSupportsRole(value string) bool {
-	return value == ontologyRuntime.RoleEntityType
-}
-
-func canonicalEntityRole(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || strings.EqualFold(value, "none") {
-		return ""
-	}
-	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") || strings.Contains(value, ":") {
-		return expandOntologyResource(value)
-	}
-	if ontologyRuntime.EntityRoleValuePrefix != "" {
-		return ontologyRuntime.EntityRoleValuePrefix + slugify(value)
-	}
-	return value
-}
-
-func entityRoleFromEntityType(value string) string {
-	return ""
-}
-
-func validateOntologyRoleEntity(entity map[string]any) error {
-	entityType, _ := entity["@type"].(string)
-	if ontologyIdentifier(entityType) != ontologyRuntime.RoleEntityType {
-		return fmt.Errorf("@type must be %s", compactOntologyResource(ontologyRuntime.RoleEntityType))
-	}
-	if len(ontologyRuntime.EntityRoleAllowedValues) == 0 {
-		return fmt.Errorf("role ontology requires allowed values")
-	}
-	role, _ := entity[ontologyRuntime.EntityRoleStatementField].(string)
-	if !containsString(ontologyRuntime.EntityRoleAllowedValues, role) && !containsString(ontologyRuntime.EntityRoleAllowedValues, compactEntityRole(role)) {
-		return fmt.Errorf("role must be one of %s", strings.Join(ontologyRuntime.EntityRoleAllowedValues, ", "))
-	}
-	return nil
 }
 
 func compactEntityRole(value string) string {
 	prefix := ontologyRuntime.EntityRoleValuePrefix
 	if prefix != "" && strings.HasPrefix(value, prefix) {
 		return strings.TrimPrefix(value, prefix)
-	}
-	return value
-}
-
-func compactOntologyResource(value string) string {
-	for prefix, base := range ontologyPrefixIndex {
-		if strings.HasPrefix(value, base) {
-			return prefix + ":" + strings.TrimPrefix(value, base)
-		}
 	}
 	return value
 }
@@ -544,18 +440,6 @@ func ontologyNumber(statement string, predicate string) *float64 {
 		}
 	}
 	return nil
-}
-
-//nolint:unused
-func ontologyBool(statement string, predicate string) bool {
-	for _, line := range strings.Split(statement, "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) >= 2 && fields[0] == predicate {
-			value := strings.TrimSuffix(fields[1], ";")
-			return value == "true" || value == "true^^xsd:boolean"
-		}
-	}
-	return false
 }
 
 func ontologyResource(statement string, predicate string) string {

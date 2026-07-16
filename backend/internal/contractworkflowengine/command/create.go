@@ -122,11 +122,6 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not read contract template data: %w", err)
 	}
 
-	// Derive the contract document from the template BEFORE persistence:
-	// without the @type rewrites (dcs:Contract / dcs:ContractMetadata) the
-	// stored contract is invisible to every sh:targetClass shape the
-	// Semantic Hub enforces (ADR-8/ADR-9) — SHACL would silently validate
-	// nothing.
 	contractDocument, err := contracttemplate.ConvertTemplateDataToContractData(contractTemplate.TemplateData, cmd.TemplateDID, contractTemplate.TemplateVersion)
 	if err != nil {
 		return fmt.Errorf("could not derive contract data from template: %w", err)

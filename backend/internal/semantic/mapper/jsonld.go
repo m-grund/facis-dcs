@@ -67,12 +67,3 @@ func parseJSONB(raw *datatype.JSON) (map[string]any, error) {
 	}
 	return result, nil
 }
-
-// encodeMap serializes a generic map to a *datatype.JSON value.
-func encodeMap(data map[string]any) (*datatype.JSON, error) {
-	j, err := datatype.NewJSON(data)
-	if err != nil {
-		return nil, err
-	}
-	return &j, nil
-}

@@ -227,7 +227,11 @@ def step_when_update_with_new_terms(context):
     context.requests_response = put_json(
         context,
         contract_update_url(context),
-        {"did": did, "updated_at": updated_at, "contract_data": {"title": "API-updated terms"}},
+        {
+            "did": did,
+            "updated_at": updated_at,
+            "contract_data": TemplateService.canonical_document_data("API-updated terms", document_type="dcs:Contract"),
+        },
     )
 
 
@@ -364,7 +368,7 @@ def step_then_contract_can_be_updated(context):
         {
             "did": did,
             "updated_at": updated_at,
-            "contract_data": {"title": "API post-review adjustment"},
+            "contract_data": TemplateService.canonical_document_data("API post-review adjustment", document_type="dcs:Contract"),
         },
     )
     assert update_resp.status_code == 200, (

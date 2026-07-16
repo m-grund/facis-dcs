@@ -146,10 +146,9 @@ func (s *semanticHubsrvc) Versions(ctx context.Context, p *semantichubgen.Versio
 	return out, nil
 }
 
-// ResolveShapes serves SHACL shapes at the pretty anchor path
-// (/semantic/shapes/{name}?version=N) that semantichub.AnchorURL embeds
-// into every produced document's sh:shapesGraph (ADR-8) —
-// without it, the anchors external verifiers dereference would 404.
+// ResolveShapes serves SHACL shapes at the anchor path
+// (/semantic/shapes/{name}?version=N) semantichub.AnchorURL embeds into
+// every produced document's sh:shapesGraph.
 func (s *semanticHubsrvc) ResolveShapes(ctx context.Context, p *semantichubgen.ResolveShapesPayload) (res *semantichubgen.SemanticSchemaItem, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -190,10 +189,8 @@ func (s *semanticHubsrvc) ResolveContext(ctx context.Context, p *semantichubgen.
 	return doc, nil
 }
 
-// Clauses serves the pre-digested clause catalog form-schema (Phase 3,
-// ADR-10): the same shapes graph validateAgainstHubShapes concatenates into
-// contract validation, so the template builder's palette and server-side
-// enforcement never drift apart.
+// Clauses serves the pre-digested clause catalog form-schema derived from
+// the same shapes graph validateAgainstHubShapes enforces.
 func (s *semanticHubsrvc) Clauses(ctx context.Context) (res *semantichubgen.ClauseCatalogResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -276,15 +273,8 @@ func (s *semanticHubsrvc) List(ctx context.Context) (res []*semantichubgen.Seman
 }
 
 // RefreshValidationAnchors re-points the validation layer's process-wide
-// schema anchors (validation.SetSchemaAnchorRefs / SetCanonicalOntologyIRIs)
-// at the hub's CURRENT active versions. Called at startup (cmd/dcs/main.go)
-// and after every activation (register-with-activate, rollback) — without
-// the post-activation refresh, documents produced after an activation would
-// keep pinning to the version that was active at process start, and the
-// UC-02-08 loop (activate a stricter shapes version -> new contracts get
-// flagged; roll back -> they stop) would silently not close (ADR-8).
-// Single-process by design: activation happens through this service in the
-// same process that normalizes documents.
+// schema anchors at the hub's current active versions. Called at startup
+// and after every activation (register-with-activate, rollback).
 func RefreshValidationAnchors(ctx context.Context, db *sqlx.DB) error {
 	hubIRIs, contextVersion, err := semantichub.ActiveOntologyIRIs(ctx, db)
 	if err != nil {

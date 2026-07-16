@@ -66,13 +66,9 @@ func (h *GetTemplateDataByDIDHandler) getContractTemplateDataFromDB(ctx context.
 
 // ConvertTemplateDataToContractData derives a contract document from a
 // stored template document: @type becomes dcs:Contract, dcs:metadata's
-// @type becomes dcs:ContractMetadata, and the sourceTemplate/
-// derivedFromTemplate provenance is attached. Both the creation preview
-// (this package's query handler) and the create command itself
-// (command/create.go) MUST go through here — a contract persisted with the
-// template's own @types is invisible to every sh:targetClass dcs:Contract /
-// dcs:ContractMetadata shape in the Semantic Hub, silently exempting it
-// from SHACL enforcement (ADR-8/ADR-9).
+// @type becomes dcs:ContractMetadata, and sourceTemplate/
+// derivedFromTemplate provenance is attached. Used by both the creation
+// preview (this package's query handler) and the create command.
 func ConvertTemplateDataToContractData(raw *datatype.JSON, templateDID string, templateVersions ...int) (*datatype.JSON, error) {
 	if raw == nil || !raw.IsNotNullValue() {
 		return raw, nil

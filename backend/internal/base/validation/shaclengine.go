@@ -11,15 +11,9 @@ import (
 	"github.com/tggo/goRDFlib/shacl"
 )
 
-// validateAgainstHubShapes checks contract (an already-decoded JSON-LD
-// document map) against the Semantic Hub's SHACL shapes using goRDFlib
-// (github.com/tggo/goRDFlib/shacl), a conformant SHACL-core processor
-// verified against the W3C SHACL/SHACL-1.2 test suites (ADR-9) — replacing
-// the hand-rolled structural-subset matcher this package used to carry.
-//
-// The shapes version is the one pinned in the document's own
-// sh:shapesGraph anchor when present (ADR-8 revalidation),
-// otherwise the hub's currently-active version (new document validation).
+// validateAgainstHubShapes checks a decoded JSON-LD document against the
+// Semantic Hub's SHACL shapes: the version pinned by the document's
+// sh:shapesGraph anchor when present, otherwise the currently-active one.
 // Returns the findings and the shapes version they were produced against.
 func validateAgainstHubShapes(ctx context.Context, contract map[string]any) ([]PolicyFinding, int, error) {
 	source, err := requireShapeSource()
@@ -48,9 +42,6 @@ func validateAgainstShapeSource(ctx context.Context, contract map[string]any, so
 		return nil, 0, fmt.Errorf("load SHACL shapes: %w", err)
 	}
 
-	// The document's "@context" pins the hub context version it was
-	// authored under (ADR-8) — expansion resolves exactly that version, the
-	// hub's currently-active one only for unpinned documents.
 	var contextContent string
 	if pinnedContext := pinnedHubContextVersion(contract); pinnedContext > 0 {
 		contextContent, err = source.ContextAt(ctx, pinnedContext)
@@ -87,13 +78,9 @@ func validateAgainstShapeSource(ctx context.Context, contract map[string]any, so
 }
 
 // mapShaclReport translates a goRDFlib sh:ValidationReport into the
-// PolicyFinding shape every other audit source in this package produces
-// (task 2.3), so downstream consumers — the PACM contract-content audit
-// trail, the signature/compliance viewer — are unaffected by which engine
-// ran. SHACL itself only reports non-conformant results (sh:Violation/
-// sh:Warning/sh:Info) — there is no per-property "conforms" finding to
-// synthesize, unlike the deleted subset matcher's noisier "X conforms" info
-// entries.
+// PolicyFinding shape every other audit source in this package produces.
+// SHACL reports only non-conformant results — a conformant document yields
+// no findings.
 func mapShaclReport(report shacl.ValidationReport, shapesVersion int) []PolicyFinding {
 	findings := make([]PolicyFinding, 0, len(report.Results))
 	for _, result := range report.Results {
@@ -195,12 +182,9 @@ func shaclLocalName(iri string) string {
 	return iri
 }
 
-// hermeticContextLoader returns a JSON-LD document loader that resolves
-// ONLY the Semantic Hub's own active JSON-LD context, entirely in-process —
-// never a network fetch during validation (commit 1fa4a097 established
-// hermetic runtime deps; SHACL validation must not regress that). Any other
-// context IRI a document references hard-fails with a clear error rather
-// than silently degrading to a remote lookup.
+// hermeticContextLoader returns a JSON-LD document loader that serves the
+// given hub context content in-process; any non-hub context IRI fails
+// instead of triggering a network fetch during validation.
 func hermeticContextLoader(activeContextJSON string) (ld.DocumentLoader, error) {
 	doc, err := ld.DocumentFromReader(strings.NewReader(activeContextJSON))
 	if err != nil {
@@ -214,9 +198,6 @@ type staticContextLoader struct {
 }
 
 func (l staticContextLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
-	// Serve any hub context anchor URL (validateAgainstShapeSource already
-	// loaded the exact pinned version this loader holds) and the historical
-	// w3id identifier — anything else would be a live network fetch.
 	if strings.Contains(u, "/semantic/context/") || strings.Contains(u, schemaRefJSONLDContext) || u == SchemaJSONLDContextV1 {
 		return &ld.RemoteDocument{DocumentURL: u, Document: l.document}, nil
 	}

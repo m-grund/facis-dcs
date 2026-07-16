@@ -422,27 +422,32 @@ func policyRequirement(path string, operator string, expectedValue any, expected
 	}
 }
 
+// normalizePolicyOperator maps an operator term to its internal evaluation
+// name. Accepted vocabulary: the ODRL core constraint operators
+// (odrl:eq/neq/gt/lt/gteq/lteq/isAnyOf/isNoneOf, compacted or full IRI) and
+// the validation-profile rule operators; anything else passes through
+// verbatim and fails evaluation.
 func normalizePolicyOperator(operator string) string {
 	switch strings.ToLower(strings.TrimSpace(compactTerm(operator))) {
 	case "":
 		return ""
-	case "gte", "gteq", "greaterthanorequal", "greaterthanorequalto", "mininclusive":
+	case "gte", "gteq":
 		return "gte"
-	case "lte", "lteq", "lessthanorequal", "lessthanorequalto", "maxinclusive":
+	case "lte", "lteq":
 		return "lte"
-	case "gt", "greaterthan":
+	case "gt":
 		return "gt"
-	case "lt", "lessthan":
+	case "lt":
 		return "lt"
-	case "eq", "equals", "equalto":
+	case "eq":
 		return "eq"
-	case "neq", "noteq", "notequals", "notequalto":
+	case "neq":
 		return "neq"
 	case "isanyof", "in":
 		return "in"
 	case "isnoneof", "notin":
 		return "notIn"
-	case "haspart", "contains":
+	case "contains":
 		return "contains"
 	case "mincount":
 		return "minCount"
@@ -454,7 +459,7 @@ func normalizePolicyOperator(operator string) string {
 		return "class"
 	case "node":
 		return "node"
-	case "exists", "required":
+	case "exists":
 		return "exists"
 	case "atleast":
 		return "atLeast"
@@ -1002,21 +1007,6 @@ func companyPartyRole(requirement map[string]any) string {
 		role, _ = requirement["entityRole"].(string)
 	}
 	return compactEntityRole(role)
-}
-
-func valuesAtPath(contract map[string]any, semanticPath string) []any {
-	value, ok := contractValue(contract, semanticPath)
-	if !ok {
-		return nil
-	}
-	if values, ok := value.([]any); ok {
-		result := make([]any, 0, len(values))
-		for _, item := range values {
-			result = append(result, compactJSONLDValue(item))
-		}
-		return result
-	}
-	return []any{compactJSONLDValue(value)}
 }
 
 func contractString(contract map[string]any, semanticPath string) (string, bool) {

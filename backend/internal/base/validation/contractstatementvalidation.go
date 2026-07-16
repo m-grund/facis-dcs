@@ -1,11 +1,8 @@
 package validation
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -63,43 +60,12 @@ type ContractStatementValidationError struct {
 	Issues []ValidationIssue
 }
 
-func (err ContractStatementValidationError) Error() string {
-	if len(err.Issues) == 0 {
-		return "contract statement validation failed"
-	}
-	if len(err.Issues) == 1 {
-		return fmt.Sprintf("contract statement validation failed: %s", err.Issues[0].Message)
-	}
-	return fmt.Sprintf("contract statement validation failed: %s and %d more issue(s)", err.Issues[0].Message, len(err.Issues)-1)
-}
-
-func LoadValidationProfileJSON(raw []byte) (ValidationProfile, error) {
-	var profile ValidationProfile
-	if err := json.Unmarshal(raw, &profile); err != nil {
-		return profile, err
-	}
-	return profile, ValidateValidationProfile(profile)
-}
-
 func LoadValidationProfileYAML(raw []byte) (ValidationProfile, error) {
 	var profile ValidationProfile
 	if err := yaml.Unmarshal(raw, &profile); err != nil {
 		return profile, err
 	}
 	return profile, ValidateValidationProfile(profile)
-}
-
-func LoadValidationProfileFile(path string) (ValidationProfile, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return ValidationProfile{}, err
-	}
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".yaml", ".yml":
-		return LoadValidationProfileYAML(raw)
-	default:
-		return LoadValidationProfileJSON(raw)
-	}
 }
 
 func ValidateValidationProfile(profile ValidationProfile) error {
@@ -432,41 +398,4 @@ func knownValidationRuleType(ruleType string) bool {
 	default:
 		return false
 	}
-}
-
-func defaultContractStatementValidationProfile() ValidationProfile {
-	profile, err := LoadValidationProfileFile(resolveDefaultContractStatementValidationProfileFile())
-	if err != nil {
-		panic(fmt.Sprintf("load default contract statement validation profile: %v", err))
-	}
-	return statementScopedValidationProfile(profile)
-}
-
-func statementScopedValidationProfile(profile ValidationProfile) ValidationProfile {
-	rules := make([]ValidationRule, 0, len(profile.Rules))
-	for _, rule := range profile.Rules {
-		if len(rule.Where) > 0 {
-			rules = append(rules, rule)
-		}
-	}
-	profile.Rules = rules
-	return profile
-}
-
-func resolveDefaultContractStatementValidationProfileFile() string {
-	if path := strings.TrimSpace(os.Getenv("FACIS_CONTRACT_STATEMENT_VALIDATION_PROFILE")); path != "" {
-		return path
-	}
-	for _, candidate := range []string{
-		defaultContractStatementValidationProfileFile,
-		filepath.Join("..", defaultContractStatementValidationProfileFile),
-		filepath.Join("..", "..", defaultContractStatementValidationProfileFile),
-		filepath.Join("..", "..", "..", defaultContractStatementValidationProfileFile),
-		filepath.Join("..", "..", "..", "..", defaultContractStatementValidationProfileFile),
-	} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return defaultContractStatementValidationProfileFile
 }

@@ -11,14 +11,8 @@ import (
 )
 
 // RemoteShapeSource is a ShapeSource backed by another DCS instance's
-// public Semantic Hub endpoints (Phase 4, DCS-to-DCS: DCS-FR-TR-03).
-// GET /semantic/schema/retrieve is public and unauthenticated (same as
-// resolve_context) precisely so that a counterparty instance receiving a
-// contract can resolve sh:shapesGraph back to the ORIGINATOR's hub and
-// re-run validation against the exact shapes/profile/context it was
-// produced under — not the receiver's own local hub, which may be running
-// a different active version. This is what a produced document's
-// sh:shapesGraph anchor (semantichub.AnchorURL) exists to make possible.
+// public Semantic Hub endpoints, so a received document can be validated
+// against the originator's hub rather than the local one.
 type RemoteShapeSource struct {
 	// BaseURL is the originator instance's public origin (e.g.
 	// "https://dcs-a.example.org" or, in the BDD two-instance deployment,
@@ -102,13 +96,9 @@ func (r RemoteShapeSource) retrieve(ctx context.Context, name, kind string, vers
 	return item.Content, item.Version, nil
 }
 
-// VerifyAgainstOriginatorHub (Phase 4, DCS-to-DCS) validates a received
-// document against the ORIGINATOR's Semantic Hub rather than the local
-// instance's — resolving sh:shapesGraph back to originatorBaseURL. An
-// external verifier (or a counterparty DCS instance receiving a synced
-// contract) uses this to confirm the document validates against the exact
-// shapes it was actually produced under, independent of what the local
-// instance's own hub currently has active.
+// VerifyAgainstOriginatorHub validates a received document against the
+// originator's Semantic Hub at originatorBaseURL rather than the local
+// instance's.
 func VerifyAgainstOriginatorHub(ctx context.Context, contractDocument any, originatorBaseURL string) ([]PolicyFinding, error) {
 	contract, err := normalizeObject(contractDocument)
 	if err != nil {
