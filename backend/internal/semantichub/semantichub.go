@@ -46,6 +46,8 @@ const (
 	ShapesName        = "facis-dcs"
 	ProfileName       = "facis.sla.basic"
 	OntologyName      = "facis-dcs"
+
+	defaultVocabularyBase = "https://w3id.org/facis/dcs"
 	ClauseCatalogName = "clause-catalog"
 )
 
@@ -208,7 +210,8 @@ func Seed(ctx context.Context, db *sqlx.DB) error {
 		if exists {
 			continue
 		}
-		if _, err := (Repo{}).Register(ctx, tx, g.name, g.kind, g.mediaType, string(g.content), "system:genesis", true); err != nil {
+		content := strings.ReplaceAll(string(g.content), defaultVocabularyBase, VocabularyBaseIRI())
+		if _, err := (Repo{}).Register(ctx, tx, g.name, g.kind, g.mediaType, content, "system:genesis", true); err != nil {
 			return err
 		}
 	}
@@ -250,6 +253,19 @@ func ActiveOntologyIRIs(ctx context.Context, db *sqlx.DB) (map[string]string, in
 // schema anchors to. Mirrors provenance.RemoteManifestURL's DCS_PUBLIC_URL
 // convention: without a configured public URL the reference stays
 // host-relative (still resolvable against the serving instance).
+// VocabularyBaseIRI is the base under which the FACIS DCS vocabulary
+// namespaces (ontology/v1#, taxonomy/v1#) are minted into the genesis
+// seeds. DCS_ONTOLOGY_BASE_IRI overrides the default w3id namespace with a
+// deployment-controlled, dereferenceable one — a federation-wide constant
+// that must be identical on every participating instance and set before
+// the first seed (hub versions are immutable).
+func VocabularyBaseIRI() string {
+	if base := strings.TrimRight(strings.TrimSpace(os.Getenv("DCS_ONTOLOGY_BASE_IRI")), "/"); base != "" {
+		return base
+	}
+	return defaultVocabularyBase
+}
+
 func AnchorURL(kind, name string, version int) string {
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("DCS_PUBLIC_URL")), "/")
 	return fmt.Sprintf("%s/semantic/%s/%s?version=%d", base, kind, name, version)

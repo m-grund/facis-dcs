@@ -99,6 +99,11 @@ route:
   # (e.g. a cluster-routable hostname resolved via a CoreDNS rewrite rather
   # than being the literal ingress host, as in the BDD two-instance suite).
   didHostname: ""
+  # Base IRI under which the FACIS DCS vocabulary namespaces are minted at
+  # first seed (DCS_ONTOLOGY_BASE_IRI). Federation-wide constant — every
+  # participating instance must use the same value, set before first boot.
+  # Empty keeps the default https://w3id.org/facis/dcs namespace.
+  ontologyBaseIRI: ""
 
 # Override individual paths (derived from route.basePath if not set)
 paths:

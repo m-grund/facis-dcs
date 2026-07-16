@@ -1,9 +1,3 @@
-export const DCS_JSONLD_CONTEXT = {
-  dcs: 'https://w3id.org/facis/dcs/ontology/v1#',
-  odrl: 'http://www.w3.org/ns/odrl/2/',
-  xsd: 'http://www.w3.org/2001/XMLSchema#',
-} as const
-
 export interface JsonLdReference {
   '@id': string
 }
@@ -176,7 +170,8 @@ export interface DcsSubTemplateSnapshot {
 }
 
 export interface DcsDocumentData {
-  '@context': typeof DCS_JSONLD_CONTEXT
+  /** Anchored server-side to the Semantic Hub's versioned context URL; the client never emits it. */
+  '@context'?: unknown
   '@type': 'dcs:ContractTemplate' | 'dcs:Contract'
   '@id'?: string
   'dcs:metadata': DcsTemplateMetadata | DcsContractMetadata

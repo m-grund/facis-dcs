@@ -146,6 +146,10 @@ spec:
             - name: DCS_PUBLIC_URL
               value: {{ include "digital-contracting-service.publicAnchorBaseURL" . | quote }}
             {{- end }}
+            {{- if .Values.route.ontologyBaseIRI }}
+            - name: DCS_ONTOLOGY_BASE_IRI
+              value: {{ .Values.route.ontologyBaseIRI | quote }}
+            {{- end }}
             {{- if .Values.oid4vp.trust.enabled }}
             - name: OID4VP_TRUST_DATA_PATH
               value: {{ .Values.oid4vp.trust.dataPath | quote }}

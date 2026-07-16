@@ -9,9 +9,19 @@ import (
 )
 
 const (
-	dcsOntologyIRI = "https://w3id.org/facis/dcs/ontology/v1#"
-	odrlIRI        = "http://www.w3.org/ns/odrl/2/"
+	defaultDCSOntologyIRI = "https://w3id.org/facis/dcs/ontology/v1#"
+	odrlIRI               = "http://www.w3.org/ns/odrl/2/"
 )
+
+// dcsNamespace returns the dcs: ontology namespace the active hub context
+// declares; the historical default applies until the hub anchors are
+// installed.
+func dcsNamespace() string {
+	if iri, ok := canonicalOntologyIRIs["dcs"]; ok && iri != "" {
+		return iri
+	}
+	return defaultDCSOntologyIRI
+}
 
 // expandForAudit returns the json-gold expansion of a document, resolved
 // hermetically through the ShapeSource. The hub context is merged in as the
@@ -150,7 +160,7 @@ var odrlRuleBucketIRIs = []string{
 // permission/prohibition/duty/obligation bucket properties.
 func expandedODRLPolicyRules(root map[string]any) []map[string]any {
 	rules := []map[string]any{}
-	for _, rawSet := range expandedValues(root, dcsOntologyIRI+"policies") {
+	for _, rawSet := range expandedValues(root, dcsNamespace()+"policies") {
 		set, ok := rawSet.(map[string]any)
 		if !ok {
 			continue
@@ -170,13 +180,13 @@ func expandedODRLPolicyRules(root map[string]any) []map[string]any {
 // parameter their values are submitted under.
 func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 	index := map[string]odrlFieldInfo{}
-	for _, rawReq := range expandedValues(root, dcsOntologyIRI+"contractData") {
+	for _, rawReq := range expandedValues(root, dcsNamespace()+"contractData") {
 		req, ok := rawReq.(map[string]any)
 		if !ok {
 			continue
 		}
-		conditionID := expandedFirstLiteralString(req, dcsOntologyIRI+"conditionId")
-		for _, rawField := range expandedValues(req, dcsOntologyIRI+"fields") {
+		conditionID := expandedFirstLiteralString(req, dcsNamespace()+"conditionId")
+		for _, rawField := range expandedValues(req, dcsNamespace()+"fields") {
 			field, ok := rawField.(map[string]any)
 			if !ok {
 				continue
@@ -187,7 +197,7 @@ func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 			}
 			index[fieldID] = odrlFieldInfo{
 				conditionID:   conditionID,
-				parameterName: expandedFirstLiteralString(field, dcsOntologyIRI+"parameterName"),
+				parameterName: expandedFirstLiteralString(field, dcsNamespace()+"parameterName"),
 			}
 		}
 	}
@@ -197,18 +207,18 @@ func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 // expandedSemanticConditionValue looks up a submitted semantic value by
 // (conditionId, parameterName).
 func expandedSemanticConditionValue(root map[string]any, conditionID, parameterName string) (any, bool) {
-	for _, rawEntry := range expandedValues(root, dcsOntologyIRI+"semanticConditionValues") {
+	for _, rawEntry := range expandedValues(root, dcsNamespace()+"semanticConditionValues") {
 		entry, ok := rawEntry.(map[string]any)
 		if !ok {
 			continue
 		}
-		if expandedFirstLiteralString(entry, dcsOntologyIRI+"conditionId") != conditionID {
+		if expandedFirstLiteralString(entry, dcsNamespace()+"conditionId") != conditionID {
 			continue
 		}
-		if expandedFirstLiteralString(entry, dcsOntologyIRI+"parameterName") != parameterName {
+		if expandedFirstLiteralString(entry, dcsNamespace()+"parameterName") != parameterName {
 			continue
 		}
-		values := expandedValues(entry, dcsOntologyIRI+"parameterValue")
+		values := expandedValues(entry, dcsNamespace()+"parameterValue")
 		if len(values) == 0 {
 			return nil, false
 		}

@@ -9,7 +9,6 @@ import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/uti
 import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { defineStore } from 'pinia'
 import {
-  DCS_JSONLD_CONTEXT,
   type DcsApprovedTemplate,
   type DcsBlock,
   type DcsClause,
@@ -587,7 +586,6 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       : { '@type': 'dcs:ContractMetadata' as const, ...commonMetadata }
 
   return {
-    '@context': DCS_JSONLD_CONTEXT,
     '@type': input.documentType,
     ...(input.documentId ? { '@id': input.documentId } : {}),
     'dcs:metadata': metadata,
