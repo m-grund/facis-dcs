@@ -226,8 +226,11 @@ statusListLocalhostProxy:
 # IPFS: required — IPFS_TENANT_BASE_URL and IPFS_MFS_BASE_URL are fatal on startup.
 ipfs:
   enabled: true
+  # The audit/evidence chains store content-addressed blobs whose CIDs live
+  # in the (persistent) database — the two stores must share a lifetime, or
+  # every IPFS pod restart dangles the recorded evidence.
   persistence:
-    enabled: false
+    enabled: true
 
 ipfsDocumentManager:
   enabled: true

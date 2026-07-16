@@ -259,7 +259,10 @@ func (s *processAuditAndCompliancesrvc) Audit(ctx context.Context, req *processa
 		})
 	}
 	for did, entries := range contractContentEntriesByDID {
-		if seenDIDs[did] || len(entries) == 0 {
+		// A content-audited contract with zero findings is a COMPLIANT result,
+		// not an unaudited one — it must appear in the audit with an empty
+		// trail (the SHACL engine only reports non-conformance, ADR-9).
+		if seenDIDs[did] {
 			continue
 		}
 

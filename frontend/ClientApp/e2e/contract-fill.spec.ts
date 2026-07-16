@@ -15,9 +15,11 @@ test('filling a placeholder emits a forField-bound value in an odrl:Offer docume
   await loginAs('Contract Creator')
   await page.goto(`/ui/contracts/edit/${contractDid}`)
 
-  // The seeded fixture binds one placeholder to the coverage requirement
-  // field; its input carries the seeded value.
-  const input = page.locator('input[type="text"], input[type="number"]').filter({ hasNot: page.locator('[disabled]') }).first()
+  // The fill inputs live under the Contract Content tab; the seeded fixture
+  // binds one placeholder to the coverage requirement field, and the input
+  // is labeled with the field's parameter name.
+  await page.getByRole('tab', { name: /content/i }).or(page.getByText('Contract Content', { exact: true })).first().click()
+  const input = page.getByRole('textbox', { name: 'coverage' }).first()
   await expect(input).toBeVisible()
   await input.fill('97')
 

@@ -15,12 +15,15 @@ test('template dashboard lists registered templates', async ({ page, loginAs }) 
 })
 
 test('contract dashboard lists contracts with their lifecycle state', async ({ page, loginAs }) => {
-  const { contractName } = seededFixtures()
   await loginAs('Contract Manager')
   await page.goto('/ui/contracts')
 
-  await expect(page.getByText(contractName).first()).toBeVisible()
-  await expect(page.getByText(/draft/i).first()).toBeVisible()
+  // The seeded contract inherits its template's name at creation; the state
+  // chip is asserted inside that contract's own card (a bare text match can
+  // land on hidden filter options).
+  const card = page.locator('div, li, article').filter({ hasText: 'BDD Contract Source Template' }).last()
+  await expect(card).toBeVisible()
+  await expect(card.getByText('DRAFT', { exact: true }).first()).toBeVisible()
 })
 
 test('contract view renders the human-readable document', async ({ page, loginAs }) => {
@@ -28,6 +31,8 @@ test('contract view renders the human-readable document', async ({ page, loginAs
   await loginAs('Contract Manager')
   await page.goto(`/ui/contracts/view/${contractDid}`)
 
+  // The human-readable rendering lives under the Contract Content tab.
+  await page.getByRole('tab', { name: /content/i }).or(page.getByText('Contract Content', { exact: true })).first().click()
   // The seeded ODRL fixture document's clause text, rendered from the
   // machine-readable JSON-LD — the human-readable representation the SRS
   // demands alongside it.
@@ -46,6 +51,7 @@ test('audit view renders scoped audits for the auditor role', async ({ page, log
   await page.goto('/ui/audit')
 
   await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible()
-  // The scope selector the /pac audit endpoints back.
-  await expect(page.getByText(/contract/i).first()).toBeVisible()
+  // The scoped-audit workstation the /pac endpoints back.
+  await expect(page.getByText('Execute Audit').first()).toBeVisible()
+  await expect(page.getByText('Scope', { exact: true }).first()).toBeVisible()
 })
