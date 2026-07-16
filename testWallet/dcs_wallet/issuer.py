@@ -22,7 +22,7 @@ TRUSTED_ISSUER_DIDS = [
 ]
 CREDENTIAL_EXT = ".jwt"
 CREDENTIAL_IAT = 1719129600
-CREDENTIAL_EXP = 1893456000
+CREDENTIAL_EXP = 2145916800
 DEFAULT_KB_AUD = "dcs-client"
 DEFAULT_KB_NONCE = "test-nonce"
 
@@ -157,7 +157,7 @@ def issue_stored_credential(
         "iat": CREDENTIAL_IAT,
         "exp": CREDENTIAL_EXP,
         "cnf": {"jwk": holder_jwk},
-        "credentialStatus": credential_status
+        "status": credential_status
         or build_credential_status(
             sub=holder_did_value,
             organization=organization,

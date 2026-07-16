@@ -27,7 +27,7 @@
 #
 # Backend .env.dev1 (see that file for the full set):
 #   STATUSLIST_SERVICE_URL=http://localhost:30821
-#   OID4VP_STATUSLIST_SKIP_JWS_VERIFY=true
+#   OID4VP_XFSC_ALLOW_UNSIGNED_FALLBACK=true
 #   ISSUER_DID=did:web:localhost%3A8991
 # The backend runs natively and provisions its own SoftHSM2 token via
 # dev-stack.sh (scripts/hsm-provision.sh), so no in-cluster PKCS#11 token here.
