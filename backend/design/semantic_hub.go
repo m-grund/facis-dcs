@@ -99,7 +99,7 @@ var _ = Service("SemanticHub", func() {
 			Token("token", String, "JWT token")
 			Attribute("name", String, "Schema name")
 			Attribute("kind", String, "Schema kind", func() {
-				Enum("context", "shapes", "profile")
+				Enum("context", "shapes", "profile", "ontology")
 			})
 			Attribute("media_type", String, "Media type of the content")
 			Attribute("content", String, "The schema document, verbatim")
@@ -132,7 +132,7 @@ var _ = Service("SemanticHub", func() {
 			Token("token", String, "JWT token")
 			Attribute("name", String, "Schema name")
 			Attribute("kind", String, "Schema kind", func() {
-				Enum("context", "shapes", "profile")
+				Enum("context", "shapes", "profile", "ontology")
 			})
 			Attribute("version", Int, "The version to activate")
 			Required("name", "kind", "version")
@@ -160,7 +160,7 @@ var _ = Service("SemanticHub", func() {
 		Payload(func() {
 			Attribute("name", String, "Schema name")
 			Attribute("kind", String, "Schema kind", func() {
-				Enum("context", "shapes", "profile")
+				Enum("context", "shapes", "profile", "ontology")
 			})
 			Attribute("version", Int, "Specific version; active version when omitted")
 			Required("name", "kind")
@@ -189,7 +189,7 @@ var _ = Service("SemanticHub", func() {
 		Payload(func() {
 			Attribute("name", String, "Schema name")
 			Attribute("kind", String, "Schema kind", func() {
-				Enum("context", "shapes", "profile")
+				Enum("context", "shapes", "profile", "ontology")
 			})
 			Required("name", "kind")
 		})
@@ -247,6 +247,30 @@ var _ = Service("SemanticHub", func() {
 
 		HTTP(func() {
 			GET("/semantic/shapes/{name}")
+			Param("version")
+			Response(StatusOK)
+			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("resolve_ontology", func() {
+		Description("Serve a registered ontology version — the dereference target of the dcs: term IRIs (via the w3id.org redirect) and of /semantic/ontology/{name} directly.")
+		Meta("dcs:requirements", "DCS-FR-TR-03")
+		NoSecurity()
+
+		Payload(func() {
+			Attribute("name", String, "Ontology schema name")
+			Attribute("version", Int, "Specific version; active version when omitted")
+			Required("name")
+		})
+		Result(SemanticSchemaItem)
+
+		Error("not_found", ErrorResult, "No such ontology schema")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/semantic/ontology/{name}")
 			Param("version")
 			Response(StatusOK)
 			Response("not_found", StatusNotFound)

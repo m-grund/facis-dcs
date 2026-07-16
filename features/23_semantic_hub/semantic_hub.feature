@@ -25,6 +25,15 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
     Then get http 200:Success code
     And the retrieved schema is version 1, active, of kind "shapes"
 
+  # The dereference target of the dcs: term IRIs: w3id.org/facis/dcs/...
+  # redirects (docs/w3id/facis) land on this public route.
+  Scenario: The genesis ontology is seeded and publicly resolvable
+    When the active "ontology" schema "facis-dcs" is retrieved from the Semantic Hub
+    Then get http 200:Success code
+    And the retrieved schema is version 1, active, of kind "ontology"
+    When the ontology "facis-dcs" is resolved from the Semantic Hub without authentication
+    Then get http 200:Success code
+
   # Registered versions persist across suite runs (the hub is seeded once at
   # startup, not per run), so the assertions are relative to the versions
   # that existed when the scenario started — only the rollback target is

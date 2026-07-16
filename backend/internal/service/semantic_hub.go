@@ -160,6 +160,19 @@ func (s *semanticHubsrvc) ResolveShapes(ctx context.Context, p *semantichubgen.R
 	return toSchemaItem(schema), nil
 }
 
+// ResolveOntology serves ontology documents at /semantic/ontology/{name} —
+// the dereference target of the dcs: term IRIs via the w3id.org redirect.
+func (s *semanticHubsrvc) ResolveOntology(ctx context.Context, p *semantichubgen.ResolveOntologyPayload) (res *semantichubgen.SemanticSchemaItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, p.Name, "ontology", p.Version)
+	if err != nil {
+		return nil, err
+	}
+	return toSchemaItem(schema), nil
+}
+
 // ResolveProfile serves validation profiles at the anchor path
 // (/semantic/profile/{name}?version=N) that semantichub.AnchorURL embeds
 // into every produced document's dcterms:conformsTo.

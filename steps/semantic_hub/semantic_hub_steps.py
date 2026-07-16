@@ -49,6 +49,14 @@ def step_then_schema_declares_iri(context, prefix, iri):
     assert declared == iri, f"Expected @context.{prefix} == {iri!r}, got: {declared!r}"
 
 
+@when('the ontology "{name}" is resolved from the Semantic Hub without authentication')
+def step_when_resolve_ontology(context, name):
+    context.requests_response = _requests.get(
+        _hub_url(context, f"/semantic/ontology/{name}"),
+        timeout=context.http_timeout_seconds,
+    )
+
+
 @when('the JSON-LD context "{name}" is resolved from the Semantic Hub without authentication')
 def step_when_resolve_context(context, name):
     context.requests_response = _requests.get(

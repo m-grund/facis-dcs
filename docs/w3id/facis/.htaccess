@@ -1,0 +1,15 @@
+Header set Access-Control-Allow-Origin *
+Options +FollowSymLinks
+RewriteEngine on
+
+# FACIS DCS ontology (terms are fragments on the served document)
+RewriteRule ^dcs/ontology/v1$ FACIS_PUBLIC_HOST/semantic/ontology/facis-dcs [R=302,L]
+
+# FACIS DCS taxonomy (values are fragments on the served ontology)
+RewriteRule ^dcs/taxonomy/v1$ FACIS_PUBLIC_HOST/semantic/ontology/facis-dcs [R=302,L]
+
+# JSON-LD context
+RewriteRule ^dcs/context/v1$ FACIS_PUBLIC_HOST/semantic/context/facis-dcs [R=302,L]
+
+# SHACL shapes
+RewriteRule ^dcs/shapes/v1$ FACIS_PUBLIC_HOST/semantic/shapes/facis-dcs [R=302,L]
