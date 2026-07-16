@@ -24,7 +24,6 @@ from steps.support.services.auth_service import AuthService
 
 
 # Given
-# TODO: Refactor to reduce duplication in template creation and state transitions, e.g. by having a helper that creates a template and advances it to a specified state.
 
 @given('template "{name}" is in "Draft" status')
 def step_given_template_draft(context, name):
