@@ -576,10 +576,12 @@ def step_given_contract_with_parties(context, name, party_a, party_b):
     c_did = create_resp.json().get("did")
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, c_did), headers=creator_h)
     assert retrieve.status_code == 200, retrieve.text
-    parties = (retrieve.json().get("contract_data") or {}).get("dcs:parties")
-    assert parties == [party_a, party_b], (
-        f"Expected the created contract's JSON-LD to record dcs:parties "
-        f"{[party_a, party_b]}, got: {parties}"
+    party_nodes = (retrieve.json().get("contract_data") or {}).get("dcs:parties") or []
+    legal_names = [node.get("dcs:legalName") for node in party_nodes]
+    types = {node.get("@type") for node in party_nodes}
+    assert legal_names == [party_a, party_b] and types == {"dcs:CompanyParty"}, (
+        f"Expected the created contract's JSON-LD to record dcs:CompanyParty nodes for "
+        f"{[party_a, party_b]}, got: {party_nodes}"
     )
     ContractService._ensure_store(context, "contract_dids", {})
     ContractService._ensure_store(context, "contract_updated_at", {})

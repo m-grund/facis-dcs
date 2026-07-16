@@ -199,15 +199,23 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 }
 
 // attachContractParties records the organizations that are parties to this
-// contract as a plain top-level "dcs:parties" JSON-LD property. Party
-// membership (organization names, the same value the OID4VP organization
-// claim discloses) gates read access in query/contract/querybyid.go.
+// contract as typed dcs:CompanyParty nodes under "dcs:parties". The legal
+// name (the same value the OID4VP organization claim discloses) gates read
+// access in query/contract/querybyid.go.
 func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(*raw, &doc); err != nil {
 		return nil, fmt.Errorf("could not decode contract data: %w", err)
 	}
-	doc["dcs:parties"] = parties
+	nodes := make([]any, 0, len(parties))
+	for index, name := range parties {
+		nodes = append(nodes, map[string]any{
+			"@id":           fmt.Sprintf("%s#party-%d", doc["@id"], index),
+			"@type":         "dcs:CompanyParty",
+			"dcs:legalName": name,
+		})
+	}
+	doc["dcs:parties"] = nodes
 	encoded, err := datatype.NewJSON(doc)
 	if err != nil {
 		return nil, fmt.Errorf("could not encode contract data: %w", err)

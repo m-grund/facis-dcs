@@ -213,8 +213,8 @@ func callerMayReadContract(query GetByIDQry, data *db.Contract) bool {
 	return false
 }
 
-// contractParties reads the optional top-level "dcs:parties" array (plain
-// organization-name strings) from the contract JSON-LD document. Absence
+// contractParties reads the legal names of the typed dcs:CompanyParty
+// nodes under the contract document's top-level "dcs:parties". Absence
 // simply means no additional parties beyond the creating organization.
 func contractParties(raw *datatype.JSON) []string {
 	if raw == nil {
@@ -230,8 +230,12 @@ func contractParties(raw *datatype.JSON) []string {
 	}
 	parties := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if s, ok := entry.(string); ok {
-			parties = append(parties, s)
+		node, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if name, ok := node["dcs:legalName"].(string); ok && name != "" {
+			parties = append(parties, name)
 		}
 	}
 	return parties
