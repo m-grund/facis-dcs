@@ -147,8 +147,8 @@ spec:
             {{- if .Values.oid4vp.trust.enabled }}
             - name: OID4VP_TRUST_DATA_PATH
               value: {{ .Values.oid4vp.trust.dataPath | quote }}
-            {{- if .Values.oid4vp.trust.statusListSkipJWSVerify }}
-            - name: OID4VP_STATUSLIST_SKIP_JWS_VERIFY
+            {{- if .Values.oid4vp.trust.xfscAllowUnsignedFallback }}
+            - name: OID4VP_XFSC_ALLOW_UNSIGNED_FALLBACK
               value: "true"
             {{- end }}
             {{- end }}

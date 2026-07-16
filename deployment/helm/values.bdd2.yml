@@ -53,7 +53,7 @@ identity:
 
 oid4vp:
   trust:
-    statusListSkipJWSVerify: true
+    xfscAllowUnsignedFallback: true
 
 # Own PostgreSQL: this instance's own DCS database plus its own Hydra's
 # database. No "fc" or "statuslist" database — B doesn't run the Federated
