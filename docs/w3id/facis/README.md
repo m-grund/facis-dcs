@@ -8,20 +8,22 @@ longer unifies — `dcs:title` from one is a different predicate than
 the ecosystem decays into dialect islands. The namespace is therefore a
 **global constant, not a per-instance setting**.
 
-Two ways to make it dereferenceable:
+Until the w3id registration below is filed, the w3id IRIs are stable
+identifiers that do not yet resolve on the open web — and that costs the
+system nothing at runtime:
 
-1. **w3id.org registration** (preferred, permanent): see below. Until the
-   PR merges the IRIs are stable identifiers that simply do not resolve
-   yet — the served copies remain fetchable from any instance's public
-   `/semantic/ontology/facis-dcs` and `/semantic/context/facis-dcs`
-   routes.
-2. **`DCS_ONTOLOGY_BASE_IRI`** (helm: `route.ontologyBaseIRI`): mints the
-   namespaces under an organization-controlled base instead of w3id at
-   genesis-seed time. This is an ecosystem-wide decision: every
-   participating instance MUST be configured with the identical value,
-   set before its first boot (hub versions are immutable — changing it
-   later orphans previously produced documents' vocabulary). Choose a
-   base whose domain is as permanent as the documents produced under it.
+- JSON-LD processing only ever dereferences `@context` URLs, never term
+  IRIs. Produced documents anchor `@context` to the hub's own versioned
+  URL, and the in-process document loader additionally serves the hub
+  copy for the historical w3id context IRI — so expansion and validation
+  never depend on w3id resolving.
+- The vocabulary documents themselves stay fetchable from any instance's
+  public `/semantic/ontology/facis-dcs`, `/semantic/context/facis-dcs`,
+  and `/semantic/shapes/facis-dcs` routes.
+
+What the registration adds is third-party follow-your-nose: an external
+agent pasting a bare `dcs:` term IRI into a resolver reaches the served
+ontology.
 
 # w3id.org registration for the FACIS DCS namespaces
 

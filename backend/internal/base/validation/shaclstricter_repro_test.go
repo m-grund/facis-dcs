@@ -91,3 +91,12 @@ func TestNormalizeTemplateDataRejectsUnregisteredExternalContext(t *testing.T) {
 	_, err = NormalizeTemplateData(&raw)
 	require.ErrorContains(t, err, "not registered in the Semantic Hub")
 }
+
+func TestAuditContractContentResolvesW3IDContextLocally(t *testing.T) {
+	contract := canonicalAuditContract()
+	contract["@context"] = []any{SchemaJSONLDContextV1, contract["@context"]}
+
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Empty(t, shaclOnlyFindings(findings))
+}
