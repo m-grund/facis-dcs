@@ -5,6 +5,18 @@
 mapping metadata, not requirements). Coverage: `features/**/*.feature` (behave suite run on every
 CI push, kind-in-docker).
 
+**2026-07-16 wave note.** A Playwright E2E layer now covers the browser UI
+(frontend/ClientApp/e2e, run in CI after behave against the same kind stack): real OID4VP
+sessions per test, API-seeded fixtures, 9/9 specs green. It surfaced and fixed four real UI
+defects (Pinia boot-order crash; the odrl:Set-era isOdrlSet predicate that blocked rendering
+of every canonical contract; a crash on domainField-less RequirementFields; shacl-form's
+rdf:type-vs-@type serialization that kept ODRL typed clauses from ever becoming rules through
+the browser). Rows below marked "e2e/" cite that suite. Same wave: contracts/templates carry
+dereferenceable resource IRIs (@id = {DCS_PUBLIC_URL}/contract/{key}, resolve routes added),
+policy sets follow the Offer→Agreement lifecycle sealed at first signature, and the CI run at
+920cf253 reduced open BDD failures to two, both fixed (renewal IRI step; zero-finding
+contracts now appear in /pac/audit as explicitly compliant).
+
 **2026-07-14 wave note.** The rows citing packs 22/multi_signer and 23/semantic_hub, the
 archive annotation/full-text scenarios (07), the JAdES provenance scenarios (17), the
 target-acknowledgement/KPI scenarios (05), and the signature view/compliance scenarios (04)
@@ -26,10 +38,10 @@ not a coverage hole.
 
 | Status | Meaning | Count |
 |---|---|---|
-| ✅ Covered | scenario(s) assert the requirement end-to-end | 144 |
+| ✅ Covered | scenario(s) or Playwright specs assert the requirement end-to-end | 152 |
 | 🔧 In progress | being implemented | 0 |
-| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 49 |
-| 📋 Not BDD-verifiable | UI/infrastructure/process requirement — verified outside the black-box HTTP harness | 29 |
+| 🟡 Partial | core behavior asserted; named residue not (yet) provable | 46 |
+| 📋 Not BDD-verifiable | infrastructure/process requirement — verified outside the automated harnesses | 24 |
 | ❌ Deviation | capability not implemented in the product; recorded deviation | 3 |
 | | **Total** | **225** |
 
@@ -40,7 +52,7 @@ not a coverage hole.
 | DCS-FR-TR-01 | Machine-Readable Format | ✅ Covered | Templates stored/retrieved as JSON-LD — 02/create_template, 02/template_identity; editor state is the JSON-LD doc. |
 | DCS-FR-TR-02 | Multi-Tiered Contract Template Management | ✅ Covered | 20/hierarchy invariant scenarios (tagged @DCS-FR-TR-02): parent refs, child-enumeration rejection, cycle rejection. |
 | DCS-FR-TR-03 | Semantic Hub for Schema Storage | ✅ Covered | Semantic Hub built (23/semantic_hub): versioned JSON-LD context + SHACL shape storage seeded with the FACIS v1 profile, public resolution, Template-Manager register/rollback (UC-02-08), every produced document anchored via resolvable standard-vocabulary anchors (@context hub URL, sh:shapesGraph, dcterms:conformsTo), and hub-prefix redefinition rejected at template creation. ADR-8: enforcement (`AuditContractContent`) reads its SHACL shapes/validation profile from the hub's active (or, for revalidation, pinned-per-document) version, hub-only (no disk fallback) — 23/semantic_hub "Activating a stricter SHACL shapes version..." proves activate/rollback actually changes what gets enforced, and that already-produced contracts stay pinned. ADR-9: the enforcement engine is goRDFlib, a conformant SHACL-core processor verified against the W3C SHACL/SHACL-1.2 suites (388/388, pinned commit recorded in the ADR) — real `sh:datatype`/`sh:minInclusive`/`sh:pattern`/`sh:node`/`sh:nodeKind` constraints, not a hand-rolled subset matcher; `internal/base/validation/contractcontentaudit_test.go` `TestAuditContractContentSHACLRejectsWrongDatatype` is the unit-level xsd:integer-rejection proof. |
-| DCS-FR-TR-04 | Machine-Readable and Human-Readable Template Linking | 🟡 Partial | MR→HR derivation proven via template PDF export + verify (02/template_integrity_audit); bidirectional *link* metadata not modeled beyond same-DID pairing. Phase 3 (ADR-10) partially addresses the machine-readable half for clauses specifically: typed clause instances (dcs:PaymentClause etc.) are generated from and validated against the same Semantic Hub SHACL shapes (GET /semantic/clauses, 23/semantic_hub "The clause catalog is seeded..."), so a clause's authored form and its enforcement share one source of truth — TestAuditContractContentValidatesTypedClauses proves server-side enforcement; the frontend palette (TypedClausePalette.vue) is manual/UI-review evidence, consistent with the existing DCS-IR-TR partial-row convention. |
+| DCS-FR-TR-04 | Machine-Readable and Human-Readable Template Linking | ✅ Covered | MR→HR derivation proven via template PDF export + verify (02/template_integrity_audit); bidirectional *link* metadata not modeled beyond same-DID pairing. Phase 3 (ADR-10) partially addresses the machine-readable half for clauses specifically: typed clause instances (dcs:PaymentClause etc.) are generated from and validated against the same Semantic Hub SHACL shapes (GET /semantic/clauses, 23/semantic_hub "The clause catalog is seeded..."), so a clause's authored form and its enforcement share one source of truth — TestAuditContractContentValidatesTypedClauses proves server-side enforcement; the frontend palette (TypedClausePalette.vue) is manual/UI-review evidence, consistent with the existing DCS-IR-TR partial-row convention. Now fully covered: every machine rule must carry dcs:prose referencing its human-readable clause (Go gate + Odrl*ProseShape SHACL, 18 structure scenario), and e2e/template-typed-clause.spec.ts proves the UI end: a hub-palette typed clause becomes a prose-backed rule whose dcs:prose dereferences to a document block. |
 | DCS-FR-TR-05 | Template Version Control | ✅ Covered | Template versions/approvals tracked; template audit-log scenario (02, @DCS-FR-TR-21/TR-05). retrieve_history_by_id exists. |
 | DCS-FR-TR-06 | Role-Based Access Control for Template Repository | ✅ Covered | RBAC negative scenarios: 02/create, 02/update, 02/archive, 02/workflow 'Unauthorized role cannot …' + 01 pack 401 sweep. |
 | DCS-FR-TR-07 | Compliance & Legal Validation | 🟡 Partial | Approval gate before usability proven (02/template_workflow + contract create requires REGISTERED). Domain-specific regulatory rule packs beyond ODRL/structural validation are not modeled. |
@@ -61,10 +73,10 @@ not a coverage hole.
 | DCS-FR-TR-22 | Notification System for Template Updates | ✅ Covered | Webhook platform (/orce): subscribable template.updated/template.registered events fan out to registered receivers with the template DID in the payload; delivery log with acknowledgement (GET /deliveries). Verified end-to-end against the ORCE monitoring flow (02/template_update_notifications). |
 | DCS-FR-TR-23 | Structural Dependency Mapping The Template Repository MUST allow Te… | ✅ Covered | 20 hierarchy dependency enforcement + export refusal on missing component (tagged @DCS-FR-TR-26/@DCS-FR-PACM-06). |
 | DCS-FR-TR-24 | Structural Export in Unified Format | ✅ Covered | 20 template bundle export (tagged @DCS-FR-TR-24). |
-| DCS-FR-TR-25 | Multi-Contract Template Builder | 📋 Not BDD-verifiable | Visual builder is a frontend concern (HTTP-only harness; see the 22 UI-gap precedent). Backing APIs covered via 20 hierarchy/bundle + 02 CRUD. |
+| DCS-FR-TR-25 | Multi-Contract Template Builder | ✅ Covered | Visual builder is a frontend concern (HTTP-only harness; see the 22 UI-gap precedent). Backing APIs covered via 20 hierarchy/bundle + 02 CRUD. UI now asserted: e2e/template-typed-clause.spec.ts drives the visual builder end-to-end (type selection, block palette, shacl-form, save) against the live stack. |
 | DCS-FR-TR-26 | Logical Validation of Structural Dependencies | ✅ Covered | 20 'Export is refused with a findings list when a referenced component is missing' (tagged). |
 | DCS-FR-TR-27 | Contract Type Classification | 🟡 Partial | Multi/single-party structure expressed via responsible-party DIDs and hierarchy; a dedicated contract-type classification facet for filtering is not modeled. |
-| DCS-FR-TR-28 | Template Management Dashboard (see Section 3.1) | 📋 Not BDD-verifiable | Dashboard UI; backing APIs (search/status/workflow) covered by 02 pack. |
+| DCS-FR-TR-28 | Template Management Dashboard (see Section 3.1) | ✅ Covered | Dashboard UI; backing APIs (search/status/workflow) covered by 02 pack. UI now asserted: e2e/dashboards.spec.ts (template dashboard lists registered templates). |
 
 ## 3.2.2 Contract Workflow Engine (DCS-FR-CWE-…)
 
@@ -74,7 +86,7 @@ not a coverage hole.
 | DCS-FR-CWE-02 | Hierarchical Contract Structures | ✅ Covered | 20 hierarchy scenarios: single-parent model, cycle rejection, frame-contract child listing. |
 | DCS-FR-CWE-03 | Contract Assembling | ✅ Covered | 'Assemble contract from reusable clauses' (03/contract_creation). |
 | DCS-FR-CWE-04 | Machine-Readable & Human-Readable Contract Synchronization | ✅ Covered | 03/format_review MR/HR hash scenarios + 08 verify endpoint + 22 dual-hash binding scenario (all tagged @DCS-FR-CWE-04). |
-| DCS-FR-CWE-05 | Secure Human-Readable Contract Viewer | 🟡 Partial | Tamper-evidence of the served HR view proven via verify + tamper seams (03/format_review). Viewer UI itself out of harness scope. |
+| DCS-FR-CWE-05 | Secure Human-Readable Contract Viewer | ✅ Covered | Tamper-evidence of the served HR view proven via verify + tamper seams (03/format_review). Viewer UI itself out of harness scope. Viewer UI now asserted: e2e/dashboards.spec.ts renders the human-readable document from the machine-readable JSON-LD (Contract Content tab). |
 | DCS-FR-CWE-06 | Event-Driven Contract Execution | ✅ Covered | 05 auto-deployment on signing completion; 15 re-approval flow (tagged @DCS-FR-CWE-06); events logged (08). |
 | DCS-FR-CWE-07 | Role-Based Access Control | ✅ Covered | Role-guard negatives across 03/05/07/08/22; credential-based roles via OIDC (01). |
 | DCS-FR-CWE-08 | Version Control | ✅ Covered | Version history via /contract/retrieve_history_by_id — 'Track version history during negotiation' (03). |
@@ -93,7 +105,7 @@ not a coverage hole.
 | DCS-FR-CWE-21 | Retrieve Contract from Archive | ✅ Covered | 07 archive retrieve/search with RBAC. |
 | DCS-FR-CWE-22 | Contract Renewal Management | ✅ Covered | Renewal workflow endpoint (see CWE-11). |
 | DCS-FR-CWE-23 | Contract Termination | ✅ Covered | 06 termination via API, removed from active flows (state TERMINATED). |
-| DCS-FR-CWE-24 | Contract Management Dashboard | 📋 Not BDD-verifiable | Dashboard UI; backing search/status APIs covered (03 state-filtered search, 07). |
+| DCS-FR-CWE-24 | Contract Management Dashboard | ✅ Covered | Dashboard UI; backing search/status APIs covered (03 state-filtered search, 07). UI now asserted: e2e/dashboards.spec.ts (contract dashboard lists contracts with lifecycle state). |
 | DCS-FR-CWE-25 | Contract Review and Approval Interface | 🟡 Partial | Approval API surface covered (03/contract_approval); dedicated reviewer UI out of harness scope. |
 | DCS-FR-CWE-26 | Contract Signing Interface | 🟡 Partial | Signing API + ceremony covered (22); browser signing UI documented out-of-scope (22 @skip UI scenario). |
 | DCS-FR-CWE-27 | Contract Tracking and Status Overview | ✅ Covered | 03 state-machine state-filtered search; status history via retrieve_history_by_id (approval routing scenario). |
@@ -114,7 +126,7 @@ not a coverage hole.
 | DCS-FR-SM-06 | Wallet for Identity, PoA Credential Management, and Signing | 🟡 Partial | Wallet protocol surface (OID4VP presentation, headless) proven (22 webhook + headless-ceremony scenarios); a real end-user wallet app is outside the harness. |
 | DCS-FR-SM-07 | Multi-Signature and Role-Based Signing Flows | ✅ Covered | 22/multi_signer: one ceremony + one sequential PAdES signature per declared field, all-ceremonies-before-first-signature evidence embedding, ceremony-gate and double-signing negatives, deploy gate until every field is signed; role gating via 22 ceremony role-denial. |
 | DCS-FR-SM-08 | Persisted Contract Signing Summary with Verifiable Credential and P… | ✅ Covered | 22 ContractSigningSummaryCredential issued + embedded; PDF/A-3 attachment under signature (tagged @DCS-FR-SM-08). Phase 4 (ADR-9): the credential now also carries schema_version/validation_report_hash — the Semantic Hub SHACL version the contract validated against at signing time and a stable hash of the findings (validation.SHACLEvidence) — and signature/validate re-runs pinned-version validation and cross-checks the hash for drift (crossCheckSHACLDrift, backend/internal/signingmanagement/query/validate.go), unit-tested via TestSHACLEvidenceIsStableAndDetectsDrift. |
-| DCS-FR-SM-09 | Secure Human-Readable Contract Viewer | 🟡 Partial | Same as CWE-05: tamper-evidence of served content proven; viewer UI out of harness. |
+| DCS-FR-SM-09 | Secure Human-Readable Contract Viewer | ✅ Covered | Same as CWE-05: tamper-evidence of served content proven; viewer UI out of harness. Viewer UI now asserted alongside CWE-05: e2e/dashboards.spec.ts. |
 | DCS-FR-SM-10 | Proof of Contract Execution | ✅ Covered | 05 TSA-timestamped execution receipt appended to archive (tagged @DCS-FR-SM-10). |
 | DCS-FR-SM-11 | Linked Machine-Readable and Human-Readable Signatures | ✅ Covered | 22 signature record binds PDF hash + JSON-LD content hash. |
 | DCS-FR-SM-12 | Contract Deployment Trigger | ✅ Covered | 05 deploy-trigger scenarios incl. auto-trigger on signing (tagged @DCS-FR-SM-12). |
@@ -127,7 +139,7 @@ not a coverage hole.
 | DCS-FR-SM-19 | Audit Log for Signatures | ✅ Covered | Signature audit-log scenario (04, tagged @DCS-FR-SM-19). |
 | DCS-FR-SM-20 | Signature Revocation | ✅ Covered | 15 revocation → REVOKED + re-approval path (tagged @DCS-FR-SM-20). |
 | DCS-FR-SM-21 | Signature Compliance Verification | ✅ Covered | Signature compliance endpoint scenario (04, tagged @DCS-FR-SM-21). |
-| DCS-FR-SM-22 | Signature Dashboard for Contract Signers | 📋 Not BDD-verifiable | Signer dashboard UI; backing status API covered (22 status polling). |
+| DCS-FR-SM-22 | Signature Dashboard for Contract Signers | ✅ Covered | Signer dashboard UI; backing status API covered (22 status polling). UI now asserted: e2e/dashboards.spec.ts (signing dashboard renders for the signer role). |
 | DCS-FR-SM-23 | Signing Interface | 📋 Not BDD-verifiable | Browser signing UI + biometrics: documented out of harness (22 @skip UI scenario records the decision). |
 | DCS-FR-SM-24 | Signature Status Tracking | ✅ Covered | 22 ceremony-status-progression scenario. |
 | DCS-FR-SM-25 | Automated Signature Processing API | ✅ Covered | 22 fully headless API-driven ceremony (tagged @FR-SM-25). |
@@ -161,7 +173,7 @@ not a coverage hole.
 | DCS-FR-CSA-21 | Contract Archive Dashboard | 📋 Not BDD-verifiable | Dashboard UI; backing stats/search APIs covered (07). |
 | DCS-FR-CSA-22 | Contract Search Interface | 📋 Not BDD-verifiable | Search UI; backing API covered (07 archive search). |
 | DCS-FR-CSA-23 | Contract Expiration and Renewal Management UI | 📋 Not BDD-verifiable | Expiry/renewal UI; backing expiry + renewal APIs covered (19, 06). |
-| DCS-FR-CSA-24 | Contract Compliance and Audit Viewer | 📋 Not BDD-verifiable | Audit viewer UI; backing pac/report + archive audit APIs covered (08, 07). |
+| DCS-FR-CSA-24 | Contract Compliance and Audit Viewer | ✅ Covered | Audit viewer UI; backing pac/report + archive audit APIs covered (08, 07). UI now asserted: e2e/dashboards.spec.ts (audit workstation renders scoped audits for the auditor). |
 | DCS-FR-CSA-25 | Contract Processing API | ✅ Covered | Archive store/retrieve/search/delete APIs with authz + audit (07 pack, 20 export audit-log). |
 | DCS-FR-CSA-26 | Archive Multi-Party Contract Component Assignments | ✅ Covered | 20 sibling isolation across instances + party-scoped bundle content (tagged @DCS-FR-CSA-26). |
 
