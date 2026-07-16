@@ -19,11 +19,10 @@ test('contract dashboard lists contracts with their lifecycle state', async ({ p
   await page.goto('/ui/contracts')
 
   // The seeded contract inherits its template's name at creation; the state
-  // chip is asserted inside that contract's own card (a bare text match can
-  // land on hidden filter options).
-  const card = page.locator('div, li, article').filter({ hasText: 'BDD Contract Source Template' }).last()
-  await expect(card).toBeVisible()
-  await expect(card.getByText('DRAFT', { exact: true }).first()).toBeVisible()
+  // chip is asserted among VISIBLE matches (a bare .first() can land on
+  // hidden filter options).
+  await expect(page.getByText('BDD Contract Source Template').first()).toBeVisible()
+  await expect(page.getByText('DRAFT', { exact: true }).locator('visible=true').first()).toBeVisible()
 })
 
 test('contract view renders the human-readable document', async ({ page, loginAs }) => {

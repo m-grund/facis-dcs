@@ -40,7 +40,8 @@ test('filling a placeholder emits a forField-bound value in an odrl:Offer docume
     expect(value, 'editor-internal keys never leak into the document').not.toHaveProperty('parameterName')
   }
   const coverage = values.find((v) => String(v.forField).includes('field-provider-coverage'))
-  expect(coverage?.parameterValue).toBe('97')
+  // The decimal-typed field yields a NUMBER — typed values, not strings.
+  expect(coverage?.parameterValue).toBe(97)
 
   expect(payload.contract_data['dcs:policies']['@type'], 'unsigned contracts stay an odrl:Offer').toBe('odrl:Offer')
 })

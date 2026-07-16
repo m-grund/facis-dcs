@@ -101,7 +101,9 @@ export interface DcsRequirementField {
   '@id': string
   '@type': 'dcs:RequirementField'
   'dcs:parameterName': string
-  'dcs:domainField': JsonLdReference
+  /** Optional: the served RequirementField shape requires only dcs:parameterName. */
+  'dcs:domainField'?: JsonLdReference
+  'dcs:valueType'?: string
   'dcs:required': boolean
 }
 
@@ -244,7 +246,9 @@ export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {
 }
 
 function isOdrlSet(value: unknown): value is OdrlSet {
-  return typeof value === 'object' && value !== null && (value as Record<string, unknown>)['@type'] === 'odrl:Set'
+  if (typeof value !== 'object' || value === null) return false
+  const type = (value as Record<string, unknown>)['@type']
+  return type === 'odrl:Offer' || type === 'odrl:Agreement'
 }
 
 export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {

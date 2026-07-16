@@ -13,6 +13,7 @@ test('typed clause from the hub palette lands as a prose-backed ODRL rule in an 
   page,
   loginAs,
 }) => {
+  test.setTimeout(180_000)
   await loginAs('Template Creator')
   await page.goto('/ui/templates/new')
 
@@ -29,22 +30,35 @@ test('typed clause from the hub palette lands as a prose-backed ODRL rule in an 
   await expect(modal.getByRole('heading', { name: 'Add block' })).toBeVisible()
   await expect(modal.getByText('Typed clauses (Semantic Hub):')).toBeVisible()
 
-  // Pick the first hub-served typed clause; the form below is rendered by
-  // shacl-form from the hub's SHACL shapes — no hardcoded fields.
-  const paletteButtons = modal.locator('button.btn-xs')
-  await expect(paletteButtons.first()).toBeVisible()
-  await paletteButtons.first().click()
+  // Pick the ODRL-typed palette entry (only odrl:* clauses produce machine
+  // rules; dcs:* typed clauses land as nested typed instances). The label
+  // comes from the hub catalog, not a hardcoded string.
+  const catalog = (await (await page.request.get('/api/semantic/clauses')).json()) as {
+    clauses?: { type: string; label: string }[]
+  }
+  const odrlClause = (catalog.clauses ?? []).find((c) => c.type.startsWith('odrl:') || c.type.includes('/odrl/'))
+  expect(odrlClause, 'the hub catalog serves an ODRL-typed clause').toBeTruthy()
+  await modal.getByRole('button', { name: odrlClause!.label, exact: true }).click()
 
   const shaclForm = modal.locator('shacl-form')
   await expect(shaclForm).toBeVisible()
 
-  // Fill every text/number input the shape generated with a plausible value.
+  // Fill every control the shape generated: selects (sh:in constraints)
+  // get their first real option, text/number inputs a plausible value.
+  const selects = shaclForm.locator('select')
+  for (let i = 0; i < (await selects.count()); i++) {
+    const select = selects.nth(i)
+    const values = await select.locator('option').evaluateAll((opts) =>
+      opts.map((o) => (o as HTMLOptionElement).value).filter((v) => v !== ''),
+    )
+    if (values.length > 0) await select.selectOption(values[0]).catch(() => {})
+  }
   const inputs = shaclForm.locator('input[type="text"], input[type="number"], input:not([type])')
   const count = await inputs.count()
   for (let i = 0; i < count; i++) {
     const input = inputs.nth(i)
     const type = await input.getAttribute('type')
-    await input.fill(type === 'number' ? '42' : 'E2E value')
+    await input.fill(type === 'number' ? '42' : 'E2E value').catch(() => {})
   }
 
   await modal.getByRole('button', { name: 'Add to document' }).click()

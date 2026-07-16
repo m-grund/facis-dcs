@@ -1108,9 +1108,27 @@ function contractDataToSemanticConditions(
     entityRole: requirement['dcs:entityRole'],
     parameters: requirement['dcs:fields'].flatMap((field) => {
       const ontologyField = ONTOLOGY_DOMAIN_FIELDS.find(
-        (candidate) => candidate.ontologyId === field['dcs:domainField']['@id'],
+        (candidate) => candidate.ontologyId === field['dcs:domainField']?.['@id'],
       )
-      if (!ontologyField) return []
+      if (!ontologyField) {
+        // A requirement field is valid without a domain-field binding (the
+        // served RequirementField shape requires only dcs:parameterName) —
+        // its fill input derives from the field's own declaration.
+        return [
+          {
+            parameterName: field['dcs:parameterName'],
+            fieldId: field['@id'],
+            type: field['dcs:valueType'] === 'number' ? ('decimal' as const) : ('string' as const),
+            schemaRef: '',
+            semanticPath: field['@id'],
+            valueConstraint: undefined,
+            uiMetadata: { label: field['dcs:parameterName'] },
+            isRequired: field['dcs:required'],
+            operators: operatorsByField.get(field['@id']) ?? [],
+            value: undefined,
+          },
+        ]
+      }
       return [
         {
           parameterName: field['dcs:parameterName'],
