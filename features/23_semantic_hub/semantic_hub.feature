@@ -128,4 +128,5 @@ Feature: Semantic Hub — versioned schema storage, anchoring, and enforcement
     When the Semantic Hub clause catalog is requested without authentication
     Then get http 200:Success code
     And the clause catalog lists a "dcs:PaymentClause" clause type whose shape declares "dcs:amount", "dcs:currency", "dcs:dueDays"
+    And the clause catalog lists a "odrl:Duty" clause type whose shape declares "odrl:action", "odrl:constraint"
     And the clause catalog response carries the raw SHACL shapes it was derived from

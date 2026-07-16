@@ -361,6 +361,7 @@ func creationPipelinePolicy(
 		"odrl:assigner": map[string]any{"@id": creationTemplateDID + "#" + conditionID},
 		"odrl:assignee": map[string]any{"@id": creationTemplateDID},
 		"odrl:target":   map[string]any{"@id": creationTemplateDID},
+		"dcs:prose":     map[string]any{"@id": "urn:uuid:block-clause-1"},
 		"odrl:constraint": map[string]any{
 			"@type":             "odrl:Constraint",
 			"odrl:leftOperand":  map[string]any{"@id": creationPipelineFieldID(conditionID, parameterName)},

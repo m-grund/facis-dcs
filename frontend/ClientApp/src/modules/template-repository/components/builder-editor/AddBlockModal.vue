@@ -88,6 +88,14 @@ watch(addBlockModalContext, (ctx) => {
 function handleAddTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
+  const instanceType = String(payload.instance['@type'] ?? '')
+  if (instanceType.startsWith('http://www.w3.org/ns/odrl/2/')) {
+    // A hub-templated ODRL rule: the store derives the policy entry plus
+    // its prose clause block (placed via the clauses editor).
+    void draftStore.addTypedClause(payload)
+    uiStore.closeAddBlockModal()
+    return
+  }
   const instance = payload.instance
   draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
     blockType: 'dcs:Clause',

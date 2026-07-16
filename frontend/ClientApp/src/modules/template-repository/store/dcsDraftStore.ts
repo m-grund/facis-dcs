@@ -7,7 +7,9 @@ import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-doma
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
+import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
+import http from '@/api/http'
 import {
   type DcsApprovedTemplate,
   type DcsBlock,
@@ -256,6 +258,7 @@ export const useDcsDraftStore = defineStore(storeId, {
           'odrl:assigner': partyReference(role, documentId),
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
+          'dcs:prose': proseBlockForField(this.blocks, fieldId),
           'odrl:constraint': {
             '@type': 'odrl:Constraint',
             'odrl:leftOperand': { '@id': fieldId },
@@ -278,7 +281,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         ...(payload.entityRole ? { 'dcs:entityRole': payload.entityRole } : {}),
         'dcs:fields': payload.parameters.map((p) => semanticParamToField(conditionId, p, documentId)),
       })
-      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, documentId))
+      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId))
     },
     updateSemanticCondition(
       conditionId: string,
@@ -305,7 +308,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
         return !leftOp || !oldFieldIds.has(leftOp)
       })
-      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, documentId))
+      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId))
     },
     deleteSemanticCondition(conditionId: string, subTemplateRef?: SubTemplateReference): void {
       if (subTemplateRef) return // sub-template snapshots are immutable
@@ -357,11 +360,37 @@ export const useDcsDraftStore = defineStore(storeId, {
      * machinery, while still becoming its own JSON-LD node server-side
      * validation (validateAgainstHubShapes) targets by its @type.
      */
-    addTypedClause(payload: { clauseType: string; title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): string {
+    async addTypedClause(payload: { clauseType: string; title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): Promise<string> {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
       const title = payload.title?.trim() || payload.clauseType.split(/[#/:]/).pop() || payload.clauseType
       const instance = payload.instance
+
+      const compacted = await compactAgainstHubContext(instance)
+      if (isOdrlRuleInstance(compacted['@type'])) {
+        // A hub-templated ODRL rule: the clause block is its human-readable
+        // prose, the compacted rule joins dcs:policies backed by it.
+        const block: import('@/models/dcs-jsonld').DcsClause = {
+          '@type': 'dcs:Clause',
+          '@id': id,
+          'dcs:title': title,
+          'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
+        }
+        this.blocks.push(block)
+        const documentId = this.did ?? undefined
+        this.policies.push({
+          'odrl:assigner': partyReference(undefined, documentId),
+          'odrl:assignee': partyReference(undefined, documentId),
+          'odrl:target': targetReference(documentId),
+          'odrl:action': { '@id': DEFAULT_FIELD_CONSTRAINT_ACTION },
+          ...compacted,
+          '@id': `urn:uuid:${crypto.randomUUID()}`,
+          '@type': compacted['@type'],
+          'dcs:prose': { '@id': id },
+        } as OdrlRule)
+        return id
+      }
+
       const block: import('@/models/dcs-jsonld').DcsClause = {
         '@type': 'dcs:Clause',
         '@id': id,
@@ -963,9 +992,51 @@ function semanticParamToField(
   }
 }
 
+
+/** The clause block whose text carries a placeholder bound to fieldId — the prose an ODRL rule over that field is backed by. */
+
+const ODRL_RULE_TYPES = new Set(['odrl:Duty', 'odrl:Permission', 'odrl:Prohibition'])
+
+let hubContextPromise: Promise<Record<string, unknown>> | undefined
+
+/** The Semantic Hub's active JSON-LD context document, fetched once. */
+async function hubContext(): Promise<Record<string, unknown>> {
+  hubContextPromise ??= http.get('/semantic/context/facis-dcs').then((res) => res.data as Record<string, unknown>)
+  return hubContextPromise
+}
+
+/** Compacts a shacl-form instance (absolute IRIs) against the hub context. */
+async function compactAgainstHubContext(instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance): Promise<Record<string, unknown>> {
+  const compacted = (await jsonld.compact(instance as object, (await hubContext()) as never)) as Record<string, unknown>
+  delete compacted['@context']
+  return compacted
+}
+
+/** Whether a compacted instance is an ODRL rule the policy buckets accept. */
+export function isOdrlRuleInstance(compactedType: unknown): boolean {
+  return typeof compactedType === 'string' && ODRL_RULE_TYPES.has(compactedType)
+}
+
+function proseBlockForField(blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[], fieldId: string): JsonLdReference {
+  for (const block of blocks) {
+    if (isDcsMergedApprovedTemplate(block) || !isDcsClause(block)) continue
+    const content = block['dcs:content']
+    const segments = typeof content === 'string' ? [] : content['@list']
+    for (const segment of segments) {
+      if (typeof segment !== 'string' && segment['dcs:bindsTo']['@id'] === fieldId) {
+        return { '@id': block['@id'] }
+      }
+    }
+  }
+  throw new Error(
+    `No clause text binds field ${fieldId}: every machine-readable rule must be backed by human-readable prose (place the field's placeholder in a clause first).`,
+  )
+}
+
 function semanticConditionToPolicies(
   condition: SemanticCondition,
   contractData: DcsDataRequirement[],
+  blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[],
   documentId?: string,
 ): OdrlRule[] {
   const req = contractData.find((r) => r['dcs:conditionId'] === condition.conditionId)
@@ -985,6 +1056,7 @@ function semanticConditionToPolicies(
           'odrl:assigner': partyReference(role, documentId),
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
+          'dcs:prose': proseBlockForField(blocks, field['@id']),
           'odrl:constraint': {
             '@type': 'odrl:Constraint',
             'odrl:leftOperand': { '@id': field['@id'] },

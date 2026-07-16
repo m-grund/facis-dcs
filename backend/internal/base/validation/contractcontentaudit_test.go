@@ -76,9 +76,9 @@ func wrapODRLSet(rules []any) any {
 		return []any{}
 	}
 	return map[string]any{
-		"@type":        "odrl:Agreement",
-		"uid":          "did:example:contract",
-		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+		"@type":           "odrl:Agreement",
+		"uid":             "did:example:contract",
+		"odrl:profile":    map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
 		"odrl:obligation": rules,
 	}
 }
@@ -106,8 +106,10 @@ func odrlContract(fieldID, conditionID, parameterName string, policies []any, ac
 
 func odrlDuty(id, fieldID, operator string, rightOperand any) map[string]any {
 	return map[string]any{
-		"@id":   id,
-		"@type": "odrl:Duty",
+		"@id":         id,
+		"@type":       "odrl:Duty",
+		"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+		"odrl:action": map[string]any{"@id": "dcs:provideCompliantValue"},
 		"odrl:constraint": map[string]any{
 			"@type":             "odrl:Constraint",
 			"odrl:leftOperand":  map[string]any{"@id": fieldID},

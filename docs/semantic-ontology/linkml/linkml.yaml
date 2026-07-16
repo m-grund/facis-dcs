@@ -413,3 +413,10 @@ slots:
     slot_uri: dcs:observation
     range: KPIObservation
     multivalued: true
+
+  prose:
+    slot_uri: dcs:prose
+    range: uriorcurie
+    description: The human-readable clause node this machine-readable rule is backed by; every ODRL rule a document carries must reference the audited prose it operationalizes.
+    close_mappings:
+      - dcterms:source

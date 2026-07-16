@@ -77,6 +77,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 					"odrl:assigner": map[string]any{"@id": "did:web:facis.example:template:1#provider"},
 					"odrl:assignee": map[string]any{"@id": "did:web:facis.example:template:1#customer"},
 					"odrl:target":   map[string]any{"@id": "did:web:facis.example:template:1"},
+					"dcs:prose":     map[string]any{"@id": "urn:uuid:block-clause-1"},
 					"odrl:constraint": map[string]any{
 						"@type":             "odrl:Constraint",
 						"odrl:leftOperand":  map[string]any{"@id": "did:web:facis.example:template:1#field-cond-1-percent"},

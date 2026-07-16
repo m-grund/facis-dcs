@@ -1,6 +1,7 @@
 @prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
 
 # Structural shape for the canonical dcs:documentStructure JSON-LD envelope
 # (the single supported contract shape since the greenfield rewrite — see
@@ -38,4 +39,36 @@ dcs:ContractMetadataShape
     sh:minCount 1 ;
     sh:maxCount 1 ;
     sh:message "A canonical contract requires a title in dcs:metadata." ;
+  ] .
+
+# Every machine-readable ODRL rule must be backed by human-audited prose:
+# dcs:prose references the clause node whose text the rule operationalizes.
+dcs:OdrlDutyProseShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Duty ;
+  sh:property [
+    sh:path dcs:prose ;
+    sh:minCount 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:message "An ODRL Duty requires dcs:prose referencing the human-readable clause it is backed by." ;
+  ] .
+
+dcs:OdrlPermissionProseShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Permission ;
+  sh:property [
+    sh:path dcs:prose ;
+    sh:minCount 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:message "An ODRL Permission requires dcs:prose referencing the human-readable clause it is backed by." ;
+  ] .
+
+dcs:OdrlProhibitionProseShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Prohibition ;
+  sh:property [
+    sh:path dcs:prose ;
+    sh:minCount 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:message "An ODRL Prohibition requires dcs:prose referencing the human-readable clause it is backed by." ;
   ] .

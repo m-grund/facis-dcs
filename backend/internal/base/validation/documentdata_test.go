@@ -127,6 +127,7 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 					"odrl:assigner": map[string]any{"@id": "urn:uuid:party-provider"},
 					"odrl:assignee": map[string]any{"@id": "urn:uuid:party-customer"},
 					"odrl:target":   map[string]any{"@id": "urn:uuid:policy-target"},
+					"dcs:prose":     map[string]any{"@id": "urn:uuid:block-clause-1"},
 					"odrl:constraint": map[string]any{
 						"@type":             "odrl:Constraint",
 						"odrl:leftOperand":  map[string]any{"@id": "urn:uuid:field-provider-country"},

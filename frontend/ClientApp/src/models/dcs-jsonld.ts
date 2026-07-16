@@ -145,6 +145,8 @@ export interface OdrlRule {
   'odrl:assignee': JsonLdReference
   /** The contract/data-asset IRI this rule applies to. */
   'odrl:target': JsonLdReference
+  /** The human-readable clause node this rule is backed by (required — machine rules operationalize audited prose). */
+  'dcs:prose': JsonLdReference
   'odrl:constraint'?: OdrlConstraint
 }
 

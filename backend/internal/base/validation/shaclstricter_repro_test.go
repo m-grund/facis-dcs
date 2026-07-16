@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"digital-contracting-service/internal/base/datatype"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -194,8 +195,8 @@ func TestAuditContractContentFlagsGaiaXParticipantViolations(t *testing.T) {
 func slaAuditContract() map[string]any {
 	contract := canonicalAuditContract()
 	contract["dcs:hasSLA"] = map[string]any{
-		"@id":    "urn:uuid:sla-1",
-		"@type":  "dcs:SLAAgreement",
+		"@id":   "urn:uuid:sla-1",
+		"@type": "dcs:SLAAgreement",
 		"dcs:hasService": map[string]any{
 			"@id":   "urn:uuid:service-1",
 			"@type": "dcs:Service",
@@ -281,4 +282,46 @@ func TestEvaluateKPIViolationBindsMetricByParameterName(t *testing.T) {
 	violated, err = EvaluateKPIViolation(context.Background(), contract, "unbound-metric", "1")
 	require.NoError(t, err)
 	require.False(t, violated, "a metric no RequirementField declares binds to nothing")
+}
+
+func TestODRLRulesRequireProseBacking(t *testing.T) {
+	contract := canonicalAuditContract()
+	rules := contract["dcs:policies"].(map[string]any)["odrl:obligation"].([]any)
+	delete(rules[0].(map[string]any), "dcs:prose")
+
+	// The audit's SHACL pass flags the unbacked rule.
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	finding := requirePolicyFinding(t, findings, "prose-MinCountConstraintComponent")
+	require.Equal(t, "error", finding.Severity)
+
+	// The authoring-time structural gate rejects it outright.
+	template := canonicalTemplateData(t)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(*template, &doc))
+	rule := doc["dcs:policies"].(map[string]any)["odrl:obligation"].([]any)[0].(map[string]any)
+	delete(rule, "dcs:prose")
+	raw, err := datatype.NewJSON(doc)
+	require.NoError(t, err)
+	_, err = NormalizeTemplateData(&raw)
+	require.ErrorContains(t, err, "dcs:prose")
+}
+
+func TestClauseCatalogObligationShapeEnforcesActionVocabulary(t *testing.T) {
+	restore := swapShapeSource(t, fixtureShapeSource{
+		shapesTTL: mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl") +
+			"\n\n" + mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-clause-catalog.ttl"),
+		profileYAML: "id: t\nversion: t\nrules: []\n",
+		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+	})
+	defer restore()
+
+	contract := canonicalAuditContract()
+	rules := contract["dcs:policies"].(map[string]any)["odrl:obligation"].([]any)
+	rules[0].(map[string]any)["odrl:action"] = map[string]any{"@id": "https://evil.example/never-declared-action"}
+
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	finding := requirePolicyFinding(t, findings, "action-InConstraintComponent")
+	require.Equal(t, "error", finding.Severity)
 }

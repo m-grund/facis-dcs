@@ -43,3 +43,57 @@ dcs:PaymentClauseShape
     sh:pattern "^INV-[0-9]{4,}$" ;
     sh:maxCount 1 ;
   ] .
+
+# Hub-templated ODRL: the obligation rule shape the builder derives ODRL
+# from (shacl-form renders it; the same shape validates every odrl:Duty a
+# document carries, since this catalog concatenates into the enforcement
+# graph). Prose backing (dcs:prose) is enforced by the canonical shapes.
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+dcs:OdrlObligationShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Duty ;
+  rdfs:label "ODRL Obligation" ;
+  sh:property [
+    sh:path odrl:action ;
+    sh:name "Action" ;
+    sh:description "What the assignee is obliged to do." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( dcs:provideCompliantValue odrl:use odrl:distribute odrl:delete ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:constraint ;
+    sh:name "Constraint" ;
+    sh:order 2 ;
+    sh:node dcs:OdrlConstraintShape ;
+  ] .
+
+dcs:OdrlConstraintShape
+  a sh:NodeShape ;
+  sh:property [
+    sh:path odrl:leftOperand ;
+    sh:name "Field" ;
+    sh:description "The contract-data field (dcs:RequirementField) the constraint governs." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:operator ;
+    sh:name "Operator" ;
+    sh:order 2 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( odrl:eq odrl:neq odrl:gt odrl:gteq odrl:lt odrl:lteq odrl:isAnyOf odrl:isNoneOf ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:rightOperand ;
+    sh:name "Required value" ;
+    sh:order 3 ;
+    sh:minCount 1 ;
+  ] .

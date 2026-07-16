@@ -94,6 +94,7 @@ def odrl_set_policies(
         "odrl:assigner": {"@id": "did:web:example.org%3A9001:bdd-provider-org"},
         "odrl:assignee": {"@id": "did:web:example.org%3A9002:bdd-customer-org"},
         "odrl:target": {"@id": contract_did},
+        "dcs:prose": {"@id": "urn:uuid:block-clause-1"},
         "odrl:constraint": {
             "@type": "odrl:Constraint",
             "odrl:leftOperand": {"@id": field_id},

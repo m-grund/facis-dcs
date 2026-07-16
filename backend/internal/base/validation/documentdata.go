@@ -736,6 +736,11 @@ func validateODRLRuleShape(rule map[string]any) error {
 			return fmt.Errorf("rule is missing %s", key)
 		}
 	}
+	prose, _ := rule["dcs:prose"].(map[string]any)
+	proseID, _ := prose["@id"].(string)
+	if strings.TrimSpace(proseID) == "" {
+		return errors.New("rule is missing dcs:prose — every machine-readable rule must reference the human-readable clause it is backed by")
+	}
 	return nil
 }
 
