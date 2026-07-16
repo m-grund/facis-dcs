@@ -182,7 +182,7 @@ watch([leftPick, rightPick], () => ensureDistinctPicks())
     <!-- tool bar -->
     <div class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
       <p class="mb-1 text-sm font-medium text-base-content">Comparing changes</p>
-      <p class="mb-3 text-xs text-base-content/50">Choose two versions to see what's changed.</p>
+      <p class="mb-3 text-xs text-base-content/70">Choose two versions to see what's changed.</p>
       <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <label class="form-control w-full md:flex-1">
           <span class="label-text text-xs text-base-content/70">Left</span>
@@ -227,9 +227,9 @@ watch([leftPick, rightPick], () => ensureDistinctPicks())
         </label>
       </div>
 
-      <p v-if="loading" class="mt-3 text-sm text-base-content/60">Loading history…</p>
+      <p v-if="loading" class="mt-3 text-sm text-base-content/70">Loading history…</p>
       <p v-else-if="loadError" class="mt-3 text-sm text-error">{{ loadError }}</p>
-      <p v-else-if="compareOptions.length < 2" class="mt-3 text-sm text-base-content/60">
+      <p v-else-if="compareOptions.length < 2" class="mt-3 text-sm text-base-content/70">
         Add at least one saved history entry to compare versions.
       </p>
     </div>

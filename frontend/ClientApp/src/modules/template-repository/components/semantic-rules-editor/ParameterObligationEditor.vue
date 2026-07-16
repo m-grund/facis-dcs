@@ -5,7 +5,7 @@ import {
   isTokenValueConstraint,
   resolveValueOptions,
 } from '@template-repository/utils/value-option-catalog'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import type {
   SemanticConditionParameter,
   SemanticOperateType,
@@ -28,6 +28,9 @@ const draftSetTargets = ref<string[]>([])
 const draftTokenTargets = ref('')
 const valueOptionSearch = ref('')
 let isSyncingFromProps = false
+
+const obligationLabelId = useId()
+const labelId = useId()
 
 const valueConstraint = computed(() => props.parameter.valueConstraint)
 const isNumericParameter = computed(() => props.parameter.type === 'decimal' || props.parameter.type === 'integer')
@@ -254,10 +257,14 @@ function clearSetConstraintTargets() {
 <template>
   <div class="contents">
     <div class="flex flex-col gap-1 md:col-span-3">
-      <label class="label min-h-0 py-0">
-        <span class="label-text text-xs text-base-content/60">Obligation</span>
+      <label :id="obligationLabelId" class="label min-h-0 py-0">
+        <span class="label-text text-xs text-base-content/70">Obligation</span>
       </label>
-      <select v-model="draftOperator" class="select-bordered select h-9 w-full select-sm">
+      <select
+        v-model="draftOperator"
+        :aria-labelledby="obligationLabelId"
+        class="select-bordered select h-9 w-full select-sm"
+      >
         <option value="">None</option>
         <option v-for="option in operatorOptions" :key="option.value" :value="option.value">
           {{ option.label }}
@@ -267,13 +274,14 @@ function clearSetConstraintTargets() {
 
     <div v-if="!usesSetConstraintEditor" class="flex flex-col gap-1 md:col-span-2">
       <label class="label min-h-0 py-0">
-        <span class="label-text text-xs text-base-content/60">Value</span>
+        <span :id="labelId" class="label-text text-xs text-base-content/60">Value</span>
       </label>
       <select
         v-if="parameter.type === 'boolean'"
         v-model="draftTarget"
         class="select-bordered select h-9 w-full select-sm"
         :disabled="!draftOperator"
+        :aria-labelledby="labelId"
       >
         <option value="">Select</option>
         <option value="true">true</option>
@@ -286,6 +294,7 @@ function clearSetConstraintTargets() {
         :inputmode="isNumericParameter ? 'decimal' : undefined"
         class="input-bordered input input-sm h-9 w-full"
         :disabled="!draftOperator"
+        :aria-labelledby="labelId"
         placeholder=""
         @input="formatNumericTarget"
       />

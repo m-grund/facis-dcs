@@ -146,16 +146,17 @@ async function compliance(contract: SignatureContract) {
   </div>
 
   <div class="p-4">
-    <div v-if="loading" class="text-base-content/60">Loading approved contracts…</div>
-    <div v-else-if="error" class="mb-4 alert alert-error">{{ error }}</div>
-    <div v-else-if="contracts.length === 0" class="text-base-content/60">
+    <div v-if="loading" class="text-base-content/60" role="status" aria-live="polite">Loading approved contracts…</div>
+    <div v-else-if="error" class="mb-4 alert alert-error" role="alert" aria-live="assertive">{{ error }}</div>
+    <div v-else-if="contracts.length === 0" class="text-base-content/60" role="status">
       No approved contracts available for signing.
     </div>
 
     <div v-else class="overflow-x-auto">
-      <table class="table w-full table-zebra">
+      <table class="table w-full table-zebra" aria-label="Contracts available for signing">
+        <caption class="sr-only">Contracts available for signing</caption>
         <thead>
-          <tr>
+          <tr class="text-base-content/70">
             <th>DID</th>
             <th>Name</th>
             <th>Version</th>

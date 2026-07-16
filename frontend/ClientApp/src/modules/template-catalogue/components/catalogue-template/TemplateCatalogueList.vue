@@ -45,17 +45,19 @@ watch(
 </script>
 
 <template>
-  <ul class="list">
-    <li class="flex flex-col justify-between px-4 tracking-wide sm:flex-row">
-      <TemplateCatalogueListSearch :templates="templates" class="flex-1" @search-result="applySearchResult" />
-      <ListSort v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :sorter="sorter" :disabled="!hasTemplates" />
-    </li>
-    <TemplateCatalogueListItem
-      v-for="template in sortedTemplates"
-      :key="`${template.did}|${template.document_number}|${template.version}`"
-      :template="template"
-      :templates="props.templates"
-    />
-    <li v-if="sortedTemplates.length < 1" class="px-4">No templates found</li>
-  </ul>
+  <div class="flex h-full min-h-0 flex-col">
+    <ul class="list flex-1 overflow-y-auto">
+      <li class="flex flex-col justify-between px-4 tracking-wide sm:flex-row">
+        <TemplateCatalogueListSearch :templates="templates" class="flex-1" @search-result="applySearchResult" />
+        <ListSort v-model:sort-by="sortBy" v-model:sort-order="sortOrder" :sorter="sorter" :disabled="!hasTemplates" />
+      </li>
+      <TemplateCatalogueListItem
+        v-for="template in sortedTemplates"
+        :key="`${template.did}|${template.document_number}|${template.version}`"
+        :template="template"
+        :templates="props.templates"
+      />
+      <li v-if="sortedTemplates.length < 1" class="px-4">No templates found</li>
+    </ul>
+  </div>
 </template>

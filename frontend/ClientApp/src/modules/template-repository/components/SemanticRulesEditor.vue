@@ -361,7 +361,7 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
       <div v-if="requirementDraft" class="mt-4 rounded-lg border border-base-300 bg-base-200/30 p-3">
         <div class="mb-3 flex flex-wrap items-end gap-3">
           <label class="flex min-w-56 flex-1 flex-col gap-1">
-            <span class="label-text text-xs text-base-content/60">Requirement</span>
+            <span class="label-text text-xs text-base-content/70">Requirement</span>
             <input v-model="requirementDraft.name" type="text" class="input-bordered input input-sm w-full" />
           </label>
           <label v-if="requirementDraft.action.roleRequired" class="flex min-w-44 flex-col gap-1">
@@ -398,8 +398,8 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
           >
             <div class="min-w-0 md:col-span-4">
               <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
-              <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
-              <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
+              <p class="truncate text-xs text-base-content/70">{{ parameter.semanticPath }}</p>
+              <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/70">
                 {{ formatValueConstraint(parameter.valueConstraint) }}
               </p>
             </div>

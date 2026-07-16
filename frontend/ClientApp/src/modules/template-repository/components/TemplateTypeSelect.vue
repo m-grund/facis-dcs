@@ -22,7 +22,7 @@ const emit = defineEmits<{
       "
       @click="emit('update:modelValue', TemplateType.contractTemplate)"
     >
-      <h3 class="mb-3 text-xl font-bold text-base-content">Contract</h3>
+      <h2 class="mb-3 text-xl font-bold text-base-content">Contract</h2>
       <p class="text-sm leading-relaxed text-base-content/70">
         A contract template composed of one or more components. Contracts created from this template can serve as the
         parent for other contracts.
@@ -38,7 +38,7 @@ const emit = defineEmits<{
       "
       @click="emit('update:modelValue', TemplateType.component)"
     >
-      <h3 class="mb-3 text-xl font-bold text-base-content">Component</h3>
+      <h2 class="mb-3 text-xl font-bold text-base-content">Component</h2>
       <p class="text-sm leading-relaxed text-base-content/70">
         A reusable partial contract template. Components can be embedded in other contract templates.
       </p>

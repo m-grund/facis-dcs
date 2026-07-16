@@ -516,21 +516,21 @@ function formatDateTime(value?: string): string {
     <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="stats stats-vertical border border-base-content/10 bg-base-200 sm:stats-horizontal">
         <div class="stat">
-          <div class="stat-title flex items-center gap-2">
+          <div class="stat-title flex items-center gap-2 text-base-content/70">
             <span class="size-2 rounded-full bg-error/50"></span>
             Failed Checks
           </div>
           <div class="stat-value text-2xl text-base-content">{{ failedCheckCount }}</div>
         </div>
         <div class="stat">
-          <div class="stat-title flex items-center gap-2">
+          <div class="stat-title flex items-center gap-2 text-base-content/70">
             <span class="size-2 rounded-full bg-success/50"></span>
             Passed Checks
           </div>
           <div class="stat-value text-2xl text-base-content">{{ passedCheckCount }}</div>
         </div>
         <div class="stat">
-          <div class="stat-title flex items-center gap-2">
+          <div class="stat-title flex items-center gap-2 text-base-content/70">
             <span class="size-2 rounded-full bg-warning/50"></span>
             Needs Review
           </div>
@@ -542,6 +542,7 @@ function formatDateTime(value?: string): string {
         <label class="form-control w-full sm:w-48">
           <span class="label-text mb-1">Scope</span>
           <select
+            id="select-scope"
             v-model="selectedScope"
             class="select-bordered select rounded-box"
             :disabled="auditLoading || reportLoading"
@@ -612,7 +613,7 @@ function formatDateTime(value?: string): string {
             <button
               type="button"
               role="tab"
-              class="tab"
+              class="tab text-base-content/70"
               :class="activeAuditTab === 'checks' ? 'tab-active' : ''"
               @click="selectTab('checks')"
             >
@@ -622,7 +623,7 @@ function formatDateTime(value?: string): string {
             <button
               type="button"
               role="tab"
-              class="tab"
+              class="tab text-base-content/70"
               :class="activeAuditTab === 'timeline' ? 'tab-active' : ''"
               @click="selectTab('timeline')"
             >
@@ -671,7 +672,7 @@ function formatDateTime(value?: string): string {
         </div>
         <table v-if="activeAuditTab === 'checks'" class="table table-zebra">
           <thead>
-            <tr>
+            <tr class="text-base-content/70">
               <th>Status</th>
               <th>DID</th>
               <th>Details</th>
@@ -786,7 +787,7 @@ function formatDateTime(value?: string): string {
             <div class="mt-2 text-xs opacity-80">{{ formatDateTime(selectedFinding.created_at) }}</div>
           </div>
 
-          <p class="text-sm break-words whitespace-pre-wrap opacity-80">{{ selectedFinding.description }}</p>
+          <p class="text-sm wrap-break-word whitespace-pre-wrap opacity-80">{{ selectedFinding.description }}</p>
 
           <dl class="divide-y divide-base-content/10 text-sm">
             <div
@@ -795,7 +796,7 @@ function formatDateTime(value?: string): string {
               class="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 py-2"
             >
               <dt class="font-medium opacity-70">{{ row.label }}</dt>
-              <dd class="break-words">{{ row.value }}</dd>
+              <dd class="wrap-break-word">{{ row.value }}</dd>
             </div>
           </dl>
 
@@ -805,7 +806,7 @@ function formatDateTime(value?: string): string {
           >
             <summary class="collapse-title text-sm font-medium">Raw Details</summary>
             <div class="collapse-content">
-              <pre class="text-xs break-words whitespace-pre-wrap">{{ selectedFindingRawDetails }}</pre>
+              <pre class="text-xs wrap-break-word whitespace-pre-wrap">{{ selectedFindingRawDetails }}</pre>
             </div>
           </details>
         </div>

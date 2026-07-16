@@ -28,6 +28,7 @@ const props = defineProps<{
   /** Clause content as JSON-LD DcsContentSegment[]. */
   modelValue: DcsContentSegment[]
   semanticConditions: SemanticCondition[]
+  textId: string
 }>()
 
 const emit = defineEmits<{
@@ -388,6 +389,8 @@ onBeforeUnmount(() => {
     <div class="relative">
       <div
         ref="editorRef"
+        role="textbox"
+        :aria-labelledby="textId"
         class="clause-editor textarea-bordered textarea min-h-24 w-full text-sm textarea-sm wrap-break-word whitespace-pre-wrap"
         contenteditable="true"
         data-placeholder=""

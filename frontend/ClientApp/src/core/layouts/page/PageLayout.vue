@@ -37,7 +37,7 @@ onMounted(() => {
       </header>
 
       <!-- Main Content -->
-      <main ref="scroll-container" class="grow overflow-y-auto bg-base-200">
+      <main ref="scroll-container" class="grow overflow-y-auto bg-base-200" tabindex="-1">
         <slot>
           <RouterView />
         </slot>

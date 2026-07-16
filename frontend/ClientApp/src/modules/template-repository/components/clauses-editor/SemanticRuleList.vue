@@ -56,7 +56,7 @@ function onParamClick(conditionId: string, parameterName: string) {
 <template>
   <section class="rounded-lg border border-base-300 bg-base-100 p-3">
     <h4 class="mb-2 text-xs font-semibold text-base-content/70">{{ title }}</h4>
-    <p v-if="!visibleConditions.length" class="text-xs text-base-content/50 italic">{{ emptyMessage }}</p>
+    <p v-if="!visibleConditions.length" class="text-xs text-base-content/70 italic">{{ emptyMessage }}</p>
     <ul v-else class="space-y-2">
       <li v-for="c in visibleConditions" :key="c.conditionId" class="text-xs">
         <span

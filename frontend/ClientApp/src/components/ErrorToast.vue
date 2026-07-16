@@ -12,6 +12,8 @@ const { errors } = storeToRefs(errorStore)
       v-for="error in errors"
       :key="error.id"
       :class="['alert', `alert-${error.type}`, 'max-h-40 max-w-md overflow-y-auto text-wrap shadow-lg']"
+      :aria-live="error.type === 'error' ? 'assertive' : 'polite'"
+      aria-atomic="true"
       :role="error.type === 'error' ? 'alert' : 'status'"
     >
       <span>{{ error.message }}</span>

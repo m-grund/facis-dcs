@@ -124,13 +124,19 @@ async function onRequestSync(contract: Contract) {
     <div class="list-col-grow card w-full min-w-0 border-base-content/10 bg-base-100 card-border hover:bg-base-300">
       <div class="card-body min-w-0">
         <div v-if="isTemplateVersionErrorVisible(contract)" class="-mt-9 flex w-full justify-center">
-          <a class="badge justify-self-center badge-md badge-error" :href="getTemplateLink(contract)">
+          <a
+            class="badge justify-self-center badge-md badge-error max-sm:h-fit max-sm:link"
+            :href="getTemplateLink(contract)"
+          >
             This contract uses a deprecated template
           </a>
         </div>
 
         <div v-if="isTemplateVersionWarningVisible(contract)" class="-mt-9 flex w-full justify-center">
-          <a class="badge justify-self-center badge-md badge-warning" :href="getTemplateLink(contract)">
+          <a
+            class="badge justify-self-center badge-md badge-warning max-sm:h-fit max-sm:link"
+            :href="getTemplateLink(contract)"
+          >
             A newer template version is available
           </a>
         </div>

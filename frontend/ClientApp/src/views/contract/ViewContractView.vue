@@ -152,13 +152,13 @@ const exportPDF = async () => {
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
           <div class="mx-auto max-w-4xl px-6 pt-3">
-            <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">View Contract</p>
+            <p class="mb-2 text-xs font-black tracking-widest text-base-content/70 uppercase">View Contract</p>
             <div role="tablist" class="tabs-border tabs tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
-                class="tab"
+                class="tab text-base-content/70"
                 :class="{ 'tab-active text-primary': activeTab === tab.id }"
                 @click="contractEditorUiStore.setActiveTab(tab.id)"
               >

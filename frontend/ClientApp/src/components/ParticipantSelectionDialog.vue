@@ -73,6 +73,13 @@ async function openModal() {
   clearAll()
   await nextTick()
   assigneeModal.value?.showModal()
+  focusDialog()
+}
+
+function focusDialog() {
+  window.requestAnimationFrame(() => {
+    assigneeModal.value?.focus()
+  })
 }
 
 function addReviewer() {
@@ -173,16 +180,23 @@ function onModalClose() {
 <template>
   <button type="button" v-bind="$attrs" @click="openModal">Create</button>
   <Teleport to="body">
-    <dialog ref="assigneeModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
+    <dialog
+      ref="assigneeModal"
+      class="modal modal-bottom transition-none sm:modal-middle"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="participant-dialog-title"
+      @close="clearAll"
+    >
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
-        <h3 class="text-lg font-bold">Contract Participants</h3>
+        <h3 id="participant-dialog-title" class="text-lg font-bold">Contract Participants</h3>
 
-        <button class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
-        <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
+        <button type="button" class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
+        <p v-if="error" class="mb-5 text-xs text-error" role="alert">{{ error }}</p>
 
         <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
           <section class="flex flex-col gap-2">
-            <span class="font-medium">Reviewers</span>
+            <h4 class="font-medium">Reviewers</h4>
             <ul v-if="reviewers.length > 0" class="flex flex-col gap-1">
               <li
                 v-for="did in reviewers"
@@ -201,7 +215,9 @@ function onModalClose() {
               </li>
             </ul>
             <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium" for="reviewer-draft">Add reviewer DID</label>
               <input
+                id="reviewer-draft"
                 v-model="reviewerDraft"
                 type="text"
                 class="input-bordered input input-sm w-full font-mono text-xs"
@@ -211,11 +227,11 @@ function onModalClose() {
               />
               <button type="button" class="btn w-fit btn-sm btn-primary" @click="addReviewer">+</button>
             </div>
-            <p v-if="reviewerError" class="text-xs text-error">{{ reviewerError }}</p>
+            <p v-if="reviewerError" class="text-xs text-error" role="alert">{{ reviewerError }}</p>
           </section>
 
           <section class="flex flex-col gap-2">
-            <span class="font-medium">Approvers</span>
+            <h4 class="font-medium">Approvers</h4>
             <ul v-if="approvers.length > 0" class="flex flex-col gap-1">
               <li
                 v-for="did in approvers"
@@ -234,7 +250,9 @@ function onModalClose() {
               </li>
             </ul>
             <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium" for="approver-draft">Add approver DID</label>
               <input
+                id="approver-draft"
                 v-model="approverDraft"
                 type="text"
                 class="input-bordered input input-sm w-full font-mono text-xs"
@@ -244,11 +262,11 @@ function onModalClose() {
               />
               <button type="button" class="btn w-fit btn-sm btn-primary" @click="addApprover">+</button>
             </div>
-            <p v-if="approverError" class="text-xs text-error">{{ approverError }}</p>
+            <p v-if="approverError" class="text-xs text-error" role="alert">{{ approverError }}</p>
           </section>
 
           <section class="flex flex-col gap-2">
-            <span class="font-medium">Negotiators</span>
+            <h4 class="font-medium">Negotiators</h4>
             <ul v-if="negotiators.length > 0" class="flex flex-col gap-1">
               <li
                 v-for="did in negotiators"
@@ -267,7 +285,9 @@ function onModalClose() {
               </li>
             </ul>
             <div class="flex flex-col gap-2">
+              <label class="text-sm font-medium" for="negotiator-draft">Add negotiator DID</label>
               <input
+                id="negotiator-draft"
                 v-model="negotiatorDraft"
                 type="text"
                 class="input-bordered input input-sm w-full font-mono text-xs"
@@ -277,7 +297,7 @@ function onModalClose() {
               />
               <button type="button" class="btn w-fit btn-sm btn-primary" @click="addNegotiator">+</button>
             </div>
-            <p v-if="negotiatorError" class="text-xs text-error">{{ negotiatorError }}</p>
+            <p v-if="negotiatorError" class="text-xs text-error" role="alert">{{ negotiatorError }}</p>
           </section>
         </div>
 

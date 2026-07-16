@@ -86,26 +86,31 @@ const isSelected = (type: FilterMap[typeof props.storeType]) => {
   </button>
   <ul id="filter-popover" popover class="menu dropdown rounded-box rounded-md bg-base-300 shadow-sm">
     <li class="pointer-events-none menu-title">
-      <label class="label">{{ label }}</label>
+      <h1 class="label text-base-content/70">{{ label }}</h1>
     </li>
-    <ul>
-      <li
-        v-for="filter in shownFilters"
-        :key="filter"
-        class="flex justify-between transition-colors"
-        @click="setFilter(filter)"
-      >
-        <label class="label flex-1" :class="{ 'mt-1 bg-primary text-primary-content': isSelected(filter) }">
-          {{ filter }}
-        </label>
-      </li>
-      <li v-if="hasFilters" class="w-full border-t border-base-300 px-4 py-2 text-sm opacity-60">
-        <label class="link cursor-pointer" @click="showAll = !showAll">
-          <div v-if="!showAll">See all</div>
-          <div v-else>See less</div>
-        </label>
-      </li>
-    </ul>
+    <li>
+      <ul>
+        <li
+          v-for="filter in shownFilters"
+          :key="filter"
+          class="flex justify-between transition-colors"
+          @click="setFilter(filter)"
+        >
+          <span
+            class="label flex-1 text-base-content/70"
+            :class="{ 'mt-1 bg-primary text-primary-content': isSelected(filter) }"
+          >
+            {{ filter }}
+          </span>
+        </li>
+        <li v-if="hasFilters" class="w-full border-t border-base-300 px-4 py-2 text-sm opacity-60">
+          <label class="link cursor-pointer" @click="showAll = !showAll">
+            <div v-if="!showAll">See all</div>
+            <div v-else>See less</div>
+          </label>
+        </li>
+      </ul>
+    </li>
   </ul>
 </template>
 

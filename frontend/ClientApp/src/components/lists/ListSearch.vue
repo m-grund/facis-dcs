@@ -126,6 +126,8 @@ function onFilterSelect(label: FilterLabelValue) {
         type="button"
         class="select w-full rounded-t-md rounded-b-none select-secondary sm:rounded-l-md sm:rounded-tr-none"
         popovertarget="list-popover-search"
+        aria-haspopup="listbox"
+        :aria-expanded="filterPopover?.matches(':popover-open')"
         :class="{ 'btn-disabled': isFilterSelectionDisabled }"
         :disabled="isFilterSelectionDisabled"
       >
@@ -136,12 +138,14 @@ function onFilterSelect(label: FilterLabelValue) {
         ref="filter-popover"
         class="menu dropdown dropdown-start w-52 rounded-box bg-base-300 shadow-sm"
         popover
+        role="listbox"
+        :aria-label="'Select search filter'"
       >
-        <li class="menu-title">
-          <span class="menu-disabled pointer-events-none select-none">Select search filter</span>
+        <li role="option" aria-selected="false" class="menu-title">
+          <span class="menu-disabled pointer-events-none text-base-content/70 select-none">Select search filter</span>
         </li>
         <template v-for="[key, label] in Object.entries(filterLabels)" :key="key">
-          <li>
+          <li role="option" :aria-selected="label === selectedFilter">
             <a :class="{ 'bg-primary text-primary-content': label === selectedFilter }" @click="onFilterSelect(label)">
               {{ label }}
             </a>
@@ -156,6 +160,7 @@ function onFilterSelect(label: FilterLabelValue) {
             :display-value="(item) => getDisplayValue(item as T | null)"
             :placeholder="placeholder || 'Search'"
             class="w-full bg-transparent"
+            :aria-label="placeholder || 'Search'"
             @change="onSearchChange"
             @focus="onComboboxFocus"
             @keydown.enter="searchList"
@@ -188,6 +193,7 @@ function onFilterSelect(label: FilterLabelValue) {
       </Combobox>
     </div>
     <button
+      type="button"
       class="btn join-item ms-0 -mt-px rounded-t-none rounded-b-md btn-secondary sm:-ms-px sm:mt-0 sm:rounded-r-md sm:rounded-bl-none"
       @click="searchList"
     >

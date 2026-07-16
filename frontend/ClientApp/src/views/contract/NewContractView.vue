@@ -7,7 +7,7 @@ import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, type Ref, ref, useId, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
 import { useScrollStore } from '@/core/store/scroll'
@@ -57,6 +57,10 @@ const isSubmitting = ref(false)
 const selectedTemplate: Ref<PartialContractTemplate | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
 const selectedParentContractDid = ref<string | null>(null)
+
+const templatePickerId = useId()
+const viewTemplatePickerLabelId = useId()
+const parentContractPickerLabelId = useId()
 
 const contract: Ref<Contract | null> = ref(null)
 
@@ -347,7 +351,13 @@ onBeforeRouteLeave(() => {
   <div class="flex h-full flex-col">
     <div v-if="!isEditMode" class="flex flex-1 flex-col">
       <div v-if="!selectedTemplate" class="flex flex-1 items-center justify-center px-6 py-20">
-        <select v-model="selectedTemplate" class="select w-150" :disabled="!hasApprovedTemplates">
+        <label :for="templatePickerId" class="sr-only">Pick a template</label>
+        <select
+          :id="templatePickerId"
+          v-model="selectedTemplate"
+          class="select w-150"
+          :disabled="!hasApprovedTemplates"
+        >
           <option :value="null" disabled selected>
             {{ hasApprovedTemplates ? 'Pick a template' : 'No templates available' }}
           </option>
@@ -361,8 +371,12 @@ onBeforeRouteLeave(() => {
         <template #before-tabs>
           <div class="flex items-end gap-4">
             <div class="flex-1">
-              <p class="mb-1 text-xs font-semibold text-base-content/60">Template</p>
-              <select v-model="selectedTemplate" class="select w-full select-sm">
+              <p :id="viewTemplatePickerLabelId" class="mb-1 text-xs font-semibold text-base-content/70">Template</p>
+              <select
+                v-model="selectedTemplate"
+                :aria-labelledby="viewTemplatePickerLabelId"
+                class="select w-full select-sm"
+              >
                 <option v-for="template in approvedTemplates" :key="template.did" :value="template">
                   Version {{ template.version }} - {{ template.name?.slice(0, 80)
                   }}{{ (template.name?.length ?? 0) > 80 ? '…' : '' }}
@@ -370,8 +384,14 @@ onBeforeRouteLeave(() => {
               </select>
             </div>
             <div v-if="draftContracts.length > 0" class="flex-1">
-              <p class="mb-1 text-xs font-semibold text-base-content/60">Add to existing contract (optional)</p>
-              <select v-model="selectedParentContractDid" class="select w-full select-sm">
+              <p :id="parentContractPickerLabelId" class="mb-1 text-xs font-semibold text-base-content/70">
+                Add to existing contract (optional)
+              </p>
+              <select
+                v-model="selectedParentContractDid"
+                :aria-labelledby="parentContractPickerLabelId"
+                class="select w-full select-sm"
+              >
                 <option :value="null">— none —</option>
                 <option v-for="c in draftContracts" :key="c.did" :value="c.did">
                   {{ c.name ?? c.did }}
@@ -387,7 +407,7 @@ onBeforeRouteLeave(() => {
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
           <div class="mx-auto max-w-4xl px-6 pt-3">
-            <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">
+            <p class="mb-2 text-xs font-black tracking-widest text-base-content/70 uppercase">
               {{ isEditMode ? 'Update Contract' : 'Create Contract' }}
             </p>
             <div role="tablist" class="tabs-border tabs tabs-lg">
@@ -395,7 +415,7 @@ onBeforeRouteLeave(() => {
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
-                class="tab"
+                class="tab text-base-content/70"
                 :class="{ 'tab-active text-primary': activeTab === tab.id }"
                 @click="contractEditorUiStore.setActiveTab(tab.id)"
               >

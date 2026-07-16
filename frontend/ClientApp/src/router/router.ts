@@ -8,7 +8,8 @@ import {
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { nextTick } from 'vue'
+import { createRouter, createWebHistory, type RouteRecordRaw, START_LOCATION } from 'vue-router'
 import { getUIBasePath } from '@/config'
 import { useScrollStore } from '@/core/store/scroll'
 import { OID4VP_STATE_KEY } from '@/hydra-login-guard'
@@ -456,6 +457,16 @@ router.beforeEach((to) => {
 router.beforeEach((_, from) => {
   const navStore = useNavStore()
   navStore.previousRoute = from
+})
+
+router.afterEach(async (to, from) => {
+  if (from === START_LOCATION) return
+
+  if (to.path === from.path) return
+
+  const scrollStore = useScrollStore()
+  await nextTick()
+  scrollStore.scrollContainer?.focus()
 })
 
 export { router, ROUTES }
