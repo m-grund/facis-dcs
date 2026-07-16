@@ -141,7 +141,7 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 	paymentFieldID := "urn:dcs:field:payment-amount"
 
 	contract := map[string]any{
-		"@context": []any{"https://w3id.org/facis/sla/ontology"},
+		"@context": map[string]any{"sla": "https://w3id.org/facis/sla/ontology#"},
 		"@id":      "urn:facis:dcs:contract:sla:example-001",
 		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
 		"dcs:contractData": []any{

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type ContractContentAuditMetadata struct {
@@ -55,14 +56,14 @@ func AuditContractContent(ctx context.Context, contractDocument any, policyDocum
 		policy.Version = metadata.PolicyVersion
 	}
 
+	source, err := requireShapeSource()
+	if err != nil {
+		return nil, err
+	}
+
 	findings := []PolicyFinding{}
 	if policy.EnforceCanonicalShapes {
-		// ADR-8 version pinning: a document is revalidated against the hub
-		// SHACL shapes version it was anchored to at creation time
-		// (sh:shapesGraph), not whatever the hub's active
-		// version has since moved on to — rolling the hub forward never
-		// retroactively breaks an already-produced artifact.
-		shaclFindings, shapesVersion, err := validateAgainstHubShapes(ctx, contract)
+		shaclFindings, shapesVersion, err := validateAgainstShapeSource(ctx, contract, source)
 		if err != nil {
 			return nil, fmt.Errorf("SHACL validation: %w", err)
 		}
@@ -72,8 +73,18 @@ func AuditContractContent(ctx context.Context, contractDocument any, policyDocum
 	for _, profile := range policy.profiles {
 		findings = append(findings, auditContractValidationProfile(contract, profile)...)
 	}
-	findings = append(findings, auditContractODRLPolicies(contract, extractContractODRLPolicies(contract))...)
-	findings = append(findings, auditContractODRLPolicies(contract, externalODRLPolicies(policy.Policies))...)
+
+	root, err := expandForAudit(ctx, contract, source)
+	if err != nil {
+		return nil, fmt.Errorf("ODRL evaluation: %w", err)
+	}
+	findings = append(findings, auditExpandedODRLPolicies(root, expandedODRLPolicyRules(root))...)
+	externalRules, err := expandExternalODRLRules(ctx, externalODRLPolicies(policy.Policies), source)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, auditExpandedODRLPolicies(root, externalRules)...)
+
 	for i := range findings {
 		findings[i].PolicySetID = policy.PolicySetID
 		findings[i].PolicyVersion = policy.Version
@@ -112,7 +123,17 @@ func ValidateContractPolicySatisfaction(contractDocument any, metadata ContractC
 	if err != nil {
 		return fmt.Errorf("decode contract document: %w", err)
 	}
-	findings := auditContractODRLPolicies(contract, extractContractODRLPolicies(contract))
+	source, err := requireShapeSource()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	root, err := expandForAudit(ctx, contract, source)
+	if err != nil {
+		return fmt.Errorf("ODRL evaluation: %w", err)
+	}
+	findings := auditExpandedODRLPolicies(root, expandedODRLPolicyRules(root))
 	blocking := make([]PolicyFinding, 0)
 	for _, finding := range findings {
 		if isBlockingContractPolicyFinding(finding) {
@@ -540,22 +561,6 @@ func compactAuditValue(value any) any {
 	}
 }
 
-// extractContractODRLPolicies reads dcs:policies and flattens it into a
-// plain list of rule nodes for the ODRL enforcement/audit pipeline.
-// dcs:policies is a single enclosing odrl:Set object whose rules live in
-// the odrl:duty/odrl:permission/odrl:prohibition/odrl:obligation bucket
-// properties (an empty array means "no policies declared").
-//
-// Extraction is security-critical: if the emitted dcs:policies shape and
-// this function ever drift apart, ValidateContractPolicySatisfaction would
-// silently see zero policies and let every contract through unchecked —
-// which is why the BDD enforcement scenarios build their fixtures against
-// the same canonical shape the backend emits.
-func extractContractODRLPolicies(contract map[string]any) []map[string]any {
-	raw := topLevelValue(documentData(contract), "policies")
-	return collectODRLPolicyRules(raw)
-}
-
 func externalODRLPolicies(raw []any) []map[string]any {
 	result := make([]map[string]any, 0, len(raw))
 	for _, item := range raw {
@@ -569,148 +574,6 @@ func externalODRLPolicies(raw []any) []map[string]any {
 type odrlFieldInfo struct {
 	conditionID   string
 	parameterName string
-}
-
-func buildODRLFieldIndex(contract map[string]any) map[string]odrlFieldInfo {
-	index := map[string]odrlFieldInfo{}
-	requirements, ok := asArray(topLevelValue(documentData(contract), "contractData"))
-	if !ok {
-		return index
-	}
-	for _, rawReq := range requirements {
-		req, ok := rawReq.(map[string]any)
-		if !ok {
-			continue
-		}
-		conditionID, _ := req["dcs:conditionId"].(string)
-		if conditionID == "" {
-			conditionID, _ = req["conditionId"].(string)
-		}
-		rawFields := req["dcs:fields"]
-		if rawFields == nil {
-			rawFields = req["fields"]
-		}
-		fields, ok := asArray(rawFields)
-		if !ok {
-			continue
-		}
-		for _, rawField := range fields {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				continue
-			}
-			fieldID, _ := field["@id"].(string)
-			paramName, _ := field["dcs:parameterName"].(string)
-			if paramName == "" {
-				paramName, _ = field["parameterName"].(string)
-			}
-			if fieldID != "" {
-				index[fieldID] = odrlFieldInfo{conditionID: conditionID, parameterName: paramName}
-			}
-		}
-	}
-	return index
-}
-
-func lookupSemanticConditionValue(contract map[string]any, conditionID, parameterName string) (any, bool) {
-	values, ok := asArray(contract["semanticConditionValues"])
-	if !ok {
-		return nil, false
-	}
-	for _, rawVal := range values {
-		val, ok := rawVal.(map[string]any)
-		if !ok {
-			continue
-		}
-		if val["conditionId"] == conditionID && val["parameterName"] == parameterName {
-			pv := val["parameterValue"]
-			if pv == nil {
-				return nil, false
-			}
-			return compactJSONLDValue(pv), true
-		}
-	}
-	return nil, false
-}
-
-func auditContractODRLPolicies(contract map[string]any, policies []map[string]any) []PolicyFinding {
-	if len(policies) == 0 {
-		return nil
-	}
-	fieldIndex := buildODRLFieldIndex(contract)
-	findings := []PolicyFinding{}
-	for _, policy := range policies {
-		findings = append(findings, auditODRLPolicy(contract, policy, fieldIndex)...)
-	}
-	return findings
-}
-
-func auditODRLPolicy(contract map[string]any, policy map[string]any, fieldIndex map[string]odrlFieldInfo) []PolicyFinding {
-	ruleID, _ := policy["@id"].(string)
-	if ruleID == "" {
-		ruleID = "FACIS-CONTRACT-ODRL-POLICY"
-	}
-	policyType, _ := policy["@type"].(string)
-
-	constraint, ok := policy["odrl:constraint"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	leftOperandObj, ok := constraint["odrl:leftOperand"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	fieldID, _ := leftOperandObj["@id"].(string)
-	if fieldID == "" {
-		return nil
-	}
-	operatorObj, ok := constraint["odrl:operator"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	operator, _ := operatorObj["@id"].(string)
-	if operator == "" {
-		return nil
-	}
-	rightOperand := constraint["odrl:rightOperand"]
-
-	fieldInfo, ok := fieldIndex[fieldID]
-	if !ok {
-		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, fieldID, "dcs:RequirementField")
-		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}
-	}
-	actualValue, hasValue := lookupSemanticConditionValue(contract, fieldInfo.conditionID, fieldInfo.parameterName)
-
-	isProhibition := compactTerm(policyType) == "Prohibition"
-	isPermission := compactTerm(policyType) == "Permission"
-	severity := "error"
-	if isPermission {
-		severity = "info"
-	}
-
-	if !hasValue {
-		if isProhibition || isPermission {
-			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, fieldID, "")
-			applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-			return []PolicyFinding{finding}
-		}
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, fieldID, "")
-		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}
-	}
-
-	satisfied := evaluateODRLConstraint(operator, actualValue, rightOperand)
-	violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
-
-	if violated {
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, compactTerm(operator)), fieldID, fieldID, "")
-		applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-		return []PolicyFinding{finding}
-	}
-	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, fieldID, "")
-	applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-	return []PolicyFinding{finding}
 }
 
 func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) bool {
