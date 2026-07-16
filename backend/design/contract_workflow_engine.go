@@ -14,9 +14,18 @@ var ContractCreateRequest = Type("ContractCreateRequest", func() {
 	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
 	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
 	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
-	Attribute("parties", ArrayOf(String), "Organizations that are parties to this contract; party membership gates read access to the contract (stored as the dcs:parties JSON-LD property)")
+	Attribute("parties", ArrayOf(ContractParty), "Organizations that are parties to this contract; party membership gates read access to the contract (stored as the dcs:parties JSON-LD property)")
 
 	Required("template_did")
+})
+
+var ContractParty = Type("ContractParty", func() {
+	Description("An organization party to the contract and the contractual role it holds")
+
+	Attribute("name", String, "Legal name of the organization (the value the OID4VP organization claim discloses; gates read access)")
+	Attribute("role", String, "Contractual role the organization holds (e.g. provider, customer); binds the organization to the role-derived party node the contract's ODRL rules reference as odrl:assigner/odrl:assignee")
+
+	Required("name")
 })
 
 var ContractCreateResponse = Type("ContractCreateResponse", func() {

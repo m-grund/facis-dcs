@@ -159,7 +159,7 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		Reviewers:   req.Reviewers,
 		Approvers:   req.Approvers,
 		Negotiators: req.Negotiators,
-		Parties:     req.Parties,
+		Parties:     contractPartiesFromRequest(req.Parties),
 	}
 	createHandler := command.Creator{
 		DB:          s.DB,
@@ -1462,4 +1462,19 @@ func (s *contractWorkflowEnginesrvc) DeploymentCallback(ctx context.Context, req
 		Did:    req.Did,
 		Status: &status,
 	}, nil
+}
+
+func contractPartiesFromRequest(parties []*contractworkflowengine.ContractParty) []command.ContractParty {
+	converted := make([]command.ContractParty, 0, len(parties))
+	for _, party := range parties {
+		if party == nil {
+			continue
+		}
+		p := command.ContractParty{Name: party.Name}
+		if party.Role != nil {
+			p.Role = *party.Role
+		}
+		converted = append(converted, p)
+	}
+	return converted
 }

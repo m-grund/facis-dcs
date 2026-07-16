@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/identity"
@@ -34,8 +35,13 @@ type CreateCmd struct {
 	Reviewers   []string           `json:"reviewers"`
 	Approvers   []string           `json:"approvers"`
 	Negotiators []string           `json:"negotiators"`
-	Parties     []string           `json:"parties"`
+	Parties     []ContractParty    `json:"parties"`
 	UserRoles   userrole.UserRoles `json:"user_roles"`
+}
+
+type ContractParty struct {
+	Name string `json:"name"`
+	Role string `json:"role,omitempty"`
 }
 
 type Creator struct {
@@ -201,19 +207,36 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 // attachContractParties records the organizations that are parties to this
 // contract as typed dcs:CompanyParty nodes under "dcs:parties". The legal
 // name (the same value the OID4VP organization claim discloses) gates read
-// access in query/contract/querybyid.go.
-func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON, error) {
+// access in query/contract/querybyid.go. A party carrying a role is bound
+// to the role-derived node the contract's ODRL rules reference as
+// odrl:assigner/odrl:assignee, so rule parties resolve to the named
+// organization.
+func attachContractParties(raw *datatype.JSON, parties []ContractParty) (*datatype.JSON, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(*raw, &doc); err != nil {
 		return nil, fmt.Errorf("could not decode contract data: %w", err)
 	}
 	nodes, _ := doc["dcs:parties"].([]any)
-	for index, name := range parties {
-		nodes = append(nodes, map[string]any{
-			"@id":           fmt.Sprintf("%s#party-%d", doc["@id"], index),
+	for index, party := range parties {
+		if party.Role != "" {
+			if node := partyNodeByRoleFragment(nodes, party.Role); node != nil {
+				node["dcs:legalName"] = party.Name
+				continue
+			}
+		}
+		fragment := fmt.Sprintf("party-%d", index)
+		if party.Role != "" {
+			fragment = "party-" + party.Role
+		}
+		node := map[string]any{
+			"@id":           fmt.Sprintf("%s#%s", doc["@id"], fragment),
 			"@type":         "dcs:CompanyParty",
-			"dcs:legalName": name,
-		})
+			"dcs:legalName": party.Name,
+		}
+		if party.Role != "" {
+			node["dcs:role"] = party.Role
+		}
+		nodes = append(nodes, node)
 	}
 	doc["dcs:parties"] = nodes
 	encoded, err := datatype.NewJSON(doc)
@@ -221,4 +244,17 @@ func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON
 		return nil, fmt.Errorf("could not encode contract data: %w", err)
 	}
 	return &encoded, nil
+}
+
+func partyNodeByRoleFragment(nodes []any, role string) map[string]any {
+	for _, rawNode := range nodes {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			continue
+		}
+		if iri, _ := node["@id"].(string); strings.HasSuffix(iri, "#party-"+role) {
+			return node
+		}
+	}
+	return nil
 }
