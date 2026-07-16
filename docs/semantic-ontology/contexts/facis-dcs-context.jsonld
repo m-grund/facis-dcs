@@ -111,22 +111,6 @@
     "blockType": "dcs:blockType",
     "type": "dcs:jsonType",
     "semanticProfileVersion": "dcs:semanticProfileVersion",
-    "schemaRefs": {
-      "@id": "dcs:schemaRefs",
-      "@type": "@json"
-    },
-    "policyRefs": {
-      "@id": "dcs:policyRefs",
-      "@type": "@json"
-    },
-    "validation": {
-      "@id": "dcs:validation",
-      "@type": "@json"
-    },
-    "sourceTemplate": {
-      "@id": "dcs:sourceTemplate",
-      "@type": "@json"
-    },
     "createdAt": {
       "@id": "dcs:createdAt",
       "@type": "xsd:dateTime"
@@ -196,6 +180,10 @@
     "semanticConditionValues": {
       "@id": "dcs:semanticConditionValues",
       "@container": "@set"
+    },
+    "forField": {
+      "@id": "dcs:forField",
+      "@type": "@id"
     },
     "conditionId": "dcs:conditionId",
     "conditionName": "dcs:conditionName",

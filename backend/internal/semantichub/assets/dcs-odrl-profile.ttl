@@ -17,11 +17,11 @@
   rdfs:label "FACIS DCS ODRL Profile" ;
   dcterms:description """ODRL 2.2 profile for FACIS Digital Contracting
 Service policies. Constraint left operands are dcs:RequirementField
-instances declared in the same document's dcs:contractData: a constraint
+instances declared in the same document's dcs:contractData. A constraint
 governs the submitted value whose dcs:semanticConditionValues entry
-matches the field's owning dcs:DataRequirement (dcs:conditionId) and the
-field's dcs:parameterName. Reported KPI metrics bind to constraints the
-same way, by dcs:parameterName equality with the metric name.""" ;
+references the constraint's odrl:leftOperand via dcs:forField. Reported
+KPI metrics bind to constraints by dcs:parameterName equality between the
+metric name and the left-operand field.""" ;
   owl:imports <http://www.w3.org/ns/odrl/2/> .
 
 dcs:provideCompliantValue
@@ -32,5 +32,6 @@ dcs:provideCompliantValue
   odrl:includedIn odrl:use .
 
 # A dcs:RequirementField referenced as odrl:leftOperand is a left operand:
-# its runtime value is the matching dcs:semanticConditionValues entry.
+# its runtime value is the dcs:semanticConditionValues entry whose
+# dcs:forField references it.
 dcs:RequirementField rdfs:subClassOf odrl:LeftOperand .

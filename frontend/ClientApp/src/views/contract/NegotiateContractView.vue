@@ -11,6 +11,10 @@ import ContractHistoryDiffView from '@/modules/contract-workflow-engine/componen
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
+import {
+  collectDeclaredRequirements,
+  fromDocumentSemanticValues,
+} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
@@ -131,7 +135,6 @@ function buildCurrentContractData(): ContractData | undefined {
     policies: dcsDraftStore.policies,
     subTemplateSnapshots: dcsDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
-    sourceTemplate: contract.value.contract_data?.sourceTemplate,
     derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
     parentContractDid: contract.value.contract_data?.['dcs:parentContract']?.['@id'],
   })
@@ -313,13 +316,19 @@ const handleSelectedNegotiation = async (negotiation: ContractNegotiation | null
       originalSemanticConditionValues.value = [...contractContentValuesStore.semanticConditionValues]
       originalValuesWereCached.value = true
     }
-    const negotiationValues = negotiation.change_request.contract_data?.semanticConditionValues ?? []
+    const negotiationChangeData = negotiation.change_request.contract_data
+    const negotiationValues = negotiationChangeData
+      ? fromDocumentSemanticValues(
+          negotiationChangeData.semanticConditionValues ?? [],
+          collectDeclaredRequirements(negotiationChangeData),
+        )
+      : []
 
     const originalValuesMap = new Map(
-      contract.value.contract_data?.semanticConditionValues?.map((value) => [
+      contractContentValuesStore.semanticConditionValues.map((value) => [
         `${value.blockId}|${value.conditionId}|${value.parameterName}`,
         String(value.parameterValue),
-      ]) ?? [],
+      ]),
     )
     const negotiationValuesMap = new Map(
       negotiationValues.map((value) => [

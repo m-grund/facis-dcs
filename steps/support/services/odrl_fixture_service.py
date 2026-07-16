@@ -31,11 +31,10 @@ _FIELD_BY_NAME = {
 
 
 def _semantic_value(field_name: str, actual_value):
-    field_id, parameter_name, _ = _FIELD_BY_NAME[field_name]
+    field_id, _, _ = _FIELD_BY_NAME[field_name]
     return {
+        "forField": field_id,
         "blockId": "block-clause-1",
-        "conditionId": "provider",
-        "parameterName": parameter_name,
         "parameterValue": actual_value,
     }
 

@@ -91,7 +91,6 @@ function buildCurrentContractData(): ContractData | undefined {
     subTemplateSnapshots: dcsDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
     parentContractDid: selectedParentContractDid.value ?? undefined,
-    sourceTemplate: contract.value.contract_data?.sourceTemplate,
     derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
   })
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -99,7 +100,7 @@ func odrlContract(fieldID, conditionID, parameterName string, policies []any, ac
 			},
 		},
 		"dcs:policies":            wrapODRLSet(policies),
-		"semanticConditionValues": []any{map[string]any{"conditionId": conditionID, "parameterName": parameterName, "parameterValue": actualValue}},
+		"semanticConditionValues": []any{map[string]any{"forField": fieldID, "parameterValue": actualValue}},
 	}
 }
 
@@ -164,9 +165,9 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 			odrlDuty("FACIS-CONTRACT-STATIC-003", paymentFieldID, "odrl:lteq", float64(10000)),
 		}),
 		"semanticConditionValues": []any{
-			map[string]any{"conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
-			map[string]any{"conditionId": "contract", "parameterName": "governingLaw", "parameterValue": "DE"},
-			map[string]any{"conditionId": "contract", "parameterName": "amount", "parameterValue": float64(9500)},
+			map[string]any{"forField": countryFieldID, "parameterValue": "DEU"},
+			map[string]any{"forField": lawFieldID, "parameterValue": "DE"},
+			map[string]any{"forField": paymentFieldID, "parameterValue": float64(9500)},
 		},
 	}
 
@@ -219,12 +220,17 @@ func TestAuditContractContentAcceptsValidJurisdiction(t *testing.T) {
 
 func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 	contract := canonicalAuditContract()
+	contract["dcs:contractData"] = append(contract["dcs:contractData"].([]any),
+		slaRequirement("condition-legal", "contract.jurisdiction"),
+		slaRequirement("condition-service", "service.sla.availability", "service.sla.responseTime", "service.sla.resolutionTime"),
+		slaRequirement("condition-signature", "signature.requiredLevel"),
+	)
 	contract["semanticConditionValues"] = append(contract["semanticConditionValues"].([]any),
-		map[string]any{"conditionId": "condition-legal", "parameterName": "contract.jurisdiction", "parameterValue": "DEU"},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.availability", "parameterValue": 99.95},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.responseTime", "parameterValue": 10},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.resolutionTime", "parameterValue": 120},
-		map[string]any{"conditionId": "condition-signature", "parameterName": "signature.requiredLevel", "parameterValue": "AES"},
+		map[string]any{"forField": slaFieldID("condition-legal", "contract.jurisdiction"), "parameterValue": "DEU"},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.availability"), "parameterValue": 99.95},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.responseTime"), "parameterValue": 10},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.resolutionTime"), "parameterValue": 120},
+		map[string]any{"forField": slaFieldID("condition-signature", "signature.requiredLevel"), "parameterValue": "AES"},
 	)
 
 	findings, err := AuditContractContent(context.Background(), contract, nil, ContractContentAuditMetadata{})
@@ -678,10 +684,38 @@ func canonicalAuditContract() map[string]any {
 			odrlDuty("urn:uuid:policy-postal-code", postalCodeFieldID, "odrl:eq", map[string]any{"@type": "xsd:string", "@value": "91448"}),
 		}),
 		"semanticConditionValues": []any{
-			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
-			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "postalCode", "parameterValue": "91448"},
+			map[string]any{"blockId": "urn:uuid:block-clause-1", "forField": countryFieldID, "parameterValue": "DEU"},
+			map[string]any{"blockId": "urn:uuid:block-clause-1", "forField": postalCodeFieldID, "parameterValue": "91448"},
 		},
 	}
+}
+
+// slaRequirement declares a data requirement whose fields carry dotted
+// semantic-path parameter names, matching how SLA statement rules address
+// runtime values.
+func slaRequirement(conditionID string, parameterNames ...string) map[string]any {
+	fields := make([]any, 0, len(parameterNames))
+	for _, parameterName := range parameterNames {
+		fields = append(fields, map[string]any{
+			"@id":               slaFieldID(conditionID, parameterName),
+			"@type":             "dcs:RequirementField",
+			"dcs:parameterName": parameterName,
+			"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#" + conditionID},
+			"dcs:required":      true,
+		})
+	}
+	return map[string]any{
+		"@id":               "urn:uuid:req-" + conditionID,
+		"@type":             "dcs:DataRequirement",
+		"dcs:conditionId":   conditionID,
+		"dcs:name":          conditionID,
+		"dcs:schemaVersion": "v1",
+		"dcs:fields":        fields,
+	}
+}
+
+func slaFieldID(conditionID, parameterName string) string {
+	return "urn:uuid:field-" + conditionID + "-" + strings.ReplaceAll(parameterName, ".", "-")
 }
 
 func canonicalAuditContractWithTemplateParties() map[string]any {
@@ -705,13 +739,17 @@ func canonicalAuditContractWithTemplateParties() map[string]any {
 			},
 		},
 	}
+	contract["dcs:contractData"] = []any{
+		slaRequirement("condition-service", "service.sla.availability"),
+		slaRequirement("condition-legal", "contract.jurisdiction"),
+	}
 	contract["semanticConditionValues"] = []any{
-		map[string]any{"conditionId": "condition-customer", "parameterName": "company.legalName", "parameterValue": "Firma A"},
-		map[string]any{"conditionId": "condition-customer", "parameterName": "company.location.country", "parameterValue": "DEU"},
-		map[string]any{"conditionId": "condition-provider", "parameterName": "company.legalName", "parameterValue": "Firma B"},
-		map[string]any{"conditionId": "condition-provider", "parameterName": "company.location.country", "parameterValue": "DEU"},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.availability", "parameterValue": 99.5},
-		map[string]any{"conditionId": "condition-legal", "parameterName": "contract.jurisdiction", "parameterValue": "DEU"},
+		map[string]any{"forField": "urn:uuid:field-condition-customer-legal-name", "parameterValue": "Firma A"},
+		map[string]any{"forField": "urn:uuid:field-condition-customer-country", "parameterValue": "DEU"},
+		map[string]any{"forField": "urn:uuid:field-condition-provider-legal-name", "parameterValue": "Firma B"},
+		map[string]any{"forField": "urn:uuid:field-condition-provider-country", "parameterValue": "DEU"},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.availability"), "parameterValue": 99.5},
+		map[string]any{"forField": slaFieldID("condition-legal", "contract.jurisdiction"), "parameterValue": "DEU"},
 	}
 	return contract
 }

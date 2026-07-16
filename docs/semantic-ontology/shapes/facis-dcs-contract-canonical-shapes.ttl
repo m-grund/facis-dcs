@@ -72,3 +72,19 @@ dcs:OdrlProhibitionProseShape
     sh:nodeKind sh:IRI ;
     sh:message "An ODRL Prohibition requires dcs:prose referencing the human-readable clause it is backed by." ;
   ] .
+
+dcs:SemanticConditionValueShape
+    a sh:NodeShape ;
+    sh:targetObjectsOf dcs:semanticConditionValues ;
+    sh:property [
+        sh:path dcs:forField ;
+        sh:nodeKind sh:IRI ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "A submitted value must reference the requirement field it is for (dcs:forField)." ;
+    ] ;
+    sh:property [
+        sh:path dcs:parameterValue ;
+        sh:minCount 1 ;
+        sh:message "A submitted value entry must carry dcs:parameterValue." ;
+    ] .

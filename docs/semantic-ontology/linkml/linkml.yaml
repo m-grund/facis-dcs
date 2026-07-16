@@ -84,6 +84,20 @@ classes:
       - parameterName
       - required
 
+  SemanticConditionValue:
+    class_uri: dcs:SemanticConditionValue
+    description: >-
+      A value submitted for a requirement field during the contract
+      workflow; dcs:forField binds it to the field an ODRL constraint
+      references as its left operand.
+    slot_usage:
+      forField:
+        required: true
+    slots:
+      - forField
+      - parameterValue
+      - blockId
+
   DocumentStructure:
     class_uri: dcs:DocumentStructure
     slots:
@@ -243,6 +257,27 @@ slots:
   parameterName:
     slot_uri: dcs:parameterName
     range: string
+
+  forField:
+    slot_uri: dcs:forField
+    range: RequirementField
+    description: The requirement field a submitted value is for.
+
+  parameterValue:
+    slot_uri: dcs:parameterValue
+    range: string
+    description: The submitted value.
+
+  blockId:
+    slot_uri: dcs:blockId
+    range: string
+    description: The document block the value was captured in.
+
+  semanticConditionValues:
+    slot_uri: dcs:semanticConditionValues
+    range: SemanticConditionValue
+    multivalued: true
+    description: The values submitted for the document's requirement fields.
 
   required:
     slot_uri: dcs:required

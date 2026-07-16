@@ -207,7 +207,7 @@ func attachContractParties(raw *datatype.JSON, parties []string) (*datatype.JSON
 	if err := json.Unmarshal(*raw, &doc); err != nil {
 		return nil, fmt.Errorf("could not decode contract data: %w", err)
 	}
-	nodes := make([]any, 0, len(parties))
+	nodes, _ := doc["dcs:parties"].([]any)
 	for index, name := range parties {
 		nodes = append(nodes, map[string]any{
 			"@id":           fmt.Sprintf("%s#party-%d", doc["@id"], index),

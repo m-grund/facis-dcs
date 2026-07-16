@@ -191,18 +191,24 @@ export interface DcsContractData extends DcsDocumentData {
   'dcs:metadata': DcsContractMetadata | DcsTemplateMetadata
   'dcs:contractFields'?: DcsContractField[]
   'dcs:parentContract'?: JsonLdReference
-  semanticConditionValues?: {
-    blockId: string
-    conditionId: string
-    parameterName: string
-    parameterValue?: string | number | boolean
-  }[]
-  sourceTemplate?: {
-    did: string
-    version?: number
-    document_number?: string
-  }
-  derivedFromTemplate?: string
+  semanticConditionValues?: DcsSemanticConditionValue[]
+  derivedFromTemplate?: DcsTemplateProvenance
+}
+
+/**
+ * A submitted runtime value; forField references the dcs:RequirementField
+ * an ODRL constraint names as its odrl:leftOperand.
+ */
+export interface DcsSemanticConditionValue {
+  forField: string
+  blockId?: string
+  parameterValue?: string | number | boolean
+}
+
+/** The source-template node: a prov:wasDerivedFrom edge plus version assertion. */
+export interface DcsTemplateProvenance {
+  '@id': string
+  version?: number
 }
 
 export function isDcsSection(block: DcsBlock): block is DcsSection {

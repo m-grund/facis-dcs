@@ -10,6 +10,7 @@ import { typedClauseValuesSummary } from '@template-repository/utils/typed-claus
 import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
 import http from '@/api/http'
+import { toDocumentSemanticValues } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import {
   type DcsApprovedTemplate,
   type DcsBlock,
@@ -584,8 +585,7 @@ interface CanonicalDocumentInput {
   subTemplateSnapshots?: SubTemplateSnapshot[]
   semanticConditionValues?: SemanticConditionValue[]
   parentContractDid?: string
-  sourceTemplate?: DcsContractData['sourceTemplate']
-  derivedFromTemplate?: string
+  derivedFromTemplate?: DcsContractData['derivedFromTemplate']
 }
 
 function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentData {
@@ -624,13 +624,22 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
     'dcs:policies': assemblePolicySet(input.policies, input.documentId, input.documentType),
     ...(input.documentType === 'dcs:Contract'
       ? {
-          semanticConditionValues: input.semanticConditionValues ?? [],
+          semanticConditionValues: toDocumentSemanticValues(
+            input.semanticConditionValues ?? [],
+            declaredRequirements(input),
+          ),
           ...(input.parentContractDid ? { 'dcs:parentContract': { '@id': input.parentContractDid } } : {}),
-          ...(input.sourceTemplate ? { sourceTemplate: input.sourceTemplate } : {}),
           ...(input.derivedFromTemplate ? { derivedFromTemplate: input.derivedFromTemplate } : {}),
         }
       : {}),
   }
+}
+
+function declaredRequirements(input: CanonicalDocumentInput): DcsDataRequirement[] {
+  const fromSnapshots = (input.subTemplateSnapshots ?? []).flatMap((snapshot) =>
+    isDcsDocumentData(snapshot.template_data) ? (snapshot.template_data['dcs:contractData'] ?? []) : [],
+  )
+  return [...input.contractData, ...fromSnapshots]
 }
 
 function canonicalizeBlocks(blocks: (DcsBlock | MergedApprovedTemplateBlock)[]): DcsBlock[] {
@@ -681,8 +690,7 @@ export interface ContractDocumentInput {
   subTemplateSnapshots: SubTemplateSnapshot[]
   semanticConditionValues: SemanticConditionValue[]
   parentContractDid?: string
-  sourceTemplate?: DcsContractData['sourceTemplate']
-  derivedFromTemplate?: string
+  derivedFromTemplate?: DcsContractData['derivedFromTemplate']
 }
 
 export function buildContractDocument(input: ContractDocumentInput): DcsContractData {

@@ -555,7 +555,6 @@ func externalODRLPolicies(raw []any) []map[string]any {
 }
 
 type odrlFieldInfo struct {
-	conditionID   string
 	parameterName string
 }
 
@@ -722,19 +721,33 @@ func firstExistingValue(contract map[string]any, keys ...string) (any, bool) {
 	return nil, false
 }
 
+// valueForField resolves a semanticConditionValues entry's dcs:forField
+// reference (an IRI string once normalized, a node reference beforehand).
+func valueForField(value map[string]any) string {
+	switch forField := value["forField"].(type) {
+	case string:
+		return forField
+	case map[string]any:
+		iri, _ := forField["@id"].(string)
+		return iri
+	}
+	return ""
+}
+
 func semanticConditionValuesByParameterName(contract map[string]any, semanticPath string) (any, bool) {
 	values, ok := asArray(contract["semanticConditionValues"])
 	if !ok {
 		return nil, false
 	}
+	fields := contractDataFieldsByID(contract)
 	matches := []any{}
 	for _, rawValue := range values {
 		value, ok := rawValue.(map[string]any)
 		if !ok {
 			continue
 		}
-		parameterName, _ := value["parameterName"].(string)
-		if !equivalentSemanticPath(parameterName, semanticPath) {
+		field := fields[valueForField(value)]
+		if !equivalentSemanticPath(field.parameterName, semanticPath) {
 			continue
 		}
 		parameterValue, exists := value["parameterValue"]
@@ -757,6 +770,7 @@ func companyPartiesFromSemanticValues(contract map[string]any) ([]any, bool) {
 		return nil, false
 	}
 	requirements := contractDataRequirementsByConditionID(contract)
+	fields := contractDataFieldsByID(contract)
 	partiesByCondition := map[string]map[string]any{}
 	order := []string{}
 	for _, rawValue := range values {
@@ -764,8 +778,9 @@ func companyPartiesFromSemanticValues(contract map[string]any) ([]any, bool) {
 		if !ok {
 			continue
 		}
-		conditionID, _ := value["conditionId"].(string)
-		parameterName, _ := value["parameterName"].(string)
+		field := fields[valueForField(value)]
+		conditionID := field.conditionID
+		parameterName := field.parameterName
 		if !strings.HasPrefix(parameterName, "company.") {
 			continue
 		}
@@ -809,6 +824,46 @@ func contractDataRequirementsByConditionID(contract map[string]any) map[string]m
 	requirements := map[string]map[string]any{}
 	collectContractDataRequirements(contract, requirements)
 	return requirements
+}
+
+type contractFieldInfo struct {
+	conditionID   string
+	parameterName string
+}
+
+// contractDataFieldsByID indexes the document's declared requirement fields
+// by their @id — the IRI a semanticConditionValues entry's dcs:forField and
+// an ODRL constraint's odrl:leftOperand both reference.
+func contractDataFieldsByID(contract map[string]any) map[string]contractFieldInfo {
+	fields := map[string]contractFieldInfo{}
+	for conditionID, requirement := range contractDataRequirementsByConditionID(contract) {
+		rawFields, ok := asArray(firstOf(requirement, "dcs:fields", "fields"))
+		if !ok {
+			continue
+		}
+		for _, rawField := range rawFields {
+			field, ok := rawField.(map[string]any)
+			if !ok {
+				continue
+			}
+			fieldID, _ := field["@id"].(string)
+			if fieldID == "" {
+				continue
+			}
+			parameterName, _ := firstOf(field, "dcs:parameterName", "parameterName").(string)
+			fields[fieldID] = contractFieldInfo{conditionID: conditionID, parameterName: parameterName}
+		}
+	}
+	return fields
+}
+
+func firstOf(node map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if value, ok := node[key]; ok {
+			return value
+		}
+	}
+	return nil
 }
 
 func collectContractDataRequirements(current any, requirements map[string]map[string]any) {

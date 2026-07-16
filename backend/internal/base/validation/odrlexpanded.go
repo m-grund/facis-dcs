@@ -185,7 +185,6 @@ func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 		if !ok {
 			continue
 		}
-		conditionID := expandedFirstLiteralString(req, dcsNamespace()+"conditionId")
 		for _, rawField := range expandedValues(req, dcsNamespace()+"fields") {
 			field, ok := rawField.(map[string]any)
 			if !ok {
@@ -196,7 +195,6 @@ func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 				continue
 			}
 			index[fieldID] = odrlFieldInfo{
-				conditionID:   conditionID,
 				parameterName: expandedFirstLiteralString(field, dcsNamespace()+"parameterName"),
 			}
 		}
@@ -204,18 +202,16 @@ func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 	return index
 }
 
-// expandedSemanticConditionValue looks up a submitted semantic value by
-// (conditionId, parameterName).
-func expandedSemanticConditionValue(root map[string]any, conditionID, parameterName string) (any, bool) {
+// expandedSemanticConditionValue looks up the submitted value whose
+// dcs:forField references the given requirement field.
+func expandedSemanticConditionValue(root map[string]any, fieldIRI string) (any, bool) {
 	for _, rawEntry := range expandedValues(root, dcsNamespace()+"semanticConditionValues") {
 		entry, ok := rawEntry.(map[string]any)
 		if !ok {
 			continue
 		}
-		if expandedFirstLiteralString(entry, dcsNamespace()+"conditionId") != conditionID {
-			continue
-		}
-		if expandedFirstLiteralString(entry, dcsNamespace()+"parameterName") != parameterName {
+		forField, ok := expandedFirst(entry, dcsNamespace()+"forField")
+		if !ok || expandedID(forField) != fieldIRI {
 			continue
 		}
 		values := expandedValues(entry, dcsNamespace()+"parameterValue")
@@ -274,13 +270,12 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 	}
 	rightOperand := expandedRightOperand(constraint, operator)
 
-	fieldInfo, ok := fieldIndex[fieldID]
-	if !ok {
+	if _, ok := fieldIndex[fieldID]; !ok {
 		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, fieldID, "dcs:RequirementField")
 		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
 		return []PolicyFinding{finding}
 	}
-	actualValue, hasValue := expandedSemanticConditionValue(root, fieldInfo.conditionID, fieldInfo.parameterName)
+	actualValue, hasValue := expandedSemanticConditionValue(root, fieldID)
 
 	isProhibition := policyType == "Prohibition"
 	isPermission := policyType == "Permission"

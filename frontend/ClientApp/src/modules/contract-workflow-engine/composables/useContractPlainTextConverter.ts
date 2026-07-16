@@ -16,6 +16,10 @@ import {
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
+import {
+  collectDeclaredRequirements,
+  fromDocumentSemanticValues,
+} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsClause, DcsLayoutNode } from '@/models/dcs-jsonld'
@@ -254,7 +258,10 @@ export function useContractPlainTextConverter() {
     const blocks = cd['dcs:documentStructure']['dcs:blocks']['@list'] as (DcsBlock | MergedApprovedTemplateBlock)[]
     const layout = cd['dcs:documentStructure']['dcs:layout']
     const conditions = getSemanticConditionsFromTemplateData(cd)
-    const conditionValues = cd.semanticConditionValues ?? []
+    const conditionValues = fromDocumentSemanticValues(
+      cd.semanticConditionValues ?? [],
+      collectDeclaredRequirements(cd),
+    )
     const subTemplateSnapshots: SubTemplateSnapshot[] = (cd['dcs:metadata']?.['dcs:subTemplates'] ?? []).map((s) => ({
       did: s['@id'],
       version: s['dcs:version'],

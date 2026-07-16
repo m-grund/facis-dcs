@@ -67,6 +67,12 @@ dcs:renewsContract a owl:DatatypeProperty ;
     skos:definition "The prior contract instance this renewal supersedes." ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
+dcs:semanticConditionValues a owl:ObjectProperty ;
+    rdfs:label "semanticConditionValues" ;
+    rdfs:range dcs:SemanticConditionValue ;
+    skos:definition "The values submitted for the document's requirement fields." ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
 dcs:semanticPath a owl:DatatypeProperty ;
     rdfs:label "semanticPath" ;
     rdfs:range xsd:string ;
@@ -94,14 +100,14 @@ prov:wasRevisionOf a owl:DatatypeProperty ;
 dcs:ContractTemplate a owl:Class ;
     rdfs:label "ContractTemplate" ;
     rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:documentTitle ],
+            owl:cardinality 1 ;
+            owl:onProperty dcs:metadata ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:documentStructure ],
         [ a owl:Restriction ;
-            owl:cardinality 1 ;
-            owl:onProperty dcs:metadata ] ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:documentTitle ] ;
     skos:closeMatch <http://schema.org/CreativeWork> ;
     skos:exactMatch dcs:ContractTemplate ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
@@ -121,6 +127,12 @@ dcs:aboutContract a owl:DatatypeProperty ;
 dcs:bindsTo a owl:ObjectProperty ;
     rdfs:label "bindsTo" ;
     rdfs:range dcs:RequirementField ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:blockId a owl:DatatypeProperty ;
+    rdfs:label "blockId" ;
+    rdfs:range xsd:string ;
+    skos:definition "The document block the value was captured in." ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:conditionId a owl:DatatypeProperty ;
@@ -174,6 +186,12 @@ dcs:fields a owl:ObjectProperty ;
     skos:closeMatch <http://schema.org/property> ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
+dcs:forField a owl:ObjectProperty ;
+    rdfs:label "forField" ;
+    rdfs:range dcs:RequirementField ;
+    skos:definition "The requirement field a submitted value is for." ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
 dcs:isRoot a owl:DatatypeProperty ;
     rdfs:label "isRoot" ;
     rdfs:range xsd:boolean ;
@@ -204,6 +222,12 @@ dcs:observedValue a owl:DatatypeProperty ;
 dcs:parameterName a owl:DatatypeProperty ;
     rdfs:label "parameterName" ;
     rdfs:range xsd:string ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:parameterValue a owl:DatatypeProperty ;
+    rdfs:label "parameterValue" ;
+    rdfs:range xsd:string ;
+    skos:definition "The submitted value." ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:required a owl:DatatypeProperty ;
@@ -272,17 +296,17 @@ dcs:violation a owl:DatatypeProperty ;
 dcs:DataRequirement a owl:Class ;
     rdfs:label "DataRequirement" ;
     rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:name ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:schemaVersion ],
-        [ a owl:Restriction ;
             owl:minCardinality 1 ;
             owl:onProperty dcs:fields ],
         [ a owl:Restriction ;
             owl:cardinality 1 ;
-            owl:onProperty dcs:conditionId ] ;
+            owl:onProperty dcs:conditionId ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:schemaVersion ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:name ] ;
     skos:exactMatch dcs:DataRequirement ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
@@ -301,13 +325,13 @@ dcs:KPIObservation a owl:Class ;
             owl:onProperty dcs:observedAt ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:aboutContract ],
+            owl:onProperty dcs:violation ],
         [ a owl:Restriction ;
             owl:cardinality 1 ;
             owl:onProperty dcs:metricName ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:violation ] ;
+            owl:onProperty dcs:aboutContract ] ;
     skos:closeMatch <http://schema.org/Observation> ;
     skos:definition "One KPI value a contract target system reported for a deployed contract." ;
     skos:exactMatch dcs:KPIObservation ;
@@ -317,21 +341,36 @@ dcs:Placeholder a owl:Class ;
     rdfs:label "Placeholder" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:token ],
+            owl:onProperty dcs:bindsTo ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:bindsTo ] ;
+            owl:onProperty dcs:token ] ;
     skos:exactMatch dcs:Placeholder ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:SemanticConditionValue a owl:Class ;
+    rdfs:label "SemanticConditionValue" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:blockId ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:parameterValue ],
+        [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:forField ] ;
+    skos:definition "A value submitted for a requirement field during the contract workflow; dcs:forField binds it to the field an ODRL constraint references as its left operand." ;
+    skos:exactMatch dcs:SemanticConditionValue ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:SignatureField a owl:Class ;
     rdfs:label "SignatureField" ;
     rdfs:subClassOf [ a owl:Restriction ;
-            owl:cardinality 1 ;
-            owl:onProperty dcs:signatoryName ],
-        [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:title ] ;
+            owl:onProperty dcs:title ],
+        [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:signatoryName ] ;
     skos:exactMatch dcs:SignatureField ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
@@ -339,25 +378,22 @@ dcs:TemplateMetadata a owl:Class ;
     rdfs:label "TemplateMetadata" ;
     rdfs:subClassOf [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:schemaVersion ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:sourceSystemType ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:uuid ],
+            owl:onProperty dcs:did ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
             owl:onProperty dcs:templateVersion ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:did ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:description ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
             owl:onProperty dcs:templateType ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:updatedAt ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:name ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:schemaVersion ],
         [ a owl:Restriction ;
             owl:cardinality 1 ;
             owl:onProperty dcs:title ],
@@ -366,16 +402,19 @@ dcs:TemplateMetadata a owl:Class ;
             owl:onProperty dcs:createdBy ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:createdAt ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
             owl:onProperty dcs:state ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:updatedAt ],
+            owl:onProperty dcs:createdAt ],
         [ a owl:Restriction ;
             owl:maxCardinality 1 ;
-            owl:onProperty dcs:name ] ;
+            owl:onProperty dcs:uuid ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:description ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:sourceSystemType ] ;
     skos:exactMatch dcs:TemplateMetadata ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
@@ -408,21 +447,6 @@ dcs:LayoutNode a owl:Class ;
     skos:exactMatch dcs:LayoutNode ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
-dcs:RequirementField a owl:Class ;
-    rdfs:label "RequirementField" ;
-    rdfs:subClassOf [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:domainField ],
-        [ a owl:Restriction ;
-            owl:maxCardinality 1 ;
-            owl:onProperty dcs:required ],
-        [ a owl:Restriction ;
-            owl:cardinality 1 ;
-            owl:onProperty dcs:parameterName ] ;
-    skos:closeMatch <http://schema.org/PropertyValue> ;
-    skos:exactMatch dcs:RequirementField ;
-    skos:inScheme <https://w3id.org/facis/dcs/schema> .
-
 dcs:Section a owl:Class ;
     rdfs:label "Section" ;
     rdfs:subClassOf [ a owl:Restriction ;
@@ -439,6 +463,21 @@ dcs:TextBlock a owl:Class ;
             owl:onProperty dcs:text ] ;
     skos:closeMatch <http://schema.org/Text> ;
     skos:exactMatch dcs:TextBlock ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
+dcs:RequirementField a owl:Class ;
+    rdfs:label "RequirementField" ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:cardinality 1 ;
+            owl:onProperty dcs:parameterName ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:domainField ],
+        [ a owl:Restriction ;
+            owl:maxCardinality 1 ;
+            owl:onProperty dcs:required ] ;
+    skos:closeMatch <http://schema.org/PropertyValue> ;
+    skos:exactMatch dcs:RequirementField ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
 dcs:title a owl:DatatypeProperty ;

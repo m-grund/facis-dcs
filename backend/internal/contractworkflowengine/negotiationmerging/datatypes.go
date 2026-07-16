@@ -70,9 +70,8 @@ type ConditionParameter struct {
 }
 
 type SemanticConditionValue struct {
+	ForField       string          `json:"forField"`
 	BlockID        string          `json:"blockId"`
-	ConditionID    string          `json:"conditionId"`
-	ParameterName  string          `json:"parameterName"`
 	ParameterValue json.RawMessage `json:"parameterValue"`
 }
 

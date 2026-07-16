@@ -151,15 +151,12 @@ func readSemanticConditionValues(contractData map[string]any) ([]SemanticConditi
 }
 
 // upsertSemanticConditionValue applies last-write-wins at the level of a
-// single (BlockID, ParameterName, ConditionID) parameter, which is finer
-// grained than the field-level merge used for the other contract attributes
-// above, but still without explicit conflict detection.
+// single (BlockID, ForField) value, which is finer grained than the
+// field-level merge used for the other contract attributes above, but
+// still without explicit conflict detection.
 func upsertSemanticConditionValue(values []SemanticConditionValue, newValue SemanticConditionValue) []SemanticConditionValue {
 	for i, existing := range values {
-		if existing.BlockID == newValue.BlockID &&
-			existing.ParameterName == newValue.ParameterName &&
-			existing.ConditionID == newValue.ConditionID {
-
+		if existing.BlockID == newValue.BlockID && existing.ForField == newValue.ForField {
 			values[i] = newValue // update
 			return values
 		}
