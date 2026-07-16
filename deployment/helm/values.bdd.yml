@@ -64,7 +64,7 @@ identity:
 
 oid4vp:
   trust:
-    statusListSkipJWSVerify: true
+    xfscAllowUnsignedFallback: true
 
 postgresql:
   enabled: true

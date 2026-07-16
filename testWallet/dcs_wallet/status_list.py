@@ -55,19 +55,29 @@ def build_credential_status(
     list_number: int = DEFAULT_LIST_NUMBER,
     tenant: str = DEFAULT_TENANT,
 ) -> dict[str, Any]:
-    """Return W3C BitstringStatusListEntry credentialStatus for issuer JWT visible claims."""
+    """Return IETF status.status_list reference for issuer JWT visible claims."""
     uri = status_list_uri(service_base, list_number, tenant)
     idx = status_list_index(status_list_index_seed(sub=sub, organization=organization, roles=roles))
     return {
-        "id": f"{uri}#{idx}",
-        "type": "BitstringStatusListEntry",
-        "statusPurpose": "revocation",
-        "statusListIndex": str(idx),
-        "statusListCredential": uri,
+        "status_list": {
+            "idx": idx,
+            "uri": uri,
+        },
     }
 
 
 def credential_status_from_claims(claims: dict[str, Any]) -> tuple[int, str] | None:
+    status_claim = claims.get("status")
+    if isinstance(status_claim, dict):
+        sl = status_claim.get("status_list")
+        if isinstance(sl, dict):
+            uri = sl.get("uri")
+            index_raw = sl.get("idx")
+            if isinstance(uri, str) and uri.strip():
+                if isinstance(index_raw, int):
+                    return index_raw, uri.strip()
+                if isinstance(index_raw, str) and index_raw.isdigit():
+                    return int(index_raw, 10), uri.strip()
     cs = claims.get("credentialStatus")
     if not isinstance(cs, dict):
         return None

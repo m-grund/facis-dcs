@@ -65,7 +65,7 @@ oid4vp:
     enabled: true
     # Baked into the container image (see deployment/docker/Dockerfile).
     dataPath: /app/config/oid4vp/trust.dev.json
-    statusListSkipJWSVerify: false
+    xfscAllowUnsignedFallback: false
 
 customCA:
   enabled: false
