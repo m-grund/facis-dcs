@@ -357,10 +357,13 @@ export DATABASE_URL="host=localhost port=5432 user=dcs password=dcs dbname=dcs s
 # Canonical bdd-executor integration requires the package in the active environment.
 python -c 'import eu.xfsc.bdd.core' >/dev/null
 
-EXTRA_ARGS=()
+# Isolated-stack features (clean-DB assumptions, component restarts) run in
+# their dedicated targets, not the shared full-suite stack. Callers that DO
+# provide the isolation (run_bdd_audit_kind_once) override ARG_BDD_TAGS.
+EXTRA_ARGS=(${ARG_BDD_TAGS---tags=-isolated_stack})
 if [[ -n "${ARG_BDD:-}" ]]; then
   # shellcheck disable=SC2206
-  EXTRA_ARGS=(${ARG_BDD})
+  EXTRA_ARGS+=(${ARG_BDD})
 fi
 
 JUNIT_ARGS=(--junit --junit-directory .reports/junit)

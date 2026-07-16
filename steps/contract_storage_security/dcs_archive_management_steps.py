@@ -135,7 +135,11 @@ def step_then_archive_deletion_audited(context, name):
         entries = resp.json()
         assert isinstance(entries, list), f"Expected a list of audit log entries, got: {entries}"
         event_types_for_did = [
-            str(e.get("event_type", "")).upper() for e in entries if isinstance(e, dict) and e.get("did") == did
+            str(entry.get("event_type", "")).upper()
+            for scope_result in entries
+            if isinstance(scope_result, dict) and scope_result.get("did") == did
+            for entry in (scope_result.get("audit_trail") or [])
+            if isinstance(entry, dict)
         ]
         if "DELETE_ARCHIVED_CONTRACT" in event_types_for_did:
             return
@@ -282,7 +286,11 @@ def step_then_archive_annotation_audited(context, name):
         entries = resp.json()
         assert isinstance(entries, list), f"Expected a list of audit log entries, got: {entries}"
         event_types_for_did = [
-            str(e.get("event_type", "")).upper() for e in entries if isinstance(e, dict) and e.get("did") == did
+            str(entry.get("event_type", "")).upper()
+            for scope_result in entries
+            if isinstance(scope_result, dict) and scope_result.get("did") == did
+            for entry in (scope_result.get("audit_trail") or [])
+            if isinstance(entry, dict)
         ]
         if "ANNOTATE_ARCHIVED_CONTRACT" in event_types_for_did:
             return

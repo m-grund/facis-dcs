@@ -115,7 +115,7 @@ def step_then_flagged_risk_audited(context, name):
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         resp = post_json(
-            context, pac_audit_url(context), {"scope": "PROCESS_AUDIT_AND_COMPLIANCE"}, headers=headers
+            context, pac_audit_url(context), {"scope": "PROCESS_AUDIT_AND_COMPLIANCE", "justification": "BDD audit re-trigger"}, headers=headers
         )
         assert resp.status_code == 200, f"PAC-scope audit failed: {resp.status_code} {resp.text}"
         body = resp.json()
@@ -175,7 +175,7 @@ def step_then_audit_response_includes_contract(context, name):
             break
         time.sleep(2)
         context.requests_response = post_json(
-            context, pac_audit_url(context), {"scope": "CONTRACT_WORKFLOW_ENGINE"}, headers=headers
+            context, pac_audit_url(context), {"scope": "CONTRACT_WORKFLOW_ENGINE", "justification": "BDD audit re-trigger"}, headers=headers
         )
         assert context.requests_response.status_code == 200, (
             f"process audit re-trigger failed: {context.requests_response.status_code} "

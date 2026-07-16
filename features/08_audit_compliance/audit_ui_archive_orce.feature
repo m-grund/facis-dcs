@@ -3,7 +3,11 @@
 # incident management, retention and general archive CRUD are intentionally
 # outside this feature.
 
-@UC-07-03 @UC-08-01 @UC-08-02 @DCS-IR-PACM-01 @DCS-IR-PACM-02 @DCS-IR-CSA-04
+# @isolated_stack: every scenario assumes a clean database (@clean_db wipes
+# contracts but not the append-only audit/archive chains) and one scenario
+# restarts ORCE — both incompatible with the 340-scenario shared-stack run.
+# Runs in its dedicated stack: make -C tests/bdd run_bdd_audit_kind_ci.
+@isolated_stack @UC-07-03 @UC-08-01 @UC-08-02 @DCS-IR-PACM-01 @DCS-IR-PACM-02 @DCS-IR-CSA-04
 Feature: Minimal auditing workstation with archive integrity and ORCE evidence
 
   @REQ-audit-ui-archive-orce-AC1 @DCS-IR-PACM-01 @DCS-FR-CSA-24
