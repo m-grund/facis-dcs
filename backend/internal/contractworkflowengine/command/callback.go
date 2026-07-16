@@ -15,6 +15,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
@@ -166,12 +167,13 @@ func (h *DeploymentCallbackHandler) applyKPIReport(ctx context.Context, tx *sqlx
 	if err != nil {
 		return fmt.Errorf("could not read contract %s: %w", deployment.DID, err)
 	}
-	var contractDataBytes []byte
+	violation := false
 	if contract.ContractData != nil && contract.ContractData.IsNotNullValue() {
-		contractDataBytes = []byte(*contract.ContractData)
+		violation, err = validation.EvaluateKPIViolation(ctx, contract.ContractData, cmd.KPIMetric, cmd.KPIValue)
+		if err != nil {
+			return fmt.Errorf("could not evaluate KPI %q against contract %s policies: %w", cmd.KPIMetric, deployment.DID, err)
+		}
 	}
-
-	violation := EvaluateKPIViolation(contractDataBytes, cmd.KPIMetric, cmd.KPIValue)
 	correlationID := cmd.CorrelationID
 
 	if err := h.DeploymentRepo.CreateKPI(ctx, tx, db.ContractKPI{

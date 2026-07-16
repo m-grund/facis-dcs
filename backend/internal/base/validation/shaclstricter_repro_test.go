@@ -266,3 +266,19 @@ func TestAuditContractContentEvaluatesSLAProfileStatements(t *testing.T) {
 		require.NotContains(t, slaStatementRuleIDs, finding.RuleID, finding.Message)
 	}
 }
+
+func TestEvaluateKPIViolationBindsMetricByParameterName(t *testing.T) {
+	contract := canonicalAuditContract()
+
+	violated, err := EvaluateKPIViolation(context.Background(), contract, "country", "USA")
+	require.NoError(t, err)
+	require.True(t, violated, "USA is outside the isAnyOf set the country field's Duty declares")
+
+	violated, err = EvaluateKPIViolation(context.Background(), contract, "country", "DEU")
+	require.NoError(t, err)
+	require.False(t, violated)
+
+	violated, err = EvaluateKPIViolation(context.Background(), contract, "unbound-metric", "1")
+	require.NoError(t, err)
+	require.False(t, violated, "a metric no RequirementField declares binds to nothing")
+}
