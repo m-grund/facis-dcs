@@ -27,7 +27,7 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID)
 	require.NoError(t, err)
 
-	contractDraft, err := convertTemplateDataToContractData(persistedTemplate, creationTemplateDID)
+	contractDraft, err := ConvertTemplateDataToContractData(persistedTemplate, creationTemplateDID)
 	require.NoError(t, err)
 
 	var contractData map[string]any

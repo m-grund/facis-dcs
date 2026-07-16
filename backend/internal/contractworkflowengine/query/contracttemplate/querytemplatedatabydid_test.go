@@ -89,7 +89,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	converted, err := convertTemplateDataToContractData(&raw, "did:web:facis.example:template:1", 7)
+	converted, err := ConvertTemplateDataToContractData(&raw, "did:web:facis.example:template:1", 7)
 	require.NoError(t, err)
 
 	var data map[string]any
@@ -134,6 +134,6 @@ func TestConvertTemplateDataToContractDataRejectsLegacyTemplate(t *testing.T) {
 	raw, err := datatype.NewJSON(map[string]any{"documentBlocks": []any{}})
 	require.NoError(t, err)
 
-	_, err = convertTemplateDataToContractData(&raw, "did:web:facis.example:template:1")
+	_, err = ConvertTemplateDataToContractData(&raw, "did:web:facis.example:template:1")
 	require.ErrorContains(t, err, "canonical dcs:documentStructure envelope")
 }

@@ -23,6 +23,7 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
+	"digital-contracting-service/internal/contractworkflowengine/query/contracttemplate"
 )
 
 type CreateCmd struct {
@@ -121,7 +122,16 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not read contract template data: %w", err)
 	}
 
-	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractTemplate.TemplateData, cmd.DID, false)
+	// Derive the contract document from the template BEFORE persistence:
+	// without the @type rewrites (dcs:Contract / dcs:ContractMetadata) the
+	// stored contract is invisible to every sh:targetClass shape the
+	// Semantic Hub enforces (ADR-8/ADR-9) — SHACL would silently validate
+	// nothing.
+	contractDocument, err := contracttemplate.ConvertTemplateDataToContractData(contractTemplate.TemplateData, cmd.TemplateDID, contractTemplate.TemplateVersion)
+	if err != nil {
+		return fmt.Errorf("could not derive contract data from template: %w", err)
+	}
+	normalizedContractData, err := validation.NormalizeContractDataForPersistence(contractDocument, cmd.DID, false)
 	if err != nil {
 		return fmt.Errorf("contract data validation failed: %w", err)
 	}

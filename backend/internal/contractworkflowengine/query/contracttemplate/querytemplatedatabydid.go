@@ -29,7 +29,7 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 	if err != nil {
 		return nil, err
 	}
-	return convertTemplateDataToContractData(templateData, qry.DID, version)
+	return ConvertTemplateDataToContractData(templateData, qry.DID, version)
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, int, error) {
@@ -64,7 +64,16 @@ func (h *GetTemplateDataByDIDHandler) getContractTemplateDataFromDB(ctx context.
 	return templateData.TemplateData, templateData.TemplateVersion, nil
 }
 
-func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string, templateVersions ...int) (*datatype.JSON, error) {
+// ConvertTemplateDataToContractData derives a contract document from a
+// stored template document: @type becomes dcs:Contract, dcs:metadata's
+// @type becomes dcs:ContractMetadata, and the sourceTemplate/
+// derivedFromTemplate provenance is attached. Both the creation preview
+// (this package's query handler) and the create command itself
+// (command/create.go) MUST go through here — a contract persisted with the
+// template's own @types is invisible to every sh:targetClass dcs:Contract /
+// dcs:ContractMetadata shape in the Semantic Hub, silently exempting it
+// from SHACL enforcement (ADR-8/ADR-9).
+func ConvertTemplateDataToContractData(raw *datatype.JSON, templateDID string, templateVersions ...int) (*datatype.JSON, error) {
 	if raw == nil || !raw.IsNotNullValue() {
 		return raw, nil
 	}
