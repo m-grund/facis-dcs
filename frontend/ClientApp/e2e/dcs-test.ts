@@ -2,7 +2,23 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { test as base } from '@playwright/test'
 
-type DcsRole = 'Template Creator' | 'Template Manager' | 'Contract Creator'
+type DcsRole =
+  | 'Template Creator'
+  | 'Template Manager'
+  | 'Contract Creator'
+  | 'Contract Manager'
+  | 'Contract Signer'
+  | 'Auditor'
+
+export interface SeededFixtures {
+  templateDid: string
+  contractDid: string
+  contractName: string
+}
+
+export function seededFixtures(): SeededFixtures {
+  return JSON.parse(readFileSync(path.join(__dirname, '.auth', 'fixtures.json'), 'utf-8'))
+}
 
 interface DcsFixtures {
   /** Navigates with the given role's token injected into localStorage. */

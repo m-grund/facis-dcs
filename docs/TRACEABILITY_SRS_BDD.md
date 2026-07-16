@@ -392,3 +392,39 @@ work, not a deviation.
 Multi-signer flows (DCS-FR-SM-07/17) graduated from this list: 22/multi_signer asserts them
 end-to-end, including two distinct signer identities and the deploy gate.
 
+
+## Semantic canonicity evidence (interoperability assertion)
+
+Claim: every artifact the DCS produces is standard, canonical semantics — consumable by
+off-the-shelf JSON-LD/RDF/ODRL/SHACL tooling with no DCS-specific conventions beyond a served,
+declared ODRL profile.
+
+| Assertion | Evidence |
+|---|---|
+| Documents are valid JSON-LD 1.1; every term resolves | `@context` is the Semantic Hub's versioned, dereferenceable URL (23/semantic_hub resolve scenarios); json-gold expansion round-trips in every audit (`expandForAudit`, backend/internal/base/validation/odrlexpanded.go); external contexts resolve or normalization fails (`validateExternalContextsResolvable`). |
+| Policy sets are conformant ODRL 2.2 | One enclosing `odrl:Offer` (unsigned) / `odrl:Agreement` (sealed at first signature — 18 "first signature seals" scenario); rules under permission/prohibition/obligation only (odrl:duty bucket rejected); policy identity is `@id` (separate `uid` rejected); exactly one action + assigner/assignee/target per rule (18 structure scenarios; `validateODRLPolicySet`). |
+| Custom semantics are declared, not implied | The DCS ODRL profile is a served document (`/semantic/ontology/dcs-odrl-profile`; docs/semantic-ontology/odrl/dcs-odrl-profile.ttl) declaring `dcs:provideCompliantValue odrl:includedIn odrl:use` and `dcs:RequirementField ⊑ odrl:LeftOperand`; every policy set declares `odrl:profile`. |
+| Constraint↔value binding is plain graph traversal | A submitted value references its field by IRI (`dcs:forField` = the constraint's `odrl:leftOperand`); enforced by SHACL (`dcs:SemanticConditionValueShape`) and exercised by every 18/05 enforcement scenario plus the Playwright fill spec (e2e/contract-fill.spec.ts). |
+| Machine rules are prose-backed | `dcs:prose` required on every rule (Go gate + `Odrl*ProseShape` SHACL shapes); the Playwright builder spec asserts the emitted rule's prose dereferences to a document block. |
+| SHACL validation is real SHACL | goRDFlib engine (ADR-9) against hub-served shapes pinned by `sh:shapesGraph` (ADR-8); version-pinning proven by 23 "stricter shapes version" scenario; shacl-form renders forms from the same raw Turtle (Gaia-X shapes render unmodified). |
+| Provenance is PROV-aligned | `dcs:derivedFromTemplate ⊑ prov:wasDerivedFrom`, `dcs:renewsContract ⊑ prov:wasRevisionOf` (generated OWL, docs/semantic-ontology/linkml); derivation carries the template `@id` + version as a node, not an opaque blob. |
+| Canonical hashing is a standard | RFC 8785 JCS for the JAdES payload and deployment content hash — byte-identical across Go (`gowebpki/jcs`) and Python (`jcs`), proven by the cross-language fixture test and 17/05 hash-verification scenarios. |
+| Vocabulary identity is shared, not per-instance | w3id.org namespaces are the vocabulary identity (hub serves the content); two federated instances speak the same terms (17 peer scenarios exchange and verify full documents). Public w3id dereferencing is the one external residual (registration PR). |
+
+## eIDAS 2.0 signature soundness evidence
+
+Claim: the signature chain is architecturally sound under eIDAS 2.0 for advanced electronic
+signatures (AdES), with qualified-level (QES) execution being the single recorded deviation
+(no qualified TSP/QSCD reachable from the hermetic environment; `credential_type` carries the
+level end-to-end for when one is wired).
+
+| Assertion | Evidence |
+|---|---|
+| Signer identification via the EUDI-wallet mechanism | Signing requires a completed OID4VP PID presentation ceremony (SD-JWT VC + KB-JWT), verified before any signature (`ErrCeremonyRequired`, 22 ceremony-gate scenarios); the presentation is embedded verbatim into the signed PDF inside a signing-summary VC (embed-first-sign-second, 22 PID-embedding + verify cross-check). |
+| Signature format is a recognized AdES baseline | PAdES signatures over PDF/A-3 via the HSM-backed P-256 key (PKCS#11/SoftHSM2, ADR-1; 21 internal-signing + CRL scenarios); DCS-to-DCS transport signatures are JAdES baseline-B (ETSI TS 119 182-1: sigT marked crit, x5c chain — backend/internal/base/jades, 17 peer verification scenarios). |
+| Trust anchoring against the EU list | `EUTrustPool` (LOTL/TSL) gates every contract mutation and both peer-sync legs (`VerifyEIDASCertificate` in contract_workflow_engine.go and dcs_to_dcs.go); dev CA is a swappable TrustAnchor, not a bypass. |
+| Revocation is enforced | Credential status lists checked on every verification (StatusList2021 + VC 2.0 BitstringStatusList, backend/internal/auth/oid4vp/status_list.go); CRL revocation flips signing to rejection (21 CRL scenario); signature revocation is first-class (04 revoke scenarios). |
+| Time evidence is RFC 3161 | Archive entries and deployment receipts carry TSA timestamps verified against the provisioned TSA certificate (05 TSA-evidence scenario, 07 archive entries); JAdES carries claimed signing time (sigT). |
+| The signed bytes are the semantic document | The content hash (RFC 8785) and the PAdES signature are computed over the sealed odrl:Agreement document inside the signing transaction (apply.go seal-before-hash); export/verify recompute and compare (03 format_review tamper seams, 20 export refusal). |
+| Integrity of the archived artifact | C2PA manifest with lifecycle assertions stamped before signing (update-then-sign, ADR-4; 19 conformance scenarios), archive chain hash-linked and TSA-timestamped with signing evidence embedded (08 audit_ui_archive_orce feature). |
+| What would make it QES | A qualified TSP signing certificate on a QSCD replacing the dev CA in the same PKCS#11 slot, plus a qualified TSA endpoint in `TSA_URL` — both configuration-level swaps by design (ADR-1, ADR-3); recorded as the DCS-FR-SM-01 partial. |

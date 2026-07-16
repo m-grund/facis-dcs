@@ -12,7 +12,14 @@ import { E2E_API_BASE } from '../playwright.config'
  * src/stores/auth-token-store.ts).
  */
 
-const ROLES = ['Template Creator', 'Template Manager', 'Contract Creator']
+const ROLES = [
+  'Template Creator',
+  'Template Manager',
+  'Contract Creator',
+  'Contract Manager',
+  'Contract Signer',
+  'Auditor',
+]
 
 export default function globalSetup(): void {
   const repoRoot = path.resolve(__dirname, '..', '..', '..')
@@ -37,4 +44,11 @@ print(json.dumps(tokens))
   const authDir = path.join(__dirname, '.auth')
   mkdirSync(authDir, { recursive: true })
   writeFileSync(path.join(authDir, 'tokens.json'), JSON.stringify(tokens, null, 2))
+
+  const seeded = execFileSync(python, [path.join(__dirname, 'seed_fixtures.py'), E2E_API_BASE], {
+    cwd: repoRoot,
+    encoding: 'utf-8',
+    timeout: 180_000,
+  })
+  writeFileSync(path.join(authDir, 'fixtures.json'), seeded.trim().split('\n').pop() ?? '{}')
 }
