@@ -1,5 +1,4 @@
 import { Parser, type Quad } from 'n3'
-import http from '@/api/http'
 import type {
   DomainFieldDefinition,
   SemanticEntityRole,
@@ -79,9 +78,16 @@ class OntologyGraph {
 }
 
 async function loadOntologyGraph(): Promise<OntologyGraph> {
-  const response = await http.get('/semantic/ontology/facis-sla')
-  const content: string = response.data.content
-  return new OntologyGraph(new Parser().parse(content))
+  // Raw fetch, deliberately not the app's http client: this module loads at
+  // import time (top-level await below), before Pinia exists — and the http
+  // client's auth interceptor needs an active Pinia. The hub's resolve
+  // routes are public.
+  const response = await fetch('/api/semantic/ontology/facis-sla', { headers: { Accept: 'application/json' } })
+  if (!response.ok) {
+    throw new Error(`Semantic Hub ontology facis-sla is unavailable: HTTP ${response.status}`)
+  }
+  const body = (await response.json()) as { content: string }
+  return new OntologyGraph(new Parser().parse(body.content))
 }
 
 function localName(iri: string): string {
