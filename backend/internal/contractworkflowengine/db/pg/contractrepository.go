@@ -146,7 +146,7 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 			AND COALESCE(latest.version > cem.template_version, FALSE) AS outdated,
 			latest.did AS latest_template_did,
 			COALESCE(tpl.state = 'DEPRECATED', FALSE) AS template_is_deprecated,
-			ce.contract_data->'dcs:parentContract'->>'@id' AS parent_contract_did,
+			regexp_replace(ce.contract_data->'dcs:parentContract'->>'@id', '^.*/', '') AS parent_contract_did,
 			COALESCE(cem.name, ce.contract_data->'dcs:metadata'->>'dcs:title') AS name
 		FROM contracts_effective_metadata cem
 		LEFT JOIN contracts_effective ce ON ce.did = cem.did

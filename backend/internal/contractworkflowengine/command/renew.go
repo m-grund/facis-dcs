@@ -9,6 +9,7 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -236,7 +237,7 @@ func attachRenewsContractReference(raw *datatype.JSON, originalDID string, origi
 		return nil, fmt.Errorf("could not decode contract data: %w", err)
 	}
 	doc["dcs:renewsContract"] = map[string]any{
-		"@id":         originalDID,
+		"@id":         base.ResourceIRI("contract", originalDID),
 		"dcs:version": originalVersion,
 	}
 	encoded, err := datatype.NewJSON(doc)

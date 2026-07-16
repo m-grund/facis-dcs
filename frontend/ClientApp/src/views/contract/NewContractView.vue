@@ -81,7 +81,7 @@ const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.
 function buildCurrentContractData(): ContractData | undefined {
   if (!contract.value) return undefined
   return buildContractDocument({
-    documentId: contract.value.did,
+    documentId: ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ?? contract.value.did,
     name: contract.value.name,
     description: contract.value.description,
     blocks: dcsDraftStore.blocks,
@@ -313,6 +313,7 @@ function applyContractDataToDraft(contractData?: unknown) {
   if (cd) {
     dcsDraftStore.reset({
       workflow: 'contract',
+      documentIri: ((contractData as Record<string, unknown>)['@id'] as string | undefined) ?? null,
       blocks: cd.blocks,
       layout: cd.layout,
       contractData: cd.contractData,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -90,7 +91,7 @@ func ConvertTemplateDataToContractData(raw *datatype.JSON, templateDID string, t
 		metadata["@type"] = "dcs:ContractMetadata"
 	}
 
-	provenance := map[string]interface{}{"@id": templateDID}
+	provenance := map[string]interface{}{"@id": base.ResourceIRI("template", templateDID)}
 	if len(templateVersions) > 0 && templateVersions[0] > 0 {
 		provenance["version"] = templateVersions[0]
 	} else if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {

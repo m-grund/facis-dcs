@@ -126,7 +126,7 @@ const semanticConditionValuesEqual = (a: SemanticConditionValue[], b: SemanticCo
 function buildCurrentContractData(): ContractData | undefined {
   if (!contract.value) return undefined
   return buildContractDocument({
-    documentId: contract.value.did,
+    documentId: ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ?? contract.value.did,
     name: editedContract.value?.name ?? contract.value.name,
     description: editedContract.value?.description ?? contract.value.description,
     blocks: dcsDraftStore.blocks,
@@ -259,19 +259,18 @@ onUnmounted(() => {
 
 // Contract data includes the template data used to fill the contract template
 function applyContractDataToDraft(contractData?: unknown) {
-  const semanticConditionValues = (contractData as { semanticConditionValues?: SemanticConditionValue[] } | undefined)
-    ?.semanticConditionValues
-  contractSemanticConditionValueSnapshot.value = (semanticConditionValues ?? []).map((value) => ({ ...value }))
-
   if (contractData == null) {
+    contractSemanticConditionValueSnapshot.value = []
     dcsDraftStore.reset({ workflow: 'contract' })
     contractContentValuesStore.reset()
     return
   }
   const cd = preprocessContractData(contractData)
+  contractSemanticConditionValueSnapshot.value = (cd?.semanticConditionValues ?? []).map((value) => ({ ...value }))
   if (cd) {
     dcsDraftStore.reset({
       workflow: 'contract',
+      documentIri: ((contractData as Record<string, unknown>)['@id'] as string | undefined) ?? null,
       blocks: cd.blocks,
       layout: cd.layout,
       contractData: cd.contractData,

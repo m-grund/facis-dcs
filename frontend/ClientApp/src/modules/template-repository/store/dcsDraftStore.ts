@@ -106,7 +106,7 @@ export const useDcsDraftStore = defineStore(storeId, {
     templateDocument(): DcsTemplateData {
       return assembleCanonicalDocument({
         documentType: 'dcs:ContractTemplate',
-        documentId: this.did ?? undefined,
+        documentId: this.documentIri ?? this.did ?? undefined,
         name: this.name,
         description: this.description,
         templateType: this.templateType,
@@ -164,6 +164,7 @@ export const useDcsDraftStore = defineStore(storeId, {
 
         this.reset({
           did: meta.did,
+          documentIri: rawDoc['@id'] ?? null,
           name: meta.name ? meta.name : (metadata['dcs:title'] ?? ''),
           description: meta.description ? meta.description : (metadata['dcs:description'] ?? ''),
           templateType: templateType !== TemplateType.component ? templateType : derivedTemplateType,
@@ -245,7 +246,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       parameterType: SemanticConditionParameter['type'],
       operators: SemanticParameterOperator[],
     ): void {
-      const documentId = this.did ?? undefined
+      const documentId = this.documentIri ?? this.did ?? undefined
       const requirement = requirementForField(this.contractData, fieldId)
       const role = requirement?.['dcs:entityRole']
       this.policies = this.policies.filter((p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId)
@@ -271,7 +272,7 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
     addSemanticCondition(payload: Omit<SemanticCondition, 'conditionId'>): void {
       const conditionId = crypto.randomUUID()
-      const documentId = this.did ?? undefined
+      const documentId = this.documentIri ?? this.did ?? undefined
       this.contractData.push({
         '@id': conditionIri(conditionId, documentId),
         '@type': 'dcs:DataRequirement',
@@ -290,7 +291,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       subTemplateRef?: SubTemplateReference,
     ): void {
       if (subTemplateRef) return // sub-template snapshots are immutable
-      const documentId = this.did ?? undefined
+      const documentId = this.documentIri ?? this.did ?? undefined
       const idx = this.contractData.findIndex((r) => r['dcs:conditionId'] === conditionId)
       const existing = this.contractData[idx]
       if (idx < 0 || !existing) return
@@ -378,7 +379,7 @@ export const useDcsDraftStore = defineStore(storeId, {
           'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
         }
         this.blocks.push(block)
-        const documentId = this.did ?? undefined
+        const documentId = this.documentIri ?? this.did ?? undefined
         this.policies.push({
           'odrl:assigner': partyReference(undefined, documentId),
           'odrl:assignee': partyReference(undefined, documentId),
@@ -904,6 +905,7 @@ function collectDescendantIds(blockId: string, nodeById: Map<string, DcsLayoutNo
 
 const defaultState: Readonly<Omit<TemplateDraftState, 'blocks' | 'layout'>> = {
   did: null,
+  documentIri: null,
   name: '',
   description: '',
   templateDataVersion: 1,

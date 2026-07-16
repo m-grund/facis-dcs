@@ -919,6 +919,42 @@ var _ = Service("ContractWorkflowEngine", func() {
 		})
 	})
 
+	// GET /contract/{did} — the contract's resource IRI
+	Method("resolve", func() {
+		Description("Dereference a contract's resource IRI ({DCS_PUBLIC_URL}/contract/{did}): serves the canonical JSON-LD contract document under the same party read authorization as retrieve_by_id. This route is what makes a contract's @id follow-your-nose resolvable.")
+		Meta("dcs:requirements", "DCS-FR-CWE-02")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
+		})
+
+		Payload(ContractRetrieveByIDRequest)
+		Result(Any)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("forbidden", ErrorResult, "Caller is not an authorized party of this contract")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/{did}")
+			Param("did")
+
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("forbidden", StatusForbidden)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
 	// GET /contract/retrieve/{did}
 	Method("retrieve_by_id", func() {
 		Description("fetch submitted contract. fetch reviewed contract. fetch contract(s).")

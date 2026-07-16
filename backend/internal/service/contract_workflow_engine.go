@@ -611,13 +611,13 @@ func (s *contractWorkflowEnginesrvc) KpiObservations(ctx context.Context, req *c
 	observations := make([]any, 0, len(entries))
 	for _, entry := range entries {
 		observations = append(observations, map[string]any{
-			"@id":               fmt.Sprintf("%s#kpi-%d", req.Did, entry.ID),
+			"@id":               fmt.Sprintf("%s#kpi-%d", base.ResourceIRI("contract", req.Did), entry.ID),
 			"@type":             "dcs:KPIObservation",
 			"dcs:metricName":    entry.Metric,
 			"dcs:observedValue": entry.Value,
 			"dcs:observedAt":    entry.ObservedAt.Format(time.RFC3339),
 			"dcs:violation":     entry.Violation,
-			"dcs:aboutContract": map[string]any{"@id": req.Did},
+			"dcs:aboutContract": map[string]any{"@id": base.ResourceIRI("contract", req.Did)},
 		})
 	}
 	return map[string]any{
@@ -1468,4 +1468,15 @@ func (s *contractWorkflowEnginesrvc) DeploymentCallback(ctx context.Context, req
 		Did:    req.Did,
 		Status: &status,
 	}, nil
+}
+
+// Resolve dereferences a contract's resource IRI: GET /contract/{did}
+// serves the canonical JSON-LD contract document, under the same party
+// read authorization retrieve_by_id enforces.
+func (s *contractWorkflowEnginesrvc) Resolve(ctx context.Context, req *contractworkflowengine.ContractRetrieveByIDRequest) (any, error) {
+	contract, err := s.RetrieveByID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return contract.ContractData, nil
 }

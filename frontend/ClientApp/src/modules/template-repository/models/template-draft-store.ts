@@ -22,6 +22,8 @@ export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]
 
 interface TemplateDraftState {
   did: string | null
+  /** The document's @id — its dereferenceable resource IRI; authored fragments anchor to it. */
+  documentIri: string | null
   name: string
   description: string
   templateDataVersion: TemplateDataVersion

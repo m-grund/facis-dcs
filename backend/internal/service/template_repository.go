@@ -852,3 +852,14 @@ func (s *templateRepositorysrvc) Publish(ctx context.Context, req *templaterepos
 		Did: req.Did,
 	}, nil
 }
+
+// Resolve dereferences a template's resource IRI: GET /template/{did}
+// serves the canonical JSON-LD template document, under the same
+// authorization retrieve_by_id enforces.
+func (s *templateRepositorysrvc) Resolve(ctx context.Context, req *templaterepository.ContractTemplateRetrieveByIDRequest) (any, error) {
+	template, err := s.RetrieveByID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return template.TemplateData, nil
+}

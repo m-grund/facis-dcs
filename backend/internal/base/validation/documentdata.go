@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 )
 
@@ -243,13 +244,15 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 }
 
 // NormalizeTemplateDataForPersistence keeps stored template JSON-LD
-// self-identifying when it is read outside the relational row envelope.
+// self-identifying when it is read outside the relational row envelope:
+// the document @id is the template's dereferenceable resource IRI, minted
+// from the system key.
 func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datatype.JSON, error) {
 	normalized, err := NormalizeTemplateData(raw)
 	if err != nil {
 		return nil, err
 	}
-	return addDocumentIdentity(normalized, did)
+	return addDocumentIdentity(normalized, base.ResourceIRI("template", did), did)
 }
 
 // NormalizeContractData anchors and validates a canonical contract JSON-LD
@@ -280,13 +283,40 @@ func NormalizeContractData(raw *datatype.JSON, _ bool) (*datatype.JSON, error) {
 }
 
 // NormalizeContractDataForPersistence keeps stored contract JSON-LD
-// self-identifying when it is read outside the relational row envelope.
+// self-identifying when it is read outside the relational row envelope:
+// the document @id is the contract's dereferenceable resource IRI, minted
+// from the system key, and cross-contract references
+// (dcs:parentContract, dcs:renewsContract) are canonicalized to the same
+// IRI scheme.
 func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, requireSemanticValues bool) (*datatype.JSON, error) {
 	normalized, err := NormalizeContractData(raw, requireSemanticValues)
 	if err != nil {
 		return nil, err
 	}
-	return addDocumentIdentity(normalized, did)
+	anchored, err := addDocumentIdentity(normalized, base.ResourceIRI("contract", did), did)
+	if err != nil {
+		return nil, err
+	}
+	return canonicalizeContractReferences(anchored)
+}
+
+// canonicalizeContractReferences rewrites references to other contracts to
+// their resource IRIs, so a document never points at a bare system key.
+func canonicalizeContractReferences(raw *datatype.JSON) (*datatype.JSON, error) {
+	data, err := decodeDocumentData(raw)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"dcs:parentContract", "dcs:renewsContract"} {
+		node, ok := data[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		if id, _ := node["@id"].(string); id != "" {
+			node["@id"] = base.ResourceIRI("contract", base.ResourceKey(id))
+		}
+	}
+	return encodeDocumentData(data)
 }
 
 // ValidateContractSemantics validates the canonical contract envelope.
@@ -301,14 +331,14 @@ func ValidateContractSemantics(raw *datatype.JSON) error {
 	return validateCanonicalEnvelope(data, expectedPolicyTypes("dcs:Contract"))
 }
 
-func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error) {
+func addDocumentIdentity(raw *datatype.JSON, did string, aliases ...string) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(did) != "" {
 		previousID, _ := data["@id"].(string)
-		rebaseDocumentIDs(map[string]any(data), previousID, did)
+		rebaseDocumentIDs(map[string]any(data), previousID, did, aliases)
 		data["@id"] = did
 		if metadata, ok := topLevelValue(data, "metadata").(map[string]any); ok {
 			metadata["@id"] = did + "#metadata"
@@ -320,27 +350,46 @@ func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error)
 	return encodeDocumentData(data)
 }
 
-func rebaseDocumentIDs(value any, previousID string, did string) {
+func rebaseDocumentIDs(value any, previousID string, did string, aliases []string) {
 	switch typed := value.(type) {
 	case map[string]any:
 		for key, nested := range typed {
 			if text, ok := nested.(string); ok {
-				switch {
-				case strings.HasPrefix(text, "urn:uuid:"):
-					typed[key] = did + "#" + strings.TrimPrefix(text, "urn:uuid:")
-					continue
-				case previousID != "" && previousID != did && strings.HasPrefix(text, previousID+"#"):
-					typed[key] = did + strings.TrimPrefix(text, previousID)
+				if rebased, ok := rebaseIDText(text, previousID, did, aliases); ok {
+					typed[key] = rebased
 					continue
 				}
 			}
-			rebaseDocumentIDs(nested, previousID, did)
+			rebaseDocumentIDs(nested, previousID, did, aliases)
 		}
 	case []any:
 		for _, nested := range typed {
-			rebaseDocumentIDs(nested, previousID, did)
+			rebaseDocumentIDs(nested, previousID, did, aliases)
 		}
 	}
+}
+
+func rebaseIDText(text, previousID, did string, aliases []string) (string, bool) {
+	switch {
+	case strings.HasPrefix(text, "urn:uuid:"):
+		return did + "#" + strings.TrimPrefix(text, "urn:uuid:"), true
+	case previousID != "" && previousID != did && strings.HasPrefix(text, previousID+"#"):
+		return did + strings.TrimPrefix(text, previousID), true
+	case previousID != "" && previousID != did && text == previousID:
+		return did, true
+	}
+	for _, alias := range aliases {
+		if alias == "" || alias == did {
+			continue
+		}
+		if text == alias {
+			return did, true
+		}
+		if strings.HasPrefix(text, alias+"#") {
+			return did + strings.TrimPrefix(text, alias), true
+		}
+	}
+	return "", false
 }
 
 func decodeDocumentData(raw *datatype.JSON) (documentData, error) {
