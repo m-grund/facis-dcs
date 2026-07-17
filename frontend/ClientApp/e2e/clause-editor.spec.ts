@@ -187,15 +187,21 @@ test('a Permission can carry a nested duty the assignee must fulfil', async ({ p
   await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
   await ruleSelect('Action').selectOption({ label: 'use' })
 
-  // Attach a duty: the assignee MUST delete, bounded by the duty's own constraint.
+  // Attach a duty: the assignee MUST delete, bounded by two of the duty's own
+  // constraints combined with ANY — a duty is as expressive as a rule.
   await editor.getByRole('button', { name: '+ duty' }).click()
   const duty = editor.getByTestId('odrl-duty').last()
   await duty.locator('select').first().selectOption({ label: 'delete' })
-  await duty.getByRole('button', { name: '+ constraint' }).click()
-  const dutyConstraint = duty.locator('.flex.flex-wrap.items-center.gap-1').last()
-  await dutyConstraint.locator('select').nth(0).selectOption({ label: 'access region (spatial)' })
-  await dutyConstraint.locator('select').nth(1).selectOption({ label: 'must equal' })
-  await dutyConstraint.locator('input[placeholder="value"]').fill('DE')
+  const addDutyRegion = async (value: string) => {
+    await duty.getByRole('button', { name: '+ constraint' }).click()
+    const row = duty.locator('.flex.flex-wrap.items-center.gap-1').last()
+    await row.locator('select').nth(0).selectOption({ label: 'access region (spatial)' })
+    await row.locator('select').nth(1).selectOption({ label: 'must equal' })
+    await row.locator('input[placeholder="value"]').fill(value)
+  }
+  await addDutyRegion('DE')
+  await addDutyRegion('FR')
+  await duty.locator('select[title="How the duty\'s constraints combine"]').selectOption('or')
 
   await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
   const created = page.waitForRequest((r) => r.url().includes('/template/create') && r.method() === 'POST')
@@ -203,7 +209,11 @@ test('a Permission can carry a nested duty the assignee must fulfil', async ({ p
   const doc = (await created).postDataJSON().template_data as {
     'dcs:policies': {
       'odrl:permission'?: {
-        'odrl:duty'?: { '@type': string; 'odrl:action': { '@id': string }; 'odrl:constraint'?: unknown[] }[]
+        'odrl:duty'?: {
+          '@type': string
+          'odrl:action': { '@id': string }
+          'odrl:constraint'?: { '@type': string; 'odrl:or'?: { '@list': unknown[] } }[]
+        }[]
       }[]
     }
   }
@@ -213,5 +223,9 @@ test('a Permission can carry a nested duty the assignee must fulfil', async ({ p
   expect(duties.length, 'one duty attached to the permission').toBe(1)
   expect(duties[0]?.['@type']).toBe('odrl:Duty')
   expect(duties[0]?.['odrl:action']['@id'], 'the duty action').toBe('odrl:delete')
-  expect(duties[0]?.['odrl:constraint']?.length, "the duty carries its own constraint").toBe(1)
+  // The duty's two constraints combined into a single logical (or) node.
+  const dutyConstraints = duties[0]?.['odrl:constraint'] ?? []
+  expect(dutyConstraints.length, 'a single logical constraint node on the duty').toBe(1)
+  expect(dutyConstraints[0]?.['@type']).toBe('odrl:LogicalConstraint')
+  expect(dutyConstraints[0]?.['odrl:or']?.['@list']?.length, 'or over both duty constraints').toBe(2)
 })
