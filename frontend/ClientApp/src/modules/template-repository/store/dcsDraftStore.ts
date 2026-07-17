@@ -262,7 +262,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       const documentId = this.documentIri ?? this.did ?? undefined
       const requirement = requirementForField(this.contractData, fieldId)
       const role = requirement?.['dcs:entityRole']
-      this.policies = this.policies.filter((p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId)
+      this.policies = this.policies.filter((p) => !ruleLeftOperands(p).includes(fieldId))
       operators.forEach((operator, index) => {
         if (!isStandardOdrlOperator(operator.operate)) return
         const rightOperand = odrlRightOperand(operator, parameterType)
@@ -274,12 +274,14 @@ export const useDcsDraftStore = defineStore(storeId, {
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
           'dcs:prose': proseBlockForField(this.blocks, fieldId),
-          'odrl:constraint': {
-            '@type': 'odrl:Constraint',
-            'odrl:leftOperand': { '@id': fieldId },
-            'odrl:operator': { '@id': operator.operate },
-            ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
-          },
+          'odrl:constraint': [
+            {
+              '@type': 'odrl:Constraint',
+              'odrl:leftOperand': { '@id': fieldId },
+              'odrl:operator': { '@id': operator.operate },
+              ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
+            },
+          ],
         } satisfies OdrlRule)
       })
     },
@@ -321,10 +323,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         ...(payload.entityRole ? { 'dcs:entityRole': payload.entityRole } : {}),
         'dcs:fields': payload.parameters.map((p) => semanticParamToField(conditionId, p, documentId)),
       }
-      this.policies = this.policies.filter((p) => {
-        const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
-        return !leftOp || !oldFieldIds.has(leftOp)
-      })
+      this.policies = this.policies.filter((p) => !ruleLeftOperands(p).some((op) => oldFieldIds.has(op)))
       this.policies.push(
         ...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId),
       )
@@ -349,10 +348,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       }
 
       this.contractData = this.contractData.filter((r) => r['dcs:conditionId'] !== conditionId)
-      this.policies = this.policies.filter((p) => {
-        const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
-        return !leftOp || !fieldIds.has(leftOp)
-      })
+      this.policies = this.policies.filter((p) => !ruleLeftOperands(p).some((op) => fieldIds.has(op)))
     },
     /** Adds a clause as prose + its machine-readable ODRL rule (linked by
      *  dcs:prose), declaring the hub fields the rule constrains as requirement
@@ -1131,16 +1127,23 @@ function semanticConditionToPolicies(
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
           'dcs:prose': proseBlockForField(blocks, field['@id']),
-          'odrl:constraint': {
-            '@type': 'odrl:Constraint',
-            'odrl:leftOperand': { '@id': field['@id'] },
-            'odrl:operator': { '@id': operator.operate },
-            ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
-          },
+          'odrl:constraint': [
+            {
+              '@type': 'odrl:Constraint',
+              'odrl:leftOperand': { '@id': field['@id'] },
+              'odrl:operator': { '@id': operator.operate },
+              ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
+            },
+          ],
         } satisfies OdrlRule,
       ]
     }),
   )
+}
+
+/** The left-operand IRIs a rule's constraints reference. */
+function ruleLeftOperands(rule: OdrlRule): string[] {
+  return (rule['odrl:constraint'] ?? []).map((constraint) => constraint['odrl:leftOperand']['@id'])
 }
 
 function contractDataToSemanticConditions(
@@ -1149,19 +1152,19 @@ function contractDataToSemanticConditions(
 ): SemanticCondition[] {
   const operatorsByField = new Map<string, SemanticParameterOperator[]>()
   for (const policy of policies) {
-    const constraint = policy['odrl:constraint']
-    if (!constraint) continue
-    const operate = constraint['odrl:operator']['@id'] as DcsOperator
-    if (!isStandardOdrlOperator(operate)) continue
-    const rightOperand = constraint['odrl:rightOperand']
-    const targets =
-      rightOperand === undefined
-        ? []
-        : Array.isArray(rightOperand)
-          ? rightOperand.map(jsonLdValue)
-          : [jsonLdValue(rightOperand)]
-    const fieldId = constraint['odrl:leftOperand']['@id']
-    operatorsByField.set(fieldId, [...(operatorsByField.get(fieldId) ?? []), { operate, targets }])
+    for (const constraint of policy['odrl:constraint'] ?? []) {
+      const operate = constraint['odrl:operator']['@id'] as DcsOperator
+      if (!isStandardOdrlOperator(operate)) continue
+      const rightOperand = constraint['odrl:rightOperand']
+      const targets =
+        rightOperand === undefined || (!Array.isArray(rightOperand) && '@id' in rightOperand)
+          ? []
+          : Array.isArray(rightOperand)
+            ? rightOperand.map(jsonLdValue)
+            : [jsonLdValue(rightOperand)]
+      const fieldId = constraint['odrl:leftOperand']['@id']
+      operatorsByField.set(fieldId, [...(operatorsByField.get(fieldId) ?? []), { operate, targets }])
+    }
   }
 
   return requirements.map((requirement) => ({
@@ -1277,6 +1280,7 @@ function jsonLdValue(value: JsonLdTypedValue): unknown {
       return value['@value'] === 'true'
     case 'xsd:string':
     case 'xsd:date':
+    case 'xsd:dateTime':
       return value['@value']
   }
 }

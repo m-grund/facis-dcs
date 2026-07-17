@@ -4,7 +4,7 @@ export interface JsonLdReference {
 
 export interface JsonLdTypedValue {
   '@value': string
-  '@type': `xsd:${'string' | 'decimal' | 'integer' | 'boolean' | 'date'}`
+  '@type': `xsd:${'string' | 'decimal' | 'integer' | 'boolean' | 'date' | 'dateTime'}`
 }
 
 export interface DcsTemplateMetadata {
@@ -139,7 +139,15 @@ export interface OdrlConstraint {
   '@type': 'odrl:Constraint'
   'odrl:leftOperand': JsonLdReference
   'odrl:operator': JsonLdReference
-  'odrl:rightOperand'?: JsonLdTypedValue | JsonLdTypedValue[]
+  /**
+   * The boundary the left operand is checked against: a fixed literal (or list
+   * for set operators), or a reference to a RequirementField whose value is
+   * agreed during contract negotiation. SRS Appendix C is a template whose
+   * spatial and dateTime boundaries (the permitted region, the access deadline)
+   * are negotiated field references, resolved to their filled values at
+   * enforcement.
+   */
+  'odrl:rightOperand'?: JsonLdTypedValue | JsonLdTypedValue[] | JsonLdReference
 }
 
 export interface OdrlRule {
@@ -154,7 +162,10 @@ export interface OdrlRule {
   'odrl:target': JsonLdReference
   /** The human-readable clause node this rule is backed by (required — machine rules operationalize audited prose). */
   'dcs:prose': JsonLdReference
-  'odrl:constraint'?: OdrlConstraint
+  /** The rule's constraints; all must hold (ODRL IM §2.5: multiple constraints
+   *  are a conjunction). A permission bounded by both a spatial and a temporal
+   *  condition (SRS Appendix C) carries two. */
+  'odrl:constraint'?: OdrlConstraint[]
 }
 
 /** The single enclosing ODRL 2.2 policy for a template (Offer) or contract (Agreement). */

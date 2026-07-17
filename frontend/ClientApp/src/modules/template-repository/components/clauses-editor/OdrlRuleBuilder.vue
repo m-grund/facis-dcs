@@ -1,14 +1,21 @@
 <script setup lang="ts">
+import {
+  ODRL_ACTIONS,
+  ODRL_CONTEXT_OPERANDS,
+  ODRL_OPERATORS,
+  ODRL_RULE_TYPES,
+} from '@template-repository/utils/odrl-vocabulary'
 import { computed, reactive, watch } from 'vue'
-import type { JsonLdTypedValue, OdrlConstraint, OdrlRule } from '@/models/dcs-jsonld'
+import type { JsonLdReference, JsonLdTypedValue, OdrlConstraint, OdrlRule } from '@/models/dcs-jsonld'
 
 /**
  * The machine-readable meaning of a clause: an ODRL rule the author builds by
- * picking, never by typing an IRI. A rule is one obligation/permission/
- * prohibition — who (assignee) must/may/must-not do what (action) toward whom
- * (target), under which constraints on the clause's data fields. This is all a
- * "typed clause" ever was: e.g. a payment clause is an obligation, action
- * "payment", assignee the counterparty, constraints amount/currency.
+ * picking standard ODRL terms, never by typing an IRI. A rule is one
+ * permission/prohibition/obligation — who (assignee) may/must-not/must do what
+ * (action) toward whom (target), bounded by constraints that all must hold.
+ * A "payment clause" is just an obligation to pay with a value constraint; the
+ * SRS Appendix C access policy is a permission to use bounded by spatial and
+ * dateTime constraints.
  */
 
 export interface Anchor {
@@ -19,7 +26,7 @@ export interface Anchor {
 
 const props = defineProps<{
   modelValue: OdrlRule | null
-  /** Data fields declared for this clause (constraint left operands). */
+  /** Data fields declared for this clause (document constraint left operands). */
   fields: Anchor[]
   /** Parties the rule can bind (assigner/assignee/target). */
   parties: Anchor[]
@@ -31,35 +38,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{ 'update:modelValue': [OdrlRule | null] }>()
 
-const RULE_TYPES = [
-  { type: 'odrl:Duty', label: 'Obligation — the party MUST' },
-  { type: 'odrl:Permission', label: 'Permission — the party MAY' },
-  { type: 'odrl:Prohibition', label: 'Prohibition — the party MUST NOT' },
-] as const
-
-const ACTIONS = [
-  { id: 'dcs:provideCompliantValue', label: 'provide a compliant value' },
-  { id: 'dcs:payment', label: 'make a payment' },
-  { id: 'dcs:delivery', label: 'deliver' },
-  { id: 'dcs:notification', label: 'notify' },
-  { id: 'dcs:disclosure', label: 'disclose' },
-] as const
-
-const OPERATORS = [
-  { id: 'odrl:eq', label: 'must equal' },
-  { id: 'odrl:neq', label: 'must not equal' },
-  { id: 'odrl:gt', label: 'must be greater than' },
-  { id: 'odrl:gteq', label: 'must be at least' },
-  { id: 'odrl:lt', label: 'must be less than' },
-  { id: 'odrl:lteq', label: 'must be at most' },
-  { id: 'odrl:hasPart', label: 'must contain' },
-  { id: 'odrl:isAnyOf', label: 'must be one of' },
-  { id: 'odrl:isNoneOf', label: 'must not be one of' },
-] as const
-
 interface ConstraintDraft {
-  fieldId: string
+  leftOperand: string
   operator: string
+  /** '' = a fixed literal boundary (use `value`); otherwise a field @id whose
+   *  value is agreed during contract negotiation. */
+  rightSource: string
   value: string
 }
 
@@ -71,8 +55,8 @@ const draft = reactive<{
   targetId: string
   constraints: ConstraintDraft[]
 }>({
-  type: props.modelValue?.['@type'] ?? 'odrl:Duty',
-  action: props.modelValue?.['odrl:action']?.['@id'] ?? ACTIONS[0].id,
+  type: props.modelValue?.['@type'] ?? ODRL_RULE_TYPES[0]?.type ?? 'odrl:Permission',
+  action: props.modelValue?.['odrl:action']?.['@id'] ?? ODRL_ACTIONS[0]?.id ?? 'odrl:use',
   assigneeId: props.modelValue?.['odrl:assignee']?.['@id'] ?? props.parties[0]?.id ?? '',
   assignerId: props.modelValue?.['odrl:assigner']?.['@id'] ?? props.parties[0]?.id ?? '',
   targetId: props.modelValue?.['odrl:target']?.['@id'] ?? props.contractTargetId,
@@ -82,19 +66,28 @@ const draft = reactive<{
 const complete = computed(() => !!draft.action && !!draft.assigneeId)
 
 function readConstraints(rule: OdrlRule | null): ConstraintDraft[] {
-  const constraint = rule?.['odrl:constraint']
-  if (!constraint) return []
-  const right = constraint['odrl:rightOperand']
-  const value = Array.isArray(right)
-    ? right.map((r) => r['@value']).join(', ')
-    : right != null
-      ? String(right['@value'])
-      : ''
-  return [{ fieldId: constraint['odrl:leftOperand']['@id'], operator: constraint['odrl:operator']['@id'], value }]
+  return (rule?.['odrl:constraint'] ?? []).map((c) => {
+    const right = c['odrl:rightOperand']
+    if (right && '@id' in right) {
+      return {
+        leftOperand: c['odrl:leftOperand']['@id'],
+        operator: c['odrl:operator']['@id'],
+        rightSource: right['@id'],
+        value: '',
+      }
+    }
+    const value = Array.isArray(right) ? right.map((r) => r['@value']).join(', ') : (right?.['@value'] ?? '')
+    return { leftOperand: c['odrl:leftOperand']['@id'], operator: c['odrl:operator']['@id'], rightSource: '', value }
+  })
 }
 
 function addConstraint() {
-  draft.constraints.push({ fieldId: props.fields[0]?.id ?? '', operator: OPERATORS[0].id, value: '' })
+  draft.constraints.push({
+    leftOperand: ODRL_CONTEXT_OPERANDS[0]?.id ?? 'odrl:spatial',
+    operator: ODRL_OPERATORS[0]?.id ?? 'odrl:eq',
+    rightSource: '',
+    value: '',
+  })
 }
 
 function removeConstraint(index: number) {
@@ -102,6 +95,7 @@ function removeConstraint(index: number) {
 }
 
 function typed(value: string): JsonLdTypedValue {
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return { '@value': value, '@type': 'xsd:dateTime' }
   const isNumber = value !== '' && !Number.isNaN(Number(value))
   return { '@value': value, '@type': isNumber ? 'xsd:decimal' : 'xsd:string' }
 }
@@ -109,18 +103,28 @@ function typed(value: string): JsonLdTypedValue {
 function rightOperand(value: string, operator: string): JsonLdTypedValue | JsonLdTypedValue[] | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
-  if (operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf') {
+  if (operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf' || operator === 'odrl:isAllOf') {
     return trimmed.split(',').map((part) => typed(part.trim()))
   }
   return typed(trimmed)
 }
 
-// The document carries one enclosing rule with a single constraint today; emit
-// the first constraint as the rule's odrl:constraint (multi-constraint rules
-// are a follow-up once the enforcement graph accepts a constraint list).
 const rule = computed<OdrlRule | null>(() => {
   if (!complete.value) return null
-  const first = draft.constraints[0]
+  const constraints: OdrlConstraint[] = draft.constraints
+    .filter((c) => c.leftOperand)
+    .map((c) => {
+      const constraint: OdrlConstraint = {
+        '@type': 'odrl:Constraint',
+        'odrl:leftOperand': { '@id': c.leftOperand },
+        'odrl:operator': { '@id': c.operator },
+      }
+      const right: JsonLdTypedValue | JsonLdTypedValue[] | JsonLdReference | undefined = c.rightSource
+        ? { '@id': c.rightSource }
+        : rightOperand(c.value, c.operator)
+      if (right !== undefined) constraint['odrl:rightOperand'] = right
+      return constraint
+    })
   const built: OdrlRule = {
     '@id': props.modelValue?.['@id'] ?? `urn:uuid:${crypto.randomUUID()}`,
     '@type': draft.type as OdrlRule['@type'],
@@ -130,16 +134,7 @@ const rule = computed<OdrlRule | null>(() => {
     'odrl:target': { '@id': draft.targetId || props.contractTargetId },
     'dcs:prose': { '@id': props.proseId },
   }
-  if (first?.fieldId) {
-    const constraint: OdrlConstraint = {
-      '@type': 'odrl:Constraint',
-      'odrl:leftOperand': { '@id': first.fieldId },
-      'odrl:operator': { '@id': first.operator },
-    }
-    const right = rightOperand(first.value, first.operator)
-    if (right !== undefined) constraint['odrl:rightOperand'] = right
-    built['odrl:constraint'] = constraint
-  }
+  if (constraints.length) built['odrl:constraint'] = constraints
   return built
 })
 
@@ -152,13 +147,13 @@ watch(rule, (value) => emit('update:modelValue', value), { deep: true })
       <label class="form-control">
         <span class="label-text text-xs">Rule</span>
         <select v-model="draft.type" class="select-bordered select select-sm">
-          <option v-for="rt in RULE_TYPES" :key="rt.type" :value="rt.type">{{ rt.label }}</option>
+          <option v-for="rt in ODRL_RULE_TYPES" :key="rt.type" :value="rt.type">{{ rt.label }}</option>
         </select>
       </label>
       <label class="form-control">
         <span class="label-text text-xs">Action</span>
         <select v-model="draft.action" class="select-bordered select select-sm">
-          <option v-for="a in ACTIONS" :key="a.id" :value="a.id">{{ a.label }}</option>
+          <option v-for="a in ODRL_ACTIONS" :key="a.id" :value="a.id">{{ a.label }}</option>
         </select>
       </label>
       <label class="form-control">
@@ -178,20 +173,34 @@ watch(rule, (value) => emit('update:modelValue', value), { deep: true })
 
     <div class="space-y-2">
       <div class="flex items-center justify-between">
-        <span class="label-text text-xs font-semibold">Constraints</span>
+        <span class="label-text text-xs font-semibold">Constraints (all must hold)</span>
         <button type="button" class="btn btn-ghost btn-xs" @click="addConstraint">+ constraint</button>
       </div>
-      <p v-if="!fields.length" class="text-xs text-base-content/50 italic">
-        Add a data field (a placeholder in the prose) to constrain it.
-      </p>
       <div v-for="(c, i) in draft.constraints" :key="i" class="flex flex-wrap items-center gap-1">
-        <select v-model="c.fieldId" class="select-bordered select select-xs">
-          <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
+        <select v-model="c.leftOperand" class="select-bordered select select-xs">
+          <optgroup v-if="fields.length" label="Data fields">
+            <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
+          </optgroup>
+          <optgroup label="Access context">
+            <option v-for="o in ODRL_CONTEXT_OPERANDS" :key="o.id" :value="o.id">{{ o.label }}</option>
+          </optgroup>
         </select>
         <select v-model="c.operator" class="select-bordered select select-xs">
-          <option v-for="op in OPERATORS" :key="op.id" :value="op.id">{{ op.label }}</option>
+          <option v-for="op in ODRL_OPERATORS" :key="op.id" :value="op.id">{{ op.label }}</option>
         </select>
-        <input v-model="c.value" type="text" placeholder="value" class="input-bordered input input-xs w-28" />
+        <select v-model="c.rightSource" class="select-bordered select select-xs" title="What the boundary is">
+          <option value="">a fixed value</option>
+          <optgroup v-if="fields.length" label="Agreed at negotiation">
+            <option v-for="f in fields" :key="f.id" :value="f.id">the “{{ f.label }}”</option>
+          </optgroup>
+        </select>
+        <input
+          v-if="!c.rightSource"
+          v-model="c.value"
+          type="text"
+          placeholder="value"
+          class="input-bordered input input-xs w-28"
+        />
         <button type="button" class="btn btn-ghost btn-xs" @click="removeConstraint(i)">✕</button>
       </div>
     </div>
