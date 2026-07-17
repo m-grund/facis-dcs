@@ -690,17 +690,46 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 		default:
 			return fmt.Errorf("policies.%d has unsupported @type %q", index, policy["@type"])
 		}
-		constraint, ok := policy["odrl:constraint"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("policies.%d.odrl:constraint must be an object", index)
-		}
-		leftOperand, _ := constraint["odrl:leftOperand"].(map[string]any)
-		fieldID, _ := leftOperand["@id"].(string)
-		if !fieldIDs[fieldID] {
-			return fmt.Errorf("policy references nonexistent contract data field %q", fieldID)
+		// A rule's constraints are a conjunction (ODRL IM §2.5). Each left
+		// operand is either a document data field or an ODRL context operand
+		// (spatial, dateTime, …) evaluated at use-time — never a field.
+		for _, constraint := range policyConstraints(policy["odrl:constraint"]) {
+			leftOperand, _ := constraint["odrl:leftOperand"].(map[string]any)
+			operandID, _ := leftOperand["@id"].(string)
+			if isODRLContextOperandTerm(operandID) {
+				continue
+			}
+			if !fieldIDs[operandID] {
+				return fmt.Errorf("policy references nonexistent contract data field %q", operandID)
+			}
 		}
 	}
 	return nil
+}
+
+// policyConstraints normalizes a rule's odrl:constraint to a list — a JSON-LD
+// property with one value may be a bare object or a one-element array; a
+// conjunction is an array.
+func policyConstraints(raw any) []map[string]any {
+	if items, ok := asArray(raw); ok {
+		constraints := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			if constraint, ok := item.(map[string]any); ok {
+				constraints = append(constraints, constraint)
+			}
+		}
+		return constraints
+	}
+	if constraint, ok := raw.(map[string]any); ok {
+		return []map[string]any{constraint}
+	}
+	return nil
+}
+
+// isODRLContextOperandTerm reports whether a left-operand @id (compact
+// "odrl:spatial" or a full IRI) is an ODRL context operand.
+func isODRLContextOperandTerm(operandID string) bool {
+	return odrlContextOperandIRIs[odrlIRI+compactTerm(operandID)]
 }
 
 // odrlRuleBucketKeys are the ODRL 2.2 rule-bucket properties an enclosing

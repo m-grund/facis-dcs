@@ -238,6 +238,37 @@ func TestNormalizeTemplateDataRejectsMissingPolicyField(t *testing.T) {
 	require.ErrorContains(t, err, "policy references nonexistent contract data field")
 }
 
+// TestNormalizeTemplateDataAcceptsConstraintConjunctionWithContextOperand
+// proves the greenfield array-constraint shape validates: a rule's
+// odrl:constraint is a conjunction (an array), and an ODRL context operand
+// (spatial) is accepted as use-time access context rather than rejected as a
+// nonexistent data field.
+func TestNormalizeTemplateDataAcceptsConstraintConjunctionWithContextOperand(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	policy := firstPolicyDuty(data)
+	policy["odrl:constraint"] = []any{
+		map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": "urn:uuid:field-provider-country"},
+			"odrl:operator":     map[string]any{"@id": "odrl:isAnyOf"},
+			"odrl:rightOperand": []any{"DEU", "AUT", "CHE"},
+		},
+		map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": "odrl:spatial"},
+			"odrl:operator":     map[string]any{"@id": "odrl:eq"},
+			"odrl:rightOperand": map[string]any{"@value": "DE", "@type": "xsd:string"},
+		},
+	}
+	valid, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&valid)
+	require.NoError(t, err)
+}
+
 func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
 	raw := canonicalTemplateData(t)
 	var data map[string]any

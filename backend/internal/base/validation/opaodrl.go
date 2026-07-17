@@ -2,6 +2,8 @@ package validation
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -35,6 +37,18 @@ both_string(a, b) if {
 }
 
 norm(x) := upper(trim_space(sprintf("%v", [x])))
+
+is_ts_string(x) if {
+	is_string(x)
+	regex.match("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$", x)
+}
+
+to_ts(x) := time.parse_rfc3339_ns(x) if is_ts_string(x)
+
+both_ts(a, b) if {
+	to_ts(a)
+	to_ts(b)
+}
 
 values_equal(a, b) if {
 	both_string(a, b)
@@ -94,6 +108,36 @@ satisfied if {
 	to_num(input.actual) <= to_num(input.right) + tol
 }
 
+# Ordering over RFC3339 timestamps (SRS Appendix C dateTime constraints):
+# when the operands are not numbers but parse as instants, compare instants.
+satisfied if {
+	input.operator == "gt"
+	not both_num(input.actual, input.right)
+	both_ts(input.actual, input.right)
+	to_ts(input.actual) > to_ts(input.right)
+}
+
+satisfied if {
+	input.operator == "gteq"
+	not both_num(input.actual, input.right)
+	both_ts(input.actual, input.right)
+	to_ts(input.actual) >= to_ts(input.right)
+}
+
+satisfied if {
+	input.operator == "lt"
+	not both_num(input.actual, input.right)
+	both_ts(input.actual, input.right)
+	to_ts(input.actual) < to_ts(input.right)
+}
+
+satisfied if {
+	input.operator == "lteq"
+	not both_num(input.actual, input.right)
+	both_ts(input.actual, input.right)
+	to_ts(input.actual) <= to_ts(input.right)
+}
+
 satisfied if {
 	input.operator == "isAnyOf"
 	any_match
@@ -127,6 +171,31 @@ func preparedODRLQuery() (rego.PreparedEvalQuery, error) {
 	return odrlRegoQuery, odrlRegoErr
 }
 
+var (
+	tzLessDateTime = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$`)
+	dateOnly       = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+)
+
+// normalizeTemporal renders a timezone-less ISO-8601 dateTime (or a bare date)
+// as RFC3339 UTC so the Rego engine's time.parse_rfc3339_ns can order it;
+// non-temporal values pass through untouched. The ODRL vocabulary the UI emits
+// carries such tz-less dateTimes (SRS Appendix C: "2025-05-10T23:59:59").
+func normalizeTemporal(value any) any {
+	s, ok := value.(string)
+	if !ok {
+		return value
+	}
+	trimmed := strings.TrimSpace(s)
+	switch {
+	case tzLessDateTime.MatchString(trimmed):
+		return trimmed + "Z"
+	case dateOnly.MatchString(trimmed):
+		return trimmed + "T00:00:00Z"
+	default:
+		return value
+	}
+}
+
 // evaluateODRLConstraintOPA reports whether an actual value satisfies an ODRL
 // constraint operator against its right operand, evaluated on OPA. The
 // operator is reduced to its local name and the values compacted exactly as
@@ -138,8 +207,8 @@ func evaluateODRLConstraintOPA(ctx context.Context, operator string, actualValue
 	}
 	input := map[string]any{
 		"operator": compactTerm(operator),
-		"actual":   compactJSONLDValue(actualValue),
-		"right":    compactJSONLDValue(rightOperand),
+		"actual":   normalizeTemporal(compactJSONLDValue(actualValue)),
+		"right":    normalizeTemporal(compactJSONLDValue(rightOperand)),
 	}
 	rs, err := query.Eval(ctx, rego.EvalInput(input))
 	if err != nil {
