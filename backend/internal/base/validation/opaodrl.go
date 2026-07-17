@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/open-policy-agent/opa/rego"
+	"github.com/open-policy-agent/opa/v1/rego"
 )
 
 // ODRL constraint satisfaction on Open Policy Agent (ADR-11). The operator

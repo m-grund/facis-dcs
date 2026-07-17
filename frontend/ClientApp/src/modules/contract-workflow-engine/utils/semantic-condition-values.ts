@@ -1,7 +1,7 @@
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
-import type { DcsContractData, DcsDataRequirement, DcsRequirementField } from '@/models/dcs-jsonld'
+import type { DcsContractData, DcsDataRequirement } from '@/models/dcs-jsonld'
 
 /**
  * Boundary between the editor's (blockId, conditionId, parameterName)
@@ -41,14 +41,14 @@ export function applyInlineSemanticValues(
     'dcs:fields': requirement['dcs:fields'].map((field) => {
       const value = byField.get(fieldKey(requirement['dcs:conditionId'], field['dcs:parameterName']))
       const { 'dcs:parameterValue': _value, 'dcs:blockId': _block, ...rest } = field
-      if (!value || value.parameterValue === undefined) {
-        return rest as DcsRequirementField
+      if (value?.parameterValue === undefined) {
+        return rest
       }
       return {
         ...rest,
         'dcs:parameterValue': value.parameterValue,
         ...(value.blockId ? { 'dcs:blockId': value.blockId } : {}),
-      } as DcsRequirementField
+      }
     }),
   }))
 }
