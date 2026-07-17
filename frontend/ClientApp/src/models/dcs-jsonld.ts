@@ -139,8 +139,12 @@ export interface OdrlConstraint {
 export interface OdrlRule {
   '@id': string
   '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
-  /** Every rule declares exactly one action (DCS ODRL profile). */
-  'odrl:action': JsonLdReference
+  /**
+   * The action(s) the rule governs. A single action is one reference; several
+   * actions are an array (ODRL Policy Rule Composition §2.7 — normatively the
+   * atomic equivalent is one rule per action).
+   */
+  'odrl:action': JsonLdReference | JsonLdReference[]
   /** Bound party DIDs for a contract instance (ODRL Agreement); open/placeholder party references for a template (ODRL Offer). */
   'odrl:assigner': JsonLdReference
   'odrl:assignee': JsonLdReference

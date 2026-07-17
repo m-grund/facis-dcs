@@ -70,14 +70,14 @@ interface ConstraintDraft {
 
 const draft = reactive<{
   type: string
-  action: string
+  actions: string[]
   assigneeId: string
   assignerId: string
   targetId: string
   constraints: ConstraintDraft[]
 }>({
   type: props.modelValue?.['@type'] ?? ODRL_RULE_TYPES[0]?.type ?? 'odrl:Permission',
-  action: props.modelValue?.['odrl:action']?.['@id'] ?? ODRL_ACTIONS[0]?.id ?? 'odrl:use',
+  actions: readActions(props.modelValue),
   assigneeId: props.modelValue?.['odrl:assignee']?.['@id'] ?? props.parties[0]?.id ?? '',
   assignerId: props.modelValue?.['odrl:assigner']?.['@id'] ?? props.parties[0]?.id ?? '',
   targetId: props.modelValue?.['odrl:target']?.['@id'] ?? props.contractTargetId,
@@ -88,7 +88,22 @@ const draft = reactive<{
 // would make each emit retrigger the computed (a reactive feedback loop).
 const ruleId = props.modelValue?.['@id'] ?? `urn:uuid:${crypto.randomUUID()}`
 
-const complete = computed(() => !!draft.action && !!draft.assigneeId)
+const complete = computed(() => draft.actions.some((a) => !!a) && !!draft.assigneeId)
+
+function readActions(rule: OdrlRule | null): string[] {
+  const action = rule?.['odrl:action']
+  if (!action) return [ODRL_ACTIONS[0]?.id ?? 'odrl:use']
+  const list = Array.isArray(action) ? action : [action]
+  const ids = list.map((a) => a['@id']).filter(Boolean)
+  return ids.length ? ids : [ODRL_ACTIONS[0]?.id ?? 'odrl:use']
+}
+
+function addAction() {
+  draft.actions.push(ODRL_ACTIONS[0]?.id ?? 'odrl:use')
+}
+function removeAction(index: number) {
+  draft.actions.splice(index, 1)
+}
 
 function readConstraints(rule: OdrlRule | null): ConstraintDraft[] {
   return (rule?.['odrl:constraint'] ?? []).map((c) => {
@@ -150,10 +165,11 @@ const rule = computed<OdrlRule | null>(() => {
       if (right !== undefined) constraint['odrl:rightOperand'] = right
       return constraint
     })
+  const actions = draft.actions.filter(Boolean)
   const built: OdrlRule = {
     '@id': ruleId,
     '@type': draft.type as OdrlRule['@type'],
-    'odrl:action': { '@id': draft.action },
+    'odrl:action': actions.length === 1 ? { '@id': actions[0] ?? '' } : actions.map((a) => ({ '@id': a })),
     'odrl:assigner': { '@id': draft.assignerId },
     'odrl:assignee': { '@id': draft.assigneeId },
     'odrl:target': { '@id': draft.targetId || props.contractTargetId },
@@ -176,8 +192,20 @@ watch(rule, (value) => emit('update:modelValue', value))
         </select>
       </label>
       <label class="form-control">
-        <span class="label-text text-xs">Action</span>
-        <IriPicker v-model="draft.action" :options="actionOptions" />
+        <span class="label-text text-xs">Action(s)</span>
+        <div class="flex flex-col gap-1">
+          <div v-for="(_, i) in draft.actions" :key="i" class="flex items-center gap-1">
+            <IriPicker
+              :model-value="draft.actions[i] ?? ''"
+              :options="actionOptions"
+              @update:model-value="draft.actions[i] = $event"
+            />
+            <button v-if="draft.actions.length > 1" type="button" class="btn btn-ghost btn-xs" @click="removeAction(i)">
+              ✕
+            </button>
+          </div>
+          <button type="button" class="btn w-fit btn-ghost btn-xs" @click="addAction">+ action</button>
+        </div>
       </label>
       <label class="form-control">
         <span class="label-text text-xs">Granted by (assigner)</span>

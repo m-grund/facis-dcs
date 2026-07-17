@@ -871,8 +871,9 @@ func validateODRLRuleShape(rule map[string]any) error {
 	if !hasAction {
 		return errors.New("rule is missing odrl:action")
 	}
-	if items, ok := action.([]any); ok && len(items) != 1 {
-		return errors.New("rule must declare exactly one odrl:action")
+	// A rule may declare several actions (ODRL Policy Rule Composition §2.7).
+	if items, ok := action.([]any); ok && len(items) == 0 {
+		return errors.New("rule must declare at least one odrl:action")
 	}
 	for _, key := range []string{"odrl:assigner", "odrl:assignee", "odrl:target"} {
 		if _, ok := rule[key]; !ok {
