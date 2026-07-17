@@ -194,19 +194,28 @@ func callerMayReadContract(query GetByIDQry, data *db.Contract) bool {
 	if query.Internal {
 		return true
 	}
-	if query.LocalPeer != "" && data.Origin != "" && data.Origin != query.LocalPeer {
+	return CallerMayReadContract(query.RetrievedBy, query.UserRoles, query.LocalPeer, data)
+}
+
+// CallerMayReadContract is the party read-scoping rule shared by direct
+// retrieval and the bundle exporter's related/ member filter: retrievedBy is
+// the caller's organization, localPeer this instance's own peer DID (adopted
+// contracts whose Origin is a different peer are readable by construction),
+// and privileged org-independent roles bypass the party check.
+func CallerMayReadContract(retrievedBy string, userRoles userrole.UserRoles, localPeer string, data *db.Contract) bool {
+	if localPeer != "" && data.Origin != "" && data.Origin != localPeer {
 		return true
 	}
-	for _, role := range query.UserRoles {
+	for _, role := range userRoles {
 		if privilegedReadRoles[role] {
 			return true
 		}
 	}
-	if query.RetrievedBy != "" && query.RetrievedBy == data.CreatedBy {
+	if retrievedBy != "" && retrievedBy == data.CreatedBy {
 		return true
 	}
 	for _, party := range contractParties(data.ContractData) {
-		if query.RetrievedBy != "" && query.RetrievedBy == party {
+		if retrievedBy != "" && retrievedBy == party {
 			return true
 		}
 	}

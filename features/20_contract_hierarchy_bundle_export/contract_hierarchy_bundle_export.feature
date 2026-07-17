@@ -9,7 +9,10 @@
 # Bundle export (FR-TR-24, FR-CWE-30, FR-PACM-06): everything the instance
 # holds for a contract/template is exported as one ZIP with a
 # bundle-manifest.json integrity index; exports with missing referenced
-# components are refused with a findings list.
+# components are refused with a findings list. Beyond the parent chain
+# (parents/), other locally-known, requester-readable members of the
+# hierarchy family are packaged under related/ — see
+# features/23_contract_bundle_export for the family-completeness scenarios.
 #
 # Scope notes:
 #   - "parent must be a frame-capable type" is not asserted by any scenario.
@@ -28,7 +31,8 @@
 # dcs_contract_hierarchy_steps.py. Bundle export: steps/pdf_generation/
 # dcs_bundle_export_steps.py (that module imports the former's
 # `_minimal_canonical_contract_data`/`_link_contract_to_parent` helpers to
-# build parent/sibling fixtures instead of duplicating them).
+# build parent/sibling fixtures instead of duplicating them). The related/
+# family assertions live in steps/contract_bundle_export_steps.py.
 
 @DCS-OR-H
 Feature: Contract hierarchy invariant and ZIP bundle export
@@ -99,8 +103,8 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     And the response has Content-Type "application/zip"
     And the contract bundle ZIP for "Bundle Export Contract" contains entries: contract.jsonld, contract.pdf, manifest-store.c2pa, credentials/, signatures.json, bundle-manifest.json
 
-  @DCS-FR-CWE-30 @DCS-FR-CSA-26
-  Scenario: Child contract bundle carries the parent chain upward but nothing about its sibling
+  @DCS-FR-CWE-30
+  Scenario: Child contract bundle carries the parent chain upward and its locally-known sibling under related/
     # All three contracts are deliberately kept in DRAFT (not advanced to
     # SIGNED): contract/update — used to establish dcs:parentContract links
     # via steps/template_management/dcs_contract_hierarchy_steps.py's
@@ -108,6 +112,11 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     # (transition.go's Transitions[Draft][EventUpdate]), and PDF export/
     # verify does not require any particular contract state (see
     # features/19_c2pa_conformance's Draft banner scenario).
+    # The sibling is created on THIS instance by the same organization, so
+    # it is locally known and requester-readable — the FR-CWE-30 family rule
+    # includes it under related/. Members held only by other instances (or
+    # outside the requester's read authorization) stay absent; see ADR-7 and
+    # features/23_contract_bundle_export.
     Given contract "Hierarchy Bundle Frame" exists with no parent reference
     And contract "Hierarchy Bundle Frame" has an exported PDF
     And contract "Hierarchy Bundle Child" and contract "Hierarchy Bundle Sibling" both reference contract "Hierarchy Bundle Frame" as their parent
@@ -116,7 +125,7 @@ Feature: Contract hierarchy invariant and ZIP bundle export
     When I request the contract bundle export for "Hierarchy Bundle Child"
     Then get http 200:Success code
     And the contract bundle ZIP for "Hierarchy Bundle Child" contains the parent chain for "Hierarchy Bundle Frame"
-    And the contract bundle ZIP for "Hierarchy Bundle Child" contains nothing about sibling contract "Hierarchy Bundle Sibling"
+    And the contract bundle ZIP for "Hierarchy Bundle Child" contains family member "Hierarchy Bundle Sibling" under related/
 
   @DCS-FR-CWE-30
   Scenario: Every bundle-manifest.json entry's SHA-256 matches the packaged bytes

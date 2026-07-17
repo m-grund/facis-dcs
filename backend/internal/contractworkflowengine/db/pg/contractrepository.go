@@ -136,6 +136,20 @@ func (r *PostgresContractRepo) ExistsByDID(ctx context.Context, tx *sqlx.Tx, did
 	return exists, nil
 }
 
+func (r *PostgresContractRepo) ReadChildrenDIDs(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error) {
+	query := `
+        SELECT did
+        FROM contracts_effective
+        WHERE regexp_replace(contract_data->'dcs:parentContract'->>'@id', '^.*/', '') = $1
+        ORDER BY did
+    `
+	children := []string{}
+	if err := tx.SelectContext(ctx, &children, query, did); err != nil {
+		return nil, err
+	}
+	return children, nil
+}
+
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
 		SELECT
