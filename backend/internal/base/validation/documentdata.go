@@ -692,10 +692,13 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 		}
 		// A rule's constraints are a conjunction (ODRL IM §2.5); each may itself
 		// be a logical constraint (and/or/xone/andSequence) nesting more
-		// constraints. Flatten to leaf operands: each is a document data field
-		// or an ODRL context operand (spatial, dateTime, …) evaluated at
-		// use-time — never a field.
-		for _, constraint := range policyConstraints(policy["odrl:constraint"]) {
+		// constraints. Its duties (and their consequences) carry constraints too.
+		// Flatten to leaf operands: each is a document data field or an ODRL
+		// context operand (spatial, dateTime, …) evaluated at use-time — never a
+		// field.
+		constraints := policyConstraints(policy["odrl:constraint"])
+		constraints = append(constraints, dutyConstraints(policy["odrl:duty"])...)
+		for _, constraint := range constraints {
 			for _, leaf := range compactConstraintLeaves(constraint) {
 				leftOperand, _ := leaf["odrl:leftOperand"].(map[string]any)
 				operandID, _ := leftOperand["@id"].(string)
@@ -737,6 +740,18 @@ func compactConstraintLeaves(constraint map[string]any) []map[string]any {
 		return leaves
 	}
 	return []map[string]any{constraint}
+}
+
+// dutyConstraints collects the constraint nodes carried by a rule's duties and,
+// recursively, their consequence duties (ODRL IM §2.5) — so a duty constraint
+// referencing a nonexistent data field is caught wherever it nests.
+func dutyConstraints(raw any) []map[string]any {
+	out := []map[string]any{}
+	for _, duty := range policyConstraints(raw) {
+		out = append(out, policyConstraints(duty["odrl:constraint"])...)
+		out = append(out, dutyConstraints(duty["odrl:consequence"])...)
+	}
+	return out
 }
 
 // policyConstraints normalizes a rule's odrl:constraint to a list — a JSON-LD
@@ -884,6 +899,45 @@ func validateODRLRuleShape(rule map[string]any) error {
 	proseID, _ := prose["@id"].(string)
 	if strings.TrimSpace(proseID) == "" {
 		return errors.New("rule is missing dcs:prose — every machine-readable rule must reference the human-readable clause it is backed by")
+	}
+	// A Permission may carry duties (ODRL IM §2.5): obligations the assignee
+	// must fulfil to exercise it. Each is a fragment — its own odrl:action (and
+	// optional constraints/consequence), inheriting the enclosing rule's
+	// parties, so it declares no assigner/assignee/target/prose of its own.
+	if rawDuty, hasDuty := rule["odrl:duty"]; hasDuty {
+		if compactTerm(fmt.Sprint(rule["@type"])) != "Permission" {
+			return errors.New("odrl:duty may only be attached to a Permission (a duty nests under the rule it obliges); a policy-level Duty belongs under odrl:obligation")
+		}
+		for index, duty := range policyConstraints(rawDuty) {
+			if err := validateODRLDutyFragment(duty); err != nil {
+				return fmt.Errorf("odrl:duty %d: %w", index, err)
+			}
+		}
+	}
+	return nil
+}
+
+// validateODRLDutyFragment validates a Duty nested under a Permission (ODRL IM
+// §2.5). Unlike a top-level rule, a duty fragment inherits its parties from the
+// enclosing rule, so it needs only an odrl:action; its consequence is itself a
+// duty, validated the same way (recursively).
+func validateODRLDutyFragment(duty map[string]any) error {
+	if t := compactTerm(fmt.Sprint(duty["@type"])); t != "" && t != "Duty" {
+		return fmt.Errorf("a duty must be an odrl:Duty, got %v", duty["@type"])
+	}
+	action, hasAction := duty["odrl:action"]
+	if !hasAction {
+		return errors.New("duty is missing odrl:action")
+	}
+	if items, ok := action.([]any); ok && len(items) == 0 {
+		return errors.New("duty must declare at least one odrl:action")
+	}
+	if rawConsequence, ok := duty["odrl:consequence"]; ok {
+		for index, consequence := range policyConstraints(rawConsequence) {
+			if err := validateODRLDutyFragment(consequence); err != nil {
+				return fmt.Errorf("odrl:consequence %d: %w", index, err)
+			}
+		}
 	}
 	return nil
 }

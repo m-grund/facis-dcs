@@ -166,3 +166,52 @@ test('the builder emits a logical (or) constraint when constraints are combined 
   expect(logical['@type']).toBe('odrl:LogicalConstraint')
   expect(logical['odrl:or']?.['@list']?.length, 'or over both spatial constraints').toBe(2)
 })
+
+// A Permission may carry nested duties (ODRL IM §2.5): obligations the assignee
+// must fulfil to exercise it. The builder emits odrl:duty, each a Duty fragment
+// with its own action and constraints.
+test('a Permission can carry a nested duty the assignee must fulfil', async ({ page, loginAs }) => {
+  page.setDefaultTimeout(15_000)
+  await gotoAs(page, loginAs, 'Template Creator', '/ui/templates/new')
+  await page.getByRole('button', { name: /Component/ }).click()
+  await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill(`FV Duty ${Date.now()}`)
+  await page.getByRole('tab', { name: /Clauses/ }).click()
+
+  const editor = page.getByTestId('split-clause-editor')
+  await editor.getByPlaceholder('Clause title').fill(`Duty clause ${Date.now()}`)
+  await editor.locator('.clause-editor').first().click()
+  await page.keyboard.type('The assignee may use the asset, and must delete it in an allowed region afterwards.')
+
+  const ruleSelect = (label: string) =>
+    editor.locator('label.form-control').filter({ hasText: label }).locator('select')
+  await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
+  await ruleSelect('Action').selectOption({ label: 'use' })
+
+  // Attach a duty: the assignee MUST delete, bounded by the duty's own constraint.
+  await editor.getByRole('button', { name: '+ duty' }).click()
+  const duty = editor.getByTestId('odrl-duty').last()
+  await duty.locator('select').first().selectOption({ label: 'delete' })
+  await duty.getByRole('button', { name: '+ constraint' }).click()
+  const dutyConstraint = duty.locator('.flex.flex-wrap.items-center.gap-1').last()
+  await dutyConstraint.locator('select').nth(0).selectOption({ label: 'access region (spatial)' })
+  await dutyConstraint.locator('select').nth(1).selectOption({ label: 'must equal' })
+  await dutyConstraint.locator('input[placeholder="value"]').fill('DE')
+
+  await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
+  const created = page.waitForRequest((r) => r.url().includes('/template/create') && r.method() === 'POST')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  const doc = (await created).postDataJSON().template_data as {
+    'dcs:policies': {
+      'odrl:permission'?: {
+        'odrl:duty'?: { '@type': string; 'odrl:action': { '@id': string }; 'odrl:constraint'?: unknown[] }[]
+      }[]
+    }
+  }
+
+  const permission = (doc['dcs:policies']['odrl:permission'] ?? [])[0]
+  const duties = permission?.['odrl:duty'] ?? []
+  expect(duties.length, 'one duty attached to the permission').toBe(1)
+  expect(duties[0]?.['@type']).toBe('odrl:Duty')
+  expect(duties[0]?.['odrl:action']['@id'], 'the duty action').toBe('odrl:delete')
+  expect(duties[0]?.['odrl:constraint']?.length, "the duty carries its own constraint").toBe(1)
+})

@@ -931,6 +931,53 @@ func TestAuditContractEvaluatesLogicalConstraint(t *testing.T) {
 	require.True(t, hasFindingSeverity(violated, "FACIS-LOGICAL-OR", "error"))
 }
 
+// TestAuditContractEvaluatesNestedDuty proves the enforcement engine audits a
+// Permission's nested duties (ODRL IM §2.5): the duty is recorded as a use-time
+// obligation, and its own constraints are evaluated as obligations — satisfied
+// when the value holds, flagged when it does not.
+func TestAuditContractEvaluatesNestedDuty(t *testing.T) {
+	fieldID := "urn:dcs:field:amount"
+	permission := func() map[string]any {
+		return map[string]any{
+			"@id":         "FACIS-PERMISSION-WITH-DUTY",
+			"@type":       "odrl:Permission",
+			"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action": map[string]any{"@id": "odrl:use"},
+			"odrl:duty": []any{
+				map[string]any{
+					"@id":         "FACIS-DUTY-COMPENSATE",
+					"@type":       "odrl:Duty",
+					"odrl:action": map[string]any{"@id": "odrl:compensate"},
+					"odrl:constraint": []any{
+						map[string]any{
+							"@type":             "odrl:Constraint",
+							"odrl:leftOperand":  map[string]any{"@id": fieldID},
+							"odrl:operator":     map[string]any{"@id": "odrl:gteq"},
+							"odrl:rightOperand": float64(1000),
+						},
+					},
+				},
+			},
+		}
+	}
+
+	// 1500 ≥ 1000 → the duty obligation is met → no violation, and the
+	// permission records its duty as a use-time obligation.
+	ok := odrlContract(fieldID, "payment", "amount", []any{permission()}, float64(1500))
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+	require.True(t, hasFindingSeverity(findings, "FACIS-PERMISSION-WITH-DUTY", "info"), "duty recorded as use-time obligation")
+
+	// 500 < 1000 → the duty obligation is unmet → the duty is flagged.
+	bad := odrlContract(fieldID, "payment", "amount", []any{permission()}, float64(500))
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-DUTY-COMPENSATE", "error"), "unmet duty obligation flagged")
+}
+
 func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string) PolicyFinding {
 	t.Helper()
 	for _, finding := range findings {

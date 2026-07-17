@@ -269,6 +269,100 @@ func TestNormalizeTemplateDataAcceptsConstraintConjunctionWithContextOperand(t *
 	require.NoError(t, err)
 }
 
+// permissionWithDuty builds a Permission (copying the canonical rule's parties
+// and prose) carrying the given odrl:duty payload, and installs it as the
+// policy set's permission bucket.
+func permissionWithDuty(t *testing.T, duty any) datatype.JSON {
+	t.Helper()
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	base := firstPolicyDuty(data)
+	permission := map[string]any{
+		"@id":           "urn:uuid:policy-permission-1",
+		"@type":         "odrl:Permission",
+		"odrl:action":   map[string]any{"@id": "odrl:use"},
+		"odrl:assigner": base["odrl:assigner"],
+		"odrl:assignee": base["odrl:assignee"],
+		"odrl:target":   base["odrl:target"],
+		"dcs:prose":     base["dcs:prose"],
+		"odrl:duty":     duty,
+	}
+	data["dcs:policies"].(map[string]any)["odrl:permission"] = []any{permission}
+	out, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+	return out
+}
+
+// TestNormalizeTemplateDataAcceptsPermissionWithNestedDuty proves a Permission
+// may carry a nested Duty fragment (ODRL IM §2.5): its own action plus a
+// constraint on an existing data field, no parties of its own.
+func TestNormalizeTemplateDataAcceptsPermissionWithNestedDuty(t *testing.T) {
+	valid := permissionWithDuty(t, []any{
+		map[string]any{
+			"@type":       "odrl:Duty",
+			"odrl:action": map[string]any{"@id": "odrl:compensate"},
+			"odrl:constraint": []any{
+				map[string]any{
+					"@type":             "odrl:Constraint",
+					"odrl:leftOperand":  map[string]any{"@id": "urn:uuid:field-provider-country"},
+					"odrl:operator":     map[string]any{"@id": "odrl:isAnyOf"},
+					"odrl:rightOperand": []any{"DEU"},
+				},
+			},
+		},
+	})
+	_, err := NormalizeTemplateData(&valid)
+	require.NoError(t, err)
+}
+
+// TestNormalizeTemplateDataRejectsDutyWithoutAction proves a nested duty must
+// declare an action.
+func TestNormalizeTemplateDataRejectsDutyWithoutAction(t *testing.T) {
+	invalid := permissionWithDuty(t, []any{
+		map[string]any{"@type": "odrl:Duty"},
+	})
+	_, err := NormalizeTemplateData(&invalid)
+	require.ErrorContains(t, err, "duty is missing odrl:action")
+}
+
+// TestNormalizeTemplateDataRejectsDutyConstraintOnUnknownField proves a nested
+// duty's constraints are checked against declared fields like a rule's own.
+func TestNormalizeTemplateDataRejectsDutyConstraintOnUnknownField(t *testing.T) {
+	invalid := permissionWithDuty(t, []any{
+		map[string]any{
+			"@type":       "odrl:Duty",
+			"odrl:action": map[string]any{"@id": "odrl:compensate"},
+			"odrl:constraint": []any{
+				map[string]any{
+					"@type":            "odrl:Constraint",
+					"odrl:leftOperand": map[string]any{"@id": "urn:uuid:field-does-not-exist"},
+					"odrl:operator":    map[string]any{"@id": "odrl:eq"},
+				},
+			},
+		},
+	})
+	_, err := NormalizeTemplateData(&invalid)
+	require.ErrorContains(t, err, "nonexistent contract data field")
+}
+
+// TestNormalizeTemplateDataRejectsDutyOnNonPermission proves odrl:duty may only
+// nest under a Permission — a policy-level Duty belongs under odrl:obligation.
+func TestNormalizeTemplateDataRejectsDutyOnNonPermission(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	obligation := firstPolicyDuty(data)
+	obligation["odrl:duty"] = []any{
+		map[string]any{"@type": "odrl:Duty", "odrl:action": map[string]any{"@id": "odrl:compensate"}},
+	}
+	invalid, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&invalid)
+	require.ErrorContains(t, err, "may only be attached to a Permission")
+}
+
 func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
 	raw := canonicalTemplateData(t)
 	var data map[string]any

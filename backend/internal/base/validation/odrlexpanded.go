@@ -239,7 +239,7 @@ func auditExpandedODRLPolicies(ctx context.Context, root map[string]any, rules [
 	return findings, nil
 }
 
-func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
+func auditExpandedODRLRule(ctx context.Context, _ map[string]any, rule map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
 	ruleID, _ := rule["@id"].(string)
 	if ruleID == "" {
 		ruleID = "FACIS-CONTRACT-ODRL-POLICY"
@@ -252,10 +252,29 @@ func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[st
 		severity = "info"
 	}
 
-	// A rule's constraints are a conjunction (ODRL IM §2.5): each is audited,
-	// and any violated data-field constraint fails the rule.
+	findings, err := auditConstraintBearingNode(ctx, ruleID, rule, fieldIndex, isProhibition, isPermission, severity)
+	if err != nil {
+		return nil, err
+	}
+
+	// A permission's duties (ODRL IM §2.5) are obligations the assignee must
+	// fulfil to exercise it. The obligated action is performed at use-time; the
+	// audit records it and evaluates the duty's own constraints as obligations.
+	dutyFindings, err := auditExpandedODRLDutyNodes(ctx, ruleID, expandedNodes(rule, odrlIRI+"duty"), fieldIndex)
+	if err != nil {
+		return nil, err
+	}
+	return append(findings, dutyFindings...), nil
+}
+
+// auditConstraintBearingNode audits the ODRL constraints carried by a rule or
+// duty node (a conjunction, ODRL IM §2.5): each is evaluated, and any violated
+// data-field constraint fails the node. isProhibition/isPermission set the
+// violation semantics (a prohibition is violated when satisfied; an obligation
+// when not); a duty is audited as an obligation.
+func auditConstraintBearingNode(ctx context.Context, ruleID string, node map[string]any, fieldIndex map[string]odrlFieldInfo, isProhibition, isPermission bool, severity string) ([]PolicyFinding, error) {
 	findings := []PolicyFinding{}
-	for _, rawConstraint := range expandedValues(rule, odrlIRI+"constraint") {
+	for _, rawConstraint := range expandedValues(node, odrlIRI+"constraint") {
 		constraint, ok := rawConstraint.(map[string]any)
 		if !ok {
 			continue
@@ -350,6 +369,72 @@ func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[st
 		findings = append(findings, finding)
 	}
 	return findings, nil
+}
+
+// auditExpandedODRLDutyNodes audits a permission's duties (ODRL IM §2.5). Each
+// duty records the obligated action (fulfilled at use-time) and has its own
+// constraints evaluated as obligations; its consequence — a duty triggered
+// when the duty is not fulfilled — is audited the same way, recursively.
+func auditExpandedODRLDutyNodes(ctx context.Context, ownerID string, duties []map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
+	findings := []PolicyFinding{}
+	for _, duty := range duties {
+		dutyID, _ := duty["@id"].(string)
+		if dutyID == "" {
+			dutyID = ownerID
+		}
+		findings = append(findings, contractFinding(ownerID, ownerID, "info",
+			fmt.Sprintf("ODRL policy %q duty (%s) is fulfilled at use-time", ownerID, dutyActionLabel(duty)), odrlIRI+"duty", ""))
+
+		constraintFindings, err := auditConstraintBearingNode(ctx, dutyID, duty, fieldIndex, false, false, "error")
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, constraintFindings...)
+
+		consequenceFindings, err := auditExpandedODRLDutyNodes(ctx, dutyID, expandedNodes(duty, odrlIRI+"consequence"), fieldIndex)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, consequenceFindings...)
+	}
+	return findings, nil
+}
+
+// expandedNodes returns a property's value nodes as maps, unwrapping an @list
+// container (ODRL duty/consequence are plain sets, but a producer may serialize
+// them as an ordered list).
+func expandedNodes(node map[string]any, property string) []map[string]any {
+	out := []map[string]any{}
+	for _, raw := range expandedValues(node, property) {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if list, ok := item["@list"].([]any); ok {
+			for _, li := range list {
+				if child, ok := li.(map[string]any); ok {
+					out = append(out, child)
+				}
+			}
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// dutyActionLabel joins the local names of a duty's action(s) for a finding.
+func dutyActionLabel(duty map[string]any) string {
+	names := []string{}
+	for _, raw := range expandedValues(duty, odrlIRI+"action") {
+		if id := expandedID(raw); id != "" {
+			names = append(names, shaclLocalName(id))
+		}
+	}
+	if len(names) == 0 {
+		return "action"
+	}
+	return strings.Join(names, ", ")
 }
 
 var odrlContextOperandIRIs = map[string]bool{

@@ -155,6 +155,22 @@ export function isAtomicConstraint(node: OdrlConstraintNode): node is OdrlConstr
   return node['@type'] === 'odrl:Constraint'
 }
 
+/**
+ * A Duty nested under a Permission (ODRL IM §2.5): an obligation the assignee
+ * must fulfil to exercise the permission. A duty is a *fragment* — it carries
+ * its own action and constraints, while the assigner/assignee/target are
+ * inherited from the enclosing rule (so, unlike a top-level rule, it declares
+ * none of them). A duty may carry a consequence: a further duty that becomes
+ * active when the duty itself is not fulfilled.
+ */
+export interface OdrlDuty {
+  '@id'?: string
+  '@type': 'odrl:Duty'
+  'odrl:action': JsonLdReference | JsonLdReference[]
+  'odrl:constraint'?: OdrlConstraintNode[]
+  'odrl:consequence'?: OdrlDuty[]
+}
+
 export interface OdrlRule {
   '@id': string
   '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
@@ -175,6 +191,10 @@ export interface OdrlRule {
    *  §2.5); a single LogicalConstraint expresses or/xone/andSequence. Nodes may
    *  nest (a constraint tree). */
   'odrl:constraint'?: OdrlConstraintNode[]
+  /** Duties the assignee must fulfil to exercise this rule (ODRL IM §2.5 —
+   *  meaningful on a Permission). Each is a fragment with its own action and
+   *  constraints. */
+  'odrl:duty'?: OdrlDuty[]
 }
 
 /** The single enclosing ODRL 2.2 policy for a template (Offer) or contract (Agreement). */
