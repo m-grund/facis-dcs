@@ -63,6 +63,10 @@ const draft = reactive<{
   constraints: readConstraints(props.modelValue),
 })
 
+// Seeded once. Reading props.modelValue inside the emitting `rule` computed
+// would make each emit retrigger the computed (a reactive feedback loop).
+const ruleId = props.modelValue?.['@id'] ?? `urn:uuid:${crypto.randomUUID()}`
+
 const complete = computed(() => !!draft.action && !!draft.assigneeId)
 
 function readConstraints(rule: OdrlRule | null): ConstraintDraft[] {
@@ -126,7 +130,7 @@ const rule = computed<OdrlRule | null>(() => {
       return constraint
     })
   const built: OdrlRule = {
-    '@id': props.modelValue?.['@id'] ?? `urn:uuid:${crypto.randomUUID()}`,
+    '@id': ruleId,
     '@type': draft.type as OdrlRule['@type'],
     'odrl:action': { '@id': draft.action },
     'odrl:assigner': { '@id': draft.assignerId },
@@ -138,7 +142,7 @@ const rule = computed<OdrlRule | null>(() => {
   return built
 })
 
-watch(rule, (value) => emit('update:modelValue', value), { deep: true })
+watch(rule, (value) => emit('update:modelValue', value))
 </script>
 
 <template>
