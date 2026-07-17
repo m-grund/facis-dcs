@@ -73,9 +73,9 @@ enforced — the hub was a write-only ledger.
   doesn't hold returns `semantichub.ErrSchemaNotFound`, which
   `AuditContractContent` propagates as a hard failure rather than silently
   falling back to the active version.
-- `docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl` is
-  authoritative; `backend/internal/semantichub/assets/facis-dcs-shapes.ttl`
-  (the embedded genesis seed) had drifted from it — a different,
+- `backend/internal/semantichub/assets/facis-dcs-shapes.ttl` (the embedded
+  seed, now the single authoring source) had drifted from the then-separate
+  docs copy — a different,
   never-actually-loaded shape set — and also was not valid Turtle
   (`sh:path did` is not a legal prefixed name; ADR-9 fixed it while
   replacing the enforcement engine, since the old hand-rolled matcher never

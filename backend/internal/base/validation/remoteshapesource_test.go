@@ -16,8 +16,8 @@ import (
 // — a fake HTTP server here stands in for a peer DCS instance's public
 // Semantic Hub endpoints (GET /semantic/schema/retrieve).
 func TestVerifyAgainstOriginatorHub(t *testing.T) {
-	shapesTTL := mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl")
-	contextJSON := mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld")
+	shapesTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl")
+	contextJSON := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		kind := r.URL.Query().Get("kind")

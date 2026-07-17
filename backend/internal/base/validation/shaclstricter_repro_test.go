@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ import (
 // injected on dcs:ContractMetadataShape's dcs:title property — a compliant
 // canonical contract must then produce a title-InConstraintComponent error.
 func TestAuditContractContentFlagsShInNarrowedTitle(t *testing.T) {
-	canonicalTTL := mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl")
+	canonicalTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl")
 	anchor := "sh:path dcs:title ;"
 	require.Contains(t, canonicalTTL, anchor)
 	stricterTTL := strings.Replace(
@@ -32,7 +33,7 @@ func TestAuditContractContentFlagsShInNarrowedTitle(t *testing.T) {
 	restore := swapShapeSource(t, fixtureShapeSource{
 		shapesTTL:   stricterTTL,
 		profileYAML: "id: t\nversion: t\nrules: []\n",
-		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
 	})
 	defer restore()
 
@@ -47,9 +48,9 @@ func TestAuditContractContentFlagsShInNarrowedTitle(t *testing.T) {
 func TestAuditContractContentResolvesRegisteredExternalContext(t *testing.T) {
 	external := "https://example.org/bdd/external-context"
 	restore := swapShapeSource(t, fixtureShapeSource{
-		shapesTTL:   mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl"),
+		shapesTTL:   mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl"),
 		profileYAML: "id: t\nversion: t\nrules: []\n",
-		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
 		externalContexts: map[string]string{
 			external: `{"@context": {"ex": "https://example.org/ns#"}}`,
 		},
@@ -148,10 +149,10 @@ func gaiaXParticipantInstance() map[string]any {
 func swapGaiaXShapeSource(t *testing.T) func() {
 	t.Helper()
 	return swapShapeSource(t, fixtureShapeSource{
-		shapesTTL: mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl") +
+		shapesTTL: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl") +
 			"\n\n" + gaiaXCatalogShapes,
 		profileYAML: "id: t\nversion: t\nrules: []\n",
-		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
 	})
 }
 
@@ -192,81 +193,41 @@ func TestAuditContractContentFlagsGaiaXParticipantViolations(t *testing.T) {
 
 // slaAuditContract is a canonical contract carrying real SLA content —
 // typed CompanyParty, PaymentTerm, SLAAgreement, and SLO nodes — the
-// facis.sla.basic profile's statement rules evaluate against.
-func slaAuditContract() map[string]any {
+// facis.sla.basic profile's statement rules evaluate against real party
+// representations: dcs:parties with plain-string roles (what the workflow
+// engine materializes) or taxonomy-IRI roles (what peers may send).
+func profileAuditContract(roles ...any) map[string]any {
 	contract := canonicalAuditContract()
-	contract["dcs:hasSLA"] = map[string]any{
-		"@id":   "urn:uuid:sla-1",
-		"@type": "dcs:SLAAgreement",
-		"dcs:hasService": map[string]any{
-			"@id":   "urn:uuid:service-1",
-			"@type": "dcs:Service",
-			"dcs:hasSLO": map[string]any{
-				"@id":              "urn:uuid:slo-availability",
-				"@type":            "dcs:SLO",
-				"dcs:availability": 99.9,
-			},
-		},
-	}
-	contract["dcs:contractParties"] = []any{
-		map[string]any{
-			"@id":           "urn:uuid:party-provider",
+	parties := []any{}
+	for i, role := range roles {
+		party := map[string]any{
+			"@id":           fmt.Sprintf("urn:uuid:party-%d", i),
 			"@type":         "dcs:CompanyParty",
-			"dcs:role":      map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"},
-			"dcs:legalName": "Provider GmbH",
-		},
-		map[string]any{
-			"@id":           "urn:uuid:party-customer",
-			"@type":         "dcs:CompanyParty",
-			"dcs:role":      map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"},
-			"dcs:legalName": "Customer GmbH",
-		},
+			"dcs:legalName": fmt.Sprintf("Party %d GmbH", i),
+		}
+		if role != nil {
+			party["dcs:role"] = role
+		}
+		parties = append(parties, party)
 	}
-	contract["dcs:paymentTerm"] = map[string]any{
-		"@id":          "urn:uuid:payment-1",
-		"@type":        "dcs:PaymentTerm",
-		"dcs:amount":   1000.0,
-		"dcs:currency": "EUR",
-		"dcs:dueDate":  "2026-12-01",
-	}
+	contract["dcs:parties"] = parties
 	return contract
 }
 
-var slaStatementRuleIDs = []string{
-	"exactly-one-provider", "exactly-one-customer",
-	"availability-slo-required", "payment-required", "payment-amount-positive",
-}
-
-func TestAuditContractContentEvaluatesSLAProfileStatements(t *testing.T) {
-	contract := slaAuditContract()
-	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(false, true), ContractContentAuditMetadata{})
+func TestAuditContractContentEvaluatesProfileStatements(t *testing.T) {
+	// Plain-string and taxonomy-IRI roles both satisfy the vocabulary; a
+	// role-less party is a not-yet-bound placeholder and is not flagged.
+	valid := profileAuditContract("provider", map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"}, nil)
+	findings, err := AuditContractContent(context.Background(), valid, mapPolicy(false, true), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 	for _, finding := range findings {
-		if finding.Severity == "error" {
-			require.NotContains(t, slaStatementRuleIDs, finding.RuleID, finding.Message)
-		}
+		require.NotEqual(t, "company-party-role-vocabulary", finding.RuleID, finding.Message)
 	}
 
-	broken := slaAuditContract()
-	broken["dcs:paymentTerm"].(map[string]any)["dcs:amount"] = 0.0
-	broken["dcs:contractParties"] = append(broken["dcs:contractParties"].([]any), map[string]any{
-		"@id":           "urn:uuid:party-provider-2",
-		"@type":         "dcs:CompanyParty",
-		"dcs:role":      map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"},
-		"dcs:legalName": "Second Provider GmbH",
-	})
+	broken := profileAuditContract("provider", "overlord")
 	findings, err = AuditContractContent(context.Background(), broken, mapPolicy(false, true), ContractContentAuditMetadata{})
 	require.NoError(t, err)
-	require.Contains(t, policyFindingRuleIDs(findings), "payment-amount-positive")
-	require.Contains(t, policyFindingRuleIDs(findings), "exactly-one-provider")
-
-	// A contract without SLA content stays out of the SLA profile's scope.
-	plain := canonicalAuditContract()
-	findings, err = AuditContractContent(context.Background(), plain, mapPolicy(false, true), ContractContentAuditMetadata{})
-	require.NoError(t, err)
-	for _, finding := range findings {
-		require.NotContains(t, slaStatementRuleIDs, finding.RuleID, finding.Message)
-	}
+	require.Contains(t, policyFindingRuleIDs(findings), "company-party-role-vocabulary")
 }
 
 func TestEvaluateKPIViolationBindsMetricByParameterName(t *testing.T) {
@@ -310,10 +271,10 @@ func TestODRLRulesRequireProseBacking(t *testing.T) {
 
 func TestClauseCatalogObligationShapeEnforcesActionVocabulary(t *testing.T) {
 	restore := swapShapeSource(t, fixtureShapeSource{
-		shapesTTL: mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl") +
+		shapesTTL: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl") +
 			"\n\n" + mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-clause-catalog.ttl"),
 		profileYAML: "id: t\nversion: t\nrules: []\n",
-		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
 	})
 	defer restore()
 

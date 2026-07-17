@@ -17,9 +17,9 @@ func TestMain(m *testing.M) {
 	// real goRDFlib SHACL engine runs end to end without a live database
 	// (see contractcontentaudit_test.go).
 	SetShapeSource(fixtureShapeSource{
-		shapesTTL:   mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl"),
-		profileYAML: mustReadRepoFile("docs/semantic-ontology/validation/facis.sla.basic.v1.yaml"),
-		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		shapesTTL:   mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl"),
+		profileYAML: mustReadRepoFile("backend/internal/semantichub/assets/facis.sla.basic.v1.yaml"),
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
 	})
 	os.Exit(m.Run())
 }

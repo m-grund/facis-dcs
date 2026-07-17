@@ -79,11 +79,6 @@ dcs:semanticConditionValues a owl:ObjectProperty ;
     skos:definition "The values submitted for the document's requirement fields." ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
-dcs:semanticPath a owl:DatatypeProperty ;
-    rdfs:label "semanticPath" ;
-    rdfs:range xsd:string ;
-    skos:inScheme <https://w3id.org/facis/dcs/schema> .
-
 dcs:signatureFields a owl:ObjectProperty ;
     rdfs:label "signatureFields" ;
     rdfs:range dcs:SignatureField ;

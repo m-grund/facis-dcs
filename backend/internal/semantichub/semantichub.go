@@ -1,11 +1,11 @@
 // Package semantichub is the Semantic Hub (DCS-FR-TR-03, UC-02-08): a
 // versioned repository for the machine-readable schemas the DCS produces
-// documents against — JSON-LD contexts, SHACL shapes, and validation
-// profiles. It is seeded at startup with the FACIS DCS v1 profile (the
-// assets/ copies of docs/semantic-ontology, the authoring source), serves
-// every version over /semantic/..., and exposes the ACTIVE context's
-// ontology IRIs so the normalization layer can anchor and enforce them on
-// every produced JSON-LD artifact.
+// documents against — JSON-LD contexts, SHACL shapes, ontologies, and
+// validation profiles. The embedded assets/ documents are the single
+// authoring source; Seed installs them (registering drifted content as new
+// versions), every version is served over /semantic/..., and the ACTIVE
+// context's ontology IRIs are exposed so the normalization layer can anchor
+// and enforce them on every produced JSON-LD artifact.
 package semantichub
 
 import (

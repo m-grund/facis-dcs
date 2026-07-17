@@ -299,12 +299,12 @@ func TestAuditContractContentSHACLAcceptsCompliantCanonicalContract(t *testing.T
 // source of truth between the template builder's palette
 // (GET /semantic/clauses) and server-side enforcement.
 func TestAuditContractContentValidatesTypedClauses(t *testing.T) {
-	canonicalTTL := mustReadRepoFile("docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl")
+	canonicalTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl")
 	clauseCatalogTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-clause-catalog.ttl")
 	restore := swapShapeSource(t, fixtureShapeSource{
 		shapesTTL:   canonicalTTL + "\n\n" + clauseCatalogTTL,
 		profileYAML: "id: t\nversion: t\nrules: []\n",
-		contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld"),
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
 	})
 	defer restore()
 
@@ -584,7 +584,7 @@ dcs:SLAAgreementShape
     sh:minInclusive 0 ;
   ] .
 `
-	restore := swapShapeSource(t, fixtureShapeSource{shapesTTL: slaShapesTTL, profileYAML: "id: t\nversion: t\nrules: []\n", contextJSON: mustReadRepoFile("docs/semantic-ontology/contexts/facis-dcs-context.jsonld")})
+	restore := swapShapeSource(t, fixtureShapeSource{shapesTTL: slaShapesTTL, profileYAML: "id: t\nversion: t\nrules: []\n", contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld")})
 	defer restore()
 
 	badContract := map[string]any{

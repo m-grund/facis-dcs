@@ -109,16 +109,16 @@ docs/semantic-ontology/
   shapes/
     facis-dcs-shapes.ttl
   validation/
-    facis.sla.basic.v1.yaml
-  contexts/
-    facis-dcs-context.jsonld
+    facis.sla.basic.v1.yaml (hub asset)
   examples/
     sla-template.jsonld
     machine-readable-contract.jsonld
-
-docs/ontology/
-  facis-sla-ontology.ttl
 ```
+
+The context, shapes, ontologies, and validation profile themselves live in
+`backend/internal/semantichub/assets/` — the Semantic Hub's embedded seed
+documents are the single authoring source and are served versioned over
+`/semantic/...`.
 
 Recommended future implementation modules:
 

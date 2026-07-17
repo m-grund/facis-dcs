@@ -102,8 +102,9 @@ the pySHACL-sidecar escape hatch.
   SHACL findings, not N info findings. This is more correct (matches real
   SHACL semantics) and is called out explicitly in
   `docs/TRACEABILITY_SRS_BDD.md` and the BDD scenarios that read findings.
-- The Semantic Hub's canonical shapes (`docs/semantic-ontology/shapes/
-  facis-dcs-contract-canonical-shapes.ttl`) were rewritten as valid Turtle
+- The Semantic Hub's canonical shapes
+  (`backend/internal/semantichub/assets/facis-dcs-shapes.ttl`) were
+  rewritten as valid Turtle
   while doing this: `sh:path did` (invalid — no legal prefixed name) became
   `sh:nodeKind sh:IRI` on the shape itself (SHACL's real equivalent of
   "requires a stable @id" — a JSON-LD document's `@id` is its RDF subject;

@@ -8,11 +8,10 @@ import (
 
 const (
 	testRoleEntityType  = "https://w3id.org/facis/dcs/ontology/v1#CompanyParty"
-	testRoleProvider    = "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"
-	testRoleCustomer    = "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"
-	testRoleReseller    = "https://w3id.org/facis/dcs/taxonomy/v1#role-reseller"
+	testRoleProvider    = "provider"
+	testRoleCustomer    = "customer"
+	testRoleReseller    = "reseller"
 	testPaymentTermType = "https://w3id.org/facis/dcs/ontology/v1#PaymentTerm"
-	testSLOType         = "https://w3id.org/facis/dcs/ontology/v1#SLO"
 )
 
 // statementScopedTestProfile is the shipped facis.sla.basic profile reduced
@@ -20,7 +19,7 @@ const (
 // auditContractStatementValidationRules evaluates.
 func statementScopedTestProfile(t *testing.T) ValidationProfile {
 	t.Helper()
-	profile, err := LoadValidationProfileYAML([]byte(mustReadRepoFile("docs/semantic-ontology/validation/facis.sla.basic.v1.yaml")))
+	profile, err := LoadValidationProfileYAML([]byte(mustReadRepoFile("backend/internal/semantichub/assets/facis.sla.basic.v1.yaml")))
 	require.NoError(t, err)
 	rules := make([]ValidationRule, 0, len(profile.Rules))
 	for _, rule := range profile.Rules {
@@ -53,11 +52,6 @@ func validContractStatementsForValidation() []map[string]any {
 			"currency": "EUR",
 			"dueDate":  "2026-06-19",
 		},
-		{
-			"@id":          "slo-availability",
-			"@type":        testSLOType,
-			"availability": 99.9,
-		},
 	}
 }
 
@@ -74,83 +68,31 @@ func TestValidateContractStatementsAcceptsValidContract(t *testing.T) {
 	require.Empty(t, issues)
 }
 
-func TestValidateContractStatementsReportsMissingProvider(t *testing.T) {
-	statements := []map[string]any{}
-	for _, statement := range validContractStatementsForValidation() {
-		if statement["@id"] == "party-provider" {
-			continue
-		}
-		statements = append(statements, statement)
-	}
-
-	issues := ValidateContractStatements(statements, statementScopedTestProfile(t))
-
-	require.Contains(t, validationIssueIDs(issues), "exactly-one-provider")
-}
-
-func TestValidateContractStatementsReportsDuplicateProvider(t *testing.T) {
+func TestValidateContractStatementsRejectsUnknownPartyRole(t *testing.T) {
 	statements := append(validContractStatementsForValidation(), map[string]any{
-		"@id":   "party-provider-2",
+		"@id":   "party-overlord",
 		"@type": testRoleEntityType,
-		"role":  testRoleProvider,
+		"role":  "overlord",
 	})
 
 	issues := ValidateContractStatements(statements, statementScopedTestProfile(t))
 
-	require.Equal(t, []string{"exactly-one-provider"}, validationIssueIDs(issues))
+	require.Equal(t, []string{"company-party-role-vocabulary"}, validationIssueIDs(issues))
+	require.Equal(t, "party-overlord", issues[0].StatementID)
 }
 
-func TestValidateContractStatementsReportsMissingPaymentField(t *testing.T) {
-	statements := validContractStatementsForValidation()
-	delete(statements[2], "dueDate")
+func TestValidateContractStatementsAcceptsRolelessParty(t *testing.T) {
+	// Parties attached before role binding carry no role yet — a vocabulary
+	// rule constrains values that are present, it does not require them.
+	statements := append(validContractStatementsForValidation(), map[string]any{
+		"@id":       "party-unbound",
+		"@type":     testRoleEntityType,
+		"legalName": "Unbound GmbH",
+	})
 
 	issues := ValidateContractStatements(statements, statementScopedTestProfile(t))
 
-	require.Equal(t, []string{"payment-required"}, validationIssueIDs(issues))
-	require.Equal(t, "payment-main", issues[0].StatementID)
-}
-
-func TestValidateContractStatementsReportsNonPositivePaymentAmount(t *testing.T) {
-	statements := validContractStatementsForValidation()
-	statements[2]["amount"] = 0.0
-
-	issues := ValidateContractStatements(statements, statementScopedTestProfile(t))
-
-	require.Equal(t, []string{"payment-amount-positive"}, validationIssueIDs(issues))
-	require.Equal(t, "payment-main", issues[0].StatementID)
-}
-
-func TestValidateContractStatementsReportsMissingSLO(t *testing.T) {
-	statements := []map[string]any{}
-	for _, statement := range validContractStatementsForValidation() {
-		if statement["@id"] == "slo-availability" {
-			continue
-		}
-		statements = append(statements, statement)
-	}
-
-	issues := ValidateContractStatements(statements, statementScopedTestProfile(t))
-
-	require.Equal(t, []string{"availability-slo-required"}, validationIssueIDs(issues))
-}
-
-func TestValidateContractStatementsReportsMultipleValidationFailures(t *testing.T) {
-	statements := []map[string]any{
-		{
-			"@id":    "payment-main",
-			"@type":  testPaymentTermType,
-			"amount": 1000.0,
-		},
-	}
-
-	issues := ValidateContractStatements(statements, statementScopedTestProfile(t))
-
-	require.ElementsMatch(t, []string{
-		"exactly-one-provider",
-		"exactly-one-customer",
-		"payment-required",
-		"availability-slo-required",
-	}, validationIssueIDs(issues))
+	require.Empty(t, issues)
 }
 
 func TestValidateContractStatementsReportsUnknownRuleType(t *testing.T) {
@@ -229,13 +171,13 @@ rules:
 }
 
 func TestLoadValidationProfileYAML(t *testing.T) {
-	defaultProfile, err := LoadValidationProfileYAML([]byte(mustReadRepoFile("docs/semantic-ontology/validation/facis.sla.basic.v1.yaml")))
+	defaultProfile, err := LoadValidationProfileYAML([]byte(mustReadRepoFile("backend/internal/semantichub/assets/facis.sla.basic.v1.yaml")))
 	require.NoError(t, err)
-	require.Equal(t, "facis.sla.basic.v1", defaultProfile.ID)
+	require.Equal(t, "facis.sla.basic", defaultProfile.ID)
 	require.Contains(t, validationIssueIDs(ValidateContractStatements(
-		[]map[string]any{{"@id": "payment-main", "@type": testPaymentTermType, "amount": 0}},
+		[]map[string]any{{"@id": "party-x", "@type": testRoleEntityType, "role": "overlord"}},
 		defaultProfile,
-	)), "payment-amount-positive")
+	)), "company-party-role-vocabulary")
 
 	yamlProfile, err := LoadValidationProfileYAML([]byte(`
 id: facis.marketplace.contract.v1
@@ -258,7 +200,7 @@ func TestStatementQueryUtilities(t *testing.T) {
 	require.Len(t, FindStatements(statements, map[string]any{"@type": testRoleEntityType}), 2)
 	require.Equal(t, 1, CountStatements(statements, map[string]any{"@type": testPaymentTermType}))
 	require.Len(t, FilterStatements(statements, func(statement map[string]any) bool {
-		_, ok := statement["availability"]
+		_, ok := statement["currency"]
 		return ok
 	}), 1)
 }
