@@ -2,6 +2,7 @@
 import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
+import ClauseEditor from '@template-repository/components/clauses-editor/ClauseEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
@@ -99,6 +100,8 @@ const { isManager } = useTemplatePermissions()
                 <span class="badge w-8 badge-sm badge-primary">0{{ currentTabNumber }}</span>
                 Clauses
               </h2>
+              <ClauseEditor />
+              <div class="divider text-xs text-base-content/40">existing clauses</div>
               <ClausesEditor />
             </div>
           </div>

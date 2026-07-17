@@ -101,6 +101,20 @@ export const useDcsDraftStore = defineStore(storeId, {
     semanticConditions(): SemanticCondition[] {
       return contractDataToSemanticConditions(this.contractData, this.policies)
     },
+    /** Parties a clause rule can bind (assigner/assignee/target), by label. */
+    partyAnchors(): { id: string; label: string }[] {
+      const documentId = this.documentIri ?? this.did ?? undefined
+      return [
+        { id: objectIri('party', 'assigner', documentId), label: 'My organization' },
+        { id: objectIri('party', 'assignee', documentId), label: 'The counterparty' },
+        { id: objectIri('party', 'provider', documentId), label: 'Provider' },
+        { id: objectIri('party', 'customer', documentId), label: 'Customer' },
+      ]
+    },
+    /** The contract/asset IRI an ODRL rule targets. */
+    contractTargetIri(): string {
+      return targetReference(this.documentIri ?? this.did ?? undefined)['@id']
+    },
     /** Assembles the canonical JSON-LD document from store state — no conversion needed. */
     templateDocument(): DcsTemplateData {
       return assembleCanonicalDocument({
@@ -339,6 +353,37 @@ export const useDcsDraftStore = defineStore(storeId, {
         const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
         return !leftOp || !fieldIds.has(leftOp)
       })
+    },
+    /** Adds a clause as prose + its machine-readable ODRL rule (linked by
+     *  dcs:prose), declaring the hub fields the rule constrains as requirement
+     *  fields — one clause, both readings, exactly as the SRS split editor. */
+    addClauseWithMeaning(payload: {
+      title: string
+      content: DcsContentSegment[]
+      fields: { id: string; parameterName: string; domainFieldIri: string }[]
+      rule: OdrlRule | null
+    }): void {
+      const documentId = this.documentIri ?? this.did ?? undefined
+      const blockId = this.addClause({ title: payload.title, content: payload.content })
+      if (payload.fields.length) {
+        this.contractData.push({
+          '@id': conditionIri(crypto.randomUUID(), documentId),
+          '@type': 'dcs:DataRequirement',
+          'dcs:conditionId': crypto.randomUUID(),
+          'dcs:name': payload.title,
+          'dcs:schemaVersion': 'v1',
+          'dcs:fields': payload.fields.map((f) => ({
+            '@id': f.id,
+            '@type': 'dcs:RequirementField',
+            'dcs:parameterName': f.parameterName,
+            'dcs:domainField': { '@id': f.domainFieldIri },
+            'dcs:required': true,
+          })),
+        })
+      }
+      if (payload.rule) {
+        this.policies.push({ ...payload.rule, 'dcs:prose': { '@id': blockId } })
+      }
     },
     addClause(payload: { title?: string; content: DcsContentSegment[] }): string {
       const blockId = crypto.randomUUID()
