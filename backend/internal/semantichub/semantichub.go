@@ -186,10 +186,14 @@ func (Repo) Versions(ctx context.Context, tx *sqlx.Tx, name, kind string) ([]Sch
 	return out, nil
 }
 
-// Seed idempotently installs the genesis FACIS DCS v1 profile: the embedded
-// context, shapes, and validation profile become version 1 (active) unless
-// the hub already holds them. Fatal on failure — the hub is a required
-// dependency of document normalization.
+// Seed installs the embedded FACIS DCS profile documents. A schema absent
+// from the hub becomes version 1 (active). A schema whose LATEST stored
+// version's content differs from the embedded document gets the embedded
+// content registered and activated as the next version — hub versions are
+// immutable, so shipped-asset updates propagate to running deployments as
+// ordinary version bumps while documents pinned to older versions keep
+// resolving them. Fatal on failure — the hub is a required dependency of
+// document normalization.
 func Seed(ctx context.Context, db *sqlx.DB) error {
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -210,12 +214,19 @@ func Seed(ctx context.Context, db *sqlx.DB) error {
 		{ODRLProfileName, "ontology", "text/turtle", genesisODRLProfile},
 	}
 	for _, g := range genesis {
-		var exists bool
-		if err := tx.GetContext(ctx, &exists,
-			`SELECT EXISTS(SELECT 1 FROM semantic_schemas WHERE name = $1 AND kind = $2)`, g.name, g.kind); err != nil {
-			return err
+		var latest struct {
+			Content string `db:"content"`
+			Version int    `db:"version"`
 		}
-		if exists {
+		err := tx.GetContext(ctx, &latest, `
+			SELECT content, version FROM semantic_schemas
+			WHERE name = $1 AND kind = $2 ORDER BY version DESC LIMIT 1`, g.name, g.kind)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// fall through to register version 1
+		case err != nil:
+			return err
+		case latest.Content == string(g.content):
 			continue
 		}
 		if _, err := (Repo{}).Register(ctx, tx, g.name, g.kind, g.mediaType, string(g.content), "system:genesis", true); err != nil {
