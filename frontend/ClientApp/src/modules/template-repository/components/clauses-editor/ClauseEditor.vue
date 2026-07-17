@@ -40,41 +40,46 @@ const content = ref<DcsContentSegment[]>([])
 const clauseFields = ref<ClauseField[]>([])
 const clauseAssets = ref<ClauseAsset[]>([])
 const rule = ref<OdrlRule | null>(null)
-const fieldToAdd = ref('')
-const assetToAdd = ref('')
+const objectToAdd = ref('')
 
 const uuid = () => `urn:uuid:${crypto.randomUUID()}`
 const localName = (iri: string) => iri.replace(/^.*[:#/]/, '')
 
-function groupBySource<T extends { source?: { name: string }; label: string }>(items: readonly T[]) {
-  const groups = new Map<string, T[]>()
-  for (const item of items) {
-    const key = item.source?.name ?? 'Semantic Hub'
+// One picker of hub objects: an object may be an asset (a shape's target class,
+// carrying properties) or a bare data field (a property). Its role — an ODRL
+// target, a constraint operand — is decided by how it is wired into the rule,
+// not by which list it came from. Assets are marked ▣ because they carry a
+// shape whose properties come along.
+const objectGroups = computed(() => {
+  const groups = new Map<string, { value: string; label: string }[]>()
+  const push = (source: string | undefined, option: { value: string; label: string }) => {
+    const key = source ?? 'Semantic Hub'
     const group = groups.get(key)
-    if (group) group.push(item)
-    else groups.set(key, [item])
+    if (group) group.push(option)
+    else groups.set(key, [option])
   }
+  for (const asset of ONTOLOGY_ASSETS)
+    push(asset.source?.name, { value: `asset:${asset.id}`, label: `▣ ${asset.label}` })
+  for (const field of ONTOLOGY_DOMAIN_FIELDS)
+    push(field.source?.name, { value: `field:${field.ontologyId}`, label: field.label })
   return [...groups.entries()].map(([name, entries]) => ({ name, entries }))
-}
-const fieldGroups = computed(() => groupBySource(ONTOLOGY_DOMAIN_FIELDS))
-const assetGroups = computed(() => groupBySource(ONTOLOGY_ASSETS))
+})
 
-function addField() {
-  const field = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.ontologyId === fieldToAdd.value)
-  fieldToAdd.value = ''
-  if (field) clauseFields.value.push({ id: uuid(), field })
-}
-
-// Declaring an asset makes it an ODRL target and brings in its shape's
-// properties as fields.
-function addAsset() {
-  const asset = ONTOLOGY_ASSETS.find((a) => a.id === assetToAdd.value)
-  assetToAdd.value = ''
-  if (!asset) return
-  const assetLocalId = uuid()
-  clauseAssets.value.push({ id: assetLocalId, asset })
-  for (const property of asset.properties) {
-    clauseFields.value.push({ id: uuid(), field: property, assetLocalId })
+function addObject() {
+  const picked = objectToAdd.value
+  objectToAdd.value = ''
+  if (picked.startsWith('asset:')) {
+    const asset = ONTOLOGY_ASSETS.find((a) => a.id === picked.slice('asset:'.length))
+    if (!asset) return
+    // Declaring an asset makes it an ODRL target and brings in its shape's properties as fields.
+    const assetLocalId = uuid()
+    clauseAssets.value.push({ id: assetLocalId, asset })
+    for (const property of asset.properties) {
+      clauseFields.value.push({ id: uuid(), field: property, assetLocalId })
+    }
+  } else if (picked.startsWith('field:')) {
+    const field = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.ontologyId === picked.slice('field:'.length))
+    if (field) clauseFields.value.push({ id: uuid(), field })
   }
 }
 
@@ -143,20 +148,14 @@ function save() {
 
     <div class="space-y-2 rounded bg-base-200/50 p-2">
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs text-base-content/60">Data fields:</span>
-        <select v-model="fieldToAdd" class="select-bordered select select-xs" @change="addField">
-          <option value="">+ add field…</option>
-          <optgroup v-for="group in fieldGroups" :key="group.name" :label="group.name">
-            <option v-for="f in group.entries" :key="f.ontologyId" :value="f.ontologyId">{{ f.label }}</option>
+        <span class="text-xs text-base-content/60">Objects (Semantic Hub):</span>
+        <select v-model="objectToAdd" class="select-bordered select select-xs" @change="addObject">
+          <option value="">+ add object…</option>
+          <optgroup v-for="group in objectGroups" :key="group.name" :label="group.name">
+            <option v-for="o in group.entries" :key="o.value" :value="o.value">{{ o.label }}</option>
           </optgroup>
         </select>
-        <span class="text-xs text-base-content/60">Assets:</span>
-        <select v-model="assetToAdd" class="select-bordered select select-xs" @change="addAsset">
-          <option value="">+ add asset…</option>
-          <optgroup v-for="group in assetGroups" :key="group.name" :label="group.name">
-            <option v-for="a in group.entries" :key="a.id" :value="a.id">{{ a.label }}</option>
-          </optgroup>
-        </select>
+        <span class="text-[10px] text-base-content/40">▣ = asset (carries a shape)</span>
       </div>
 
       <div v-if="clauseAssets.length" class="flex flex-wrap items-center gap-1">
