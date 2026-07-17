@@ -131,8 +131,12 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
 
     const ruleSelect = (label: string) =>
       editor.locator('label.form-control').filter({ hasText: label }).locator('select')
-    await ruleSelect('Rule').selectOption({ label: 'Obligation — the assignee MUST' })
-    await ruleSelect('Action').selectOption({ label: 'provide a compliant value' })
+    // A Permission bounded by the payment-amount field: at template time the
+    // field carries no value yet (the contract fills it), so a permission's
+    // constraint is informational — an obligation would error as "value not
+    // provided" and block create.
+    await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
+    await ruleSelect('Action').selectOption({ label: 'use' })
     await editor.getByRole('button', { name: '+ constraint' }).click()
     const constraint = editor.locator('.flex.flex-wrap.items-center.gap-1').last()
     await constraint.locator('select').nth(0).selectOption({ label: 'Payment Amount' })
