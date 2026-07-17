@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IriPicker from '@template-repository/components/clauses-editor/IriPicker.vue'
 import {
   ODRL_ACTIONS,
   ODRL_CONTEXT_OPERANDS,
@@ -9,13 +10,13 @@ import { computed, reactive, watch } from 'vue'
 import type { JsonLdReference, JsonLdTypedValue, OdrlConstraint, OdrlRule } from '@/models/dcs-jsonld'
 
 /**
- * The machine-readable meaning of a clause: an ODRL rule the author builds by
- * picking standard ODRL terms, never by typing an IRI. A rule is one
+ * The machine-readable meaning of a clause: an ODRL rule. Reference terms —
+ * action, assigner, assignee, target — are picked from the DCS vocabulary or
+ * given as a custom IRI (ODRL sets no closed vocabulary on them). A rule is one
  * permission/prohibition/obligation — who (assignee) may/must-not/must do what
  * (action) toward whom (target), bounded by constraints that all must hold.
- * A "payment clause" is just an obligation to pay with a value constraint; the
- * SRS Appendix C access policy is a permission to use bounded by spatial and
- * dateTime constraints.
+ * The SRS Appendix C access policy is a permission to use an asset bounded by
+ * spatial and dateTime constraints.
  */
 
 export interface Anchor {
@@ -42,6 +43,21 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [OdrlRule | null] }>()
+
+const actionOptions = ODRL_ACTIONS.map((a) => ({ value: a.id, label: a.label }))
+const partyOptions = computed(() => props.parties.map((p) => ({ value: p.id, label: p.label })))
+const targetOptions = computed(() => [{ value: props.contractTargetId, label: 'the contract' }])
+const targetGroups = computed(() => {
+  const groups: { label: string; options: { value: string; label: string }[] }[] = []
+  if (props.assets.length) {
+    groups.push({ label: 'Asset', options: props.assets.map((a) => ({ value: a.id, label: a.label })) })
+  }
+  if (props.fields.length) {
+    groups.push({ label: 'Data field', options: props.fields.map((f) => ({ value: f.id, label: f.label })) })
+  }
+  groups.push({ label: 'Parties', options: props.parties.map((p) => ({ value: p.id, label: p.label })) })
+  return groups
+})
 
 interface ConstraintDraft {
   leftOperand: string
@@ -161,30 +177,19 @@ watch(rule, (value) => emit('update:modelValue', value))
       </label>
       <label class="form-control">
         <span class="label-text text-xs">Action</span>
-        <select v-model="draft.action" class="select-bordered select select-sm">
-          <option v-for="a in ODRL_ACTIONS" :key="a.id" :value="a.id">{{ a.label }}</option>
-        </select>
+        <IriPicker v-model="draft.action" :options="actionOptions" />
+      </label>
+      <label class="form-control">
+        <span class="label-text text-xs">Granted by (assigner)</span>
+        <IriPicker v-model="draft.assignerId" :options="partyOptions" placeholder="party DID / IRI" />
       </label>
       <label class="form-control">
         <span class="label-text text-xs">Applies to (assignee)</span>
-        <select v-model="draft.assigneeId" class="select-bordered select select-sm">
-          <option v-for="p in parties" :key="p.id" :value="p.id">{{ p.label }}</option>
-        </select>
+        <IriPicker v-model="draft.assigneeId" :options="partyOptions" placeholder="party DID / IRI" />
       </label>
       <label class="form-control">
         <span class="label-text text-xs">Toward (target)</span>
-        <select v-model="draft.targetId" class="select-bordered select select-sm">
-          <option :value="contractTargetId">the contract</option>
-          <optgroup v-if="assets.length" label="Asset">
-            <option v-for="a in assets" :key="a.id" :value="a.id">{{ a.label }}</option>
-          </optgroup>
-          <optgroup v-if="fields.length" label="Data field">
-            <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
-          </optgroup>
-          <optgroup label="Parties">
-            <option v-for="p in parties" :key="p.id" :value="p.id">{{ p.label }}</option>
-          </optgroup>
-        </select>
+        <IriPicker v-model="draft.targetId" :options="targetOptions" :groups="targetGroups" placeholder="asset IRI" />
       </label>
     </div>
 
