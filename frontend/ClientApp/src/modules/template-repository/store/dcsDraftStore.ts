@@ -2,8 +2,6 @@ import { TemplateType } from '@template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
-import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
-import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
 import {
   type DcsApprovedTemplate,
@@ -32,7 +30,6 @@ import {
   applyInlineSemanticValues,
   applyInlineSemanticValuesToSnapshots,
 } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
-import { getHubContext } from '@/services/semantic-hub-service'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
@@ -231,7 +228,6 @@ export const useDcsDraftStore = defineStore(storeId, {
         title?: string
         text?: string
         content?: DcsContentSegment[]
-        typedClause?: import('@/models/dcs-jsonld').DcsTypedClauseInstance
       },
     ): void {
       const block = this.blocks.find((b) => b['@id'] === blockId)
@@ -240,7 +236,6 @@ export const useDcsDraftStore = defineStore(storeId, {
         const clause = block as DcsClause
         if (payload.title !== undefined) clause['dcs:title'] = payload.title || undefined
         if (payload.content !== undefined) clause['dcs:content'] = { '@list': payload.content }
-        if (payload.typedClause !== undefined) clause['dcs:typedClause'] = payload.typedClause
       } else if ((block as DcsBlock)['@type'] === 'dcs:TextBlock') {
         const tb = block as DcsTextBlock
         if (payload.text !== undefined) tb['dcs:text'] = payload.text
@@ -392,87 +387,6 @@ export const useDcsDraftStore = defineStore(storeId, {
       }
       this.blocks.push(block)
       return id
-    },
-    /**
-     * Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): adds a typed clause instance
-     * generated from the Semantic Hub's clause catalog (TypedClausePalette
-     * .vue). Nested inside a plain dcs:Clause block (dcs:typedClause) so it
-     * renders/places/persists through the existing free-text clause
-     * machinery, while still becoming its own JSON-LD node server-side
-     * validation (validateAgainstHubShapes) targets by its @type.
-     */
-    async addTypedClause(payload: {
-      clauseType: string
-      title?: string
-      instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
-    }): Promise<string> {
-      const blockId = crypto.randomUUID()
-      const id = blockIri(blockId, this.did ?? undefined)
-      const trimmedTitle = payload.title?.trim()
-      const typeTail = payload.clauseType.split(/[#/:]/).pop()
-      const title = trimmedTitle?.length ? trimmedTitle : typeTail?.length ? typeTail : payload.clauseType
-      const instance = payload.instance
-
-      const compacted = await compactAgainstHubContext(instance)
-      if (isOdrlRuleInstance(compacted['@type'])) {
-        // A hub-templated ODRL rule: the clause block is its human-readable
-        // prose, the compacted rule joins dcs:policies backed by it.
-        const block: import('@/models/dcs-jsonld').DcsClause = {
-          '@type': 'dcs:Clause',
-          '@id': id,
-          'dcs:title': title,
-          'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
-        }
-        this.blocks.push(block)
-        const root = this.layout.find((node) => node['dcs:isRoot'])
-        if (root) {
-          const children = root['dcs:children']['@list'].map((ref) => ref['@id'])
-          children.push(id)
-          root['dcs:children'] = { '@list': children.map((childId) => ({ '@id': childId })) }
-        }
-        const documentId = this.documentIri ?? this.did ?? undefined
-        this.policies.push({
-          'odrl:assigner': partyReference(undefined, documentId),
-          'odrl:assignee': partyReference(undefined, documentId),
-          'odrl:target': targetReference(documentId),
-          'odrl:action': { '@id': DEFAULT_FIELD_CONSTRAINT_ACTION },
-          ...compacted,
-          '@id': `urn:uuid:${crypto.randomUUID()}`,
-          '@type': compacted['@type'],
-          'dcs:prose': { '@id': id },
-        } as OdrlRule)
-        return id
-      }
-
-      const block: import('@/models/dcs-jsonld').DcsClause = {
-        '@type': 'dcs:Clause',
-        '@id': id,
-        'dcs:title': title,
-        'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
-        'dcs:typedClause': instance,
-      }
-      this.blocks.push(block)
-      return id
-    },
-    /**
-     * Re-fills a typed clause with new shape-conformant values: the nested
-     * machine-readable instance and the clause's human-readable summary text
-     * change together, so the two representations cannot drift apart
-     * (DCS-FR-CWE-04). Available in both workflows — the template freezes
-     * the clause's shape, the contract creator fills its values.
-     */
-    updateTypedClause(
-      blockId: string,
-      payload: { title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance },
-    ): void {
-      const block = this.blocks.find((b) => b['@id'] === blockId)
-      if (!block || !isDcsClause(block as DcsBlock)) return
-      const clause = block as DcsClause
-      if (!clause['dcs:typedClause']) return
-      clause['dcs:typedClause'] = payload.instance
-      clause['dcs:content'] = { '@list': [typedClauseValuesSummary(payload.instance)] }
-      const trimmedTitle = payload.title?.trim()
-      if (trimmedTitle?.length) clause['dcs:title'] = trimmedTitle
     },
     deleteClause(blockId: string): void {
       removeClauseFromLayout(this.layout, blockId)
@@ -891,7 +805,6 @@ function createBlock(id: string, payload: AddBlockPayload): DcsBlock | MergedApp
         '@id': id,
         'dcs:content': { '@list': payload.content ?? [] },
         ...(payload.title ? { 'dcs:title': payload.title } : {}),
-        ...(payload.typedClause ? { 'dcs:typedClause': payload.typedClause } : {}),
       }
     case 'dcs:ApprovedTemplate':
       return {
@@ -1061,27 +974,6 @@ function semanticParamToField(
     'dcs:required': parameter.isRequired,
     ...(hasValue ? { 'dcs:parameterValue': value as string | number | boolean } : {}),
   }
-}
-
-/** The clause block whose text carries a placeholder bound to fieldId — the prose an ODRL rule over that field is backed by. */
-
-const ODRL_RULE_TYPES = new Set(['odrl:Duty', 'odrl:Permission', 'odrl:Prohibition'])
-
-/** Compacts a shacl-form instance (absolute IRIs) against the hub context. */
-async function compactAgainstHubContext(
-  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance,
-): Promise<Record<string, unknown>> {
-  const compacted = (await jsonld.compact(instance as object, (await getHubContext()) as never)) as Record<
-    string,
-    unknown
-  >
-  delete compacted['@context']
-  return compacted
-}
-
-/** Whether a compacted instance is an ODRL rule the policy buckets accept. */
-export function isOdrlRuleInstance(compactedType: unknown): boolean {
-  return typeof compactedType === 'string' && ODRL_RULE_TYPES.has(compactedType)
 }
 
 function proseBlockForField(

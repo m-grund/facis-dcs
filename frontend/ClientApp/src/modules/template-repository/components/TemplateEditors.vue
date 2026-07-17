@@ -6,7 +6,6 @@ import ClauseEditor from '@template-repository/components/clauses-editor/ClauseE
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
-import SemanticElementEditor from '@template-repository/components/SemanticElementEditor.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
@@ -75,19 +74,6 @@ const { isManager } = useTemplatePermissions()
                 <div v-if="state" class="badge badge-sm badge-secondary">{{ state }}</div>
               </h2>
               <DetailsEditor />
-            </div>
-          </div>
-        </div>
-
-        <!-- DATA REQUIREMENTS TAB -->
-        <div v-show="activeTab === 'semantic'">
-          <div class="card border border-base-300 bg-base-100 shadow-sm">
-            <div class="card-body gap-5">
-              <h2 class="card-title text-sm">
-                <span class="badge w-8 badge-sm badge-primary">0{{ currentTabNumber }}</span>
-                Data Requirements
-              </h2>
-              <SemanticElementEditor />
             </div>
           </div>
         </div>

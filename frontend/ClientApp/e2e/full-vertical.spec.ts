@@ -8,11 +8,12 @@ import { E2E_API_BASE, E2E_STATUSLIST_URL } from '../playwright.config'
 import { type DcsRole, expect, test } from './dcs-test'
 
 /**
- * Full vertical: a component template with a hub typed clause travels the
- * whole product surface through the real UI — build, review, approval,
- * composition into a contract template, registration, contract derivation,
- * negotiation, review/approval, signing (the wallet leg arrives over the
- * wallet's own webhook channel), PDF/bundle export, and audit.
+ * Full vertical: a component template with a semantic clause — human prose
+ * beside its machine-readable ODRL meaning, both bound to a hub field —
+ * travels the whole product surface through the real UI: build, review,
+ * approval, composition into a contract template, registration, contract
+ * derivation, negotiation, review/approval, signing (the wallet leg arrives
+ * over the wallet's own webhook channel), PDF/bundle export, and audit.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -107,10 +108,9 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
 
   // ---- Stage 1: Template Creator builds a Component template ----
   let componentDid = ''
-  await test.step('create component template with typed clause + prose', async () => {
+  await test.step('create component template with a semantic clause', async () => {
     await gotoAs(page, loginAs, 'Template Creator', '/ui/templates/new')
 
-    // Component templates carry typed clauses (contract templates compose components).
     await page.getByRole('button', { name: /Component/ }).click()
     await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill(componentName)
     // An empty description is a verification finding at review time.
@@ -120,45 +120,34 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
       .getByRole('textbox')
       .fill('Payment component for the full vertical.')
 
-    await page.getByRole('tab', { name: /Builder/ }).click()
-    await page
-      .getByRole('button', { name: /add.*block/i })
-      .first()
-      .click()
+    // A clause = human prose beside its machine-readable ODRL meaning, both
+    // bound to a hub field picked from the Semantic Hub — the split editor.
+    await page.getByRole('tab', { name: /Clauses/ }).click()
+    const editor = page.getByTestId('split-clause-editor')
+    await editor.getByPlaceholder('Clause title').fill('Payment terms')
+    await editor.locator('select').first().selectOption({ label: 'Payment Amount' })
+    await editor.locator('.clause-editor').first().click()
+    await page.keyboard.type('The provider invoices the agreed payment amount.')
 
+    const ruleSelect = (label: string) =>
+      editor.locator('label.form-control').filter({ hasText: label }).locator('select')
+    await ruleSelect('Rule').selectOption({ label: 'Obligation — the assignee MUST' })
+    await ruleSelect('Action').selectOption({ label: 'provide a compliant value' })
+    await editor.getByRole('button', { name: '+ constraint' }).click()
+    const constraint = editor.locator('.flex.flex-wrap.items-center.gap-1').last()
+    await constraint.locator('select').nth(0).selectOption({ label: 'Payment Amount' })
+    await constraint.locator('select').nth(1).selectOption({ label: 'must be at most' })
+    await constraint.locator('input[placeholder="value"]').fill('500')
+
+    await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
+    await expect(editor.getByPlaceholder('Clause title')).toHaveValue('')
+
+    // Place the authored clause into the document outline.
     const modal = page.getByRole('dialog')
-    await expect(modal.getByRole('heading', { name: 'Add block' })).toBeVisible()
-    await expect(modal.getByText('Typed clauses (Semantic Hub):')).toBeVisible()
-
-    // The palette label comes from the hub's clause catalog — look the
-    // PaymentClause entry up the same way the palette does (metadata read
-    // only; every app action stays in the UI).
-    const catalog = (await (await page.request.get('/api/semantic/clauses')).json()) as {
-      clauses?: { type: string; label: string }[]
-    }
-    const paymentClause = (catalog.clauses ?? []).find(
-      (c) => c.type === 'dcs:PaymentClause' || c.type.endsWith('#PaymentClause'),
-    )
-    expect(paymentClause, 'the hub catalog serves the PaymentClause').toBeTruthy()
-    await modal.getByRole('button', { name: paymentClause!.label, exact: true }).click()
-
-    const shaclForm = modal.locator('shacl-form')
-    await expect(shaclForm).toBeVisible()
-    // amount (xsd:integer, first property of the shape) and currency
-    // (sh:in EUR/USD renders as shacl-form's filterable combobox).
-    await shaclForm.locator('input[type="number"]').first().fill('100')
-    await shaclForm.getByPlaceholder('Type to filter list...').first().click()
-    await modal.getByRole('option', { name: 'EUR', exact: true }).click()
-
-    await modal.getByRole('button', { name: 'Add to document' }).click()
+    await page.getByRole('button', { name: 'Place in document' }).first().click()
+    await expect(modal.getByText('Selected clause')).toBeVisible()
+    await modal.getByRole('button', { name: /Payment terms/ }).click()
     await expect(page.getByRole('dialog')).toBeHidden()
-
-    // A prose text block alongside the typed clause (a populated outline
-    // offers per-block insert buttons instead of the empty-state add).
-    await page.getByRole('button', { name: 'Insert block below' }).first().click()
-    await modal.getByRole('button', { name: 'Text', exact: true }).click()
-    await expect(page.getByRole('dialog')).toBeHidden()
-    await page.locator('textarea').last().fill('Prose block for the full vertical.')
 
     const created = page.waitForResponse(
       (r) => r.url().includes('/template/create') && r.request().method() === 'POST' && r.ok(),
@@ -240,25 +229,24 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     expect(contractDid).toBeTruthy()
   })
 
-  // ---- Stage 6: the SHACL-typed clause travelled hub → component →
+  // ---- Stage 6: the semantic clause travelled hub → component →
   //      contract template → contract, and persists on the contract doc ----
-  await test.step('typed clause travels into the contract document', async () => {
+  await test.step('semantic clause travels into the contract document', async () => {
     await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/edit/${contractDid}`)
     await page
       .getByRole('tab', { name: /content/i })
       .or(page.getByText('Contract Content', { exact: true }))
       .first()
       .click()
-    // The component's typed clause renders through its regenerated
-    // human-readable summary (composed sub-template clauses are immutable at
-    // contract time, so there is no in-place editor here — the machine
-    // instance rode along from the hub shape).
-    await expect(page.getByText(/amount: 100 · currency: EUR/).first()).toBeVisible()
+    // The component's clause renders its prose (composed sub-template clauses
+    // are immutable at contract time — the ODRL rule and its field rode along
+    // from the component).
+    await expect(page.getByText(/The provider invoices the agreed payment amount/).first()).toBeVisible()
 
     const updated = page.waitForRequest((r) => r.url().includes('/contract/update') && r.method() === 'PUT')
     await page.getByRole('button', { name: 'Update', exact: true }).click()
     const payload = JSON.stringify((await updated).postDataJSON())
-    expect(payload, 'the machine-readable typed instance rides along').toContain('PaymentClause')
+    expect(payload, 'the clause and its machine-readable meaning ride along').toContain('Payment terms')
   })
 
   // ---- Stage 7: DRAFT → NEGOTIATION → SUBMITTED → REVIEWED → APPROVED ----
