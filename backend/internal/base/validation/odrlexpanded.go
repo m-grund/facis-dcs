@@ -245,37 +245,6 @@ func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[st
 		ruleID = "FACIS-CONTRACT-ODRL-POLICY"
 	}
 	policyType := expandedTypeLocalName(rule)
-
-	constraint, ok := expandedFirst(rule, odrlIRI+"constraint")
-	if !ok {
-		return nil, nil
-	}
-	leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
-	if !ok {
-		return nil, nil
-	}
-	fieldID, _ := leftOperand["@id"].(string)
-	if fieldID == "" {
-		return nil, nil
-	}
-	operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
-	if !ok {
-		return nil, nil
-	}
-	operator := shaclLocalName(expandedID(operatorNode))
-	if operator == "" {
-		return nil, nil
-	}
-	rightOperand := expandedRightOperand(constraint, operator)
-
-	fieldInfo, ok := fieldIndex[fieldID]
-	if !ok {
-		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, "dcs:RequirementField")
-		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}, nil
-	}
-	actualValue, hasValue := fieldInfo.value, fieldInfo.hasValue
-
 	isProhibition := policyType == "Prohibition"
 	isPermission := policyType == "Permission"
 	severity := "error"
@@ -283,50 +252,133 @@ func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[st
 		severity = "info"
 	}
 
-	if !hasValue {
-		if isProhibition || isPermission {
-			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, "")
-			applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-			return []PolicyFinding{finding}, nil
+	// A rule's constraints are a conjunction (ODRL IM §2.5): each is audited,
+	// and any violated data-field constraint fails the rule.
+	findings := []PolicyFinding{}
+	for _, rawConstraint := range expandedValues(rule, odrlIRI+"constraint") {
+		constraint, ok := rawConstraint.(map[string]any)
+		if !ok {
+			continue
 		}
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, "")
-		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}, nil
-	}
+		leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
+		if !ok {
+			continue
+		}
+		operandID, _ := leftOperand["@id"].(string)
+		if operandID == "" {
+			continue
+		}
+		operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
+		if !ok {
+			continue
+		}
+		operator := shaclLocalName(expandedID(operatorNode))
+		if operator == "" {
+			continue
+		}
+		rightOperand := resolveRightOperand(constraint, operator, fieldIndex)
 
-	satisfied, err := evaluateODRLConstraintOPA(ctx, operator, actualValue, rightOperand)
-	if err != nil {
-		return nil, fmt.Errorf("evaluate ODRL policy %q: %w", ruleID, err)
-	}
-	violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
+		// ODRL context operands (spatial, dateTime, purpose, …) are evaluated
+		// at use-time by the execution environment against the access context
+		// it reports; the contract audit only records that they apply.
+		if isODRLContextOperand(operandID) {
+			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q constraint on %s is enforced at use-time", ruleID, shaclLocalName(operandID)), operandID, "")
+			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
 
-	if violated {
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), fieldID, "")
-		applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-		return []PolicyFinding{finding}, nil
+		fieldInfo, ok := fieldIndex[operandID]
+		if !ok {
+			finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, operandID), operandID, "dcs:RequirementField")
+			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+		actualValue, hasValue := fieldInfo.value, fieldInfo.hasValue
+
+		if !hasValue {
+			if isProhibition || isPermission {
+				finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), operandID, "")
+				applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+				findings = append(findings, finding)
+				continue
+			}
+			finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), operandID, "")
+			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+
+		satisfied, err := evaluateODRLConstraintOPA(ctx, operator, actualValue, rightOperand)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate ODRL policy %q: %w", ruleID, err)
+		}
+		violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
+		if violated {
+			finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), operandID, "")
+			applyODRLPolicyDetails(&finding, operandID, operator, actualValue, true, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+		finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), operandID, "")
+		applyODRLPolicyDetails(&finding, operandID, operator, actualValue, true, rightOperand)
+		findings = append(findings, finding)
 	}
-	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, "")
-	applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-	return []PolicyFinding{finding}, nil
+	return findings, nil
 }
 
-// expandedRightOperand converts the constraint's right operand to plain Go
-// values. Set operators always receive a list — expansion erases the
-// distinction between a one-element set and a scalar.
-func expandedRightOperand(constraint map[string]any, operator string) any {
+var odrlContextOperandIRIs = map[string]bool{
+	odrlIRI + "spatial":   true,
+	odrlIRI + "dateTime":  true,
+	odrlIRI + "purpose":   true,
+	odrlIRI + "count":     true,
+	odrlIRI + "recipient": true,
+	odrlIRI + "industry":  true,
+	odrlIRI + "event":     true,
+}
+
+// isODRLContextOperand reports whether a left operand is an ODRL context
+// operand — access context reported at use-time, not a document data field.
+func isODRLContextOperand(iri string) bool {
+	return odrlContextOperandIRIs[iri]
+}
+
+// resolveRightOperand converts a constraint's right operand to plain Go
+// values. A boundary that references a requirement field — a value agreed at
+// negotiation — resolves to that field's filled value; set operators always
+// receive a list, as expansion erases the one-element-set/scalar distinction.
+func resolveRightOperand(constraint map[string]any, operator string, fieldIndex map[string]odrlFieldInfo) any {
 	values := expandedValues(constraint, odrlIRI+"rightOperand")
-	switch normalizePolicyOperator(operator) {
-	case "in", "notIn":
-		return expandedLiterals(values)
+	resolve := func(v any) any {
+		if obj, ok := v.(map[string]any); ok {
+			if id, ok := obj["@id"].(string); ok {
+				if info, found := fieldIndex[id]; found && info.hasValue {
+					return info.value
+				}
+			}
+		}
+		return expandedLiteral(v)
+	}
+	if op := normalizePolicyOperator(operator); op == "in" || op == "notIn" {
+		return mapAny(values, resolve)
 	}
 	switch len(values) {
 	case 0:
 		return nil
 	case 1:
-		return expandedLiteral(values[0])
+		return resolve(values[0])
 	default:
-		return expandedLiterals(values)
+		return mapAny(values, resolve)
 	}
+}
+
+func mapAny(values []any, fn func(any) any) []any {
+	out := make([]any, 0, len(values))
+	for _, v := range values {
+		out = append(out, fn(v))
+	}
+	return out
 }
 
 // expandExternalODRLRules expands rule nodes supplied by an audit policy

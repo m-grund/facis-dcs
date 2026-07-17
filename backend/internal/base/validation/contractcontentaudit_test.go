@@ -894,3 +894,76 @@ func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string)
 	require.Failf(t, "finding not found", "ruleID %q not found in %v", ruleID, policyFindingRuleIDs(findings))
 	return PolicyFinding{}
 }
+
+// TestAuditContractAcceptsTempoSpatialAccessPolicy proves the SRS Appendix C
+// policy audits cleanly once instantiated from the access-grant template: a
+// Permission to use bounded by an ANDed spatial and dateTime context
+// constraint whose boundaries are the negotiated region and deadline fields.
+// The context operands are accepted (never flagged "nonexistent field") and
+// deferred to use-time, and each negotiated boundary resolves to its filled
+// contract value.
+func TestAuditContractAcceptsTempoSpatialAccessPolicy(t *testing.T) {
+	countryFieldID := "urn:dcs:field:permitted-country"
+	deadlineFieldID := "urn:dcs:field:access-deadline"
+
+	permission := map[string]any{
+		"@id":         "FACIS-CONTRACT-APPENDIX-C",
+		"@type":       "odrl:Permission",
+		"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+		"odrl:action": map[string]any{"@id": "odrl:use"},
+		"odrl:constraint": []any{
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": "odrl:spatial"},
+				"odrl:operator":     map[string]any{"@id": "odrl:eq"},
+				"odrl:rightOperand": map[string]any{"@id": countryFieldID},
+			},
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": "odrl:dateTime"},
+				"odrl:operator":     map[string]any{"@id": "odrl:lteq"},
+				"odrl:rightOperand": map[string]any{"@id": deadlineFieldID},
+			},
+		},
+	}
+
+	contract := map[string]any{
+		"@id":   "urn:facis:dcs:contract:appendix-c",
+		"@type": "dcs:Contract",
+		"dcs:contractData": []any{
+			map[string]any{
+				"@id": "urn:dcs:req:access", "@type": "dcs:DataRequirement", "dcs:conditionId": "access",
+				"dcs:fields": []any{
+					map[string]any{"@id": countryFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "permittedCountry", "dcs:parameterValue": "DE"},
+					map[string]any{"@id": deadlineFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "accessDeadline", "dcs:parameterValue": "2025-05-10T23:59:59"},
+				},
+			},
+		},
+		"dcs:policies": map[string]any{
+			"@type":           "odrl:Agreement",
+			"odrl:profile":    map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+			"odrl:permission": []any{permission},
+		},
+	}
+
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	var spatial, temporal *PolicyFinding
+	for i := range findings {
+		switch findings[i].Path {
+		case odrlIRI + "spatial":
+			spatial = &findings[i]
+		case odrlIRI + "dateTime":
+			temporal = &findings[i]
+		}
+	}
+	require.NotNil(t, spatial, "spatial context constraint audited")
+	require.NotNil(t, temporal, "dateTime context constraint audited")
+	require.Contains(t, fmt.Sprint(spatial.ExpectedValue), "DE", "negotiated region boundary resolved to the filled value")
+	require.Equal(t, "lte", temporal.Operator)
+}
