@@ -30,14 +30,16 @@ test('typed clause from the hub palette lands as a prose-backed ODRL rule in an 
   await expect(modal.getByRole('heading', { name: 'Add block' })).toBeVisible()
   await expect(modal.getByText('Typed clauses (Semantic Hub):')).toBeVisible()
 
-  // Pick the ODRL-typed palette entry (only odrl:* clauses produce machine
-  // rules; dcs:* typed clauses land as nested typed instances). The label
-  // comes from the hub catalog, not a hardcoded string.
+  // Pick the ODRL Duty palette entry (only odrl:* clauses produce machine
+  // rules; dcs:* typed clauses land as nested typed instances) — the
+  // catalog also carries Permission/Prohibition shapes, so the pick must be
+  // by type, not "first odrl entry". The label comes from the hub catalog,
+  // not a hardcoded string.
   const catalog = (await (await page.request.get('/api/semantic/clauses')).json()) as {
     clauses?: { type: string; label: string }[]
   }
-  const odrlClause = (catalog.clauses ?? []).find((c) => c.type.startsWith('odrl:') || c.type.includes('/odrl/'))
-  expect(odrlClause, 'the hub catalog serves an ODRL-typed clause').toBeTruthy()
+  const odrlClause = (catalog.clauses ?? []).find((c) => c.type === 'odrl:Duty' || c.type.endsWith('odrl/2/Duty'))
+  expect(odrlClause, 'the hub catalog serves the ODRL Duty clause').toBeTruthy()
   await modal.getByRole('button', { name: odrlClause!.label, exact: true }).click()
 
   const shaclForm = modal.locator('shacl-form')

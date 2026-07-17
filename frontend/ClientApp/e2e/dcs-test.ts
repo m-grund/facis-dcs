@@ -20,6 +20,8 @@ export interface SeededFixtures {
   templateDid: string
   contractDid: string
   contractName: string
+  /** Draft contract derived from a registered template carrying a hub typed clause (dcs:PaymentClause). */
+  typedContractDid: string
 }
 
 export function seededFixtures(): SeededFixtures {

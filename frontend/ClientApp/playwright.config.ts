@@ -37,12 +37,19 @@ const apiTarget = new URL(E2E_API_BASE)
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup',
-  timeout: 60_000,
+  // Generous per-test budget: tests run fully parallel against one shared
+  // kind-cluster backend, so an individual test can slow down under load
+  // (the hub register-version flow renders ~100KB schema documents).
+  timeout: 90_000,
   expect: { timeout: 15_000 },
   // Every test mints its own OID4VP session and the seeded fixtures are
   // read-only for the specs, so tests within a file are as independent as
   // tests across files — run them all in parallel.
   fullyParallel: true,
+  // One shared kind-cluster backend and one vite dev server serve every
+  // worker — beyond ~6 local workers, page loads start starving instead of
+  // parallelizing. CI keeps Playwright's own core-based default.
+  workers: process.env.CI ? undefined : 6,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
