@@ -84,16 +84,11 @@ func enforceCanonicalOntologyIRIMap(context map[string]any) error {
 	return nil
 }
 
+// domainField is one dcs:DomainField from the hub's SLA ontology; its IRI
+// is its identity — documents reference it via dcs:domainField {"@id": …}.
 type domainField struct {
-	SchemaRef      string
-	Type           string
-	DomainPath     string
-	OntologyTerm   string
-	StatementField string
-	StatementType  string
-	StatementID    string
-	ValuePrefix    string
-	Constraint     *valueConstraint
+	IRI        string
+	Constraint *valueConstraint
 }
 
 type valueConstraint struct {
@@ -115,6 +110,15 @@ type valueOption struct {
 	IRI    string
 }
 
+// clone returns a deep copy so per-field constraint metadata can be
+// mutated without touching the shared parsed ontology.
+func (constraint *valueConstraint) clone() *valueConstraint {
+	copied := *constraint
+	copied.AllowedValues = append([]string(nil), constraint.AllowedValues...)
+	copied.ValueOptions = append([]valueOption(nil), constraint.ValueOptions...)
+	return &copied
+}
+
 func (constraint *valueConstraint) asMap() map[string]any {
 	result := map[string]any{}
 	if constraint.Format != "" {
@@ -126,14 +130,14 @@ func (constraint *valueConstraint) asMap() map[string]any {
 	if constraint.ValueType != "" {
 		result["valueType"] = constraint.ValueType
 	}
-	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
-		values := make([]any, len(allowedValues))
-		for i, value := range allowedValues {
+	if len(constraint.AllowedValues) > 0 {
+		values := make([]any, len(constraint.AllowedValues))
+		for i, value := range constraint.AllowedValues {
 			values[i] = value
 		}
 		result["allowedValues"] = values
 	}
-	if valueOptions := valueOptionsForConstraint(constraint); len(valueOptions) > 0 {
+	if valueOptions := constraint.ValueOptions; len(valueOptions) > 0 {
 		options := make([]any, 0, len(valueOptions))
 		for _, option := range valueOptions {
 			if option.Value == "" {

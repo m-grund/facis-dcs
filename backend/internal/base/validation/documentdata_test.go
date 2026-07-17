@@ -42,8 +42,7 @@ func validTemplateData(t *testing.T) *datatype.JSON {
 					map[string]any{
 						"parameterName": "percent",
 						"type":          "decimal",
-						"schemaRef":     SchemaServiceV1,
-						"semanticPath":  "service.sla.availability",
+						"fieldIri":      "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability",
 						"isRequired":    true,
 						"operators":     []any{},
 					},

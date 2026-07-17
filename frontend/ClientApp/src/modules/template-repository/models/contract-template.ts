@@ -47,8 +47,8 @@ export interface SemanticConditionParameter {
   /** The DCS field IRI (e.g. urn:uuid:field-... or did:...#field-...) — populated by contractDataToSemanticConditions. */
   fieldId?: string
   type: SemanticParameterType
-  schemaRef: string
-  semanticPath: DomainSemanticPath
+  /** The ontology domain-field IRI this parameter binds (its identity); the requirement field's own @id when unbound. */
+  fieldIri: string
   valueConstraint?: SemanticValueConstraint
   defaultValue?: unknown
   semanticMeaning?: string
@@ -79,16 +79,16 @@ export interface SemanticValueOption {
 
 // ---- Validation Metadata ----
 
-export type DomainSemanticPath = string
-
 export interface DomainFieldDefinition {
+  /** The field's IRI — its identity in documents (dcs:domainField @id). */
   ontologyId: string
-  semanticPath: DomainSemanticPath
-  schemaRef: string
+  /** The dcs:parameterName new requirement fields declare, derived from the field IRI's local name. */
+  parameterName: string
   type: SemanticParameterType
   label: string
-  statementType?: string
-  statementTypeLabel?: string
+  /** The rdfs:domain class IRI grouping the field, when declared. */
+  domain?: string
+  domainLabel?: string
   valueConstraint?: SemanticValueConstraint
 }
 

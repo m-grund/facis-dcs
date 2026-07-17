@@ -60,6 +60,12 @@ func AuditContractContent(ctx context.Context, contractDocument any, policyDocum
 	if err != nil {
 		return nil, err
 	}
+	// The domain-field ontology backs value normalization during profile
+	// audits (compactEntityRole); loading it here hard-fails the audit when
+	// the hub cannot serve it.
+	if _, err := requireDomainOntology(ctx); err != nil {
+		return nil, err
+	}
 
 	findings := []PolicyFinding{}
 	if policy.EnforceCanonicalShapes {
@@ -331,7 +337,7 @@ func auditContractStatementValidationRules(root map[string]any, profile Validati
 	issues := ValidateContractStatements(statements, profile)
 	findings := make([]PolicyFinding, 0, len(issues))
 	for _, issue := range issues {
-		findings = append(findings, contractFinding(issue.RuleID, issue.RuleID, issue.Severity, issue.Message, issue.StatementID, issue.StatementID, "dcs:ContractStatement"))
+		findings = append(findings, contractFinding(issue.RuleID, issue.RuleID, issue.Severity, issue.Message, issue.StatementID, "dcs:ContractStatement"))
 	}
 	return findings
 }
@@ -341,7 +347,7 @@ func validationRuleFinding(rule ValidationRule, path string, severity string, me
 }
 
 func validationRuleFindingWithDetails(rule ValidationRule, path string, severity string, message string, actualValue any, expectedValue any, expectedValues []any, operator string) PolicyFinding {
-	finding := contractFinding(rule.ID, rule.ID, severity, message, path, path, "")
+	finding := contractFinding(rule.ID, rule.ID, severity, message, path, "")
 	if len(rule.RequiredFields) > 0 && operator == "" {
 		operator = "exists"
 		expectedValues = anySliceFromStrings(rule.RequiredFields)
@@ -634,14 +640,13 @@ func odrlValuesEqual(a, b any) bool {
 	return fmt.Sprint(a) == fmt.Sprint(b)
 }
 
-func contractFinding(ruleID, title, severity, message, path, semanticPath, ontologyTerm string) PolicyFinding {
+func contractFinding(ruleID, title, severity, message, path, ontologyTerm string) PolicyFinding {
 	return PolicyFinding{
 		RuleID:       ruleID,
 		Title:        title,
 		Severity:     severity,
 		Message:      message,
 		Path:         path,
-		SemanticPath: semanticPath,
 		OntologyTerm: ontologyTerm,
 	}
 }
@@ -680,27 +685,27 @@ func normalizeObject(raw any) (map[string]any, error) {
 	return doc, nil
 }
 
-func contractValue(contract map[string]any, semanticPath string) (any, bool) {
-	if value, ok := contractSHACLAliasValue(contract, semanticPath); ok {
+// contractValue resolves a validation-profile rule target (a document
+// property path like "contract.jurisdiction", or a declared
+// dcs:parameterName) to the document's runtime value.
+func contractValue(contract map[string]any, target string) (any, bool) {
+	if value, ok := contractSHACLAliasValue(contract, target); ok {
 		return compactJSONLDValue(value), true
 	}
-	if value, ok := nestedValue(contract, strings.Split(semanticPath, ".")); ok {
+	if value, ok := nestedValue(contract, strings.Split(target, ".")); ok {
 		return compactJSONLDValue(value), true
 	}
-	if value, ok := semanticConditionValuesByParameterName(contract, semanticPath); ok {
+	if value, ok := semanticConditionValuesByParameterName(contract, target); ok {
 		return compactJSONLDValue(value), true
 	}
-	if value, ok := recursiveExactKeyValue(contract, semanticPath); ok {
-		return compactJSONLDValue(value), true
-	}
-	if value, ok := recursiveSemanticPathValue(contract, semanticPath); ok {
+	if value, ok := recursiveExactKeyValue(contract, target); ok {
 		return compactJSONLDValue(value), true
 	}
 	return nil, false
 }
 
-func contractSHACLAliasValue(contract map[string]any, semanticPath string) (any, bool) {
-	switch compactTerm(semanticPath) {
+func contractSHACLAliasValue(contract map[string]any, target string) (any, bool) {
+	switch compactTerm(target) {
 	case "did":
 		return firstExistingValue(contract, "@id", "did", "dcs:did")
 	case "party":
@@ -734,7 +739,7 @@ func valueForField(value map[string]any) string {
 	return ""
 }
 
-func semanticConditionValuesByParameterName(contract map[string]any, semanticPath string) (any, bool) {
+func semanticConditionValuesByParameterName(contract map[string]any, parameterName string) (any, bool) {
 	values, ok := asArray(contract["semanticConditionValues"])
 	if !ok {
 		return nil, false
@@ -747,7 +752,7 @@ func semanticConditionValuesByParameterName(contract map[string]any, semanticPat
 			continue
 		}
 		field := fields[valueForField(value)]
-		if !equivalentSemanticPath(field.parameterName, semanticPath) {
+		if field.parameterName != parameterName {
 			continue
 		}
 		parameterValue, exists := value["parameterValue"]
@@ -910,8 +915,8 @@ func companyPartyRole(requirement map[string]any) string {
 	return compactEntityRole(role)
 }
 
-func contractString(contract map[string]any, semanticPath string) (string, bool) {
-	value, ok := contractValue(contract, semanticPath)
+func contractString(contract map[string]any, target string) (string, bool) {
+	value, ok := contractValue(contract, target)
 	if !ok {
 		return "", false
 	}
@@ -956,43 +961,6 @@ func recursiveExactKeyValue(current any, key string) (any, bool) {
 	case []any:
 		for _, item := range value {
 			if found, ok := recursiveExactKeyValue(item, key); ok {
-				return found, true
-			}
-		}
-	}
-	return nil, false
-}
-
-func recursiveSemanticPathValue(current any, semanticPath string) (any, bool) {
-	switch value := current.(type) {
-	case map[string]any:
-		pathValue, _ := value["semanticPath"].(string)
-		if pathValue == "" {
-			pathValue, _ = value["dcs:semanticPath"].(string)
-		}
-		if equivalentSemanticPath(pathValue, semanticPath) {
-			for key, found := range value {
-				switch compactTerm(key) {
-				case "value", "hasTargetValue", "targetValue", "actualValue", "hasActualValue":
-					return found, true
-				}
-			}
-			for key, threshold := range value {
-				if compactTerm(key) == "hasThreshold" {
-					if found, ok := recursiveExactKeyValue(threshold, "hasTargetValue"); ok {
-						return found, true
-					}
-				}
-			}
-		}
-		for _, candidateValue := range value {
-			if found, ok := recursiveSemanticPathValue(candidateValue, semanticPath); ok {
-				return found, true
-			}
-		}
-	case []any:
-		for _, item := range value {
-			if found, ok := recursiveSemanticPathValue(item, semanticPath); ok {
 				return found, true
 			}
 		}

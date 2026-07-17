@@ -42,6 +42,12 @@ func (h HubShapeSource) ActiveContext(ctx context.Context) (string, int, error) 
 	return h.active(ctx, ContextName, "context")
 }
 
+// ActiveDomainOntology returns the SLA domain-field ontology — the
+// dcs:DomainField/dcs:ValueConstraint catalog validation indexes by IRI.
+func (h HubShapeSource) ActiveDomainOntology(ctx context.Context) (string, int, error) {
+	return h.active(ctx, SLAOntologyName, "ontology")
+}
+
 // ShapesAt returns the SHACL shapes at a specific version, concatenated
 // with the clause catalog's active version.
 func (h HubShapeSource) ShapesAt(ctx context.Context, version int) (string, error) {

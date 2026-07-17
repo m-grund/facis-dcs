@@ -271,7 +271,7 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 	rightOperand := expandedRightOperand(constraint, operator)
 
 	if _, ok := fieldIndex[fieldID]; !ok {
-		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, fieldID, "dcs:RequirementField")
+		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, "dcs:RequirementField")
 		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
 		return []PolicyFinding{finding}
 	}
@@ -286,11 +286,11 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 
 	if !hasValue {
 		if isProhibition || isPermission {
-			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, fieldID, "")
+			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, "")
 			applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
 			return []PolicyFinding{finding}
 		}
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, fieldID, "")
+		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, "")
 		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
 		return []PolicyFinding{finding}
 	}
@@ -299,11 +299,11 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 	violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
 
 	if violated {
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), fieldID, fieldID, "")
+		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), fieldID, "")
 		applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
 		return []PolicyFinding{finding}
 	}
-	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, fieldID, "")
+	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, "")
 	applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
 	return []PolicyFinding{finding}
 }

@@ -17,7 +17,6 @@ import {
 } from '@template-repository/store/dcsDraftStore'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import {
   buildOntologyDomainTypeParameters,
   ONTOLOGY_DOMAIN_TYPES,
@@ -141,7 +140,7 @@ function startRequirementDraft(action: RequirementAction) {
     name: defaultRequirementName(action, ''),
     role: '',
     parameters,
-    parameterValidity: Object.fromEntries(parameters.map((parameter) => [parameter.semanticPath, true])),
+    parameterValidity: Object.fromEntries(parameters.map((parameter) => [parameter.fieldIri, true])),
   }
 }
 
@@ -170,10 +169,9 @@ function addRequirementDraft() {
 
 function parameterFromField(field: DomainFieldDefinition): SemanticCondition['parameters'][number] {
   return {
-    parameterName: field.semanticPath,
+    parameterName: field.parameterName,
     type: field.type,
-    schemaRef: field.schemaRef,
-    semanticPath: field.semanticPath,
+    fieldIri: field.ontologyId,
     valueConstraint: cloneValueConstraint(field.valueConstraint),
     uiMetadata: { label: field.label },
     isRequired: false,
@@ -202,10 +200,10 @@ function updateDraftParameterOperators(index: number, operators: SemanticParamet
   parameter.operators = operators
 }
 
-function updateDraftParameterValidity(semanticPath: string, isValid: boolean) {
+function updateDraftParameterValidity(parameterFieldIri: string, isValid: boolean) {
   const draft = requirementDraft.value
   if (!draft) return
-  draft.parameterValidity[semanticPath] = isValid
+  draft.parameterValidity[parameterFieldIri] = isValid
 }
 
 function updateParameterOperators(condition: SemanticCondition, index: number, operators: SemanticParameterOperator[]) {
@@ -265,7 +263,7 @@ function cloneValueConstraint(constraint?: SemanticValueConstraint): SemanticVal
 }
 
 function buildRequirementActions(): RequirementAction[] {
-  return [...buildOntologyDomainTypeActions(), ...buildOntologyGroupedFieldActions()]
+  return buildOntologyDomainTypeActions()
     .filter((action): action is RequirementAction => !!action && !!action.fields.length)
     .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label))
 }
@@ -280,37 +278,6 @@ function buildOntologyDomainTypeActions(): RequirementAction[] {
     entityType: domainType.entityType,
     fields: domainType.fields,
   }))
-}
-
-function buildOntologyGroupedFieldActions(): RequirementAction[] {
-  const groups = new Map<string, { label: string; order: number; fields: DomainFieldDefinition[] }>()
-  const entityTypes = new Set(ONTOLOGY_DOMAIN_TYPES.map((domainType) => domainType.entityType))
-  for (const field of ONTOLOGY_DOMAIN_FIELDS) {
-    const statementType = localOntologyName(field.statementType ?? '')
-    if (!statementType || entityTypes.has(statementType)) continue
-    const group = groups.get(statementType) ?? {
-      label: field.statementTypeLabel ?? statementType,
-      order: groups.size + ONTOLOGY_DOMAIN_TYPES.length + 1,
-      fields: [],
-    }
-    group.fields.push(field)
-    groups.set(statementType, group)
-  }
-
-  return [...groups.entries()].map(([id, group]) => {
-    const sortedFields = [...group.fields].sort((left, right) => left.label.localeCompare(right.label))
-    return {
-      id,
-      label: group.label,
-      roleRequired: false,
-      order: group.order,
-      fields: sortedFields,
-    }
-  })
-}
-
-function localOntologyName(resource: string) {
-  return resource.replace(/^.*[:#/]/, '')
 }
 
 function actionSummary(action: RequirementAction) {
@@ -393,12 +360,12 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
         <div class="space-y-3">
           <div
             v-for="(parameter, index) in requirementDraft.parameters"
-            :key="parameter.semanticPath"
+            :key="parameter.fieldIri"
             class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
           >
             <div class="min-w-0 md:col-span-4">
               <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
-              <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
+              <p class="truncate text-xs text-base-content/50">{{ parameter.parameterName }}</p>
               <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
                 {{ formatValueConstraint(parameter.valueConstraint) }}
               </p>
@@ -407,7 +374,7 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
               :parameter="parameter"
               :operators="parameter.operators"
               @update:operators="updateDraftParameterOperators(index, $event)"
-              @validity-change="updateDraftParameterValidity(parameter.semanticPath, $event)"
+              @validity-change="updateDraftParameterValidity(parameter.fieldIri, $event)"
             />
             <button
               type="button"
@@ -470,14 +437,14 @@ function formatValueConstraint(constraint: SemanticValueConstraint) {
           </div>
 
           <div class="space-y-3">
-            <template v-for="(parameter, index) in item.condition.parameters" :key="parameter.semanticPath">
+            <template v-for="(parameter, index) in item.condition.parameters" :key="parameter.fieldIri">
               <div
                 v-if="parameter.isRequired"
                 class="grid grid-cols-1 items-start gap-x-3 gap-y-3 rounded border border-base-300 bg-base-100 p-3 md:grid-cols-12"
               >
                 <div class="min-w-0 md:col-span-4">
                   <p class="truncate text-sm font-medium text-base-content">{{ semanticParameterLabel(parameter) }}</p>
-                  <p class="truncate text-xs text-base-content/50">{{ parameter.semanticPath }}</p>
+                  <p class="truncate text-xs text-base-content/50">{{ parameter.parameterName }}</p>
                   <p v-if="parameter.valueConstraint" class="truncate text-xs text-base-content/50">
                     {{ formatValueConstraint(parameter.valueConstraint) }}
                   </p>

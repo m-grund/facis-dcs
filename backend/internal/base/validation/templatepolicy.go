@@ -1,12 +1,14 @@
 package validation
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"digital-contracting-service/internal/base/datatype"
 )
@@ -27,7 +29,7 @@ type PolicyFinding struct {
 	Severity       string `json:"severity"`
 	Message        string `json:"message"`
 	Path           string `json:"path,omitempty"`
-	SemanticPath   string `json:"semanticPath,omitempty"`
+	FieldIri       string `json:"fieldIri,omitempty"`
 	OntologyTerm   string `json:"ontologyTerm,omitempty"`
 	Requirement    string `json:"requirement,omitempty"`
 	ActualValue    any    `json:"actualValue,omitempty"`
@@ -67,6 +69,12 @@ func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetad
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ontology, err := requireDomainOntology(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	findings := []PolicyFinding{}
 	if !isCanonicalEnvelope(data) {
@@ -76,7 +84,7 @@ func AuditTemplatePolicies(raw *datatype.JSON, metadata TemplatePolicyAuditMetad
 		if !templatePolicyRuleApplies(rule, metadata.TemplateType) {
 			continue
 		}
-		findings = append(findings, evaluateTemplatePolicyRule(policySet, rule, data, metadata)...)
+		findings = append(findings, evaluateTemplatePolicyRule(policySet, rule, data, metadata, ontology)...)
 	}
 	return findings, nil
 }
@@ -119,7 +127,7 @@ func resolveTemplatePolicyFile() (string, error) {
 	return "", errors.New("template policy file not found")
 }
 
-func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolicyRule, data documentData, metadata TemplatePolicyAuditMetadata) []PolicyFinding {
+func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolicyRule, data documentData, metadata TemplatePolicyAuditMetadata, ontology *domainOntology) []PolicyFinding {
 	switch rule.Builtin {
 	case "canonical_document_structure":
 		return auditCanonicalDocumentStructure(policySet, rule, data)
@@ -138,11 +146,11 @@ func evaluateTemplatePolicyRule(policySet *templatePolicySet, rule templatePolic
 	case "finished_template_state":
 		return auditFinishedTemplateState(policySet, rule, metadata)
 	case "canonical_domain_fields":
-		return auditCanonicalDomainFields(policySet, rule, data)
+		return auditCanonicalDomainFields(policySet, rule, data, ontology)
 	case "constrained_parameters_use_value_constraint":
-		return auditConstrainedParameters(policySet, rule, data)
+		return auditConstrainedParameters(policySet, rule, data, ontology)
 	case "required_domain_fields":
-		return auditRequiredDomainFields(policySet, rule, data)
+		return auditRequiredDomainFields(policySet, rule, data, ontology)
 	case "audit_metadata_complete":
 		return auditMetadataComplete(policySet, rule, data, metadata)
 	default:
@@ -445,46 +453,46 @@ func auditFinishedTemplateState(policySet *templatePolicySet, rule templatePolic
 	return []PolicyFinding{newPolicyFinding(policySet, rule, fmt.Sprintf("template state %q is not one of the finished states: %s", metadata.State, strings.Join(states, ", ")), "state", "")}
 }
 
-func auditCanonicalDomainFields(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+func auditCanonicalDomainFields(policySet *templatePolicySet, rule templatePolicyRule, data documentData, ontology *domainOntology) []PolicyFinding {
 	findings := []PolicyFinding{}
-	forEachSemanticParameter(data, func(conditionID string, index int, param map[string]any) {
-		semanticPath, _ := param["semanticPath"].(string)
-		if _, ok := ontologyDomainFieldIndex[semanticPath]; !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("semantic condition %q uses unknown domain field %q", conditionID, semanticPath), fmt.Sprintf("semanticConditions.%s.parameters.%d", conditionID, index), semanticPath))
+	forEachSemanticParameter(data, ontology, func(conditionID string, index int, param map[string]any) {
+		fieldIri, _ := param["fieldIri"].(string)
+		if _, ok := ontology.fields[fieldIri]; !ok {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("semantic condition %q uses unknown domain field %q", conditionID, fieldIri), fmt.Sprintf("semanticConditions.%s.parameters.%d", conditionID, index), fieldIri))
 		}
 	})
 	return findings
 }
 
-func auditConstrainedParameters(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
+func auditConstrainedParameters(policySet *templatePolicySet, rule templatePolicyRule, data documentData, ontology *domainOntology) []PolicyFinding {
 	findings := []PolicyFinding{}
-	forEachSemanticParameter(data, func(conditionID string, index int, param map[string]any) {
-		semanticPath, _ := param["semanticPath"].(string)
-		field, ok := ontologyDomainFieldIndex[semanticPath]
+	forEachSemanticParameter(data, ontology, func(conditionID string, index int, param map[string]any) {
+		fieldIri, _ := param["fieldIri"].(string)
+		field, ok := ontology.fields[fieldIri]
 		if !ok || field.Constraint == nil {
 			return
 		}
 		if _, ok := param["valueConstraint"].(map[string]any); !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("semantic field %q requires valueConstraint metadata", semanticPath), fmt.Sprintf("semanticConditions.%s.parameters.%d.valueConstraint", conditionID, index), semanticPath))
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("semantic field %q requires valueConstraint metadata", fieldIri), fmt.Sprintf("semanticConditions.%s.parameters.%d.valueConstraint", conditionID, index), fieldIri))
 		}
 	})
 	return findings
 }
 
-func auditRequiredDomainFields(policySet *templatePolicySet, rule templatePolicyRule, data documentData) []PolicyFinding {
-	required := stringSliceParameter(rule.Parameters, "semanticPaths")
+func auditRequiredDomainFields(policySet *templatePolicySet, rule templatePolicyRule, data documentData, ontology *domainOntology) []PolicyFinding {
+	required := stringSliceParameter(rule.Parameters, "fieldIris")
 	if len(required) == 0 {
 		return nil
 	}
 	seen := map[string]bool{}
-	forEachSemanticParameter(data, func(_ string, _ int, param map[string]any) {
-		semanticPath, _ := param["semanticPath"].(string)
-		seen[canonicalDomainFieldTerm(semanticPath)] = true
+	forEachSemanticParameter(data, ontology, func(_ string, _ int, param map[string]any) {
+		fieldIri, _ := param["fieldIri"].(string)
+		seen[fieldIri] = true
 	})
 	findings := []PolicyFinding{}
-	for _, semanticPath := range required {
-		if !seen[canonicalDomainFieldTerm(semanticPath)] {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("required semantic field %q is missing", semanticPath), "semanticConditions.parameters", semanticPath))
+	for _, fieldIri := range required {
+		if !seen[fieldIri] {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("required semantic field %q is missing", fieldIri), "semanticConditions.parameters", fieldIri))
 		}
 	}
 	return findings
@@ -508,7 +516,7 @@ func auditMetadataComplete(policySet *templatePolicySet, rule templatePolicyRule
 	return findings
 }
 
-func forEachSemanticParameter(data documentData, visit func(conditionID string, index int, param map[string]any)) {
+func forEachSemanticParameter(data documentData, ontology *domainOntology, visit func(conditionID string, index int, param map[string]any)) {
 	requirements, _ := topLevelValue(data, "contractData").([]any)
 	for _, rawRequirement := range requirements {
 		requirement, ok := rawRequirement.(map[string]any)
@@ -525,8 +533,8 @@ func forEachSemanticParameter(data documentData, visit func(conditionID string, 
 			domainField, _ := field["dcs:domainField"].(map[string]any)
 			domainFieldID, _ := domainField["@id"].(string)
 			visit(conditionID, index, map[string]any{
-				"semanticPath":    domainFieldID,
-				"valueConstraint": domainFieldValueConstraint(domainFieldID),
+				"fieldIri":        domainFieldID,
+				"valueConstraint": domainFieldValueConstraint(ontology, domainFieldID),
 			})
 		}
 	}
@@ -582,8 +590,8 @@ func clauseHasContractDataBinding(block map[string]any, fieldIDs map[string]bool
 	return false
 }
 
-func domainFieldValueConstraint(domainFieldID string) map[string]any {
-	field, ok := ontologyDomainFieldIndex[domainFieldID]
+func domainFieldValueConstraint(ontology *domainOntology, domainFieldID string) map[string]any {
+	field, ok := ontology.fields[domainFieldID]
 	if !ok || field.Constraint == nil {
 		return nil
 	}
@@ -647,7 +655,7 @@ func stringSliceParameter(parameters map[string]any, key string) []string {
 	return values
 }
 
-func newPolicyFinding(policySet *templatePolicySet, rule templatePolicyRule, message string, path string, semanticPath string) PolicyFinding {
+func newPolicyFinding(policySet *templatePolicySet, rule templatePolicyRule, message string, path string, fieldIri string) PolicyFinding {
 	severity := rule.Severity
 	if severity == "" {
 		severity = "warning"
@@ -660,7 +668,7 @@ func newPolicyFinding(policySet *templatePolicySet, rule templatePolicyRule, mes
 		Severity:      severity,
 		Message:       message,
 		Path:          path,
-		SemanticPath:  semanticPath,
+		FieldIri:      fieldIri,
 		OntologyTerm:  rule.OntologyTerm,
 	}
 }

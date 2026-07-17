@@ -286,6 +286,7 @@ func RefreshValidationAnchors(ctx context.Context, db *sqlx.DB) error {
 		return fmt.Errorf("load active hub profile version: %w", err)
 	}
 	validation.SetCanonicalOntologyIRIs(hubIRIs)
+	validation.ResetDomainOntologyCache()
 	validation.SetSchemaAnchorRefs(
 		semantichub.AnchorURL("context", semantichub.ContextName, contextVersion),
 		semantichub.AnchorURL("shapes", semantichub.ShapesName, shapesVersion),

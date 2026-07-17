@@ -119,7 +119,7 @@ func shaclResultFinding(result shacl.ValidationResult, shapesVersion int) Policy
 		message = fmt.Sprintf("%s (focus node %s)", message, focusNode)
 	}
 
-	finding := contractFinding(ruleID, shapeName, shaclResultSeverity(result), message, pathName, pathName, termValue(result.SourceShape))
+	finding := contractFinding(ruleID, shapeName, shaclResultSeverity(result), message, pathName, termValue(result.SourceShape))
 	finding.ActualValue = shaclFindingValue(result.Value)
 	finding.Operator = componentName
 	finding.ShapesVersion = shapesVersion

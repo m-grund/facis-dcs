@@ -268,8 +268,13 @@ func evaluateStatementValueInRule(statements []map[string]any, rule ValidationRu
 	issues := []ValidationIssue{}
 	allowed := normalizedSet(rule.Values)
 	for _, statement := range FindStatements(statements, rule.Where) {
+		// A vocabulary rule constrains values that are present; requiring the
+		// field at all is a required_fields rule's job.
 		value, ok := statement[rule.Target]
-		if !ok || !allowed[strings.ToUpper(strings.TrimSpace(fmt.Sprint(value)))] {
+		if !ok {
+			continue
+		}
+		if !allowed[strings.ToUpper(strings.TrimSpace(fmt.Sprint(value)))] {
 			issues = append(issues, validationIssue(rule, statementID(statement), ""))
 		}
 	}

@@ -317,13 +317,13 @@ func creationPipelineRequirement(
 	return requirement
 }
 
-func creationPipelineField(conditionID string, parameterName string, semanticPath string) map[string]any {
+func creationPipelineField(conditionID string, parameterName string, domainFieldName string) map[string]any {
 	return map[string]any{
 		"@id":               creationPipelineFieldID(conditionID, parameterName),
 		"@type":             "dcs:RequirementField",
 		"dcs:parameterName": parameterName,
 		"dcs:domainField": map[string]any{
-			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(semanticPath),
+			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(domainFieldName),
 		},
 		"dcs:required": true,
 	}

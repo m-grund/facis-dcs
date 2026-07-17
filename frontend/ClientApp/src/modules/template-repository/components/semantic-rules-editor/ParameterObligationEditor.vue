@@ -62,7 +62,7 @@ watch(
 )
 
 watch(
-  () => props.parameter.semanticPath,
+  () => props.parameter.fieldIri,
   () => syncDraftFromOperators(props.operators),
 )
 

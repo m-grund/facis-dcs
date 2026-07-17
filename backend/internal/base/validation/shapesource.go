@@ -32,16 +32,22 @@ type ShapeSource interface {
 	// under the given IRI as its name — how externally anchored contexts
 	// a document references are resolved without a network fetch.
 	ContextByIRI(ctx context.Context, iri string) (content string, err error)
+	// ActiveDomainOntology returns the SLA domain-field ontology (hub
+	// name="facis-sla" kind="ontology") currently active, and its
+	// version — the source of the dcs:DomainField index.
+	ActiveDomainOntology(ctx context.Context) (content string, version int, err error)
 }
 
 // activeShapeSource is the process-wide enforcement source, installed at
 // startup (cmd/dcs/main.go); nil until SetShapeSource runs.
 var activeShapeSource ShapeSource
 
-// SetShapeSource installs the process-wide enforcement source.
+// SetShapeSource installs the process-wide enforcement source and drops
+// the domain-ontology cache so it reloads from the new source.
 func SetShapeSource(s ShapeSource) {
 	if s != nil {
 		activeShapeSource = s
+		ResetDomainOntologyCache()
 	}
 }
 

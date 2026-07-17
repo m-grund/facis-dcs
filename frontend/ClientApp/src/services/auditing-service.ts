@@ -146,7 +146,7 @@ function descriptionFromEventData(eventData: unknown): string {
   if (!isObjectRecord(eventData)) return ''
   const message = stringValue(eventData.message)
   const ruleId = stringValue(eventData.ruleId)
-  const semanticPath = stringValue(eventData.semanticPath)
+  const fieldIri = stringValue(eventData.fieldIri)
   const requirement = stringValue(eventData.requirement)
   const actualValue = detailValue(eventData.actualValue)
   const expectedValue = detailValue(eventData.expectedValue)
@@ -175,7 +175,7 @@ function descriptionFromEventData(eventData: unknown): string {
     expectedValues ? `Expected values: ${expectedValues}` : '',
     operator ? `Operator: ${operator}` : '',
     ruleId ? `Rule: ${ruleId}` : '',
-    semanticPath ? `Semantic path: ${semanticPath}` : '',
+    fieldIri ? `Field: ${fieldIri}` : '',
   ].filter(Boolean)
   if (parts.length) return parts.join('\n')
   return JSON.stringify(eventData, null, 2)

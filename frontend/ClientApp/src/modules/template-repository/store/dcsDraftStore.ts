@@ -336,8 +336,6 @@ export const useDcsDraftStore = defineStore(storeId, {
     addClause(payload: {
       title?: string
       content: DcsContentSegment[]
-      schemaRef?: string
-      semanticPath?: string
     }): string {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
@@ -1004,12 +1002,12 @@ function semanticParamToField(
   parameter: SemanticConditionParameter,
   documentId?: string,
 ): DcsRequirementField {
-  const domainField = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.semanticPath === parameter.semanticPath)
+  const domainField = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.ontologyId === parameter.fieldIri)
   return {
     '@id': fieldIri(conditionId, parameter.parameterName, documentId),
     '@type': 'dcs:RequirementField',
     'dcs:parameterName': parameter.parameterName,
-    'dcs:domainField': { '@id': domainField?.ontologyId ?? parameter.semanticPath },
+    'dcs:domainField': { '@id': domainField?.ontologyId ?? parameter.fieldIri },
     'dcs:required': parameter.isRequired,
   }
 }
@@ -1123,8 +1121,7 @@ function contractDataToSemanticConditions(
             parameterName: field['dcs:parameterName'],
             fieldId: field['@id'],
             type: field['dcs:valueType'] === 'number' ? ('decimal' as const) : ('string' as const),
-            schemaRef: '',
-            semanticPath: field['@id'],
+            fieldIri: field['@id'],
             valueConstraint: undefined,
             uiMetadata: { label: field['dcs:parameterName'] },
             isRequired: field['dcs:required'],
@@ -1138,8 +1135,7 @@ function contractDataToSemanticConditions(
           parameterName: field['dcs:parameterName'],
           fieldId: field['@id'],
           type: ontologyField.type,
-          schemaRef: ontologyField.schemaRef,
-          semanticPath: ontologyField.semanticPath,
+          fieldIri: ontologyField.ontologyId,
           valueConstraint: cloneValueConstraint(ontologyField.valueConstraint),
           uiMetadata: { label: ontologyField.label },
           isRequired: field['dcs:required'],

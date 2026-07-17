@@ -106,7 +106,7 @@ const selectedFindingDetailRows = computed(() => {
     { label: 'Expected value', value: detailValue(eventData?.expectedValue) },
     { label: 'Expected values', value: detailValue(eventData?.expectedValues) },
     { label: 'Operator', value: detailValue(eventData?.operator) },
-    { label: 'Semantic Path', value: stringDetail(eventData?.semanticPath) },
+    { label: 'Field IRI', value: stringDetail(eventData?.fieldIri) },
     { label: 'Path', value: stringDetail(eventData?.path) },
     { label: 'Ontology Term', value: stringDetail(eventData?.ontologyTerm) },
     { label: 'Object Type', value: stringDetail(eventData?.objectType ?? finding.object_type) },
@@ -327,7 +327,7 @@ function auditItemKind(finding: AuditFinding): 'check' | 'event' {
   ) {
     return 'check'
   }
-  if (eventData?.ruleId || eventData?.policySetId || eventData?.semanticPath || eventData?.severity) {
+  if (eventData?.ruleId || eventData?.policySetId || eventData?.fieldIri || eventData?.severity) {
     return 'check'
   }
   return 'event'

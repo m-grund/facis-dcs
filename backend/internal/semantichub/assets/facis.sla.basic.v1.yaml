@@ -1,51 +1,23 @@
-id: facis.sla.basic.v1
-version: "1"
-description: Basic FACIS SLA contract statement validation profile.
+# Statement-level business rules for FACIS DCS contract documents. The
+# profile applies to what documents actually are — a dcs:Contract root with
+# dcs:CompanyParty nodes under dcs:parties — so its rules can genuinely
+# fire; structural requirements (metadata, envelope, semantic values) are
+# the SHACL shapes' job, not duplicated here.
+id: facis.sla.basic
+version: "2"
+description: Statement rules for FACIS DCS contract documents.
 appliesTo:
-  - "https://w3id.org/facis/dcs/ontology/v1#SLAAgreement"
+  - "https://w3id.org/facis/dcs/ontology/v1#Contract"
 rules:
-  - id: exactly-one-provider
-    type: count
+  - id: company-party-role-vocabulary
+    type: value_in
     severity: error
-    message: Contract requires exactly one provider.
+    message: A contract party's role must come from the DCS role vocabulary.
     where:
       "@type": "https://w3id.org/facis/dcs/ontology/v1#CompanyParty"
-      role: "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"
-    operator: eq
-    value: 1
-  - id: exactly-one-customer
-    type: count
-    severity: error
-    message: Contract requires exactly one customer.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#CompanyParty"
-      role: "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"
-    operator: eq
-    value: 1
-  - id: availability-slo-required
-    type: required_fields
-    severity: error
-    message: Availability SLO is incomplete.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#SLO"
-    requiredFields:
-      - availability
-  - id: payment-required
-    type: required_fields
-    severity: error
-    message: Payment term is incomplete.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#PaymentTerm"
-    requiredFields:
-      - amount
-      - currency
-      - dueDate
-  - id: payment-amount-positive
-    type: comparison
-    severity: error
-    message: Payment amount must be greater than 0.
-    target: amount
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#PaymentTerm"
-    operator: gt
-    value: 0
+    target: role
+    values:
+      - provider
+      - customer
+      - assigner
+      - assignee

@@ -56,7 +56,7 @@ export interface AuditReportFinding {
   expectedValues?: unknown[]
   operator?: string
   path?: string
-  semanticPath?: string
+  fieldIri?: string
   ontologyTerm?: string
   actor?: string
 }

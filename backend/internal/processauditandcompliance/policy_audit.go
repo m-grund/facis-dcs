@@ -18,7 +18,7 @@ func ContractContentPolicyFindingEventData(finding validation.PolicyFinding, met
 		"severity":        finding.Severity,
 		"message":         finding.Message,
 		"path":            finding.Path,
-		"semanticPath":    finding.SemanticPath,
+		"fieldIri":        finding.FieldIri,
 		"ontologyTerm":    finding.OntologyTerm,
 		"objectType":      "contract",
 		"objectDid":       metadata.ContractDID,
@@ -38,7 +38,7 @@ func TemplatePolicyFindingEventData(finding validation.PolicyFinding, template *
 		"severity":      finding.Severity,
 		"message":       finding.Message,
 		"path":          finding.Path,
-		"semanticPath":  finding.SemanticPath,
+		"fieldIri":      finding.FieldIri,
 		"ontologyTerm":  finding.OntologyTerm,
 	}
 	addPolicyFindingDetails(data, finding)
@@ -69,7 +69,7 @@ func TemplateApprovalProvenanceFindingEventData(finding validation.PolicyFinding
 		"severity":      finding.Severity,
 		"message":       finding.Message,
 		"path":          finding.Path,
-		"semanticPath":  finding.SemanticPath,
+		"fieldIri":      finding.FieldIri,
 		"ontologyTerm":  finding.OntologyTerm,
 		"objectType":    "contractTemplate",
 		"objectDid":     did,

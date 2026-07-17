@@ -21,11 +21,12 @@ type RemoteShapeSource struct {
 	// (semantichub.AnchorURL), so the caller supplies the origin the
 	// contract was actually received from.
 	BaseURL string
-	// ShapesName/ProfileName/ContextName name the remote hub's schema
-	// entries (mirrors semantichub.ShapesName etc. — the DCS ontology is
-	// shared, so these are the same well-known names on every instance).
-	ShapesName, ProfileName, ContextName string
-	HTTPClient                           *http.Client
+	// ShapesName/ProfileName/ContextName/OntologyName name the remote
+	// hub's schema entries (mirrors semantichub.ShapesName etc. — the DCS
+	// ontology is shared, so these are the same well-known names on every
+	// instance).
+	ShapesName, ProfileName, ContextName, OntologyName string
+	HTTPClient                                         *http.Client
 }
 
 const remoteShapeSourceTimeout = 15 * time.Second
@@ -62,6 +63,10 @@ func (r RemoteShapeSource) ContextAt(ctx context.Context, version int) (string, 
 func (r RemoteShapeSource) ContextByIRI(ctx context.Context, iri string) (string, error) {
 	content, _, err := r.retrieve(ctx, iri, "context", 0)
 	return content, err
+}
+
+func (r RemoteShapeSource) ActiveDomainOntology(ctx context.Context) (string, int, error) {
+	return r.retrieve(ctx, r.OntologyName, "ontology", 0)
 }
 
 type remoteSchemaItem struct {
@@ -110,10 +115,11 @@ func VerifyAgainstOriginatorHub(ctx context.Context, contractDocument any, origi
 		return nil, fmt.Errorf("decode contract document: %w", err)
 	}
 	remote := RemoteShapeSource{
-		BaseURL:     originatorBaseURL,
-		ShapesName:  "facis-dcs",
-		ProfileName: "facis.sla.basic",
-		ContextName: "facis-dcs",
+		BaseURL:      originatorBaseURL,
+		ShapesName:   "facis-dcs",
+		ProfileName:  "facis.sla.basic",
+		ContextName:  "facis-dcs",
+		OntologyName: "facis-sla",
 	}
 	findings, _, err := validateAgainstShapeSource(ctx, contract, remote)
 	return findings, err

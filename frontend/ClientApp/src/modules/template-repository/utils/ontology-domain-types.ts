@@ -20,10 +20,9 @@ export const ONTOLOGY_DOMAIN_TYPES: readonly OntologyDomainType[] = buildOntolog
 
 export function buildOntologyDomainTypeParameters(domainType: OntologyDomainType): SemanticConditionParameter[] {
   return domainType.fields.map((field) => ({
-    parameterName: field.semanticPath,
+    parameterName: field.parameterName,
     type: field.type,
-    schemaRef: field.schemaRef,
-    semanticPath: field.semanticPath,
+    fieldIri: field.ontologyId,
     valueConstraint: cloneValueConstraint(field.valueConstraint),
     uiMetadata: { label: field.label },
     isRequired: true,
@@ -53,7 +52,7 @@ function buildOntologyDomainTypes(): OntologyDomainType[] {
 }
 
 function fieldsForEntityType(entityType: string): DomainFieldDefinition[] {
-  return ONTOLOGY_DOMAIN_FIELDS.filter((field) => localOntologyName(field.statementType ?? '') === entityType).sort(
+  return ONTOLOGY_DOMAIN_FIELDS.filter((field) => localOntologyName(field.domain ?? '') === entityType).sort(
     (left, right) => left.label.localeCompare(right.label),
   )
 }

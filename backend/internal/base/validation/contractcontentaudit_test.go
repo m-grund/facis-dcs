@@ -20,6 +20,7 @@ type fixtureShapeSource struct {
 	shapesTTL        string
 	profileYAML      string
 	contextJSON      string
+	ontologyTTL      string
 	externalContexts map[string]string
 }
 
@@ -48,6 +49,15 @@ func (f fixtureShapeSource) ContextByIRI(_ context.Context, iri string) (string,
 		return content, nil
 	}
 	return "", fmt.Errorf("context %q is not registered", iri)
+}
+
+// ActiveDomainOntology defaults to the hub's seed SLA ontology asset, so
+// fixtures that only override shapes keep a working domain-field index.
+func (f fixtureShapeSource) ActiveDomainOntology(context.Context) (string, int, error) {
+	if f.ontologyTTL != "" {
+		return f.ontologyTTL, 1, nil
+	}
+	return mustReadRepoFile("backend/internal/semantichub/assets/facis-sla-ontology.ttl"), 1, nil
 }
 
 // mustReadRepoFile climbs from the package directory to find a repo-root
@@ -447,7 +457,7 @@ func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLVal
 	require.Equal(t, "urn:uuid:policy-postal-code", policyErr.Findings[1].RuleID)
 }
 
-func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testing.T) {
+func TestAuditContractContentReadsCanonicalRuntimeValuesByParameterName(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
 	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
@@ -611,7 +621,10 @@ func swapShapeSource(t *testing.T, s ShapeSource) func() {
 	t.Helper()
 	original := activeShapeSource
 	SetShapeSource(s)
-	return func() { activeShapeSource = original }
+	return func() {
+		activeShapeSource = original
+		ResetDomainOntologyCache()
+	}
 }
 
 func canonicalAuditContract() map[string]any {
