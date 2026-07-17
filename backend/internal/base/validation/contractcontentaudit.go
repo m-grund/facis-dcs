@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,12 +83,20 @@ func AuditContractContent(ctx context.Context, contractDocument any, policyDocum
 	for _, profile := range policy.profiles {
 		findings = append(findings, auditContractValidationProfile(contract, root, profile)...)
 	}
-	findings = append(findings, auditExpandedODRLPolicies(root, expandedODRLPolicyRules(root))...)
+	embeddedFindings, err := auditExpandedODRLPolicies(ctx, root, expandedODRLPolicyRules(root))
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, embeddedFindings...)
 	externalRules, err := expandExternalODRLRules(ctx, externalODRLPolicies(policy.Policies), source)
 	if err != nil {
 		return nil, err
 	}
-	findings = append(findings, auditExpandedODRLPolicies(root, externalRules)...)
+	externalFindings, err := auditExpandedODRLPolicies(ctx, root, externalRules)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, externalFindings...)
 
 	for i := range findings {
 		findings[i].PolicySetID = policy.PolicySetID
@@ -123,7 +130,8 @@ func (e ContractPolicySatisfactionError) Error() string {
 }
 
 // ValidateContractPolicySatisfaction enforces the per-contract ODRL policies
-// embedded as dcs:policies against the submitted semanticConditionValues.
+// embedded as dcs:policies against the values carried inline on the
+// requirement fields.
 func ValidateContractPolicySatisfaction(contractDocument any, metadata ContractContentAuditMetadata) error {
 	contract, err := normalizeObject(contractDocument)
 	if err != nil {
@@ -139,7 +147,10 @@ func ValidateContractPolicySatisfaction(contractDocument any, metadata ContractC
 	if err != nil {
 		return fmt.Errorf("ODRL evaluation: %w", err)
 	}
-	findings := auditExpandedODRLPolicies(root, expandedODRLPolicyRules(root))
+	findings, err := auditExpandedODRLPolicies(ctx, root, expandedODRLPolicyRules(root))
+	if err != nil {
+		return fmt.Errorf("ODRL evaluation: %w", err)
+	}
 	blocking := make([]PolicyFinding, 0)
 	for _, finding := range findings {
 		if isBlockingContractPolicyFinding(finding) {
@@ -566,82 +577,6 @@ type odrlFieldInfo struct {
 	hasValue      bool
 }
 
-func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) bool {
-	op := compactTerm(operator)
-	actualValue = compactJSONLDValue(actualValue)
-	rightOperand = compactJSONLDValue(rightOperand)
-	switch op {
-	case "eq":
-		return odrlValuesEqual(actualValue, rightOperand)
-	case "neq":
-		return !odrlValuesEqual(actualValue, rightOperand)
-	case "gt":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1 > f2+floatTolerance
-	case "gteq":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1+floatTolerance >= f2
-	case "lt":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1 < f2-floatTolerance
-	case "lteq":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1 <= f2+floatTolerance
-	case "isAnyOf":
-		items, ok := asArray(rightOperand)
-		if !ok {
-			return false
-		}
-		normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
-		for _, item := range items {
-			if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) == normalized {
-				return true
-			}
-		}
-		return false
-	case "isNoneOf":
-		items, ok := asArray(rightOperand)
-		if !ok {
-			return true
-		}
-		normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
-		for _, item := range items {
-			if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) == normalized {
-				return false
-			}
-		}
-		return true
-	case "hasPart":
-		str, ok := actualValue.(string)
-		if !ok {
-			return false
-		}
-		return strings.Contains(str, fmt.Sprint(compactJSONLDValue(rightOperand)))
-	default:
-		return false
-	}
-}
-
-func odrlValuesEqual(a, b any) bool {
-	a = compactJSONLDValue(a)
-	b = compactJSONLDValue(b)
-	sa, saOk := a.(string)
-	sb, sbOk := b.(string)
-	if saOk && sbOk {
-		return strings.EqualFold(sa, sb)
-	}
-	fa, faOk := toFloat(a)
-	fb, fbOk := toFloat(b)
-	if faOk && fbOk {
-		return math.Abs(fa-fb) <= floatTolerance
-	}
-	return fmt.Sprint(a) == fmt.Sprint(b)
-}
-
 func contractFinding(ruleID, title, severity, message, path, ontologyTerm string) PolicyFinding {
 	return PolicyFinding{
 		RuleID:       ruleID,
@@ -652,8 +587,6 @@ func contractFinding(ruleID, title, severity, message, path, ontologyTerm string
 		OntologyTerm: ontologyTerm,
 	}
 }
-
-const floatTolerance = 0.0000001
 
 func normalizeObject(raw any) (map[string]any, error) {
 	if raw == nil {
@@ -961,28 +894,6 @@ func compactJSONLDValue(value any) any {
 		}
 	}
 	return value
-}
-
-func toFloat(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case float64:
-		return typed, !math.IsNaN(typed)
-	case float32:
-		return float64(typed), !math.IsNaN(float64(typed))
-	case int:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	case json.Number:
-		float, err := typed.Float64()
-		return float, err == nil
-	case string:
-		var parsed float64
-		_, err := fmt.Sscanf(strings.TrimSpace(typed), "%f", &parsed)
-		return parsed, err == nil
-	default:
-		return 0, false
-	}
 }
 
 func normalizedSet(values []string) map[string]bool {

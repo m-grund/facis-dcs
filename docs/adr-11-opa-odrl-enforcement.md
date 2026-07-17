@@ -129,7 +129,8 @@ Mirroring ADR-9's goRDFlib gate, OPA is not wired into enforcement until:
    typed right-operand, KPI violation) must produce an **identical
    pass/violate verdict** through the OPA path as through `evaluateODRLConstraint`.
    The hand-rolled evaluator stays in the tree as the parity oracle until this
-   passes, then is deleted (below).
+   passes, then is removed from the production path and retained solely as the
+   test parity oracle (below).
 3. **Operator coverage**: the ODRL→Rego compiler covers at least the nine
    operators already supported; any gap fails the gate.
 
@@ -162,10 +163,13 @@ revised — the gate is the trigger to switch, not an assumption that it works.
 - A translation layer (ODRL→Rego) is introduced and owned; it is deterministic
   and unit-tested, and its correctness is pinned by the parity gate against the
   evaluator it replaces.
-- No dual-engine flag (greenfield, per ADR-9's precedent): once the parity gate
-  passes, `evaluateODRLConstraint` is deleted outright rather than kept behind
-  a `POLICY_ENGINE=opa|builtin` switch. Until then it stays solely as the
-  parity oracle, not as a shipped fallback.
+- No dual-engine flag (greenfield, per ADR-9's precedent): `evaluateODRLConstraint`
+  is removed from the production binary rather than kept behind a
+  `POLICY_ENGINE=opa|builtin` switch — nothing in the shipped path evaluates
+  ODRL except OPA. The switch is retained only in `opaodrl_test.go` as the
+  parity oracle (a test fixture, not a runtime fallback), so any future change
+  to `evaluateODRLConstraintOPA` is still checked against the reference
+  semantics verdict-for-verdict.
 - The value-inlining unification (`dcs:parameterValue` on the field) is a
   prerequisite that stands independently of the engine: it is the clean
   "state of the world" both this OPA path and the prior evaluator read.

@@ -56,7 +56,10 @@ func EvaluateKPIViolation(ctx context.Context, contractDocument any, metric, val
 		if operator == "" {
 			continue
 		}
-		satisfied := evaluateODRLConstraint(operator, strings.TrimSpace(value), expandedRightOperand(constraint, operator))
+		satisfied, err := evaluateODRLConstraintOPA(ctx, operator, strings.TrimSpace(value), expandedRightOperand(constraint, operator))
+		if err != nil {
+			return false, err
+		}
 		isProhibition := expandedTypeLocalName(rule) == "Prohibition"
 		if (isProhibition && satisfied) || (!isProhibition && !satisfied) {
 			return true, nil

@@ -222,20 +222,24 @@ func expandedInlineFieldValue(field map[string]any) (any, bool) {
 }
 
 // auditExpandedODRLPolicies evaluates every ODRL rule node against the
-// document's submitted semantic values.
-func auditExpandedODRLPolicies(root map[string]any, rules []map[string]any) []PolicyFinding {
+// values the document carries inline on its requirement fields.
+func auditExpandedODRLPolicies(ctx context.Context, root map[string]any, rules []map[string]any) ([]PolicyFinding, error) {
 	if len(rules) == 0 {
-		return nil
+		return nil, nil
 	}
 	fieldIndex := expandedODRLFieldIndex(root)
 	findings := []PolicyFinding{}
 	for _, rule := range rules {
-		findings = append(findings, auditExpandedODRLRule(root, rule, fieldIndex)...)
+		ruleFindings, err := auditExpandedODRLRule(ctx, root, rule, fieldIndex)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ruleFindings...)
 	}
-	return findings
+	return findings, nil
 }
 
-func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex map[string]odrlFieldInfo) []PolicyFinding {
+func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
 	ruleID, _ := rule["@id"].(string)
 	if ruleID == "" {
 		ruleID = "FACIS-CONTRACT-ODRL-POLICY"
@@ -244,23 +248,23 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 
 	constraint, ok := expandedFirst(rule, odrlIRI+"constraint")
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	fieldID, _ := leftOperand["@id"].(string)
 	if fieldID == "" {
-		return nil
+		return nil, nil
 	}
 	operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	operator := shaclLocalName(expandedID(operatorNode))
 	if operator == "" {
-		return nil
+		return nil, nil
 	}
 	rightOperand := expandedRightOperand(constraint, operator)
 
@@ -268,7 +272,7 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 	if !ok {
 		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, "dcs:RequirementField")
 		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}
+		return []PolicyFinding{finding}, nil
 	}
 	actualValue, hasValue := fieldInfo.value, fieldInfo.hasValue
 
@@ -283,24 +287,27 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 		if isProhibition || isPermission {
 			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, "")
 			applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-			return []PolicyFinding{finding}
+			return []PolicyFinding{finding}, nil
 		}
 		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, "")
 		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}
+		return []PolicyFinding{finding}, nil
 	}
 
-	satisfied := evaluateODRLConstraint(operator, actualValue, rightOperand)
+	satisfied, err := evaluateODRLConstraintOPA(ctx, operator, actualValue, rightOperand)
+	if err != nil {
+		return nil, fmt.Errorf("evaluate ODRL policy %q: %w", ruleID, err)
+	}
 	violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
 
 	if violated {
 		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), fieldID, "")
 		applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-		return []PolicyFinding{finding}
+		return []PolicyFinding{finding}, nil
 	}
 	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, "")
 	applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-	return []PolicyFinding{finding}
+	return []PolicyFinding{finding}, nil
 }
 
 // expandedRightOperand converts the constraint's right operand to plain Go
