@@ -24,17 +24,22 @@ export interface Anchor {
   label: string
 }
 
-const props = defineProps<{
-  modelValue: OdrlRule | null
-  /** Data fields declared for this clause (document constraint left operands). */
-  fields: Anchor[]
-  /** Parties the rule can bind (assigner/assignee/target). */
-  parties: Anchor[]
-  /** The prose block this rule is backed by (dcs:prose). */
-  proseId: string
-  /** The contract/asset IRI the rule targets by default. */
-  contractTargetId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: OdrlRule | null
+    /** Data fields declared for this clause (document constraint left operands). */
+    fields: Anchor[]
+    /** Assets declared for this clause (targetable objects — an ODRL rule's target). */
+    assets?: Anchor[]
+    /** Parties the rule can bind (assigner/assignee/target). */
+    parties: Anchor[]
+    /** The prose block this rule is backed by (dcs:prose). */
+    proseId: string
+    /** The contract/asset IRI the rule targets by default. */
+    contractTargetId: string
+  }>(),
+  { assets: () => [] },
+)
 
 const emit = defineEmits<{ 'update:modelValue': [OdrlRule | null] }>()
 
@@ -170,7 +175,10 @@ watch(rule, (value) => emit('update:modelValue', value))
         <span class="label-text text-xs">Toward (target)</span>
         <select v-model="draft.targetId" class="select-bordered select select-sm">
           <option :value="contractTargetId">the contract</option>
-          <optgroup v-if="fields.length" label="Asset (declared object)">
+          <optgroup v-if="assets.length" label="Asset">
+            <option v-for="a in assets" :key="a.id" :value="a.id">{{ a.label }}</option>
+          </optgroup>
+          <optgroup v-if="fields.length" label="Data field">
             <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
           </optgroup>
           <optgroup label="Parties">
