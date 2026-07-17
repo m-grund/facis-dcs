@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
+import { ODRL_OPERATORS } from '@template-repository/utils/odrl-profile-catalog'
 import {
   formatValueOption,
   isTokenValueConstraint,
@@ -39,7 +40,11 @@ const usesSetConstraintEditor = computed(() => {
 })
 const activeSetTargets = computed(() => setConstraintTargets())
 const operatorOptions = computed(() =>
-  usesSetConstraintEditor.value ? setOperatorOptions() : operatorOptionsForType(props.parameter.type),
+  ODRL_OPERATORS.filter(
+    (operator) =>
+      operator.parameterTypes.has(props.parameter.type) &&
+      isSetOperator(operator.term) === usesSetConstraintEditor.value,
+  ).map((operator) => ({ value: operator.term as SemanticOperateType, label: operator.label })),
 )
 const filteredValueOptions = computed(() => {
   const query = valueOptionSearch.value.trim().toLowerCase()
@@ -203,40 +208,7 @@ function formatNumericTarget(event: Event) {
   draftTarget.value = formatNumberInput((event.target as HTMLInputElement | null)?.value ?? '')
 }
 
-function operatorOptionsForType(type: SemanticConditionParameter['type']) {
-  const equality = [
-    { value: 'odrl:eq' as SemanticOperateType, label: 'Must equal' },
-    { value: 'odrl:neq' as SemanticOperateType, label: 'Must not equal' },
-  ]
-  if (type === 'decimal' || type === 'integer' || type === 'date') {
-    return [
-      { value: 'odrl:gt' as SemanticOperateType, label: 'Must be greater than' },
-      { value: 'odrl:gteq' as SemanticOperateType, label: 'Must be at least' },
-      { value: 'odrl:lt' as SemanticOperateType, label: 'Must be less than' },
-      { value: 'odrl:lteq' as SemanticOperateType, label: 'Must be at most' },
-      ...equality,
-    ]
-  }
-  if (type === 'string' || type === 'enum') {
-    return [
-      ...equality,
-      { value: 'odrl:hasPart' as SemanticOperateType, label: 'Must contain' },
-      { value: 'dcs:matchesRegex' as SemanticOperateType, label: 'Must match pattern' },
-    ]
-  }
-  return equality
-}
-
-function setOperatorOptions() {
-  return [
-    { value: 'odrl:isAnyOf' as SemanticOperateType, label: 'Allow only' },
-    { value: 'odrl:isNoneOf' as SemanticOperateType, label: 'Exclude' },
-  ]
-}
-
-function isSetOperator(
-  operator: SemanticOperateType | '',
-): operator is Extract<SemanticOperateType, 'odrl:isAnyOf' | 'odrl:isNoneOf'> {
+function isSetOperator(operator: string): operator is Extract<SemanticOperateType, 'odrl:isAnyOf' | 'odrl:isNoneOf'> {
   return operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf'
 }
 

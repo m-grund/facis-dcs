@@ -1,15 +1,10 @@
-import {
-  FACIS_TEMPLATE_POLICY_REFS,
-  FACIS_TEMPLATE_VALIDATION_PROFILE,
-  TemplateType,
-} from '@template-repository/models/contract-template'
+import { TemplateType } from '@template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
-import http from '@/api/http'
 import {
   type DcsApprovedTemplate,
   type DcsBlock,
@@ -34,6 +29,7 @@ import {
   type OdrlSet,
 } from '@/models/dcs-jsonld'
 import { toDocumentSemanticValues } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
+import { getHubContext } from '@/services/semantic-hub-service'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
@@ -411,9 +407,29 @@ export const useDcsDraftStore = defineStore(storeId, {
       this.blocks.push(block)
       return id
     },
+    /**
+     * Re-fills a typed clause with new shape-conformant values: the nested
+     * machine-readable instance and the clause's human-readable summary text
+     * change together, so the two representations cannot drift apart
+     * (DCS-FR-CWE-04). Available in both workflows — the template freezes
+     * the clause's shape, the contract creator fills its values.
+     */
+    updateTypedClause(blockId: string, payload: { title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): void {
+      const block = this.blocks.find((b) => b['@id'] === blockId)
+      if (!block || !isDcsClause(block as DcsBlock)) return
+      const clause = block as DcsClause
+      if (!clause['dcs:typedClause']) return
+      clause['dcs:typedClause'] = payload.instance
+      clause['dcs:content'] = { '@list': [typedClauseValuesSummary(payload.instance)] }
+      const trimmedTitle = payload.title?.trim()
+      if (trimmedTitle?.length) clause['dcs:title'] = trimmedTitle
+    },
     deleteClause(blockId: string): void {
       removeClauseFromLayout(this.layout, blockId)
       this.blocks = this.blocks.filter((b) => b['@id'] !== blockId)
+      // A machine-readable rule must never outlive the prose it is backed
+      // by — drop policies whose dcs:prose referenced the deleted clause.
+      this.policies = this.policies.filter((p) => p['dcs:prose']?.['@id'] !== blockId)
     },
     updateClause(blockId: string, payload: { title?: string; content?: DcsContentSegment[] }): void {
       this.updateBlock(blockId, payload)
@@ -921,13 +937,6 @@ const defaultState: Readonly<Omit<TemplateDraftState, 'blocks' | 'layout'>> = {
   contractData: [],
   policies: [],
   customMetaData: [],
-  policyRefs: FACIS_TEMPLATE_POLICY_REFS,
-  validation: FACIS_TEMPLATE_VALIDATION_PROFILE,
-  templateVariables: [],
-  placeholderBindings: [],
-  semanticRules: [],
-  policyBundle: null,
-  sla: null,
   subTemplateSnapshots: [],
   templateType: TemplateType.component,
   state: undefined,
@@ -947,11 +956,6 @@ function getInitialState(): TemplateDraftState {
     contractData: [],
     policies: [],
     customMetaData: [],
-    policyRefs: defaultState.policyRefs.map((p) => ({ ...p })),
-    validation: { ...defaultState.validation, requiredPolicies: [...defaultState.validation.requiredPolicies] },
-    templateVariables: [],
-    placeholderBindings: [],
-    semanticRules: [],
     subTemplateSnapshots: [],
   }
 }
@@ -1015,17 +1019,9 @@ function semanticParamToField(
 
 const ODRL_RULE_TYPES = new Set(['odrl:Duty', 'odrl:Permission', 'odrl:Prohibition'])
 
-let hubContextPromise: Promise<Record<string, unknown>> | undefined
-
-/** The Semantic Hub's active JSON-LD context document, fetched once. */
-async function hubContext(): Promise<Record<string, unknown>> {
-  hubContextPromise ??= http.get('/semantic/context/facis-dcs').then((res) => res.data as Record<string, unknown>)
-  return hubContextPromise
-}
-
 /** Compacts a shacl-form instance (absolute IRIs) against the hub context. */
 async function compactAgainstHubContext(instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance): Promise<Record<string, unknown>> {
-  const compacted = (await jsonld.compact(instance as object, (await hubContext()) as never)) as Record<string, unknown>
+  const compacted = (await jsonld.compact(instance as object, (await getHubContext()) as never)) as Record<string, unknown>
   delete compacted['@context']
   return compacted
 }

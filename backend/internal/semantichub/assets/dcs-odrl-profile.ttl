@@ -22,7 +22,18 @@ governs the submitted value whose dcs:semanticConditionValues entry
 references the constraint's odrl:leftOperand via dcs:forField. Reported
 KPI metrics bind to constraints by dcs:parameterName equality between the
 metric name and the left-operand field.""" ;
+  dcs:defaultConstraintAction dcs:provideCompliantValue ;
   owl:imports <http://www.w3.org/ns/odrl/2/> .
+
+dcs:defaultConstraintAction
+  a owl:AnnotationProperty ;
+  rdfs:label "default constraint action" ;
+  skos:definition "The odrl:action a document producer attaches to field-value constraint rules generated under this profile." .
+
+dcs:appliesToParameterType
+  a owl:AnnotationProperty ;
+  rdfs:label "applies to parameter type" ;
+  skos:definition "The dcs:RequirementField parameter types (string, decimal, integer, boolean, date, enum) whose value constraints may use this operator." .
 
 dcs:provideCompliantValue
   a odrl:Action ;
@@ -35,3 +46,70 @@ dcs:provideCompliantValue
 # its runtime value is the dcs:semanticConditionValues entry whose
 # dcs:forField references it.
 dcs:RequirementField rdfs:subClassOf odrl:LeftOperand .
+
+# The constraint operators this profile supports, with the parameter types
+# each applies to. Declaration order is the order operator choices are
+# offered in per parameter type. odrl:isAnyOf / odrl:isNoneOf take a set of
+# right operands and are offered only for fields with an enumerable value
+# constraint.
+
+odrl:gt
+  a odrl:Operator ;
+  rdfs:label "Must be greater than" ;
+  dcs:appliesToParameterType "decimal", "integer", "date" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:gteq
+  a odrl:Operator ;
+  rdfs:label "Must be at least" ;
+  dcs:appliesToParameterType "decimal", "integer", "date" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:lt
+  a odrl:Operator ;
+  rdfs:label "Must be less than" ;
+  dcs:appliesToParameterType "decimal", "integer", "date" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:lteq
+  a odrl:Operator ;
+  rdfs:label "Must be at most" ;
+  dcs:appliesToParameterType "decimal", "integer", "date" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:eq
+  a odrl:Operator ;
+  rdfs:label "Must equal" ;
+  dcs:appliesToParameterType "string", "decimal", "integer", "boolean", "date", "enum" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:neq
+  a odrl:Operator ;
+  rdfs:label "Must not equal" ;
+  dcs:appliesToParameterType "string", "decimal", "integer", "boolean", "date", "enum" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:hasPart
+  a odrl:Operator ;
+  rdfs:label "Must contain" ;
+  dcs:appliesToParameterType "string", "enum" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+dcs:matchesRegex
+  a odrl:Operator ;
+  rdfs:label "Must match pattern" ;
+  skos:definition "The left-operand value matches the right-operand regular expression." ;
+  dcs:appliesToParameterType "string", "enum" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:isAnyOf
+  a odrl:Operator ;
+  rdfs:label "Allow only" ;
+  dcs:appliesToParameterType "string", "enum" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .
+
+odrl:isNoneOf
+  a odrl:Operator ;
+  rdfs:label "Exclude" ;
+  dcs:appliesToParameterType "string", "enum" ;
+  skos:inScheme <https://w3id.org/facis/dcs/ontology/v1/odrl-profile> .

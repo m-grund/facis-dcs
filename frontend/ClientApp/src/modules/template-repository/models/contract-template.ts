@@ -92,46 +92,6 @@ export interface DomainFieldDefinition {
   valueConstraint?: SemanticValueConstraint
 }
 
-export interface PolicyReference {
-  policyId: string
-  version: string
-  enforcementPoint:
-    | 'template:create'
-    | 'template:update'
-    | 'template:verify'
-    | 'contract:create'
-    | 'contract:update'
-    | 'contract:submit'
-}
-
-export interface ValidationProfile {
-  schemaVersion: 'v1'
-  profile: 'FACIS_DCS_TEMPLATE_V1' | 'FACIS_DCS_CONTRACT_V1'
-  requiredPolicies: string[]
-}
-
-export const FACIS_TEMPLATE_POLICY_REFS: PolicyReference[] = [
-  { policyId: 'facis.dcs.template.structure', version: 'v1', enforcementPoint: 'template:create' },
-  { policyId: 'facis.dcs.template.semantic-conditions', version: 'v1', enforcementPoint: 'template:verify' },
-]
-
-export const FACIS_CONTRACT_POLICY_REFS: PolicyReference[] = [
-  { policyId: 'facis.dcs.contract.structure', version: 'v1', enforcementPoint: 'contract:create' },
-  { policyId: 'facis.dcs.contract.semantic-values', version: 'v1', enforcementPoint: 'contract:update' },
-]
-
-export const FACIS_TEMPLATE_VALIDATION_PROFILE: ValidationProfile = {
-  schemaVersion: 'v1',
-  profile: 'FACIS_DCS_TEMPLATE_V1',
-  requiredPolicies: FACIS_TEMPLATE_POLICY_REFS.map((policy) => policy.policyId),
-}
-
-export const FACIS_CONTRACT_VALIDATION_PROFILE: ValidationProfile = {
-  schemaVersion: 'v1',
-  profile: 'FACIS_DCS_CONTRACT_V1',
-  requiredPolicies: FACIS_CONTRACT_POLICY_REFS.map((policy) => policy.policyId),
-}
-
 // ---- MetaData ----
 
 export interface MetaData {

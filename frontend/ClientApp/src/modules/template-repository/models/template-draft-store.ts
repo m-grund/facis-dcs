@@ -1,19 +1,7 @@
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import type { DcsBlock, DcsDataRequirement, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'
-import type {
-  PlaceholderBinding,
-  PolicyBundle,
-  SemanticRule,
-  SLAAgreement,
-  TemplateVariable,
-} from '@/models/semantic/facis-dcs-semantic'
-import type {
-  MetaData,
-  PolicyReference,
-  TemplateTypeValue,
-  ValidationProfile,
-} from '@/modules/template-repository/models/contract-template'
+import type { MetaData, TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
@@ -36,13 +24,6 @@ interface TemplateDraftState {
   /** JSON-LD ODRL policies (operator constraints). */
   policies: OdrlRule[]
   customMetaData: MetaData[]
-  policyRefs: PolicyReference[]
-  validation: ValidationProfile
-  templateVariables: TemplateVariable[]
-  placeholderBindings: PlaceholderBinding[]
-  semanticRules: SemanticRule[]
-  policyBundle: PolicyBundle | null
-  sla: SLAAgreement | null
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue
   state: ContractTemplateState | undefined
