@@ -88,7 +88,7 @@ async function onRegistered() {
 async function onPublished(name: string, kind: string) {
   await loadEntries()
   const entry = entries.value.find((candidate) => candidate.name === name && candidate.kind === kind)
-  if (entry) select(entry)
+  if (entry) await select(entry)
 }
 
 async function afterMutation() {

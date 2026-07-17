@@ -10,7 +10,6 @@ import { typedClauseValuesSummary } from '@template-repository/utils/typed-claus
 import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
 import http from '@/api/http'
-import { toDocumentSemanticValues } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import {
   type DcsApprovedTemplate,
   type DcsBlock,
@@ -34,6 +33,7 @@ import {
   type OdrlRule,
   type OdrlSet,
 } from '@/models/dcs-jsonld'
+import { toDocumentSemanticValues } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
@@ -365,7 +365,9 @@ export const useDcsDraftStore = defineStore(storeId, {
     async addTypedClause(payload: { clauseType: string; title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): Promise<string> {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
-      const title = payload.title?.trim() || payload.clauseType.split(/[#/:]/).pop() || payload.clauseType
+      const trimmedTitle = payload.title?.trim()
+      const typeTail = payload.clauseType.split(/[#/:]/).pop()
+      const title = trimmedTitle?.length ? trimmedTitle : typeTail?.length ? typeTail : payload.clauseType
       const instance = payload.instance
 
       const compacted = await compactAgainstHubContext(instance)

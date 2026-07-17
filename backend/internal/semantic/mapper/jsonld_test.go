@@ -7,17 +7,11 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/validation"
 	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/stretchr/testify/require"
 )
-
-// testContextIRI mirrors validation.SchemaJSONLDContextV1, the package
-// default every produced document's @context is anchored with until the
-// Semantic Hub re-points it at startup (SetSchemaAnchorRefs).
-const testContextIRI = validation.SchemaJSONLDContextV1
 
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())

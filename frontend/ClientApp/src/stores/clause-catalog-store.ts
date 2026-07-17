@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { getClauseCatalog, type ClauseCatalogType } from '@/services/semantic-hub-service'
+import { type ClauseCatalogType,getClauseCatalog } from '@/services/semantic-hub-service'
 
 /**
  * Process-wide cache of the Semantic Hub's active clause catalog

@@ -51,9 +51,10 @@ async function mountForm() {
   const el = document.createElement('shacl-form') as ShaclFormElement
   el.setAttribute('data-shapes', props.shapes)
   el.setAttribute('data-shape-subject', props.clause.shape)
-  if (props.initialValues?.['@id']) {
+  const valueSubject = props.initialValues?.['@id']
+  if (props.initialValues && typeof valueSubject === 'string' && valueSubject !== '') {
     el.setAttribute('data-values', await instanceToNQuads(props.initialValues))
-    el.setAttribute('data-value-subject', String(props.initialValues['@id']))
+    el.setAttribute('data-value-subject', valueSubject)
   }
   formEl = el
   formHost.value.appendChild(el)

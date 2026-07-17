@@ -11,10 +11,10 @@ import { defineConfig, devices } from '@playwright/test'
  * and the BDD venv exists (~/.dcs-bdd-venv, created by the BDD Makefile).
  */
 
-const FRONTEND_PORT = Number(process.env.E2E_FRONTEND_PORT || 5199)
+const FRONTEND_PORT = Number(process.env.E2E_FRONTEND_PORT ?? 5199)
 
 export const E2E_API_BASE =
-  process.env.E2E_DCS_API_BASE || 'http://dcs-a.localhost:18080/digital-contracting-service/api'
+  process.env.E2E_DCS_API_BASE ?? 'http://dcs-a.localhost:18080/digital-contracting-service/api'
 
 const apiTarget = new URL(E2E_API_BASE)
 

@@ -13,6 +13,10 @@ from types import SimpleNamespace
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, REPO_ROOT)
 
+from steps.support import localhost_resolver  # noqa: E402
+
+localhost_resolver.install()
+
 from steps.support.api_client import contract_update_url, put_json  # noqa: E402
 from steps.support.services import odrl_fixture_service as odrl  # noqa: E402
 from steps.support.services.contract_service import ContractService  # noqa: E402

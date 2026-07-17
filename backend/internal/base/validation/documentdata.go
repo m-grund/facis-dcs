@@ -898,10 +898,6 @@ func numericValue(value any) (float64, bool) {
 	}
 }
 
-type semanticConditionsByBlock struct {
-	topLevel map[string]map[string]any
-}
-
 func asArray(value any) ([]any, bool) {
 	switch items := value.(type) {
 	case []any:

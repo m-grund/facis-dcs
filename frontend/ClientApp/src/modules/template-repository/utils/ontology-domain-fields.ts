@@ -204,7 +204,7 @@ function parseOntologyEntityRoles(graph: OntologyGraph): OntologySelectOption<Se
     .flatMap((ref) => constraints.get(ref)?.allowedValues ?? [])
 
   return allowedValues
-    .map((value) => ({ value: value as SemanticEntityRole, label: formatOntologyLabel(value) }))
+    .map((value) => ({ value: value, label: formatOntologyLabel(value) }))
     .sort((left, right) => left.label.localeCompare(right.label))
 }
 
@@ -233,7 +233,7 @@ function parseOntologyEntityTypes(graph: OntologyGraph): OntologyEntityTypeOptio
     .subjectsOfType(`${RDFS}Class`)
     .filter((subject) => entityTypeNames.has(localName(subject)))
     .map((subject) => ({
-      value: localName(subject) as SemanticEntityType,
+      value: localName(subject),
       label: graph.first(subject, `${RDFS}label`) || localName(subject),
       roleRequired,
     }))

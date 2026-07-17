@@ -41,6 +41,8 @@ function mintSession(role: DcsRole): RoleSession {
 import json, sys
 import requests
 sys.path.insert(0, ${JSON.stringify(path.resolve(here, '..', '..', '..'))})
+from steps.support import localhost_resolver
+localhost_resolver.install()
 from steps.support.services.auth_service import AuthService
 role, api_base = sys.argv[1], sys.argv[2]
 credentials = AuthService.parse_auth_credentials([role], None)

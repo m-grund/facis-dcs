@@ -21,8 +21,6 @@ const (
 	ValidationRuleSignatureLevel = "signature_level_at_least"
 )
 
-const defaultContractStatementValidationProfileFile = "docs/semantic-ontology/validation/facis.sla.basic.v1.yaml"
-
 type ValidationProfile struct {
 	ID          string `json:"id" yaml:"id"`
 	Version     string `json:"version" yaml:"version"`

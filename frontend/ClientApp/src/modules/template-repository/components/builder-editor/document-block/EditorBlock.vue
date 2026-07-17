@@ -3,7 +3,6 @@ import TemplatePreview from '@template-repository/components/builder-editor/prev
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import TypedClauseForm from '@template-repository/components/clauses-editor/TypedClauseForm.vue'
-import { typedClauseEntries, typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import {
   getPlaceholderLabelFromConditions,
@@ -17,10 +16,11 @@ import {
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { typedClauseEntries, typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
 import { useClauseCatalogStore } from '@/stores/clause-catalog-store'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const props = defineProps<{

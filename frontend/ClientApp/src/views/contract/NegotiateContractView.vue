@@ -11,12 +11,12 @@ import ContractHistoryDiffView from '@/modules/contract-workflow-engine/componen
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
+import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
+import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import {
   collectDeclaredRequirements,
   fromDocumentSemanticValues,
 } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
-import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
-import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import {
   buildContractDocument,

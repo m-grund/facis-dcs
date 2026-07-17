@@ -2,7 +2,6 @@
 import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import TypedClauseForm from '@template-repository/components/clauses-editor/TypedClauseForm.vue'
-import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import {
   getPlaceholderLabelFromConditions,
   parseSegmentsFromContent,
@@ -10,10 +9,11 @@ import {
 } from '@template-repository/composables/useClauseTextChips'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { useClauseCatalogStore } from '@/stores/clause-catalog-store'
+import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { TemplateType } from '../../models/contract-template.ts'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsClause } from '@/models/dcs-jsonld'

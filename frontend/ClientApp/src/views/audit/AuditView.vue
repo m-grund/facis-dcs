@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { AuditReportFormat, AuditScope } from '@/models/requests/auditing-request'
-import type { AuditFinding } from '@/models/responses/auditing-response'
+import { computed, ref, watch } from 'vue'
 import { auditingService } from '@/services/auditing-service'
 import { useAuthStore } from '@/stores/auth-store'
-import { computed, ref, watch } from 'vue'
+import type { AuditReportFormat, AuditScope } from '@/models/requests/auditing-request'
+import type { AuditFinding } from '@/models/responses/auditing-response'
 
 const auditFindingsByScope = ref<Partial<Record<AuditScope, AuditFinding[]>>>({})
 const auditErrorsByScope = ref<Partial<Record<AuditScope, string>>>({})

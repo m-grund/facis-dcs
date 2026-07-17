@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
-import TypedClausePalette from '@template-repository/components/clauses-editor/TypedClausePalette.vue'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
+import TypedClausePalette from '@template-repository/components/clauses-editor/TypedClausePalette.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
@@ -86,8 +86,8 @@ function deleteClause(blockId: string) {
   if (editingBlockId.value === blockId) cancelEdit()
 }
 
-function addTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
-  store.addTypedClause(payload)
+async function addTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+  await store.addTypedClause(payload)
 }
 
 function placeClause(blockId: string) {

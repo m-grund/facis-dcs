@@ -3,7 +3,6 @@ package validation
 import (
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -147,98 +146,6 @@ func firstPolicyDuty(data map[string]any) map[string]any {
 	set := data["dcs:policies"].(map[string]any)
 	duties := set["odrl:obligation"].([]any)
 	return duties[0].(map[string]any)
-}
-
-func validSemanticContractData(t *testing.T) *datatype.JSON {
-	t.Helper()
-	conditions := []any{
-		partyCondition("provider", "Provider"),
-		partyCondition("customer", "Customer"),
-		map[string]any{
-			"conditionId":   "payment",
-			"conditionName": "Payment",
-			"schemaVersion": "v1",
-			"parameters": []any{
-				semanticParam("amount", "decimal", SchemaContractV1, "contract.payment.amount"),
-				semanticParam("currency", "string", SchemaContractV1, "contract.payment.currency"),
-				semanticParam("dueDate", "date", SchemaContractV1, "contract.payment.dueDate"),
-			},
-		},
-		map[string]any{
-			"conditionId":   "sla",
-			"conditionName": "SLA Availability",
-			"schemaVersion": "v1",
-			"parameters": []any{
-				semanticParam("availability", "decimal", SchemaServiceV1, "service.sla.availability"),
-			},
-		},
-	}
-	data, err := datatype.NewJSON(map[string]any{
-		"documentOutline": []any{
-			map[string]any{"blockId": "root", "isRoot": true, "children": []any{"clause-main"}},
-		},
-		"documentBlocks": []any{
-			map[string]any{
-				"blockId": "clause-main",
-				"type":    "CLAUSE",
-				"text": strings.Join([]string{
-					"Provider {{provider.legalName}} from {{provider.country}}",
-					"Customer {{customer.legalName}} from {{customer.country}}",
-					"Payment {{payment.amount}} {{payment.currency}} due {{payment.dueDate}}",
-					"Availability {{sla.availability}}",
-				}, "\n"),
-				"conditionIds": []any{"provider", "customer", "payment", "sla"},
-			},
-		},
-		"semanticConditions": conditions,
-		"semanticConditionValues": []any{
-			semanticValue("clause-main", "provider", "legalName", "Musterfirma"),
-			semanticValue("clause-main", "provider", "country", "POL"),
-			semanticValue("clause-main", "customer", "legalName", "Example company"),
-			semanticValue("clause-main", "customer", "country", "DEU"),
-			semanticValue("clause-main", "payment", "amount", 10000.0),
-			semanticValue("clause-main", "payment", "currency", "EUR"),
-			semanticValue("clause-main", "payment", "dueDate", "2026-06-19"),
-			semanticValue("clause-main", "sla", "availability", 99.9),
-		},
-		"customMetaData": []any{},
-	})
-	require.NoError(t, err)
-	return &data
-}
-
-func partyCondition(id string, name string) map[string]any {
-	return map[string]any{
-		"conditionId":   id,
-		"conditionName": name,
-		"schemaVersion": "v1",
-		"entityType":    "CompanyParty",
-		"entityRole":    id,
-		"parameters": []any{
-			semanticParam("legalName", "string", SchemaPartyV1, "company.legalName"),
-			semanticParam("country", "string", SchemaPartyV1, "company.location.country"),
-		},
-	}
-}
-
-func semanticParam(name string, paramType string, schemaRef string, semanticPath string) map[string]any {
-	return map[string]any{
-		"parameterName": name,
-		"type":          paramType,
-		"schemaRef":     schemaRef,
-		"semanticPath":  semanticPath,
-		"isRequired":    true,
-		"operators":     []any{},
-	}
-}
-
-func semanticValue(blockID string, conditionID string, parameterName string, value any) map[string]any {
-	return map[string]any{
-		"blockId":        blockID,
-		"conditionId":    conditionID,
-		"parameterName":  parameterName,
-		"parameterValue": value,
-	}
 }
 
 func TestNormalizeTemplateDataRejectsNonCanonicalStructure(t *testing.T) {
