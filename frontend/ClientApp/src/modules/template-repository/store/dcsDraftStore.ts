@@ -1006,12 +1006,15 @@ function semanticParamToField(
   documentId?: string,
 ): DcsRequirementField {
   const domainField = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.ontologyId === parameter.fieldIri)
+  const value = parameter.value
+  const hasValue = value !== undefined && value !== null && value !== ''
   return {
     '@id': fieldIri(conditionId, parameter.parameterName, documentId),
     '@type': 'dcs:RequirementField',
     'dcs:parameterName': parameter.parameterName,
     'dcs:domainField': { '@id': domainField?.ontologyId ?? parameter.fieldIri },
     'dcs:required': parameter.isRequired,
+    ...(hasValue ? { 'dcs:parameterValue': value as string | number | boolean } : {}),
   }
 }
 

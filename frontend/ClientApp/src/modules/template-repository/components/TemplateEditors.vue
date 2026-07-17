@@ -5,7 +5,7 @@ import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import DetailsEditor from '@template-repository/components/DetailsEditor.vue'
 import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
-import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
+import SemanticElementEditor from '@template-repository/components/SemanticElementEditor.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
@@ -86,7 +86,7 @@ const { isManager } = useTemplatePermissions()
                 <span class="badge w-8 badge-sm badge-primary">0{{ currentTabNumber }}</span>
                 Data Requirements
               </h2>
-              <SemanticRulesEditor />
+              <SemanticElementEditor />
             </div>
           </div>
         </div>
