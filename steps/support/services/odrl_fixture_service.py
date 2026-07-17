@@ -30,24 +30,23 @@ _FIELD_BY_NAME = {
 }
 
 
-def _semantic_value(field_name: str, actual_value):
-    field_id, _, _ = _FIELD_BY_NAME[field_name]
-    return {
-        "forField": field_id,
-        "blockId": "block-clause-1",
-        "parameterValue": actual_value,
-    }
 
 
-def _requirement_field(field_name: str) -> dict:
+def _requirement_field(field_name: str, actual_value=None) -> dict:
     field_id, parameter_name, value_type = _FIELD_BY_NAME[field_name]
-    return {
+    field = {
         "@id": field_id,
         "@type": "dcs:RequirementField",
         "dcs:parameterName": parameter_name,
         "dcs:valueType": value_type,
         "dcs:required": True,
     }
+    if actual_value is not None:
+        # The submitted value lives inline on the requirement field
+        # (dcs:parameterValue) — the shape the enforcement path reads.
+        field["dcs:parameterValue"] = actual_value
+        field["dcs:blockId"] = "block-clause-1"
+    return field
 
 
 def bare_duty_policies(field_name: str, operator: str, right_operand) -> list:
@@ -112,7 +111,7 @@ def odrl_set_policies(
 
 def build_contract_document(contract_did: str, field_name: str, policies, actual_value) -> dict:
     """A full canonical `dcs:Contract` document (documentStructure +
-    contractData + semanticConditionValues + policies) suitable for a full
+    contractData (values inline on the field) + policies) suitable for a full
     replacement PUT to /contract/update while the contract is in DRAFT.
     """
     field_id, _, _ = _FIELD_BY_NAME[field_name]
@@ -164,10 +163,9 @@ def build_contract_document(contract_did: str, field_name: str, policies, actual
                 "dcs:schemaVersion": "v1",
                 "dcs:entityType": "CompanyParty",
                 "dcs:entityRole": "provider",
-                "dcs:fields": [_requirement_field(field_name)],
+                "dcs:fields": [_requirement_field(field_name, actual_value)],
             }
         ],
-        "semanticConditionValues": [_semantic_value(field_name, actual_value)],
         "dcs:policies": policies,
     }
 
