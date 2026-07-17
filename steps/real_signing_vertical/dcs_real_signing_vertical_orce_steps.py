@@ -144,6 +144,33 @@ def _wait_pdf_core_ready(timeout_s: int = 180):
     )
 
 
+def _wait_pdf_core_pod_tsa_env(expected: str, timeout_s: int = 150):
+    """Wait until every RUNNING pdf-core pod actually serves the expected TSA
+    env value. `kubectl set env` + `rollout status` can report the previous
+    generation ready before the new pod takes over, which would let a sign
+    hit a pod with the old TSA setting — so confirm on the live pods, not just
+    the deployment, before signing."""
+    deadline = time.time() + timeout_s
+    last = ""
+    while time.time() < deadline:
+        proc = _run(_kubectl_base() + [
+            "get", "pods",
+            "-l", "app.kubernetes.io/component=pdf-core,app.kubernetes.io/instance=dcs",
+            "--field-selector=status.phase=Running",
+            "-o", f"jsonpath={{.items[*].spec.containers[?(@.name=='pdf-core')]"
+                  f".env[?(@.name=='{_TSA_ENV_VAR}')].value}}",
+        ])
+        last = proc.stdout
+        values = proc.stdout.split()
+        if values and all(v == expected for v in values):
+            return
+        time.sleep(2)
+    raise AssertionError(
+        f"pdf-core running pods did not converge on {_TSA_ENV_VAR}={expected!r} within "
+        f"{timeout_s}s (last seen: {last!r})"
+    )
+
+
 def _pdf_core_log_lines(since_seconds: int) -> str:
     proc = _run(_kubectl_base() + [
         "logs", "-l", "app.kubernetes.io/component=pdf-core,app.kubernetes.io/instance=dcs",
@@ -167,6 +194,7 @@ def step_when_tsa_unavailable(context, ):
         if getattr(context, "pdf_core_tsa_broken", False):
             _set_tsa_env(original)
             _wait_pdf_core_ready()
+            _wait_pdf_core_pod_tsa_env(original)
             context.pdf_core_tsa_broken = False
 
     context.add_cleanup(_restore)
@@ -174,6 +202,7 @@ def step_when_tsa_unavailable(context, ):
     context.tsa_down_since = time.time()
     _set_tsa_env(_UNREACHABLE_TSA_URL)
     _wait_pdf_core_ready()
+    _wait_pdf_core_pod_tsa_env(_UNREACHABLE_TSA_URL)
     context.pdf_core_tsa_broken = True
 
 
@@ -186,6 +215,7 @@ def step_when_tsa_restored(context):
     )
     _set_tsa_env(original)
     _wait_pdf_core_ready()
+    _wait_pdf_core_pod_tsa_env(original)
     context.pdf_core_tsa_broken = False
 
 
@@ -263,9 +293,18 @@ def step_then_no_rfc3161_timestamp(context, name):
 def step_then_pdf_core_logged_bb_fallback(context):
     started = getattr(context, "tsa_down_since", None)
     assert started is not None, "No recorded TSA-down window for this scenario"
-    since_seconds = max(int(time.time() - started) + 30, 30)
-    logs = _pdf_core_log_lines(since_seconds)
-    assert "falling back to PAdES-B-B" in logs, (
+    # The WARN is emitted during signing but can lag in `kubectl logs`; poll.
+    deadline = time.time() + 30
+    since_seconds = 30
+    while True:
+        since_seconds = max(int(time.time() - started) + 30, 30)
+        logs = _pdf_core_log_lines(since_seconds)
+        if "falling back to PAdES-B-B" in logs:
+            return
+        if time.time() >= deadline:
+            break
+        time.sleep(2)
+    assert False, (
         "Expected pdf-core to have logged the WARN documented in "
         "pdf-core/compiler/pades.go ('WARN pades: TSA %s failed, falling back to "
         f"PAdES-B-B (no timestamp): %v') during the TSA-down window, found no such line "
