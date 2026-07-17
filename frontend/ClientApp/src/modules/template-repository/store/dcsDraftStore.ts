@@ -28,7 +28,10 @@ import {
   type OdrlRule,
   type OdrlSet,
 } from '@/models/dcs-jsonld'
-import { toDocumentSemanticValues } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
+import {
+  applyInlineSemanticValues,
+  applyInlineSemanticValuesToSnapshots,
+} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import { getHubContext } from '@/services/semantic-hub-service'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
@@ -612,6 +615,17 @@ interface CanonicalDocumentInput {
 }
 
 function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentData {
+  const isContract = input.documentType === 'dcs:Contract'
+  const submittedValues = input.semanticConditionValues ?? []
+  // A contract carries its submitted values inline on the requirement field
+  // each one targets (dcs:parameterValue) — own fields and composed
+  // sub-template fields alike; a template declares fields with no values.
+  const contractData = isContract
+    ? applyInlineSemanticValues(input.contractData, submittedValues)
+    : input.contractData
+  const subTemplateSnapshots = isContract
+    ? applyInlineSemanticValuesToSnapshots(input.subTemplateSnapshots ?? [], submittedValues)
+    : (input.subTemplateSnapshots ?? [])
   const canonicalBlocks = canonicalizeBlocks(input.blocks)
   const canonicalLayout = canonicalizeLayout(input.layout)
   const commonMetadata = {
@@ -619,8 +633,8 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
     ...(input.name ? { 'dcs:title': input.name } : {}),
     ...(input.description ? { 'dcs:description': input.description } : {}),
     ...(input.customMetaData?.length ? { 'dcs:customMetaData': input.customMetaData } : {}),
-    ...(input.subTemplateSnapshots?.length
-      ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(input.subTemplateSnapshots) }
+    ...(subTemplateSnapshots.length
+      ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(subTemplateSnapshots) }
       : {}),
   }
   const metadata =
@@ -643,26 +657,15 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       'dcs:blocks': { '@list': canonicalBlocks },
       'dcs:layout': canonicalLayout,
     },
-    'dcs:contractData': input.contractData,
+    'dcs:contractData': contractData,
     'dcs:policies': assemblePolicySet(input.policies, input.documentId),
-    ...(input.documentType === 'dcs:Contract'
+    ...(isContract
       ? {
-          semanticConditionValues: toDocumentSemanticValues(
-            input.semanticConditionValues ?? [],
-            declaredRequirements(input),
-          ),
           ...(input.parentContractDid ? { 'dcs:parentContract': { '@id': input.parentContractDid } } : {}),
           ...(input.derivedFromTemplate ? { derivedFromTemplate: input.derivedFromTemplate } : {}),
         }
       : {}),
   }
-}
-
-function declaredRequirements(input: CanonicalDocumentInput): DcsDataRequirement[] {
-  const fromSnapshots = (input.subTemplateSnapshots ?? []).flatMap((snapshot) =>
-    isDcsDocumentData(snapshot.template_data) ? (snapshot.template_data['dcs:contractData'] ?? []) : [],
-  )
-  return [...input.contractData, ...fromSnapshots]
 }
 
 function canonicalizeBlocks(blocks: (DcsBlock | MergedApprovedTemplateBlock)[]): DcsBlock[] {

@@ -105,6 +105,14 @@ export interface DcsRequirementField {
   'dcs:domainField'?: JsonLdReference
   'dcs:valueType'?: string
   'dcs:required': boolean
+  /**
+   * The submitted runtime value, carried inline on the field an ODRL
+   * constraint names as its odrl:leftOperand. Absent on a template (the
+   * declaration), filled at contract time.
+   */
+  'dcs:parameterValue'?: string | number | boolean
+  /** The document block a placeholder bound to this field renders into. */
+  'dcs:blockId'?: string
 }
 
 export interface DcsDataRequirement {
@@ -190,18 +198,7 @@ export interface DcsContractData extends DcsDocumentData {
   'dcs:metadata': DcsContractMetadata | DcsTemplateMetadata
   'dcs:contractFields'?: DcsContractField[]
   'dcs:parentContract'?: JsonLdReference
-  semanticConditionValues?: DcsSemanticConditionValue[]
   derivedFromTemplate?: DcsTemplateProvenance
-}
-
-/**
- * A submitted runtime value; forField references the dcs:RequirementField
- * an ODRL constraint names as its odrl:leftOperand.
- */
-export interface DcsSemanticConditionValue {
-  forField: string
-  blockId?: string
-  parameterValue?: string | number | boolean
 }
 
 /** The source-template node: a prov:wasDerivedFrom edge plus version assertion. */

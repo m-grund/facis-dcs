@@ -100,7 +100,6 @@ func ConvertTemplateDataToContractData(raw *datatype.JSON, templateDID string, t
 		}
 	}
 	templateDataMap["derivedFromTemplate"] = provenance
-	templateDataMap["semanticConditionValues"] = []any{}
 	materializeRuleParties(templateDataMap)
 
 	contractData, err := datatype.NewJSON(templateDataMap)

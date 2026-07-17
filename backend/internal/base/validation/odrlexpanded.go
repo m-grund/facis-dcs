@@ -176,8 +176,10 @@ func expandedODRLPolicyRules(root map[string]any) []map[string]any {
 	return rules
 }
 
-// expandedODRLFieldIndex maps requirement-field @ids to the condition and
-// parameter their values are submitted under.
+// expandedODRLFieldIndex maps requirement-field @ids to the parameter they
+// are submitted under and the value carried inline on the field node
+// (dcs:parameterValue) — the same IRI the ODRL constraint names as its
+// odrl:leftOperand.
 func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 	index := map[string]odrlFieldInfo{}
 	for _, rawReq := range expandedValues(root, dcsNamespace()+"contractData") {
@@ -194,37 +196,29 @@ func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 			if fieldID == "" {
 				continue
 			}
+			value, hasValue := expandedInlineFieldValue(field)
 			index[fieldID] = odrlFieldInfo{
 				parameterName: expandedFirstLiteralString(field, dcsNamespace()+"parameterName"),
+				value:         value,
+				hasValue:      hasValue,
 			}
 		}
 	}
 	return index
 }
 
-// expandedSemanticConditionValue looks up the submitted value whose
-// dcs:forField references the given requirement field.
-func expandedSemanticConditionValue(root map[string]any, fieldIRI string) (any, bool) {
-	for _, rawEntry := range expandedValues(root, dcsNamespace()+"semanticConditionValues") {
-		entry, ok := rawEntry.(map[string]any)
-		if !ok {
-			continue
-		}
-		forField, ok := expandedFirst(entry, dcsNamespace()+"forField")
-		if !ok || expandedID(forField) != fieldIRI {
-			continue
-		}
-		values := expandedValues(entry, dcsNamespace()+"parameterValue")
-		if len(values) == 0 {
-			return nil, false
-		}
-		if len(values) == 1 {
-			value := expandedLiteral(values[0])
-			return value, value != nil
-		}
-		return expandedLiterals(values), true
+// expandedInlineFieldValue reads the value a requirement field carries
+// inline (dcs:parameterValue).
+func expandedInlineFieldValue(field map[string]any) (any, bool) {
+	values := expandedValues(field, dcsNamespace()+"parameterValue")
+	if len(values) == 0 {
+		return nil, false
 	}
-	return nil, false
+	if len(values) == 1 {
+		value := expandedLiteral(values[0])
+		return value, value != nil
+	}
+	return expandedLiterals(values), true
 }
 
 // auditExpandedODRLPolicies evaluates every ODRL rule node against the
@@ -270,12 +264,13 @@ func auditExpandedODRLRule(root map[string]any, rule map[string]any, fieldIndex 
 	}
 	rightOperand := expandedRightOperand(constraint, operator)
 
-	if _, ok := fieldIndex[fieldID]; !ok {
+	fieldInfo, ok := fieldIndex[fieldID]
+	if !ok {
 		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, "dcs:RequirementField")
 		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
 		return []PolicyFinding{finding}
 	}
-	actualValue, hasValue := expandedSemanticConditionValue(root, fieldID)
+	actualValue, hasValue := fieldInfo.value, fieldInfo.hasValue
 
 	isProhibition := policyType == "Prohibition"
 	isPermission := policyType == "Permission"

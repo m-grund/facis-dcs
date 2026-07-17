@@ -98,10 +98,7 @@ export function useContractDataPreprocess() {
       layout,
       contractData: contractData['dcs:contractData'],
       policies: flattenPolicySet(contractData['dcs:policies']),
-      semanticConditionValues: fromDocumentSemanticValues(
-        contractData.semanticConditionValues ?? [],
-        collectDeclaredRequirements(contractData),
-      ),
+      semanticConditionValues: fromDocumentSemanticValues(collectDeclaredRequirements(contractData)),
       subTemplateSnapshots,
       derivedFromTemplate: contractData.derivedFromTemplate,
     }

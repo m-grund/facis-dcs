@@ -7,14 +7,6 @@
     "dcterms": "http://purl.org/dc/terms/",
     "sh": "http://www.w3.org/ns/shacl#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "semanticConditionValues": {
-      "@id": "dcs:semanticConditionValues",
-      "@container": "@set"
-    },
-    "forField": {
-      "@id": "dcs:forField",
-      "@type": "@id"
-    },
     "parameterValue": "dcs:parameterValue",
     "blockId": "dcs:blockId",
     "derivedFromTemplate": {

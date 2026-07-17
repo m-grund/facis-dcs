@@ -73,18 +73,18 @@ dcs:OdrlProhibitionProseShape
     sh:message "An ODRL Prohibition requires dcs:prose referencing the human-readable clause it is backed by." ;
   ] .
 
-dcs:SemanticConditionValueShape
+dcs:RequirementFieldShape
     a sh:NodeShape ;
-    sh:targetObjectsOf dcs:semanticConditionValues ;
+    sh:targetClass dcs:RequirementField ;
     sh:property [
-        sh:path dcs:forField ;
-        sh:nodeKind sh:IRI ;
+        sh:path dcs:parameterName ;
+        sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
-        sh:message "A submitted value must reference the requirement field it is for (dcs:forField)." ;
+        sh:message "A requirement field must declare the parameter it binds (dcs:parameterName)." ;
     ] ;
     sh:property [
         sh:path dcs:parameterValue ;
-        sh:minCount 1 ;
-        sh:message "A submitted value entry must carry dcs:parameterValue." ;
+        sh:maxCount 1 ;
+        sh:message "A requirement field carries at most one inline submitted value (dcs:parameterValue)." ;
     ] .

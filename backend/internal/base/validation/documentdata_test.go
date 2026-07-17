@@ -281,7 +281,6 @@ func TestValidateContractSemanticsAcceptsCanonicalContract(t *testing.T) {
 	require.NoError(t, json.Unmarshal(*raw, &data))
 	data["@type"] = "dcs:Contract"
 	data["dcs:policies"].(map[string]any)["@type"] = "odrl:Agreement"
-	data["semanticConditionValues"] = []any{}
 	contract, err := datatype.NewJSON(data)
 	require.NoError(t, err)
 

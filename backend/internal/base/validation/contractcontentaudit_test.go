@@ -102,15 +102,97 @@ func odrlContract(fieldID, conditionID, parameterName string, policies []any, ac
 				"dcs:conditionId": conditionID,
 				"dcs:fields": []any{
 					map[string]any{
-						"@id":               fieldID,
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": parameterName,
+						"@id":                fieldID,
+						"@type":              "dcs:RequirementField",
+						"dcs:parameterName":  parameterName,
+						"dcs:parameterValue": actualValue,
 					},
 				},
 			},
 		},
-		"dcs:policies":            wrapODRLSet(policies),
-		"semanticConditionValues": []any{map[string]any{"forField": fieldID, "parameterValue": actualValue}},
+		"dcs:policies": wrapODRLSet(policies),
+	}
+}
+
+// setInlineFieldValue sets a submitted value inline on the requirement field
+// with the given @id, wherever it is declared (including composed
+// sub-templates) — the shape the audit reads now that values live on the
+// field rather than a separate semanticConditionValues array.
+func setInlineFieldValue(node any, fieldID string, value any) bool {
+	switch n := node.(type) {
+	case map[string]any:
+		if id, _ := n["@id"].(string); id == fieldID {
+			if _, isField := n["dcs:parameterName"]; isField {
+				n["dcs:parameterValue"] = value
+				return true
+			}
+		}
+		for _, child := range n {
+			if setInlineFieldValue(child, fieldID, value) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range n {
+			if setInlineFieldValue(child, fieldID, value) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// applyInlineFieldValues sets each {forField, parameterValue} entry inline on
+// the field it references.
+func applyInlineFieldValues(contract map[string]any, entries []any) {
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		fieldID, _ := entry["forField"].(string)
+		setInlineFieldValue(contract, fieldID, entry["parameterValue"])
+	}
+}
+
+// deleteInlineFieldValue removes the inline value from the field with the
+// given @id.
+func deleteInlineFieldValue(node any, fieldID string) bool {
+	switch n := node.(type) {
+	case map[string]any:
+		if id, _ := n["@id"].(string); id == fieldID {
+			if _, isField := n["dcs:parameterName"]; isField {
+				delete(n, "dcs:parameterValue")
+				return true
+			}
+		}
+		for _, child := range n {
+			if deleteInlineFieldValue(child, fieldID) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range n {
+			if deleteInlineFieldValue(child, fieldID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// clearInlineFieldValues removes every inline submitted value in the document.
+func clearInlineFieldValues(node any) {
+	switch n := node.(type) {
+	case map[string]any:
+		delete(n, "dcs:parameterValue")
+		for _, child := range n {
+			clearInlineFieldValues(child)
+		}
+	case []any:
+		for _, child := range n {
+			clearInlineFieldValues(child)
+		}
 	}
 }
 
@@ -174,12 +256,12 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 			odrlDuty("FACIS-CONTRACT-STATIC-002", lawFieldID, "odrl:isAnyOf", []any{"DE", "AT", "CH"}),
 			odrlDuty("FACIS-CONTRACT-STATIC-003", paymentFieldID, "odrl:lteq", float64(10000)),
 		}),
-		"semanticConditionValues": []any{
-			map[string]any{"forField": countryFieldID, "parameterValue": "DEU"},
-			map[string]any{"forField": lawFieldID, "parameterValue": "DE"},
-			map[string]any{"forField": paymentFieldID, "parameterValue": float64(9500)},
-		},
 	}
+	applyInlineFieldValues(contract, []any{
+		map[string]any{"forField": countryFieldID, "parameterValue": "DEU"},
+		map[string]any{"forField": lawFieldID, "parameterValue": "DE"},
+		map[string]any{"forField": paymentFieldID, "parameterValue": float64(9500)},
+	})
 
 	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
@@ -235,13 +317,13 @@ func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 		slaRequirement("condition-service", "service.sla.availability", "service.sla.responseTime", "service.sla.resolutionTime"),
 		slaRequirement("condition-signature", "signature.requiredLevel"),
 	)
-	contract["semanticConditionValues"] = append(contract["semanticConditionValues"].([]any),
+	applyInlineFieldValues(contract, []any{
 		map[string]any{"forField": slaFieldID("condition-legal", "contract.jurisdiction"), "parameterValue": "DEU"},
 		map[string]any{"forField": slaFieldID("condition-service", "service.sla.availability"), "parameterValue": 99.95},
 		map[string]any{"forField": slaFieldID("condition-service", "service.sla.responseTime"), "parameterValue": 10},
 		map[string]any{"forField": slaFieldID("condition-service", "service.sla.resolutionTime"), "parameterValue": 120},
 		map[string]any{"forField": slaFieldID("condition-signature", "signature.requiredLevel"), "parameterValue": "AES"},
-	)
+	})
 
 	findings, err := AuditContractContent(context.Background(), contract, nil, ContractContentAuditMetadata{})
 	policy, policyErr := normalizeContractContentPolicy(context.Background(), nil, ContractContentAuditMetadata{})
@@ -384,8 +466,7 @@ func TestAuditContractContentAcceptsCanonicalContractODRLValues(t *testing.T) {
 
 func TestAuditContractContentFlagsCanonicalContractODRLViolation(t *testing.T) {
 	contract := canonicalAuditContract()
-	values := contract["semanticConditionValues"].([]any)
-	values[0].(map[string]any)["parameterValue"] = "USA"
+	setInlineFieldValue(contract, "urn:uuid:field-company-country", "USA")
 
 	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
@@ -395,7 +476,7 @@ func TestAuditContractContentFlagsCanonicalContractODRLViolation(t *testing.T) {
 
 func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testing.T) {
 	contract := canonicalAuditContract()
-	contract["semanticConditionValues"] = []any{}
+	clearInlineFieldValues(contract)
 
 	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
@@ -431,8 +512,7 @@ func TestValidateContractPolicySatisfactionAcceptsSatisfiedEmbeddedODRLPolicies(
 
 func TestValidateContractPolicySatisfactionRejectsEmbeddedODRLViolation(t *testing.T) {
 	contract := canonicalAuditContract()
-	values := contract["semanticConditionValues"].([]any)
-	values[0].(map[string]any)["parameterValue"] = "USA"
+	setInlineFieldValue(contract, "urn:uuid:field-company-country", "USA")
 
 	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
 
@@ -446,7 +526,7 @@ func TestValidateContractPolicySatisfactionRejectsEmbeddedODRLViolation(t *testi
 
 func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLValue(t *testing.T) {
 	contract := canonicalAuditContract()
-	contract["semanticConditionValues"] = []any{}
+	clearInlineFieldValues(contract)
 
 	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
 
@@ -496,8 +576,8 @@ func TestAuditContractContentReadsCanonicalRuntimeValuesByParameterName(t *testi
 
 func TestAuditContractContentShowsPolicyDetailsForMissingRuntimeValue(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
-	values := contract["semanticConditionValues"].([]any)
-	contract["semanticConditionValues"] = values[:len(values)-2]
+	deleteInlineFieldValue(contract, slaFieldID("condition-service", "service.sla.availability"))
+	deleteInlineFieldValue(contract, slaFieldID("condition-legal", "contract.jurisdiction"))
 
 	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
@@ -672,18 +752,22 @@ func canonicalAuditContract() map[string]any {
 				"dcs:schemaVersion": "v1",
 				"dcs:fields": []any{
 					map[string]any{
-						"@id":               countryFieldID,
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": "country",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
-						"dcs:required":      true,
+						"@id":                countryFieldID,
+						"@type":              "dcs:RequirementField",
+						"dcs:parameterName":  "country",
+						"dcs:domainField":    map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
+						"dcs:required":       true,
+						"dcs:blockId":        "urn:uuid:block-clause-1",
+						"dcs:parameterValue": "DEU",
 					},
 					map[string]any{
-						"@id":               postalCodeFieldID,
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": "postalCode",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-postalCode"},
-						"dcs:required":      true,
+						"@id":                postalCodeFieldID,
+						"@type":              "dcs:RequirementField",
+						"dcs:parameterName":  "postalCode",
+						"dcs:domainField":    map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-postalCode"},
+						"dcs:required":       true,
+						"dcs:blockId":        "urn:uuid:block-clause-1",
+						"dcs:parameterValue": "91448",
 					},
 				},
 			},
@@ -696,10 +780,6 @@ func canonicalAuditContract() map[string]any {
 			}),
 			odrlDuty("urn:uuid:policy-postal-code", postalCodeFieldID, "odrl:eq", map[string]any{"@type": "xsd:string", "@value": "91448"}),
 		}),
-		"semanticConditionValues": []any{
-			map[string]any{"blockId": "urn:uuid:block-clause-1", "forField": countryFieldID, "parameterValue": "DEU"},
-			map[string]any{"blockId": "urn:uuid:block-clause-1", "forField": postalCodeFieldID, "parameterValue": "91448"},
-		},
 	}
 }
 
@@ -756,14 +836,14 @@ func canonicalAuditContractWithTemplateParties() map[string]any {
 		slaRequirement("condition-service", "service.sla.availability"),
 		slaRequirement("condition-legal", "contract.jurisdiction"),
 	}
-	contract["semanticConditionValues"] = []any{
+	applyInlineFieldValues(contract, []any{
 		map[string]any{"forField": "urn:uuid:field-condition-customer-legal-name", "parameterValue": "Firma A"},
 		map[string]any{"forField": "urn:uuid:field-condition-customer-country", "parameterValue": "DEU"},
 		map[string]any{"forField": "urn:uuid:field-condition-provider-legal-name", "parameterValue": "Firma B"},
 		map[string]any{"forField": "urn:uuid:field-condition-provider-country", "parameterValue": "DEU"},
 		map[string]any{"forField": slaFieldID("condition-service", "service.sla.availability"), "parameterValue": 99.5},
 		map[string]any{"forField": slaFieldID("condition-legal", "contract.jurisdiction"), "parameterValue": "DEU"},
-	}
+	})
 	return contract
 }
 

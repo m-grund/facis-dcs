@@ -1,12 +1,14 @@
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { DcsContractData, DcsDataRequirement, DcsSemanticConditionValue } from '@/models/dcs-jsonld'
+import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { DcsContractData, DcsDataRequirement, DcsRequirementField } from '@/models/dcs-jsonld'
 
 /**
  * Boundary between the editor's (blockId, conditionId, parameterName)
- * view-model and the canonical document shape, where a submitted value
- * references its dcs:RequirementField by IRI (dcs:forField) — the same IRI
- * the ODRL constraint names as its odrl:leftOperand.
+ * view-model and the canonical document shape, where a submitted value is
+ * carried inline on its dcs:RequirementField (dcs:parameterValue) — the same
+ * field an ODRL constraint names as its odrl:leftOperand. One node holds the
+ * field and its value; there is no separate semanticConditionValues array.
  */
 
 /** The document's declared requirements, including sub-template snapshots'. */
@@ -21,49 +23,75 @@ export function collectDeclaredRequirements(cd: Partial<DcsContractData>): DcsDa
   return requirements
 }
 
-export function toDocumentSemanticValues(
-  values: SemanticConditionValue[],
+/**
+ * Writes each submitted value inline onto the dcs:RequirementField it targets
+ * (matched by conditionId + parameterName), returning new requirement objects.
+ * A field with no submitted value carries no dcs:parameterValue.
+ */
+export function applyInlineSemanticValues(
   requirements: DcsDataRequirement[],
-): DcsSemanticConditionValue[] {
-  return values.map((value) => {
-    const requirement = requirements.find((r) => r['dcs:conditionId'] === value.conditionId)
-    const field = requirement?.['dcs:fields'].find((f) => f['dcs:parameterName'] === value.parameterName)
-    if (!field) {
-      throw new Error(
-        `No requirement field declared for condition "${value.conditionId}" parameter "${value.parameterName}".`,
-      )
-    }
+  values: SemanticConditionValue[],
+): DcsDataRequirement[] {
+  const byField = new Map<string, SemanticConditionValue>()
+  for (const value of values) {
+    byField.set(fieldKey(value.conditionId, value.parameterName), value)
+  }
+  return requirements.map((requirement) => ({
+    ...requirement,
+    'dcs:fields': requirement['dcs:fields'].map((field) => {
+      const value = byField.get(fieldKey(requirement['dcs:conditionId'], field['dcs:parameterName']))
+      const { 'dcs:parameterValue': _value, 'dcs:blockId': _block, ...rest } = field
+      if (!value || value.parameterValue === undefined) {
+        return rest as DcsRequirementField
+      }
+      return {
+        ...rest,
+        'dcs:parameterValue': value.parameterValue,
+        ...(value.blockId ? { 'dcs:blockId': value.blockId } : {}),
+      } as DcsRequirementField
+    }),
+  }))
+}
+
+/**
+ * Applies submitted values inline to each sub-template snapshot's own
+ * requirement fields, returning new snapshots — a value targeting a composed
+ * sub-template's field is carried on that field, wherever it is declared.
+ */
+export function applyInlineSemanticValuesToSnapshots(
+  snapshots: SubTemplateSnapshot[],
+  values: SemanticConditionValue[],
+): SubTemplateSnapshot[] {
+  return snapshots.map((snapshot) => {
+    const template = snapshot.template_data
+    if (!isDcsDocumentData(template)) return snapshot
     return {
-      forField: field['@id'],
-      ...(value.blockId ? { blockId: value.blockId } : {}),
-      ...(value.parameterValue !== undefined ? { parameterValue: value.parameterValue } : {}),
+      ...snapshot,
+      template_data: {
+        ...template,
+        'dcs:contractData': applyInlineSemanticValues(template['dcs:contractData'] ?? [], values),
+      },
     }
   })
 }
 
-export function fromDocumentSemanticValues(
-  values: DcsSemanticConditionValue[],
-  requirements: DcsDataRequirement[],
-): SemanticConditionValue[] {
-  const fieldIndex = new Map<string, { conditionId: string; parameterName: string }>()
+/** The editor view-model reconstructed from the fields' inline values. */
+export function fromDocumentSemanticValues(requirements: DcsDataRequirement[]): SemanticConditionValue[] {
+  const values: SemanticConditionValue[] = []
   for (const requirement of requirements) {
     for (const field of requirement['dcs:fields']) {
-      fieldIndex.set(field['@id'], {
+      if (field['dcs:parameterValue'] === undefined) continue
+      values.push({
+        blockId: field['dcs:blockId'] ?? '',
         conditionId: requirement['dcs:conditionId'],
         parameterName: field['dcs:parameterName'],
+        parameterValue: field['dcs:parameterValue'],
       })
     }
   }
-  return values.map((value) => {
-    const field = fieldIndex.get(value.forField)
-    if (!field) {
-      throw new Error(`Submitted value references undeclared requirement field "${value.forField}".`)
-    }
-    return {
-      blockId: value.blockId ?? '',
-      conditionId: field.conditionId,
-      parameterName: field.parameterName,
-      ...(value.parameterValue !== undefined ? { parameterValue: value.parameterValue } : {}),
-    }
-  })
+  return values
+}
+
+function fieldKey(conditionId: string, parameterName: string): string {
+  return `${conditionId}::${parameterName}`
 }

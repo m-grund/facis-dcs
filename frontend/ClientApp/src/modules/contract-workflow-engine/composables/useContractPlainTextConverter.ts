@@ -258,10 +258,7 @@ export function useContractPlainTextConverter() {
     const blocks = cd['dcs:documentStructure']['dcs:blocks']['@list'] as (DcsBlock | MergedApprovedTemplateBlock)[]
     const layout = cd['dcs:documentStructure']['dcs:layout']
     const conditions = getSemanticConditionsFromTemplateData(cd)
-    const conditionValues = fromDocumentSemanticValues(
-      cd.semanticConditionValues ?? [],
-      collectDeclaredRequirements(cd),
-    )
+    const conditionValues = fromDocumentSemanticValues(collectDeclaredRequirements(cd))
     const subTemplateSnapshots: SubTemplateSnapshot[] = (cd['dcs:metadata']?.['dcs:subTemplates'] ?? []).map((s) => ({
       did: s['@id'],
       version: s['dcs:version'],
