@@ -170,7 +170,12 @@ watch(rule, (value) => emit('update:modelValue', value))
         <span class="label-text text-xs">Toward (target)</span>
         <select v-model="draft.targetId" class="select-bordered select select-sm">
           <option :value="contractTargetId">the contract</option>
-          <option v-for="p in parties" :key="p.id" :value="p.id">{{ p.label }}</option>
+          <optgroup v-if="fields.length" label="Asset (declared object)">
+            <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
+          </optgroup>
+          <optgroup label="Parties">
+            <option v-for="p in parties" :key="p.id" :value="p.id">{{ p.label }}</option>
+          </optgroup>
         </select>
       </label>
     </div>

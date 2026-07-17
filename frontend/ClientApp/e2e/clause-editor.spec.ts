@@ -19,6 +19,7 @@ interface Constraint {
 interface Rule {
   '@type': string
   'odrl:action': Ref
+  'odrl:target': Ref
   'odrl:constraint'?: Constraint[]
 }
 interface TemplateData {
@@ -45,10 +46,13 @@ test('an exhaustive access-grant template lets the Appendix C policy be negotiat
   const editor = page.getByTestId('split-clause-editor')
   await editor.getByPlaceholder('Clause title').fill(clauseTitle)
 
-  // Two hub objects become the negotiated boundaries of the access grant.
+  // Hub objects: the two negotiated boundaries, plus the accessed asset that
+  // the permission targets (Appendix C's ShowtimesAPI). Boundaries are picked
+  // first so their rightSource option indices (1, 2) stay stable.
   const fieldPicker = editor.locator('select').first()
   await fieldPicker.selectOption({ label: 'Company Country' })
   await fieldPicker.selectOption({ label: 'Validity End Date' })
+  await fieldPicker.selectOption({ label: 'Service Description' })
 
   await editor.locator('.clause-editor').first().click()
   await page.keyboard.type('The assignee may access the service within the agreed country until the agreed date.')
@@ -58,6 +62,8 @@ test('an exhaustive access-grant template lets the Appendix C policy be negotiat
   await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
   await ruleSelect('Action').selectOption({ label: 'use' })
   await ruleSelect('Applies to').selectOption({ label: 'The counterparty' })
+  // The target is the accessed asset — a declared object, not the contract.
+  await ruleSelect('Toward').selectOption({ label: 'Service Description' })
 
   // Each context constraint's boundary is one of the negotiated fields
   // (option index 0 is "a fixed value"; 1 and 2 are the two picked fields).
@@ -93,6 +99,10 @@ test('an exhaustive access-grant template lets the Appendix C policy be negotiat
     (r) => r['@type'] === 'odrl:Permission' && r['odrl:action']['@id'] === 'odrl:use',
   )
   expect(permission, 'a Permission to use').toBeTruthy()
+
+  // The permission targets the accessed asset (a declared object), the way
+  // Appendix C targets the ShowtimesAPI — not the contract itself.
+  expect(fieldIds.has(permission!['odrl:target']['@id']), 'target is the declared asset object').toBeTruthy()
 
   const byOperand = new Map((permission!['odrl:constraint'] ?? []).map((c) => [c['odrl:leftOperand']['@id'], c]))
   const spatial = byOperand.get('odrl:spatial')
