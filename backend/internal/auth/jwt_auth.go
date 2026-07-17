@@ -61,10 +61,14 @@ func (a JWTAuthenticator) JWTAuth(ctx context.Context, token string, scheme *sec
 
 	if len(scheme.RequiredScopes) > 0 {
 		if !hasAnyRole(info.Roles, scheme.RequiredScopes) {
-			a.logAttempt(ctx, ip, &info.HolderDID, info.Roles, false)
-			if err := a.checkAndLock(ctx, ip); err != nil {
-				return ctx, err
-			}
+			// A valid credential that lacks the required role is an
+			// authorization decision, not a failed authentication — it must
+			// NOT count toward the invalid-credential lockout (DCS-FR-UC-01-4),
+			// or a single user legitimately switching roles from one IP would
+			// lock themselves out. Recorded as an authenticated access event
+			// for the audit trail, not as a failed attempt.
+			a.logAttempt(ctx, ip, &info.HolderDID, info.Roles, true)
+			a.clearLock(ctx, ip)
 			return ctx, goa.PermanentError("forbidden", "insufficient permissions: requires one of %v", scheme.RequiredScopes)
 		}
 	}
