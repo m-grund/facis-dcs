@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	semantichubgen "digital-contracting-service/gen/semantic_hub"
 	"digital-contracting-service/internal/auth"
@@ -16,6 +20,52 @@ import (
 
 	"github.com/jmoiron/sqlx"
 )
+
+const maxSchemaFetchBytes = 8 << 20 // 8 MiB
+
+// fetchSchemaFromURL retrieves a schema document over http(s), following
+// redirects (Gaia-X and other canonical schemas sit behind w3id/purl
+// redirects). It is register-only and RBAC-gated (Template Manager); it bounds
+// the scheme, response size, and time. The caller snapshots the bytes as an
+// immutable version.
+func fetchSchemaFromURL(ctx context.Context, rawURL string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", fmt.Errorf("invalid source_url: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("source_url must be http or https, got %q", parsed.Scheme)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "text/turtle, application/ld+json, application/rdf+xml, application/json, */*")
+
+	// http.Client follows up to 10 redirects by default.
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch %s: %w", parsed.Redacted(), err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("fetch %s: HTTP %d", parsed.Redacted(), resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSchemaFetchBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", parsed.Redacted(), err)
+	}
+	if len(body) > maxSchemaFetchBytes {
+		return "", fmt.Errorf("fetched schema exceeds %d bytes", maxSchemaFetchBytes)
+	}
+	if len(body) == 0 {
+		return "", fmt.Errorf("fetched schema from %s is empty", parsed.Redacted())
+	}
+	return string(body), nil
+}
 
 // SemanticHub service implementation (DCS-FR-TR-03, UC-02-08).
 type semanticHubsrvc struct {
@@ -36,6 +86,22 @@ func (s *semanticHubsrvc) Register(ctx context.Context, p *semantichubgen.Regist
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	content := ""
+	if p.Content != nil {
+		content = *p.Content
+	}
+	// A schema may be given inline or fetched from a URL (Gaia-X and other
+	// canonical schemas live behind w3id/purl redirects). The fetched bytes are
+	// snapshotted as the version — never a live reference — so version pinning
+	// (DCS-FR-TR-03, ADR-8) still holds.
+	if strings.TrimSpace(content) == "" && p.SourceURL != nil && strings.TrimSpace(*p.SourceURL) != "" {
+		fetched, err := fetchSchemaFromURL(ctx, *p.SourceURL)
+		if err != nil {
+			return nil, semantichubgen.MakeBadRequest(err)
+		}
+		content = fetched
+	}
+
 	if p.Kind == "context" {
 		// A context version must at least parse as a JSON-LD document with
 		// an @context object — a broken active context would break every
@@ -43,13 +109,13 @@ func (s *semanticHubsrvc) Register(ctx context.Context, p *semantichubgen.Regist
 		var doc struct {
 			Context map[string]any `json:"@context"`
 		}
-		if err := json.Unmarshal([]byte(p.Content), &doc); err != nil || len(doc.Context) == 0 {
+		if err := json.Unmarshal([]byte(content), &doc); err != nil || len(doc.Context) == 0 {
 			return nil, semantichubgen.MakeBadRequest(
 				fmt.Errorf("context schema content must be a JSON-LD document with a non-empty @context object"))
 		}
 	}
-	if strings.TrimSpace(p.Content) == "" {
-		return nil, semantichubgen.MakeBadRequest(errors.New("schema content must not be empty"))
+	if strings.TrimSpace(content) == "" {
+		return nil, semantichubgen.MakeBadRequest(errors.New("schema content must not be empty (provide content or source_url)"))
 	}
 
 	tx, err := s.DB.BeginTxx(ctx, nil)
@@ -59,7 +125,7 @@ func (s *semanticHubsrvc) Register(ctx context.Context, p *semantichubgen.Regist
 	defer func() { _ = tx.Rollback() }()
 
 	activate := p.Activate != nil && *p.Activate
-	version, err := s.Repo.Register(ctx, tx, p.Name, p.Kind, p.MediaType, p.Content, middleware.GetParticipantID(ctx), activate)
+	version, err := s.Repo.Register(ctx, tx, p.Name, p.Kind, p.MediaType, content, middleware.GetParticipantID(ctx), activate)
 	if err != nil {
 		return nil, semantichubgen.MakeInternalError(err)
 	}

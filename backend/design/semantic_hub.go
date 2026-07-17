@@ -87,9 +87,10 @@ var _ = Service("SemanticHub", func() {
 				Enum("context", "shapes", "profile", "ontology")
 			})
 			Attribute("media_type", String, "Media type of the content")
-			Attribute("content", String, "The schema document, verbatim")
+			Attribute("content", String, "The schema document, verbatim (omit when source_url is given)")
+			Attribute("source_url", String, "Fetch the schema from this URL (http/https, follows redirects) instead of inline content; the fetched bytes are snapshotted as the new immutable version")
 			Attribute("activate", Boolean, "Make the new version active immediately")
-			Required("name", "kind", "media_type", "content")
+			Required("name", "kind", "media_type")
 		})
 		Result(SemanticSchemaRegisterResponse)
 
