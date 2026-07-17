@@ -654,11 +654,21 @@ func sealAgreementForSigning(raw datatype.JSON, responsible *db.Responsible, sig
 		policies["@type"] = "odrl:Agreement"
 	}
 
+	// The offeror is the contracting party (ODRL §4.3.7 — "the Party who is
+	// offering the contract"); the accepting counterparty is the contracted
+	// party (§4.3.8). Both are signatories.
+	if responsible != nil && responsible.Creator != "" {
+		if node := partyNodeByID(doc, responsible.Creator); node != nil {
+			node["odrl:function"] = map[string]any{"@id": "odrl:contractingParty"}
+		}
+	}
+
 	if placeholder := singleOpenPartyPlaceholder(doc); placeholder != "" {
 		counterparty := counterpartyIdentity(responsible, signerDID)
 		replaceNodeIRI(doc, placeholder, counterparty)
 		if node := partyNodeByID(doc, counterparty); node != nil {
 			node["dcs:hasSignatory"] = map[string]any{"@id": signerDID}
+			node["odrl:function"] = map[string]any{"@id": "odrl:contractedParty"}
 		}
 	}
 
