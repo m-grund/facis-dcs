@@ -350,13 +350,18 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     // contract's IPFS trail — far slower and unnecessary here).
     await page.getByLabel('DID (optional)').fill(contractDid)
     await page.getByLabel('Audit justification').fill('Full-vertical E2E audit')
-    const audited = page.waitForResponse(
-      (r) => r.url().includes('/pac/audit') && r.request().method() === 'POST',
-      { timeout: 90_000 },
-    )
-    await page.getByRole('button', { name: 'Execute Audit' }).click()
-    const auditResp = await audited
-    expect(auditResp.ok(), `audit ${auditResp.status()}: ${await auditResp.text()}`).toBeTruthy()
+    // The audit reads the contract's lifecycle trail from IPFS; right after a
+    // fresh sign+export the document manager can briefly lag before the trail
+    // is retrievable, so retry the run until it comes back ok.
+    await expect(async () => {
+      const audited = page.waitForResponse(
+        (r) => r.url().includes('/pac/audit') && r.request().method() === 'POST',
+        { timeout: 90_000 },
+      )
+      await page.getByRole('button', { name: 'Execute Audit' }).click()
+      const auditResp = await audited
+      expect(auditResp.ok(), `audit ${auditResp.status()}: ${await auditResp.text()}`).toBeTruthy()
+    }).toPass({ timeout: 150_000, intervals: [5_000, 10_000, 20_000] })
     // The freshly signed contract's lifecycle events are in the audit trail.
     await expect(page.getByRole('cell', { name: contractDid }).first()).toBeVisible({ timeout: 60_000 })
   })
