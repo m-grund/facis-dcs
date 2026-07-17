@@ -106,18 +106,28 @@ spec:
               mountPath: /tmp
             - name: filestore
               mountPath: /var/lib/fc-service/filestore
+          # Spring + Neo4j cold boot can exceed 5 minutes on I/O-constrained
+          # nodes; the startup probe gates liveness so a slow boot is not
+          # killed into a crashloop.
+          startupProbe:
+            httpGet:
+              path: {{ .Values.route.path | default "" }}/actuator/health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 80
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: {{ .Values.route.path | default "" }}/actuator/health
               port: http
-            initialDelaySeconds: 240
             periodSeconds: 30
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: {{ .Values.route.path | default "" }}/actuator/health
               port: http
-            initialDelaySeconds: 90
             periodSeconds: 10
+            timeoutSeconds: 5
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:

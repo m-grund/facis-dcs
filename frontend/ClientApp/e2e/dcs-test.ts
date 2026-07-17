@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test as base } from '@playwright/test'
-import { E2E_API_BASE } from '../playwright.config'
+import { E2E_API_BASE, E2E_STATUSLIST_URL } from '../playwright.config'
 
 type DcsRole =
   | 'Template Creator'
@@ -64,7 +64,7 @@ print(json.dumps({"token": access_token, "cookies": [
     timeout: 120_000,
     env: {
       ...process.env,
-      STATUSLIST_SERVICE_URL: `${new URL(E2E_API_BASE).origin}/statuslist`,
+      STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL,
       BDD_DCS_BASE_URL: E2E_API_BASE,
     },
   })

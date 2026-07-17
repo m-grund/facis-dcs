@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { E2E_API_BASE } from '../playwright.config'
+import { E2E_API_BASE, E2E_STATUSLIST_URL } from '../playwright.config'
 
 /**
  * Seeds the shared E2E fixtures (an approved template and a draft contract
@@ -24,7 +24,7 @@ export default function globalSetup(): void {
     timeout: 180_000,
     env: {
       ...process.env,
-      STATUSLIST_SERVICE_URL: `${new URL(E2E_API_BASE).origin}/statuslist`,
+      STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL,
       BDD_DCS_BASE_URL: E2E_API_BASE,
     },
   })
