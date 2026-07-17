@@ -4,7 +4,10 @@ import { computed, nextTick, onMounted, onUnmounted, type Ref, ref, useTemplateR
 import { useRoute } from 'vue-router'
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
 import NegotiationList from '@/components/lists/contract/negotiation/NegotiationList.vue'
+import { useDocumentExport } from '@/composables/useDocumentExport'
+import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
 import { useScrollStore } from '@/core/store/scroll'
+import { contractStory, toBannerActions } from '@/core/workflow-story'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import ContractHistoryDiffView from '@/modules/contract-workflow-engine/components/ContractHistoryDiffView.vue'
@@ -70,6 +73,8 @@ const isAuditingAuthorized = computed(
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
+const story = computed(() => contractStory(contract.value?.state))
+
 const verificationResult = computed(() => {
   const subTemplateSemanticConditions = dcsDraftStore.subTemplateSnapshots.map((subTemplate) => ({
     templateId: subTemplate.did,
@@ -126,7 +131,9 @@ const semanticConditionValuesEqual = (a: SemanticConditionValue[], b: SemanticCo
 function buildCurrentContractData(): ContractData | undefined {
   if (!contract.value) return undefined
   return buildContractDocument({
-    documentId: ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ?? contract.value.did,
+    documentId:
+      ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ??
+      contract.value.did,
     name: editedContract.value?.name ?? contract.value.name,
     description: editedContract.value?.description ?? contract.value.description,
     blocks: dcsDraftStore.blocks,
@@ -397,18 +404,12 @@ const hasActiveNegotiations = computed(() => {
   )
 })
 
-const exportPDF = async () => {
-  if (contract?.value?.did === null || contract?.value?.did === undefined) {
-    return
-  }
+const { download: downloadExport, exporting } = useDocumentExport()
 
-  const blob = await contractWorkflowService.exportPdf(contract?.value?.did)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `contract-${contract?.value?.did}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+const exportPDF = async () => {
+  const did = contract?.value?.did
+  if (!did) return
+  await downloadExport(() => contractWorkflowService.exportPdf(did), `contract-${did}.pdf`)
 }
 </script>
 
@@ -438,6 +439,13 @@ const exportPDF = async () => {
         <div class="mt-5 grow">
           <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
+              <WorkflowStageBanner
+                :steps="story.steps"
+                :current-key="story.currentKey"
+                :headline="story.headline"
+                :narrative="story.narrative"
+                :actions="toBannerActions(story.actionHints)"
+              />
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor
                   :contract="shownData"
@@ -502,7 +510,7 @@ const exportPDF = async () => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <button class="btn btn-outline md:w-32" :disabled="exporting" @click="exportPDF">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.negotiation"
           class="btn flex-1 btn-primary"

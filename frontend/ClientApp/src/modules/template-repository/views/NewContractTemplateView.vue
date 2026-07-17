@@ -7,6 +7,8 @@ import { useTemplateEditorUiStore } from '@template-repository/store/templateEdi
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
+import { templateStory, toBannerActions } from '@/core/workflow-story'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { TemplateState } from '@/types/contract-template-state'
@@ -16,7 +18,7 @@ const route = useRoute()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useDcsDraftStore()
-const { templateType } = storeToRefs(draftStore)
+const { state, templateType } = storeToRefs(draftStore)
 
 const isEditMode = computed(() => !!route.params.did)
 const hasChosenType = ref(false)
@@ -24,6 +26,8 @@ const showTypeSelectionOnly = computed(() => !isEditMode.value && !hasChosenType
 const title = computed(() => (isEditMode.value ? 'Update Template' : 'Create Template'))
 
 const { isManager } = useTemplatePermissions()
+
+const story = computed(() => templateStory(state.value, { isEditableView: true, templateType: templateType.value }))
 
 function onTemplateTypeChosen(value: typeof templateType.value) {
   draftStore.reset({ templateType: value })
@@ -125,7 +129,18 @@ const submit = async () => {
       </div>
     </div>
     <template v-else>
-      <TemplateEditors :title="title" />
+      <TemplateEditors :title="title">
+        <template #before-tabs>
+          <WorkflowStageBanner
+            v-if="isEditMode && state"
+            :steps="story.steps"
+            :current-key="story.currentKey"
+            :headline="story.headline"
+            :narrative="story.narrative"
+            :actions="toBannerActions(story.actionHints)"
+          />
+        </template>
+      </TemplateEditors>
 
       <!-- Pinned Footer -->
       <div

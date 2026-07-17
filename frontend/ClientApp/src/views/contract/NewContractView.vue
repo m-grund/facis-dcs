@@ -10,7 +10,9 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
+import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
 import { useScrollStore } from '@/core/store/scroll'
+import { contractStory, toBannerActions } from '@/core/workflow-story'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import {
@@ -78,10 +80,14 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
+const story = computed(() => contractStory(contract.value?.state))
+
 function buildCurrentContractData(): ContractData | undefined {
   if (!contract.value) return undefined
   return buildContractDocument({
-    documentId: ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ?? contract.value.did,
+    documentId:
+      ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ??
+      contract.value.did,
     name: contract.value.name,
     description: contract.value.description,
     blocks: dcsDraftStore.blocks,
@@ -408,6 +414,13 @@ onBeforeRouteLeave(() => {
         <div class="mt-5 grow">
           <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
+              <WorkflowStageBanner
+                :steps="story.steps"
+                :current-key="story.currentKey"
+                :headline="story.headline"
+                :narrative="story.narrative"
+                :actions="toBannerActions(story.actionHints)"
+              />
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" />
               </div>
