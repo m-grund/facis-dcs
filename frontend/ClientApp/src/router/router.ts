@@ -5,6 +5,7 @@ import {
   DocumentTextIcon,
   EyeIcon,
   PencilSquareIcon,
+  Square3Stack3DIcon,
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
@@ -215,7 +216,7 @@ const routes: RouteRecordRaw[] = [
     component: TemplateCatalogueListView,
     meta: {
       name: 'Template Catalogue',
-      icon: DocumentTextIcon,
+      icon: Square3Stack3DIcon,
       requiresAuth: true,
       title: 'DCS - Template Catalogue',
       order: 4,
@@ -244,7 +245,7 @@ const routes: RouteRecordRaw[] = [
       icon: ClipboardDocumentListIcon,
       requiresAuth: true,
       title: 'DCS - Audit',
-      order: 5,
+      order: 6,
       roles: ['AUDITOR'],
     },
   },

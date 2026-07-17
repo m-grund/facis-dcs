@@ -116,6 +116,8 @@ function onFilterSelect(label: FilterLabelValue) {
   selectedFilter.value = label
   filterPopover.value?.hidePopover()
 }
+
+const showInitialFocus = ref(true)
 </script>
 
 <template>
@@ -124,7 +126,7 @@ function onFilterSelect(label: FilterLabelValue) {
       <button
         id="list-btn-search"
         type="button"
-        class="select w-full rounded-t-md rounded-b-none select-secondary sm:rounded-l-md sm:rounded-tr-none"
+        class="select-button btn w-full cursor-default rounded-t-md rounded-b-none border-secondary btn-outline-default sm:rounded-l-md sm:rounded-tr-none"
         popovertarget="list-popover-search"
         aria-haspopup="listbox"
         :aria-expanded="filterPopover?.matches(':popover-open')"
@@ -136,17 +138,29 @@ function onFilterSelect(label: FilterLabelValue) {
       <ul
         id="list-popover-search"
         ref="filter-popover"
-        class="menu dropdown dropdown-start w-52 rounded-box bg-base-300 shadow-sm"
+        class="menu dropdown dropdown-start mt-2 w-52 rounded-box bg-base-300 shadow-sm"
         popover
         role="listbox"
         :aria-label="'Select search filter'"
+        @toggle="(event) => (event.newState === 'closed' ? (showInitialFocus = true) : null)"
       >
         <li role="option" aria-selected="false" class="menu-title">
           <span class="menu-disabled pointer-events-none text-base-content/70 select-none">Select search filter</span>
         </li>
-        <template v-for="[key, label] in Object.entries(filterLabels)" :key="key">
+        <template v-for="([key, label], index) in Object.entries(filterLabels)" :key="key">
           <li role="option" :aria-selected="label === selectedFilter">
-            <a :class="{ 'bg-primary text-primary-content': label === selectedFilter }" @click="onFilterSelect(label)">
+            <a
+              tabindex="0"
+              :autofocus="index === 0"
+              :class="{
+                'bg-primary text-primary-content': label === selectedFilter,
+                'menu-focus': index === 0 && showInitialFocus,
+              }"
+              @blur="index === 0 ? (showInitialFocus = false) : null"
+              @click="onFilterSelect(label)"
+              @keydown.enter="onFilterSelect(label)"
+              @keydown.space.prevent="onFilterSelect(label)"
+            >
               {{ label }}
             </a>
           </li>

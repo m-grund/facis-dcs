@@ -506,7 +506,7 @@ function formatDateTime(value?: string): string {
 </script>
 
 <template>
-  <div class="mb-4 flex justify-between p-4">
+  <div class="mb-4 flex justify-between border-b border-base-content/10 bg-base-100 p-4">
     <h2 class="text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight">
       {{ $route.meta.name }}
     </h2>
