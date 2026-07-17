@@ -1,37 +1,29 @@
 import { Parser, type Quad } from 'n3'
 import type {
   DomainFieldDefinition,
-  SemanticEntityRole,
-  SemanticEntityType,
   SemanticParameterType,
   SemanticValueConstraint,
   SemanticValueOption,
 } from '@/modules/template-repository/models/contract-template'
 
 /**
- * The SLA domain-field catalog (dcs:DomainField/dcs:ValueConstraint
- * individuals plus taxonomy value options) driving the semantic-condition
- * builder. Fetched at startup from the Semantic Hub's registered
- * "facis-sla" ontology — registering a new version in the hub changes what
- * the builder offers, no rebuild involved — and parsed with N3.
+ * The builder's pickable domain-field vocabulary, discovered at startup from
+ * every schema the Semantic Hub holds — each registered ontology's
+ * dcs:DomainField individuals and each registered shapes graph's property
+ * shapes — and parsed with N3. Registering a schema in the hub (a new ontology
+ * version, an imported Gaia-X profile) changes what the builder offers with no
+ * rebuild and no hardcoded schema name.
  */
 
-export interface OntologySelectOption<TValue extends string = string> {
-  value: TValue
-  label: string
-}
-
-export interface OntologyEntityTypeOption extends OntologySelectOption<SemanticEntityType> {
-  roleRequired: boolean
-}
-
-const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
-const RDF_PROPERTY = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property'
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+const RDF_TYPE = `${RDF}type`
+const RDF_NIL = `${RDF}nil`
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#'
 const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class'
 const SKOS = 'http://www.w3.org/2004/02/skos/core#'
 const XSD = 'http://www.w3.org/2001/XMLSchema#'
 const DCS = 'https://w3id.org/facis/dcs/ontology/v1#'
+const SH = 'http://www.w3.org/ns/shacl#'
 
 class OntologyGraph {
   private bySubject = new Map<string, Quad[]>()
@@ -77,16 +69,40 @@ class OntologyGraph {
   }
 }
 
-async function loadOntologyGraph(): Promise<OntologyGraph> {
-  // Raw fetch, deliberately not the app's http client: this module loads at
-  // import time (top-level await below), before Pinia exists — and the http
-  // client's auth interceptor needs an active Pinia. The hub's resolve
-  // routes are public.
-  const response = await fetch('/api/semantic/ontology/facis-sla', { headers: { Accept: 'application/json' } })
+interface SchemaListEntry {
+  name: string
+  kind: string
+}
+
+// Raw fetch, deliberately not the app's http client: this module loads at
+// import time (top-level await below), before Pinia exists — and the http
+// client's auth interceptor needs an active Pinia. The hub's resolve and
+// list routes are public.
+async function fetchJson<T>(route: string): Promise<T> {
+  const response = await fetch(route, { headers: { Accept: 'application/json' } })
   if (!response.ok) {
-    throw new Error(`Semantic Hub ontology facis-sla is unavailable: HTTP ${response.status}`)
+    throw new Error(`Semantic Hub route ${route} is unavailable: HTTP ${response.status}`)
   }
-  const body = (await response.json()) as { content: string }
+  return (await response.json()) as T
+}
+
+/** The hub route serving a registered schema's content, by kind. */
+function schemaContentRoute(kind: string, name: string): string | null {
+  const encoded = encodeURIComponent(name)
+  switch (kind) {
+    case 'ontology':
+      return `/api/semantic/ontology/${encoded}`
+    case 'shapes':
+      return `/api/semantic/shapes/${encoded}`
+    default:
+      return null
+  }
+}
+
+async function loadSchemaGraph(kind: string, name: string): Promise<OntologyGraph> {
+  const route = schemaContentRoute(kind, name)
+  if (!route) throw new Error(`No content route for schema kind ${kind}`)
+  const body = await fetchJson<{ content: string }>(route)
   return new OntologyGraph(new Parser().parse(body.content))
 }
 
@@ -204,51 +220,108 @@ function parseOntologyDomainFields(graph: OntologyGraph): DomainFieldDefinition[
     .sort((left, right) => left.ontologyId.localeCompare(right.ontologyId))
 }
 
-function parseOntologyEntityRoles(graph: OntologyGraph): OntologySelectOption<SemanticEntityRole>[] {
-  const constraints = parseValueConstraints(graph)
-  const allowedValues = graph
-    .subjectsOfType(RDF_PROPERTY)
-    .filter((subject) => localName(graph.first(subject, `${RDFS}range`)).endsWith('RoleCode'))
-    .map((subject) => graph.first(subject, `${DCS}hasValueConstraint`))
-    .filter(Boolean)
-    .flatMap((ref) => constraints.get(ref)?.allowedValues ?? [])
-
-  return allowedValues
-    .map((value) => ({ value: value, label: formatOntologyLabel(value) }))
-    .sort((left, right) => left.label.localeCompare(right.label))
+/** Reads an RDF collection (rdf:first/rdf:rest) into its member IRIs/literals. */
+function readRdfList(graph: OntologyGraph, head: string): string[] {
+  const members: string[] = []
+  let node = head
+  const guard = new Set<string>()
+  while (node && node !== RDF_NIL && !guard.has(node)) {
+    guard.add(node)
+    const first = graph.first(node, `${RDF}first`)
+    if (first) members.push(first)
+    node = graph.first(node, `${RDF}rest`)
+  }
+  return members
 }
 
-function parseOntologyEntityTypes(graph: OntologyGraph): OntologyEntityTypeOption[] {
-  const domainClassIRIs = new Set(
-    graph
-      .subjectsOfType(`${DCS}DomainField`)
-      .map((subject) => graph.first(subject, `${RDFS}domain`))
-      .filter(Boolean),
-  )
-  // Document-level entity classes (the ranges of properties carried by the
-  // document itself, e.g. dcs:party → dcs:CompanyParty) represent parties
-  // and require a contract role on their requirements.
-  const roleRequiredIRIs = new Set(
-    graph
-      .subjects()
-      .filter((subject) => graph.first(subject, `${DCS}documentProperty`) !== '')
-      .map((subject) => graph.first(subject, `${RDFS}range`))
-      .filter((iri) => domainClassIRIs.has(iri)),
-  )
-  const rolesExist = parseOntologyEntityRoles(graph).length > 0
+/**
+ * Extracts pickable fields from a SHACL shapes graph: every property shape
+ * (a node carrying sh:path) becomes a field, so any registered shapes schema
+ * — the DCS clause catalog, an imported Gaia-X profile — surfaces in the
+ * builder. sh:in enumerations become enum value constraints; sh:datatype maps
+ * to the parameter type; the owning node shape's sh:targetClass groups it.
+ */
+function parseShapesDomainFields(graph: OntologyGraph): DomainFieldDefinition[] {
+  const targetClassByPropShape = new Map<string, string>()
+  for (const nodeShape of graph.subjectsOfType(`${SH}NodeShape`)) {
+    const targetClass = graph.first(nodeShape, `${SH}targetClass`)
+    if (!targetClass) continue
+    for (const propShape of graph.values(nodeShape, `${SH}property`)) {
+      targetClassByPropShape.set(propShape, targetClass)
+    }
+  }
 
-  return [...domainClassIRIs]
-    .map((iri) => ({
-      value: localName(iri),
-      label: graph.first(iri, `${RDFS}label`) || localName(iri),
-      roleRequired: rolesExist && roleRequiredIRIs.has(iri),
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label))
+  const fields: DomainFieldDefinition[] = []
+  const seenPaths = new Set<string>()
+  for (const subject of graph.subjects()) {
+    const path = graph.first(subject, `${SH}path`)
+    if (!path || seenPaths.has(path)) continue
+    seenPaths.add(path)
+
+    const allowedValues = readRdfList(graph, graph.first(subject, `${SH}in`)).filter(Boolean)
+    const datatype = graph.first(subject, `${SH}datatype`)
+    const label =
+      graph.first(subject, `${SH}name`) || graph.first(subject, `${RDFS}label`) || formatOntologyLabel(localName(path))
+    const domain = targetClassByPropShape.get(subject)
+    const pattern = graph.first(subject, `${SH}pattern`) || undefined
+    const min = graph.firstNumber(subject, `${SH}minInclusive`)
+    const max = graph.firstNumber(subject, `${SH}maxInclusive`)
+    const hasConstraint = allowedValues.length > 0 || pattern !== undefined || min !== undefined || max !== undefined
+    fields.push({
+      ontologyId: path,
+      parameterName: parameterNameFor(path),
+      type: allowedValues.length ? 'enum' : parameterTypeForRange(datatype),
+      label,
+      domain,
+      domainLabel: domain ? graph.first(domain, `${RDFS}label`) || localName(domain) : undefined,
+      valueConstraint: hasConstraint
+        ? {
+            pattern,
+            min,
+            max,
+            allowedValues: allowedValues.length ? allowedValues : undefined,
+            valueOptions: allowedValues.map((value) => ({ value })),
+          }
+        : undefined,
+    })
+  }
+  return fields
 }
 
-const graph = await loadOntologyGraph()
+/**
+ * The builder's pickable vocabulary, discovered from the whole Semantic Hub:
+ * every registered ontology contributes its dcs:DomainField individuals and
+ * every registered shapes graph its property shapes. Registering a schema in
+ * the hub — including an imported Gaia-X profile — makes its objects
+ * immediately pickable, with no hardcoded schema name.
+ */
+async function loadHubDomainFields(): Promise<DomainFieldDefinition[]> {
+  const inventory = await fetchJson<SchemaListEntry[]>('/api/semantic/schema/list')
+  const sources = inventory.filter((entry) => entry.kind === 'ontology' || entry.kind === 'shapes')
 
-export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = parseOntologyDomainFields(graph)
-export const ONTOLOGY_ENTITY_TYPES: readonly OntologyEntityTypeOption[] = parseOntologyEntityTypes(graph)
-export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
-  parseOntologyEntityRoles(graph)
+  const perSource = await Promise.all(
+    sources.map(async (entry) => {
+      try {
+        const graph = await loadSchemaGraph(entry.kind, entry.name)
+        const fields = entry.kind === 'ontology' ? parseOntologyDomainFields(graph) : parseShapesDomainFields(graph)
+        return fields.map((field) => ({ ...field, source: { name: entry.name, kind: entry.kind } }))
+      } catch {
+        // A single malformed schema must not blank the whole picker.
+        return [] as DomainFieldDefinition[]
+      }
+    }),
+  )
+
+  // Dedupe by field IRI (kept from the first schema that declares it), then
+  // order by source name so the picker groups predictably.
+  const byId = new Map<string, DomainFieldDefinition>()
+  for (const field of perSource.flat()) {
+    if (!byId.has(field.ontologyId)) byId.set(field.ontologyId, field)
+  }
+  return [...byId.values()].sort(
+    (left, right) =>
+      (left.source?.name ?? '').localeCompare(right.source?.name ?? '') || left.label.localeCompare(right.label),
+  )
+}
+
+export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = await loadHubDomainFields()

@@ -38,6 +38,19 @@ function addField() {
   clauseFields.value.push({ id: `urn:uuid:${crypto.randomUUID()}`, field })
 }
 
+// Fields grouped by the hub schema they came from, so an imported schema
+// (e.g. Gaia-X) shows as its own group in the picker.
+const fieldGroups = computed(() => {
+  const groups = new Map<string, DomainFieldDefinition[]>()
+  for (const field of ONTOLOGY_DOMAIN_FIELDS) {
+    const key = field.source?.name ?? 'Semantic Hub'
+    const group = groups.get(key)
+    if (group) group.push(field)
+    else groups.set(key, [field])
+  }
+  return [...groups.entries()].map(([name, fields]) => ({ name, fields }))
+})
+
 function removeField(id: string) {
   clauseFields.value = clauseFields.value.filter((cf) => cf.id !== id)
 }
@@ -94,7 +107,9 @@ function save() {
       <span class="text-xs text-base-content/60">Data fields (Semantic Hub):</span>
       <select v-model="fieldToAdd" class="select-bordered select select-xs" @change="addField">
         <option value="">+ add field…</option>
-        <option v-for="f in ONTOLOGY_DOMAIN_FIELDS" :key="f.ontologyId" :value="f.ontologyId">{{ f.label }}</option>
+        <optgroup v-for="group in fieldGroups" :key="group.name" :label="group.name">
+          <option v-for="f in group.fields" :key="f.ontologyId" :value="f.ontologyId">{{ f.label }}</option>
+        </optgroup>
       </select>
       <span v-for="cf in clauseFields" :key="cf.id" class="badge gap-1 badge-outline badge-sm">
         {{ cf.field.label }}
