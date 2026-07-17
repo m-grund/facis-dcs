@@ -3,13 +3,17 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { test as base } from '@playwright/test'
+import { type BrowserContext, type Page, test as base } from '@playwright/test'
 import { E2E_API_BASE, E2E_STATUSLIST_URL } from '../playwright.config'
 
-type DcsRole =
+export type DcsRole =
   | 'Template Creator'
+  | 'Template Reviewer'
+  | 'Template Approver'
   | 'Template Manager'
   | 'Contract Creator'
+  | 'Contract Reviewer'
+  | 'Contract Approver'
   | 'Contract Manager'
   | 'Contract Signer'
   | 'Auditor'
@@ -33,10 +37,11 @@ interface RoleSession {
   cookies: { name: string; value: string; domain: string; path: string }[]
 }
 
-/** Mints a FRESH OID4VP session for the role — Hydra rotates refresh tokens
- *  (single use), so sessions cannot be shared across tests: the app's router
- *  guard consumes one refresh per navigation chain. */
-function mintSession(role: DcsRole): RoleSession {
+/** Mints a FRESH OID4VP session for the role against the given instance's
+ *  API base — Hydra rotates refresh tokens (single use), so sessions cannot
+ *  be shared across tests. `apiBase` selects the instance (A or the DCS-to-DCS
+ *  peer B); the status-list service is shared at the localhost origin. */
+export function mintSession(role: DcsRole, apiBase: string = E2E_API_BASE): RoleSession {
   const repoRoot = path.resolve(here, '..', '..', '..')
   const python = process.env.E2E_BDD_PYTHON || path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
   const script = `
@@ -60,17 +65,42 @@ print(json.dumps({"token": access_token, "cookies": [
     {"name": c.name, "value": c.value, "domain": c.domain, "path": c.path or "/"} for c in session.cookies
 ]}))
 `
-  const stdout = execFileSync(python, ['-c', script, role, E2E_API_BASE], {
+  const stdout = execFileSync(python, ['-c', script, role, apiBase], {
     cwd: repoRoot,
     encoding: 'utf-8',
     timeout: 120_000,
     env: {
       ...process.env,
       STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL,
-      BDD_DCS_BASE_URL: E2E_API_BASE,
+      BDD_DCS_BASE_URL: apiBase,
     },
   })
   return JSON.parse(stdout.trim().split('\n').pop() ?? '{}')
+}
+
+/** Injects a minted session into a page's browser context: cookies on the
+ *  dev origin plus the access token in localStorage. Used directly by the
+ *  two-instance test for instance B's own page/context. */
+export async function applySession(
+  context: BrowserContext,
+  page: Page,
+  originURL: string,
+  session: RoleSession,
+): Promise<void> {
+  await context.addCookies(
+    session.cookies.map((cookie) => ({
+      name: cookie.name,
+      value: cookie.value,
+      url: new URL(originURL).origin + '/',
+    })),
+  )
+  await page.addInitScript(
+    ([accessToken]) => {
+      window.localStorage.setItem('token_type', 'Bearer')
+      window.localStorage.setItem('access_token', accessToken)
+    },
+    [session.token],
+  )
 }
 
 interface DcsFixtures {
@@ -83,24 +113,7 @@ interface DcsFixtures {
 export const test = base.extend<DcsFixtures>({
   loginAs: async ({ page, context, baseURL }, use) => {
     await use(async (role: DcsRole) => {
-      const session = mintSession(role)
-      await context.addCookies(
-        session.cookies.map((cookie) => ({
-          name: cookie.name,
-          value: cookie.value,
-          // Host-wide on the dev origin: cookies are per-host (not per-port),
-          // but their ingress paths (/digital-contracting-service/…) would
-          // never match the dev server's rewritten /api/* paths.
-          url: new URL(baseURL ?? 'http://localhost:5199').origin + '/',
-        })),
-      )
-      await page.addInitScript(
-        ([accessToken]) => {
-          window.localStorage.setItem('token_type', 'Bearer')
-          window.localStorage.setItem('access_token', accessToken)
-        },
-        [session.token],
-      )
+      await applySession(context, page, baseURL ?? 'http://localhost:5199', mintSession(role))
     })
   },
 })

@@ -32,7 +32,20 @@ export const E2E_API_BASE =
  */
 export const E2E_STATUSLIST_URL = process.env.E2E_STATUSLIST_URL ?? 'http://localhost:18080/statuslist'
 
+/**
+ * Instance B (dcs2) for the DCS-to-DCS scenarios: its own public origin is
+ * dcs-b.localhost (values.bdd.yml), served in the browser by a second vite
+ * dev server so the two instances' UIs run at distinct origins exactly as
+ * two organizations would. The full-vertical peer-negotiation test drives
+ * B's real UI through this origin.
+ */
+const FRONTEND_B_PORT = Number(process.env.E2E_FRONTEND_B_PORT ?? 5198)
+export const E2E_FRONTEND_B_ORIGIN = `http://localhost:${FRONTEND_B_PORT}`
+export const E2E_API_BASE_B =
+  process.env.E2E_DCS_API_BASE_B ?? 'http://dcs-b.localhost:18080/digital-contracting-service/api'
+
 const apiTarget = new URL(E2E_API_BASE)
+const apiTargetB = new URL(E2E_API_BASE_B)
 
 export default defineConfig({
   testDir: './e2e',
@@ -58,14 +71,26 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: 'npx vite --port ' + FRONTEND_PORT,
-    url: `http://localhost:${FRONTEND_PORT}`,
-    reuseExistingServer: !process.env.CI,
-    env: {
-      DCS_FRONTEND_PORT: String(FRONTEND_PORT),
-      DCS_API_TARGET: apiTarget.origin,
-      DCS_API_TARGET_PATH: apiTarget.pathname,
+  webServer: [
+    {
+      command: 'npx vite --port ' + FRONTEND_PORT,
+      url: `http://localhost:${FRONTEND_PORT}`,
+      reuseExistingServer: !process.env.CI,
+      env: {
+        DCS_FRONTEND_PORT: String(FRONTEND_PORT),
+        DCS_API_TARGET: apiTarget.origin,
+        DCS_API_TARGET_PATH: apiTarget.pathname,
+      },
     },
-  },
+    {
+      command: 'npx vite --port ' + FRONTEND_B_PORT,
+      url: E2E_FRONTEND_B_ORIGIN,
+      reuseExistingServer: !process.env.CI,
+      env: {
+        DCS_FRONTEND_PORT: String(FRONTEND_B_PORT),
+        DCS_API_TARGET: apiTargetB.origin,
+        DCS_API_TARGET_PATH: apiTargetB.pathname,
+      },
+    },
+  ],
 })

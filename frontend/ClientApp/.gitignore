@@ -28,3 +28,6 @@ dist-ssr
 e2e/.auth/
 test-results/
 playwright-report/
+
+# Python bytecode from e2e helper scripts
+e2e/__pycache__/
