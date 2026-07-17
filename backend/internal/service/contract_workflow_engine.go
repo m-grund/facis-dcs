@@ -102,6 +102,7 @@ func mapContractCommandError(err error) error {
 	}
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, validation.ErrContractHierarchyInvalid) ||
+		errors.Is(err, validation.ErrContractNotClosed) ||
 		errors.Is(err, command.ErrContractHierarchyCycle) ||
 		errors.Is(err, command.ErrDeploymentNotFound) ||
 		errors.Is(err, command.ErrSigningIncomplete) ||

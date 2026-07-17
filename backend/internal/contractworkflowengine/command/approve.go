@@ -140,6 +140,13 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		return err
 	}
 
+	// SRS Contract Approval verifies schema completeness: an approved contract
+	// must be closed — no unresolved placeholders (negotiated boundaries,
+	// required fields, prose placeholders).
+	if err := validation.ValidateContractClosed(*contractForPolicyValidation.ContractData); err != nil {
+		return err
+	}
+
 	err = h.ATRepo.UpdateState(ctx, tx, cmd.DID, cmd.CauserDID, approvaltaskstate.Approved.String())
 	if err != nil {
 		return fmt.Errorf("could not update approval task state: %w", err)

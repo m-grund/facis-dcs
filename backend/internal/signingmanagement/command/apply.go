@@ -230,6 +230,14 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return err
 	}
 
+	// Signatures are the point of no return: a contract must be closed — no
+	// unresolved placeholders — before it is sealed into an odrl:Agreement and
+	// signed. A template's open policy is only ever a contract once every
+	// placeholder is materialized.
+	if err := validation.ValidateContractClosed(*data.ContractData); err != nil {
+		return fmt.Errorf("signature application blocked: %w", err)
+	}
+
 	// A non-conformant contract must never be signed (DCS-FR-PACM-03) —
 	// submission already gates this, but signatures are the point of no
 	// return, so the invariant is re-checked here.

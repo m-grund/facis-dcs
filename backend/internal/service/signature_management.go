@@ -11,6 +11,7 @@ import (
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
+	"digital-contracting-service/internal/base/validation"
 
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
@@ -45,6 +46,7 @@ func mapSignatureCommandError(err error) error {
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, command.ErrUnknownSignatureField) ||
 		errors.Is(err, command.ErrFieldAlreadySigned) ||
+		errors.Is(err, validation.ErrContractNotClosed) ||
 		errors.Is(err, db.ErrSignatureNotFound) {
 		return signaturemanagement.MakeBadRequest(err)
 	}
