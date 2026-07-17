@@ -230,6 +230,13 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return err
 	}
 
+	// A non-conformant contract must never be signed (DCS-FR-PACM-03) —
+	// submission already gates this, but signatures are the point of no
+	// return, so the invariant is re-checked here.
+	if err := validation.RequireHubConformance(ctx, *data.ContractData); err != nil {
+		return fmt.Errorf("signature application blocked: %w", err)
+	}
+
 	// SHACL evidence (Phase 4, ADR-9): the hub schema version this contract
 	// validates against and a stable hash of the resulting findings, bound
 	// into the signing-summary credential below — an external verifier

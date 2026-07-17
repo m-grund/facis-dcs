@@ -74,7 +74,7 @@ func IssueTemplateProvenanceVC(ctx context.Context, signer provenance.VCSigner, 
 			"https://www.w3.org/ns/credentials/v2",
 			"https://w3id.org/security/data-integrity/v2",
 			map[string]interface{}{
-				"dcs":                          "https://w3id.org/facis/dcs#",
+				"dcs":                          "https://w3id.org/facis/dcs/ontology/v1#",
 				"TemplateProvenanceCredential": "dcs:TemplateProvenanceCredential",
 				"template_did":                 "dcs:templateDid",
 				"version":                      "dcs:templateVersion",

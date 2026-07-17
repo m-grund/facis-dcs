@@ -46,7 +46,7 @@ func IssueLifecycleVC(ctx context.Context, signer VCSigner, issuerDID, statusLis
 			"https://www.w3.org/ns/credentials/v2",
 			securityCtx,
 			map[string]interface{}{
-				"dcs":                         "https://w3id.org/facis/dcs#",
+				"dcs":                         "https://w3id.org/facis/dcs/ontology/v1#",
 				"ContractLifecycleCredential": "dcs:ContractLifecycleCredential",
 				"contract_id":                 "dcs:contractId",
 				"file_hash":                   "dcs:fileHash",

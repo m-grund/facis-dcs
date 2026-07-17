@@ -46,7 +46,7 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 			"https://www.w3.org/ns/credentials/v2",
 			dataIntegrityContext,
 			map[string]interface{}{
-				"dcs":                              "https://w3id.org/facis/dcs#",
+				"dcs":                              "https://w3id.org/facis/dcs/ontology/v1#",
 				"ContractSigningSummaryCredential": "dcs:ContractSigningSummaryCredential",
 				"contract_id":                      "dcs:contractId",
 				"ceremony_id":                      "dcs:ceremonyId",

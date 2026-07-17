@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sort"
+	"strings"
 )
 
 // SHACLEvidence runs the Semantic Hub SHACL validation pass for a document
@@ -23,6 +25,34 @@ func SHACLEvidence(ctx context.Context, contractDocument any) (schemaVersion int
 		return 0, "", err
 	}
 	return version, ValidationReportHash(findings), nil
+}
+
+// RequireHubConformance blocks a document that violates the Semantic Hub's
+// SHACL shapes (canonical shapes + clause catalog): error-severity findings
+// fail it with every violation spelled out; warnings/info pass. The gate
+// runs at contract submission and at signature application (DCS-FR-TR-20,
+// DCS-FR-PACM-03: non-conformant contracts MUST NOT proceed toward
+// execution or signing).
+func RequireHubConformance(ctx context.Context, contractDocument any) error {
+	contract, err := normalizeObject(contractDocument)
+	if err != nil {
+		return err
+	}
+	findings, version, err := validateAgainstHubShapes(ctx, contract)
+	if err != nil {
+		return err
+	}
+	var violations []string
+	for _, f := range findings {
+		if f.Severity == "error" {
+			violations = append(violations, fmt.Sprintf("%s: %s", f.RuleID, f.Message))
+		}
+	}
+	if len(violations) == 0 {
+		return nil
+	}
+	sort.Strings(violations)
+	return fmt.Errorf("document violates Semantic Hub shapes (version %d): %s", version, strings.Join(violations, "; "))
 }
 
 // ValidationReportHash computes a stable SHA-256 hash (hex) of a set of
