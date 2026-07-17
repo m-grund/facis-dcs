@@ -53,6 +53,12 @@ dcs:policies a owl:DatatypeProperty ;
     skos:closeMatch odrl:hasPolicy ;
     skos:inScheme <https://w3id.org/facis/dcs/schema> .
 
+dcs:typedClause a owl:ObjectProperty ;
+    rdfs:label "typedClause" ;
+    rdfs:domain dcs:Clause ;
+    skos:definition "The machine-readable typed instance (an instance of a Semantic Hub clause-catalog type, validated against its SHACL shape) that this human-readable clause carries; the clause's summary text is derived from the instance's values." ;
+    skos:inScheme <https://w3id.org/facis/dcs/schema> .
+
 dcs:prose a owl:DatatypeProperty ;
     rdfs:label "prose" ;
     rdfs:range xsd:anyURI ;

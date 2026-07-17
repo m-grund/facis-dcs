@@ -1,4 +1,5 @@
 import type { DcsTypedClauseInstance } from '@/models/dcs-jsonld'
+import type { ClauseCatalogType } from '@/services/semantic-hub-service'
 
 /**
  * Typed-clause helpers: a typed clause instance lives nested in a
@@ -44,4 +45,32 @@ export function typedClauseValuesSummary(instance: DcsTypedClauseInstance): stri
 /** The value entries of an instance, for read-only display. */
 export function typedClauseEntries(instance: DcsTypedClauseInstance): { key: string; value: string }[] {
   return valueEntries(instance)
+}
+
+/** Expands "dcs:PaymentClause" to its full IRI via the hub context's prefixes; full IRIs pass through. */
+export function expandPrefixedTerm(term: string, prefixes: Record<string, string>): string {
+  const colon = term.indexOf(':')
+  if (colon <= 0) return term
+  const namespace = prefixes[term.slice(0, colon)]
+  return namespace ? namespace + term.slice(colon + 1) : term
+}
+
+/** All rdf:type IRIs an instance carries (its @type may be a string or an array). */
+export function instanceTypeIris(instance: DcsTypedClauseInstance): string[] {
+  const raw = instance['@type']
+  return (Array.isArray(raw) ? raw : [raw]).filter((t): t is string => typeof t === 'string')
+}
+
+/**
+ * Resolves a stored typed clause instance back to its hub clause-catalog
+ * entry: catalog types are hub-context-compacted terms, instance types are
+ * the absolute IRIs shacl-form serialized — expansion bridges the two.
+ */
+export function findCatalogClause(
+  instance: DcsTypedClauseInstance,
+  clauses: readonly ClauseCatalogType[],
+  prefixes: Record<string, string>,
+): ClauseCatalogType | undefined {
+  const typeIris = new Set(instanceTypeIris(instance).map((iri) => expandPrefixedTerm(iri, prefixes)))
+  return clauses.find((clause) => typeIris.has(expandPrefixedTerm(clause.type, prefixes)))
 }

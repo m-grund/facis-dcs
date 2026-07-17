@@ -1,17 +1,20 @@
 <script setup lang="ts">
+import TypedClauseEditor from '@template-repository/components/clauses-editor/TypedClauseEditor.vue'
 import {
   isNewline,
   isPlaceholder,
   isText,
   parseSegmentsFromContent,
 } from '@template-repository/composables/useClauseTextChips'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import { computed } from 'vue'
+import { isMergedBlockId } from '@template-repository/utils/template-data-ref'
+import { computed, ref } from 'vue'
 import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
 import PreviewParamInput from './PreviewParamInput.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { DcsContentSegment } from '@/models/dcs-jsonld'
+import type { DcsContentSegment, DcsTypedClauseInstance } from '@/models/dcs-jsonld'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type {
@@ -27,7 +30,23 @@ const props = defineProps<{
   semanticConditionValues?: SemanticConditionValue[]
   verificationResult?: VerificationResult | null
   setSemanticConditionValue?: SemanticConditionValueSetter
+  /** The clause's nested typed instance, when it is a Semantic Hub typed clause. */
+  typedClause?: DcsTypedClauseInstance
 }>()
+
+// Typed clause fill (hub shapes at contract time): editable exactly when the
+// preview is in fill mode (a value setter is wired) and the clause lives in
+// the document itself — sub-template snapshot clauses are immutable.
+const typedClauseEditable = computed(
+  () => !!props.typedClause && !!props.setSemanticConditionValue && !isMergedBlockId(props.blockId),
+)
+const editingTypedClause = ref(false)
+const draftStore = useDcsDraftStore()
+
+function saveTypedClause(payload: { title: string; instance: DcsTypedClauseInstance }) {
+  draftStore.updateTypedClause(props.blockId, { title: payload.title, instance: payload.instance })
+  editingTypedClause.value = false
+}
 
 type PreviewSegment =
   | { type: 'text'; value: string }
@@ -113,6 +132,26 @@ function findVerificationError(conditionId: string, parameterName: string) {
       :class="[previewNewlineSpanClass, 'preview-newline-break']"
       aria-hidden="true"
     />
+  </template>
+  <template v-if="typedClauseEditable">
+    <span class="ml-2 align-middle">
+      <button
+        v-if="!editingTypedClause"
+        type="button"
+        class="btn btn-outline btn-xs"
+        @click="editingTypedClause = true"
+      >
+        Edit typed values
+      </button>
+    </span>
+    <div v-if="editingTypedClause && typedClause" class="mt-2 rounded border border-base-300 bg-base-200/30 p-3">
+      <TypedClauseEditor
+        :instance="typedClause"
+        submit-label="Save values"
+        @submit="saveTypedClause"
+        @cancel="editingTypedClause = false"
+      />
+    </div>
   </template>
 </template>
 

@@ -23,6 +23,28 @@ export async function getClauseCatalog(): Promise<ClauseCatalogResponse> {
   return http.get('/semantic/clauses').then((res) => res.data)
 }
 
+let hubContextPromise: Promise<Record<string, unknown>> | undefined
+
+/** The hub's active JSON-LD context document, fetched once per session. */
+export async function getHubContext(): Promise<Record<string, unknown>> {
+  hubContextPromise ??= http.get('/semantic/context/facis-dcs').then((res) => res.data as Record<string, unknown>)
+  return hubContextPromise
+}
+
+/** The active context's prefix → namespace-IRI declarations. */
+export async function getHubPrefixes(): Promise<Record<string, string>> {
+  const doc = await getHubContext()
+  const context = doc['@context']
+  if (typeof context !== 'object' || context === null) return {}
+  const prefixes: Record<string, string> = {}
+  for (const [term, value] of Object.entries(context as Record<string, unknown>)) {
+    if (!term.startsWith('@') && typeof value === 'string' && value.includes('://')) {
+      prefixes[term] = value
+    }
+  }
+  return prefixes
+}
+
 /** One (name, kind) hub entry summary (GET /semantic/schema/list). */
 export interface SemanticSchemaListEntry {
   name: string

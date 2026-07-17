@@ -71,12 +71,102 @@ dcs:OdrlObligationShape
     sh:node dcs:OdrlConstraintShape ;
   ] .
 
+# Grants and bans (the SRS Appendix C agreement — API access for named
+# parties under spatial/temporal constraints — is an odrl:Permission carrying
+# odrl:spatial / odrl:dateTime constraints; nothing about it is code, it is
+# all expressible through these hub-served shapes).
+
+dcs:OdrlPermissionShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Permission ;
+  rdfs:label "ODRL Permission" ;
+  sh:property [
+    sh:path odrl:action ;
+    sh:name "Action" ;
+    sh:description "What the assignees are permitted to do." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( odrl:use odrl:read odrl:distribute odrl:reproduce odrl:execute odrl:play odrl:present ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:assigner ;
+    sh:name "Assigner" ;
+    sh:description "The party granting the permission (IRI)." ;
+    sh:order 2 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:assignee ;
+    sh:name "Assignees" ;
+    sh:description "The parties receiving the permission (one IRI per party)." ;
+    sh:order 3 ;
+    sh:nodeKind sh:IRI ;
+  ] ;
+  sh:property [
+    sh:path odrl:target ;
+    sh:name "Target asset" ;
+    sh:description "The asset the permission applies to (IRI)." ;
+    sh:order 4 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:constraint ;
+    sh:name "Constraints" ;
+    sh:order 5 ;
+    sh:node dcs:OdrlConstraintShape ;
+  ] .
+
+dcs:OdrlProhibitionShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Prohibition ;
+  rdfs:label "ODRL Prohibition" ;
+  sh:property [
+    sh:path odrl:action ;
+    sh:name "Action" ;
+    sh:description "What the assignees are prohibited from doing." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( odrl:use odrl:distribute odrl:reproduce odrl:modify odrl:delete odrl:transfer ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:assigner ;
+    sh:name "Assigner" ;
+    sh:order 2 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:assignee ;
+    sh:name "Assignees" ;
+    sh:order 3 ;
+    sh:nodeKind sh:IRI ;
+  ] ;
+  sh:property [
+    sh:path odrl:target ;
+    sh:name "Target asset" ;
+    sh:order 4 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:constraint ;
+    sh:name "Constraints" ;
+    sh:order 5 ;
+    sh:node dcs:OdrlConstraintShape ;
+  ] .
+
 dcs:OdrlConstraintShape
   a sh:NodeShape ;
   sh:property [
     sh:path odrl:leftOperand ;
-    sh:name "Field" ;
-    sh:description "The contract-data field (dcs:RequirementField) the constraint governs." ;
+    sh:name "Left operand" ;
+    sh:description "What the constraint governs: an ODRL left operand (odrl:spatial, odrl:dateTime, ...) or a contract-data field (dcs:RequirementField IRI)." ;
     sh:order 1 ;
     sh:nodeKind sh:IRI ;
     sh:minCount 1 ;

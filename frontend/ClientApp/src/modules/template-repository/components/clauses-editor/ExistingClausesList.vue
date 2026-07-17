@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
+import TypedClauseEditor from '@template-repository/components/clauses-editor/TypedClauseEditor.vue'
 import {
   getPlaceholderLabelFromConditions,
   parseSegmentsFromContent,
@@ -9,7 +10,7 @@ import {
 import { computed } from 'vue'
 import IconEdit from '@/core/components/icons/IconEdit.vue'
 import IconRemove from '@/core/components/icons/IconRemove.vue'
-import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
+import type { DcsClause, DcsContentSegment, DcsTypedClauseInstance } from '@/models/dcs-jsonld'
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 
 const props = withDefaults(
@@ -29,6 +30,7 @@ defineEmits<{
   delete: [blockId: string]
   edit: [blockId: string]
   save: [payload: { blockId: string; title: string; content: DcsContentSegment[] }]
+  'save-typed': [payload: { blockId: string; title: string; instance: DcsTypedClauseInstance }]
   place: [blockId: string]
   'cancel-edit': []
 }>()
@@ -60,7 +62,17 @@ function getPlaceholderLabel(seg: Segment): string {
     >
       <div class="min-w-0 flex-1">
         <div v-if="editingBlockId === clause['@id']">
+          <TypedClauseEditor
+            v-if="clause['dcs:typedClause']"
+            :instance="clause['dcs:typedClause']"
+            :initial-title="clause['dcs:title'] ?? ''"
+            @submit="
+              (payload) => $emit('save-typed', { blockId: clause['@id'], title: payload.title, instance: payload.instance })
+            "
+            @cancel="$emit('cancel-edit')"
+          />
           <ClauseEditorForm
+            v-else
             :mode="'edit'"
             :initial-title="clause['dcs:title'] ?? ''"
             :initial-content="clauseContent(clause)"
@@ -72,6 +84,7 @@ function getPlaceholderLabel(seg: Segment): string {
         <div v-else>
           <div class="text-sm font-semibold text-base-content">
             {{ clause['dcs:title'] ?? '' }}
+            <span v-if="clause['dcs:typedClause']" class="ml-1 badge badge-sm badge-info">Typed</span>
             <span
               class="ml-1 badge badge-sm"
               :class="outlineBlockIds.has(clause['@id']) ? 'badge-success' : 'badge-outline'"

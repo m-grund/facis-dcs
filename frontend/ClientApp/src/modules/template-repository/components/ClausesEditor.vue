@@ -90,6 +90,11 @@ async function addTypedClause(payload: { clauseType: string; title: string; inst
   await store.addTypedClause(payload)
 }
 
+function saveTypedClause(payload: { blockId: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+  store.updateTypedClause(payload.blockId, { title: payload.title, instance: payload.instance })
+  if (editingBlockId.value === payload.blockId) cancelEdit()
+}
+
 function placeClause(blockId: string) {
   const root = rootBlock.value
   if (!root) return
@@ -133,6 +138,7 @@ function placeClause(blockId: string) {
         @edit="startEditClause"
         @place="placeClause"
         @save="saveEditedClause"
+        @save-typed="saveTypedClause"
         @cancel-edit="cancelEdit"
       />
     </section>
