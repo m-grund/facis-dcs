@@ -124,6 +124,14 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		}
 	}(tx)
 
+	// Serialize regeneration per contract IRI: concurrent lifecycle events for
+	// the same contract queue on this lock instead of racing the read-modify-
+	// write of the PDF state (which would double-render and could fork the C2PA
+	// chain). Released on tx commit/rollback.
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", cweEvt.DID); err != nil {
+		return fmt.Errorf("acquire per-contract PDF regeneration lock for %s: %w", cweEvt.DID, err)
+	}
+
 	// Fetch current contract state and JSON-LD.
 	contract, err := s.CRepo.ReadDataByDID(ctx, tx, cweEvt.DID)
 	if err != nil {
