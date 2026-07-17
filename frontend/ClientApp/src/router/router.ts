@@ -443,6 +443,14 @@ router.beforeEach(async (to) => {
     return true
   }
 
+  // A valid stored token already carries the identity — restore it without a
+  // refresh round-trip; only refresh when there is no usable token (its
+  // rotating refresh cookie is single-use, so it must not be spent on every
+  // navigation).
+  if (authStore.restoreFromToken()) {
+    return true
+  }
+
   await authenticationService.refresh()
   if (authStore.isAuthenticated) {
     return true

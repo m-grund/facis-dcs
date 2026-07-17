@@ -79,6 +79,13 @@ export default defineConfig(({ mode, command }) => {
           target: env.DCS_HYDRA_TARGET || 'http://localhost:4444',
           changeOrigin: true,
         },
+        // The instance's did:web document is served by the DCS backend at the
+        // origin root, not by Hydra — route it there before the general
+        // /.well-known → Hydra (OIDC discovery) rule below.
+        '/.well-known/did.json': {
+          target: env.DCS_API_TARGET || 'http://localhost:8991',
+          changeOrigin: true,
+        },
         '/.well-known': {
           target: env.DCS_HYDRA_TARGET || 'http://localhost:4444',
           changeOrigin: true,
