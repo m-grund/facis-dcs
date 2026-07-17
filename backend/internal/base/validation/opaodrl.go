@@ -79,6 +79,14 @@ satisfied if {
 	values_equal(input.actual, input.right)
 }
 
+# isA — the left operand is an instance of the class named by the right
+# operand. With no class graph to reason over at the value level, this reduces
+# to (normalised) equality of the class identifier.
+satisfied if {
+	input.operator == "isA"
+	values_equal(input.actual, input.right)
+}
+
 satisfied if {
 	input.operator == "neq"
 	not values_equal(input.actual, input.right)

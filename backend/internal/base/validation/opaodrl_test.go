@@ -23,7 +23,7 @@ func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) 
 	actualValue = compactJSONLDValue(actualValue)
 	rightOperand = compactJSONLDValue(rightOperand)
 	switch op {
-	case "eq":
+	case "eq", "isA":
 		return odrlValuesEqual(actualValue, rightOperand)
 	case "neq":
 		return !odrlValuesEqual(actualValue, rightOperand)
@@ -251,6 +251,10 @@ func TestOPAConstraintParityWithHandRolled(t *testing.T) {
 		{"isPartOf", "Bay", "Bayern, Germany"},
 		{"isPartOf", "xyz", "Bayern"},
 		{"isPartOf", "DEU", float64(5)}, // non-string, non-array right -> false
+		// isA: value-level class-identifier equality (case-insensitive)
+		{"isA", "odrl:Asset", "odrl:Asset"},
+		{"isA", "odrl:asset", "odrl:Asset"},
+		{"isA", "odrl:Asset", "odrl:Party"},
 		// isAllOf: the actual must match every member of the right set
 		{"isAllOf", "DEU", []any{"DEU"}},
 		{"isAllOf", "DEU", []any{"DEU", "DEU"}},

@@ -363,6 +363,35 @@ func TestNormalizeTemplateDataRejectsDutyOnNonPermission(t *testing.T) {
 	require.ErrorContains(t, err, "may only be attached to a Permission")
 }
 
+// TestNormalizeTemplateDataAcceptsExtendedContextOperands proves the full ODRL
+// core Left Operand vocabulary (beyond spatial/dateTime) is recognized as
+// use-time context and accepted, not rejected as a nonexistent data field.
+func TestNormalizeTemplateDataAcceptsExtendedContextOperands(t *testing.T) {
+	raw := canonicalTemplateData(t)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(*raw, &data))
+	policy := firstPolicyDuty(data)
+	policy["odrl:constraint"] = []any{
+		map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": "odrl:elapsedTime"},
+			"odrl:operator":     map[string]any{"@id": "odrl:lteq"},
+			"odrl:rightOperand": map[string]any{"@value": "P30D", "@type": "xsd:duration"},
+		},
+		map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": "odrl:virtualLocation"},
+			"odrl:operator":     map[string]any{"@id": "odrl:eq"},
+			"odrl:rightOperand": map[string]any{"@value": "https://vr.example/room1", "@type": "xsd:string"},
+		},
+	}
+	valid, err := datatype.NewJSON(data)
+	require.NoError(t, err)
+
+	_, err = NormalizeTemplateData(&valid)
+	require.NoError(t, err)
+}
+
 func TestNormalizeTemplateDataRejectsUnreferencedBlock(t *testing.T) {
 	raw := canonicalTemplateData(t)
 	var data map[string]any

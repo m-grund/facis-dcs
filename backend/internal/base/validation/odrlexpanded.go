@@ -437,14 +437,43 @@ func dutyActionLabel(duty map[string]any) string {
 	return strings.Join(names, ", ")
 }
 
+// odrlContextOperandIRIs is the full ODRL 2.2 core Left Operand vocabulary. A
+// context operand names access/use context the enforcer reports at use-time
+// (not a document data field), so the contract-time audit records that the
+// constraint applies and defers its verdict rather than resolving it.
 var odrlContextOperandIRIs = map[string]bool{
-	odrlIRI + "spatial":   true,
-	odrlIRI + "dateTime":  true,
-	odrlIRI + "purpose":   true,
-	odrlIRI + "count":     true,
-	odrlIRI + "recipient": true,
-	odrlIRI + "industry":  true,
-	odrlIRI + "event":     true,
+	odrlIRI + "absolutePosition":         true,
+	odrlIRI + "absoluteSpatialPosition":  true,
+	odrlIRI + "absoluteTemporalPosition": true,
+	odrlIRI + "absoluteSize":             true,
+	odrlIRI + "count":                    true,
+	odrlIRI + "dateTime":                 true,
+	odrlIRI + "delayPeriod":              true,
+	odrlIRI + "deliveryChannel":          true,
+	odrlIRI + "elapsedTime":              true,
+	odrlIRI + "event":                    true,
+	odrlIRI + "fileFormat":               true,
+	odrlIRI + "industry":                 true,
+	odrlIRI + "language":                 true,
+	odrlIRI + "media":                    true,
+	odrlIRI + "meteredTime":              true,
+	odrlIRI + "payAmount":                true,
+	odrlIRI + "percentage":               true,
+	odrlIRI + "product":                  true,
+	odrlIRI + "purpose":                  true,
+	odrlIRI + "recipient":                true,
+	odrlIRI + "relativePosition":         true,
+	odrlIRI + "relativeSpatialPosition":  true,
+	odrlIRI + "relativeTemporalPosition": true,
+	odrlIRI + "relativeSize":             true,
+	odrlIRI + "resolution":               true,
+	odrlIRI + "spatial":                  true,
+	odrlIRI + "spatialCoordinates":       true,
+	odrlIRI + "systemDevice":             true,
+	odrlIRI + "timeInterval":             true,
+	odrlIRI + "unitOfCount":              true,
+	odrlIRI + "version":                  true,
+	odrlIRI + "virtualLocation":          true,
 }
 
 // isODRLContextOperand reports whether a left operand is an ODRL context
