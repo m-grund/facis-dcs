@@ -56,6 +56,24 @@ async function waitForTemplateLoaded(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox')).toHaveValue(name)
 }
 
+/**
+ * Asserts a PDF/A can be exported for a document at the current lifecycle step.
+ * Uses the active session's bearer token (the app keeps it in localStorage) so
+ * it exercises the same authenticated GET /pdf/export/{kind}/{did} the Export
+ * PDF button issues — proving export works at every step, not only post-sign.
+ */
+async function assertPdfExport(page: Page, kind: 'template' | 'contract', did: string, step: string): Promise<void> {
+  const token = await page.evaluate(() => window.localStorage.getItem('access_token'))
+  const resp = await page.request.get(`/api/pdf/export/${kind}/${encodeURIComponent(did)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(resp.ok(), `export ${kind} PDF at "${step}": HTTP ${resp.status()} ${await resp.text().catch(() => '')}`).toBe(
+    true,
+  )
+  const bytes = await resp.body()
+  expect(bytes.subarray(0, 5).toString('latin1'), `PDF/A magic bytes at "${step}"`).toBe('%PDF-')
+}
+
 /** DRAFT → SUBMITTED → REVIEWED → APPROVED for one template, via the UI. */
 async function submitReviewApproveTemplate(page: Page, loginAs: LoginAs, did: string, name: string): Promise<void> {
   await test.step(`submit template ${name} for review`, async () => {
@@ -65,11 +83,13 @@ async function submitReviewApproveTemplate(page: Page, loginAs: LoginAs, did: st
     )
     await page.getByRole('button', { name: 'Submit', exact: true }).click()
     await submitted
+    await assertPdfExport(page, 'template', did, `${name} SUBMITTED`)
   })
 
   await test.step(`review template ${name}`, async () => {
     await gotoAs(page, loginAs, 'Template Reviewer', `/ui/templates/review/${did}`)
     await waitForTemplateLoaded(page, name)
+    await assertPdfExport(page, 'template', did, `${name} REVIEWED (in review)`)
     // The backend accepts the reviewer recommendation only after a
     // verification run — the Verify dialog is part of the review flow.
     const verified = page.waitForResponse(
@@ -95,6 +115,7 @@ async function submitReviewApproveTemplate(page: Page, loginAs: LoginAs, did: st
     await page.getByRole('button', { name: 'Approve', exact: true }).click()
     await confirmModal(page, 'Submit')
     await approved
+    await assertPdfExport(page, 'template', did, `${name} APPROVED`)
   })
 }
 
@@ -159,6 +180,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await page.getByRole('button', { name: 'Create', exact: true }).click()
     componentDid = ((await (await created).json()) as { did: string }).did
     expect(componentDid).toBeTruthy()
+    await assertPdfExport(page, 'template', componentDid, 'component DRAFT')
   })
 
   // ---- Stage 2: submit → review → approve the component ----
@@ -251,6 +273,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await page.getByRole('button', { name: 'Update', exact: true }).click()
     const payload = JSON.stringify((await updated).postDataJSON())
     expect(payload, 'the clause and its machine-readable meaning ride along').toContain('Payment terms')
+    await assertPdfExport(page, 'contract', contractDid, 'contract DRAFT')
   })
 
   // ---- Stage 7: DRAFT → NEGOTIATION → SUBMITTED → REVIEWED → APPROVED ----
@@ -276,6 +299,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     )
     await page.getByRole('button', { name: 'Submit', exact: true }).click()
     await accepted
+    await assertPdfExport(page, 'contract', contractDid, 'contract in negotiation')
   })
 
   await test.step('review contract', async () => {
@@ -286,6 +310,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await page.getByRole('button', { name: 'Approve', exact: true }).click()
     await confirmModal(page, 'Submit')
     await forwarded
+    await assertPdfExport(page, 'contract', contractDid, 'contract REVIEWED')
   })
 
   await test.step('approve contract', async () => {
