@@ -102,6 +102,19 @@ func (r *PostgresContractRepo) UpdateState(ctx context.Context, tx *sqlx.Tx, did
 	return err
 }
 
+// UpdateContractData persists the sealed contract document the first
+// signature commits to (command/apply.go's Offer-to-Agreement seal); it
+// runs inside the signing transaction, before the content hash and the
+// PAdES signature are computed over the same bytes.
+func (r *PostgresContractRepo) UpdateContractData(ctx context.Context, tx *sqlx.Tx, did string, contractData datatype.JSON) error {
+	statement := `
+        UPDATE contracts SET contract_data = $2
+        WHERE did = $1
+    `
+	_, err := tx.ExecContext(ctx, statement, did, contractData)
+	return err
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx, signature db.ContractSignature) error {

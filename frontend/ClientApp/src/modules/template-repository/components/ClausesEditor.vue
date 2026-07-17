@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
+import TypedClausePalette from '@template-repository/components/clauses-editor/TypedClausePalette.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
@@ -85,6 +86,23 @@ function deleteClause(blockId: string) {
   if (editingBlockId.value === blockId) cancelEdit()
 }
 
+async function addTypedClause(payload: {
+  clauseType: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
+  await store.addTypedClause(payload)
+}
+
+function saveTypedClause(payload: {
+  blockId: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
+  store.updateTypedClause(payload.blockId, { title: payload.title, instance: payload.instance })
+  if (editingBlockId.value === payload.blockId) cancelEdit()
+}
+
 function placeClause(blockId: string) {
   const root = rootBlock.value
   if (!root) return
@@ -109,6 +127,12 @@ function placeClause(blockId: string) {
       />
     </section>
 
+    <!-- Section 1b: Typed clauses (Semantic Hub clause catalog, DCS-FR-TR-03/TR-04) -->
+    <section v-if="uiStore.isTemplateEditable" class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <h3 class="mb-4 text-sm font-semibold text-base-content/80">Typed clauses</h3>
+      <TypedClausePalette @submit="addTypedClause" />
+    </section>
+
     <!-- Section 2: Existing clauses -->
     <section class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
       <h3 class="mb-4 text-sm font-semibold text-base-content/80">Existing clauses</h3>
@@ -122,6 +146,7 @@ function placeClause(blockId: string) {
         @edit="startEditClause"
         @place="placeClause"
         @save="saveEditedClause"
+        @save-typed="saveTypedClause"
         @cancel-edit="cancelEdit"
       />
     </section>

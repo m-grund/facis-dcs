@@ -9,7 +9,6 @@ import (
 	"digital-contracting-service/internal/base/validation"
 	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	semanticmapper "digital-contracting-service/internal/semantic/mapper"
-	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +26,7 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	persistedTemplate, err := validation.NormalizeTemplateDataForPersistence(templateData, creationTemplateDID)
 	require.NoError(t, err)
 
-	contractDraft, err := convertTemplateDataToContractData(persistedTemplate, creationTemplateDID)
+	contractDraft, err := ConvertTemplateDataToContractData(persistedTemplate, creationTemplateDID)
 	require.NoError(t, err)
 
 	var contractData map[string]any
@@ -44,18 +43,6 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	assertCreationPipelinePolicies(t, persistedContract)
 
 	now := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
-	templateName := "DACH Service Agreement"
-	template := templatedb.ContractTemplate{
-		DID:          creationTemplateDID,
-		Version:      1,
-		State:        "APPROVED",
-		TemplateType: "COMPONENT",
-		Name:         &templateName,
-		CreatedBy:    "test-participant",
-		CreatedAt:    now,
-		UpdatedAt:    now,
-		TemplateData: persistedTemplate,
-	}
 	contract := contractdb.Contract{
 		DID:             creationContractDID,
 		ContractVersion: 1,
@@ -66,7 +53,7 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 		ContractData:    persistedContract,
 	}
 
-	published, err := semanticmapper.BuildContractJSONLD(contract, template, semanticmapper.DefaultProfile())
+	published, err := semanticmapper.BuildContractJSONLD(contract)
 	require.NoError(t, err)
 
 	var stored, returned map[string]any
@@ -171,10 +158,9 @@ func creationPipelineRequirements() []any {
 func creationPipelinePolicyDefinitions() map[string]any {
 	return map[string]any{
 		"@id":          creationTemplateDID + "#policy-set-1",
-		"@type":        "odrl:Set",
-		"uid":          creationTemplateDID,
+		"@type":        "odrl:Offer",
 		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-		"odrl:duty": []any{
+		"odrl:obligation": []any{
 			creationPipelinePolicy(
 				"provider-country-dach",
 				"provider",
@@ -244,7 +230,7 @@ func assertCreationPipelinePolicies(t *testing.T, raw *datatype.JSON) {
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*raw, &data))
 	policySet := data["dcs:policies"].(map[string]any)
-	policies := policySet["odrl:duty"].([]any)
+	policies := policySet["odrl:obligation"].([]any)
 
 	dach := creationPipelinePolicyBySuffix(t, policies, "policy-provider-country-dach")
 	dachConstraint := dach["odrl:constraint"].(map[string]any)
@@ -331,13 +317,13 @@ func creationPipelineRequirement(
 	return requirement
 }
 
-func creationPipelineField(conditionID string, parameterName string, semanticPath string) map[string]any {
+func creationPipelineField(conditionID string, parameterName string, domainFieldName string) map[string]any {
 	return map[string]any{
 		"@id":               creationPipelineFieldID(conditionID, parameterName),
 		"@type":             "dcs:RequirementField",
 		"dcs:parameterName": parameterName,
 		"dcs:domainField": map[string]any{
-			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(semanticPath),
+			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(domainFieldName),
 		},
 		"dcs:required": true,
 	}
@@ -361,6 +347,7 @@ func creationPipelinePolicy(
 		"odrl:assigner": map[string]any{"@id": creationTemplateDID + "#" + conditionID},
 		"odrl:assignee": map[string]any{"@id": creationTemplateDID},
 		"odrl:target":   map[string]any{"@id": creationTemplateDID},
+		"dcs:prose":     map[string]any{"@id": "urn:uuid:block-clause-1"},
 		"odrl:constraint": map[string]any{
 			"@type":             "odrl:Constraint",
 			"odrl:leftOperand":  map[string]any{"@id": creationPipelineFieldID(conditionID, parameterName)},

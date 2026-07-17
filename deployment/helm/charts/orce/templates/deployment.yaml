@@ -14,8 +14,20 @@ spec:
         app.kubernetes.io/name: orce
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
-      {{- if .Values.localTSA.enabled }}
+      {{- if or .Values.localTSA.enabled .Values.persistence.enabled }}
       initContainers:
+        {{- if .Values.persistence.enabled }}
+        # A fresh persistent volume mounted at /data shadows the image's
+        # baked-in Node-RED runtime files (settings.js, ...); seed them once.
+        - name: seed-data
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          command: ["/bin/sh", "-c", "[ -f /seed/settings.js ] || cp -a /data/. /seed/"]
+          volumeMounts:
+            - name: orce-data
+              mountPath: /seed
+        {{- end }}
+        {{- if .Values.localTSA.enabled }}
         # openssl ts -reply needs a writable, pre-existing serial file.
         - name: seed-tsa-serial
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -24,6 +36,7 @@ spec:
           volumeMounts:
             - name: tsa-state
               mountPath: /data/tsa-state
+        {{- end }}
       {{- end }}
       containers:
         - name: orce
@@ -33,9 +46,22 @@ spec:
             - name: http
               containerPort: 1880
               protocol: TCP
-          {{- with .Values.extraEnv }}
+          {{- if or .Values.global.archiveAuditTokenSecretRef.name .Values.global.archiveAuditToken .Values.extraEnv }}
           env:
+            {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if or .Values.global.archiveAuditTokenSecretRef.name .Values.global.archiveAuditToken }}
+            - name: ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN
+              {{- if .Values.global.archiveAuditTokenSecretRef.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.archiveAuditTokenSecretRef.name | quote }}
+                  key: {{ .Values.global.archiveAuditTokenSecretRef.key | quote }}
+              {{- else }}
+              value: {{ .Values.global.archiveAuditToken | quote }}
+              {{- end }}
+            {{- end }}
           {{- end }}
           {{- if or .Values.persistence.enabled .Values.localTSA.enabled .Values.flowsFile.enabled }}
           volumeMounts:

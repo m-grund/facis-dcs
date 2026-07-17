@@ -84,6 +84,20 @@ classes:
       - parameterName
       - required
 
+  SemanticConditionValue:
+    class_uri: dcs:SemanticConditionValue
+    description: >-
+      A value submitted for a requirement field during the contract
+      workflow; dcs:forField binds it to the field an ODRL constraint
+      references as its left operand.
+    slot_usage:
+      forField:
+        required: true
+    slots:
+      - forField
+      - parameterValue
+      - blockId
+
   DocumentStructure:
     class_uri: dcs:DocumentStructure
     slots:
@@ -140,6 +154,29 @@ classes:
     class_uri: dcs:LayoutNode
     slots:
       - isRoot
+
+  KPIObservation:
+    class_uri: dcs:KPIObservation
+    description: One KPI value a contract target system reported for a deployed contract.
+    close_mappings:
+      - schema:Observation
+    slot_usage:
+      metricName:
+        required: true
+      observedValue:
+        required: true
+    slots:
+      - aboutContract
+      - metricName
+      - observedAt
+      - observedValue
+      - violation
+
+  KPIObservationSet:
+    class_uri: dcs:KPIObservationSet
+    description: The KPI observations reported for one contract.
+    slots:
+      - observation
 
 slots:
 
@@ -220,6 +257,27 @@ slots:
   parameterName:
     slot_uri: dcs:parameterName
     range: string
+
+  forField:
+    slot_uri: dcs:forField
+    range: RequirementField
+    description: The requirement field a submitted value is for.
+
+  parameterValue:
+    slot_uri: dcs:parameterValue
+    range: string
+    description: The submitted value.
+
+  blockId:
+    slot_uri: dcs:blockId
+    range: string
+    description: The document block the value was captured in.
+
+  semanticConditionValues:
+    slot_uri: dcs:semanticConditionValues
+    range: SemanticConditionValue
+    multivalued: true
+    description: The values submitted for the document's requirement fields.
 
   required:
     slot_uri: dcs:required
@@ -336,3 +394,64 @@ slots:
   bindsTo:
     slot_uri: dcs:bindsTo
     range: RequirementField
+
+  wasDerivedFrom:
+    abstract: true
+    slot_uri: prov:wasDerivedFrom
+    range: uriorcurie
+
+  wasRevisionOf:
+    abstract: true
+    slot_uri: prov:wasRevisionOf
+    range: uriorcurie
+
+  derivedFromTemplate:
+    slot_uri: dcs:derivedFromTemplate
+    is_a: wasDerivedFrom
+    range: uriorcurie
+    description: The template this contract instance was derived from.
+
+  renewsContract:
+    slot_uri: dcs:renewsContract
+    is_a: wasRevisionOf
+    range: uriorcurie
+    description: The prior contract instance this renewal supersedes.
+
+  metricName:
+    slot_uri: dcs:metricName
+    range: string
+    close_mappings:
+      - schema:name
+
+  observedValue:
+    slot_uri: dcs:observedValue
+    range: string
+    close_mappings:
+      - schema:value
+
+  observedAt:
+    slot_uri: dcs:observedAt
+    range: datetime
+
+  violation:
+    slot_uri: dcs:violation
+    range: boolean
+    description: Whether the observed value violates an obligation the contract's own ODRL policies declare for the metric.
+
+  aboutContract:
+    slot_uri: dcs:aboutContract
+    range: uriorcurie
+    close_mappings:
+      - schema:about
+
+  observation:
+    slot_uri: dcs:observation
+    range: KPIObservation
+    multivalued: true
+
+  prose:
+    slot_uri: dcs:prose
+    range: uriorcurie
+    description: The human-readable clause node this machine-readable rule is backed by; every ODRL rule a document carries must reference the audited prose it operationalizes.
+    close_mappings:
+      - dcterms:source

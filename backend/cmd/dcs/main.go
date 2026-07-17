@@ -142,25 +142,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Semantic Hub (DCS-FR-TR-03): seed the genesis FACIS DCS v1 profile
-	// (JSON-LD context, SHACL shapes, validation profile) and anchor every
-	// subsequently produced document to the hub's ACTIVE context version —
-	// its schemaRefs point at hub-served, versioned URLs, and documents
-	// redefining a hub-declared ontology prefix are rejected. Fatal on
-	// failure: the hub is a required dependency of document normalization.
+	// DCS_PUBLIC_URL is the base of every absolute IRI a produced document
+	// carries (@context, sh:shapesGraph, dcterms:conformsTo anchors, C2PA
+	// remote manifests) — these must dereference for external consumers.
+	if strings.TrimSpace(os.Getenv("DCS_PUBLIC_URL")) == "" {
+		log.Fatalf(ctx, errors.New("dcs configuration missing"), "DCS_PUBLIC_URL must be set: produced documents carry absolute, resolvable IRIs based on it")
+	}
+
+	// Seed the Semantic Hub genesis schemas (JSON-LD context, SHACL shapes,
+	// validation profile) and anchor document production to the active
+	// versions. The SemanticHub service re-runs the anchor refresh after
+	// every activation/rollback.
 	if err := semantichub.Seed(ctx, db); err != nil {
 		log.Fatalf(ctx, err, "Could not seed the Semantic Hub genesis schemas")
 	}
-	hubIRIs, hubContextVersion, err := semantichub.ActiveOntologyIRIs(ctx, db)
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not load the Semantic Hub's active context")
+	if err := service.RefreshValidationAnchors(ctx, db); err != nil {
+		log.Fatalf(ctx, err, "Could not anchor validation to the Semantic Hub's active schemas")
 	}
-	validation.SetCanonicalOntologyIRIs(hubIRIs)
-	validation.SetSchemaAnchorRefs(
-		semantichub.AnchorURL("context", semantichub.ContextName, hubContextVersion),
-		hubIRIs["dcs"],
-		semantichub.AnchorURL("shapes", semantichub.ShapesName, hubContextVersion),
-	)
+
+	validation.SetShapeSource(semantichub.HubShapeSource{DB: db})
 
 	// Open the PKCS#11 token that holds every private key (DCS-IR-HI-01). A
 	// wrong module path/token/PIN is fatal: there is no software fallback.
@@ -351,7 +351,7 @@ func main() {
 	archiveNotaryURL := strings.TrimSpace(os.Getenv("ORCE_ARCHIVE_NOTARY_URL"))
 	var archiveNotaryClient cwecommand.ArchiveNotary
 	if archiveNotaryURL != "" {
-		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL)
+		archiveNotaryClient = cwecommand.NewHTTPArchiveNotaryClient(archiveNotaryURL, os.Getenv("ORCE_ARCHIVE_AUDIT_LOG_BEARER_TOKEN"))
 	}
 
 	// Contract deployment (UC-05-01): the Contract Target
@@ -505,7 +505,7 @@ func main() {
 		contractStorageArchiveSvc = service.NewContractStorageArchive(db, jwtAuth, &cweRepo, *didDocument, auditTrailReader)
 		contractWorkflowEngineSvc = service.NewContractWorkflowEngine(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, templateCatalogueClient, auditTrailReader, *didDocument, ipfsAPIClient, archiveNotaryClient, tsaClient, cweDeploymentRepo, contractTargetClient)
 		dcsToDcsSvc = service.NewDcsToDcs(db, jwtAuth, &cweRepo, &cweRTRepo, &cweATRepo, &cweNTRepo, &cweNRepo, &cweCTRepo, &syncRepo, euTrustPool, *didDocument, ipfsAPIClient)
-		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
+		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher), did)
 		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo, &cweATRepo)
 		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smrepo.PostgresCeremonyRepo{}, auditTrailReader, signer.NewPDFCoreSigner(pdfCoreClient), vcSigner, issuerDID, ipfsAPIClient, pdfCoreClient, &cweRepo, archiveNotaryClient, tsaClient, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
@@ -608,6 +608,7 @@ func main() {
 		pdfGenerationEndpoints.Use(debug.LogPayloads())
 		pdfGenerationEndpoints.Use(log.Endpoint)
 		processAuditAndComplianceEndpoints = processauditandcompliance.NewEndpoints(processAuditAndComplianceSvc)
+		processAuditAndComplianceEndpoints.Use(auth.AccessMetadataMiddleware)
 		processAuditAndComplianceEndpoints.Use(debug.LogPayloads())
 		processAuditAndComplianceEndpoints.Use(log.Endpoint)
 		signatureManagementEndpoints = signaturemanagement.NewEndpoints(signatureManagementSvc)

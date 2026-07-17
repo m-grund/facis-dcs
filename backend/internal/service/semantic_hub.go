@@ -10,6 +10,7 @@ import (
 	semantichubgen "digital-contracting-service/gen/semantic_hub"
 	"digital-contracting-service/internal/auth"
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/semantichub"
 
@@ -65,6 +66,11 @@ func (s *semanticHubsrvc) Register(ctx context.Context, p *semantichubgen.Regist
 	if err := tx.Commit(); err != nil {
 		return nil, semantichubgen.MakeInternalError(err)
 	}
+	if activate {
+		if err := RefreshValidationAnchors(ctx, s.DB); err != nil {
+			return nil, semantichubgen.MakeInternalError(fmt.Errorf("schema version %d activated but re-anchoring failed: %w", version, err))
+		}
+	}
 
 	return &semantichubgen.SemanticSchemaRegisterResponse{
 		Name:    p.Name,
@@ -92,6 +98,9 @@ func (s *semanticHubsrvc) Rollback(ctx context.Context, p *semantichubgen.Rollba
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, semantichubgen.MakeInternalError(err)
+	}
+	if err := RefreshValidationAnchors(ctx, s.DB); err != nil {
+		return nil, semantichubgen.MakeInternalError(fmt.Errorf("schema version %d activated but re-anchoring failed: %w", p.Version, err))
 	}
 
 	return &semantichubgen.SemanticSchemaRegisterResponse{
@@ -137,6 +146,47 @@ func (s *semanticHubsrvc) Versions(ctx context.Context, p *semantichubgen.Versio
 	return out, nil
 }
 
+// ResolveShapes serves SHACL shapes at the anchor path
+// (/semantic/shapes/{name}?version=N) semantichub.AnchorURL embeds into
+// every produced document's sh:shapesGraph.
+func (s *semanticHubsrvc) ResolveShapes(ctx context.Context, p *semantichubgen.ResolveShapesPayload) (res *semantichubgen.SemanticSchemaItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, p.Name, "shapes", p.Version)
+	if err != nil {
+		return nil, err
+	}
+	return toSchemaItem(schema), nil
+}
+
+// ResolveOntology serves ontology documents at /semantic/ontology/{name} —
+// the dereference target of the dcs: term IRIs via the w3id.org redirect.
+func (s *semanticHubsrvc) ResolveOntology(ctx context.Context, p *semantichubgen.ResolveOntologyPayload) (res *semantichubgen.SemanticSchemaItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, p.Name, "ontology", p.Version)
+	if err != nil {
+		return nil, err
+	}
+	return toSchemaItem(schema), nil
+}
+
+// ResolveProfile serves validation profiles at the anchor path
+// (/semantic/profile/{name}?version=N) that semantichub.AnchorURL embeds
+// into every produced document's dcterms:conformsTo.
+func (s *semanticHubsrvc) ResolveProfile(ctx context.Context, p *semantichubgen.ResolveProfilePayload) (res *semantichubgen.SemanticSchemaItem, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, p.Name, "profile", p.Version)
+	if err != nil {
+		return nil, err
+	}
+	return toSchemaItem(schema), nil
+}
+
 func (s *semanticHubsrvc) ResolveContext(ctx context.Context, p *semantichubgen.ResolveContextPayload) (res any, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -150,6 +200,99 @@ func (s *semanticHubsrvc) ResolveContext(ctx context.Context, p *semantichubgen.
 		return nil, semantichubgen.MakeInternalError(fmt.Errorf("stored context %s v%d is not valid JSON: %w", schema.Name, schema.Version, err))
 	}
 	return doc, nil
+}
+
+// Clauses serves the pre-digested clause catalog form-schema derived from
+// the same shapes graph validateAgainstHubShapes enforces.
+func (s *semanticHubsrvc) Clauses(ctx context.Context) (res *semantichubgen.ClauseCatalogResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	schema, err := s.getSchema(ctx, semantichub.ClauseCatalogName, "shapes", nil)
+	if err != nil {
+		return nil, err
+	}
+	prefixes, _, err := semantichub.ActiveOntologyIRIs(ctx, s.DB)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(fmt.Errorf("load active hub context prefixes: %w", err))
+	}
+	entries, err := semantichub.ParseClauseCatalog(schema.Content, prefixes)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(fmt.Errorf("parse clause catalog v%d: %w", schema.Version, err))
+	}
+
+	clauses := make([]*semantichubgen.ClauseCatalogType, 0, len(entries))
+	for _, entry := range entries {
+		clauses = append(clauses, &semantichubgen.ClauseCatalogType{
+			Type:  entry.Type,
+			Label: entry.Label,
+			Shape: entry.Shape,
+		})
+	}
+
+	return &semantichubgen.ClauseCatalogResponse{
+		Version: schema.Version,
+		Clauses: clauses,
+		Shapes:  schema.Content,
+	}, nil
+}
+
+// List serves the hub's (name, kind) inventory for the management UI.
+func (s *semanticHubsrvc) List(ctx context.Context) (res []*semantichubgen.SemanticSchemaListEntry, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	entries, err := s.Repo.List(ctx, tx)
+	if err != nil {
+		return nil, semantichubgen.MakeInternalError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, semantichubgen.MakeInternalError(err)
+	}
+	out := make([]*semantichubgen.SemanticSchemaListEntry, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, &semantichubgen.SemanticSchemaListEntry{
+			Name:          e.Name,
+			Kind:          e.Kind,
+			MediaType:     e.MediaType,
+			ActiveVersion: e.ActiveVersion,
+			LatestVersion: e.LatestVersion,
+			UpdatedAt:     e.UpdatedAt,
+		})
+	}
+	return out, nil
+}
+
+// RefreshValidationAnchors re-points the validation layer's process-wide
+// schema anchors at the hub's current active versions. Called at startup
+// and after every activation (register-with-activate, rollback).
+func RefreshValidationAnchors(ctx context.Context, db *sqlx.DB) error {
+	hubIRIs, contextVersion, err := semantichub.ActiveOntologyIRIs(ctx, db)
+	if err != nil {
+		return fmt.Errorf("load active hub context: %w", err)
+	}
+	shapesVersion, err := semantichub.ActiveVersion(ctx, db, semantichub.ShapesName, "shapes")
+	if err != nil {
+		return fmt.Errorf("load active hub shapes version: %w", err)
+	}
+	profileVersion, err := semantichub.ActiveVersion(ctx, db, semantichub.ProfileName, "profile")
+	if err != nil {
+		return fmt.Errorf("load active hub profile version: %w", err)
+	}
+	validation.SetCanonicalOntologyIRIs(hubIRIs)
+	validation.ResetDomainOntologyCache()
+	validation.SetSchemaAnchorRefs(
+		semantichub.AnchorURL("context", semantichub.ContextName, contextVersion),
+		semantichub.AnchorURL("shapes", semantichub.ShapesName, shapesVersion),
+		semantichub.AnchorURL("profile", semantichub.ProfileName, profileVersion),
+	)
+	return nil
 }
 
 func (s *semanticHubsrvc) getSchema(ctx context.Context, name, kind string, version *int) (*semantichub.Schema, error) {

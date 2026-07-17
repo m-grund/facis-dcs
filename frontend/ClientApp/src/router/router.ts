@@ -1,6 +1,7 @@
 import {
   ArrowsRightLeftIcon,
   CheckCircleIcon,
+  CircleStackIcon,
   ClipboardDocumentListIcon,
   DocumentTextIcon,
   EyeIcon,
@@ -12,6 +13,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { getUIBasePath } from '@/config'
 import { useScrollStore } from '@/core/store/scroll'
 import { OID4VP_STATE_KEY } from '@/hydra-login-guard'
+import SemanticHubView from '@/modules/semantic-hub/views/SemanticHubView.vue'
 import TemplateCatalogueListView from '@/modules/template-catalogue/views/TemplateCatalogueListView.vue'
 import TemplateCatalogueView from '@/modules/template-catalogue/views/TemplateCatalogueView.vue'
 import ApproveContractTemplateView from '@/modules/template-repository/views/ApproveContractTemplateView.vue'
@@ -74,6 +76,9 @@ const ROUTES = {
   },
   SIGNING: {
     DASHBOARD: 'signing.dashboard',
+  },
+  SEMANTIC_HUB: {
+    DASHBOARD: 'semantic_hub.dashboard',
   },
 } as const
 
@@ -244,7 +249,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Audit',
       order: 5,
-      roles: ['AUDITOR'],
+      roles: ['AUDITOR', 'ARCHIVE_MANAGER'],
     },
   },
   {
@@ -381,6 +386,19 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/semantic-hub',
+    name: ROUTES.SEMANTIC_HUB.DASHBOARD,
+    component: SemanticHubView,
+    meta: {
+      name: 'Semantic Hub',
+      icon: CircleStackIcon,
+      requiresAuth: true,
+      title: 'DCS - Semantic Hub',
+      order: 6,
+      roles: ['TEMPLATE_MANAGER'],
+    },
+  },
+  {
     path: '/auth/success',
     name: ROUTES.AUTH.SUCCESS,
     meta: { hideInSidebar: true, requiresAuth: false, layout: 'blank', title: 'DCS - Auth Success' },
@@ -422,6 +440,14 @@ router.beforeEach(async (to) => {
   }
 
   if (authStore.isAuthenticated) {
+    return true
+  }
+
+  // A valid stored token already carries the identity — restore it without a
+  // refresh round-trip; only refresh when there is no usable token (its
+  // rotating refresh cookie is single-use, so it must not be spent on every
+  // navigation).
+  if (authStore.restoreFromToken()) {
     return true
   }
 

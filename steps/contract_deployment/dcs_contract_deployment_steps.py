@@ -65,6 +65,8 @@ a second DCS instance, so it is NOT tagged @two-instance.
 
 import base64
 import hashlib
+
+import jcs
 import json
 import os
 import time
@@ -161,7 +163,7 @@ def step_given_force_state(context, name, state):
 # ---------------------------------------------------------------------------
 
 
-@given('contract "{name}" is submitted, reviewed, approved, and signed via the standard workflow')
+@step('contract "{name}" is submitted, reviewed, approved, and signed via the standard workflow')
 def step_given_full_workflow_to_signed(context, name):
     # Reuses the ceremony-aware helpers from contract_state_machine_steps.py
     # / real_signing_vertical rather than re-implementing the
@@ -481,10 +483,9 @@ def step_given_orce_reachable(context):
 def step_when_post_to_orce_directly(context, name):
     """Posts the SAME envelope shape the backend dispatches
     (command/deploy.go): a JSON-LD document whose dcs:contentHash covers the
-    whole envelope minus the hash field itself, canonicalized as recursively
-    key-sorted compact JSON without ASCII escaping (matching Go's
-    hashDeploymentPayload with SetEscapeHTML(false) and the flow's
-    sortKeysDeep + JSON.stringify)."""
+    whole envelope minus the hash field itself, canonicalized per RFC 8785
+    (JCS) — matching Go's hashDeploymentPayload and the flow's
+    sortKeysDeep + JSON.stringify."""
     did, updated_at = ContractService._contract_data(context, name)
     correlation_id = f"bdd-orce-{did}-{updated_at}".replace(":", "-").replace(" ", "-")
     envelope = {
@@ -498,10 +499,9 @@ def step_when_post_to_orce_directly(context, name):
             "@type": "dcs:Contract",
             "dcs:contractDid": did,
         },
-        "odrl:policy": {"@id": "urn:uuid:bdd-orce-policy-set", "@type": "odrl:Set", "uid": did},
+        "odrl:policy": {"@id": "urn:uuid:bdd-orce-policy-set", "@type": "odrl:Set"},
     }
-    canonical = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    content_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    content_hash = "sha256:" + hashlib.sha256(jcs.canonicalize(envelope)).hexdigest()
     envelope["dcs:contentHash"] = content_hash
     context.orce_sent_correlation_id = correlation_id
     context.orce_sent_content_hash = content_hash
@@ -528,3 +528,36 @@ def step_then_orce_acknowledges(context):
         f"verified ({context.orce_sent_content_hash!r}), got {ack.get('payload_hash')!r}: {ack!r}"
     )
     assert ack.get("activated_at"), f"Expected a non-empty 'activated_at' in the ORCE ack: {ack!r}"
+
+
+@then('the semantic KPI observations for "{name}" record a violated "{metric}" observation')
+def step_then_semantic_kpi_observations(context, name, metric):
+    """GET /contract/kpis/{did} (DCS-FR-CWE-09/-31): the reported KPIs as a
+    JSON-LD observation set — dcs:KPIObservation nodes anchored to the
+    Semantic Hub's versioned context, consumable by external tooling."""
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    resp = get_with_headers(context, f"{context.base_url}/contract/kpis/{did}", headers=manager_h)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert isinstance(body.get("@context"), str) and "/semantic/context/" in body["@context"], (
+        f"Expected the observation set's @context to be the hub's versioned context URL, got: {body.get('@context')}"
+    )
+    assert body.get("@type") == "dcs:KPIObservationSet", f"Expected a dcs:KPIObservationSet, got: {body.get('@type')}"
+    observations = body.get("dcs:observation") or []
+    matching = [
+        node for node in observations
+        if node.get("@type") == "dcs:KPIObservation" and node.get("dcs:metricName") == metric
+    ]
+    assert matching, (
+        f"Expected a dcs:KPIObservation for metric {metric!r}, got: {observations}"
+    )
+    assert any(node.get("dcs:violation") is True for node in matching), (
+        f"Expected a violated {metric!r} observation, got: {matching}"
+    )
+    # The observation references the contract's dereferenceable resource IRI,
+    # whose last path segment is the system key.
+    assert all(
+        str(node.get("dcs:aboutContract", {}).get("@id", "")).rstrip("/").rsplit("/", 1)[-1] == did
+        for node in matching
+    ), f"Expected every observation to reference contract {did}, got: {matching}"

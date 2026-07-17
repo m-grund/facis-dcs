@@ -1,316 +1,90 @@
-@prefix dcs:  <https://w3id.org/facis/dcs/ontology/v1#> .
-@prefix sh:   <http://www.w3.org/ns/shacl#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
-@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
 
-<https://w3id.org/facis/dcs/shapes/v1>
-  a owl:Ontology ;
-  sh:description "FACIS DCS starter SHACL package. Shapes are separate validation assets used by PACM contract content audits and external Semantic Hub/CI checks." .
+# Structural shape for the canonical dcs:documentStructure JSON-LD envelope
+# (the single supported contract shape since the greenfield rewrite — see
+# CLAUDE.md "Template Editor — JSON-LD as Single Source of Truth"). This is
+# the Semantic Hub's kind="shapes" seed (backend/internal/semantichub/assets,
+# ADR-8) — the sole source AuditContractContent's goRDFlib SHACL engine
+# validates produced contracts against (ADR-9). A contract's own IRI ("@id")
+# is its RDF subject already; sh:nodeKind checks it is a real IRI, not a
+# blank node — SHACL's equivalent of "requires a stable @id".
 
-dcs:ContractShape
+dcs:CanonicalContractShape
   a sh:NodeShape ;
   sh:targetClass dcs:Contract ;
+  sh:nodeKind sh:IRI ;
   sh:property [
-    sh:path dcs:did ;
+    sh:path dcs:metadata ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:node dcs:ContractMetadataShape ;
+    sh:message "A canonical contract requires dcs:metadata with a title." ;
+  ] ;
+  sh:property [
+    sh:path dcs:documentStructure ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "A canonical contract requires a dcs:documentStructure envelope." ;
+  ] .
+
+dcs:ContractMetadataShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:ContractMetadata ;
+  sh:property [
+    sh:path dcs:title ;
     sh:datatype xsd:string ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
-    sh:message "A contract requires a stable DID." ;
-  ] ;
+    sh:message "A canonical contract requires a title in dcs:metadata." ;
+  ] .
+
+# Every machine-readable ODRL rule must be backed by human-audited prose:
+# dcs:prose references the clause node whose text the rule operationalizes.
+dcs:OdrlDutyProseShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Duty ;
   sh:property [
-    sh:path dcs:contractVersion ;
-    sh:datatype xsd:integer ;
+    sh:path dcs:prose ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:minInclusive 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:derivedFromTemplate ;
     sh:nodeKind sh:IRI ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:validUntil ;
-    sh:datatype xsd:dateTime ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:party ;
-    sh:class dcs:CompanyParty ;
-    sh:node dcs:CompanyPartyShape ;
-    sh:minCount 2 ;
+    sh:message "An ODRL Duty requires dcs:prose referencing the human-readable clause it is backed by." ;
   ] .
 
-dcs:CompanyPartyShape
+dcs:OdrlPermissionProseShape
   a sh:NodeShape ;
-  sh:targetClass dcs:CompanyParty ;
+  sh:targetClass odrl:Permission ;
   sh:property [
-    sh:path dcs:role ;
-    sh:datatype xsd:string ;
-    sh:in ( "supplier" "customer" "provider" "client" ) ;
+    sh:path dcs:prose ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:legalName ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] .
-
-dcs:ContractTemplateShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:ContractTemplate ;
-  sh:property [
-    sh:path dcs:did ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:templateVersion ;
-    sh:datatype xsd:integer ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-    sh:minInclusive 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:schemaVersion ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] .
-
-dcs:ClauseShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:Clause ;
-  sh:property [
-    sh:path dcs:blockId ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:text ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:clauseVersion ;
-    sh:datatype xsd:integer ;
-    sh:minInclusive 1 ;
-  ] .
-
-dcs:SemanticConditionShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:SemanticCondition ;
-  sh:property [
-    sh:path dcs:conditionId ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:conditionName ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:schemaVersion ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:hasParameter ;
-    sh:node dcs:ParameterShape ;
-    sh:minCount 1 ;
-  ] .
-
-dcs:ParameterShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:Parameter ;
-  sh:property [
-    sh:path dcs:parameterName ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:parameterType ;
-    sh:datatype xsd:string ;
-    sh:in ( "string" "decimal" "integer" "boolean" "date" "enum" ) ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:required ;
-    sh:datatype xsd:boolean ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:hasConstraint ;
-    sh:node dcs:ConstraintShape ;
-  ] .
-
-dcs:ConstraintShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:Constraint ;
-  sh:property [
-    sh:path dcs:operator ;
-    sh:in ( dcs:Equals dcs:NotEquals dcs:GreaterThan dcs:GreaterThanOrEqual dcs:LessThan dcs:LessThanOrEqual dcs:Between dcs:Contains dcs:MatchesRegex ) ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:rightOperand ;
-    sh:minCount 1 ;
-  ] .
-
-dcs:SemanticRuleShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:SemanticRule ;
-  sh:property [
-    sh:path dcs:ruleId ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:leftOperand ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:operator ;
-    sh:in ( dcs:Equals dcs:NotEquals dcs:GreaterThan dcs:GreaterThanOrEqual dcs:LessThan dcs:LessThanOrEqual dcs:Between dcs:Contains dcs:MatchesRegex ) ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] .
-
-dcs:SLAAgreementShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:SLAAgreement ;
-  sh:property [
-    sh:path dcs:hasService ;
-    sh:node dcs:ServiceShape ;
-    sh:minCount 1 ;
-  ] .
-
-dcs:ServiceShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:Service ;
-  sh:property [
-    sh:path dcs:serviceId ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:name ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:hasSLO ;
-    sh:node dcs:SLOShape ;
-    sh:minCount 1 ;
-  ] .
-
-dcs:SLOShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:SLO ;
-  sh:property [
-    sh:path dcs:sloType ;
-    sh:datatype xsd:string ;
-    sh:in ( "availability" "responseTime" "resolutionTime" "errorRate" "throughput" ) ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:targetValue ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] .
-
-dcs:ContractAdjustmentShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:ContractAdjustment ;
-  sh:property [
-    sh:path dcs:adjustmentId ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:contractVersion ;
-    sh:datatype xsd:integer ;
-    sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:operation ;
-    sh:datatype xsd:string ;
-    sh:in ( "add" "remove" "replace" "move" "setValue" ) ;
-    sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:targetId ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-  ] .
-
-dcs:DeploymentShape
-  a sh:NodeShape ;
-  sh:targetClass dcs:Deployment ;
-  sh:property [
-    sh:path dcs:targetSystem ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:targetEndpoint ;
     sh:nodeKind sh:IRI ;
-    sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:hasPolicyBundle ;
-    sh:minCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:correlationId ;
-    sh:datatype xsd:string ;
-    sh:maxCount 1 ;
+    sh:message "An ODRL Permission requires dcs:prose referencing the human-readable clause it is backed by." ;
   ] .
 
-dcs:ProvenanceEventShape
+dcs:OdrlProhibitionProseShape
   a sh:NodeShape ;
-  sh:targetClass dcs:ProvenanceEvent ;
+  sh:targetClass odrl:Prohibition ;
   sh:property [
-    sh:path dcs:eventId ;
-    sh:datatype xsd:string ;
+    sh:path dcs:prose ;
     sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:eventType ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:actor ;
-    sh:datatype xsd:string ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
-  ] ;
-  sh:property [
-    sh:path dcs:occurredAt ;
-    sh:datatype xsd:dateTime ;
-    sh:minCount 1 ;
-    sh:maxCount 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:message "An ODRL Prohibition requires dcs:prose referencing the human-readable clause it is backed by." ;
   ] .
+
+dcs:RequirementFieldShape
+    a sh:NodeShape ;
+    sh:targetClass dcs:RequirementField ;
+    sh:property [
+        sh:path dcs:parameterName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "A requirement field must declare the parameter it binds (dcs:parameterName)." ;
+    ] ;
+    sh:property [
+        sh:path dcs:parameterValue ;
+        sh:maxCount 1 ;
+        sh:message "A requirement field carries at most one inline submitted value (dcs:parameterValue)." ;
+    ] .

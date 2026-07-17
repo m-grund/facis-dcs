@@ -3,11 +3,15 @@ import TemplateEditors from '@template-repository/components/TemplateEditors.vue
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
+import { storeToRefs } from 'pinia'
 import { computed, type Ref, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import TemplateManagerActions from '@/components/template/TemplateManagerActions.vue'
 import VerificationFindingsDialog from '@/components/VerificationFindingsDialog.vue'
+import { useDocumentExport } from '@/composables/useDocumentExport'
+import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
+import { templateStory, toBannerActions } from '@/core/workflow-story'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useNavStore } from '@/stores/nav-store'
 import CopyTemplateButton from '../components/CopyTemplateButton.vue'
@@ -19,6 +23,9 @@ const navStore = useNavStore()
 
 const templateEditorUiStore = useTemplateEditorUiStore()
 const draftStore = useDcsDraftStore()
+const { state, templateType } = storeToRefs(draftStore)
+
+const story = computed(() => templateStory(state.value, { templateType: templateType.value }))
 
 const commentDialog = useTemplateRef<InstanceType<typeof ConfirmationModal>>('comment-dialog')
 
@@ -138,25 +145,29 @@ const returnToDraft = async () => {
   }
 }
 
-const exportPDF = async () => {
-  if (route.params?.did === null || route.params?.did === undefined || Array.isArray(route.params?.did)) {
-    return
-  }
+const { download: downloadExport, exporting } = useDocumentExport()
 
-  const did = route.params?.did ?? ''
-  const blob = await contractTemplateService.exportPdf(did)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `template-${did}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+const exportPDF = async () => {
+  const did = route.params?.did
+  if (!did || Array.isArray(did)) return
+  await downloadExport(() => contractTemplateService.exportPdf(did), `template-${did}.pdf`)
 }
 </script>
 
 <template>
   <div class="-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8">
-    <TemplateEditors title="Review Template" />
+    <TemplateEditors title="Review Template">
+      <template #before-tabs>
+        <WorkflowStageBanner
+          v-if="state"
+          :steps="story.steps"
+          :current-key="story.currentKey"
+          :headline="story.headline"
+          :narrative="story.narrative"
+          :actions="toBannerActions(story.actionHints)"
+        />
+      </template>
+    </TemplateEditors>
 
     <!-- Pinned Footer -->
     <div v-if="hasDid" class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
@@ -164,7 +175,7 @@ const exportPDF = async () => {
       <ConfirmationModal ref="comment-dialog" />
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <button class="btn btn-outline md:w-32" :disabled="exporting" @click="exportPDF">Export PDF</button>
         <CopyTemplateButton :disabled="!isCreator && !isManager" class="btn flex-1 btn-primary" />
         <!-- Verify / Return to draft / request changes -->
         <VerificationFindingsDialog

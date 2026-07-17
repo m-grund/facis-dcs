@@ -1,4 +1,4 @@
-import ontologyText from '../../../../../../docs/ontology/facis-sla-ontology.ttl?raw'
+import { Parser, type Quad } from 'n3'
 import type {
   DomainFieldDefinition,
   SemanticEntityRole,
@@ -8,10 +8,13 @@ import type {
   SemanticValueOption,
 } from '@/modules/template-repository/models/contract-template'
 
-interface OntologyStatement {
-  subject: string
-  text: string
-}
+/**
+ * The SLA domain-field catalog (dcs:DomainField/dcs:ValueConstraint
+ * individuals plus taxonomy value options) driving the semantic-condition
+ * builder. Fetched at startup from the Semantic Hub's registered
+ * "facis-sla" ontology — registering a new version in the hub changes what
+ * the builder offers, no rebuild involved — and parsed with N3.
+ */
 
 export interface OntologySelectOption<TValue extends string = string> {
   value: TValue
@@ -22,198 +25,73 @@ export interface OntologyEntityTypeOption extends OntologySelectOption<SemanticE
   roleRequired: boolean
 }
 
-const quotedValue = /"([^"]*)"/g
-const numericValue = /[-+]?[0-9]+(?:\.[0-9]+)?/
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+const RDF_PROPERTY = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property'
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#'
+const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class'
+const SKOS = 'http://www.w3.org/2004/02/skos/core#'
+const XSD = 'http://www.w3.org/2001/XMLSchema#'
+const DCS = 'https://w3id.org/facis/dcs/ontology/v1#'
 
-export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = parseOntologyDomainFields(ontologyText)
-export const ONTOLOGY_ENTITY_TYPES: readonly OntologyEntityTypeOption[] = parseOntologyEntityTypes(ontologyText)
-export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
-  parseOntologyEntityRoles(ontologyText)
+class OntologyGraph {
+  private bySubject = new Map<string, Quad[]>()
 
-function parseOntologyDomainFields(source: string): DomainFieldDefinition[] {
-  const statements = parseStatements(source)
-  const constraints = parseValueConstraints(statements)
-  const classLabels = parseClassLabels(statements)
+  constructor(quads: Quad[]) {
+    for (const quad of quads) {
+      const key = quad.subject.value
+      const list = this.bySubject.get(key)
+      if (list) list.push(quad)
+      else this.bySubject.set(key, [quad])
+    }
+  }
 
-  return statements
-    .filter((statement) => statement.text.includes(' a dcs:DomainField'))
-    .map((statement) => {
-      const semanticPath = firstLiteral(statement.text, 'dcs:semanticPath')
-      const schemaRef = firstLiteral(statement.text, 'dcs:schemaRef')
-      const type = firstLiteral(statement.text, 'dcs:parameterType') as SemanticParameterType
-      const label = firstLiteral(statement.text, 'rdfs:label')
-      if (!semanticPath || !schemaRef || !type || !label) {
-        throw new Error(`Ontology domain field ${statement.subject} is incomplete.`)
+  subjectsOfType(typeIRI: string): string[] {
+    const subjects: string[] = []
+    for (const [subject, quads] of this.bySubject) {
+      if (quads.some((quad) => quad.predicate.value === RDF_TYPE && quad.object.value === typeIRI)) {
+        subjects.push(subject)
       }
-      const valueConstraintRef = firstResource(statement.text, 'dcs:hasValueConstraint')
-      const statementType = firstResource(statement.text, 'dcs:statementType') || undefined
-      return {
-        ontologyId: expandResource(statement.subject),
-        semanticPath,
-        schemaRef,
-        type,
-        label,
-        statementType,
-        statementTypeLabel: statementType ? classLabels.get(localName(statementType)) : undefined,
-        valueConstraint: valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined,
-      }
-    })
-    .sort((left, right) => left.semanticPath.localeCompare(right.semanticPath))
-}
-
-function parseOntologyEntityTypes(source: string): OntologyEntityTypeOption[] {
-  const statements = parseStatements(source)
-  const statementTypeNames = new Set(
-    statements
-      .filter((statement) => statement.text.includes(' a dcs:DomainField'))
-      .map((statement) => localName(firstResource(statement.text, 'dcs:statementType')))
-      .filter(Boolean),
-  )
-  const documentEntityTypeNames = new Set(
-    statements
-      .filter((statement) => statement.text.includes('dcs:documentProperty'))
-      .map((statement) => localName(firstResource(statement.text, 'rdfs:range')))
-      .filter((name) => name && statementTypeNames.has(name)),
-  )
-  const entityTypeNames = new Set(
-    documentEntityTypeNames.size
-      ? documentEntityTypeNames
-      : [...statementTypeNames].filter((name) => !isPrimitiveCodeType(name)),
-  )
-  const roleRequired = parseOntologyEntityRoles(source).length > 0
-
-  return statements
-    .filter((statement) => statement.text.includes(' a rdfs:Class'))
-    .filter((statement) => entityTypeNames.has(localName(statement.subject)))
-    .map((statement) => {
-      const value = localName(statement.subject)
-      const label = firstLiteral(statement.text, 'rdfs:label') || value
-      if (!value) throw new Error(`Ontology entity type ${statement.subject} is incomplete.`)
-      return { value, label, roleRequired }
-    })
-    .sort((left, right) => left.label.localeCompare(right.label))
-}
-
-function parseOntologyEntityRoles(source: string): OntologySelectOption<SemanticEntityRole>[] {
-  const statements = parseStatements(source)
-  const constraints = parseValueConstraints(statements)
-  const roleConstraintRefs = statements
-    .filter((statement) => statement.text.includes(' a rdf:Property'))
-    .filter((statement) => localName(firstResource(statement.text, 'rdfs:range')).endsWith('RoleCode'))
-    .map((statement) => firstResource(statement.text, 'dcs:hasValueConstraint'))
-    .filter(Boolean)
-  const allowedValues = roleConstraintRefs.flatMap((ref) => constraints.get(ref)?.allowedValues ?? [])
-
-  return allowedValues
-    .map((value) => ({ value, label: formatOntologyLabel(value) }))
-    .sort((left, right) => left.label.localeCompare(right.label))
-}
-
-function isPrimitiveCodeType(name: string): boolean {
-  return name.endsWith('Code')
-}
-
-function parseClassLabels(statements: readonly OntologyStatement[]): ReadonlyMap<string, string> {
-  const labels = new Map<string, string>()
-  for (const statement of statements) {
-    if (!statement.text.includes(' a rdfs:Class') && !statement.text.includes(' a owl:Class')) continue
-    const name = localName(statement.subject)
-    const label = firstLiteral(statement.text, 'rdfs:label') || name
-    if (name) labels.set(name, label)
+    }
+    return subjects
   }
-  return labels
-}
 
-function parseValueConstraints(statements: readonly OntologyStatement[]): ReadonlyMap<string, SemanticValueConstraint> {
-  const constraints = new Map<string, SemanticValueConstraint>()
-  const valueOptions = parseValueOptions(statements)
-
-  for (const statement of statements) {
-    if (!statement.text.includes(' a dcs:ValueConstraint')) continue
-    constraints.set(statement.subject, parseValueConstraint(statement.text, valueOptions))
+  values(subject: string, predicateIRI: string): string[] {
+    return (this.bySubject.get(subject) ?? [])
+      .filter((quad) => quad.predicate.value === predicateIRI)
+      .map((quad) => quad.object.value)
   }
-  return constraints
-}
 
-function parseStatements(source: string): OntologyStatement[] {
-  const statements: OntologyStatement[] = []
-  let lines: string[] = []
-
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#') || line.startsWith('@prefix')) continue
-    lines.push(line)
-    if (!line.endsWith(' .') && line !== '.') continue
-    const text = lines.join('\n')
-    const subject = text.split(/\s+/, 1)[0] ?? ''
-    statements.push({ subject, text })
-    lines = []
+  first(subject: string, predicateIRI: string): string {
+    return this.values(subject, predicateIRI)[0] ?? ''
   }
-  return statements
-}
 
-function parseValueConstraint(
-  statement: string,
-  catalogOptions: ReadonlyMap<string, SemanticValueOption>,
-): SemanticValueConstraint {
-  const allowedValues = literals(statement, 'dcs:allowedValue')
-  return {
-    format: firstLiteral(statement, 'dcs:format') as SemanticValueConstraint['format'],
-    pattern: firstLiteral(statement, 'dcs:pattern') || undefined,
-    allowedValues,
-    valueOptions: allowedValues
-      .map((value) => catalogOptions.get(value))
-      .filter((option): option is SemanticValueOption => !!option),
-    allowedValuesRef: firstLiteral(statement, 'dcs:allowedValuesRef') || undefined,
-    min: firstNumber(statement, 'dcs:minInclusive'),
-    max: firstNumber(statement, 'dcs:maxInclusive'),
-    description: firstLiteral(statement, 'rdfs:label') || undefined,
+  firstNumber(subject: string, predicateIRI: string): number | undefined {
+    const raw = this.first(subject, predicateIRI)
+    if (raw === '') return undefined
+    const parsed = Number(raw)
+    return Number.isNaN(parsed) ? undefined : parsed
+  }
+
+  subjects(): string[] {
+    return [...this.bySubject.keys()]
   }
 }
 
-function parseValueOptions(statements: readonly OntologyStatement[]): ReadonlyMap<string, SemanticValueOption> {
-  const options = new Map<string, SemanticValueOption>()
-  for (const statement of statements) {
-    const value = firstLiteral(statement.text, 'skos:notation')
-    if (!value) continue
-    options.set(value, {
-      value,
-      label: firstLiteral(statement.text, 'skos:prefLabel') || undefined,
-      symbol: firstLiteral(statement.text, 'dcs:valueSymbol') || undefined,
-    })
+async function loadOntologyGraph(): Promise<OntologyGraph> {
+  // Raw fetch, deliberately not the app's http client: this module loads at
+  // import time (top-level await below), before Pinia exists — and the http
+  // client's auth interceptor needs an active Pinia. The hub's resolve
+  // routes are public.
+  const response = await fetch('/api/semantic/ontology/facis-sla', { headers: { Accept: 'application/json' } })
+  if (!response.ok) {
+    throw new Error(`Semantic Hub ontology facis-sla is unavailable: HTTP ${response.status}`)
   }
-  return options
+  const body = (await response.json()) as { content: string }
+  return new OntologyGraph(new Parser().parse(body.content))
 }
 
-function firstLiteral(statement: string, predicate: string): string {
-  return literals(statement, predicate)[0] ?? ''
-}
-
-function literals(statement: string, predicate: string): string[] {
-  const line = predicateLine(statement, predicate)
-  if (!line) return []
-  return [...line.matchAll(quotedValue)].map((match) => match[1] ?? '')
-}
-
-function firstNumber(statement: string, predicate: string): number | undefined {
-  const match = numericValue.exec(predicateLine(statement, predicate))
-  return match ? Number(match[0]) : undefined
-}
-
-function firstResource(statement: string, predicate: string): string {
-  const line = predicateLine(statement, predicate)
-  if (!line) return ''
-  return line.split(/\s+/)[1]?.replace(/[;.]+$/, '') ?? ''
-}
-
-function localName(resource: string): string {
-  return resource.replace(/^.*[:#/]/, '')
-}
-
-function expandResource(resource: string): string {
-  if (resource.startsWith('dcst:')) return `https://w3id.org/facis/dcs/taxonomy/v1#${resource.slice('dcst:'.length)}`
-  if (resource.startsWith('dcs:')) return `https://w3id.org/facis/dcs/ontology/v1#${resource.slice(4)}`
-  return resource
+function localName(iri: string): string {
+  return iri.replace(/^.*[:#/]/, '')
 }
 
 function formatOntologyLabel(value: string): string {
@@ -221,13 +99,70 @@ function formatOntologyLabel(value: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-function predicateLine(statement: string, predicate: string): string {
-  return (
-    statement
-      .split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.startsWith(`${predicate} `)) ?? ''
-  )
+function parseValueOptions(graph: OntologyGraph): ReadonlyMap<string, SemanticValueOption> {
+  const options = new Map<string, SemanticValueOption>()
+  for (const subject of graph.subjects()) {
+    const value = graph.first(subject, `${SKOS}notation`)
+    if (!value) continue
+    options.set(value, {
+      value,
+      label: graph.first(subject, `${SKOS}prefLabel`) || undefined,
+      symbol: graph.first(subject, `${DCS}valueSymbol`) || undefined,
+    })
+  }
+  return options
+}
+
+function parseValueConstraints(graph: OntologyGraph): ReadonlyMap<string, SemanticValueConstraint> {
+  const valueOptions = parseValueOptions(graph)
+  const constraints = new Map<string, SemanticValueConstraint>()
+  for (const subject of graph.subjectsOfType(`${DCS}ValueConstraint`)) {
+    const allowedValues = graph.values(subject, `${DCS}allowedValue`)
+    constraints.set(subject, {
+      format: (graph.first(subject, `${DCS}format`) || undefined) as SemanticValueConstraint['format'],
+      pattern: graph.first(subject, `${DCS}pattern`) || undefined,
+      allowedValues,
+      valueOptions: allowedValues
+        .map((value) => valueOptions.get(value))
+        .filter((option): option is SemanticValueOption => !!option),
+      allowedValuesRef: graph.first(subject, `${DCS}allowedValuesRef`) || undefined,
+      min: graph.firstNumber(subject, `${DCS}minInclusive`),
+      max: graph.firstNumber(subject, `${DCS}maxInclusive`),
+      description: graph.first(subject, `${RDFS}label`) || undefined,
+    })
+  }
+  return constraints
+}
+
+function parseClassLabels(graph: OntologyGraph): ReadonlyMap<string, string> {
+  const labels = new Map<string, string>()
+  for (const subject of [...graph.subjectsOfType(`${RDFS}Class`), ...graph.subjectsOfType(OWL_CLASS)]) {
+    labels.set(subject, graph.first(subject, `${RDFS}label`) || localName(subject))
+  }
+  return labels
+}
+
+/** Maps a field's rdfs:range xsd datatype to the builder's parameter type. */
+function parameterTypeForRange(rangeIRI: string): SemanticParameterType {
+  switch (rangeIRI) {
+    case `${XSD}decimal`:
+      return 'decimal'
+    case `${XSD}integer`:
+      return 'integer'
+    case `${XSD}boolean`:
+      return 'boolean'
+    case `${XSD}date`:
+      return 'date'
+    default:
+      return 'string'
+  }
+}
+
+/** The dcs:parameterName a field's IRI encodes: its local name without the "field-" marker, dot-separated. */
+function parameterNameFor(fieldIRI: string): string {
+  return localName(fieldIRI)
+    .replace(/^field-/, '')
+    .replace(/-/g, '.')
 }
 
 function cloneConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
@@ -238,3 +173,82 @@ function cloneConstraint(constraint?: SemanticValueConstraint): SemanticValueCon
     valueOptions: constraint.valueOptions ? constraint.valueOptions.map((option) => ({ ...option })) : undefined,
   }
 }
+
+function parseOntologyDomainFields(graph: OntologyGraph): DomainFieldDefinition[] {
+  const constraints = parseValueConstraints(graph)
+  const classLabels = parseClassLabels(graph)
+
+  return graph
+    .subjectsOfType(`${DCS}DomainField`)
+    .map((subject) => {
+      const range = graph.first(subject, `${RDFS}range`)
+      const label = graph.first(subject, `${RDFS}label`)
+      if (!range || !label) {
+        throw new Error(`Ontology domain field ${subject} is incomplete.`)
+      }
+      const valueConstraintRef = graph.first(subject, `${DCS}hasValueConstraint`)
+      const valueConstraint = valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined
+      const domain = graph.first(subject, `${RDFS}domain`) || undefined
+      // A field is an enum when its constraint enumerates allowed values.
+      const type: SemanticParameterType = valueConstraint?.allowedValues?.length ? 'enum' : parameterTypeForRange(range)
+      return {
+        ontologyId: subject,
+        parameterName: parameterNameFor(subject),
+        type,
+        label,
+        domain,
+        domainLabel: domain ? classLabels.get(domain) : undefined,
+        valueConstraint,
+      }
+    })
+    .sort((left, right) => left.ontologyId.localeCompare(right.ontologyId))
+}
+
+function parseOntologyEntityRoles(graph: OntologyGraph): OntologySelectOption<SemanticEntityRole>[] {
+  const constraints = parseValueConstraints(graph)
+  const allowedValues = graph
+    .subjectsOfType(RDF_PROPERTY)
+    .filter((subject) => localName(graph.first(subject, `${RDFS}range`)).endsWith('RoleCode'))
+    .map((subject) => graph.first(subject, `${DCS}hasValueConstraint`))
+    .filter(Boolean)
+    .flatMap((ref) => constraints.get(ref)?.allowedValues ?? [])
+
+  return allowedValues
+    .map((value) => ({ value: value, label: formatOntologyLabel(value) }))
+    .sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function parseOntologyEntityTypes(graph: OntologyGraph): OntologyEntityTypeOption[] {
+  const domainClassIRIs = new Set(
+    graph
+      .subjectsOfType(`${DCS}DomainField`)
+      .map((subject) => graph.first(subject, `${RDFS}domain`))
+      .filter(Boolean),
+  )
+  // Document-level entity classes (the ranges of properties carried by the
+  // document itself, e.g. dcs:party → dcs:CompanyParty) represent parties
+  // and require a contract role on their requirements.
+  const roleRequiredIRIs = new Set(
+    graph
+      .subjects()
+      .filter((subject) => graph.first(subject, `${DCS}documentProperty`) !== '')
+      .map((subject) => graph.first(subject, `${RDFS}range`))
+      .filter((iri) => domainClassIRIs.has(iri)),
+  )
+  const rolesExist = parseOntologyEntityRoles(graph).length > 0
+
+  return [...domainClassIRIs]
+    .map((iri) => ({
+      value: localName(iri),
+      label: graph.first(iri, `${RDFS}label`) || localName(iri),
+      roleRequired: rolesExist && roleRequiredIRIs.has(iri),
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label))
+}
+
+const graph = await loadOntologyGraph()
+
+export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = parseOntologyDomainFields(graph)
+export const ONTOLOGY_ENTITY_TYPES: readonly OntologyEntityTypeOption[] = parseOntologyEntityTypes(graph)
+export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
+  parseOntologyEntityRoles(graph)

@@ -73,6 +73,10 @@ def step_when_compliance_check(context, name):
 _PASSING_VALIDATION_FINDINGS = {
     "Document integrity check passed",
     "Embedded PID presentation re-verified and cross-checked against the signature record",
+    # Phase 4 (ADR-9): crossCheckSHACLDrift's positive confirmation — the
+    # pinned-hub-version SHACL report re-ran and matched the hash embedded
+    # in the signing evidence (signingmanagement/query/validate.go).
+    "SHACL validation report re-verified against the pinned hub schema version — no drift",
     "Validation passed",
 }
 

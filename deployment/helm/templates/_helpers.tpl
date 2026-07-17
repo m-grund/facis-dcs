@@ -383,6 +383,18 @@ true. Derived from <fullname> so two releases sharing one namespace (e.g. the
 BDD two-instance suite's 'dcs' / 'dcs2' releases) never collide on a shared
 literal name.
 */}}
+{{/*
+Public base URL for the absolute IRIs a produced document carries (schema
+anchors, C2PA remote manifests): the did:web hostname — resolvable both
+in-cluster and externally — combined with publicBaseURL's scheme and path.
+*/}}
+{{- define "digital-contracting-service.publicAnchorBaseURL" -}}
+{{- if .Values.route.publicBaseURL -}}
+{{- $u := urlParse .Values.route.publicBaseURL -}}
+{{- printf "%s://%s%s" $u.scheme (include "digital-contracting-service.didHostname" .) $u.path -}}
+{{- end -}}
+{{- end }}
+
 {{- define "digital-contracting-service.identitySecretName" -}}
 {{- default (printf "%s-identity" (include "digital-contracting-service.fullname" .)) .Values.identity.secretName -}}
 {{- end }}

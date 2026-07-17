@@ -98,8 +98,8 @@
       "ontologyTerm": "dcst:field-contract-jurisdiction",
       "appliesToTemplateTypes": ["CONTRACT_TEMPLATE"],
       "parameters": {
-        "semanticPaths": [
-          "contract.jurisdiction"
+        "fieldIris": [
+          "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-jurisdiction"
         ]
       }
     },
@@ -111,8 +111,8 @@
       "ontologyTerm": "dcst:field-company-location-country",
       "appliesToTemplateTypes": ["CONTRACT_TEMPLATE"],
       "parameters": {
-        "semanticPaths": [
-          "company.location.country"
+        "fieldIris": [
+          "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"
         ]
       }
     },
@@ -124,8 +124,8 @@
       "ontologyTerm": "dcst:field-signature-requiredLevel",
       "appliesToTemplateTypes": ["CONTRACT_TEMPLATE"],
       "parameters": {
-        "semanticPaths": [
-          "signature.requiredLevel"
+        "fieldIris": [
+          "https://w3id.org/facis/dcs/taxonomy/v1#field-signature-requiredLevel"
         ]
       }
     },

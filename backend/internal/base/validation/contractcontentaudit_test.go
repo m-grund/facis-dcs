@@ -1,10 +1,83 @@
 package validation
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// fixtureShapeSource is a ShapeSource backed by the real Semantic Hub
+// authoring files (docs/semantic-ontology/...) — the same content the hub
+// seeds itself with (ADR-8) — installed process-wide in TestMain
+// (documentdata_test.go) so tests exercise the real goRDFlib SHACL engine
+// (ADR-9) end to end without needing a live database.
+type fixtureShapeSource struct {
+	shapesTTL        string
+	profileYAML      string
+	contextJSON      string
+	ontologyTTL      string
+	externalContexts map[string]string
+}
+
+func (f fixtureShapeSource) ActiveShapes(context.Context) (string, int, error) {
+	return f.shapesTTL, 1, nil
+}
+
+func (f fixtureShapeSource) ActiveProfile(context.Context) (string, int, error) {
+	return f.profileYAML, 1, nil
+}
+
+func (f fixtureShapeSource) ActiveContext(context.Context) (string, int, error) {
+	return f.contextJSON, 1, nil
+}
+
+func (f fixtureShapeSource) ShapesAt(_ context.Context, _ int) (string, error) {
+	return f.shapesTTL, nil
+}
+
+func (f fixtureShapeSource) ContextAt(_ context.Context, _ int) (string, error) {
+	return f.contextJSON, nil
+}
+
+func (f fixtureShapeSource) ContextByIRI(_ context.Context, iri string) (string, error) {
+	if content, ok := f.externalContexts[iri]; ok {
+		return content, nil
+	}
+	return "", fmt.Errorf("context %q is not registered", iri)
+}
+
+// ActiveDomainOntology defaults to the hub's seed SLA ontology asset, so
+// fixtures that only override shapes keep a working domain-field index.
+func (f fixtureShapeSource) ActiveDomainOntology(context.Context) (string, int, error) {
+	if f.ontologyTTL != "" {
+		return f.ontologyTTL, 1, nil
+	}
+	return mustReadRepoFile("backend/internal/semantichub/assets/facis-sla-ontology.ttl"), 1, nil
+}
+
+// mustReadRepoFile climbs from the package directory to find a repo-root
+// relative path (go test's working directory is the package source
+// directory) — hard-fails loudly rather than silently skipping if the
+// authoring file has moved, matching the "never soft-fail a required
+// dependency" rule.
+func mustReadRepoFile(relPath string) string {
+	candidates := []string{
+		relPath,
+		filepath.Join("..", "..", "..", relPath),
+		filepath.Join("..", "..", "..", "..", relPath),
+	}
+	for _, candidate := range candidates {
+		if data, err := os.ReadFile(candidate); err == nil {
+			return string(data)
+		}
+	}
+	panic("test fixture: could not find " + relPath + " from any candidate path")
+}
 
 // wrapODRLSet encloses rule nodes in the canonical odrl:Set shape
 // (validateODRLPoliciesShape rejects bare non-empty rule arrays); an empty
@@ -14,10 +87,9 @@ func wrapODRLSet(rules []any) any {
 		return []any{}
 	}
 	return map[string]any{
-		"@type":        "odrl:Set",
-		"uid":          "did:example:contract",
-		"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-		"odrl:duty":    rules,
+		"@type":           "odrl:Agreement",
+		"odrl:profile":    map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+		"odrl:obligation": rules,
 	}
 }
 
@@ -30,22 +102,106 @@ func odrlContract(fieldID, conditionID, parameterName string, policies []any, ac
 				"dcs:conditionId": conditionID,
 				"dcs:fields": []any{
 					map[string]any{
-						"@id":               fieldID,
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": parameterName,
+						"@id":                fieldID,
+						"@type":              "dcs:RequirementField",
+						"dcs:parameterName":  parameterName,
+						"dcs:parameterValue": actualValue,
 					},
 				},
 			},
 		},
-		"dcs:policies":            wrapODRLSet(policies),
-		"semanticConditionValues": []any{map[string]any{"conditionId": conditionID, "parameterName": parameterName, "parameterValue": actualValue}},
+		"dcs:policies": wrapODRLSet(policies),
+	}
+}
+
+// setInlineFieldValue sets a submitted value inline on the requirement field
+// with the given @id, wherever it is declared (including composed
+// sub-templates) — the shape the audit reads now that values live on the
+// field rather than a separate semanticConditionValues array.
+func setInlineFieldValue(node any, fieldID string, value any) bool {
+	switch n := node.(type) {
+	case map[string]any:
+		if id, _ := n["@id"].(string); id == fieldID {
+			if _, isField := n["dcs:parameterName"]; isField {
+				n["dcs:parameterValue"] = value
+				return true
+			}
+		}
+		for _, child := range n {
+			if setInlineFieldValue(child, fieldID, value) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range n {
+			if setInlineFieldValue(child, fieldID, value) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// applyInlineFieldValues sets each {forField, parameterValue} entry inline on
+// the field it references.
+func applyInlineFieldValues(contract map[string]any, entries []any) {
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		fieldID, _ := entry["forField"].(string)
+		setInlineFieldValue(contract, fieldID, entry["parameterValue"])
+	}
+}
+
+// deleteInlineFieldValue removes the inline value from the field with the
+// given @id.
+func deleteInlineFieldValue(node any, fieldID string) bool {
+	switch n := node.(type) {
+	case map[string]any:
+		if id, _ := n["@id"].(string); id == fieldID {
+			if _, isField := n["dcs:parameterName"]; isField {
+				delete(n, "dcs:parameterValue")
+				return true
+			}
+		}
+		for _, child := range n {
+			if deleteInlineFieldValue(child, fieldID) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range n {
+			if deleteInlineFieldValue(child, fieldID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// clearInlineFieldValues removes every inline submitted value in the document.
+func clearInlineFieldValues(node any) {
+	switch n := node.(type) {
+	case map[string]any:
+		delete(n, "dcs:parameterValue")
+		for _, child := range n {
+			clearInlineFieldValues(child)
+		}
+	case []any:
+		for _, child := range n {
+			clearInlineFieldValues(child)
+		}
 	}
 }
 
 func odrlDuty(id, fieldID, operator string, rightOperand any) map[string]any {
 	return map[string]any{
-		"@id":   id,
-		"@type": "odrl:Duty",
+		"@id":         id,
+		"@type":       "odrl:Duty",
+		"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+		"odrl:action": map[string]any{"@id": "dcs:provideCompliantValue"},
 		"odrl:constraint": map[string]any{
 			"@type":             "odrl:Constraint",
 			"odrl:leftOperand":  map[string]any{"@id": fieldID},
@@ -66,7 +222,7 @@ func TestAuditContractContentFlagsBlacklistedCountry(t *testing.T) {
 		"RUS",
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.Contains(t, policyFindingRuleIDs(findings), "FACIS-CONTRACT-STATIC-001")
@@ -79,7 +235,7 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 	paymentFieldID := "urn:dcs:field:payment-amount"
 
 	contract := map[string]any{
-		"@context": []any{"https://w3id.org/facis/sla/ontology"},
+		"@context": map[string]any{"sla": "https://w3id.org/facis/sla/ontology#"},
 		"@id":      "urn:facis:dcs:contract:sla:example-001",
 		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
 		"dcs:contractData": []any{
@@ -100,14 +256,14 @@ func TestAuditContractContentAcceptsCompliantContract(t *testing.T) {
 			odrlDuty("FACIS-CONTRACT-STATIC-002", lawFieldID, "odrl:isAnyOf", []any{"DE", "AT", "CH"}),
 			odrlDuty("FACIS-CONTRACT-STATIC-003", paymentFieldID, "odrl:lteq", float64(10000)),
 		}),
-		"semanticConditionValues": []any{
-			map[string]any{"conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
-			map[string]any{"conditionId": "contract", "parameterName": "governingLaw", "parameterValue": "DE"},
-			map[string]any{"conditionId": "contract", "parameterName": "amount", "parameterValue": float64(9500)},
-		},
 	}
+	applyInlineFieldValues(contract, []any{
+		map[string]any{"forField": countryFieldID, "parameterValue": "DEU"},
+		map[string]any{"forField": lawFieldID, "parameterValue": "DE"},
+		map[string]any{"forField": paymentFieldID, "parameterValue": float64(9500)},
+	})
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	for _, finding := range findings {
@@ -122,7 +278,7 @@ func TestAuditContractContentFlagsExceededMaximum(t *testing.T) {
 		float64(150000),
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-003", "error"))
@@ -135,7 +291,7 @@ func TestAuditContractContentFlagsInvalidJurisdiction(t *testing.T) {
 		"ZZZ",
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "error"))
@@ -148,7 +304,7 @@ func TestAuditContractContentAcceptsValidJurisdiction(t *testing.T) {
 		"DEU",
 	)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-STATIC-COUNTRY", "info"))
@@ -156,94 +312,125 @@ func TestAuditContractContentAcceptsValidJurisdiction(t *testing.T) {
 
 func TestAuditContractContentLoadsDefaultPolicyDocument(t *testing.T) {
 	contract := canonicalAuditContract()
-	contract["semanticConditionValues"] = append(contract["semanticConditionValues"].([]any),
-		map[string]any{"conditionId": "condition-legal", "parameterName": "contract.jurisdiction", "parameterValue": "DEU"},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.availability", "parameterValue": 99.95},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.responseTime", "parameterValue": 10},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.resolutionTime", "parameterValue": 120},
-		map[string]any{"conditionId": "condition-signature", "parameterName": "signature.requiredLevel", "parameterValue": "AES"},
+	contract["dcs:contractData"] = append(contract["dcs:contractData"].([]any),
+		slaRequirement("condition-legal", "contract.jurisdiction"),
+		slaRequirement("condition-service", "service.sla.availability", "service.sla.responseTime", "service.sla.resolutionTime"),
+		slaRequirement("condition-signature", "signature.requiredLevel"),
 	)
+	applyInlineFieldValues(contract, []any{
+		map[string]any{"forField": slaFieldID("condition-legal", "contract.jurisdiction"), "parameterValue": "DEU"},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.availability"), "parameterValue": 99.95},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.responseTime"), "parameterValue": 10},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.resolutionTime"), "parameterValue": 120},
+		map[string]any{"forField": slaFieldID("condition-signature", "signature.requiredLevel"), "parameterValue": "AES"},
+	})
 
-	findings, err := AuditContractContent(contract, nil, ContractContentAuditMetadata{})
-	policy, policyErr := normalizeContractContentPolicy(nil, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, nil, ContractContentAuditMetadata{})
+	policy, policyErr := normalizeContractContentPolicy(context.Background(), nil, ContractContentAuditMetadata{})
 
 	require.NoError(t, err)
 	require.NoError(t, policyErr)
-	require.NotEmpty(t, policy.SHACLFiles)
-	require.NotEmpty(t, policy.SHACLShapes)
+	require.True(t, policy.EnforceCanonicalShapes)
+	require.True(t, policy.EnforceValidationProfile)
 	require.NotEmpty(t, findings)
-	require.Contains(t, policyFindingRuleIDs(findings), "dcs:CanonicalContractShape-PROP-002")
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-POLICY-003", "info"))
+	// The default policy document enables both the Semantic Hub's canonical
+	// SHACL shapes and the SLA validation profile — a fully compliant
+	// canonical contract produces zero SHACL violations.
+	for _, finding := range findings {
+		if finding.ShapesVersion > 0 {
+			require.NotEqual(t, "error", finding.Severity, finding.Message)
+		}
+	}
+	require.Positive(t, policy.ProfileVersion)
 }
 
-func TestAuditContractContentValidatesJSONLDAndSHACL(t *testing.T) {
-	contract := map[string]any{
-		"@context": []any{"https://w3id.org/facis/sla/ontology"},
-		"@id":      "urn:facis:dcs:contract:sla:example-001",
-		"@type":    []any{"dcs:Contract", "sla:ServiceLevelAgreement"},
-		"parties": []any{
-			map[string]any{"@type": "dcs:CompanyParty", "role": "supplier"},
-			map[string]any{"@type": "dcs:CompanyParty", "role": "customer"},
-		},
-		"contract": map[string]any{
-			"jurisdiction": "DEU",
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shaclShapes": []any{
-			map[string]any{
-				"id":          "FACIS-CONTRACT-SHACL-SLA",
-				"title":       "SLA contract must satisfy semantic shape",
-				"targetClass": "dcs:Contract",
-				"properties": []any{
-					map[string]any{"path": "contract.jurisdiction", "minCount": 1, "datatype": "xsd:string", "name": "Jurisdiction"},
-					map[string]any{"path": "parties", "minCount": 2, "class": "dcs:CompanyParty", "name": "Contract parties"},
-				},
-			},
-		},
+func TestAuditContractContentSHACLReportsRealSHACLCoreViolations(t *testing.T) {
+	// dcs:metadata is missing dcs:title entirely — a real SHACL sh:minCount
+	// violation the deleted hand-rolled subset matcher's replacement
+	// (goRDFlib, ADR-9) must catch via the hub's canonical shapes.
+	contract := canonicalAuditContract()
+	contract["dcs:metadata"] = map[string]any{
+		"@type":       "dcs:ContractMetadata",
+		"dcs:version": 1,
 	}
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "info"))
-	require.False(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
+	shaclFindings := shaclOnlyFindings(findings)
+	require.NotEmpty(t, shaclFindings)
+	titleFinding := requirePolicyFinding(t, shaclFindings, "title-MinCountConstraintComponent")
+	require.Equal(t, "error", titleFinding.Severity)
+	require.Contains(t, titleFinding.Message, "requires a title")
 }
 
-func TestAuditContractContentFlagsSHACLViolations(t *testing.T) {
-	contract := map[string]any{
-		"@context": "https://w3id.org/facis/sla/ontology",
-		"@id":      "urn:facis:dcs:contract:sla:example-001",
-		"@type":    "dcs:Contract",
-		"parties": []any{
-			map[string]any{"@type": "dcs:Organization", "role": "supplier"},
-		},
-	}
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shacl": map[string]any{
-			"shapes": []any{
-				map[string]any{
-					"id":          "FACIS-CONTRACT-SHACL-SLA",
-					"title":       "SLA contract must satisfy semantic shape",
-					"targetClass": "dcs:Contract",
-					"property": []any{
-						map[string]any{"path": "contract.jurisdiction", "minCount": 1, "name": "Jurisdiction"},
-						map[string]any{"path": "parties", "class": "dcs:CompanyParty", "name": "Contract parties"},
-					},
-				},
-			},
-		},
-	}
+func TestAuditContractContentSHACLAcceptsCompliantCanonicalContract(t *testing.T) {
+	contract := canonicalAuditContract()
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, mapPolicy(true, false), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-001", "error"))
-	require.True(t, hasFindingSeverity(findings, "FACIS-CONTRACT-SHACL-SLA-PROP-002", "error"))
+	require.Empty(t, shaclOnlyFindings(findings))
+}
+
+// TestAuditContractContentValidatesTypedClauses is the Phase 3 (ADR-10)
+// acceptance criterion: a dcs:PaymentClause instance is validated by the
+// SAME shapes graph as the rest of a contract (semantichub.HubShapeSource
+// concatenates the canonical shapes with the clause catalog at runtime;
+// this test mirrors that by concatenating the two authoring files) — one
+// source of truth between the template builder's palette
+// (GET /semantic/clauses) and server-side enforcement.
+func TestAuditContractContentValidatesTypedClauses(t *testing.T) {
+	canonicalTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-shapes.ttl")
+	clauseCatalogTTL := mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-clause-catalog.ttl")
+	restore := swapShapeSource(t, fixtureShapeSource{
+		shapesTTL:   canonicalTTL + "\n\n" + clauseCatalogTTL,
+		profileYAML: "id: t\nversion: t\nrules: []\n",
+		contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld"),
+	})
+	defer restore()
+
+	invalidClause := map[string]any{
+		"@context":     map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "xsd": "http://www.w3.org/2001/XMLSchema#"},
+		"@id":          "urn:facis:dcs:clause:payment-001",
+		"@type":        "dcs:PaymentClause",
+		"dcs:amount":   map[string]any{"@value": -5, "@type": "xsd:integer"},
+		"dcs:currency": "EUR",
+	}
+	findings, err := AuditContractContent(context.Background(), invalidClause, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	finding := requirePolicyFinding(t, findings, "amount-MinInclusiveConstraintComponent")
+	require.Equal(t, "error", finding.Severity)
+
+	validClause := map[string]any{
+		"@context":     map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "xsd": "http://www.w3.org/2001/XMLSchema#"},
+		"@id":          "urn:facis:dcs:clause:payment-002",
+		"@type":        "dcs:PaymentClause",
+		"dcs:amount":   map[string]any{"@value": 100, "@type": "xsd:integer"},
+		"dcs:currency": "EUR",
+	}
+	okFindings, err := AuditContractContent(context.Background(), validClause, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Empty(t, okFindings)
+}
+
+func mapPolicy(enforceShapes, enforceProfile bool) map[string]any {
+	return map[string]any{
+		"policySetId":              "facis.dcs.contract.structure-semantics",
+		"version":                  "test",
+		"enforceCanonicalShapes":   enforceShapes,
+		"enforceValidationProfile": enforceProfile,
+	}
+}
+
+func shaclOnlyFindings(findings []PolicyFinding) []PolicyFinding {
+	out := make([]PolicyFinding, 0, len(findings))
+	for _, f := range findings {
+		if f.ShapesVersion > 0 {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
@@ -258,7 +445,7 @@ func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
 		},
 	}
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, policy, ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "FACIS-EXT-001", "error"))
@@ -267,7 +454,7 @@ func TestAuditContractContentEvaluatesExternalODRLPolicies(t *testing.T) {
 func TestAuditContractContentAcceptsCanonicalContractODRLValues(t *testing.T) {
 	contract := canonicalAuditContract()
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "info"))
@@ -279,10 +466,9 @@ func TestAuditContractContentAcceptsCanonicalContractODRLValues(t *testing.T) {
 
 func TestAuditContractContentFlagsCanonicalContractODRLViolation(t *testing.T) {
 	contract := canonicalAuditContract()
-	values := contract["semanticConditionValues"].([]any)
-	values[0].(map[string]any)["parameterValue"] = "USA"
+	setInlineFieldValue(contract, "urn:uuid:field-company-country", "USA")
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
@@ -290,9 +476,9 @@ func TestAuditContractContentFlagsCanonicalContractODRLViolation(t *testing.T) {
 
 func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testing.T) {
 	contract := canonicalAuditContract()
-	contract["semanticConditionValues"] = []any{}
+	clearInlineFieldValues(contract)
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
@@ -306,11 +492,11 @@ func TestAuditContractContentFlagsCanonicalContractMissingSemanticValue(t *testi
 
 func TestAuditContractContentFlagsCanonicalPolicyWithUnknownField(t *testing.T) {
 	contract := canonicalAuditContract()
-	policy := contract["dcs:policies"].(map[string]any)["odrl:duty"].([]any)[0].(map[string]any)
+	policy := contract["dcs:policies"].(map[string]any)["odrl:obligation"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	constraint["odrl:leftOperand"] = map[string]any{"@id": "urn:uuid:missing-field"}
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	require.True(t, hasFindingSeverity(findings, "urn:uuid:policy-country", "error"))
@@ -326,8 +512,7 @@ func TestValidateContractPolicySatisfactionAcceptsSatisfiedEmbeddedODRLPolicies(
 
 func TestValidateContractPolicySatisfactionRejectsEmbeddedODRLViolation(t *testing.T) {
 	contract := canonicalAuditContract()
-	values := contract["semanticConditionValues"].([]any)
-	values[0].(map[string]any)["parameterValue"] = "USA"
+	setInlineFieldValue(contract, "urn:uuid:field-company-country", "USA")
 
 	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
 
@@ -341,7 +526,7 @@ func TestValidateContractPolicySatisfactionRejectsEmbeddedODRLViolation(t *testi
 
 func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLValue(t *testing.T) {
 	contract := canonicalAuditContract()
-	contract["semanticConditionValues"] = []any{}
+	clearInlineFieldValues(contract)
 
 	err := ValidateContractPolicySatisfaction(contract, ContractContentAuditMetadata{})
 
@@ -352,55 +537,9 @@ func TestValidateContractPolicySatisfactionRejectsMissingRequiredEmbeddedODRLVal
 	require.Equal(t, "urn:uuid:policy-postal-code", policyErr.Findings[1].RuleID)
 }
 
-func TestAuditContractContentMapsCanonicalSemanticValuesToPartyShape(t *testing.T) {
+func TestAuditContractContentReadsCanonicalRuntimeValuesByParameterName(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
-	minCount := 2
-	maxCount := 2
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shacl": map[string]any{
-			"shapes": []any{
-				map[string]any{
-					"id":          "dcs:ContractShape",
-					"title":       "Contract shape",
-					"targetClass": "dcs:Contract",
-					"property": []any{
-						map[string]any{
-							"id":       "dcs:ContractShape-PARTY",
-							"path":     "dcs:party",
-							"minCount": minCount,
-							"maxCount": maxCount,
-							"class":    "dcs:CompanyParty",
-							"node":     "dcs:CompanyPartyShape",
-						},
-					},
-				},
-				map[string]any{
-					"id":          "dcs:CompanyPartyShape",
-					"title":       "Company party shape",
-					"targetClass": "dcs:CompanyParty",
-					"property": []any{
-						map[string]any{"id": "dcs:CompanyPartyShape-ROLE", "path": "dcs:role", "minCount": 1, "maxCount": 1, "datatype": "xsd:string", "in": []any{"provider", "customer"}},
-						map[string]any{"id": "dcs:CompanyPartyShape-LEGAL", "path": "dcs:legalName", "minCount": 1, "maxCount": 1, "datatype": "xsd:string"},
-					},
-				},
-			},
-		},
-	}
-
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
-	require.NoError(t, err)
-
-	for _, finding := range findings {
-		require.NotEqual(t, "error", finding.Severity, finding.Message)
-	}
-	require.True(t, hasFindingSeverity(findings, "dcs:ContractShape-PARTY", "info"))
-}
-
-func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testing.T) {
-	contract := canonicalAuditContractWithTemplateParties()
-	findings := auditContractValidationProfile(contract, ValidationProfile{
+	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
 		Version: "test",
 		Rules: []ValidationRule{
@@ -437,10 +576,10 @@ func TestAuditContractContentReadsCanonicalRuntimeValuesBySemanticPath(t *testin
 
 func TestAuditContractContentShowsPolicyDetailsForMissingRuntimeValue(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
-	values := contract["semanticConditionValues"].([]any)
-	contract["semanticConditionValues"] = values[:len(values)-2]
+	deleteInlineFieldValue(contract, slaFieldID("condition-service", "service.sla.availability"))
+	deleteInlineFieldValue(contract, slaFieldID("condition-legal", "contract.jurisdiction"))
 
-	findings := auditContractValidationProfile(contract, ValidationProfile{
+	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
 		Version: "test",
 		Rules: []ValidationRule{
@@ -467,7 +606,7 @@ func TestAuditContractContentShowsPolicyDetailsForMissingRuntimeValue(t *testing
 func TestAuditContractContentShowsPolicyDetailsForLowRuntimeValue(t *testing.T) {
 	contract := canonicalAuditContractWithTemplateParties()
 
-	findings := auditContractValidationProfile(contract, ValidationProfile{
+	findings := auditContractValidationProfile(contract, map[string]any{}, ValidationProfile{
 		ID:      "runtime-values",
 		Version: "test",
 		Rules: []ValidationRule{
@@ -493,7 +632,7 @@ func TestAuditContractContentShowsPolicyDetailsForLowRuntimeValue(t *testing.T) 
 func TestAuditContractContentShowsPolicyDetailsForTypedODRLRightOperand(t *testing.T) {
 	contract := canonicalAuditContract()
 
-	findings, err := AuditContractContent(contract, emptyPolicy(), ContractContentAuditMetadata{})
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
 	require.NoError(t, err)
 
 	finding := requirePolicyFinding(t, findings, "urn:uuid:policy-postal-code")
@@ -503,45 +642,69 @@ func TestAuditContractContentShowsPolicyDetailsForTypedODRLRightOperand(t *testi
 	require.Equal(t, "urn:uuid:field-company-postal-code must equal 91448", finding.Requirement)
 }
 
-func TestAuditContractContentShowsPolicyDetailsForSHACLConstraints(t *testing.T) {
-	contract := map[string]any{
-		"@type": "dcs:Contract",
-		"parties": []any{
-			map[string]any{"@type": "dcs:CompanyParty"},
-		},
-		"service": map[string]any{"sla": map[string]any{"availability": 98.5}},
-	}
-	minCount := 2
-	minInclusive := 99.9
-	policy := map[string]any{
-		"policySetId": "facis.dcs.contract.structure-semantics",
-		"version":     "test",
-		"shaclShapes": []any{
-			map[string]any{
-				"id":          "FACIS-CONTRACT-SHACL-SLA",
-				"title":       "SLA contract must satisfy semantic shape",
-				"targetClass": "dcs:Contract",
-				"properties": []any{
-					map[string]any{"id": "party-count", "path": "parties", "minCount": minCount, "name": "Contract parties"},
-					map[string]any{"id": "availability-min", "path": "service.sla.availability", "minInclusive": minInclusive, "name": "Availability"},
-				},
-			},
-		},
-	}
+// TestAuditContractContentSHACLRejectsWrongDatatype is the Phase 2 (ADR-9)
+// acceptance criterion: a genuine xsd:integer datatype constraint the
+// deleted subset matcher's replacement (goRDFlib) enforces, with a finding
+// naming the focus node and the violated constraint. Uses its own
+// ShapeSource (not the package fixture) to exercise a shapes graph the
+// hub-seeded canonical shape doesn't declare — standing in for "register a
+// stricter hub shapes version" without a live database.
+func TestAuditContractContentSHACLRejectsWrongDatatype(t *testing.T) {
+	const slaShapesTTL = `
+@prefix dcs: <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-	findings, err := AuditContractContent(contract, policy, ContractContentAuditMetadata{})
+dcs:SLAAgreementShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:SLAAgreement ;
+  sh:property [
+    sh:path dcs:availability ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+  ] .
+`
+	restore := swapShapeSource(t, fixtureShapeSource{shapesTTL: slaShapesTTL, profileYAML: "id: t\nversion: t\nrules: []\n", contextJSON: mustReadRepoFile("backend/internal/semantichub/assets/facis-dcs-context.jsonld")})
+	defer restore()
+
+	badContract := map[string]any{
+		"@context": map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#"},
+		"@id":      "urn:facis:dcs:sla:example-001",
+		"@type":    "dcs:SLAAgreement",
+		"dcs:availability": map[string]any{
+			"@value": "ninety-nine",
+		},
+	}
+	findings, err := AuditContractContent(context.Background(), badContract, mapPolicy(true, false), ContractContentAuditMetadata{})
 	require.NoError(t, err)
+	finding := requirePolicyFinding(t, findings, "availability-DatatypeConstraintComponent")
+	require.Equal(t, "error", finding.Severity)
+	require.Contains(t, finding.Path, "availability")
+	require.Contains(t, finding.Message, "urn:facis:dcs:sla:example-001") // names the focus node
 
-	partyFinding := requirePolicyFinding(t, findings, "party-count")
-	require.Equal(t, "minCount", partyFinding.Operator)
-	require.Equal(t, 1, partyFinding.ActualValue)
-	require.Equal(t, minCount, partyFinding.ExpectedValue)
-	require.Equal(t, "parties requires at least 2 value(s)", partyFinding.Requirement)
-	availabilityFinding := requirePolicyFinding(t, findings, "availability-min")
-	require.Equal(t, "gte", availabilityFinding.Operator)
-	require.Equal(t, 98.5, availabilityFinding.ActualValue)
-	require.Equal(t, minInclusive, availabilityFinding.ExpectedValue)
-	require.Equal(t, "service.sla.availability must be >= 99.9", availabilityFinding.Requirement)
+	goodContract := map[string]any{
+		"@context":         map[string]any{"dcs": "https://w3id.org/facis/dcs/ontology/v1#", "xsd": "http://www.w3.org/2001/XMLSchema#"},
+		"@id":              "urn:facis:dcs:sla:example-002",
+		"@type":            "dcs:SLAAgreement",
+		"dcs:availability": map[string]any{"@value": 99, "@type": "xsd:integer"},
+	}
+	okFindings, err := AuditContractContent(context.Background(), goodContract, mapPolicy(true, false), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.Empty(t, okFindings)
+}
+
+// swapShapeSource installs a temporary ShapeSource for the duration of a
+// single test and returns a restore func for the shared fixture — the
+// package var is process-wide, so tests using a different shapes graph must
+// not run in Parallel with each other.
+func swapShapeSource(t *testing.T, s ShapeSource) func() {
+	t.Helper()
+	original := activeShapeSource
+	SetShapeSource(s)
+	return func() {
+		activeShapeSource = original
+		ResetDomainOntologyCache()
+	}
 }
 
 func canonicalAuditContract() map[string]any {
@@ -589,18 +752,22 @@ func canonicalAuditContract() map[string]any {
 				"dcs:schemaVersion": "v1",
 				"dcs:fields": []any{
 					map[string]any{
-						"@id":               countryFieldID,
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": "country",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
-						"dcs:required":      true,
+						"@id":                countryFieldID,
+						"@type":              "dcs:RequirementField",
+						"dcs:parameterName":  "country",
+						"dcs:domainField":    map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
+						"dcs:required":       true,
+						"dcs:blockId":        "urn:uuid:block-clause-1",
+						"dcs:parameterValue": "DEU",
 					},
 					map[string]any{
-						"@id":               postalCodeFieldID,
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": "postalCode",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-postalCode"},
-						"dcs:required":      true,
+						"@id":                postalCodeFieldID,
+						"@type":              "dcs:RequirementField",
+						"dcs:parameterName":  "postalCode",
+						"dcs:domainField":    map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-postalCode"},
+						"dcs:required":       true,
+						"dcs:blockId":        "urn:uuid:block-clause-1",
+						"dcs:parameterValue": "91448",
 					},
 				},
 			},
@@ -613,11 +780,35 @@ func canonicalAuditContract() map[string]any {
 			}),
 			odrlDuty("urn:uuid:policy-postal-code", postalCodeFieldID, "odrl:eq", map[string]any{"@type": "xsd:string", "@value": "91448"}),
 		}),
-		"semanticConditionValues": []any{
-			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "country", "parameterValue": "DEU"},
-			map[string]any{"blockId": "urn:uuid:block-clause-1", "conditionId": "company", "parameterName": "postalCode", "parameterValue": "91448"},
-		},
 	}
+}
+
+// slaRequirement declares a data requirement whose fields carry dotted
+// semantic-path parameter names, matching how SLA statement rules address
+// runtime values.
+func slaRequirement(conditionID string, parameterNames ...string) map[string]any {
+	fields := make([]any, 0, len(parameterNames))
+	for _, parameterName := range parameterNames {
+		fields = append(fields, map[string]any{
+			"@id":               slaFieldID(conditionID, parameterName),
+			"@type":             "dcs:RequirementField",
+			"dcs:parameterName": parameterName,
+			"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#" + conditionID},
+			"dcs:required":      true,
+		})
+	}
+	return map[string]any{
+		"@id":               "urn:uuid:req-" + conditionID,
+		"@type":             "dcs:DataRequirement",
+		"dcs:conditionId":   conditionID,
+		"dcs:name":          conditionID,
+		"dcs:schemaVersion": "v1",
+		"dcs:fields":        fields,
+	}
+}
+
+func slaFieldID(conditionID, parameterName string) string {
+	return "urn:uuid:field-" + conditionID + "-" + strings.ReplaceAll(parameterName, ".", "-")
 }
 
 func canonicalAuditContractWithTemplateParties() map[string]any {
@@ -641,14 +832,18 @@ func canonicalAuditContractWithTemplateParties() map[string]any {
 			},
 		},
 	}
-	contract["semanticConditionValues"] = []any{
-		map[string]any{"conditionId": "condition-customer", "parameterName": "company.legalName", "parameterValue": "Firma A"},
-		map[string]any{"conditionId": "condition-customer", "parameterName": "company.location.country", "parameterValue": "DEU"},
-		map[string]any{"conditionId": "condition-provider", "parameterName": "company.legalName", "parameterValue": "Firma B"},
-		map[string]any{"conditionId": "condition-provider", "parameterName": "company.location.country", "parameterValue": "DEU"},
-		map[string]any{"conditionId": "condition-service", "parameterName": "service.sla.availability", "parameterValue": 99.5},
-		map[string]any{"conditionId": "condition-legal", "parameterName": "contract.jurisdiction", "parameterValue": "DEU"},
+	contract["dcs:contractData"] = []any{
+		slaRequirement("condition-service", "service.sla.availability"),
+		slaRequirement("condition-legal", "contract.jurisdiction"),
 	}
+	applyInlineFieldValues(contract, []any{
+		map[string]any{"forField": "urn:uuid:field-condition-customer-legal-name", "parameterValue": "Firma A"},
+		map[string]any{"forField": "urn:uuid:field-condition-customer-country", "parameterValue": "DEU"},
+		map[string]any{"forField": "urn:uuid:field-condition-provider-legal-name", "parameterValue": "Firma B"},
+		map[string]any{"forField": "urn:uuid:field-condition-provider-country", "parameterValue": "DEU"},
+		map[string]any{"forField": slaFieldID("condition-service", "service.sla.availability"), "parameterValue": 99.5},
+		map[string]any{"forField": slaFieldID("condition-legal", "contract.jurisdiction"), "parameterValue": "DEU"},
+	})
 	return contract
 }
 

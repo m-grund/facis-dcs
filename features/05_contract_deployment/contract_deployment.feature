@@ -127,3 +127,4 @@ Feature: Contract deployment, execution evidence, and KPIs
     When the target reports a KPI value "coverage" = "80" for contract "KPI Violation Contract"
     Then get http 200:Success code
     And the contract detail for "KPI Violation Contract" shows a KPI violation flag for "coverage"
+    And the semantic KPI observations for "KPI Violation Contract" record a violated "coverage" observation

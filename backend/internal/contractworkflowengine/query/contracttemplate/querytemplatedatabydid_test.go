@@ -66,17 +66,17 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		},
 		"dcs:policies": map[string]any{
 			"@id":          "did:web:facis.example:template:1#policy-set-1",
-			"@type":        "odrl:Set",
-			"uid":          "did:web:facis.example:template:1",
+			"@type":        "odrl:Offer",
 			"odrl:profile": map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
-			"odrl:duty": []any{
+			"odrl:obligation": []any{
 				map[string]any{
 					"@id":           "did:web:facis.example:template:1#policy-cond-1-percent-0",
 					"@type":         "odrl:Duty",
 					"odrl:action":   map[string]any{"@id": "dcs:provideCompliantValue"},
-					"odrl:assigner": map[string]any{"@id": "did:web:facis.example:template:1#provider"},
-					"odrl:assignee": map[string]any{"@id": "did:web:facis.example:template:1#customer"},
+					"odrl:assigner": map[string]any{"@id": "did:web:facis.example:template:1#party-provider"},
+					"odrl:assignee": map[string]any{"@id": "did:web:facis.example:template:1#party-customer"},
 					"odrl:target":   map[string]any{"@id": "did:web:facis.example:template:1"},
+					"dcs:prose":     map[string]any{"@id": "urn:uuid:block-clause-1"},
 					"odrl:constraint": map[string]any{
 						"@type":             "odrl:Constraint",
 						"odrl:leftOperand":  map[string]any{"@id": "did:web:facis.example:template:1#field-cond-1-percent"},
@@ -89,16 +89,22 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	converted, err := convertTemplateDataToContractData(&raw, "did:web:facis.example:template:1", 7)
+	converted, err := ConvertTemplateDataToContractData(&raw, "did:web:facis.example:template:1", 7)
 	require.NoError(t, err)
 
 	var data map[string]any
 	require.NoError(t, json.Unmarshal(*converted, &data))
 	require.Equal(t, "dcs:Contract", data["@type"])
-	require.Equal(t, "did:web:facis.example:template:1", data["derivedFromTemplate"])
-	require.Equal(t, "did:web:facis.example:template:1", data["sourceTemplate"].(map[string]any)["did"])
-	require.Equal(t, float64(7), data["sourceTemplate"].(map[string]any)["version"])
+	provenance := data["derivedFromTemplate"].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:1", provenance["@id"])
+	require.Equal(t, float64(7), provenance["version"])
 	require.Empty(t, data["semanticConditionValues"])
+	parties := data["dcs:parties"].([]any)
+	require.Len(t, parties, 2)
+	provider := parties[0].(map[string]any)
+	require.Equal(t, "did:web:facis.example:template:1#party-provider", provider["@id"])
+	require.Equal(t, "dcs:CompanyParty", provider["@type"])
+	require.Equal(t, "provider", provider["dcs:role"])
 	structure := data["dcs:documentStructure"].(map[string]any)
 	require.Len(t, structure["dcs:blocks"].(map[string]any)["@list"], 1)
 	require.Len(t, data["dcs:contractData"], 1)
@@ -121,7 +127,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		placeholder["dcs:bindsTo"].(map[string]any)["@id"],
 	)
 	policySet := data["dcs:policies"].(map[string]any)
-	policy := policySet["odrl:duty"].([]any)[0].(map[string]any)
+	policy := policySet["odrl:obligation"].([]any)[0].(map[string]any)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	require.Equal(
 		t,
@@ -130,10 +136,10 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	)
 }
 
-func TestConvertTemplateDataToContractDataRejectsLegacyTemplate(t *testing.T) {
+func TestConvertTemplateDataToContractDataRejectsNonCanonicalTemplate(t *testing.T) {
 	raw, err := datatype.NewJSON(map[string]any{"documentBlocks": []any{}})
 	require.NoError(t, err)
 
-	_, err = convertTemplateDataToContractData(&raw, "did:web:facis.example:template:1")
+	_, err = ConvertTemplateDataToContractData(&raw, "did:web:facis.example:template:1")
 	require.ErrorContains(t, err, "canonical dcs:documentStructure envelope")
 }

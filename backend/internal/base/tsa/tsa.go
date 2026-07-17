@@ -55,39 +55,37 @@ var embeddedTSACert = func() *x509.Certificate {
 	return cert
 }()
 
-// trustedTSACert is the certificate TSR signatures are verified against. It
-// defaults to the compile-time embedded certs/tsa.crt; deployments running
-// their own TSA (e.g. the in-cluster dev TSA in the ORCE chart's localTSA
-// mode) override it via TSA_TRUST_CERT_FILE. A set-but-unloadable file is
-// fatal: silently falling back to the embedded cert would make every
-// timestamp verification fail later with a far less obvious error.
-var trustedTSACert = func() *x509.Certificate {
-	path := os.Getenv("TSA_TRUST_CERT_FILE")
+// loadTrustedTSACertificate resolves the trust anchor after application
+// configuration has been loaded. In local development main loads .env after
+// Go package initialization, so reading TSA_TRUST_CERT_FILE in a package-level
+// initializer would silently ignore the configured ORCE certificate.
+func loadTrustedTSACertificate() (*x509.Certificate, error) {
+	path := strings.TrimSpace(os.Getenv("TSA_TRUST_CERT_FILE"))
 	if path == "" {
-		return embeddedTSACert
+		return embeddedTSACert, nil
 	}
 	pemBytes, err := os.ReadFile(path)
 	if err != nil {
-		panic("tsa: TSA_TRUST_CERT_FILE is set but unreadable: " + err.Error())
+		return nil, fmt.Errorf("TSA_TRUST_CERT_FILE %s is unreadable: %w", path, err)
 	}
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		panic("tsa: TSA_TRUST_CERT_FILE does not contain a PEM certificate: " + path)
+		return nil, fmt.Errorf("TSA_TRUST_CERT_FILE does not contain a PEM certificate: %s", path)
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		panic("tsa: failed to parse TSA_TRUST_CERT_FILE " + path + ": " + err.Error())
+		return nil, fmt.Errorf("parse TSA_TRUST_CERT_FILE %s: %w", path, err)
 	}
-	log.Printf("tsa: trusting TSA certificate from %s (subject %s)", path, cert.Subject)
-	return cert
-}()
+	return cert, nil
+}
 
 // APIClient sends timestamp requests to an RFC 3161 TSA HTTP endpoint.
 type APIClient struct {
 	// url is the base URL of the TSA endpoint. The hex-encoded hash of the
 	// payload is appended to this URL for each request.
-	url    string
-	client *http.Client
+	url         string
+	client      *http.Client
+	trustedCert *x509.Certificate
 }
 
 type Receipt struct {
@@ -103,11 +101,16 @@ type Receipt struct {
 // NewClient creates a new [APIClient] for the given TSA endpoint URL.
 // url must end with a path separator so that the hash can be appended directly
 func NewClient(url string) (*APIClient, error) {
+	trustedCert, err := loadTrustedTSACertificate()
+	if err != nil {
+		return nil, fmt.Errorf("load TSA trust certificate: %w", err)
+	}
 	return &APIClient{
 		url: strings.TrimSpace(url),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		trustedCert: trustedCert,
 	}, nil
 }
 
@@ -307,6 +310,23 @@ func receiptFromTimestamp(token []byte, ts *timestamp.Timestamp) *Receipt {
 // its SHA-256 hash, and compares it against the hash inside the TSR.
 // Returns (true, nil) on success, (false, err) on any failure.
 func Verify(tsrBase64 string, data any) (bool, error) {
+	trustedCert, err := loadTrustedTSACertificate()
+	if err != nil {
+		return false, fmt.Errorf("load TSA trust certificate: %w", err)
+	}
+	return verifyWithCertificate(tsrBase64, data, trustedCert)
+}
+
+// Verify checks a timestamp using the trust anchor captured when the client
+// was created, after the application's environment configuration was loaded.
+func (c *APIClient) Verify(tsrBase64 string, data any) (bool, error) {
+	if c == nil || c.trustedCert == nil {
+		return false, fmt.Errorf("TSA client has no trust certificate")
+	}
+	return verifyWithCertificate(tsrBase64, data, c.trustedCert)
+}
+
+func verifyWithCertificate(tsrBase64 string, data any, trustedCert *x509.Certificate) (bool, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return false, fmt.Errorf("marshal data: %w", err)
@@ -338,7 +358,7 @@ func Verify(tsrBase64 string, data any) (bool, error) {
 	// Verify the TSA's cryptographic signature against the trusted TSA
 	// certificate (embedded default or TSA_TRUST_CERT_FILE override).
 	pool := x509.NewCertPool()
-	pool.AddCert(trustedTSACert)
+	pool.AddCert(trustedCert)
 	p7, err := pkcs7.Parse(ts.RawToken)
 	if err != nil {
 		return false, fmt.Errorf("parse TSR token: %w", err)

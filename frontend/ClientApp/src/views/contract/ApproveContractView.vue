@@ -4,6 +4,9 @@ import { computed, onMounted, onUnmounted, type Ref, ref, useTemplateRef, watch 
 import { useRoute } from 'vue-router'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
+import { useDocumentExport } from '@/composables/useDocumentExport'
+import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
+import { contractStory, toBannerActions } from '@/core/workflow-story'
 import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
@@ -56,6 +59,8 @@ const isAuditingAuthorized = computed(
 )
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
+
+const story = computed(() => contractStory(contract.value?.state))
 
 const verificationResult: Ref<VerificationResult | null> = ref(null)
 
@@ -197,6 +202,7 @@ function applyContractDataToDraft(contractData?: unknown) {
   if (cd) {
     dcsDraftStore.reset({
       workflow: 'contract',
+      documentIri: ((contractData as Record<string, unknown>)['@id'] as string | undefined) ?? null,
       blocks: cd.blocks,
       layout: cd.layout,
       contractData: cd.contractData,
@@ -211,18 +217,12 @@ function applyContractDataToDraft(contractData?: unknown) {
   verificationResult.value = null
 }
 
-const exportPDF = async () => {
-  if (contract?.value?.did === null || contract?.value?.did === undefined) {
-    return
-  }
+const { download: downloadExport, exporting } = useDocumentExport()
 
-  const blob = await contractWorkflowService.exportPdf(contract?.value?.did)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `contract-${contract?.value?.did}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+const exportPDF = async () => {
+  const did = contract?.value?.did
+  if (!did) return
+  await downloadExport(() => contractWorkflowService.exportPdf(did), `contract-${did}.pdf`)
 }
 </script>
 
@@ -252,6 +252,13 @@ const exportPDF = async () => {
         <div class="mt-5 grow">
           <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
+              <WorkflowStageBanner
+                :steps="story.steps"
+                :current-key="story.currentKey"
+                :headline="story.headline"
+                :narrative="story.narrative"
+                :actions="toBannerActions(story.actionHints)"
+              />
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor
                   :contract="contract"
@@ -296,7 +303,7 @@ const exportPDF = async () => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" @click="exportPDF">Export PDF</button>
+        <button class="btn btn-outline md:w-32" :disabled="exporting" @click="exportPDF">Export PDF</button>
         <button
           v-if="contract?.state === ContractState.reviewed"
           class="btn flex-1 btn-primary"

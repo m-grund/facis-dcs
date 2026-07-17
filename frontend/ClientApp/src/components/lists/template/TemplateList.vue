@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
 import Pagination from '@/components/Pagination.vue'
+import { ROUTES } from '@/router/router'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store.ts'
 import { useTemplateStateFilterStore } from '@/stores/state-filter-store'
 import { contractTemplateStates } from '@/types/contract-template-state'
@@ -69,6 +71,12 @@ const sortedTemplates = computed(() => {
 
 const hasTemplates = computed(() => templates.value.length > 0)
 
+const { isCreator, isManager } = useTemplatePermissions()
+
+const isRepositoryEmpty = computed(
+  () => !hasTemplates.value && searchResults.value === null && !stateFilterStore.hasFilters && currentPage.value === 1,
+)
+
 const filteredTemplates = computed(() => {
   if (stateFilterStore.hasFilters) {
     return sortedTemplates.value.filter((template) => stateFilterStore.hasFilter(template.state))
@@ -103,7 +111,21 @@ onUnmounted(() => stateFilterStore.reset())
       :key="`${template.did}|${template.document_number}|${template.version}`"
       :template="template"
     />
-    <li v-if="filteredTemplates.length < 1" class="px-4">No templates found</li>
+    <li v-if="isRepositoryEmpty" class="flex flex-col items-start gap-2 px-4 py-8">
+      <p class="font-semibold">No templates yet.</p>
+      <p class="max-w-prose text-sm text-base-content/70">
+        Templates are the reusable blueprints contracts are created from. Create one from the Template Builder — it must
+        pass review, approval and catalogue registration before contracts can use it.
+      </p>
+      <RouterLink
+        v-if="isCreator || isManager"
+        :to="{ name: ROUTES.TEMPLATES.NEW }"
+        class="btn mt-1 btn-sm btn-primary"
+      >
+        New Template
+      </RouterLink>
+    </li>
+    <li v-else-if="filteredTemplates.length < 1" class="px-4">No templates found</li>
   </ul>
   <div class="grid w-full grid-cols-3 items-center px-4 pb-4">
     <select v-model.number="limit" class="select max-w-30 justify-self-start select-sm" @change="currentPage = 1">

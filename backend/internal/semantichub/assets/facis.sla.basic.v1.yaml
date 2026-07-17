@@ -1,105 +1,27 @@
-id: facis.sla.basic.v1
-version: "1"
-description: Basic FACIS SLA contract statement validation profile.
+# Statement-level business rules for FACIS DCS contract documents. The
+# profile applies to what documents actually are — a dcs:Contract root with
+# dcs:CompanyParty nodes under dcs:parties — so its rules can genuinely
+# fire; structural requirements (metadata, envelope, semantic values) are
+# the SHACL shapes' job, not duplicated here.
+id: facis.sla.basic
+version: "2"
+description: Statement rules for FACIS DCS contract documents.
+appliesTo:
+  - "https://w3id.org/facis/dcs/ontology/v1#Contract"
 rules:
-  - id: exactly-one-provider
-    type: count
-    severity: error
-    message: Contract requires exactly one provider.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#CompanyParty"
-      role: "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"
-    operator: eq
-    value: 1
-  - id: exactly-one-customer
-    type: count
-    severity: error
-    message: Contract requires exactly one customer.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#CompanyParty"
-      role: "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"
-    operator: eq
-    value: 1
-  - id: availability-slo-required
-    type: required_fields
-    severity: error
-    message: Availability SLO is incomplete.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#SLO"
-    requiredFields:
-      - availability
-  - id: payment-required
-    type: required_fields
-    severity: error
-    message: Payment term is incomplete.
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#PaymentTerm"
-    requiredFields:
-      - amount
-      - currency
-      - dueDate
-  - id: payment-amount-positive
-    type: comparison
-    severity: error
-    message: Payment amount must be greater than 0.
-    target: amount
-    where:
-      "@type": "https://w3id.org/facis/dcs/ontology/v1#PaymentTerm"
-    operator: gt
-    value: 0
-  - id: FACIS-CONTRACT-POLICY-002
+  - id: company-party-role-vocabulary
     type: value_in
     severity: error
-    message: Contract jurisdiction must be allowed.
-    target: contract.jurisdiction
+    message: A contract party's role must come from the DCS role vocabulary.
+    where:
+      "@type": "https://w3id.org/facis/dcs/ontology/v1#CompanyParty"
+    target: role
     values:
-      - DEU
-      - AUT
-      - CHE
-      - FRA
-      - NLD
-      - BEL
-      - LUX
-      - POL
-      - CZE
-      - ESP
-      - ITA
-      - GBR
-      - USA
-      - DNK
-      - SWE
-      - NOR
-      - FIN
-      - IRL
-      - PRT
-      - GRC
-      - CAN
-      - JPN
-      - AUS
-  - id: FACIS-CONTRACT-POLICY-003
-    type: comparison
-    severity: error
-    message: Service availability must satisfy policy minimum.
-    target: service.sla.availability
-    operator: gte
-    value: 99.9
-  - id: FACIS-CONTRACT-POLICY-004
-    type: comparison
-    severity: error
-    message: Service response time must satisfy policy maximum.
-    target: service.sla.responseTime
-    operator: lte
-    value: 15
-  - id: FACIS-CONTRACT-POLICY-005
-    type: comparison
-    severity: error
-    message: Service resolution time must satisfy policy maximum.
-    target: service.sla.resolutionTime
-    operator: lte
-    value: 240
-  - id: FACIS-CONTRACT-POLICY-006
-    type: signature_level_at_least
-    severity: error
-    message: Signature level must satisfy policy.
-    target: signature.requiredLevel
-    value: AES
+      - provider
+      - customer
+      - assigner
+      - assignee
+      - "https://w3id.org/facis/dcs/taxonomy/v1#role-provider"
+      - "https://w3id.org/facis/dcs/taxonomy/v1#role-customer"
+      - "https://w3id.org/facis/dcs/taxonomy/v1#role-assigner"
+      - "https://w3id.org/facis/dcs/taxonomy/v1#role-assignee"

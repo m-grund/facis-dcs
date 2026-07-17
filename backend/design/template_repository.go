@@ -717,6 +717,34 @@ var _ = Service("TemplateRepository", func() {
 		})
 	})
 
+	// GET /template/{did} — the template's resource IRI
+	Method("resolve", func() {
+		Description("Dereference a template's resource IRI ({DCS_PUBLIC_URL}/template/{did}): serves the canonical JSON-LD template document under the same authorization as retrieve_by_id. This route is what makes a template's @id follow-your-nose resolvable.")
+		Meta("dcs:requirements", "DCS-FR-TR-01")
+
+		Security(JWTAuth, func() {
+			Scope("Template Creator")
+			Scope("Template Reviewer")
+			Scope("Template Approver")
+			Scope("Template Manager")
+		})
+
+		Payload(ContractTemplateRetrieveByIDRequest)
+		Result(Any)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/template/{did}")
+			Param("did")
+
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
 	// GET /template/retrieve/{did}
 	Method("retrieve_by_id", func() {
 		Description("Retrieve a template by template id.")

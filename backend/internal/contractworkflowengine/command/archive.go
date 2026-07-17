@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -16,10 +17,16 @@ import (
 
 const archiveSnapshotHashAlgorithm = "SHA-256"
 
+type ArchiveSigningEvidence struct {
+	Signer, CredentialType, CeremonyID, Field, PDFCID, PDFHash string
+	SignedAt                                                   time.Time
+	CredentialHashes                                           map[string]string
+}
+
 // BuildArchiveEntry freezes the signed contract state for archive
 // persistence (DCS-FR-CWE-20): the archive entry is created once the
 // signature workflow completes (SIGNED), not at APPROVED.
-func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchiveEntry, error) {
+func BuildArchiveEntry(contract *db.Contract, storedBy string, signing ArchiveSigningEvidence) (db.ContractArchiveEntry, error) {
 	if contract == nil {
 		return db.ContractArchiveEntry{}, fmt.Errorf("contract is required")
 	}
@@ -37,17 +44,14 @@ func BuildArchiveEntry(contract *db.Contract, storedBy string) (db.ContractArchi
 	}
 
 	signatureMetadata, err := datatype.NewJSON(map[string]any{
-		"status":   "NOT_PERFORMED",
-		"reason":   "PDF/signature generation is not part of the archive foundation",
-		"provider": "PENDING",
+		"status": "SIGNED", "signer": signing.Signer, "credential_type": signing.CredentialType,
+		"ceremony_id": signing.CeremonyID, "field": signing.Field, "signed_at": signing.SignedAt.UTC().Format(time.RFC3339Nano),
+		"pdf_cid": signing.PDFCID, "pdf_hash": "sha256:" + strings.TrimPrefix(signing.PDFHash, "sha256:"),
 	})
 	if err != nil {
 		return db.ContractArchiveEntry{}, err
 	}
-	credentialHashes, err := datatype.NewJSON(map[string]any{
-		"status": "PENDING",
-		"reason": "credential hash production is not part of the archive foundation",
-	})
+	credentialHashes, err := datatype.NewJSON(signing.CredentialHashes)
 	if err != nil {
 		return db.ContractArchiveEntry{}, err
 	}

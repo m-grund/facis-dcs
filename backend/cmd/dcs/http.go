@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,6 +57,23 @@ import (
 
 type formRequestDecoder struct {
 	r *http.Request
+}
+
+type rawBytesEncoder struct {
+	fallback goahttp.Encoder
+	w        http.ResponseWriter
+}
+
+func (e rawBytesEncoder) Encode(value any) error {
+	if data, ok := value.([]byte); ok {
+		_, err := e.w.Write(data)
+		return err
+	}
+	return e.fallback.Encode(value)
+}
+
+func responseEncoder(ctx context.Context, w http.ResponseWriter) goahttp.Encoder {
+	return rawBytesEncoder{fallback: goahttp.ResponseEncoder(ctx, w), w: w}
 }
 
 func (d *formRequestDecoder) Decode(v any) error {
@@ -128,7 +146,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	// see goa.design/implement/encoding.
 	var (
 		dec = requestDecoderWithForm
-		enc = goahttp.ResponseEncoder
+		enc = responseEncoder
 	)
 
 	// Build the service HTTP request multiplexer and mount debug and profiler
@@ -212,6 +230,7 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 	outerMux.Handle("/", mux)
 
 	var handler http.Handler = outerMux
+	handler = reportContentTypeMiddleware(handler)
 	handler = service.RequestContextMiddleware(handler)
 	handler = middleware.InjectIP(handler)
 	handler = metricsMiddleware(handler)
@@ -286,6 +305,22 @@ func handleHTTPServer(ctx context.Context, u *url.URL, authEndpoints *genauth.En
 			log.Printf(ctx, "failed to shutdown: %v", err)
 		}
 	}()
+}
+
+func reportContentTypeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/pac/report") && r.Method == http.MethodGet {
+			switch strings.ToLower(r.URL.Query().Get("format")) {
+			case "csv":
+				w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+			case "pdf":
+				w.Header().Set("Content-Type", "application/pdf")
+			default:
+				w.Header().Set("Content-Type", "application/json")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // errorHandler returns a function that writes and logs the given error.

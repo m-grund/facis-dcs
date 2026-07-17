@@ -161,8 +161,11 @@ def step_then_renewal_references_original(context, name):
         f"'dcs:renewsContract' reference back to the original, got contract_data "
         f"keys: {list(contract_data.keys())}"
     )
-    assert reference.get("@id") == original_did, (
-        f"Expected dcs:renewsContract/@id to be the original contract's DID "
+    # The back-reference is the original's dereferenceable resource IRI,
+    # whose last path segment is the system key.
+    reference_key = str(reference.get("@id", "")).rstrip("/").rsplit("/", 1)[-1]
+    assert reference_key == original_did, (
+        f"Expected dcs:renewsContract/@id to reference the original contract "
         f"'{original_did}', got: {reference}"
     )
     assert reference.get("dcs:version") == renewal["renews_contract_version"], (

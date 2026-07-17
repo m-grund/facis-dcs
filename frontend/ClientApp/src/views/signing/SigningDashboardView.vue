@@ -149,7 +149,7 @@ async function compliance(contract: SignatureContract) {
     <div v-if="loading" class="text-base-content/60">Loading approved contracts…</div>
     <div v-else-if="error" class="mb-4 alert alert-error">{{ error }}</div>
     <div v-else-if="contracts.length === 0" class="text-base-content/60">
-      No approved contracts available for signing.
+      Nothing awaits your signature. Contracts appear here once they are approved for signing.
     </div>
 
     <div v-else class="overflow-x-auto">

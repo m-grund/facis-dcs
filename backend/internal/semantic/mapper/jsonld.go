@@ -15,7 +15,7 @@ import (
 // BuildTemplateJSONLD returns the stored canonical JSON-LD envelope for a
 // contract template. The document must already be in canonical form
 // (dcs:documentStructure present); non-canonical data returns an error.
-func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyProfile) (map[string]any, error) {
+func BuildTemplateJSONLD(template templatedb.ContractTemplate) (map[string]any, error) {
 	inner, err := parseJSONB(template.TemplateData)
 	if err != nil {
 		return nil, fmt.Errorf("parse template_data: %w", err)
@@ -29,7 +29,7 @@ func BuildTemplateJSONLD(template templatedb.ContractTemplate, profile OntologyP
 // BuildContractJSONLD returns the stored canonical JSON-LD envelope for a
 // contract. The document must already be in canonical form; non-canonical data
 // returns an error.
-func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb.ContractTemplate, profile OntologyProfile) (map[string]any, error) {
+func BuildContractJSONLD(contract contractdb.Contract) (map[string]any, error) {
 	inner, err := parseJSONB(contract.ContractData)
 	if err != nil {
 		return nil, fmt.Errorf("parse contract_data: %w", err)
@@ -38,13 +38,6 @@ func BuildContractJSONLD(contract contractdb.Contract, sourceTemplate templatedb
 		return nil, fmt.Errorf("contract data is not in canonical JSON-LD format")
 	}
 	return inner, nil
-}
-
-// MaterializeStoredContractJSONLD is an alias for BuildContractJSONLD that
-// reads source-template identity from the stored envelope (kept for call-site
-// compatibility; the source template is no longer used during mapping).
-func MaterializeStoredContractJSONLD(contract contractdb.Contract, profile OntologyProfile) (map[string]any, error) {
-	return BuildContractJSONLD(contract, templatedb.ContractTemplate{}, profile)
 }
 
 func isCanonicalJSONLDEnvelope(value map[string]any) bool {
@@ -66,13 +59,4 @@ func parseJSONB(raw *datatype.JSON) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	return result, nil
-}
-
-// encodeMap serializes a generic map to a *datatype.JSON value.
-func encodeMap(data map[string]any) (*datatype.JSON, error) {
-	j, err := datatype.NewJSON(data)
-	if err != nil {
-		return nil, err
-	}
-	return &j, nil
 }

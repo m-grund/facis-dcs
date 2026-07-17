@@ -4,13 +4,15 @@ import BuilderPreviewDialog from '@template-repository/components/builder-editor
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
-import SemanticRulesEditor from '@template-repository/components/SemanticRulesEditor.vue'
+import SemanticElementEditor from '@template-repository/components/SemanticElementEditor.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
+import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
 import { useScrollStore } from '@/core/store/scroll'
+import { contractStory, toBannerActions } from '@/core/workflow-story'
 import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
 import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import {
@@ -78,10 +80,14 @@ const setSemanticConditionValue = computed<SemanticConditionValueSetter>(() => {
 
 const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft))
 
+const story = computed(() => contractStory(contract.value?.state))
+
 function buildCurrentContractData(): ContractData | undefined {
   if (!contract.value) return undefined
   return buildContractDocument({
-    documentId: contract.value.did,
+    documentId:
+      ((contract.value.contract_data as Record<string, unknown> | undefined)?.['@id'] as string | undefined) ??
+      contract.value.did,
     name: contract.value.name,
     description: contract.value.description,
     blocks: dcsDraftStore.blocks,
@@ -91,7 +97,6 @@ function buildCurrentContractData(): ContractData | undefined {
     subTemplateSnapshots: dcsDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
     parentContractDid: selectedParentContractDid.value ?? undefined,
-    sourceTemplate: contract.value.contract_data?.sourceTemplate,
     derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
   })
 }
@@ -314,6 +319,7 @@ function applyContractDataToDraft(contractData?: unknown) {
   if (cd) {
     dcsDraftStore.reset({
       workflow: 'contract',
+      documentIri: ((contractData as Record<string, unknown>)['@id'] as string | undefined) ?? null,
       blocks: cd.blocks,
       layout: cd.layout,
       contractData: cd.contractData,
@@ -408,6 +414,13 @@ onBeforeRouteLeave(() => {
         <div class="mt-5 grow">
           <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
+              <WorkflowStageBanner
+                :steps="story.steps"
+                :current-key="story.currentKey"
+                :headline="story.headline"
+                :narrative="story.narrative"
+                :actions="toBannerActions(story.actionHints)"
+              />
               <div v-show="activeTab === 'details'">
                 <ContractDetailsEditor :contract="contract" />
               </div>
@@ -432,7 +445,7 @@ onBeforeRouteLeave(() => {
               <div v-show="activeTab === 'semantic'">
                 <div class="card border border-base-300 bg-base-100 shadow-sm">
                   <div class="card-body gap-5">
-                    <SemanticRulesEditor />
+                    <SemanticElementEditor />
                   </div>
                 </div>
               </div>

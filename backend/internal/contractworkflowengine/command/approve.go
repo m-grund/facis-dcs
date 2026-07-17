@@ -160,10 +160,7 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 		if err != nil {
 			return fmt.Errorf("could not read approved contract for archive storage: %w", err)
 		}
-		finalContractData, err := semanticmapper.MaterializeStoredContractJSONLD(
-			*approvedContract,
-			semanticmapper.DefaultProfile(),
-		)
+		finalContractData, err := semanticmapper.BuildContractJSONLD(*approvedContract)
 		if err != nil {
 			return fmt.Errorf("could not materialize approved contract JSON-LD: %w", err)
 		}

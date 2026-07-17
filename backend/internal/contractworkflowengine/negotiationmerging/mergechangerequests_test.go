@@ -37,33 +37,15 @@ func TestMergeContractDataChangeAcceptsCanonicalContractData(t *testing.T) {
 	require.Empty(t, merged["semanticConditionValues"])
 }
 
-func TestMergeContractDataChangeAppliesLegacySemanticValuePatch(t *testing.T) {
-	stored := map[string]any{
-		"semanticConditionValues": []any{
-			map[string]any{
-				"blockId":        "block-1",
-				"conditionId":    "provider",
-				"parameterName":  "country",
-				"parameterValue": "DEU",
-			},
-		},
-	}
+func TestMergeContractDataChangeRejectsNonCanonicalChange(t *testing.T) {
+	stored := map[string]any{"dcs:documentStructure": map[string]any{}}
 	partialChange := json.RawMessage(`{
 		"semanticConditionValues": [
-			{
-				"blockId": "block-1",
-				"conditionId": "provider",
-				"parameterName": "country",
-				"parameterValue": "AUT"
-			}
+			{"forField": "urn:uuid:field-provider-country", "parameterValue": "AUT"}
 		]
 	}`)
 
-	merged, err := mergeContractDataChange(stored, partialChange)
+	_, err := mergeContractDataChange(stored, partialChange)
 
-	require.NoError(t, err)
-	values, ok := merged["semanticConditionValues"].([]SemanticConditionValue)
-	require.True(t, ok)
-	require.Len(t, values, 1)
-	require.JSONEq(t, `"AUT"`, string(values[0].ParameterValue))
+	require.ErrorContains(t, err, "canonical dcs:documentStructure envelope")
 }

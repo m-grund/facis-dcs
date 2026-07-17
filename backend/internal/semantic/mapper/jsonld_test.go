@@ -7,17 +7,13 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/validation"
 	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/stretchr/testify/require"
 )
 
-const testContextIRI = "https://w3id.org/facis/dcs/context/v1"
-
 func TestMain(m *testing.M) {
-	validation.SetJSONLDContextIRI(testContextIRI)
 	os.Exit(m.Run())
 }
 
@@ -92,7 +88,7 @@ func TestBuildTemplateJSONLDPassesThrough(t *testing.T) {
 		TemplateData: newJSON(t, input),
 	}
 
-	env, err := BuildTemplateJSONLD(template, DefaultProfile())
+	env, err := BuildTemplateJSONLD(template)
 	require.NoError(t, err)
 
 	var got, want map[string]any
@@ -103,7 +99,7 @@ func TestBuildTemplateJSONLDPassesThrough(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestBuildTemplateJSONLDRejectsLegacyFormat(t *testing.T) {
+func TestBuildTemplateJSONLDRejectsNonCanonicalFormat(t *testing.T) {
 	template := templatedb.ContractTemplate{
 		DID:       "did:web:example:template:1",
 		CreatedAt: fixedTime(),
@@ -114,7 +110,7 @@ func TestBuildTemplateJSONLDRejectsLegacyFormat(t *testing.T) {
 		}),
 	}
 
-	_, err := BuildTemplateJSONLD(template, DefaultProfile())
+	_, err := BuildTemplateJSONLD(template)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "canonical JSON-LD")
 }
@@ -133,7 +129,7 @@ func TestBuildContractJSONLDPassesThrough(t *testing.T) {
 		ContractData:    newJSON(t, input),
 	}
 
-	env, err := BuildContractJSONLD(contract, templatedb.ContractTemplate{}, DefaultProfile())
+	env, err := BuildContractJSONLD(contract)
 	require.NoError(t, err)
 
 	var got, want map[string]any
@@ -144,7 +140,7 @@ func TestBuildContractJSONLDPassesThrough(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestBuildContractJSONLDRejectsLegacyFormat(t *testing.T) {
+func TestBuildContractJSONLDRejectsNonCanonicalFormat(t *testing.T) {
 	contract := contractdb.Contract{
 		DID:       "did:web:example:contract:1",
 		CreatedAt: fixedTime(),
@@ -155,30 +151,7 @@ func TestBuildContractJSONLDRejectsLegacyFormat(t *testing.T) {
 		}),
 	}
 
-	_, err := BuildContractJSONLD(contract, templatedb.ContractTemplate{}, DefaultProfile())
+	_, err := BuildContractJSONLD(contract)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "canonical JSON-LD")
-}
-
-func TestMaterializeStoredContractJSONLDPassesThrough(t *testing.T) {
-	input := canonicalContractData()
-	contract := contractdb.Contract{
-		DID:             "did:web:example:contract:1",
-		ContractVersion: 1,
-		State:           "APPROVED",
-		CreatedBy:       "user-1",
-		CreatedAt:       fixedTime(),
-		UpdatedAt:       fixedTime(),
-		ContractData:    newJSON(t, input),
-	}
-
-	env, err := MaterializeStoredContractJSONLD(contract, DefaultProfile())
-	require.NoError(t, err)
-
-	var got, want map[string]any
-	raw, _ := json.Marshal(env)
-	_ = json.Unmarshal(raw, &got)
-	rawIn, _ := json.Marshal(input)
-	_ = json.Unmarshal(rawIn, &want)
-	require.Equal(t, want, got)
 }

@@ -604,7 +604,7 @@ class AuthService:
         }
 
     # ------------------------------------------------------------------
-    # Helpers (JWT decode, legacy expired-token path, username)
+    # Helpers (JWT decode, expired-token fixtures, username)
     # ------------------------------------------------------------------
 
     @staticmethod

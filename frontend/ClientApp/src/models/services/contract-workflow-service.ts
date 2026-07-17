@@ -55,6 +55,7 @@ export interface ContractWorkflowService {
   audit: (request: ContractAuditRequest) => Promise<ContractAuditResponse>
   retrieveHistoryByDid: (request: ContractHistoryRetrieveRequest) => Promise<ContractHistoryResponse>
   exportPdf: (did: string) => Promise<Blob>
+  exportBundle: (did: string) => Promise<Blob>
   verifyPdf: (did: string) => Promise<{
     match: boolean
     jsonld_hash: string
