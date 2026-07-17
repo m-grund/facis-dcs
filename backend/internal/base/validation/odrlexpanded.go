@@ -260,6 +260,30 @@ func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[st
 		if !ok {
 			continue
 		}
+
+		// A logical constraint (odrl:and/or/xone/andSequence) is a tree of
+		// nested constraints — evaluate it recursively rather than as an atomic
+		// leaf. When its outcome depends on use-time context it is deferred.
+		if logicalOp, _, isLogical := constraintLogical(constraint); isLogical {
+			satisfied, resolvable, err := evaluateConstraintNode(ctx, constraint, fieldIndex)
+			if err != nil {
+				return nil, fmt.Errorf("evaluate ODRL policy %q logical constraint: %w", ruleID, err)
+			}
+			if !resolvable {
+				findings = append(findings, contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q %s-constraint is enforced at use-time", ruleID, logicalOp), odrlIRI+logicalOp, ""))
+				continue
+			}
+			violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
+			sev := "info"
+			msg := fmt.Sprintf("ODRL policy %q logical (%s) constraint satisfied", ruleID, logicalOp)
+			if violated {
+				sev = severity
+				msg = fmt.Sprintf("ODRL policy %q logical (%s) constraint violated", ruleID, logicalOp)
+			}
+			findings = append(findings, contractFinding(ruleID, ruleID, sev, msg, odrlIRI+logicalOp, ""))
+			continue
+		}
+
 		leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
 		if !ok {
 			continue
@@ -379,6 +403,103 @@ func mapAny(values []any, fn func(any) any) []any {
 		out = append(out, fn(v))
 	}
 	return out
+}
+
+// odrlLogicalOperators are the ODRL LogicalConstraint operators (IM §2.6):
+// each takes a list of operand constraints, atomic or logical (recursive).
+var odrlLogicalOperators = []string{"and", "or", "xone", "andSequence"}
+
+// constraintLogical reports whether a constraint node is a LogicalConstraint,
+// returning its operator local name and child constraint nodes. The children
+// arrive as an @list (an ordered ODRL operand list) or a bare set.
+func constraintLogical(node map[string]any) (string, []map[string]any, bool) {
+	for _, op := range odrlLogicalOperators {
+		children := []map[string]any{}
+		for _, raw := range expandedValues(node, odrlIRI+op) {
+			item, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if list, ok := item["@list"].([]any); ok {
+				for _, li := range list {
+					if child, ok := li.(map[string]any); ok {
+						children = append(children, child)
+					}
+				}
+				continue
+			}
+			children = append(children, item)
+		}
+		if len(children) > 0 {
+			return op, children, true
+		}
+	}
+	return "", nil, false
+}
+
+// evaluateConstraintNode evaluates an atomic or logical ODRL constraint tree
+// against the document's inline field values. resolvable is false when the
+// outcome depends on use-time context (spatial/dateTime/…) or a value not yet
+// provided, so the audit defers rather than decides.
+func evaluateConstraintNode(ctx context.Context, node map[string]any, fieldIndex map[string]odrlFieldInfo) (satisfied bool, resolvable bool, err error) {
+	if op, children, isLogical := constraintLogical(node); isLogical {
+		results := make([]bool, 0, len(children))
+		for _, child := range children {
+			childSatisfied, childResolvable, err := evaluateConstraintNode(ctx, child, fieldIndex)
+			if err != nil {
+				return false, false, err
+			}
+			if !childResolvable {
+				// The whole tree defers if any operand needs use-time context.
+				return false, false, nil
+			}
+			results = append(results, childSatisfied)
+		}
+		switch op {
+		case "or":
+			for _, r := range results {
+				if r {
+					return true, true, nil
+				}
+			}
+			return false, true, nil
+		case "xone":
+			satisfiedCount := 0
+			for _, r := range results {
+				if r {
+					satisfiedCount++
+				}
+			}
+			return satisfiedCount == 1, true, nil
+		default: // and, andSequence
+			for _, r := range results {
+				if !r {
+					return false, true, nil
+				}
+			}
+			return true, true, nil
+		}
+	}
+
+	leftOperand, ok := expandedFirst(node, odrlIRI+"leftOperand")
+	if !ok {
+		return false, false, nil
+	}
+	operandID, _ := leftOperand["@id"].(string)
+	if isODRLContextOperand(operandID) {
+		return false, false, nil // use-time context — deferred
+	}
+	operatorNode, ok := expandedFirst(node, odrlIRI+"operator")
+	if !ok {
+		return false, false, nil
+	}
+	operator := shaclLocalName(expandedID(operatorNode))
+	info, ok := fieldIndex[operandID]
+	if !ok || !info.hasValue {
+		return false, false, nil // no value yet — deferred
+	}
+	satisfied, err = evaluateODRLConstraintOPA(ctx, operator, info.value, resolveRightOperand(node, operator, fieldIndex))
+	return satisfied, true, err
 }
 
 // expandExternalODRLRules expands rule nodes supplied by an audit policy

@@ -884,6 +884,53 @@ func hasFindingSeverity(findings []PolicyFinding, ruleID string, severity string
 	return false
 }
 
+// TestAuditContractEvaluatesLogicalConstraint proves the enforcement engine
+// evaluates ODRL logical constraints (LogicalConstraint, IM §2.6) recursively:
+// an odrl:or is satisfied when any branch holds and violated only when none do.
+func TestAuditContractEvaluatesLogicalConstraint(t *testing.T) {
+	fieldID := "urn:dcs:field:amount"
+	orConstraint := map[string]any{
+		"@type": "odrl:LogicalConstraint",
+		"odrl:or": []any{
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": fieldID},
+				"odrl:operator":     map[string]any{"@id": "odrl:lteq"},
+				"odrl:rightOperand": float64(500),
+			},
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": fieldID},
+				"odrl:operator":     map[string]any{"@id": "odrl:gteq"},
+				"odrl:rightOperand": float64(1000),
+			},
+		},
+	}
+	duty := func() map[string]any {
+		return map[string]any{
+			"@id":             "FACIS-LOGICAL-OR",
+			"@type":           "odrl:Duty",
+			"dcs:prose":       map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action":     map[string]any{"@id": "dcs:provideCompliantValue"},
+			"odrl:constraint": []any{orConstraint},
+		}
+	}
+
+	// 400 satisfies the first branch → the or holds → no violation.
+	ok := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(400))
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	// 700 satisfies neither branch → the or is violated.
+	bad := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(700))
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-LOGICAL-OR", "error"))
+}
+
 func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string) PolicyFinding {
 	t.Helper()
 	for _, finding := range findings {

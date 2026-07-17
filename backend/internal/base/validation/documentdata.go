@@ -690,21 +690,53 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 		default:
 			return fmt.Errorf("policies.%d has unsupported @type %q", index, policy["@type"])
 		}
-		// A rule's constraints are a conjunction (ODRL IM §2.5). Each left
-		// operand is either a document data field or an ODRL context operand
-		// (spatial, dateTime, …) evaluated at use-time — never a field.
+		// A rule's constraints are a conjunction (ODRL IM §2.5); each may itself
+		// be a logical constraint (and/or/xone/andSequence) nesting more
+		// constraints. Flatten to leaf operands: each is a document data field
+		// or an ODRL context operand (spatial, dateTime, …) evaluated at
+		// use-time — never a field.
 		for _, constraint := range policyConstraints(policy["odrl:constraint"]) {
-			leftOperand, _ := constraint["odrl:leftOperand"].(map[string]any)
-			operandID, _ := leftOperand["@id"].(string)
-			if isODRLContextOperandTerm(operandID) {
-				continue
-			}
-			if !fieldIDs[operandID] {
-				return fmt.Errorf("policy references nonexistent contract data field %q", operandID)
+			for _, leaf := range compactConstraintLeaves(constraint) {
+				leftOperand, _ := leaf["odrl:leftOperand"].(map[string]any)
+				operandID, _ := leftOperand["@id"].(string)
+				if operandID == "" || isODRLContextOperandTerm(operandID) {
+					continue
+				}
+				if !fieldIDs[operandID] {
+					return fmt.Errorf("policy references nonexistent contract data field %q", operandID)
+				}
 			}
 		}
 	}
 	return nil
+}
+
+// compactConstraintLeaves flattens a (compact-form) constraint tree to its
+// atomic leaves, descending through logical constraints (odrl:and/or/xone/
+// andSequence, prefixed or bare).
+func compactConstraintLeaves(constraint map[string]any) []map[string]any {
+	for _, key := range []string{
+		"odrl:and", "and", "odrl:or", "or", "odrl:xone", "xone", "odrl:andSequence", "andSequence",
+	} {
+		raw, ok := constraint[key]
+		if !ok {
+			continue
+		}
+		leaves := []map[string]any{}
+		children, _ := asArray(raw)
+		if children == nil {
+			if child, ok := raw.(map[string]any); ok {
+				children = []any{child}
+			}
+		}
+		for _, child := range children {
+			if node, ok := child.(map[string]any); ok {
+				leaves = append(leaves, compactConstraintLeaves(node)...)
+			}
+		}
+		return leaves
+	}
+	return []map[string]any{constraint}
 }
 
 // policyConstraints normalizes a rule's odrl:constraint to a list — a JSON-LD
