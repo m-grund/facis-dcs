@@ -9,7 +9,6 @@ import (
 	"digital-contracting-service/internal/base/validation"
 	contractdb "digital-contracting-service/internal/contractworkflowengine/db"
 	semanticmapper "digital-contracting-service/internal/semantic/mapper"
-	templatedb "digital-contracting-service/internal/templaterepository/db"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,18 +43,6 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 	assertCreationPipelinePolicies(t, persistedContract)
 
 	now := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
-	templateName := "DACH Service Agreement"
-	template := templatedb.ContractTemplate{
-		DID:          creationTemplateDID,
-		Version:      1,
-		State:        "APPROVED",
-		TemplateType: "COMPONENT",
-		Name:         &templateName,
-		CreatedBy:    "test-participant",
-		CreatedAt:    now,
-		UpdatedAt:    now,
-		TemplateData: persistedTemplate,
-	}
 	contract := contractdb.Contract{
 		DID:             creationContractDID,
 		ContractVersion: 1,
@@ -66,7 +53,7 @@ func TestCreateTemplateThenNormalizeContract(t *testing.T) {
 		ContractData:    persistedContract,
 	}
 
-	published, err := semanticmapper.BuildContractJSONLD(contract, template, semanticmapper.DefaultProfile())
+	published, err := semanticmapper.BuildContractJSONLD(contract)
 	require.NoError(t, err)
 
 	var stored, returned map[string]any

@@ -527,7 +527,7 @@ func (s *templateRepositorysrvc) RetrieveByID(ctx context.Context, req *template
 		CreatedAt:      contractTemplate.CreatedAt,
 		UpdatedAt:      contractTemplate.UpdatedAt,
 		TemplateData:   contractTemplate.TemplateData,
-	}, semanticmapper.DefaultProfile())
+	})
 	if err != nil {
 		return nil, templaterepository.MakeInternalError(err)
 	}

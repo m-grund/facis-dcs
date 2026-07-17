@@ -190,9 +190,9 @@ var ErrDocumentSchemaConflict = errors.New("document schema conflict")
 // every new child). Note dcs:children is deliberately NOT listed here — it is
 // a legitimate documentStructure layout term, checked only at the top level.
 var childEnumeratingProperties = []string{
-	"dcs:childContracts", "childContracts",
-	"dcs:subContracts", "subContracts",
-	"dcs:hasPart", "hasPart",
+	"dcs:childContracts",
+	"dcs:subContracts",
+	"dcs:hasPart",
 }
 
 // validateContractHierarchyInvariants enforces the structural hierarchy rules
@@ -202,15 +202,9 @@ var childEnumeratingProperties = []string{
 //   - at most one dcs:parentContract reference;
 //   - no child-enumerating top-level property.
 func validateContractHierarchyInvariants(data documentData) error {
-	for _, key := range []string{"dcs:parentContract", "parentContract"} {
-		value, ok := data[key]
-		if !ok {
-			continue
-		}
-		if list, isList := value.([]any); isList && len(list) > 1 {
-			return fmt.Errorf("%w: a contract may reference at most one dcs:parentContract, got %d",
-				ErrContractHierarchyInvalid, len(list))
-		}
+	if list, isList := data["dcs:parentContract"].([]any); isList && len(list) > 1 {
+		return fmt.Errorf("%w: a contract may reference at most one dcs:parentContract, got %d",
+			ErrContractHierarchyInvalid, len(list))
 	}
 	for _, key := range childEnumeratingProperties {
 		if _, ok := data[key]; ok {

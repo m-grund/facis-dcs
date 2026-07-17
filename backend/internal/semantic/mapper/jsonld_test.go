@@ -88,7 +88,7 @@ func TestBuildTemplateJSONLDPassesThrough(t *testing.T) {
 		TemplateData: newJSON(t, input),
 	}
 
-	env, err := BuildTemplateJSONLD(template, DefaultProfile())
+	env, err := BuildTemplateJSONLD(template)
 	require.NoError(t, err)
 
 	var got, want map[string]any
@@ -110,7 +110,7 @@ func TestBuildTemplateJSONLDRejectsNonCanonicalFormat(t *testing.T) {
 		}),
 	}
 
-	_, err := BuildTemplateJSONLD(template, DefaultProfile())
+	_, err := BuildTemplateJSONLD(template)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "canonical JSON-LD")
 }
@@ -129,7 +129,7 @@ func TestBuildContractJSONLDPassesThrough(t *testing.T) {
 		ContractData:    newJSON(t, input),
 	}
 
-	env, err := BuildContractJSONLD(contract, templatedb.ContractTemplate{}, DefaultProfile())
+	env, err := BuildContractJSONLD(contract)
 	require.NoError(t, err)
 
 	var got, want map[string]any
@@ -151,30 +151,7 @@ func TestBuildContractJSONLDRejectsNonCanonicalFormat(t *testing.T) {
 		}),
 	}
 
-	_, err := BuildContractJSONLD(contract, templatedb.ContractTemplate{}, DefaultProfile())
+	_, err := BuildContractJSONLD(contract)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "canonical JSON-LD")
-}
-
-func TestMaterializeStoredContractJSONLDPassesThrough(t *testing.T) {
-	input := canonicalContractData()
-	contract := contractdb.Contract{
-		DID:             "did:web:example:contract:1",
-		ContractVersion: 1,
-		State:           "APPROVED",
-		CreatedBy:       "user-1",
-		CreatedAt:       fixedTime(),
-		UpdatedAt:       fixedTime(),
-		ContractData:    newJSON(t, input),
-	}
-
-	env, err := MaterializeStoredContractJSONLD(contract, DefaultProfile())
-	require.NoError(t, err)
-
-	var got, want map[string]any
-	raw, _ := json.Marshal(env)
-	_ = json.Unmarshal(raw, &got)
-	rawIn, _ := json.Marshal(input)
-	_ = json.Unmarshal(rawIn, &want)
-	require.Equal(t, want, got)
 }
