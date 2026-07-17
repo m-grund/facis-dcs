@@ -12,7 +12,9 @@ import type { ClauseCatalogType } from '@/services/semantic-hub-service'
  * the hub is available here immediately — no reload or redeploy.
  */
 const emit = defineEmits<{
-  submit: [payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }]
+  submit: [
+    payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance },
+  ]
 }>()
 
 const catalog = useClauseCatalogStore()
@@ -28,7 +30,11 @@ function selectClauseType(type: string) {
   selectedType.value = selectedType.value === type ? null : type
 }
 
-function handleSubmit(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+function handleSubmit(payload: {
+  clauseType: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
   emit('submit', payload)
   selectedType.value = null
 }

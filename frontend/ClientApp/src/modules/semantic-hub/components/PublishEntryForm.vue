@@ -77,7 +77,7 @@ async function submit() {
       </div>
       <div class="form-control">
         <label class="label py-1"><span class="label-text text-xs">Kind</span></label>
-        <select v-model="kind" class="select-bordered select select-sm w-full" aria-label="Entry kind">
+        <select v-model="kind" class="select-bordered select w-full select-sm" aria-label="Entry kind">
           <option v-for="option in KINDS" :key="option" :value="option">{{ option }}</option>
         </select>
       </div>

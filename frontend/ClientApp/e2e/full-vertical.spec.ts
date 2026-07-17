@@ -121,7 +121,10 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
       .fill('Payment component for the full vertical.')
 
     await page.getByRole('tab', { name: /Builder/ }).click()
-    await page.getByRole('button', { name: /add.*block/i }).first().click()
+    await page
+      .getByRole('button', { name: /add.*block/i })
+      .first()
+      .click()
 
     const modal = page.getByRole('dialog')
     await expect(modal.getByRole('heading', { name: 'Add block' })).toBeVisible()
@@ -188,7 +191,10 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
 
     // Reference it in the document outline (Builder tab).
     await page.getByRole('tab', { name: /Builder/ }).click()
-    await page.getByRole('button', { name: /add.*block/i }).first().click()
+    await page
+      .getByRole('button', { name: /add.*block/i })
+      .first()
+      .click()
     const modal = page.getByRole('dialog')
     await expect(modal.getByText('Approved sub-templates:')).toBeVisible()
     await modal.getByText(componentName).first().click()
@@ -226,9 +232,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
 
     // The create trigger is the ParticipantSelectionDialog instance.
     await page.getByRole('button', { name: 'Create', exact: true }).click()
-    const created = page.waitForResponse(
-      (r) => r.url().includes('/contract/create') && r.request().method() === 'POST',
-    )
+    const created = page.waitForResponse((r) => r.url().includes('/contract/create') && r.request().method() === 'POST')
     await completeParticipantDialog(page)
     const createResp = await created
     expect(createResp.ok(), `contract create ${createResp.status()}: ${await createResp.text()}`).toBeTruthy()
@@ -354,10 +358,9 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     // fresh sign+export the document manager can briefly lag before the trail
     // is retrievable, so retry the run until it comes back ok.
     await expect(async () => {
-      const audited = page.waitForResponse(
-        (r) => r.url().includes('/pac/audit') && r.request().method() === 'POST',
-        { timeout: 90_000 },
-      )
+      const audited = page.waitForResponse((r) => r.url().includes('/pac/audit') && r.request().method() === 'POST', {
+        timeout: 90_000,
+      })
       await page.getByRole('button', { name: 'Execute Audit' }).click()
       const auditResp = await audited
       expect(auditResp.ok(), `audit ${auditResp.status()}: ${await auditResp.text()}`).toBeTruthy()

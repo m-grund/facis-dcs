@@ -282,7 +282,9 @@ export const useDcsDraftStore = defineStore(storeId, {
         ...(payload.entityRole ? { 'dcs:entityRole': payload.entityRole } : {}),
         'dcs:fields': payload.parameters.map((p) => semanticParamToField(conditionId, p, documentId)),
       })
-      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId))
+      this.policies.push(
+        ...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId),
+      )
     },
     updateSemanticCondition(
       conditionId: string,
@@ -309,7 +311,9 @@ export const useDcsDraftStore = defineStore(storeId, {
         const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
         return !leftOp || !oldFieldIds.has(leftOp)
       })
-      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId))
+      this.policies.push(
+        ...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId),
+      )
     },
     deleteSemanticCondition(conditionId: string, subTemplateRef?: SubTemplateReference): void {
       if (subTemplateRef) return // sub-template snapshots are immutable
@@ -336,10 +340,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         return !leftOp || !fieldIds.has(leftOp)
       })
     },
-    addClause(payload: {
-      title?: string
-      content: DcsContentSegment[]
-    }): string {
+    addClause(payload: { title?: string; content: DcsContentSegment[] }): string {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
       const block: import('@/models/dcs-jsonld').DcsClause = {
@@ -359,7 +360,11 @@ export const useDcsDraftStore = defineStore(storeId, {
      * machinery, while still becoming its own JSON-LD node server-side
      * validation (validateAgainstHubShapes) targets by its @type.
      */
-    async addTypedClause(payload: { clauseType: string; title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): Promise<string> {
+    async addTypedClause(payload: {
+      clauseType: string
+      title?: string
+      instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+    }): Promise<string> {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
       const trimmedTitle = payload.title?.trim()
@@ -415,7 +420,10 @@ export const useDcsDraftStore = defineStore(storeId, {
      * (DCS-FR-CWE-04). Available in both workflows — the template freezes
      * the clause's shape, the contract creator fills its values.
      */
-    updateTypedClause(blockId: string, payload: { title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }): void {
+    updateTypedClause(
+      blockId: string,
+      payload: { title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance },
+    ): void {
       const block = this.blocks.find((b) => b['@id'] === blockId)
       if (!block || !isDcsClause(block as DcsBlock)) return
       const clause = block as DcsClause
@@ -620,9 +628,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
   // A contract carries its submitted values inline on the requirement field
   // each one targets (dcs:parameterValue) — own fields and composed
   // sub-template fields alike; a template declares fields with no values.
-  const contractData = isContract
-    ? applyInlineSemanticValues(input.contractData, submittedValues)
-    : input.contractData
+  const contractData = isContract ? applyInlineSemanticValues(input.contractData, submittedValues) : input.contractData
   const subTemplateSnapshots = isContract
     ? applyInlineSemanticValuesToSnapshots(input.subTemplateSnapshots ?? [], submittedValues)
     : (input.subTemplateSnapshots ?? [])
@@ -633,9 +639,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
     ...(input.name ? { 'dcs:title': input.name } : {}),
     ...(input.description ? { 'dcs:description': input.description } : {}),
     ...(input.customMetaData?.length ? { 'dcs:customMetaData': input.customMetaData } : {}),
-    ...(subTemplateSnapshots.length
-      ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(subTemplateSnapshots) }
-      : {}),
+    ...(subTemplateSnapshots.length ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(subTemplateSnapshots) } : {}),
   }
   const metadata =
     input.documentType === 'dcs:ContractTemplate'
@@ -1018,14 +1022,18 @@ function semanticParamToField(
   }
 }
 
-
 /** The clause block whose text carries a placeholder bound to fieldId — the prose an ODRL rule over that field is backed by. */
 
 const ODRL_RULE_TYPES = new Set(['odrl:Duty', 'odrl:Permission', 'odrl:Prohibition'])
 
 /** Compacts a shacl-form instance (absolute IRIs) against the hub context. */
-async function compactAgainstHubContext(instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance): Promise<Record<string, unknown>> {
-  const compacted = (await jsonld.compact(instance as object, (await getHubContext()) as never)) as Record<string, unknown>
+async function compactAgainstHubContext(
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance,
+): Promise<Record<string, unknown>> {
+  const compacted = (await jsonld.compact(instance as object, (await getHubContext()) as never)) as Record<
+    string,
+    unknown
+  >
   delete compacted['@context']
   return compacted
 }
@@ -1035,7 +1043,10 @@ export function isOdrlRuleInstance(compactedType: unknown): boolean {
   return typeof compactedType === 'string' && ODRL_RULE_TYPES.has(compactedType)
 }
 
-function proseBlockForField(blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[], fieldId: string): JsonLdReference {
+function proseBlockForField(
+  blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[],
+  fieldId: string,
+): JsonLdReference {
   for (const block of blocks) {
     if (isDcsMergedApprovedTemplate(block) || !isDcsClause(block)) continue
     const content = block['dcs:content']

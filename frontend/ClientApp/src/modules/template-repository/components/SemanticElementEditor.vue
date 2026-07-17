@@ -32,9 +32,9 @@ const allConditions = computed<SemanticCondition[]>(() => [
   ...subTemplateSnapshots.value.flatMap((snapshot) => getSemanticConditionsFromTemplateData(snapshot.template_data)),
 ])
 
-const selected = ref<{ kind: 'field'; field: DomainFieldDefinition } | { kind: 'clause'; clause: ClauseCatalogType } | null>(
-  null,
-)
+const selected = ref<
+  { kind: 'field'; field: DomainFieldDefinition } | { kind: 'clause'; clause: ClauseCatalogType } | null
+>(null)
 
 const activeForm = computed<{ clause: ClauseCatalogType; shapes: string } | null>(() => {
   if (!selected.value) return null

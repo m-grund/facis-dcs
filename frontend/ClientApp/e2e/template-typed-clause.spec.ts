@@ -20,11 +20,18 @@ test('typed clause from the hub palette lands as a prose-backed ODRL rule in an 
   // Component templates carry typed clauses (contract templates compose components).
   await page.getByRole('button', { name: /Component/ }).click()
 
-  await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill('E2E Typed Clause Template')
+  await page
+    .getByRole('group')
+    .filter({ hasText: 'Global Name' })
+    .getByRole('textbox')
+    .fill('E2E Typed Clause Template')
 
   // Builder tab → add a block at the root.
   await page.getByRole('tab', { name: /Builder/ }).click()
-  await page.getByRole('button', { name: /add.*block/i }).first().click()
+  await page
+    .getByRole('button', { name: /add.*block/i })
+    .first()
+    .click()
 
   const modal = page.getByRole('dialog')
   await expect(modal.getByRole('heading', { name: 'Add block' })).toBeVisible()

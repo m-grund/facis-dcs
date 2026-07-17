@@ -43,7 +43,7 @@ async function exportErrorMessage(err: unknown): Promise<string> {
     }
   }
   if (typeof data === 'object' && data !== null && 'message' in data) {
-    return String((data).message)
+    return String(data.message)
   }
   if (response?.status) return `server responded with HTTP ${response.status}`
   return err instanceof Error ? err.message : 'unknown error'

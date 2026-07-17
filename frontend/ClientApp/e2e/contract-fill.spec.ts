@@ -26,7 +26,11 @@ test('filling a placeholder writes the value inline on the requirement field of 
   // The fill inputs live under the Contract Content tab; the seeded fixture
   // binds one placeholder to the coverage requirement field, and the input
   // is labeled with the field's parameter name.
-  await page.getByRole('tab', { name: /content/i }).or(page.getByText('Contract Content', { exact: true })).first().click()
+  await page
+    .getByRole('tab', { name: /content/i })
+    .or(page.getByText('Contract Content', { exact: true }))
+    .first()
+    .click()
   const input = page.getByRole('textbox', { name: 'coverage' }).first()
   await expect(input).toBeVisible()
   await input.fill('97')
@@ -40,7 +44,9 @@ test('filling a placeholder writes the value inline on the requirement field of 
     }
   }
 
-  const fields = (payload.contract_data['dcs:contractData'] ?? []).flatMap((requirement) => requirement['dcs:fields'] ?? [])
+  const fields = (payload.contract_data['dcs:contractData'] ?? []).flatMap(
+    (requirement) => requirement['dcs:fields'] ?? [],
+  )
   const coverage = fields.find((field) => field['dcs:parameterName'] === 'coverage')
   expect(coverage, 'the coverage requirement field is in the document').toBeTruthy()
   // The value lives inline on the field, not in a separate values array; the

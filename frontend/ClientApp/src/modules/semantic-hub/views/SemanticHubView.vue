@@ -118,33 +118,35 @@ onMounted(loadEntries)
       <!-- Entry list -->
       <section class="space-y-4">
         <div class="rounded-lg border border-base-300 bg-base-100 shadow-sm">
-        <div class="border-b border-base-300 px-4 py-3">
-          <h2 class="text-sm font-semibold text-base-content/80">Entries</h2>
-        </div>
-        <div v-if="loading && !entries.length" class="p-4 text-sm text-base-content/60">Loading…</div>
-        <ul v-else class="divide-y divide-base-200">
-          <li v-for="entry in entries" :key="`${entry.kind}/${entry.name}`">
-            <button
-              type="button"
-              class="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-base-200/60"
-              :class="selected && selected.name === entry.name && selected.kind === entry.kind ? 'bg-base-200/80' : ''"
-              @click="select(entry)"
-            >
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-medium">{{ entry.name }}</span>
-                <span class="mt-1 badge badge-xs" :class="KIND_BADGE[entry.kind] ?? 'badge-ghost'">
-                  {{ entry.kind }}
+          <div class="border-b border-base-300 px-4 py-3">
+            <h2 class="text-sm font-semibold text-base-content/80">Entries</h2>
+          </div>
+          <div v-if="loading && !entries.length" class="p-4 text-sm text-base-content/60">Loading…</div>
+          <ul v-else class="divide-y divide-base-200">
+            <li v-for="entry in entries" :key="`${entry.kind}/${entry.name}`">
+              <button
+                type="button"
+                class="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-base-200/60"
+                :class="
+                  selected && selected.name === entry.name && selected.kind === entry.kind ? 'bg-base-200/80' : ''
+                "
+                @click="select(entry)"
+              >
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium">{{ entry.name }}</span>
+                  <span class="mt-1 badge badge-xs" :class="KIND_BADGE[entry.kind] ?? 'badge-ghost'">
+                    {{ entry.kind }}
+                  </span>
                 </span>
-              </span>
-              <span class="shrink-0 text-right text-xs text-base-content/60">
-                <span v-if="entry.active_version > 0" class="block">active v{{ entry.active_version }}</span>
-                <span v-else class="block text-warning">no active version</span>
-                <span class="block opacity-70">latest v{{ entry.latest_version }}</span>
-              </span>
-            </button>
-          </li>
-          <li v-if="!entries.length" class="px-4 py-3 text-sm text-base-content/50">No hub entries.</li>
-        </ul>
+                <span class="shrink-0 text-right text-xs text-base-content/60">
+                  <span v-if="entry.active_version > 0" class="block">active v{{ entry.active_version }}</span>
+                  <span v-else class="block text-warning">no active version</span>
+                  <span class="block opacity-70">latest v{{ entry.latest_version }}</span>
+                </span>
+              </button>
+            </li>
+            <li v-if="!entries.length" class="px-4 py-3 text-sm text-base-content/50">No hub entries.</li>
+          </ul>
         </div>
 
         <!-- Publish new entry -->

@@ -20,8 +20,7 @@ const FRONTEND_PORT = Number(process.env.E2E_FRONTEND_PORT ?? 5199)
  * the localhost origin (dcs-a.localhost is an ADDITIONAL host used by the
  * DCS-to-DCS peer suite, not a self-contained login origin).
  */
-export const E2E_API_BASE =
-  process.env.E2E_DCS_API_BASE ?? 'http://localhost:18080/digital-contracting-service/api'
+export const E2E_API_BASE = process.env.E2E_DCS_API_BASE ?? 'http://localhost:18080/digital-contracting-service/api'
 
 /**
  * The status-list service the minted credentials embed. In the BDD kind

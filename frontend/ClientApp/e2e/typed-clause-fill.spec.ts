@@ -57,8 +57,7 @@ test('editing a typed clause updates instance and summary together', async ({ pa
   const amount = clause?.['dcs:typedClause']?.[DCS_AMOUNT] as { '@value'?: string } | string | undefined
   const amountValue = typeof amount === 'object' ? amount?.['@value'] : amount
   expect(String(amountValue), 'machine-readable instance carries the edited value').toBe('250')
-  expect(
-    JSON.stringify(clause?.['dcs:content']),
-    'human-readable summary is regenerated from the instance',
-  ).toContain('amount: 250')
+  expect(JSON.stringify(clause?.['dcs:content']), 'human-readable summary is regenerated from the instance').toContain(
+    'amount: 250',
+  )
 })

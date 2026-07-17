@@ -154,7 +154,7 @@ async function submit() {
 
     <div ref="formHost"></div>
 
-    <p v-if="formError" class="text-error text-xs">{{ formError }}</p>
+    <p v-if="formError" class="text-xs text-error">{{ formError }}</p>
 
     <div class="flex items-center justify-end gap-2 pt-1">
       <button v-if="showCancel" type="button" class="btn btn-ghost btn-sm" @click="emit('cancel')">Cancel</button>

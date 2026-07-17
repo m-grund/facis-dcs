@@ -85,7 +85,11 @@ watch(addBlockModalContext, (ctx) => {
   if (ctx !== null) void clauseCatalog.refresh()
 })
 
-function handleAddTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+function handleAddTypedClause(payload: {
+  clauseType: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
   const instanceType = String(payload.instance['@type'] ?? '')

@@ -67,7 +67,8 @@ function getPlaceholderLabel(seg: Segment): string {
             :instance="clause['dcs:typedClause']"
             :initial-title="clause['dcs:title'] ?? ''"
             @submit="
-              (payload) => $emit('save-typed', { blockId: clause['@id'], title: payload.title, instance: payload.instance })
+              (payload) =>
+                $emit('save-typed', { blockId: clause['@id'], title: payload.title, instance: payload.instance })
             "
             @cancel="$emit('cancel-edit')"
           />

@@ -160,7 +160,9 @@ function parameterTypeForRange(rangeIRI: string): SemanticParameterType {
 
 /** The dcs:parameterName a field's IRI encodes: its local name without the "field-" marker, dot-separated. */
 function parameterNameFor(fieldIRI: string): string {
-  return localName(fieldIRI).replace(/^field-/, '').replace(/-/g, '.')
+  return localName(fieldIRI)
+    .replace(/^field-/, '')
+    .replace(/-/g, '.')
 }
 
 function cloneConstraint(constraint?: SemanticValueConstraint): SemanticValueConstraint | undefined {
@@ -188,9 +190,7 @@ function parseOntologyDomainFields(graph: OntologyGraph): DomainFieldDefinition[
       const valueConstraint = valueConstraintRef ? cloneConstraint(constraints.get(valueConstraintRef)) : undefined
       const domain = graph.first(subject, `${RDFS}domain`) || undefined
       // A field is an enum when its constraint enumerates allowed values.
-      const type: SemanticParameterType = valueConstraint?.allowedValues?.length
-        ? 'enum'
-        : parameterTypeForRange(range)
+      const type: SemanticParameterType = valueConstraint?.allowedValues?.length ? 'enum' : parameterTypeForRange(range)
       return {
         ontologyId: subject,
         parameterName: parameterNameFor(subject),

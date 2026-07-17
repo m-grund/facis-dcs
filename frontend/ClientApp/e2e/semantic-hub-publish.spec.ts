@@ -44,7 +44,10 @@ test('an operator registers and activates a new version of an existing entry', a
   await page.goto('/ui/semantic-hub')
 
   // Work on the facis-sla ontology entry.
-  await page.getByRole('button', { name: /facis-sla/ }).first().click()
+  await page
+    .getByRole('button', { name: /facis-sla/ })
+    .first()
+    .click()
 
   const current = await (await page.request.get('/api/semantic/ontology/facis-sla')).json()
   const nextContent = `${current.content}\n# e2e version bump ${Date.now()}\n`

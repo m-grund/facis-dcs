@@ -18,7 +18,11 @@ function summarizeValue(value: unknown): string {
   if (Array.isArray(value)) return value.map(summarizeValue).join(', ')
   if (typeof value === 'object' && value !== null) {
     const nested = value as Record<string, unknown>
-    if (typeof nested['@value'] === 'string' || typeof nested['@value'] === 'number' || typeof nested['@value'] === 'boolean') {
+    if (
+      typeof nested['@value'] === 'string' ||
+      typeof nested['@value'] === 'number' ||
+      typeof nested['@value'] === 'boolean'
+    ) {
       return String(nested['@value'])
     }
     if (typeof nested['@id'] === 'string') return nested['@id']

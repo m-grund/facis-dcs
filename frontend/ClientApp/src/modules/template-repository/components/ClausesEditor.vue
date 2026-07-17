@@ -86,11 +86,19 @@ function deleteClause(blockId: string) {
   if (editingBlockId.value === blockId) cancelEdit()
 }
 
-async function addTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+async function addTypedClause(payload: {
+  clauseType: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
   await store.addTypedClause(payload)
 }
 
-function saveTypedClause(payload: { blockId: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+function saveTypedClause(payload: {
+  blockId: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
   store.updateTypedClause(payload.blockId, { title: payload.title, instance: payload.instance })
   if (editingBlockId.value === payload.blockId) cancelEdit()
 }

@@ -49,7 +49,7 @@ export default defineConfig(({ mode, command }) => {
     plugins: [
       uiRedirectPlugin,
       baseHrefPlugin,
-      vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === "shacl-form" } } }),
+      vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'shacl-form' } } }),
       tailwindcss(),
     ],
     envPrefix: 'DCS_',

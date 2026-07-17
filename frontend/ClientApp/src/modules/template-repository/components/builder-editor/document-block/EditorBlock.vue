@@ -85,7 +85,11 @@ const typedClauseValueEntries = computed(() => {
 })
 const isEditingTypedClause = ref(false)
 
-function saveTypedClause(payload: { clauseType: string; title: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance }) {
+function saveTypedClause(payload: {
+  clauseType: string
+  title: string
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+}) {
   const instance = payload.instance
   draftStore.updateBlock(props.item.blockId, {
     title: payload.title,

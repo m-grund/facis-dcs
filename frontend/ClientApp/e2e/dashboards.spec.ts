@@ -31,7 +31,11 @@ test('contract view renders the human-readable document', async ({ page, loginAs
   await page.goto(`/ui/contracts/view/${contractDid}`)
 
   // The human-readable rendering lives under the Contract Content tab.
-  await page.getByRole('tab', { name: /content/i }).or(page.getByText('Contract Content', { exact: true })).first().click()
+  await page
+    .getByRole('tab', { name: /content/i })
+    .or(page.getByText('Contract Content', { exact: true }))
+    .first()
+    .click()
   // The seeded ODRL fixture document's clause text, rendered from the
   // machine-readable JSON-LD — the human-readable representation the SRS
   // demands alongside it.
