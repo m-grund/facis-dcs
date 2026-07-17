@@ -93,6 +93,36 @@ func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) 
 			return false
 		}
 		return strings.Contains(str, fmt.Sprint(compactJSONLDValue(rightOperand)))
+	case "isPartOf":
+		if items, ok := asArray(rightOperand); ok {
+			normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
+			for _, item := range items {
+				if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) == normalized {
+					return true
+				}
+			}
+			return false
+		}
+		str, ok := rightOperand.(string)
+		if !ok {
+			return false
+		}
+		return strings.Contains(str, fmt.Sprint(actualValue))
+	case "isAllOf":
+		items, ok := asArray(rightOperand)
+		if !ok {
+			items = []any{rightOperand}
+		}
+		if len(items) == 0 {
+			return false
+		}
+		normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
+		for _, item := range items {
+			if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) != normalized {
+				return false
+			}
+		}
+		return true
 	default:
 		return false
 	}
@@ -214,6 +244,19 @@ func TestOPAConstraintParityWithHandRolled(t *testing.T) {
 		// hasPart (substring)
 		{"hasPart", "hello world", "world"},
 		{"hasPart", "hello", "xyz"},
+		// isPartOf: membership over a set, substring over a spelled-out whole
+		{"isPartOf", "DEU", []any{"DEU", "AUT", "CHE"}},
+		{"isPartOf", "deu", []any{"DEU", "AUT"}},
+		{"isPartOf", "ZZZ", []any{"DEU"}},
+		{"isPartOf", "Bay", "Bayern, Germany"},
+		{"isPartOf", "xyz", "Bayern"},
+		{"isPartOf", "DEU", float64(5)}, // non-string, non-array right -> false
+		// isAllOf: the actual must match every member of the right set
+		{"isAllOf", "DEU", []any{"DEU"}},
+		{"isAllOf", "DEU", []any{"DEU", "DEU"}},
+		{"isAllOf", "DEU", []any{"DEU", "AUT"}}, // not all equal -> false
+		{"isAllOf", "DEU", "DEU"},               // scalar coerces to singleton set
+		{"isAllOf", "DEU", []any{}},             // empty set -> false
 		// unknown operator -> false
 		{"unknownOp", "DEU", "DEU"},
 	}

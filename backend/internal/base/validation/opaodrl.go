@@ -153,6 +153,36 @@ satisfied if {
 	is_string(input.actual)
 	contains(input.actual, sprintf("%v", [input.right]))
 }
+
+# isPartOf — the value-level converse of hasPart, with no partonomy graph to
+# consult: the actual value is part of a right operand that enumerates a set
+# (membership) or spells out a whole (substring).
+satisfied if {
+	input.operator == "isPartOf"
+	is_array(input.right)
+	some item in input.right
+	norm(item) == norm(input.actual)
+}
+
+satisfied if {
+	input.operator == "isPartOf"
+	is_string(input.right)
+	contains(input.right, sprintf("%v", [input.actual]))
+}
+
+# isAllOf — the actual value comprises every member of the right operand set
+# (a scalar right is read as a one-member set).
+right_items := input.right if is_array(input.right)
+
+right_items := [input.right] if not is_array(input.right)
+
+satisfied if {
+	input.operator == "isAllOf"
+	count(right_items) > 0
+	every item in right_items {
+		norm(item) == norm(input.actual)
+	}
+}
 `
 
 var (

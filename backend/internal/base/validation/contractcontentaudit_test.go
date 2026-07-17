@@ -978,6 +978,41 @@ func TestAuditContractEvaluatesNestedDuty(t *testing.T) {
 	require.True(t, hasFindingSeverity(violated, "FACIS-DUTY-COMPENSATE", "error"), "unmet duty obligation flagged")
 }
 
+// TestAuditContractEnforcesIsPartOf proves the isPartOf operator — offered by
+// the clause builder — is actually enforced by the contract policy check: a
+// value in the enumerated set passes, one outside it is flagged.
+func TestAuditContractEnforcesIsPartOf(t *testing.T) {
+	fieldID := "urn:dcs:field:country"
+	duty := func() map[string]any {
+		return map[string]any{
+			"@id":         "FACIS-ISPARTOF",
+			"@type":       "odrl:Duty",
+			"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action": map[string]any{"@id": "dcs:provideCompliantValue"},
+			"odrl:constraint": []any{
+				map[string]any{
+					"@type":             "odrl:Constraint",
+					"odrl:leftOperand":  map[string]any{"@id": fieldID},
+					"odrl:operator":     map[string]any{"@id": "odrl:isPartOf"},
+					"odrl:rightOperand": []any{"DEU", "AUT"},
+				},
+			},
+		}
+	}
+
+	ok := odrlContract(fieldID, "region", "country", []any{duty()}, "DEU")
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	bad := odrlContract(fieldID, "region", "country", []any{duty()}, "ZZZ")
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-ISPARTOF", "error"), "value outside the isPartOf set flagged")
+}
+
 func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string) PolicyFinding {
 	t.Helper()
 	for _, finding := range findings {
