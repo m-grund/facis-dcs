@@ -7,7 +7,24 @@ import {
   ODRL_RULE_TYPES,
 } from '@template-repository/utils/odrl-vocabulary'
 import { computed, reactive, watch } from 'vue'
-import type { JsonLdReference, JsonLdTypedValue, OdrlConstraint, OdrlRule } from '@/models/dcs-jsonld'
+import {
+  isAtomicConstraint,
+  type JsonLdReference,
+  type JsonLdTypedValue,
+  type OdrlConstraint,
+  type OdrlConstraintNode,
+  type OdrlLogicalConstraint,
+  type OdrlRule,
+} from '@/models/dcs-jsonld'
+
+/** How a rule's multiple constraints combine (ODRL LogicalConstraint IM §2.6). */
+const CONSTRAINT_COMBINATORS = [
+  { op: 'and', label: 'ALL must hold' },
+  { op: 'or', label: 'ANY may hold' },
+  { op: 'xone', label: 'EXACTLY ONE must hold' },
+  { op: 'andSequence', label: 'ALL, in sequence' },
+] as const
+type ConstraintCombinator = (typeof CONSTRAINT_COMBINATORS)[number]['op']
 
 /**
  * The machine-readable meaning of a clause: an ODRL rule. Reference terms —
@@ -68,12 +85,15 @@ interface ConstraintDraft {
   value: string
 }
 
+const initialConstraints = extractConstraints(props.modelValue)
+
 const draft = reactive<{
   type: string
   actions: string[]
   assigneeId: string
   assignerId: string
   targetId: string
+  combine: ConstraintCombinator
   constraints: ConstraintDraft[]
 }>({
   type: props.modelValue?.['@type'] ?? ODRL_RULE_TYPES[0]?.type ?? 'odrl:Permission',
@@ -81,7 +101,8 @@ const draft = reactive<{
   assigneeId: props.modelValue?.['odrl:assignee']?.['@id'] ?? props.parties[0]?.id ?? '',
   assignerId: props.modelValue?.['odrl:assigner']?.['@id'] ?? props.parties[0]?.id ?? '',
   targetId: props.modelValue?.['odrl:target']?.['@id'] ?? props.contractTargetId,
-  constraints: readConstraints(props.modelValue),
+  combine: initialConstraints.combine,
+  constraints: initialConstraints.constraints,
 })
 
 // Seeded once. Reading props.modelValue inside the emitting `rule` computed
@@ -105,20 +126,49 @@ function removeAction(index: number) {
   draft.actions.splice(index, 1)
 }
 
-function readConstraints(rule: OdrlRule | null): ConstraintDraft[] {
-  return (rule?.['odrl:constraint'] ?? []).map((c) => {
-    const right = c['odrl:rightOperand']
-    if (right && '@id' in right) {
-      return {
-        leftOperand: c['odrl:leftOperand']['@id'],
-        operator: c['odrl:operator']['@id'],
-        rightSource: right['@id'],
-        value: '',
+// Reads a rule's constraints back into the flat editor: a single
+// LogicalConstraint wrapper surfaces its combinator and children; a plain list
+// is a conjunction (ALL). Nested logical children below the first level are not
+// round-tripped into the flat editor (kept only their atomic leaves).
+function extractConstraints(rule: OdrlRule | null): { combine: ConstraintCombinator; constraints: ConstraintDraft[] } {
+  const nodes: OdrlConstraintNode[] = rule?.['odrl:constraint'] ?? []
+  const first = nodes[0]
+  if (nodes.length === 1 && first && !isAtomicConstraint(first)) {
+    for (const { op } of CONSTRAINT_COMBINATORS) {
+      const list = logicalList(first, op)
+      if (list) {
+        return { combine: op, constraints: list.filter(isAtomicConstraint).map(readAtomic) }
       }
     }
-    const value = Array.isArray(right) ? right.map((r) => r['@value']).join(', ') : (right?.['@value'] ?? '')
-    return { leftOperand: c['odrl:leftOperand']['@id'], operator: c['odrl:operator']['@id'], rightSource: '', value }
-  })
+  }
+  return { combine: 'and', constraints: nodes.filter(isAtomicConstraint).map(readAtomic) }
+}
+
+function logicalList(node: OdrlLogicalConstraint, op: ConstraintCombinator): OdrlConstraintNode[] | undefined {
+  switch (op) {
+    case 'or':
+      return node['odrl:or']?.['@list']
+    case 'xone':
+      return node['odrl:xone']?.['@list']
+    case 'andSequence':
+      return node['odrl:andSequence']?.['@list']
+    default:
+      return node['odrl:and']?.['@list']
+  }
+}
+
+function readAtomic(c: OdrlConstraint): ConstraintDraft {
+  const right = c['odrl:rightOperand']
+  if (right && '@id' in right) {
+    return {
+      leftOperand: c['odrl:leftOperand']['@id'],
+      operator: c['odrl:operator']['@id'],
+      rightSource: right['@id'],
+      value: '',
+    }
+  }
+  const value = Array.isArray(right) ? right.map((r) => r['@value']).join(', ') : (right?.['@value'] ?? '')
+  return { leftOperand: c['odrl:leftOperand']['@id'], operator: c['odrl:operator']['@id'], rightSource: '', value }
 }
 
 function addConstraint() {
@@ -175,9 +225,29 @@ const rule = computed<OdrlRule | null>(() => {
     'odrl:target': { '@id': draft.targetId || props.contractTargetId },
     'dcs:prose': { '@id': props.proseId },
   }
-  if (constraints.length) built['odrl:constraint'] = constraints
+  if (constraints.length) {
+    if (draft.combine === 'and' || constraints.length === 1) {
+      built['odrl:constraint'] = constraints
+    } else {
+      built['odrl:constraint'] = [logicalConstraint(draft.combine, constraints)]
+    }
+  }
   return built
 })
+
+function logicalConstraint(combine: ConstraintCombinator, constraints: OdrlConstraint[]): OdrlLogicalConstraint {
+  const list = { '@list': constraints }
+  switch (combine) {
+    case 'or':
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:or': list }
+    case 'xone':
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:xone': list }
+    case 'andSequence':
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:andSequence': list }
+    default:
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:and': list }
+  }
+}
 
 watch(rule, (value) => emit('update:modelValue', value))
 </script>
@@ -223,7 +293,17 @@ watch(rule, (value) => emit('update:modelValue', value))
 
     <div class="space-y-2">
       <div class="flex items-center justify-between">
-        <span class="label-text text-xs font-semibold">Constraints (all must hold)</span>
+        <div class="flex items-center gap-1">
+          <span class="label-text text-xs font-semibold">Constraints</span>
+          <select
+            v-if="draft.constraints.length > 1"
+            v-model="draft.combine"
+            class="select-bordered select select-xs"
+            title="How the constraints combine"
+          >
+            <option v-for="c in CONSTRAINT_COMBINATORS" :key="c.op" :value="c.op">{{ c.label }}</option>
+          </select>
+        </div>
         <button type="button" class="btn btn-ghost btn-xs" @click="addConstraint">+ constraint</button>
       </div>
       <div v-for="(c, i) in draft.constraints" :key="i" class="flex flex-wrap items-center gap-1">

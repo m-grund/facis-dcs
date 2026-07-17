@@ -118,3 +118,51 @@ test('an exhaustive access-grant template lets the Appendix C policy be negotiat
     'dateTime boundary is a negotiated field',
   ).toBeTruthy()
 })
+
+// The builder generates an ODRL LogicalConstraint (IM §2.6) when constraints
+// are combined with anything other than ALL: two spatial constraints under
+// "ANY may hold" emit a single odrl:or over both.
+test('the builder emits a logical (or) constraint when constraints are combined with ANY', async ({
+  page,
+  loginAs,
+}) => {
+  page.setDefaultTimeout(15_000)
+  await gotoAs(page, loginAs, 'Template Creator', '/ui/templates/new')
+  await page.getByRole('button', { name: /Component/ }).click()
+  await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill(`FV Logical ${Date.now()}`)
+  await page.getByRole('tab', { name: /Clauses/ }).click()
+
+  const editor = page.getByTestId('split-clause-editor')
+  await editor.getByPlaceholder('Clause title').fill(`Logical or ${Date.now()}`)
+  await editor.locator('.clause-editor').first().click()
+  await page.keyboard.type('The assignee may access from an allowed region.')
+
+  const ruleSelect = (label: string) =>
+    editor.locator('label.form-control').filter({ hasText: label }).locator('select')
+  await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
+  await ruleSelect('Action').selectOption({ label: 'use' })
+
+  const addSpatial = async (value: string) => {
+    await editor.getByRole('button', { name: '+ constraint' }).click()
+    const row = editor.locator('.flex.flex-wrap.items-center.gap-1').last()
+    await row.locator('select').nth(0).selectOption({ label: 'access region (spatial)' })
+    await row.locator('select').nth(1).selectOption({ label: 'must equal' })
+    await row.locator('input[placeholder="value"]').fill(value)
+  }
+  await addSpatial('DE')
+  await addSpatial('FR')
+  await editor.locator('select[title="How the constraints combine"]').selectOption('or')
+
+  await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
+  const created = page.waitForRequest((r) => r.url().includes('/template/create') && r.method() === 'POST')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  const doc = (await created).postDataJSON().template_data as {
+    'dcs:policies': { 'odrl:permission'?: { 'odrl:constraint'?: unknown[] }[] }
+  }
+
+  const constraints = (doc['dcs:policies']['odrl:permission'] ?? [])[0]?.['odrl:constraint'] ?? []
+  expect(constraints.length, 'a single logical constraint node').toBe(1)
+  const logical = constraints[0] as { '@type': string; 'odrl:or'?: { '@list': unknown[] } }
+  expect(logical['@type']).toBe('odrl:LogicalConstraint')
+  expect(logical['odrl:or']?.['@list']?.length, 'or over both spatial constraints').toBe(2)
+})

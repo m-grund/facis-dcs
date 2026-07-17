@@ -18,11 +18,14 @@ import {
   type DcsSubTemplateSnapshot,
   type DcsTemplateData,
   type DcsTextBlock,
+  isAtomicConstraint,
   isDcsClause,
   isDcsDocumentData,
   isDcsTemplateData,
   type JsonLdReference,
   type JsonLdTypedValue,
+  type OdrlConstraint,
+  type OdrlConstraintNode,
   type OdrlRule,
   type OdrlSet,
 } from '@/models/dcs-jsonld'
@@ -1033,9 +1036,27 @@ function semanticConditionToPolicies(
   )
 }
 
-/** The left-operand IRIs a rule's constraints reference. */
+/** Flattens a constraint list to its atomic leaves, descending logical constraints. */
+function atomicConstraintLeaves(nodes: readonly OdrlConstraintNode[]): OdrlConstraint[] {
+  const leaves: OdrlConstraint[] = []
+  for (const node of nodes) {
+    if (isAtomicConstraint(node)) {
+      leaves.push(node)
+      continue
+    }
+    for (const op of ['odrl:and', 'odrl:or', 'odrl:xone', 'odrl:andSequence'] as const) {
+      const list = node[op]
+      if (list) leaves.push(...atomicConstraintLeaves(list['@list']))
+    }
+  }
+  return leaves
+}
+
+/** The left-operand IRIs a rule's constraints reference (across logical trees). */
 function ruleLeftOperands(rule: OdrlRule): string[] {
-  return (rule['odrl:constraint'] ?? []).map((constraint) => constraint['odrl:leftOperand']['@id'])
+  return atomicConstraintLeaves(rule['odrl:constraint'] ?? []).map(
+    (constraint) => constraint['odrl:leftOperand']['@id'],
+  )
 }
 
 function contractDataToSemanticConditions(
@@ -1044,7 +1065,7 @@ function contractDataToSemanticConditions(
 ): SemanticCondition[] {
   const operatorsByField = new Map<string, SemanticParameterOperator[]>()
   for (const policy of policies) {
-    for (const constraint of policy['odrl:constraint'] ?? []) {
+    for (const constraint of atomicConstraintLeaves(policy['odrl:constraint'] ?? [])) {
       const operate = constraint['odrl:operator']['@id'] as DcsOperator
       if (!isStandardOdrlOperator(operate)) continue
       const rightOperand = constraint['odrl:rightOperand']

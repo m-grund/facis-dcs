@@ -136,6 +136,25 @@ export interface OdrlConstraint {
   'odrl:rightOperand'?: JsonLdTypedValue | JsonLdTypedValue[] | JsonLdReference
 }
 
+/**
+ * An ODRL LogicalConstraint (IM §2.6): a logical operator over an ordered list
+ * of constraints. and/andSequence = all hold, or = any holds, xone = exactly
+ * one holds; children may themselves be logical (a tree).
+ */
+export interface OdrlLogicalConstraint {
+  '@type': 'odrl:LogicalConstraint'
+  'odrl:and'?: { '@list': OdrlConstraintNode[] }
+  'odrl:or'?: { '@list': OdrlConstraintNode[] }
+  'odrl:xone'?: { '@list': OdrlConstraintNode[] }
+  'odrl:andSequence'?: { '@list': OdrlConstraintNode[] }
+}
+
+export type OdrlConstraintNode = OdrlConstraint | OdrlLogicalConstraint
+
+export function isAtomicConstraint(node: OdrlConstraintNode): node is OdrlConstraint {
+  return node['@type'] === 'odrl:Constraint'
+}
+
 export interface OdrlRule {
   '@id': string
   '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
@@ -152,10 +171,10 @@ export interface OdrlRule {
   'odrl:target': JsonLdReference
   /** The human-readable clause node this rule is backed by (required — machine rules operationalize audited prose). */
   'dcs:prose': JsonLdReference
-  /** The rule's constraints; all must hold (ODRL IM §2.5: multiple constraints
-   *  are a conjunction). A permission bounded by both a spatial and a temporal
-   *  condition (SRS Appendix C) carries two. */
-  'odrl:constraint'?: OdrlConstraint[]
+  /** The rule's constraints. A plain list is a conjunction (all hold, ODRL IM
+   *  §2.5); a single LogicalConstraint expresses or/xone/andSequence. Nodes may
+   *  nest (a constraint tree). */
+  'odrl:constraint'?: OdrlConstraintNode[]
 }
 
 /** The single enclosing ODRL 2.2 policy for a template (Offer) or contract (Agreement). */
