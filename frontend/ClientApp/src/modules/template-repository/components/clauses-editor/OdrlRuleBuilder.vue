@@ -1,40 +1,25 @@
 <script setup lang="ts">
+import {
+  composeConstraintTree,
+  type GroupDraft,
+  newGroup,
+  parseConstraintTree,
+} from '@template-repository/components/clauses-editor/constraint-draft'
+import ConstraintGroupEditor from '@template-repository/components/clauses-editor/ConstraintGroupEditor.vue'
 import IriPicker from '@template-repository/components/clauses-editor/IriPicker.vue'
-import {
-  ODRL_ACTIONS,
-  ODRL_CONTEXT_OPERANDS,
-  ODRL_OPERATORS,
-  ODRL_RULE_TYPES,
-} from '@template-repository/utils/odrl-vocabulary'
+import { ODRL_ACTIONS, ODRL_RULE_TYPES } from '@template-repository/utils/odrl-vocabulary'
 import { computed, reactive, watch } from 'vue'
-import {
-  isAtomicConstraint,
-  type JsonLdReference,
-  type JsonLdTypedValue,
-  type OdrlConstraint,
-  type OdrlConstraintNode,
-  type OdrlDuty,
-  type OdrlLogicalConstraint,
-  type OdrlRule,
-} from '@/models/dcs-jsonld'
-
-/** How a rule's multiple constraints combine (ODRL LogicalConstraint IM §2.6). */
-const CONSTRAINT_COMBINATORS = [
-  { op: 'and', label: 'ALL must hold' },
-  { op: 'or', label: 'ANY may hold' },
-  { op: 'xone', label: 'EXACTLY ONE must hold' },
-  { op: 'andSequence', label: 'ALL, in sequence' },
-] as const
-type ConstraintCombinator = (typeof CONSTRAINT_COMBINATORS)[number]['op']
+import { type OdrlDuty, type OdrlRule } from '@/models/dcs-jsonld'
 
 /**
  * The machine-readable meaning of a clause: an ODRL rule. Reference terms —
  * action, assigner, assignee, target — are picked from the DCS vocabulary or
  * given as a custom IRI (ODRL sets no closed vocabulary on them). A rule is one
  * permission/prohibition/obligation — who (assignee) may/must-not/must do what
- * (action) toward whom (target), bounded by constraints that all must hold.
- * The SRS Appendix C access policy is a permission to use an asset bounded by
- * spatial and dateTime constraints.
+ * (action) toward whom (target), bounded by a constraint tree (ODRL IM §2.6).
+ * A Permission may carry duties, each an obligation with its own constraint
+ * tree and optional consequence. The SRS Appendix C access policy is a
+ * permission to use an asset bounded by spatial and dateTime constraints.
  */
 
 export interface Anchor {
@@ -77,24 +62,13 @@ const targetGroups = computed(() => {
   return groups
 })
 
-interface ConstraintDraft {
-  leftOperand: string
-  operator: string
-  /** '' = a fixed literal boundary (use `value`); otherwise a field @id whose
-   *  value is agreed during contract negotiation. */
-  rightSource: string
-  value: string
-}
-
-/** A Duty the assignee must fulfil to exercise a Permission (ODRL IM §2.5):
- *  its own action, bounded by its own constraints combined like a rule's. */
+/** A Duty the assignee must fulfil to exercise a Permission (ODRL IM §2.5): its
+ *  own action, a constraint tree, and consequence duties triggered when unmet. */
 interface DutyDraft {
   action: string
-  combine: ConstraintCombinator
-  constraints: ConstraintDraft[]
+  root: GroupDraft
+  consequences: { action: string; root: GroupDraft }[]
 }
-
-const initialConstraints = extractConstraintNodes(props.modelValue?.['odrl:constraint'] ?? [])
 
 const draft = reactive<{
   type: string
@@ -102,8 +76,7 @@ const draft = reactive<{
   assigneeId: string
   assignerId: string
   targetId: string
-  combine: ConstraintCombinator
-  constraints: ConstraintDraft[]
+  root: GroupDraft
   duties: DutyDraft[]
 }>({
   type: props.modelValue?.['@type'] ?? ODRL_RULE_TYPES[0]?.type ?? 'odrl:Permission',
@@ -111,8 +84,7 @@ const draft = reactive<{
   assigneeId: props.modelValue?.['odrl:assignee']?.['@id'] ?? props.parties[0]?.id ?? '',
   assignerId: props.modelValue?.['odrl:assigner']?.['@id'] ?? props.parties[0]?.id ?? '',
   targetId: props.modelValue?.['odrl:target']?.['@id'] ?? props.contractTargetId,
-  combine: initialConstraints.combine,
-  constraints: initialConstraints.constraints,
+  root: parseConstraintTree(props.modelValue?.['odrl:constraint'] ?? []),
   duties: readDuties(props.modelValue),
 })
 
@@ -130,6 +102,11 @@ function readActions(rule: OdrlRule | null): string[] {
   return ids.length ? ids : [ODRL_ACTIONS[0]?.id ?? 'odrl:use']
 }
 
+function firstActionId(action: OdrlDuty['odrl:action']): string {
+  const first = Array.isArray(action) ? action[0] : action
+  return first?.['@id'] ?? ODRL_ACTIONS[0]?.id ?? 'odrl:use'
+}
+
 function addAction() {
   draft.actions.push(ODRL_ACTIONS[0]?.id ?? 'odrl:use')
 }
@@ -137,132 +114,39 @@ function removeAction(index: number) {
   draft.actions.splice(index, 1)
 }
 
-// Reads a rule's constraints back into the flat editor: a single
-// LogicalConstraint wrapper surfaces its combinator and children; a plain list
-// is a conjunction (ALL). Nested logical children below the first level are not
-// round-tripped into the flat editor (kept only their atomic leaves).
-function extractConstraintNodes(nodes: OdrlConstraintNode[]): { combine: ConstraintCombinator; constraints: ConstraintDraft[] } {
-  const first = nodes[0]
-  if (nodes.length === 1 && first && !isAtomicConstraint(first)) {
-    for (const { op } of CONSTRAINT_COMBINATORS) {
-      const list = logicalList(first, op)
-      if (list) {
-        return { combine: op, constraints: list.filter(isAtomicConstraint).map(readAtomic) }
-      }
-    }
-  }
-  return { combine: 'and', constraints: nodes.filter(isAtomicConstraint).map(readAtomic) }
-}
-
-function logicalList(node: OdrlLogicalConstraint, op: ConstraintCombinator): OdrlConstraintNode[] | undefined {
-  switch (op) {
-    case 'or':
-      return node['odrl:or']?.['@list']
-    case 'xone':
-      return node['odrl:xone']?.['@list']
-    case 'andSequence':
-      return node['odrl:andSequence']?.['@list']
-    default:
-      return node['odrl:and']?.['@list']
-  }
-}
-
-function readAtomic(c: OdrlConstraint): ConstraintDraft {
-  const right = c['odrl:rightOperand']
-  if (right && '@id' in right) {
-    return {
-      leftOperand: c['odrl:leftOperand']['@id'],
-      operator: c['odrl:operator']['@id'],
-      rightSource: right['@id'],
-      value: '',
-    }
-  }
-  const value = Array.isArray(right) ? right.map((r) => r['@value']).join(', ') : (right?.['@value'] ?? '')
-  return { leftOperand: c['odrl:leftOperand']['@id'], operator: c['odrl:operator']['@id'], rightSource: '', value }
-}
-
-function addConstraint() {
-  draft.constraints.push({
-    leftOperand: ODRL_CONTEXT_OPERANDS[0]?.id ?? 'odrl:spatial',
-    operator: ODRL_OPERATORS[0]?.id ?? 'odrl:eq',
-    rightSource: '',
-    value: '',
-  })
-}
-
-function removeConstraint(index: number) {
-  draft.constraints.splice(index, 1)
-}
-
-// A duty is a fragment: one action bounded by its own constraints, combined by
-// a logical operator just like a rule's.
+// A duty is a fragment: its own action, a constraint tree, and consequence
+// duties (each again an action + constraint tree, ODRL IM §2.5).
 function readDuties(rule: OdrlRule | null): DutyDraft[] {
-  return (rule?.['odrl:duty'] ?? []).map((duty) => {
-    const action = duty['odrl:action']
-    const first = Array.isArray(action) ? action[0] : action
-    const { combine, constraints } = extractConstraintNodes(duty['odrl:constraint'] ?? [])
-    return { action: first?.['@id'] ?? ODRL_ACTIONS[0]?.id ?? 'odrl:use', combine, constraints }
-  })
+  return (rule?.['odrl:duty'] ?? []).map((duty) => ({
+    action: firstActionId(duty['odrl:action']),
+    root: parseConstraintTree(duty['odrl:constraint'] ?? []),
+    consequences: (duty['odrl:consequence'] ?? []).map((consequence) => ({
+      action: firstActionId(consequence['odrl:action']),
+      root: parseConstraintTree(consequence['odrl:constraint'] ?? []),
+    })),
+  }))
 }
 
 function addDuty() {
-  draft.duties.push({ action: ODRL_ACTIONS[0]?.id ?? 'odrl:use', combine: 'and', constraints: [] })
+  draft.duties.push({ action: ODRL_ACTIONS[0]?.id ?? 'odrl:use', root: newGroup(), consequences: [] })
 }
 function removeDuty(index: number) {
   draft.duties.splice(index, 1)
 }
-function addDutyConstraint(dutyIndex: number) {
-  draft.duties[dutyIndex]?.constraints.push({
-    leftOperand: ODRL_CONTEXT_OPERANDS[0]?.id ?? 'odrl:spatial',
-    operator: ODRL_OPERATORS[0]?.id ?? 'odrl:eq',
-    rightSource: '',
-    value: '',
-  })
+function addConsequence(dutyIndex: number) {
+  draft.duties[dutyIndex]?.consequences.push({ action: ODRL_ACTIONS[0]?.id ?? 'odrl:use', root: newGroup() })
 }
-function removeDutyConstraint(dutyIndex: number, index: number) {
-  draft.duties[dutyIndex]?.constraints.splice(index, 1)
+function removeConsequence(dutyIndex: number, index: number) {
+  draft.duties[dutyIndex]?.consequences.splice(index, 1)
 }
 
-function typed(value: string): JsonLdTypedValue {
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return { '@value': value, '@type': 'xsd:dateTime' }
-  const isNumber = value !== '' && !Number.isNaN(Number(value))
-  return { '@value': value, '@type': isNumber ? 'xsd:decimal' : 'xsd:string' }
-}
-
-function rightOperand(value: string, operator: string): JsonLdTypedValue | JsonLdTypedValue[] | undefined {
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  if (operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf' || operator === 'odrl:isAllOf') {
-    return trimmed.split(',').map((part) => typed(part.trim()))
-  }
-  return typed(trimmed)
-}
-
-function buildAtomicConstraint(c: ConstraintDraft): OdrlConstraint {
-  const constraint: OdrlConstraint = {
-    '@type': 'odrl:Constraint',
-    'odrl:leftOperand': { '@id': c.leftOperand },
-    'odrl:operator': { '@id': c.operator },
-  }
-  const right: JsonLdTypedValue | JsonLdTypedValue[] | JsonLdReference | undefined = c.rightSource
-    ? { '@id': c.rightSource }
-    : rightOperand(c.value, c.operator)
-  if (right !== undefined) constraint['odrl:rightOperand'] = right
-  return constraint
-}
-
-function buildConstraints(drafts: ConstraintDraft[]): OdrlConstraint[] {
-  return drafts.filter((c) => c.leftOperand).map(buildAtomicConstraint)
-}
-
-// Composes drafts into a rule's odrl:constraint value: a plain conjunction
-// array for ALL (or a single constraint), otherwise a single LogicalConstraint
-// wrapping the combinator (ODRL IM §2.6).
-function composeConstraints(drafts: ConstraintDraft[], combine: ConstraintCombinator): OdrlConstraintNode[] | undefined {
-  const constraints = buildConstraints(drafts)
-  if (!constraints.length) return undefined
-  if (combine === 'and' || constraints.length === 1) return constraints
-  return [logicalConstraint(combine, constraints)]
+function buildDuty(action: string, root: GroupDraft, consequences: DutyDraft['consequences'] = []): OdrlDuty {
+  const duty: OdrlDuty = { '@type': 'odrl:Duty', 'odrl:action': { '@id': action } }
+  const constraints = composeConstraintTree(root)
+  if (constraints) duty['odrl:constraint'] = constraints
+  const built = consequences.filter((c) => c.action).map((c) => buildDuty(c.action, c.root))
+  if (built.length) duty['odrl:consequence'] = built
+  return duty
 }
 
 const rule = computed<OdrlRule | null>(() => {
@@ -277,37 +161,16 @@ const rule = computed<OdrlRule | null>(() => {
     'odrl:target': { '@id': draft.targetId || props.contractTargetId },
     'dcs:prose': { '@id': props.proseId },
   }
-  const ruleConstraints = composeConstraints(draft.constraints, draft.combine)
+  const ruleConstraints = composeConstraintTree(draft.root)
   if (ruleConstraints) built['odrl:constraint'] = ruleConstraints
   // Duties attach only to a Permission (ODRL IM §2.5): the obligations the
   // assignee must fulfil to exercise it.
   if (draft.type === 'odrl:Permission') {
-    const duties = draft.duties
-      .filter((d) => d.action)
-      .map((d): OdrlDuty => {
-        const duty: OdrlDuty = { '@type': 'odrl:Duty', 'odrl:action': { '@id': d.action } }
-        const dutyConstraints = composeConstraints(d.constraints, d.combine)
-        if (dutyConstraints) duty['odrl:constraint'] = dutyConstraints
-        return duty
-      })
+    const duties = draft.duties.filter((d) => d.action).map((d) => buildDuty(d.action, d.root, d.consequences))
     if (duties.length) built['odrl:duty'] = duties
   }
   return built
 })
-
-function logicalConstraint(combine: ConstraintCombinator, constraints: OdrlConstraint[]): OdrlLogicalConstraint {
-  const list = { '@list': constraints }
-  switch (combine) {
-    case 'or':
-      return { '@type': 'odrl:LogicalConstraint', 'odrl:or': list }
-    case 'xone':
-      return { '@type': 'odrl:LogicalConstraint', 'odrl:xone': list }
-    case 'andSequence':
-      return { '@type': 'odrl:LogicalConstraint', 'odrl:andSequence': list }
-    default:
-      return { '@type': 'odrl:LogicalConstraint', 'odrl:and': list }
-  }
-}
 
 watch(rule, (value) => emit('update:modelValue', value))
 </script>
@@ -352,51 +215,12 @@ watch(rule, (value) => emit('update:modelValue', value))
     </div>
 
     <div class="space-y-2">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-1">
-          <span class="label-text text-xs font-semibold">Constraints</span>
-          <select
-            v-if="draft.constraints.length > 1"
-            v-model="draft.combine"
-            class="select-bordered select select-xs"
-            title="How the constraints combine"
-          >
-            <option v-for="c in CONSTRAINT_COMBINATORS" :key="c.op" :value="c.op">{{ c.label }}</option>
-          </select>
-        </div>
-        <button type="button" class="btn btn-ghost btn-xs" @click="addConstraint">+ constraint</button>
-      </div>
-      <div v-for="(c, i) in draft.constraints" :key="i" class="flex flex-wrap items-center gap-1">
-        <select v-model="c.leftOperand" class="select-bordered select select-xs">
-          <optgroup v-if="fields.length" label="Data fields">
-            <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
-          </optgroup>
-          <optgroup label="Access context">
-            <option v-for="o in ODRL_CONTEXT_OPERANDS" :key="o.id" :value="o.id">{{ o.label }}</option>
-          </optgroup>
-        </select>
-        <select v-model="c.operator" class="select-bordered select select-xs">
-          <option v-for="op in ODRL_OPERATORS" :key="op.id" :value="op.id">{{ op.label }}</option>
-        </select>
-        <select v-model="c.rightSource" class="select-bordered select select-xs" title="What the boundary is">
-          <option value="">a fixed value</option>
-          <optgroup v-if="fields.length" label="Agreed at negotiation">
-            <option v-for="f in fields" :key="f.id" :value="f.id">the “{{ f.label }}”</option>
-          </optgroup>
-        </select>
-        <input
-          v-if="!c.rightSource"
-          v-model="c.value"
-          type="text"
-          placeholder="value"
-          class="input-bordered input input-xs w-28"
-        />
-        <button type="button" class="btn btn-ghost btn-xs" @click="removeConstraint(i)">✕</button>
-      </div>
+      <span class="label-text text-xs font-semibold">Constraints</span>
+      <ConstraintGroupEditor v-model="draft.root" :fields="fields" combine-title="How the constraints combine" />
     </div>
 
     <!-- Duties: obligations the assignee must fulfil to exercise a Permission
-         (ODRL IM §2.5) — each its own action bounded by its own constraints. -->
+         (ODRL IM §2.5) — each its own action, constraint tree, and consequence. -->
     <div v-if="draft.type === 'odrl:Permission'" class="space-y-2">
       <div class="flex items-center justify-between">
         <span class="label-text text-xs font-semibold">Duties (must fulfil to exercise)</span>
@@ -411,44 +235,37 @@ watch(rule, (value) => emit('update:modelValue', value))
         <div class="flex items-center gap-1">
           <span class="label-text text-xs">must</span>
           <IriPicker :model-value="duty.action" :options="actionOptions" @update:model-value="duty.action = $event" />
-          <select
-            v-if="duty.constraints.length > 1"
-            v-model="duty.combine"
-            class="select-bordered select select-xs"
-            title="How the duty's constraints combine"
-          >
-            <option v-for="c in CONSTRAINT_COMBINATORS" :key="c.op" :value="c.op">{{ c.label }}</option>
-          </select>
           <button type="button" class="btn ml-auto btn-ghost btn-xs" @click="removeDuty(di)">remove duty</button>
         </div>
-        <div v-for="(c, ci) in duty.constraints" :key="ci" class="flex flex-wrap items-center gap-1">
-          <select v-model="c.leftOperand" class="select-bordered select select-xs">
-            <optgroup v-if="fields.length" label="Data fields">
-              <option v-for="f in fields" :key="f.id" :value="f.id">{{ f.label }}</option>
-            </optgroup>
-            <optgroup label="Access context">
-              <option v-for="o in ODRL_CONTEXT_OPERANDS" :key="o.id" :value="o.id">{{ o.label }}</option>
-            </optgroup>
-          </select>
-          <select v-model="c.operator" class="select-bordered select select-xs">
-            <option v-for="op in ODRL_OPERATORS" :key="op.id" :value="op.id">{{ op.label }}</option>
-          </select>
-          <select v-model="c.rightSource" class="select-bordered select select-xs" title="What the boundary is">
-            <option value="">a fixed value</option>
-            <optgroup v-if="fields.length" label="Agreed at negotiation">
-              <option v-for="f in fields" :key="f.id" :value="f.id">the “{{ f.label }}”</option>
-            </optgroup>
-          </select>
-          <input
-            v-if="!c.rightSource"
-            v-model="c.value"
-            type="text"
-            placeholder="value"
-            class="input-bordered input input-xs w-28"
+        <ConstraintGroupEditor
+          v-model="duty.root"
+          :fields="fields"
+          combine-title="How the duty's constraints combine"
+        />
+
+        <!-- Consequence: a duty triggered when this duty is not fulfilled. -->
+        <div
+          v-for="(consequence, ci) in duty.consequences"
+          :key="ci"
+          data-testid="odrl-consequence"
+          class="ml-3 space-y-1 rounded border border-warning/40 border-dashed p-1"
+        >
+          <div class="flex items-center gap-1">
+            <span class="label-text text-2xs opacity-70">if unmet, must</span>
+            <IriPicker
+              :model-value="consequence.action"
+              :options="actionOptions"
+              @update:model-value="consequence.action = $event"
+            />
+            <button type="button" class="btn ml-auto btn-ghost btn-xs" @click="removeConsequence(di, ci)">✕</button>
+          </div>
+          <ConstraintGroupEditor
+            v-model="consequence.root"
+            :fields="fields"
+            combine-title="How the consequence's constraints combine"
           />
-          <button type="button" class="btn btn-ghost btn-xs" @click="removeDutyConstraint(di, ci)">✕</button>
         </div>
-        <button type="button" class="btn btn-ghost btn-xs" @click="addDutyConstraint(di)">+ constraint</button>
+        <button type="button" class="btn btn-ghost btn-xs" @click="addConsequence(di)">+ consequence</button>
       </div>
     </div>
   </div>

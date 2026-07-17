@@ -978,6 +978,56 @@ func TestAuditContractEvaluatesNestedDuty(t *testing.T) {
 	require.True(t, hasFindingSeverity(violated, "FACIS-DUTY-COMPENSATE", "error"), "unmet duty obligation flagged")
 }
 
+// TestAuditContractEvaluatesNestedConstraintTree proves the enforcement engine
+// evaluates an arbitrarily deep constraint tree (ODRL IM §2.6): an ALL over an
+// atomic and a nested ANY holds only when the atomic and at least one branch of
+// the ANY hold.
+func TestAuditContractEvaluatesNestedConstraintTree(t *testing.T) {
+	fieldID := "urn:dcs:field:amount"
+	atomic := func(operator string, boundary float64) map[string]any {
+		return map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": fieldID},
+			"odrl:operator":     map[string]any{"@id": operator},
+			"odrl:rightOperand": boundary,
+		}
+	}
+	tree := map[string]any{
+		"@type": "odrl:LogicalConstraint",
+		"odrl:and": []any{
+			atomic("odrl:gteq", 100),
+			map[string]any{
+				"@type":   "odrl:LogicalConstraint",
+				"odrl:or": []any{atomic("odrl:lteq", 200), atomic("odrl:gteq", 1000)},
+			},
+		},
+	}
+	duty := func() map[string]any {
+		return map[string]any{
+			"@id":             "FACIS-TREE",
+			"@type":           "odrl:Duty",
+			"dcs:prose":       map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action":     map[string]any{"@id": "dcs:provideCompliantValue"},
+			"odrl:constraint": []any{tree},
+		}
+	}
+
+	// 150: >=100 AND (<=200 OR >=1000) -> the tree holds.
+	ok := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(150))
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	// 500: >=100 holds but (500<=200 false, 500>=1000 false) -> the ANY fails,
+	// so the ALL fails.
+	bad := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(500))
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-TREE", "error"), "nested tree violation flagged")
+}
+
 // TestAuditContractEnforcesIsPartOf proves the isPartOf operator — offered by
 // the clause builder — is actually enforced by the contract policy check: a
 // value in the enumerated set passes, one outside it is flagged.

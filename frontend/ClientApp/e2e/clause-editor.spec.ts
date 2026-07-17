@@ -229,3 +229,116 @@ test('a Permission can carry a nested duty the assignee must fulfil', async ({ p
   expect(dutyConstraints[0]?.['@type']).toBe('odrl:LogicalConstraint')
   expect(dutyConstraints[0]?.['odrl:or']?.['@list']?.length, 'or over both duty constraints').toBe(2)
 })
+
+// The builder authors an arbitrarily deep constraint tree (ODRL IM §2.6): a
+// top-level ALL conjunction holding one atomic constraint and a nested ANY
+// group emits [Constraint, LogicalConstraint(or, [·, ·])].
+test('the builder authors a nested constraint tree (and over an or-group)', async ({ page, loginAs }) => {
+  page.setDefaultTimeout(15_000)
+  await gotoAs(page, loginAs, 'Template Creator', '/ui/templates/new')
+  await page.getByRole('button', { name: /Component/ }).click()
+  await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill(`FV Tree ${Date.now()}`)
+  await page.getByRole('tab', { name: /Clauses/ }).click()
+
+  const editor = page.getByTestId('split-clause-editor')
+  await editor.getByPlaceholder('Clause title').fill(`Nested tree ${Date.now()}`)
+  await editor.locator('.clause-editor').first().click()
+  await page.keyboard.type('The assignee may use the asset within a purpose and one of two allowed regions.')
+
+  const ruleSelect = (label: string) =>
+    editor.locator('label.form-control').filter({ hasText: label }).locator('select')
+  await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
+  await ruleSelect('Action').selectOption({ label: 'use' })
+
+  // A top-level atomic constraint (purpose), then a nested group of two spatial
+  // constraints combined with ANY — while the top level stays ALL.
+  await editor.getByRole('button', { name: '+ constraint' }).click()
+  const topRow = editor.locator('.flex.flex-wrap.items-center.gap-1').last()
+  await topRow.locator('select').nth(0).selectOption({ label: 'purpose' })
+  await topRow.locator('select').nth(1).selectOption({ label: 'must equal' })
+  await topRow.locator('input[placeholder="value"]').fill('research')
+
+  await editor.getByRole('button', { name: '+ group' }).click()
+  const group = editor.locator('.border-dashed').last()
+  const addGroupRegion = async (value: string) => {
+    await group.getByRole('button', { name: '+ constraint' }).click()
+    const row = group.locator('.flex.flex-wrap.items-center.gap-1').last()
+    await row.locator('select').nth(0).selectOption({ label: 'access region (spatial)' })
+    await row.locator('select').nth(1).selectOption({ label: 'must equal' })
+    await row.locator('input[placeholder="value"]').fill(value)
+  }
+  await addGroupRegion('DE')
+  await addGroupRegion('FR')
+  await group.locator('select[title="How this group combines"]').selectOption('or')
+
+  await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
+  const created = page.waitForRequest((r) => r.url().includes('/template/create') && r.method() === 'POST')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  const doc = (await created).postDataJSON().template_data as {
+    'dcs:policies': {
+      'odrl:permission'?: {
+        'odrl:constraint'?: {
+          '@type': string
+          'odrl:leftOperand'?: { '@id': string }
+          'odrl:or'?: { '@list': unknown[] }
+        }[]
+      }[]
+    }
+  }
+
+  const constraints = (doc['dcs:policies']['odrl:permission'] ?? [])[0]?.['odrl:constraint'] ?? []
+  expect(constraints.length, 'top-level conjunction of two nodes').toBe(2)
+  const atomic = constraints.find((c) => c['@type'] === 'odrl:Constraint')
+  const logical = constraints.find((c) => c['@type'] === 'odrl:LogicalConstraint')
+  expect(atomic?.['odrl:leftOperand']?.['@id'], 'the top-level atomic is the purpose constraint').toBe('odrl:purpose')
+  expect(logical, 'a nested logical constraint node').toBeTruthy()
+  expect(logical?.['odrl:or']?.['@list']?.length, 'the nested or holds both regions').toBe(2)
+})
+
+// A duty carries a consequence (ODRL IM §2.5): a further duty triggered when
+// the duty is not fulfilled. The builder emits odrl:consequence.
+test('a duty can carry a consequence duty', async ({ page, loginAs }) => {
+  page.setDefaultTimeout(15_000)
+  await gotoAs(page, loginAs, 'Template Creator', '/ui/templates/new')
+  await page.getByRole('button', { name: /Component/ }).click()
+  await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill(`FV Conseq ${Date.now()}`)
+  await page.getByRole('tab', { name: /Clauses/ }).click()
+
+  const editor = page.getByTestId('split-clause-editor')
+  await editor.getByPlaceholder('Clause title').fill(`Consequence ${Date.now()}`)
+  await editor.locator('.clause-editor').first().click()
+  await page.keyboard.type('The assignee may use the asset and must delete it; failing that, must attribute.')
+
+  const ruleSelect = (label: string) =>
+    editor.locator('label.form-control').filter({ hasText: label }).locator('select')
+  await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
+  await ruleSelect('Action').selectOption({ label: 'use' })
+
+  await editor.getByRole('button', { name: '+ duty' }).click()
+  const duty = editor.getByTestId('odrl-duty').last()
+  await duty.locator('select').first().selectOption({ label: 'delete' })
+  await duty.getByRole('button', { name: '+ consequence' }).click()
+  const consequence = duty.getByTestId('odrl-consequence').last()
+  await consequence.locator('select').first().selectOption({ label: 'display' })
+
+  await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
+  const created = page.waitForRequest((r) => r.url().includes('/template/create') && r.method() === 'POST')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  const doc = (await created).postDataJSON().template_data as {
+    'dcs:policies': {
+      'odrl:permission'?: {
+        'odrl:duty'?: {
+          'odrl:action': { '@id': string }
+          'odrl:consequence'?: { '@type': string; 'odrl:action': { '@id': string } }[]
+        }[]
+      }[]
+    }
+  }
+
+  const duties = (doc['dcs:policies']['odrl:permission'] ?? [])[0]?.['odrl:duty'] ?? []
+  expect(duties[0]?.['odrl:action']['@id'], 'the duty action').toBe('odrl:delete')
+  const consequences = duties[0]?.['odrl:consequence'] ?? []
+  expect(consequences.length, 'one consequence duty').toBe(1)
+  expect(consequences[0]?.['@type']).toBe('odrl:Duty')
+  expect(consequences[0]?.['odrl:action']['@id'], 'the consequence action').toBe('odrl:display')
+})
