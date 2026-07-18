@@ -1036,10 +1036,15 @@ function semanticConditionToPolicies(
   )
 }
 
-/** Flattens a constraint list to its atomic leaves, descending logical constraints. */
-function atomicConstraintLeaves(nodes: readonly OdrlConstraintNode[]): OdrlConstraint[] {
+/** Flattens a constraint list to its atomic leaves, descending logical constraints.
+ * ODRL/JSON-LD lets `odrl:constraint` be a single node or a list, so a bare
+ * constraint object is normalized to a one-element list before descent. */
+function atomicConstraintLeaves(
+  nodes: readonly OdrlConstraintNode[] | OdrlConstraintNode,
+): OdrlConstraint[] {
+  const list = Array.isArray(nodes) ? nodes : [nodes]
   const leaves: OdrlConstraint[] = []
-  for (const node of nodes) {
+  for (const node of list) {
     if (isAtomicConstraint(node)) {
       leaves.push(node)
       continue
@@ -1069,8 +1074,17 @@ function contractDataToSemanticConditions(
       const operate = constraint['odrl:operator']['@id'] as DcsOperator
       if (!isStandardOdrlOperator(operate)) continue
       const rightOperand = constraint['odrl:rightOperand']
+      // A right operand may be a bare literal (95), a typed value ({@value}), a
+      // field reference ({@id} — a negotiated boundary, not a fixed target), or
+      // a list. Only an OBJECT can be probed with `in`; guarding it keeps a
+      // primitive operand from throwing and blanking the whole clause render.
+      const isReference =
+        typeof rightOperand === 'object' &&
+        rightOperand !== null &&
+        !Array.isArray(rightOperand) &&
+        '@id' in rightOperand
       const targets =
-        rightOperand === undefined || (!Array.isArray(rightOperand) && '@id' in rightOperand)
+        rightOperand === undefined || isReference
           ? []
           : Array.isArray(rightOperand)
             ? rightOperand.map(jsonLdValue)
