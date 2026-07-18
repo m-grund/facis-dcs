@@ -25,6 +25,7 @@ import (
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
+	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
 	"digital-contracting-service/internal/signingmanagement/signer"
 
@@ -42,6 +43,9 @@ func mapSignatureCommandError(err error) error {
 	}
 	if errors.Is(err, command.ErrCeremonyRequired) || errors.Is(err, command.ErrCeremoniesIncomplete) {
 		return signaturemanagement.MakeCeremonyRequired(err)
+	}
+	if errors.Is(err, command.ErrSignatureInvalid) {
+		return signaturemanagement.MakeSignatureInvalid(err)
 	}
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, command.ErrUnknownSignatureField) ||
@@ -322,6 +326,133 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 	return &signaturemanagement.SMContractApplyResponse{
 		Did:               req.Did,
 		SignatureEnvelope: signatureEnvelop,
+	}, nil
+}
+
+// newApplier assembles the signing command handler. Validator is wired from a
+// configured DSS (DSS_URL) so SubmitSignature can validate an externally-produced
+// signature and confirm it identifies the signatory (sole control, ADR-12); the
+// transitional DCS-signing Apply path does not use it.
+func (s *signatureManagementsrvc) newApplier() command.Applier {
+	var validator command.SignatureValidator
+	if url := dss.URL(); url != "" {
+		validator = dss.New(url)
+	}
+	return command.Applier{
+		DB:            s.DB,
+		CRepo:         s.CRepo,
+		CeremonyRepo:  s.CeremonyRepo,
+		Signer:        s.Signer,
+		PDFCore:       s.PDFCore,
+		IPFSClient:    s.IPFSClient,
+		VCSigner:      s.VCSigner,
+		VCIssuer:      s.VCIssuer,
+		IssuerDID:     s.IssuerDID,
+		DIDDocument:   s.DIDDocument,
+		ArchiveRepo:   s.ArchiveRepo,
+		IPFSStorer:    s.IPFSClient,
+		ArchiveNotary: s.ArchiveNotary,
+		ArchiveTSA:    s.ArchiveTSA,
+		Validator:     validator,
+	}
+}
+
+// PrepareSignature returns the to-be-signed PDF for the signatory to sign
+// externally — with their wallet/QTSP or a desktop PAdES signer. The DCS applies
+// no signature (ADR-12, DCS-FR-SM-16).
+func (s *signatureManagementsrvc) PrepareSignature(ctx context.Context, req *signaturemanagement.SMSignaturePrepareRequest) (res *signaturemanagement.SMSignaturePrepareResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	credentialType := "AES"
+	if req.CredentialType != nil && *req.CredentialType != "" {
+		credentialType = *req.CredentialType
+	}
+	fieldName := ""
+	if req.FieldName != nil {
+		fieldName = *req.FieldName
+	}
+
+	handler := s.newApplier()
+	document, err := handler.Prepare(ctx, command.ApplyCmd{
+		DID:            req.Did,
+		SignerDID:      req.SignerDid,
+		FieldName:      fieldName,
+		CredentialType: credentialType,
+		AppliedBy:      middleware.GetParticipantID(ctx),
+		HolderDID:      middleware.GetHolderDID(ctx),
+		UserRoles:      middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		return nil, mapSignatureCommandError(err)
+	}
+	return &signaturemanagement.SMSignaturePrepareResponse{Document: document}, nil
+}
+
+// SubmitSignature accepts a signature the signatory produced externally and
+// finalizes the contract after validating it identifies the signatory (sole
+// control, ADR-12, DCS-FR-SM-16/-18). The same path serves the wallet callback
+// and a downloaded-then-desktop-signed re-upload.
+func (s *signatureManagementsrvc) SubmitSignature(ctx context.Context, req *signaturemanagement.SMSignatureSubmitRequest) (res *signaturemanagement.SMContractApplyResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	credentialType := "AES"
+	if req.CredentialType != nil && *req.CredentialType != "" {
+		credentialType = *req.CredentialType
+	}
+	fieldName := ""
+	if req.FieldName != nil {
+		fieldName = *req.FieldName
+	}
+	expectedSignatory := ""
+	if req.ExpectedSignatory != nil {
+		expectedSignatory = *req.ExpectedSignatory
+	}
+	jadesSignature := ""
+	if req.JadesSignature != nil {
+		jadesSignature = *req.JadesSignature
+	}
+
+	handler := s.newApplier()
+	if err := handler.SubmitSignature(ctx, command.SubmitSignatureCmd{
+		ApplyCmd: command.ApplyCmd{
+			DID:            req.Did,
+			SignerDID:      req.SignerDid,
+			FieldName:      fieldName,
+			CredentialType: credentialType,
+			AppliedBy:      middleware.GetParticipantID(ctx),
+			HolderDID:      middleware.GetHolderDID(ctx),
+			UserRoles:      middleware.GetUserRoles(ctx),
+		},
+		SignedPDF:         req.SignedPdf,
+		JAdESSignature:    jadesSignature,
+		ExpectedSignatory: expectedSignatory,
+	}); err != nil {
+		return nil, mapSignatureCommandError(err)
+	}
+
+	queryHandler := query.GetByIDHandler{DB: s.DB, CRepo: s.CRepo}
+	result, err := queryHandler.Handle(ctx, query.GetByIDQry{
+		DID:         req.Did,
+		RetrievedBy: middleware.GetParticipantID(ctx),
+		HolderDID:   middleware.GetHolderDID(ctx),
+		UserRoles:   middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+	return &signaturemanagement.SMContractApplyResponse{
+		Did: req.Did,
+		SignatureEnvelope: &signaturemanagement.SMContractSignatureEnvelope{
+			ContractDid:    result.SignatureEnvelope.ContractDID,
+			CredentialType: result.SignatureEnvelope.CredentialType,
+			IpfsCid:        result.SignatureEnvelope.IpfsCID,
+			RevokedAt:      result.SignatureEnvelope.RevokedAt,
+			SignedAt:       result.SignatureEnvelope.SignedAt,
+			SignerDid:      result.SignatureEnvelope.SignerDID,
+			Status:         result.SignatureEnvelope.Status.String(),
+		},
 	}, nil
 }
 

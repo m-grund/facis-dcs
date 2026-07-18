@@ -54,6 +54,11 @@ var ErrCeremoniesIncomplete = errors.New("all declared signature fields need a c
 // contract document does not declare.
 var ErrUnknownSignatureField = errors.New("signature field is not declared by the contract document")
 
+// ErrSignatureInvalid rejects a submitted external signature that fails
+// validation or whose certificate does not identify the signatory (sole
+// control, ADR-12, DCS-FR-SM-16/-18).
+var ErrSignatureInvalid = errors.New("submitted signature is not valid or does not identify the signatory")
+
 // ErrFieldAlreadySigned rejects re-signing an already-signed field.
 var ErrFieldAlreadySigned = errors.New("signature field is already signed")
 
@@ -266,7 +271,7 @@ func (h *Applier) SubmitSignature(ctx context.Context, cmd SubmitSignatureCmd) e
 		return fmt.Errorf("validate submitted signature: %w", err)
 	}
 	if err := report.AssertValidAES(cmd.ExpectedSignatory); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrSignatureInvalid, err)
 	}
 
 	// The signing time is the signatory's, taken from the validated signature

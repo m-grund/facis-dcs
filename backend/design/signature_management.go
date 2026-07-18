@@ -145,6 +145,43 @@ var SMContractApplyResponse = Type("SMContractApplyResponse", func() {
 	Required("did")
 })
 
+var SMSignaturePrepareRequest = Type("SMSignaturePrepareRequest", func() {
+	Description("Request to prepare the to-be-signed document for external signing")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("signer_did", String, "DID of the signer")
+	Attribute("field_name", String, "For multi-signer contracts (DCS-FR-SM-07/-17): the declared signature field this signer covers.")
+	Attribute("credential_type", String, "Type of credential to use (default: AES)")
+
+	Required("did", "signer_did")
+})
+
+var SMSignaturePrepareResponse = Type("SMSignaturePrepareResponse", func() {
+	Description("The to-be-signed PDF, for the signatory to sign externally")
+
+	Attribute("document", Bytes, "The unsigned PDF with the AcroForm signature field placed and the PoA/summary evidence embedded inside the byte range the signatory's signature will cover (ADR-12)")
+
+	Required("document")
+})
+
+var SMSignatureSubmitRequest = Type("SMSignatureSubmitRequest", func() {
+	Description("An externally-produced signature over the prepared document")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("signer_did", String, "DID of the signer")
+	Attribute("field_name", String, "For multi-signer contracts (DCS-FR-SM-07/-17): the declared signature field this signer covers.")
+	Attribute("credential_type", String, "Type of credential used (default: AES)")
+	Attribute("expected_signatory", String, "Identifier the signing certificate must carry; the sole-control check rejects a certificate that does not reference it (DCS-FR-SM-16)")
+	Attribute("signed_pdf", Bytes, "The signatory's PAdES-signed contract")
+	Attribute("jades_signature", String, "The signatory's JAdES over the machine-readable JSON-LD (DCS-FR-SM-02/-11); empty when only the PDF was signed")
+
+	Required("did", "signer_did", "signed_pdf")
+})
+
 var SMContractValidateRequest = Type("SMContractValidateRequest", func() {
 	Description("Contract validate request")
 
@@ -434,6 +471,58 @@ var _ = Service("SignatureManagement", func() {
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("ceremony_required", StatusUnprocessableEntity)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("prepareSignature", func() {
+		Description("prepare the to-be-signed document for the signatory to sign externally — with their wallet/QTSP or a desktop PAdES signer. The DCS embeds the PoA/summary, places the AcroForm field, and returns the unsigned PDF; it applies no signature and holds no signing key (ADR-12, FR-SM-16).")
+		Meta("dcs:requirements", "DCS-FR-SM-16")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+		})
+
+		Payload(SMSignaturePrepareRequest)
+		Result(SMSignaturePrepareResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("ceremony_required", ErrorResult, "No completed PID presentation ceremony exists for this signer and contract")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/signature/prepare")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("ceremony_required", StatusUnprocessableEntity)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("submitSignature", func() {
+		Description("accept a signature the signatory produced externally (wallet/QTSP or desktop PAdES signer) and finalize the contract once it validates and its certificate identifies the signatory (sole control, ADR-12, FR-SM-16/-18).")
+		Meta("dcs:requirements", "DCS-FR-SM-16")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+		})
+
+		Payload(SMSignatureSubmitRequest)
+		Result(SMContractApplyResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("ceremony_required", ErrorResult, "No completed PID presentation ceremony exists for this signer and contract")
+		Error("signature_invalid", ErrorResult, "The submitted signature is not valid or does not identify the signatory")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/signature/submit")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("ceremony_required", StatusUnprocessableEntity)
+			Response("signature_invalid", StatusUnprocessableEntity)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})
