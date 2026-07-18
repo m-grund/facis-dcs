@@ -2,7 +2,11 @@
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SigningCeremonyDialog from '@/components/signing/SigningCeremonyDialog.vue'
+import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
+import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
+import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
 import { ROUTES } from '@/router/router'
 import {
   type SignatureContract,
@@ -23,6 +27,13 @@ const did = computed(() => (Array.isArray(route.params.did) ? route.params.did[0
 
 const { isSigner, isManager } = useContractPermissions()
 
+// Render the real contract content (clauses/terms) the same way the contract
+// views do: preprocess the JSON-LD into the draft store and hand it to TemplatePreview.
+const { preprocessContractData } = useContractDataPreprocess()
+const dcsDraftStore = useDcsDraftStore()
+const contractContentValuesStore = useContractContentValuesStore()
+const hasContent = ref(false)
+
 const ceremonyDialog = useTemplateRef<InstanceType<typeof SigningCeremonyDialog>>('ceremony-dialog')
 
 const contract = ref<SignatureContract | null>(null)
@@ -33,9 +44,11 @@ const envelope = ref<SignatureEnvelope | undefined>()
 const verifyResult = ref<SignatureVerifyResult | undefined>()
 const validateResult = ref<SignatureValidateResult | undefined>()
 
-// After prepare (Apply Signature), the contract awaits the externally-signed
-// upload; holds the ceremony's signatory DID for the submit call.
+// After prepare, the contract awaits the externally-signed upload; holds the
+// ceremony's signatory DID for the submit call and the to-be-signed PDF so the
+// signer can download it again without re-running the identity ceremony.
 const pendingSignerDid = ref<string | null>(null)
+const preparedDocument = ref<Blob | null>(null)
 
 const busy = ref(false)
 
@@ -51,10 +64,10 @@ const done = ref<Record<StepId, boolean>>({
 })
 
 const STEPS: { id: StepId; title: string }[] = [
-  { id: 'retrieve', title: 'Retrieve' },
+  { id: 'retrieve', title: 'Open' },
   { id: 'verify', title: 'Verify' },
-  { id: 'apply', title: 'Apply Signature' },
-  { id: 'submit', title: 'Submit' },
+  { id: 'apply', title: 'Download to sign' },
+  { id: 'submit', title: 'Upload signed' },
   { id: 'validate', title: 'Validate' },
 ]
 
@@ -70,13 +83,10 @@ const executed = computed(() => done.value.validate && signed.value)
 
 onMounted(async () => {
   try {
-    const contracts = await signatureManagementService.retrieveContracts()
-    const found = contracts.find((c) => c.did === did.value)
-    if (!found) {
-      loadError.value = 'This contract is not available for signing under your account.'
-      return
-    }
-    contract.value = found
+    const detail = await signatureManagementService.retrieveById(did.value)
+    contract.value = detail.contract
+    envelope.value = detail.signature_envelope
+    loadContractContent(detail.contract.contract_data)
     done.value.retrieve = true
   } catch (e: unknown) {
     loadError.value = `Failed to retrieve the contract: ${message(e)}`
@@ -85,9 +95,32 @@ onMounted(async () => {
   }
 })
 
+function loadContractContent(contractData: unknown) {
+  const cd = contractData == null ? null : preprocessContractData(contractData)
+  if (!cd) {
+    dcsDraftStore.reset({ workflow: 'contract' })
+    contractContentValuesStore.reset()
+    hasContent.value = false
+    return
+  }
+  dcsDraftStore.reset({
+    workflow: 'contract',
+    documentIri: ((contractData as Record<string, unknown>)['@id'] as string | undefined) ?? null,
+    blocks: cd.blocks,
+    layout: cd.layout,
+    contractData: cd.contractData,
+    policies: cd.policies,
+    subTemplateSnapshots: cd.subTemplateSnapshots,
+  })
+  contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
+  hasContent.value = true
+}
+
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
+
+const documentFilename = computed(() => `${contract.value?.name ?? did.value}-to-sign.pdf`)
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -96,6 +129,10 @@ function downloadBlob(blob: Blob, filename: string) {
   anchor.download = filename
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+function downloadAgain() {
+  if (preparedDocument.value) downloadBlob(preparedDocument.value, documentFilename.value)
 }
 
 // Step 2 — integrity of the contract content and its signature envelope.
@@ -121,7 +158,8 @@ async function applySignature() {
     const outcome = await ceremonyDialog.value?.reveal({ contractDid: did.value, fieldName: SIGNATURE_FIELD_NAME })
     if (!outcome || outcome.isCanceled || !outcome.data) return
     const prepared = await signatureManagementService.prepareSignature(did.value, outcome.data.signerDid, CREDENTIAL_TYPE)
-    downloadBlob(prepared, `${contract.value?.name ?? did.value}-to-sign.pdf`)
+    preparedDocument.value = prepared
+    downloadBlob(prepared, documentFilename.value)
     pendingSignerDid.value = outcome.data.signerDid
     done.value.apply = true
   } catch (e: unknown) {
@@ -200,21 +238,23 @@ async function validate() {
               <div>
                 <h4 class="text-lg font-bold">{{ contract?.name ?? 'Untitled contract' }}</h4>
                 <p class="font-mono text-xs break-all text-base-content/50">{{ did }}</p>
+                <p v-if="contract?.description" class="mt-2 text-sm whitespace-pre-line">{{ contract.description }}</p>
               </div>
-              <p v-if="contract?.description" class="text-sm whitespace-pre-line">{{ contract.description }}</p>
-              <p v-else class="text-sm text-base-content/50 italic">No description provided.</p>
-              <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <dt class="text-base-content/50">State</dt>
-                <dd>{{ contract?.state }}</dd>
-                <dt class="text-base-content/50">Version</dt>
-                <dd>{{ contract?.contract_version ?? 1 }}</dd>
-                <dt class="text-base-content/50">Created</dt>
-                <dd>{{ contract ? new Date(contract.created_at).toLocaleString() : '—' }}</dd>
-                <dt class="text-base-content/50">Updated</dt>
-                <dd>{{ contract ? new Date(contract.updated_at).toLocaleString() : '—' }}</dd>
-              </dl>
+
+              <!-- The actual contract content: clauses, terms, and filled values -->
+              <div v-if="hasContent" class="border-t border-base-300 pt-4">
+                <TemplatePreview
+                  :layout="dcsDraftStore.layout"
+                  :blocks="dcsDraftStore.blocks"
+                  :semantic-conditions="dcsDraftStore.semanticConditions"
+                  :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
+                  :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
+                />
+              </div>
+              <p v-else class="text-sm text-base-content/50 italic">This contract has no renderable clause content.</p>
+
               <p class="text-xs text-base-content/50">
-                Review the full clauses and machine-readable terms before signing. The to-be-signed PDF with the
+                Review the full clauses and machine-readable terms above before signing. The to-be-signed PDF with the
                 embedded PoA and signing summary is produced at the Apply Signature step.
               </p>
             </div>
@@ -247,11 +287,11 @@ async function validate() {
           <div class="card border border-base-300 bg-base-100">
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
-                <h4 class="card-title text-sm">1 · Retrieve</h4>
-                <span class="badge badge-success badge-sm">Retrieved</span>
+                <h4 class="card-title text-sm">1 · Open contract</h4>
+                <span class="badge badge-success badge-sm">Opened</span>
               </div>
               <p class="text-xs text-base-content/60">
-                Approved contract and its signature envelope loaded. Version {{ contract?.contract_version ?? 1 }}.
+                Contract content loaded on the left for review. Version {{ contract?.contract_version ?? 1 }}.
               </p>
             </div>
           </div>
@@ -285,22 +325,23 @@ async function validate() {
             </div>
           </div>
 
-          <!-- Step 3: Apply Signature -->
+          <!-- Step 3: Verify identity & download the document to sign -->
           <div
             class="card border bg-base-100"
             :class="stepState('apply') === 'active' ? 'border-info' : 'border-base-300'"
           >
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
-                <h4 class="card-title text-sm">3 · Apply signature</h4>
-                <span v-if="done.apply" class="badge badge-success badge-sm">Prepared</span>
+                <h4 class="card-title text-sm">3 · Verify your identity &amp; download the document to sign</h4>
+                <span v-if="done.apply" class="badge badge-success badge-sm">Downloaded</span>
               </div>
               <p class="text-xs text-base-content/60">
-                Present your PID in the wallet ceremony, then sign the downloaded to-be-signed PDF externally
-                (credential: {{ CREDENTIAL_TYPE }} with PoA). The DCS holds no signing key.
+                Present your PID in the wallet ceremony. The DCS then builds the to-be-signed PDF (with your Power of
+                Attorney and the signing summary embedded, credential {{ CREDENTIAL_TYPE }}) and downloads it to your
+                device. The DCS holds no signing key — you sign the document yourself.
               </p>
               <div v-if="!isSigner" class="text-xs text-warning">
-                Your role can review and validate this contract, but applying a signature requires the Signer role.
+                Your role can review and validate this contract, but signing requires the Signer role.
               </div>
               <div v-if="stepError.apply" class="text-xs text-error">{{ stepError.apply }}</div>
               <div class="card-actions">
@@ -310,30 +351,41 @@ async function validate() {
                   @click="applySignature"
                 >
                   <span v-if="busy && currentStep === 'apply'" class="loading loading-xs loading-spinner" />
-                  {{ done.apply ? 'Re-prepare' : 'Apply Signature' }}
+                  {{ done.apply ? 'Verify &amp; download again' : 'Verify identity &amp; download document to sign' }}
+                </button>
+              </div>
+              <div v-if="done.apply && !signed" class="mt-1 flex items-center gap-2 text-xs text-info">
+                <span>Document downloaded as “{{ documentFilename }}”. Sign it in your wallet, then upload it below.</span>
+                <button class="btn btn-ghost btn-xs" :disabled="!preparedDocument" @click="downloadAgain">
+                  Download again
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- Step 4: Submit -->
+          <!-- Step 4: Upload the externally-signed document -->
           <div
             class="card border bg-base-100"
             :class="stepState('submit') === 'active' ? 'border-info' : 'border-base-300'"
           >
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
-                <h4 class="card-title text-sm">4 · Submit signed contract</h4>
-                <span v-if="signed" class="badge badge-success badge-sm">Submitted</span>
+                <h4 class="card-title text-sm">4 · Upload the signed document</h4>
+                <span v-if="signed" class="badge badge-success badge-sm">Uploaded</span>
               </div>
               <p class="text-xs text-base-content/60">
-                Upload the externally-signed PDF. The DCS validates sole control and records the executed contract.
+                Once you have signed the downloaded PDF, upload it here. The DCS validates that you alone controlled the
+                signing key (sole control) and records the executed contract.
               </p>
+              <p v-if="!done.apply" class="text-xs text-base-content/50 italic">
+                Complete step 3 first to get the document to sign.
+              </p>
+              <p v-else-if="signed" class="text-xs text-success">Signed document accepted and recorded.</p>
               <div v-if="stepError.submit" class="text-xs text-error">{{ stepError.submit }}</div>
               <div class="card-actions">
                 <label class="btn btn-sm btn-primary" :class="{ 'btn-disabled': busy || !pendingSignerDid }">
                   <span v-if="busy && currentStep === 'submit'" class="loading loading-xs loading-spinner" />
-                  Submit signed PDF
+                  Upload signed document
                   <input
                     type="file"
                     accept="application/pdf"

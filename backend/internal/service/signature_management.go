@@ -201,25 +201,27 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		Description:     result.Contract.Description,
 		CreatedAt:       result.Contract.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       result.Contract.UpdatedAt.Format(time.RFC3339),
+		ContractData:    result.Contract.ContractData,
 	}
 
-	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{
-		ContractDid:    result.SignatureEnvelope.ContractDID,
-		CredentialType: result.SignatureEnvelope.CredentialType,
-		IpfsCid:        result.SignatureEnvelope.IpfsCID,
-		RevokedAt:      result.SignatureEnvelope.RevokedAt,
-		SignedAt:       result.SignatureEnvelope.SignedAt,
-		SignerDid:      result.SignatureEnvelope.SignerDID,
-		Status:         result.SignatureEnvelope.Status.String(),
+	res = &signaturemanagement.SMContractRetrieveByIDResponse{Contract: &contract}
+
+	// An APPROVED-unsigned contract has no signature envelope yet; the signer
+	// still needs to read its content to sign it.
+	if envelope := result.SignatureEnvelope; envelope != nil {
+		res.SignatureEnvelope = &signaturemanagement.SMContractSignatureEnvelope{
+			ContractDid:    envelope.ContractDID,
+			CredentialType: envelope.CredentialType,
+			IpfsCid:        envelope.IpfsCID,
+			RevokedAt:      envelope.RevokedAt,
+			SignedAt:       envelope.SignedAt,
+			SignerDid:      envelope.SignerDID,
+			Status:         envelope.Status.String(),
+		}
+		res.KeyVersion = &envelope.KeyVersion
 	}
 
-	keyVersion := result.SignatureEnvelope.KeyVersion
-
-	return &signaturemanagement.SMContractRetrieveByIDResponse{
-		Contract:          &contract,
-		SignatureEnvelope: signatureEnvelop,
-		KeyVersion:        &keyVersion,
-	}, nil
+	return res, nil
 }
 
 func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemanagement.SMContractVerifyRequest) (res *signaturemanagement.SMContractVerifyResponse, err error) {
@@ -356,16 +358,17 @@ func (s *signatureManagementsrvc) SubmitSignature(ctx context.Context, req *sign
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
+	envelope := result.SignatureEnvelope
 	return &signaturemanagement.SMContractApplyResponse{
 		Did: req.Did,
 		SignatureEnvelope: &signaturemanagement.SMContractSignatureEnvelope{
-			ContractDid:    result.SignatureEnvelope.ContractDID,
-			CredentialType: result.SignatureEnvelope.CredentialType,
-			IpfsCid:        result.SignatureEnvelope.IpfsCID,
-			RevokedAt:      result.SignatureEnvelope.RevokedAt,
-			SignedAt:       result.SignatureEnvelope.SignedAt,
-			SignerDid:      result.SignatureEnvelope.SignerDID,
-			Status:         result.SignatureEnvelope.Status.String(),
+			ContractDid:    envelope.ContractDID,
+			CredentialType: envelope.CredentialType,
+			IpfsCid:        envelope.IpfsCID,
+			RevokedAt:      envelope.RevokedAt,
+			SignedAt:       envelope.SignedAt,
+			SignerDid:      envelope.SignerDID,
+			Status:         envelope.Status.String(),
 		},
 	}, nil
 }

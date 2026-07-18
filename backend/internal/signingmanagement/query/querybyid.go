@@ -62,8 +62,10 @@ type SignatureEnvelope struct {
 }
 
 type GetByIDResult struct {
-	Contract          Contract
-	SignatureEnvelope SignatureEnvelope
+	Contract Contract
+	// SignatureEnvelope is nil for an APPROVED-unsigned contract: no signature
+	// has been submitted yet, so no envelope exists.
+	SignatureEnvelope *SignatureEnvelope
 }
 
 type GetByIDHandler struct {
@@ -92,9 +94,10 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 	}
 
 	envelopResult, err := h.CRepo.ReadLatestEnvelopeByContractDID(ctx, tx, query.DID)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("could not read signature envelope: %w", err)
 	}
+	envelopeMissing := errors.Is(err, sql.ErrNoRows)
 
 	evt := signingmanagementevents.RetrieveByIDEvent{
 		DID:         query.DID,
@@ -144,6 +147,10 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 		Responsible:     contractResult.Responsible,
 	}
 
+	if envelopeMissing {
+		return &GetByIDResult{Contract: contract}, nil
+	}
+
 	signingStatus, err := signingstatus.NewSigningStatus(envelopResult.Status)
 	if err != nil {
 		return nil, fmt.Errorf("could not create signing status: %w", err)
@@ -162,6 +169,6 @@ func (h *GetByIDHandler) Handle(ctx context.Context, query GetByIDQry) (*GetByID
 
 	return &GetByIDResult{
 		Contract:          contract,
-		SignatureEnvelope: envelop,
+		SignatureEnvelope: &envelop,
 	}, nil
 }

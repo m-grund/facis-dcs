@@ -93,10 +93,10 @@ var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {
 
 var SMContractRetrieveByIDResponse = Type("SMContractRetrieveByIDResponse", func() {
 	Attribute("contract", SMContractItem, "The contract")
-	Attribute("signature_envelope", SMContractSignatureEnvelope, "The signature_envelope of the contract")
+	Attribute("signature_envelope", SMContractSignatureEnvelope, "The latest signature envelope; absent for an APPROVED-unsigned contract that has no signature yet")
 	Attribute("key_version", Int, "HSM key version that produced the latest signature (DCS-OR-C2PA-007)")
 
-	Required("contract", "signature_envelope")
+	Required("contract")
 })
 
 var SMContractVerifyRequest = Type("SMContractVerifyRequest", func() {

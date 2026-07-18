@@ -8,6 +8,16 @@ export interface SignatureContract {
   description?: string
   created_at: string
   updated_at: string
+  // The full JSON-LD contract document (clauses, terms, policies). Present on
+  // the by-DID retrieval; absent from the list feed.
+  contract_data?: unknown
+}
+
+export interface SignatureContractDetail {
+  contract: SignatureContract
+  // Absent for an APPROVED-unsigned contract with no signature yet (ADR-12).
+  signature_envelope?: SignatureEnvelope
+  key_version?: number
 }
 
 export interface SignatureEnvelope {
@@ -19,7 +29,6 @@ export interface SignatureEnvelope {
   revoked_at?: string
   ipfs_cid?: string
 }
-
 
 export interface SignatureVerifyResult {
   did: string
@@ -113,6 +122,13 @@ export const signatureManagementService = {
     return http
       .get<{ contracts: SignatureContract[]; signing_tasks: unknown[] }>('/signature/retrieve')
       .then((res) => res.data.contracts ?? [])
+  },
+
+  // The Secure Contract Viewer's per-contract read (GET /signature/retrieve/{did}):
+  // the full contract document to render for signing, plus its latest signature
+  // envelope. Tolerates an APPROVED-unsigned contract that has no envelope yet.
+  async retrieveById(did: string): Promise<SignatureContractDetail> {
+    return http.get<SignatureContractDetail>(`/signature/retrieve/${encodeURIComponent(did)}`).then((res) => res.data)
   },
 
   async startCeremony(contractDid: string, fieldName: string): Promise<CeremonyStartResult> {
