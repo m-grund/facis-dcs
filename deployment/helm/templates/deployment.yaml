@@ -79,6 +79,21 @@ spec:
           env:
             - name: DCS_SYSTEM_TOKEN
               value: {{ .Values.systemToken | default "dcs-dev-system-token" | quote }}
+            # Signing backend (DCS-IR-SI-10): "pdfcore" (default) keeps the
+            # in-process PKCS#11 PAdES path; "dss" routes through a remote EU
+            # DSS (the wallet-unlocked-QTSP prod switch). The DSS path also
+            # needs DCS_DSS_URL and the PAdES x5chain; both stay empty by
+            # default so this env block is inert until dss is activated.
+            - name: DCS_SIGNER_BACKEND
+              value: {{ .Values.signerBackend | default "pdfcore" | quote }}
+            {{- if .Values.dss }}{{- if .Values.dss.enabled }}
+            - name: DCS_DSS_URL
+              value: {{ .Values.dss.url | default (printf "http://%s-dss:8080" .Release.Name) | quote }}
+            {{- if .Values.dss.padesX5ChainPEM }}
+            - name: DCS_PADES_X5CHAIN_PEM
+              value: {{ .Values.dss.padesX5ChainPEM | quote }}
+            {{- end }}
+            {{- end }}{{- end }}
             {{- if and .Values.hydra.enabled .Values.hydra.clients }}
             {{- $hydraClient := index .Values.hydra.clients 0 }}
             - name: HYDRA_PUBLIC_ISSUER_URL
