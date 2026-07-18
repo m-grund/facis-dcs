@@ -145,57 +145,6 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 	return pdf, resp.Header.Get("X-PDF-Core-Version"), nil
 }
 
-// Sign posts a multipart request to POST /sign containing pdf as "pdf",
-// fieldName as "field_name", signatoryName as "signatory_name", and, when
-// non-empty, evidence as "evidence". pdf-core embeds the evidence attachment
-// (embed-first-sign-second, so it falls inside the PAdES ByteRange) and applies
-// a PAdES signature in the named AcroForm field, delegating the ECDSA operation
-// to the backend's /internal/pades/sign endpoint. Returns the signed PDF bytes
-// and the renderer version header.
-func (c *Client) Sign(ctx context.Context, pdf []byte, fieldName, signatoryName string, evidence []byte) (signed []byte, version string, err error) {
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-
-	if err := writeField(mw, "pdf", pdf); err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign: write pdf field: %w", err)
-	}
-	if err := writeField(mw, "field_name", []byte(fieldName)); err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign: write field_name field: %w", err)
-	}
-	if err := writeField(mw, "signatory_name", []byte(signatoryName)); err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign: write signatory_name field: %w", err)
-	}
-	if len(evidence) > 0 {
-		if err := writeField(mw, "evidence", evidence); err != nil {
-			return nil, "", fmt.Errorf("pdf-core sign: write evidence field: %w", err)
-		}
-	}
-	if err := mw.Close(); err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign: close multipart: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/sign", &buf)
-	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign request: %w", err)
-	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	forwardBearerToken(ctx, req)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if err := checkStatus(resp); err != nil {
-		return nil, "", err
-	}
-	signed, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core sign read: %w", err)
-	}
-	return signed, resp.Header.Get("X-PDF-Core-Version"), nil
-}
-
 // EmbedEvidence posts pdf + evidence to POST /evidence/embed and returns the
 // PDF with the evidence attached but NOT signed — the attach-only step a remote
 // DSS signer performs before it produces the PAdES signature (so the /ByteRange

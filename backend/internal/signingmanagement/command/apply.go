@@ -19,7 +19,6 @@ import (
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/hsm"
-	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/jades"
 	"digital-contracting-service/internal/base/validation"
@@ -32,7 +31,6 @@ import (
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
-	"digital-contracting-service/internal/signingmanagement/signer"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -84,12 +82,13 @@ type SignatureValidator interface {
 	ValidatePDF(ctx context.Context, pdf []byte, name string) (*dss.Report, error)
 }
 
-// Applier handles the ApplyCmd command.
+// Applier runs the signing command flow: prepare the to-be-signed document,
+// and — after the signatory signs it externally (ADR-12) — validate and
+// finalize. The DCS holds no contract-signing key.
 type Applier struct {
 	DB           *sqlx.DB
 	CRepo        db.ContractRepo
 	CeremonyRepo db.CeremonyRepo
-	Signer       signer.ContractSigner
 	PDFCore      *pdfcore.Client
 	IPFSClient   *ipfs.APIClient
 	VCSigner     provenance.VCSigner
@@ -97,10 +96,6 @@ type Applier struct {
 	// PDF before signing (DCS-OR-C2PA-004) — see stampActiveLifecycle below.
 	VCIssuer  provenance.VCIssuer
 	IssuerDID string
-	// DIDDocument is the instance's HSM-backed signing identity (x5c chain);
-	// used to produce the JAdES signature over the machine-readable JSON-LD
-	// alongside the visible PAdES on the PDF (DCS-FR-SM-02, DCS-FR-SM-11).
-	DIDDocument identity.DIDDocument
 	// ArchiveRepo, IPFSStorer, ArchiveNotary, and ArchiveTSA back the
 	// archive-entry creation that now happens on reaching SIGNED (DCS-FR-
 	// CWE-20), not on APPROVED. ArchiveRepo is the contractworkflowengine
@@ -115,64 +110,6 @@ type Applier struct {
 	// wallet/QTSP, or a desktop PAdES signer) before the DCS records it. Required
 	// by SubmitSignature; the transitional DCS-signing Handle path does not use it.
 	Validator SignatureValidator
-}
-
-// Handle applies a PAdES digital signature to a contract (DCS-FR-SM-16,
-// DCS-IR-SI-10). It first enforces the PID-presentation ceremony precondition
-// (orthogonal to, and evaluated before, the APPROVED -> SIGNED state gate),
-// then embeds the presentation and a ContractSigningSummaryCredential into the
-// PDF and signs it (embed-first-sign-second), stores the signed artefact in
-// IPFS, and binds both the signed-PDF hash and the JSON-LD content hash.
-func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
-
-	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
-	defer cancel()
-
-	tx, err := h.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("could not start transaction: %w", err)
-	}
-	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("could not rollback transaction: %v", err)
-		}
-	}(tx)
-
-	prepared, err := h.prepare(ctx, tx, cmd)
-	if err != nil {
-		return err
-	}
-
-	// Transitional DCS-side signing — superseded by the wallet-driven ceremony
-	// (ADR-12), kept until the ceremony endpoints replace this entrypoint. The
-	// signatory's wallet/QTSP produces these artefacts from prepared.basePDF
-	// (evidence embedded, AcroForm field placed) and prepared.jadesPayload; the
-	// DCS then validates and finalizes, holding no signing key of its own.
-	signedPDF, err := h.Signer.SignPDF(ctx, prepared.basePDF, prepared.ceremony.FieldName, prepared.ceremony.FieldName, prepared.evidence)
-	if err != nil {
-		return fmt.Errorf("pades sign: %w", err)
-	}
-	jadesSignature, err := jades.Sign(&h.DIDDocument, prepared.jadesPayload)
-	if err != nil {
-		return fmt.Errorf("JAdES sign: %w", err)
-	}
-
-	if err := h.finalize(ctx, tx, cmd, finalizeInput{
-		ceremony:        prepared.ceremony,
-		signedPDF:       signedPDF,
-		jadesSignature:  jadesSignature,
-		contentHash:     prepared.contentHash,
-		rendererVersion: prepared.rendererVersion,
-		signedCount:     prepared.signedCount,
-		vpToken:         prepared.vpToken,
-		kbSDHash:        prepared.kbSDHash,
-		signedAt:        prepared.signedAt,
-		contractVersion: prepared.contractVersion,
-	}); err != nil {
-		return err
-	}
-
-	return tx.Commit()
 }
 
 // Prepare produces the to-be-signed PDF the signatory signs externally — with

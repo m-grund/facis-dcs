@@ -78,13 +78,6 @@ bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
   "$PDF_CORE_DIR/certs/dev/c2pa-x5chain-8991.pem"
 echo "✓ C2PA x5chain provisioned for pdf-core"
 
-# Issue the PAdES x5chain binding the dcs-contract-pades token key so pdf-core
-# can embed it as the CMS signing certificate of a PAdES contract signature
-# (the ECDSA operation itself runs in the backend, DCS-IR-HI-01).
-KEY_LABEL=dcs-contract-pades bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
-  "$PDF_CORE_DIR/certs/dev/pades-x5chain-8991.pem"
-echo "✓ PAdES x5chain provisioned for pdf-core"
-
 # Publish an initial (empty) CRL for the dev signing CA so the leaf's
 # crlDistributionPoints resolves to a fresh, valid list. crlcheck (ops) or the
 # AC11 test path can later revoke the signing cert against this CA.

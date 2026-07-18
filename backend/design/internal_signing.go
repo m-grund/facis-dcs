@@ -22,24 +22,6 @@ var C2PASignResponse = Type("C2PASignResponse", func() {
 	Required("signature")
 })
 
-var PAdESSignRequest = Type("PAdESSignRequest", func() {
-	Description("Request to sign a CMS SignedAttributes digest with the HSM PAdES key")
-
-	Token("token", String, "JWT token")
-
-	Attribute("digest", String, "Base64-encoded SHA-256 digest of the CMS SignedAttributes to be signed")
-
-	Required("digest")
-})
-
-var PAdESSignResponse = Type("PAdESSignResponse", func() {
-	Description("A DER-encoded ECDSA (P-256/SHA-256) signature over the submitted digest")
-
-	Attribute("signature", String, "Base64-encoded ASN.1 DER ECDSA signature")
-
-	Required("signature")
-})
-
 // InternalSigning exposes authenticated, non-public signing primitives that
 // keep private-key material inside the backend's PKCS#11 token. pdf-core (a
 // separate process holding no key material) builds the COSE Sig_structure and
@@ -87,46 +69,6 @@ var _ = Service("InternalSigning", func() {
 
 		HTTP(func() {
 			POST("/internal/c2pa/sign")
-			Response(StatusOK)
-			Response("bad_request", StatusBadRequest)
-			Response("internal_error", StatusInternalServerError)
-		})
-	})
-
-	Method("padesSign", func() {
-		Description("Signs a CMS SignedAttributes digest with the HSM dcs-pades key and returns the ASN.1 DER ECDSA (P-256/SHA-256) signature that a detached PAdES CMS SignedData embeds directly.")
-		Meta("dcs:requirements", "DCS-IR-SI-10")
-
-		// pdf-core builds the CMS SignedAttributes of a PAdES signature and
-		// delegates the ECDSA operation here so private-key material stays
-		// inside the backend's PKCS#11 token (DCS-IR-HI-01). The accepted
-		// scopes mirror c2paSign: the call rides on whatever already-
-		// authenticated export/sign action triggered the PDF signature.
-		Security(JWTAuth, func() {
-			Scope("Contract Manager")
-			Scope("Sys. Contract Manager")
-			Scope("Contract Reviewer")
-			Scope("Contract Creator")
-			Scope("Contract Approver")
-			Scope("Contract Observer")
-			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
-			Scope("Template Manager")
-			Scope("Template Reviewer")
-			Scope("Template Creator")
-			Scope("Template Approver")
-			Scope("Auditor")
-			Scope("Compliance Officer")
-		})
-
-		Payload(PAdESSignRequest)
-		Result(PAdESSignResponse)
-
-		Error("bad_request", ErrorResult, "Bad request")
-		Error("internal_error", ErrorResult, "Internal server error")
-
-		HTTP(func() {
-			POST("/internal/pades/sign")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

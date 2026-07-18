@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"digital-contracting-service/internal/base/identity"
-
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/tsa"
@@ -27,7 +25,6 @@ import (
 	db "digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	"digital-contracting-service/internal/signingmanagement/query"
-	"digital-contracting-service/internal/signingmanagement/signer"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -63,12 +60,10 @@ type signatureManagementsrvc struct {
 	CeremonyRepo  db.CeremonyRepo
 	PDFCore       *pdfcore.Client
 	ATrailReader  base.AuditTrailReader
-	Signer        signer.ContractSigner
 	VCSigner      provenance.VCSigner
 	VCIssuer      provenance.VCIssuer
 	IssuerDID     string
 	IPFSClient    *ipfs.APIClient
-	DIDDocument   identity.DIDDocument
 	ArchiveRepo   cwedb.ContractRepo
 	ArchiveNotary cwecommand.ArchiveNotary
 	ArchiveTSA    *tsa.APIClient
@@ -76,9 +71,9 @@ type signatureManagementsrvc struct {
 }
 
 func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, ceremonyRepo db.CeremonyRepo,
-	auditTrailReader base.AuditTrailReader, contractSigner signer.ContractSigner, vcSigner provenance.VCSigner, issuerDID string,
+	auditTrailReader base.AuditTrailReader, vcSigner provenance.VCSigner, issuerDID string,
 	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client, archiveRepo cwedb.ContractRepo, archiveNotary cwecommand.ArchiveNotary,
-	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer, didDocument identity.DIDDocument) signaturemanagement.Service {
+	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
@@ -87,11 +82,9 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 		CeremonyRepo:     ceremonyRepo,
 		PDFCore:          pdfCore,
 		ATrailReader:     auditTrailReader,
-		Signer:           contractSigner,
 		VCSigner:         vcSigner,
 		VCIssuer:         vcIssuer,
 		IssuerDID:        issuerDID,
-		DIDDocument:      didDocument,
 		IPFSClient:       ipfsClient,
 		ArchiveRepo:      archiveRepo,
 		ArchiveNotary:    archiveNotary,
@@ -253,86 +246,9 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 	return &signaturemanagement.SMContractVerifyResponse{}, nil
 }
 
-func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanagement.SMContractApplyRequest) (res *signaturemanagement.SMContractApplyResponse, err error) {
-
-	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
-	defer cancel()
-
-	credentialType := req.CredentialType
-	if credentialType == nil || *credentialType == "" {
-		aes := "AES"
-		credentialType = &aes
-	}
-	fieldName := ""
-	if req.FieldName != nil {
-		fieldName = *req.FieldName
-	}
-	cmd := command.ApplyCmd{
-		DID:            req.Did,
-		SignerDID:      req.SignerDid,
-		FieldName:      fieldName,
-		CredentialType: *credentialType,
-		AppliedBy:      middleware.GetParticipantID(ctx),
-		HolderDID:      middleware.GetHolderDID(ctx),
-		UserRoles:      middleware.GetUserRoles(ctx),
-	}
-	handler := command.Applier{
-		DB:            s.DB,
-		CRepo:         s.CRepo,
-		CeremonyRepo:  s.CeremonyRepo,
-		Signer:        s.Signer,
-		PDFCore:       s.PDFCore,
-		IPFSClient:    s.IPFSClient,
-		VCSigner:      s.VCSigner,
-		VCIssuer:      s.VCIssuer,
-		IssuerDID:     s.IssuerDID,
-		DIDDocument:   s.DIDDocument,
-		ArchiveRepo:   s.ArchiveRepo,
-		IPFSStorer:    s.IPFSClient,
-		ArchiveNotary: s.ArchiveNotary,
-		ArchiveTSA:    s.ArchiveTSA,
-	}
-	err = handler.Handle(ctx, cmd)
-	if err != nil {
-		return nil, mapSignatureCommandError(err)
-	}
-
-	qry := query.GetByIDQry{
-		DID:         req.Did,
-		RetrievedBy: middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-	}
-	queryHandler := query.GetByIDHandler{
-		DB:    s.DB,
-		CRepo: s.CRepo,
-	}
-
-	result, err := queryHandler.Handle(ctx, qry)
-	if err != nil {
-		return nil, signaturemanagement.MakeInternalError(err)
-	}
-
-	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{
-		ContractDid:    result.SignatureEnvelope.ContractDID,
-		CredentialType: result.SignatureEnvelope.CredentialType,
-		IpfsCid:        result.SignatureEnvelope.IpfsCID,
-		RevokedAt:      result.SignatureEnvelope.RevokedAt,
-		SignedAt:       result.SignatureEnvelope.SignedAt,
-		SignerDid:      result.SignatureEnvelope.SignerDID,
-		Status:         result.SignatureEnvelope.Status.String(),
-	}
-
-	return &signaturemanagement.SMContractApplyResponse{
-		Did:               req.Did,
-		SignatureEnvelope: signatureEnvelop,
-	}, nil
-}
-
 // newApplier assembles the signing command handler. Validator is wired from a
 // configured DSS (DSS_URL) so SubmitSignature can validate an externally-produced
-// signature and confirm it identifies the signatory (sole control, ADR-12); the
-// transitional DCS-signing Apply path does not use it.
+// signature and confirm it identifies the signatory (sole control, ADR-12).
 func (s *signatureManagementsrvc) newApplier() command.Applier {
 	var validator command.SignatureValidator
 	if url := dss.URL(); url != "" {
@@ -342,13 +258,11 @@ func (s *signatureManagementsrvc) newApplier() command.Applier {
 		DB:            s.DB,
 		CRepo:         s.CRepo,
 		CeremonyRepo:  s.CeremonyRepo,
-		Signer:        s.Signer,
 		PDFCore:       s.PDFCore,
 		IPFSClient:    s.IPFSClient,
 		VCSigner:      s.VCSigner,
 		VCIssuer:      s.VCIssuer,
 		IssuerDID:     s.IssuerDID,
-		DIDDocument:   s.DIDDocument,
 		ArchiveRepo:   s.ArchiveRepo,
 		IPFSStorer:    s.IPFSClient,
 		ArchiveNotary: s.ArchiveNotary,

@@ -18,7 +18,6 @@ import (
 	dcstodcsdb "digital-contracting-service/internal/dcstodcs/db"
 	pq2 "digital-contracting-service/internal/dcstodcs/db/pg"
 
-	"digital-contracting-service/internal/signingmanagement/signer"
 
 	didservice "digital-contracting-service/gen/did_service"
 
@@ -440,14 +439,6 @@ func main() {
 		log.Fatalf(ctx, err, "Could not load HSM C2PA signing key")
 	}
 
-	// Sign CMS SignedAttributes digests for pdf-core's PAdES contract
-	// signatures with the HSM PAdES key, exposed via the authenticated
-	// InternalSigning endpoint (DCS-IR-SI-10).
-	padesSigner, err := hsmClient.Signer(hsm.KeyLabelPADES())
-	if err != nil {
-		log.Fatalf(ctx, err, "Could not load HSM PAdES signing key")
-	}
-
 	// Initialize OCM-W Status List Service client (DCS-OR-C2PA-005).
 	statusListServiceURL := os.Getenv("STATUSLIST_SERVICE_URL")
 	if statusListServiceURL == "" {
@@ -508,12 +499,11 @@ func main() {
 		pdfGenerationSvc = service.NewPDFGeneration(db, jwtAuth, ipfsAPIClient, &cweRepo, &ctRepo, &smCRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher), did)
 		c2paSvc = service.NewC2PAService(db, ipfsAPIClient, &cweRepo, pdfCoreClient, issuerDID, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		processAuditAndComplianceSvc = service.NewProcessAuditAndCompliance(db, jwtAuth, auditTrailReader, &ctRepo, &cweRepo, &cweATRepo)
-		contractSigner := signer.NewPDFCoreSigner(pdfCoreClient)
-		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smrepo.PostgresCeremonyRepo{}, auditTrailReader, contractSigner, vcSigner, issuerDID, ipfsAPIClient, pdfCoreClient, &cweRepo, archiveNotaryClient, tsaClient, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher), *didDocument)
+		signatureManagementSvc = service.NewSignatureManagement(db, jwtAuth, &smCRepo, &smrepo.PostgresCeremonyRepo{}, auditTrailReader, vcSigner, issuerDID, ipfsAPIClient, pdfCoreClient, &cweRepo, archiveNotaryClient, tsaClient, provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher))
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(db, jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, vcSigner, issuerDID)
 		didSrv = didService
-		internalSigningSvc = service.NewInternalSigning(jwtAuth, c2paSigner, padesSigner)
+		internalSigningSvc = service.NewInternalSigning(jwtAuth, c2paSigner)
 		semanticHubSvc = service.NewSemanticHub(db, jwtAuth)
 	}
 

@@ -122,22 +122,8 @@ var SMContractVerifyResponse = Type("SMContractVerifyResponse", func() {
 	Required("did", "match", "sig_count")
 })
 
-var SMContractApplyRequest = Type("SMContractApplyRequest", func() {
-	Description("Contract apply request")
-
-	Token("token", String, "JWT token")
-
-	Attribute("did", String, "Decentralized Identifier of the contract")
-	Attribute("signer_did", String, "DID of the signer")
-	Attribute("field_name", String, "For multi-signer contracts (DCS-FR-SM-07/-17): the declared signature field this signer covers. When omitted, the signer's most recent verified ceremony is used (single-signer flow).")
-	Attribute("credential_type", String, "Type of credential to use (default: AES)")
-	Attribute("updated_at", String, "The timestamp when the contract was updated")
-
-	Required("did", "signer_did", "updated_at")
-})
-
 var SMContractApplyResponse = Type("SMContractApplyResponse", func() {
-	Description("Result of applying a signature")
+	Description("Result of a signature reaching SIGNED (the /signature/submit result)")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("signature_envelope", SMContractSignatureEnvelope, "The resulting signature envelope")
@@ -444,33 +430,6 @@ var _ = Service("SignatureManagement", func() {
 			POST("/signature/verify")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
-			Response("internal_error", StatusInternalServerError)
-		})
-	})
-
-	Method("apply", func() {
-		Description("apply digital signature.")
-		Meta("dcs:requirements", "DCS-IR-SM-03")
-		Meta("dcs:ui", "Secure Contract Viewer")
-		Meta("dcs:sm:components", "Timestamping")
-
-		Security(JWTAuth, func() {
-			Scope("Contract Signer")
-			Scope("Sys. Contract Signer")
-		})
-
-		Payload(SMContractApplyRequest)
-		Result(SMContractApplyResponse)
-
-		Error("bad_request", ErrorResult, "Bad request")
-		Error("ceremony_required", ErrorResult, "No completed PID presentation ceremony exists for this signer and contract")
-		Error("internal_error", ErrorResult, "Internal server error")
-
-		HTTP(func() {
-			POST("/signature/apply")
-			Response(StatusOK)
-			Response("bad_request", StatusBadRequest)
-			Response("ceremony_required", StatusUnprocessableEntity)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})
