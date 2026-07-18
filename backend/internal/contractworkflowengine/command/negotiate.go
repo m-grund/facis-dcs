@@ -2,7 +2,10 @@ package command
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -132,6 +135,25 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		return fmt.Errorf("could not reopen negotiation: %w", err)
 	}
 
+	// Negotiation is where the participating DCS instances are finalized, so it
+	// is where the contract's signature fields are materialized: one
+	// dcs:SignatureField per instance, the AcroForm field the wallet-driven
+	// signing ceremony signs (ADR-12). Without a pre-placed field, the
+	// deterministic two-call remote signing has nothing to sign.
+	contract, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not read contract for signature-field seeding: %w", err)
+	}
+	seeded, changed, err := seedSignatureFields(*contract.ContractData, contract.Responsible.GetUniqueResponsibleList())
+	if err != nil {
+		return fmt.Errorf("could not seed signature fields: %w", err)
+	}
+	if changed {
+		if err := h.CRepo.Update(ctx, tx, db.ContractUpdateData{DID: cmd.DID, ContractData: &seeded}); err != nil {
+			return fmt.Errorf("could not persist seeded signature fields: %w", err)
+		}
+	}
+
 	evt := contractevents.NegotiationEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,
@@ -148,4 +170,63 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 	}
 
 	return tx.Commit()
+}
+
+// seedSignatureFields adds one dcs:SignatureField per participating DCS
+// instance to the contract document, its dcs:signatoryName set to that
+// instance's DID — the value pdf-core renders as the AcroForm field's /T name,
+// which the wallet-driven signing ceremony targets (ADR-12). It is merge-aware
+// and idempotent: an instance that already has a field — from a template or an
+// earlier negotiation pass — is left untouched, so re-running never duplicates.
+// It reports whether the document changed so the caller only persists real
+// additions.
+func seedSignatureFields(raw datatype.JSON, instanceDIDs []string) (datatype.JSON, bool, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, false, fmt.Errorf("decode contract data: %w", err)
+	}
+
+	fields, _ := doc["dcs:signatureFields"].([]any)
+	present := map[string]bool{}
+	for _, rawField := range fields {
+		if node, ok := rawField.(map[string]any); ok {
+			present[signatureFieldName(node)] = true
+		}
+	}
+
+	docID, _ := doc["@id"].(string)
+	changed := false
+	for _, did := range instanceDIDs {
+		if present[did] {
+			continue
+		}
+		digest := sha256.Sum256([]byte(did))
+		fields = append(fields, map[string]any{
+			"@id":               fmt.Sprintf("%s#signature-field-%s", docID, hex.EncodeToString(digest[:8])),
+			"@type":             "dcs:SignatureField",
+			"dcs:signatoryName": did,
+		})
+		present[did] = true
+		changed = true
+	}
+	if !changed {
+		return raw, false, nil
+	}
+
+	doc["dcs:signatureFields"] = fields
+	encoded, err := datatype.NewJSON(doc)
+	if err != nil {
+		return nil, false, fmt.Errorf("encode contract data: %w", err)
+	}
+	return encoded, true, nil
+}
+
+// signatureFieldName reads a dcs:SignatureField node's signatory name, which a
+// document may carry under the prefixed or the JSON-LD-compacted term.
+func signatureFieldName(node map[string]any) string {
+	if name, ok := node["dcs:signatoryName"].(string); ok {
+		return name
+	}
+	name, _ := node["signatoryName"].(string)
+	return name
 }
