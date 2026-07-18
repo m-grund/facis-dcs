@@ -176,8 +176,21 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			DID:         cmd.DID,
 			Responsible: &resp,
 		}
-		err = h.CRepo.Update(ctx, tx, updateData)
+
+		// Submission into NEGOTIATION is where the participating parties are
+		// finalized, so seed one signature field per participating DCS instance
+		// here (CORRECTION 5): the contract carries a pre-placed AcroForm field
+		// per party (dcs:signatoryName == instance DID), which prepare renders
+		// and the signatory's wallet signs.
+		seeded, changed, err := seedSignatureFields(*contractData, resp.GetUniqueResponsibleList())
 		if err != nil {
+			return fmt.Errorf("could not seed signature fields: %w", err)
+		}
+		if changed {
+			updateData.ContractData = &seeded
+		}
+
+		if err := h.CRepo.Update(ctx, tx, updateData); err != nil {
 			return fmt.Errorf("could not update contract: %w", err)
 		}
 
