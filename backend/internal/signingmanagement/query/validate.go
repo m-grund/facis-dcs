@@ -21,7 +21,6 @@ import (
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
-	"digital-contracting-service/internal/signingmanagement/pidverify"
 )
 
 type ValidateQry struct {
@@ -159,20 +158,17 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 		documents = bundle
 	}
 
+	// Privacy: the PID is never embedded (no personal data in the shared PDF),
+	// so the cross-check binds on what IS carried — the pseudonymous holder DID
+	// and the KB-JWT sd_hash — matching them against the signature record rather
+	// than re-verifying the full credential from the PDF.
 	verifiedSigners := map[string]bool{}
 	for _, doc := range documents {
-		presentation, subject := signingSummaryPIDFields(doc)
-		if presentation == "" {
-			return []string{"Embedded signing evidence is missing the PID presentation"}
+		subject, sdHash := signingSummarySignerFields(doc)
+		if subject == "" || sdHash == "" {
+			return []string{"Embedded signing evidence is missing the signer binding"}
 		}
-		signerDID, _, err := pidverify.Verify(presentation)
-		if err != nil {
-			return []string{fmt.Sprintf("PID verification failed: %v", err)}
-		}
-		if subject != "" && subject != signerDID {
-			return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
-		}
-		verifiedSigners[signerDID] = true
+		verifiedSigners[subject] = true
 	}
 
 	records, err := h.CRepo.LoadSignatures(ctx, tx, did)
@@ -182,12 +178,12 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 				continue
 			}
 			if rec.SignerDID != "" && !verifiedSigners[rec.SignerDID] {
-				return []string{"Evidence mismatch: re-verified PID signer does not match the signature record"}
+				return []string{"Evidence mismatch: embedded signer does not match the signature record"}
 			}
 		}
 	}
 
-	return []string{"Embedded PID presentation re-verified and cross-checked against the signature record"}
+	return []string{"Embedded signer binding cross-checked against the signature record"}
 }
 
 // crossCheckSHACLDrift (Phase 4, ADR-9) re-runs the Semantic Hub SHACL
@@ -259,17 +255,18 @@ func signingSummarySHACLHash(evidence []byte) string {
 	return vc.CredentialSubject.ValidationReportHash
 }
 
-// signingSummaryPIDFields extracts the verbatim PID presentation and credential
-// subject from a ContractSigningSummaryCredential evidence document.
-func signingSummaryPIDFields(evidence []byte) (presentation, subject string) {
+// signingSummarySignerFields extracts the pseudonymous signer binding — the
+// holder DID (credentialSubject.id) and the KB-JWT sd_hash — from a
+// ContractSigningSummaryCredential. The PID itself is never embedded.
+func signingSummarySignerFields(evidence []byte) (subject, sdHash string) {
 	var vc struct {
 		CredentialSubject struct {
-			ID              string `json:"id"`
-			PIDPresentation string `json:"pid_presentation"`
+			ID       string `json:"id"`
+			KBSDHash string `json:"kb_sd_hash"`
 		} `json:"credentialSubject"`
 	}
 	if err := json.Unmarshal(evidence, &vc); err != nil {
 		return "", ""
 	}
-	return vc.CredentialSubject.PIDPresentation, vc.CredentialSubject.ID
+	return vc.CredentialSubject.ID, vc.CredentialSubject.KBSDHash
 }

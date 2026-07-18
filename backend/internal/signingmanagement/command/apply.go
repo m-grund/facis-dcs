@@ -314,7 +314,6 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 			PDFHash:              basePDFHash,
 			CredentialType:       cmd.CredentialType,
 			KBSDHash:             kbSDHash,
-			PIDPresentation:      vpToken,
 			SignedAt:             signedAt,
 			SchemaVersion:        schemaVersion,
 			ValidationReportHash: validationReportHash,
@@ -329,10 +328,6 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		summaries := make([]json.RawMessage, 0, len(requiredFields))
 		for _, f := range requiredFields {
 			c := fieldCeremonies[f]
-			fieldVP := ""
-			if c.VpToken != nil {
-				fieldVP = *c.VpToken
-			}
 			fieldKB := ""
 			if c.KbSdHash != nil {
 				fieldKB = *c.KbSdHash
@@ -357,7 +352,6 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 				PDFHash:              basePDFHash,
 				CredentialType:       credentialType,
 				KBSDHash:             fieldKB,
-				PIDPresentation:      fieldVP,
 				SignedAt:             signedAt,
 				SchemaVersion:        schemaVersion,
 				ValidationReportHash: validationReportHash,

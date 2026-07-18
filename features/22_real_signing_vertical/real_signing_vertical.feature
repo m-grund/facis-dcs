@@ -177,14 +177,15 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     And the signing ceremony for contract "RSV Headless Ceremony Contract" has status "verified"
 
   # ---------------------------------------------------------------------
-  # Identity binding: PID fragment + signing-summary VC embedded UNDER the
-  # signature (embed-first-sign-second)
+  # Signer binding: the pseudonymous holder DID + signing-summary VC embedded
+  # UNDER the signature (embed-first-sign-second). The PID itself is NEVER
+  # embedded — personal data stays out of the shared PDF (eIDAS/GDPR).
   # ---------------------------------------------------------------------
 
   @DCS-FR-SM-08 @NFR-SEC-18
-  Scenario: The presented SD-JWT VC + KB-JWT is embedded verbatim before signing, inside the PAdES ByteRange
+  Scenario: The signer PID is NOT embedded in the signed PDF (privacy), only the pseudonymous binding
     Given contract "RSV Verbatim Presentation Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerThirteen"
-    Then the SD-JWT VC presentation for contract "RSV Verbatim Presentation Contract" is embedded verbatim inside the PAdES ByteRange
+    Then the signer PID for contract "RSV Verbatim Presentation Contract" is NOT embedded in the signed PDF, only the pseudonymous binding
 
   @DCS-FR-SM-08
   Scenario: A ContractSigningSummaryCredential is issued and embedded under the signature
@@ -206,11 +207,11 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     Then the signature validation findings for contract "RSV Evidence Tamper Contract" report the embedded signing evidence as invalid
 
   @UC-04-02 @UC-04-03
-  Scenario: The verify side re-verifies the embedded PID presentation and cross-checks it against the signature record
+  Scenario: The verify side cross-checks the embedded signer binding against the signature record
     Given contract "RSV Verify Crosscheck Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerFifteen"
     When I validate the signature for contract "RSV Verify Crosscheck Contract"
     Then get http 200:Success code
-    And the signature validation findings for contract "RSV Verify Crosscheck Contract" cross-check the embedded PID evidence
+    And the signature validation findings for contract "RSV Verify Crosscheck Contract" cross-check the embedded signer binding
 
   # ---------------------------------------------------------------------
   # Full end-to-end

@@ -564,21 +564,28 @@ def step_then_pades_still_valid_after_update(context, name):
     step_then_byte_range_structurally_valid(context, name)
 
 
-@then('the SD-JWT VC presentation for contract "{name}" is embedded verbatim inside the PAdES ByteRange')
-def step_then_presentation_embedded_verbatim_covered(context, name):
+@then('the signer PID for contract "{name}" is NOT embedded in the signed PDF, only the pseudonymous binding')
+def step_then_pid_not_embedded_only_binding(context, name):
     pdf_bytes = _pdf_bytes_for(context, name)
-    presentation = context.pid_presentations[name]["presentation"]
-    needle = presentation.encode("ascii")
+    info = context.pid_presentations[name]
+    # Privacy (eIDAS/GDPR data-minimisation): neither the verbatim PID
+    # presentation nor its disclosed personal attributes may appear in the
+    # shared PDF. (given_name is the ceremony's signatory label == the AcroForm
+    # field name, legitimately in the PDF, so the distinct family_name is the
+    # unambiguous disclosure to prove absence of.)
+    for secret in (info["presentation"], info["family_name"]):
+        assert secret.encode("ascii") not in pdf_bytes, (
+            f"Privacy leak: signer PID data ({secret!r}) appears in the shared signed PDF; "
+            "the PID must never be embedded (only a pseudonymous binding may be)"
+        )
+    # The pseudonymous signer binding (holder DID) IS embedded under the signature.
+    needle = info["subject_did"].encode("ascii")
     assert needle in pdf_bytes, (
-        "Expected the exact, verbatim SD-JWT VC + KB-JWT compact presentation string to appear "
-        "unmodified somewhere in the signed PDF (the presentation must be embedded verbatim "
-        "do NOT re-filter or re-serialize it) - not found at all"
+        "Expected the pseudonymous holder DID (the signer binding) embedded in the signed PDF"
     )
     ranges = _last_byte_range(pdf_bytes)
     assert _offset_covered(pdf_bytes, needle, ranges), (
-        "The embedded SD-JWT VC presentation was found, but its byte offset falls OUTSIDE the "
-        "PAdES signature's /ByteRange-covered regions - the identity credential must be embedded "
-        "BEFORE signing, embed-first-sign-second, so the ByteRange covers it)"
+        "The embedded signer binding must fall inside the PAdES /ByteRange (embed-first-sign-second)"
     )
 
 
@@ -755,8 +762,8 @@ def step_then_webhook_rejected(context):
     )
 
 
-@then('the signature validation findings for contract "{name}" cross-check the embedded PID evidence')
-def step_then_validate_crosschecks_pid_evidence(context, name):
+@then('the signature validation findings for contract "{name}" cross-check the embedded signer binding')
+def step_then_validate_crosschecks_signer_binding(context, name):
     resp = context.requests_response
     assert resp.status_code == 200, f"/signature/validate failed: {resp.status_code} {resp.text}"
     findings = resp.json().get("findings") or []

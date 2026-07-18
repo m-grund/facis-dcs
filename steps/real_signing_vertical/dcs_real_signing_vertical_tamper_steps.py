@@ -126,7 +126,7 @@ def step_then_evidence_reported_invalid(context, name):
     findings = resp.json().get("findings") or []
     body_text = " ".join(findings).lower()
     assert "evidence" in body_text and (
-        "missing" in body_text or "invalid" in body_text or "failed" in body_text
+        "missing" in body_text or "invalid" in body_text or "failed" in body_text or "mismatch" in body_text
     ), (
         f"Expected /signature/validate to report the corrupted signing evidence as "
         f"invalid/missing (distinct from its normal positive 'PID presentation "
