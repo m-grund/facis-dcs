@@ -32,7 +32,7 @@ func (r *PostgresCeremonyRepo) GetCeremonyByID(ctx context.Context, tx *sqlx.Tx,
 	var c db.SignatureCeremony
 	err := tx.GetContext(ctx, &c, `
 		SELECT id, contract_did, field_name, requested_by, status, wallet_uri, nonce,
-		       signer_did, vp_token, pid_claims, kb_sd_hash, created_at, verified_at, expires_at
+		       signer_did, vp_token, poa_claims, kb_sd_hash, created_at, verified_at, expires_at
 		  FROM signature_ceremonies
 		 WHERE id = $1`, id,
 	)
@@ -45,13 +45,13 @@ func (r *PostgresCeremonyRepo) GetCeremonyByID(ctx context.Context, tx *sqlx.Tx,
 	return &c, nil
 }
 
-func (r *PostgresCeremonyRepo) MarkCeremonyVerified(ctx context.Context, tx *sqlx.Tx, id, signerDID, vpToken string, pidClaims []byte, kbSdHash string) error {
+func (r *PostgresCeremonyRepo) MarkCeremonyVerified(ctx context.Context, tx *sqlx.Tx, id, signerDID, vpToken string, poaClaims []byte, kbSdHash string) error {
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE signature_ceremonies
-		   SET status = $2, signer_did = $3, vp_token = $4, pid_claims = $5, kb_sd_hash = $6, verified_at = $7
+		   SET status = $2, signer_did = $3, vp_token = $4, poa_claims = $5, kb_sd_hash = $6, verified_at = $7
 		 WHERE id = $1 AND status = $8`,
-		id, db.CeremonyVerified, signerDID, vpToken, pidClaims, kbSdHash, now, db.CeremonyPending,
+		id, db.CeremonyVerified, signerDID, vpToken, poaClaims, kbSdHash, now, db.CeremonyPending,
 	)
 	if err != nil {
 		return fmt.Errorf("mark ceremony %s verified: %w", id, err)
@@ -70,7 +70,7 @@ func (r *PostgresCeremonyRepo) FindVerifiedCeremonyByField(ctx context.Context, 
 	var c db.SignatureCeremony
 	err := tx.GetContext(ctx, &c, `
 		SELECT id, contract_did, field_name, requested_by, status, wallet_uri, nonce,
-		       signer_did, vp_token, pid_claims, kb_sd_hash, created_at, verified_at, expires_at
+		       signer_did, vp_token, poa_claims, kb_sd_hash, created_at, verified_at, expires_at
 		  FROM signature_ceremonies
 		 WHERE contract_did = $1 AND field_name = $2 AND status = $3
 		 ORDER BY verified_at DESC NULLS LAST
@@ -90,7 +90,7 @@ func (r *PostgresCeremonyRepo) FindVerifiedCeremony(ctx context.Context, tx *sql
 	var c db.SignatureCeremony
 	err := tx.GetContext(ctx, &c, `
 		SELECT id, contract_did, field_name, requested_by, status, wallet_uri, nonce,
-		       signer_did, vp_token, pid_claims, kb_sd_hash, created_at, verified_at, expires_at
+		       signer_did, vp_token, poa_claims, kb_sd_hash, created_at, verified_at, expires_at
 		  FROM signature_ceremonies
 		 WHERE contract_did = $1 AND signer_did = $2 AND status = $3
 		 ORDER BY verified_at DESC NULLS LAST

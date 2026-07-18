@@ -16,16 +16,16 @@ import (
 
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/signingmanagement/db"
-	"digital-contracting-service/internal/signingmanagement/pidverify"
+	"digital-contracting-service/internal/signingmanagement/poaverify"
 )
 
 // ceremonyTTL is how long a started ceremony stays valid for a wallet to
-// present the PID before it must be restarted.
+// present the PoA before it must be restarted.
 const ceremonyTTL = 15 * time.Minute
 
 // ceremonyAudience is the fixed OID4VP audience/client_id bound into the
-// KB-JWT of a PID presentation for a signing ceremony.
-const ceremonyAudience = pidverify.Audience
+// KB-JWT of a PoA presentation for a signing ceremony.
+const ceremonyAudience = poaverify.Audience
 
 // WebhookSecret returns the shared secret that authenticates the EUDIPLO
 // OID4VP webhook (NFR-SEC-18). It is read from EUDIPLO_WEBHOOK_SECRET.
@@ -94,15 +94,15 @@ var ErrWebhookUnauthorized = errors.New("incorrect webhook shared secret")
 // ErrCeremonyNotFound is returned when a webhook references an unknown ceremony.
 var ErrCeremonyNotFound = errors.New("ceremony not found")
 
-// WebhookCmd carries a completed PID presentation from EUDIPLO.
+// WebhookCmd carries a completed PoA presentation from EUDIPLO.
 type WebhookCmd struct {
 	Secret     string
 	CeremonyID string
 	VpToken    string
-	PidClaims  any
+	PoaClaims  any
 }
 
-// WebhookHandler validates a PID presentation and marks the ceremony verified.
+// WebhookHandler validates a PoA presentation and marks the ceremony verified.
 type WebhookHandler struct {
 	DB           *sqlx.DB
 	CeremonyRepo db.CeremonyRepo
@@ -130,19 +130,19 @@ func (h *WebhookHandler) Handle(ctx context.Context, cmd WebhookCmd) (*db.Signat
 		return nil, ErrCeremonyNotFound
 	}
 
-	signerDID, sdHash, err := pidverify.Verify(cmd.VpToken)
+	signerDID, sdHash, err := poaverify.Verify(cmd.VpToken)
 	if err != nil {
-		return nil, fmt.Errorf("pid presentation verification failed: %w", err)
+		return nil, fmt.Errorf("PoA presentation verification failed: %w", err)
 	}
 
-	var pidBytes []byte
-	if cmd.PidClaims != nil {
-		if b, mErr := json.Marshal(cmd.PidClaims); mErr == nil {
-			pidBytes = b
+	var poaBytes []byte
+	if cmd.PoaClaims != nil {
+		if b, mErr := json.Marshal(cmd.PoaClaims); mErr == nil {
+			poaBytes = b
 		}
 	}
 
-	if err := h.CeremonyRepo.MarkCeremonyVerified(ctx, tx, cmd.CeremonyID, signerDID, cmd.VpToken, pidBytes, sdHash); err != nil {
+	if err := h.CeremonyRepo.MarkCeremonyVerified(ctx, tx, cmd.CeremonyID, signerDID, cmd.VpToken, poaBytes, sdHash); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
