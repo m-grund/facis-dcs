@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import urllib.request
 from pathlib import Path
 
@@ -51,6 +52,11 @@ def _pades_params(cert_b64: str, field: str) -> dict:
         "signatureLevel": "PAdES_BASELINE_B",
         "digestAlgorithm": "SHA256",
         "signaturePackaging": "ENVELOPED",
+        # A fixed signing time shared by both remote calls: the CMS
+        # SignedAttributes carry the signing-time, and DSS regenerates them per
+        # call, so without pinning it getDataToSign and signDocument cover
+        # different bytes and the signature fails validation (SIG_CRYPTO_FAILURE).
+        "blevelParams": {"signingDate": int(time.time() * 1000)},
         "imageParameters": {"fieldParameters": {"fieldId": field}},
     }
 
