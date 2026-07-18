@@ -128,6 +128,9 @@ func signatureParameters(params SignParams) map[string]any {
 	switch params.Format {
 	case FormatPAdES:
 		out["signaturePackaging"] = "ENVELOPED"
+		// Place the visible signature in the existing AcroForm field pdf-core
+		// laid out (imageParameters/fieldParameters, DSS 6.x RemoteSignature-
+		// Parameters). DCS-FR-SM: PAdES signatures MUST be visible.
 		if params.SignatureFieldID != "" {
 			out["imageParameters"] = map[string]any{
 				"fieldParameters": map[string]any{"fieldId": params.SignatureFieldID},
