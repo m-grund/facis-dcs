@@ -1,4 +1,4 @@
-# Real signing vertical - PAdES signature, EUDIPLO signing ceremony, PID
+# Real signing vertical - PAdES signature, EUDIPLO signing ceremony, PoA
 # binding (SRS: DCS-FR-SM-08/-14/-16/-18, DCS-IR-SI-10, DCS-FR-CWE-04).
 #
 # Harness notes (see steps/real_signing_vertical/
@@ -13,7 +13,7 @@
 #      codebase's BDD packs.
 #   2. EUDIPLO is never co-deployed here; this harness plays the "EUDIPLO
 #      test client" role itself, POSTing a real, protocol-correct SD-JWT VC +
-#      KB-JWT PID presentation straight at the ceremony webhook
+#      KB-JWT PoA presentation straight at the ceremony webhook
 #      (POST /signature/request/webhook, authenticated via the
 #      X-EUDIPLO-Webhook-Secret shared-secret header), built with the
 #      testWallet/dcs_wallet signing primitives.
@@ -31,7 +31,7 @@
 # @skip scenario, not fabricated.
 
 @DCS-FR-SM-16 @DCS-IR-SI-10
-Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
+Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PoA binding
 
   # ---------------------------------------------------------------------
   # PAdES signature production - pdf-core POST /sign, exercised indirectly
@@ -117,7 +117,7 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     And the signature envelope for contract "RSV Apply Fields Contract" reflects the ceremony's signer_did and credential_type "AES"
 
   @DCS-FR-SM-16 @FR-SM-25 @UC-04-02
-  Scenario: Apply is refused with a typed error until a completed PID presentation exists for the signer
+  Scenario: Apply is refused with a typed error until a completed PoA presentation exists for the signer
     Given contract "RSV Ceremony Gate Contract" has reached contract state "APPROVED"
     When contract signer applies a signature to contract "RSV Ceremony Gate Contract" without a prior signing ceremony
     Then the apply request is rejected with a typed ceremony-required error
@@ -152,7 +152,7 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     And the signing ceremony for contract "RSV Ceremony Status Contract" has status "verified"
 
   @NFR-SEC-18 @FR-SM-14
-  Scenario: The webhook receiver marks the ceremony verified and persists PID claims when the shared secret is correct
+  Scenario: The webhook receiver marks the ceremony verified and persists PoA claims when the shared secret is correct
     Given contract "RSV Webhook Auth Contract" has reached contract state "APPROVED"
     When I start a signing ceremony for contract "RSV Webhook Auth Contract" field "SignerTen" as "Contract Signer"
     Then get http 200:Success code
@@ -177,7 +177,7 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     And the signing ceremony for contract "RSV Headless Ceremony Contract" has status "verified"
 
   # ---------------------------------------------------------------------
-  # Identity binding: PID fragment + signing-summary VC embedded UNDER the
+  # Identity binding: PoA fragment + signing-summary VC embedded UNDER the
   # signature (embed-first-sign-second)
   # ---------------------------------------------------------------------
 
@@ -194,23 +194,23 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
   # Uses the IPFS CID-swap seam (steps/support/tamper_seam.py). See
   # steps/real_signing_vertical/dcs_real_signing_vertical_tamper_steps.py's
   # module docstring for why the observable signal here is
-  # /signature/validate's embedded-PID cross-check finding, not a literal
+  # /signature/validate's embedded-PoA cross-check finding, not a literal
   # PAdES cryptographic signature verdict — no endpoint reachable by this
   # harness re-verifies the CMS signature over its /ByteRange, and
   # pdf-core's own /verify treats the entire PAdES-signed span (including
   # the evidence attachment) as an opaque, unchecked suffix by design.
   @DCS-FR-SM-08
-  Scenario: Corrupting the signature-evidence attachment invalidates the embedded-PID cross-check
+  Scenario: Corrupting the signature-evidence attachment invalidates the embedded-PoA cross-check
     Given contract "RSV Evidence Tamper Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerEvidenceTamper"
     When the signature-evidence attachment for contract "RSV Evidence Tamper Contract" is corrupted on the server-stored PDF
     Then the signature validation findings for contract "RSV Evidence Tamper Contract" report the embedded signing evidence as invalid
 
   @UC-04-02 @UC-04-03
-  Scenario: The verify side re-verifies the embedded PID presentation and cross-checks it against the signature record
+  Scenario: The verify side re-verifies the embedded PoA presentation and cross-checks it against the signature record
     Given contract "RSV Verify Crosscheck Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerFifteen"
     When I validate the signature for contract "RSV Verify Crosscheck Contract"
     Then get http 200:Success code
-    And the signature validation findings for contract "RSV Verify Crosscheck Contract" cross-check the embedded PID evidence
+    And the signature validation findings for contract "RSV Verify Crosscheck Contract" cross-check the embedded PoA evidence
 
   # ---------------------------------------------------------------------
   # Full end-to-end

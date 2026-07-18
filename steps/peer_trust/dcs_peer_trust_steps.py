@@ -687,7 +687,7 @@ def step_when_sign_cross_instance(context):
     # Reuses the real-signing pack's ceremony machinery verbatim — every URL
     # builder reads context.base_url, which _as_instance swaps to A.
     from steps.real_signing_vertical.dcs_real_signing_vertical_steps import (  # noqa: PLC0415
-        _build_pid_presentation,
+        _build_poa_presentation,
         _complete_ceremony_via_webhook,
     )
 
@@ -706,13 +706,11 @@ def step_when_sign_cross_instance(context):
         ceremony_id = start.json().get("ceremony_id")
         assert ceremony_id, f"/signature/request response has no ceremony_id: {start.text}"
 
-        given_name, family_name = "PeerRevocation", "BDD-Testperson"
-        presentation, _issuer_jwt, _disclosures, subject_did = _build_pid_presentation(
-            given_name=given_name, family_name=family_name,
-            aud="dcs-signature-ceremony", nonce=str(uuid.uuid4()),
+        presentation, _issuer_jwt, _disclosures, subject_did = _build_poa_presentation(
+            aud="dcs-signature-ceremony", nonce=str(uuid.uuid4()), organization="PeerRevocation",
         )
         webhook = _complete_ceremony_via_webhook(
-            context, ceremony_id, presentation, subject_did, given_name, family_name
+            context, ceremony_id, presentation, subject_did, organization="PeerRevocation"
         )
         assert webhook.status_code == 200, (
             f"ceremony webhook failed on instance A: {webhook.status_code} {webhook.text}"
