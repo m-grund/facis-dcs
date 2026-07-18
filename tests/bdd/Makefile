@@ -229,7 +229,7 @@ kind_load_pdf_core_image: kind_create
 	@docker image inspect "$(PDF_CORE_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(PDF_CORE_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(PDF_CORE_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
-kind_deploy: kind_load_image kind_load_pdf_core_image
+kind_deploy: kind_load_image kind_load_pdf_core_image kind_load_dss_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 	@"$(HELM_BIN)" repo add traefik https://traefik.github.io/charts --force-update
 	@"$(HELM_BIN)" repo update

@@ -320,3 +320,9 @@ nodeExporter:
   enabled: false
 kubeStateMetrics:
   enabled: false
+
+# EU DSS validates the wallet-produced signature on /signature/submit (ADR-12,
+# DCS-FR-SM-18); the DCS holds no signing key. Enabled so the wallet-driven
+# signing BDD scenarios can complete.
+dss:
+  enabled: true
