@@ -32,11 +32,50 @@ export interface SignatureVerifyResult {
 export interface SignatureValidateResult {
   did: string
   findings?: string[]
+  dss?: DSSReport
 }
 
 export interface SignatureComplianceResult {
   did: string
   findings?: string[]
+}
+
+// EU DSS (ETSI EN 319 102-1) validation report surfaced for the compliance
+// viewer: the external AdES validator's view of trust anchors, crypto
+// integrity, signature level, and timestamp (DCS-FR-SM-18/-26).
+export interface DSSReport {
+  indication: string
+  sub_indication?: string
+  signed_by?: string
+  signature_format?: string
+  signing_time?: string
+}
+
+// One applied signature's compliance metadata (DCS-FR-SM-26): signer identity,
+// credential class/level, status, timestamps, and the cryptographic integrity
+// proof bound into the embedded ContractSigningSummaryCredential.
+export interface SignatureViewItem {
+  signer_did: string
+  field_name?: string
+  credential_type: string
+  status: string
+  signed_at?: string
+  revoked_at?: string
+  format: string
+  jades?: string
+  ceremony_id?: string
+  content_hash?: string
+  pdf_hash?: string
+  kb_sd_hash?: string
+  validation_report_hash?: string
+}
+
+export interface SignatureViewResult {
+  did: string
+  contract_state: string
+  signatures: SignatureViewItem[]
+  integrity_findings: string[]
+  dss?: DSSReport
 }
 
 export interface SignatureAuditEntry {
@@ -132,6 +171,13 @@ export const signatureManagementService = {
 
   async complianceCheck(did: string): Promise<SignatureComplianceResult> {
     return http.post<SignatureComplianceResult>('/signature/compliance', { did }).then((res) => res.data)
+  },
+
+  // The Signature Compliance Viewer's read feed (DCS-FR-SM-26): per-signature
+  // signer identity, credential chain, integrity proof, plus the contract's
+  // integrity findings and the EU DSS validation report.
+  async getSignatureView(did: string): Promise<SignatureViewResult> {
+    return http.get<SignatureViewResult>('/signature/view', { params: { did } }).then((res) => res.data)
   },
 
   async revokeSignature(did: string, signerDid: string): Promise<void> {
