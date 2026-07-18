@@ -115,6 +115,18 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 
 	body, err := c.fetchTenantFileWithRetry(cid)
 	if err != nil {
+		// The tenant document-manager's DataIdentifier index can drop an entry
+		// under sustained write load ("DataIdentifier not found"), but every
+		// object CreateFile stores is also pinned in Kubo (copyToMFS). Fall back
+		// to that durable pinned copy so a lost tenant mapping never fails a
+		// read — critical for the tamper-proof audit trail (DCS-FR-CSA), whose
+		// chain walk must not 404 on a link the store transiently forgot. The
+		// content is identical (same CID) and the hash chain still verifies.
+		if c.mfsBaseURL != "" {
+			if kubo, kerr := c.fetchKuboFile(cid); kerr == nil {
+				return kubo, nil
+			}
+		}
 		return nil, err
 	}
 
