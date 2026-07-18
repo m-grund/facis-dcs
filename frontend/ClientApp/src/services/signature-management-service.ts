@@ -20,6 +20,7 @@ export interface SignatureEnvelope {
   ipfs_cid?: string
 }
 
+
 export interface SignatureVerifyResult {
   did: string
   match: boolean

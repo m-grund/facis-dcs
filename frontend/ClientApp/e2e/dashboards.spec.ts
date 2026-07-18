@@ -42,11 +42,11 @@ test('contract view renders the human-readable document', async ({ page, loginAs
   await expect(page.getByText('Provider coverage:').first()).toBeVisible()
 })
 
-test('signing dashboard renders for the signer role', async ({ page, loginAs }) => {
+test('signing list renders for the signer role', async ({ page, loginAs }) => {
   await loginAs('Contract Signer')
   await page.goto('/ui/signing')
 
-  await expect(page.getByRole('heading', { name: 'Signing Dashboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Signing', exact: true })).toBeVisible()
 })
 
 test('audit view renders scoped audits for the auditor role', async ({ page, loginAs }) => {

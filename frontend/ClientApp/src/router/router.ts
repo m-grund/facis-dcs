@@ -35,7 +35,8 @@ import ReviewContractView from '@/views/contract/ReviewContractView.vue'
 import ViewContractView from '@/views/contract/ViewContractView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import FrontPageView from '@/views/FrontPageView.vue'
-import SigningDashboardView from '@/views/signing/SigningDashboardView.vue'
+import SecureContractViewerView from '@/views/signing/SecureContractViewerView.vue'
+import SigningListView from '@/views/signing/SigningListView.vue'
 import TaskListView from '@/views/task/TaskListView.vue'
 
 const ROUTES = {
@@ -75,7 +76,8 @@ const ROUTES = {
     APPROVE: 'contracts.approve',
   },
   SIGNING: {
-    DASHBOARD: 'signing.dashboard',
+    LIST: 'signing.list',
+    VIEWER: 'signing.viewer',
   },
   SEMANTIC_HUB: {
     DASHBOARD: 'semantic_hub.dashboard',
@@ -374,15 +376,27 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/signing',
-    name: ROUTES.SIGNING.DASHBOARD,
-    component: SigningDashboardView,
+    name: ROUTES.SIGNING.LIST,
+    component: SigningListView,
     meta: {
-      name: 'Signing Dashboard',
+      name: 'Signing',
       icon: PencilSquareIcon,
       requiresAuth: true,
-      title: 'DCS - Signing Dashboard',
+      title: 'DCS - Signing',
       order: 5,
       roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+    },
+  },
+  {
+    path: '/signing/:did',
+    name: ROUTES.SIGNING.VIEWER,
+    component: SecureContractViewerView,
+    meta: {
+      name: 'Secure Contract Viewer',
+      hideInSidebar: true,
+      requiresAuth: true,
+      title: 'DCS - Secure Contract Viewer',
+      roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER'],
     },
   },
   {
