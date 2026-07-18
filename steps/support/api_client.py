@@ -145,8 +145,12 @@ def contract_peer_post_sync_url(context) -> str:
     return f"{context.base_url}/peer/contracts/"
 
 
-def signature_apply_url(context) -> str:
-    return f"{context.base_url}/signature/apply"
+def signature_prepare_url(context) -> str:
+    return f"{context.base_url}/signature/prepare"
+
+
+def signature_submit_url(context) -> str:
+    return f"{context.base_url}/signature/submit"
 
 
 def signature_revoke_url(context) -> str:

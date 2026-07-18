@@ -63,7 +63,6 @@ import uuid
 from behave import given, then, when
 
 from steps.support.api_client import (
-    signature_apply_url,
     signature_request_by_id_url,
     signature_request_url,
     signature_request_webhook_url,
@@ -223,17 +222,28 @@ def _run_full_ceremony(context, name, field_name, signatory_name, holder_private
 
 
 def _apply_signature(context, name, *, signer_did, credential_type="AES", field_name=None):
-    did, updated_at = ContractService._contract_data(context, name)
-    signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    payload = {
-        "did": did,
-        "signer_did": signer_did,
-        "credential_type": credential_type,
-        "updated_at": updated_at,
-    }
-    if field_name is not None:
-        payload["field_name"] = field_name
-    return post_json(context, signature_apply_url(context), payload, headers=signer_h)
+    """Drive the wallet-driven signing ceremony (ADR-12): prepare the
+    to-be-signed PDF, sign it with the signatory's own key via the external SCA
+    (a real EU DSS), then submit it. The DCS holds no signing key — it validates
+    and records what the signatory produced. Replaces the removed
+    /signature/apply. A precondition failure (e.g. no completed ceremony)
+    surfaces from /signature/prepare, so error scenarios see the same responses.
+    """
+    from steps.support.signing import wallet_sign  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    # The signatory name is the wallet key identity / certificate subject and,
+    # for these tests, the AcroForm field name (see _run_full_ceremony).
+    presentation = (getattr(context, "pid_presentations", {}) or {}).get(name) or {}
+    signatory = field_name or presentation.get("given_name") or name
+    return wallet_sign(
+        context,
+        did,
+        signer_did=signer_did,
+        signatory=signatory,
+        field_name=field_name,
+        credential_type=credential_type,
+    )
 
 
 # ---------------------------------------------------------------------------

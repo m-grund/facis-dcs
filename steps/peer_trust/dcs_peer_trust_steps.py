@@ -56,11 +56,11 @@ from steps.support.api_client import (
     get_with_headers,
     origin_url,
     post_json,
-    signature_apply_url,
     signature_request_url,
     signature_revoke_url,
     signature_view_url,
 )
+from steps.support.signing import wallet_sign
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
 from steps.template_management.contract_state_machine_steps import (
@@ -723,19 +723,17 @@ def step_when_sign_cross_instance(context):
             context, contract_retrieve_by_id_url(context, c_did), headers=manager_h
         )
         assert retrieve.status_code == 200, retrieve.text
-        apply_resp = post_json(
+        apply_resp = wallet_sign(
             context,
-            signature_apply_url(context),
-            {
-                "did": c_did,
-                "signer_did": subject_did,
-                "credential_type": "AES",
-                "updated_at": retrieve.json().get("updated_at"),
-            },
+            c_did,
+            signer_did=subject_did,
+            signatory=given_name,
+            field_name="PeerRevocationSigner",
+            credential_type="AES",
             headers=signer_h,
         )
         assert apply_resp.status_code == 200, (
-            f"signature apply failed on instance A: {apply_resp.status_code} {apply_resp.text}"
+            f"wallet signing failed on instance A: {apply_resp.status_code} {apply_resp.text}"
         )
         context.requests_response = apply_resp
 

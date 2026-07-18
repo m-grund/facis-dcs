@@ -39,9 +39,9 @@ from steps.support.api_client import (
     contract_withdraw_url,
     get_with_headers,
     post_json,
-    signature_apply_url,
     signature_revoke_url,
 )
+from steps.support.signing import wallet_sign
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
 from steps.support.services.pdf_service import PDFService
@@ -274,19 +274,13 @@ def _apply_signature(context, name):
         _run_full_ceremony,
     )
 
-    did, updated_at = ContractService._contract_data(context, name)
+    did, _updated_at = ContractService._contract_data(context, name)
     _ceremony_id, _presentation, subject_did = _run_full_ceremony(
         context, name, "BDD Counterparty Signer", "BDD Counterparty Signer"
     )
-    signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    resp = post_json(
-        context,
-        signature_apply_url(context),
-        {"did": did, "signer_did": subject_did, "updated_at": updated_at},
-        headers=signer_h,
-    )
+    resp = wallet_sign(context, did, signer_did=subject_did, signatory="BDD Counterparty Signer")
     assert resp.status_code == 200, (
-        f"Signature apply failed while preparing SIGNED state for '{name}': {resp.status_code} {resp.text}"
+        f"Wallet signing failed while preparing SIGNED state for '{name}': {resp.status_code} {resp.text}"
     )
     ContractService._refresh_contract(context, name)
 
