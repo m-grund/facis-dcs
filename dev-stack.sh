@@ -114,22 +114,30 @@ for i in $(seq 1 15); do
   sleep 1
 done
 
-# Optional: run a local EU DSS for signature VALIDATION (DCS-FR-SM-18) and the
-# wallet-driven /signature/submit acceptance path (ADR-12). Enable with
-# DCS_DEV_DSS=1. The DSS validates a signature the SIGNATORY produced (with
-# their wallet/QTSP or a desktop PAdES signer); the DCS holds no signing key.
-# The DSS 6.2 demo webapp runs as a local container and boots in ~90s; the
-# backend calls it lazily at validation time, so it need not be ready at startup.
-if [ "${DCS_DEV_DSS:-0}" = "1" ]; then
+# Signing is wallet-driven (ADR-12): the DCS holds no signing key. It prepares
+# the to-be-signed document, and validates + records whatever the signatory
+# signs. Local signing therefore NEEDS a reachable EU DSS (the signature
+# validator, DCS-FR-SM-18) and the test wallet (which signs with a per-signatory
+# key, driving the DSS as its external SCA). Both are provisioned here by default
+# so devs can always sign locally — DCS_DEV_DSS=0 opts out only if you know you
+# don't need signing.
+DSS_LOCAL_URL="http://localhost:18099"
+WALLET_KEYS_DIR="$HOME/.dcs/wallet-keys"
+if [ "${DCS_DEV_DSS:-1}" = "1" ]; then
   echo ""
-  echo "=== Starting a local EU DSS for signature validation (DCS_DEV_DSS=1) ==="
+  echo "=== Starting the local EU DSS (signature validation + test-wallet SCA) ==="
   docker rm -f dcs-dev-dss >/dev/null 2>&1 || true
   docker run -d --name dcs-dev-dss -p 18099:8080 \
     --entrypoint /dss/apache-tomcat-11.0.4/bin/catalina.sh \
     conectx/dss-demo:6.2.1 run >/dev/null
-  echo "✓ DSS 6.2 demo webapp starting on http://localhost:18099 (boots in ~90s)"
-  echo "DSS_URL=http://localhost:18099" >> backend/.env
-  echo "✓ backend .env wired for DSS signature validation"
+  echo "✓ DSS 6.2 demo webapp starting on $DSS_LOCAL_URL (boots in ~90s)"
+  echo "DSS_URL=$DSS_LOCAL_URL" >> backend/.env
+  mkdir -p "$WALLET_KEYS_DIR"
+  echo "✓ backend .env wired to the DSS validator; test-wallet keys dir: $WALLET_KEYS_DIR"
+  echo ""
+  echo "  Sign a contract locally with the test wallet (plays wallet+QTSP):"
+  echo "    make -C testWallet sign DCS_URL=http://localhost:8991/api \\"
+  echo "      CONTRACT_DID=<did> FIELD=<field> USER=<signatory> TOKEN=<jwt>"
 fi
 
 echo ""
