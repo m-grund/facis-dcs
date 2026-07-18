@@ -400,6 +400,58 @@ func (s *service) sign(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(signed)
 }
 
+// embedEvidence attaches the posted signing evidence to the PDF without signing
+// it. It is the attach-only half of the embed-first-sign-second contract that a
+// remote signer (EU DSS) needs: the DSS signDocument call does not attach, so
+// the evidence must already be embedded — and therefore covered by the PAdES
+// /ByteRange — before the DSS produces the signature (DCS-FR-SM-08).
+func (s *service) embedEvidence(w http.ResponseWriter, r *http.Request) {
+	ct := r.Header.Get("Content-Type")
+	if err := checkMediaType(ct, "multipart/form-data"); err != nil {
+		writeError(w, err)
+		return
+	}
+	defer r.Body.Close()
+
+	_, params, err := mime.ParseMediaType(ct)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("invalid multipart content type: %w", err)))
+		return
+	}
+	boundary, ok := params["boundary"]
+	if !ok {
+		writeError(w, errBadRequest(errors.New("multipart boundary missing from Content-Type")))
+		return
+	}
+
+	parts, err := readMultipartParts(r.Body, boundary)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+
+	pdfBytes, ok := parts["pdf"]
+	if !ok || len(pdfBytes) == 0 {
+		writeError(w, errBadRequest(errors.New("pdf field required")))
+		return
+	}
+	evidence, ok := parts["evidence"]
+	if !ok || len(evidence) == 0 {
+		writeError(w, errBadRequest(errors.New("evidence field required")))
+		return
+	}
+
+	embedded, err := compiler.EmbedSigningEvidence(pdfBytes, evidence)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("embed signing evidence: %w", err)))
+		return
+	}
+
+	setPDFCoreVersionHeader(w)
+	w.Header().Set("Content-Type", "application/pdf")
+	_, _ = w.Write(embedded)
+}
+
 func (s *service) extractEvidence(w http.ResponseWriter, r *http.Request) {
 	if err := checkMediaType(r.Header.Get("Content-Type"), "application/pdf"); err != nil {
 		writeError(w, err)

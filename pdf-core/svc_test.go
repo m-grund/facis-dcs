@@ -279,7 +279,9 @@ func TestDownload_MalformedPayloadReportsValidationDetails(t *testing.T) {
 	if name := errorName(t, rec.Body.Bytes()); name != "bad_request" {
 		t.Fatalf("expected bad_request, got %q", name)
 	}
-	var v struct{ Message string `json:"message"` }
+	var v struct {
+		Message string `json:"message"`
+	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &v)
 	msg := v.Message
 	if !strings.Contains(msg, "path=<https://w3id.org/facis/dcs/ontology/v1#metadata>") ||
@@ -812,5 +814,55 @@ func TestVerify_JSONMatchFalseOnMismatch(t *testing.T) {
 		bytes.NewReader(corrupted), "application/pdf")
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for tampered PDF, got %d", rec.Code)
+	}
+}
+
+// TestEmbedEvidenceAttachesAndRoundTrips verifies POST /evidence/embed attaches
+// the posted evidence to the PDF WITHOUT signing (the attach-only seam a remote
+// DSS signer needs: embed evidence first so the PAdES ByteRange covers it, then
+// have the DSS sign the returned PDF). The result must carry the evidence
+// filespec and extract back byte-for-byte via /evidence/extract.
+func TestEmbedEvidenceAttachesAndRoundTrips(t *testing.T) {
+	baseRec := doRequest(http.MethodPost, "/download",
+		strings.NewReader(minimalPayload), "application/ld+json")
+	if baseRec.Code != http.StatusOK {
+		t.Fatalf("compile base PDF: %d", baseRec.Code)
+	}
+	basePDF := baseRec.Body.Bytes()
+
+	evidence := []byte(`{"type":["VerifiablePresentation"],"id":"urn:dcs:evidence:test"}`)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	pdfPart, _ := mw.CreateFormField("pdf")
+	_, _ = pdfPart.Write(basePDF)
+	evPart, _ := mw.CreateFormField("evidence")
+	_, _ = evPart.Write(evidence)
+	mw.Close()
+
+	rec := doRequest(http.MethodPost, "/evidence/embed", &buf, mw.FormDataContentType())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/pdf" {
+		t.Errorf("expected application/pdf, got %q", ct)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("signing-evidence.json")) {
+		t.Error("embedded PDF must contain the signing-evidence.json filespec")
+	}
+
+	// The embedded PDF is unsigned (no PAdES dictionary yet — a DSS signs it next).
+	if bytes.Contains(rec.Body.Bytes(), []byte("/SubFilter/ETSI.CAdES.detached")) {
+		t.Error("/evidence/embed must NOT sign the PDF")
+	}
+
+	// Round-trips back out.
+	extractRec := doRequest(http.MethodPost, "/evidence/extract",
+		bytes.NewReader(rec.Body.Bytes()), "application/pdf")
+	if extractRec.Code != http.StatusOK {
+		t.Fatalf("extract expected 200, got %d: %s", extractRec.Code, extractRec.Body.String())
+	}
+	if !bytes.Equal(bytes.TrimSpace(extractRec.Body.Bytes()), evidence) {
+		t.Errorf("extracted evidence mismatch: got %q", extractRec.Body.String())
 	}
 }

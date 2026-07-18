@@ -20,6 +20,30 @@ func SystemToken() string {
 	return os.Getenv("DCS_SYSTEM_TOKEN")
 }
 
+// SignerBackend selects how contract PAdES signatures are produced:
+// "pdfcore" (default) uses pdf-core's in-process PKCS#11 path; "dss" routes
+// through a remote EU DSS via the CSC/rQES flow (DCS-IR-SI-10), the
+// production switch to a wallet-unlocked QTSP.
+func SignerBackend() string {
+	if b := os.Getenv("DCS_SIGNER_BACKEND"); b != "" {
+		return b
+	}
+	return "pdfcore"
+}
+
+// DSSURL is the base URL of the EU DSS REST service used when SignerBackend is
+// "dss" (and for signature validation). Empty when the DSS is not deployed.
+func DSSURL() string {
+	return os.Getenv("DCS_DSS_URL")
+}
+
+// PAdESX5ChainPEM is the PAdES signer's certificate chain (leaf first) in PEM,
+// the same chain pdf-core embeds; the DSS backend needs it to name the signing
+// certificate in the rQES parameters.
+func PAdESX5ChainPEM() string {
+	return os.Getenv("DCS_PADES_X5CHAIN_PEM")
+}
+
 func HTTPClientTimeout() time.Duration {
 	return 1 * time.Minute
 }

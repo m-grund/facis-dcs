@@ -8,8 +8,11 @@ package signer
 
 import (
 	"context"
+	"crypto"
+	"fmt"
 
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+	"digital-contracting-service/internal/signingmanagement/dss"
 )
 
 // ContractSigner embeds signing evidence into a PDF and applies a PAdES
@@ -31,6 +34,24 @@ type PDFCoreSigner struct {
 // NewPDFCoreSigner returns a ContractSigner backed by pdf-core.
 func NewPDFCoreSigner(pdfCore *pdfcore.Client) *PDFCoreSigner {
 	return &PDFCoreSigner{PDFCore: pdfCore}
+}
+
+// NewContractSigner selects the signing backend (DCS-IR-SI-10). "pdfcore"
+// (default) keeps the in-process PKCS#11 path unchanged; "dss" routes PAdES
+// through a remote EU DSS, the wallet-unlocked-QTSP production switch. The DSS
+// path still needs a DSS URL, the PAdES key's HSM signer, and its x5chain.
+func NewContractSigner(backend string, pdfCore *pdfcore.Client, dssURL string, padesSigner crypto.Signer, x5chainPEM, signatureLevel string) (ContractSigner, error) {
+	switch backend {
+	case "dss":
+		if dssURL == "" {
+			return nil, fmt.Errorf("signer backend %q requires DCS_DSS_URL", backend)
+		}
+		return NewDSSSigner(dss.New(dssURL), pdfCore, padesSigner, x5chainPEM, signatureLevel)
+	case "", "pdfcore":
+		return NewPDFCoreSigner(pdfCore), nil
+	default:
+		return nil, fmt.Errorf("unknown signer backend %q (want pdfcore or dss)", backend)
+	}
 }
 
 // SignPDF implements ContractSigner by calling pdf-core POST /sign.

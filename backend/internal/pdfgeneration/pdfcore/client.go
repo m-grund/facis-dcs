@@ -196,6 +196,46 @@ func (c *Client) Sign(ctx context.Context, pdf []byte, fieldName, signatoryName 
 	return signed, resp.Header.Get("X-PDF-Core-Version"), nil
 }
 
+// EmbedEvidence posts pdf + evidence to POST /evidence/embed and returns the
+// PDF with the evidence attached but NOT signed — the attach-only step a remote
+// DSS signer performs before it produces the PAdES signature (so the /ByteRange
+// covers the evidence). The default pdf-core signer embeds and signs in one
+// call (Sign); this seam splits the two for the DSS backend.
+func (c *Client) EmbedEvidence(ctx context.Context, pdf, evidence []byte) (embedded []byte, err error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := writeField(mw, "pdf", pdf); err != nil {
+		return nil, fmt.Errorf("pdf-core embed: write pdf field: %w", err)
+	}
+	if err := writeField(mw, "evidence", evidence); err != nil {
+		return nil, fmt.Errorf("pdf-core embed: write evidence field: %w", err)
+	}
+	if err := mw.Close(); err != nil {
+		return nil, fmt.Errorf("pdf-core embed: close multipart: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/evidence/embed", &buf)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core embed request: %w", err)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	forwardBearerToken(ctx, req)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core embed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	embedded, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core embed read: %w", err)
+	}
+	return embedded, nil
+}
+
 // ExtractEvidence posts pdf to POST /evidence/extract and returns the raw
 // signing-evidence attachment bytes embedded by Sign, plus whether it was
 // present.
