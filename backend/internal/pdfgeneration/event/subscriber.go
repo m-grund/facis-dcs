@@ -165,6 +165,16 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("read PDF state for contract %s: %w", cweEvt.DID, err)
 	}
 
+	// A frozen PDF is a PAdES-signed artifact (DCS-FR-SM-16): the signing
+	// command already produced the final signed bytes and stored them, and any
+	// post-signing C2PA lifecycle update runs through the explicit signing/
+	// revoke endpoints — never this background regenerator. Re-rendering here
+	// would replace the signed PDF with an unsigned one and destroy the
+	// signature's /ByteRange, so leave a frozen artifact untouched.
+	if pdfState.IPFSCID != "" && provenance.IsFrozenC2PAState(pdfState.C2PAState) {
+		return nil
+	}
+
 	contentChanged := pdfState.PayloadHash != currentPayloadHash
 	stateChanged := pdfState.C2PAState != c2paState
 	if pdfState.IPFSCID != "" && !contentChanged && !stateChanged {
