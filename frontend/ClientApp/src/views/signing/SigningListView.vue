@@ -12,7 +12,10 @@ const error = ref<string | null>(null)
 onMounted(async () => {
   loading.value = true
   try {
-    contracts.value = await signatureManagementService.retrieveContracts()
+    // The retrieve feed also carries ACTIVE (already-executed) contracts for the
+    // compliance viewer; the signing workspace only lists contracts still to sign.
+    const all = await signatureManagementService.retrieveContracts()
+    contracts.value = all.filter((c) => c.state === 'APPROVED' || c.state === 'SIGNED')
   } catch {
     error.value = 'Failed to load contracts for signing.'
   } finally {
