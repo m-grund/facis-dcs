@@ -11,8 +11,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"digital-contracting-service/internal/middleware"
 )
 
 // RendererVersion is kept in sync with pdf-core/compiler/version.go.
@@ -20,18 +18,85 @@ import (
 // the same JSON-LD input, so that cached PDFs are invalidated.
 const RendererVersion = "1.0.1"
 
+// C2PASignFunc signs one COSE Sig_structure with the DCS dcs-c2pa key and returns
+// the 64-byte ES256 r||s. pdf-core holds no key: it prepares the to-be-signed
+// Sig_structures, the DCS signs them here, and pdf-core embeds the signatures.
+type C2PASignFunc func(sigStructure []byte) ([]byte, error)
+
 // Client is an HTTP client for the pdf-core microservice.
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
+	// sign produces the dcs-c2pa signature for a prepared Sig_structure. The DCS
+	// never lets pdf-core see key material, so every C2PA signature is produced
+	// here and posted back to pdf-core's /c2pa/embed.
+	sign C2PASignFunc
 }
 
-// New returns a Client pointed at baseURL.
-func New(baseURL string) *Client {
+// New returns a Client pointed at baseURL. sign is the in-process dcs-c2pa
+// signer the two-step render flow uses; it must be non-nil.
+func New(baseURL string, sign C2PASignFunc) *Client {
 	return &Client{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
 		HTTPClient: &http.Client{Timeout: 60 * time.Second},
+		sign:       sign,
 	}
+}
+
+// preparedC2PA is pdf-core's prepare response: the compiled PDF with zeroed COSE
+// signature slots and the Sig_structures the DCS must sign (document order).
+type preparedC2PA struct {
+	PDFBase64         string   `json:"pdf_base64"`
+	C2PASigStructures []string `json:"c2pa_sig_structures"`
+}
+
+// embedC2PA is pdf-core's /c2pa/embed request: the prepared PDF and the ES256
+// signatures for its zeroed slots, in the order prepare returned them.
+type embedC2PA struct {
+	PDFBase64      string   `json:"pdf_base64"`
+	C2PASignatures []string `json:"c2pa_signatures"`
+}
+
+// signAndEmbed signs each prepared Sig_structure with the dcs-c2pa key and posts
+// the signatures to pdf-core's stateless /c2pa/embed, returning the finished PDF.
+func (c *Client) signAndEmbed(ctx context.Context, prepared preparedC2PA) ([]byte, error) {
+	if c.sign == nil {
+		return nil, fmt.Errorf("pdf-core client has no C2PA signer configured")
+	}
+	signatures := make([]string, len(prepared.C2PASigStructures))
+	for i, s := range prepared.C2PASigStructures {
+		sigStructure, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			return nil, fmt.Errorf("decode sig_structure %d: %w", i, err)
+		}
+		sig, err := c.sign(sigStructure)
+		if err != nil {
+			return nil, fmt.Errorf("sign c2pa sig_structure %d: %w", i, err)
+		}
+		signatures[i] = base64.StdEncoding.EncodeToString(sig)
+	}
+	body, err := json.Marshal(embedC2PA{PDFBase64: prepared.PDFBase64, C2PASignatures: signatures})
+	if err != nil {
+		return nil, fmt.Errorf("marshal c2pa embed request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/c2pa/embed", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core c2pa embed request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core c2pa embed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	pdf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core c2pa embed read: %w", err)
+	}
+	return pdf, nil
 }
 
 // Version fetches the renderer version string from pdf-core's GET /version.
@@ -57,7 +122,7 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 	return body.Version, nil
 }
 
-// Download posts jsonld to POST /download and returns the resulting PDF bytes
+// Download posts jsonld to POST /render and returns the resulting PDF bytes
 // plus the renderer version from the X-PDF-Core-Version response header.
 func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, version string, err error) {
 	jsonld, err = flattenComposedStructure(jsonld)
@@ -65,12 +130,11 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 		return nil, "", fmt.Errorf("pdf-core download: flatten composed structure: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.BaseURL+"/download", bytes.NewReader(jsonld))
+		c.BaseURL+"/render", bytes.NewReader(jsonld))
 	if err != nil {
 		return nil, "", fmt.Errorf("pdf-core download request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/ld+json")
-	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -80,14 +144,19 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 	if err := checkStatus(resp); err != nil {
 		return nil, "", err
 	}
-	pdf, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core download read: %w", err)
+	version = resp.Header.Get("X-PDF-Core-Version")
+	var prepared preparedC2PA
+	if err := json.NewDecoder(resp.Body).Decode(&prepared); err != nil {
+		return nil, "", fmt.Errorf("pdf-core download decode prepared: %w", err)
 	}
-	return pdf, resp.Header.Get("X-PDF-Core-Version"), nil
+	pdf, err = c.signAndEmbed(ctx, prepared)
+	if err != nil {
+		return nil, "", fmt.Errorf("pdf-core download: %w", err)
+	}
+	return pdf, version, nil
 }
 
-// Update posts a multipart request to POST /update containing existingPDF as
+// Update posts a multipart request to POST /render/amendment containing existingPDF as
 // "pdf", jsonld as "payload", and optionally vcBytes as "vc". When vcBytes is
 // non-nil the request proceeds even if the JSON-LD payload is unchanged.
 // When manifestURL is non-empty it is sent as the "manifest_url" field so
@@ -123,12 +192,11 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.BaseURL+"/update", &buf)
+		c.BaseURL+"/render/amendment", &buf)
 	if err != nil {
 		return nil, "", fmt.Errorf("pdf-core update request: %w", err)
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -138,11 +206,16 @@ func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte
 	if err := checkStatus(resp); err != nil {
 		return nil, "", err
 	}
-	pdf, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core update read: %w", err)
+	version = resp.Header.Get("X-PDF-Core-Version")
+	var prepared preparedC2PA
+	if err := json.NewDecoder(resp.Body).Decode(&prepared); err != nil {
+		return nil, "", fmt.Errorf("pdf-core update decode prepared: %w", err)
 	}
-	return pdf, resp.Header.Get("X-PDF-Core-Version"), nil
+	pdf, err = c.signAndEmbed(ctx, prepared)
+	if err != nil {
+		return nil, "", fmt.Errorf("pdf-core update: %w", err)
+	}
+	return pdf, version, nil
 }
 
 // EmbedEvidence posts pdf + evidence to POST /evidence/embed and returns the
@@ -168,7 +241,6 @@ func (c *Client) EmbedEvidence(ctx context.Context, pdf, evidence []byte) (embed
 		return nil, fmt.Errorf("pdf-core embed request: %w", err)
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -236,7 +308,6 @@ func (c *Client) Verify(ctx context.Context, pdf []byte) (VerifyResult, error) {
 		return VerifyResult{}, fmt.Errorf("pdf-core verify request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/pdf")
-	forwardBearerToken(ctx, req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -295,14 +366,37 @@ func (c *Client) ExtractManifest(ctx context.Context, pdf []byte) ([]byte, error
 	return manifest, nil
 }
 
-// forwardBearerToken copies the caller's JWT from ctx onto the outbound pdf-core
-// request. pdf-core presents it as its own Authorization header when it calls the
-// backend's internal C2PA signing endpoint (DCS-IR-HI-01). When ctx carries no
-// token (an unauthenticated internal path) the header is left unset.
-func forwardBearerToken(ctx context.Context, req *http.Request) {
-	if tok := middleware.GetBearerToken(ctx); tok != "" {
-		req.Header.Set("Authorization", "Bearer "+tok)
+// ChainEntry is one manifest in a PDF's C2PA provenance chain: its JUMBF label
+// and, when present, its parsed dcs.lifecycle assertion. pdf-core owns the
+// JUMBF/CBOR parsing; the DCS consumes this structured form.
+type ChainEntry struct {
+	Label     string            `json:"label"`
+	Lifecycle map[string]string `json:"lifecycle,omitempty"`
+}
+
+// ExtractManifestChain returns the parsed C2PA provenance chain embedded in a
+// PDF (oldest manifest first).
+func (c *Client) ExtractManifestChain(ctx context.Context, pdf []byte) ([]ChainEntry, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/manifest/chain", bytes.NewReader(pdf))
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core manifest-chain request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/pdf")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core manifest-chain: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var chain []ChainEntry
+	if err := json.NewDecoder(resp.Body).Decode(&chain); err != nil {
+		return nil, fmt.Errorf("pdf-core manifest-chain decode: %w", err)
+	}
+	return chain, nil
 }
 
 // checkStatus returns an error for non-2xx responses, including the status code

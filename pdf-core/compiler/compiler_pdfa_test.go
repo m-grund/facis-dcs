@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"math"
 	"strconv"
@@ -34,7 +33,7 @@ func minimalDocWithSigFields() documentModel {
 // at least four bytes each with a decimal value greater than 127. This marker
 // signals to tools that the file may contain binary data.
 func TestPDFHeaderBinaryComment(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func TestPDFHeaderBinaryComment(t *testing.T) {
 // explicitly set to true.
 func TestAcroFormNoNeedAppearances(t *testing.T) {
 	// Use a doc with signature fields so the AcroForm object is emitted.
-	pdf, err := renderPDF(context.Background(), minimalDocWithSigFields())
+	pdf, err := renderPDF(testSigningContext(), minimalDocWithSigFields())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +82,7 @@ func TestAcroFormNoNeedAppearances(t *testing.T) {
 // A TrueType font requires /FontFile2 in its /FontDescriptor, and the
 // /FontDescriptor must be referenced from the /Font object.
 func TestFontIsEmbedded(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +99,7 @@ func TestFontIsEmbedded(t *testing.T) {
 // PDF/A version and conformance level shall be specified using the PDF/A
 // Identification extension schema (pdfaid:part and pdfaid:conformance).
 func TestXMPHasPDFAIdentification(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +160,7 @@ func TestGlossaryURIArrowIsASCII(t *testing.T) {
 		FileID:        strings.Repeat("0", 64),
 	}
 
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,11 +195,11 @@ func TestGlossaryURIArrowIsASCII(t *testing.T) {
 //   - produces an XRef stream whose /Length matches the actual stream byte count
 //     (ISO 19005-3:2012 clause 6.1.7.1)
 func TestVerificationAppendixHasIDAndValidXRefStream(t *testing.T) {
-	base, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	base, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := AppendVerificationWitness(context.Background(), base, []byte(minimalPayloadBase))
+	result, err := AppendVerificationWitness(testSigningContext(), base, []byte(minimalPayloadBase))
 	if err != nil {
 		t.Fatalf("AppendVerificationWitness: %v", err)
 	}
@@ -251,7 +250,7 @@ func TestVerificationAppendixHasIDAndValidXRefStream(t *testing.T) {
 // without a schema extension declaration causes veraPDF failures. C2PA data
 // belongs in the binary JUMBF attachment, not in XMP.
 func TestXMPNoUnregisteredC2PANamespace(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +266,7 @@ func TestXMPNoUnregisteredC2PANamespace(t *testing.T) {
 // ISO 19005-3:2012. The absence of the xpacket wrapper is flagged by veraPDF
 // as "XMP not included in 'xpacket'" (clause 6.6.3).
 func TestXMPWrappedInXpacket(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +283,7 @@ func TestXMPWrappedInXpacket(t *testing.T) {
 // property embeds the renderer version so consumers can identify which build
 // produced the PDF without any out-of-band version registry.
 func TestXMPCreatorToolContainsRendererVersion(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +299,7 @@ func TestXMPCreatorToolContainsRendererVersion(t *testing.T) {
 // ISO 19005-3:2012 clause 6.4.7 (Table 4). veraPDF flags the absence of
 // /ModDate as "Embedded file Params has no ModDate entry".
 func TestEmbeddedFileParamsHasModDate(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +326,7 @@ func TestEmbeddedFileParamsHasModDate(t *testing.T) {
 // beyond the asset boundary; such ranges are flagged by validators as
 // "extra data hash exclusions found" and cause hard-binding hash failures.
 func TestC2PAExclusionsWithinFileBounds(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +487,7 @@ func TestFontWidthsConsistentWithEmbeddedTTF(t *testing.T) {
 	ttfWidths := parseTTFWidths(t, liberationSansTTF, 32, 127)
 
 	// Extract the /Widths array from a compiled PDF.
-	pdf, err := renderPDF(context.Background(), minimalDoc())
+	pdf, err := renderPDF(testSigningContext(), minimalDoc())
 	if err != nil {
 		t.Fatal(err)
 	}

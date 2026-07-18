@@ -2,7 +2,7 @@
 # DCS-IR-SI-04): the QR-driven wallet automation layer on top of the working
 # prepare/submit signing. After a ceremony is PID-verified, the DCS publishes a
 # STANDARD OID4VP Document-Retrieval request object (a signed JAR carrying
-# document_digests, document_locations, response_uri, nonce) as a QR/deep link.
+# documentDigests, documentLocations, response_uri, nonce) as a QR/deep link.
 # The wallet scans it, fetches the request object, fetches the to-be-signed
 # document, signs it with the signatory's own key (sole control), and posts the
 # signed document back to the response_uri callback — where the DCS reuses the
@@ -24,7 +24,7 @@ Feature: OID4VP Document-Retrieval signing ceremony
     When the signer publishes the OID4VP signing request for contract "RSV DocRetrieval Publish Contract"
     Then get http 200:Success code
     And the publish response carries a client_id, request_uri, and expires_at
-    And the published request object is a signed JAR carrying document_digests, document_locations, response_uri, and a nonce
+    And the published request object is a signed JAR carrying documentDigests, documentLocations, response_uri, and a nonce
 
   @DCS-FR-SM-16 @DCS-FR-SM-18 @UC-04-02 @UC-04-03
   Scenario: A wallet scanning the QR signs the fetched document and the contract reaches SIGNED via the callback
@@ -34,4 +34,4 @@ Feature: OID4VP Document-Retrieval signing ceremony
     When the wallet signs contract "RSV DocRetrieval E2E Contract" by consuming the OID4VP signing request as "SignerDrE2E"
     Then the wallet callback reports the contract "RSV DocRetrieval E2E Contract" as SIGNED
     And the contract "RSV DocRetrieval E2E Contract" is in state "SIGNED"
-    And the signature view for contract "RSV DocRetrieval E2E Contract" shows a "SIGNED" signature for field "SignerDrE2E"
+    And the signature view for contract "RSV DocRetrieval E2E Contract" shows a "SIGNED" signature for the signing party

@@ -275,8 +275,9 @@ def _apply_signature(context, name):
     )
 
     did, _updated_at = ContractService._contract_data(context, name)
+    party_did = ContractService._local_peer_did(context)
     _ceremony_id, _presentation, subject_did = _run_full_ceremony(
-        context, name, "BDD Counterparty Signer", "BDD Counterparty Signer"
+        context, name, party_did, "BDD Counterparty Signer"
     )
     resp = wallet_sign(context, did, signer_did=subject_did, signatory="BDD Counterparty Signer")
     assert resp.status_code == 200, (
@@ -513,7 +514,7 @@ def step_when_apply_signature(context, name):
         _run_full_ceremony,
     )
 
-    _run_full_ceremony(context, name, "BDD Counterparty Signer", "BDD Counterparty Signer")
+    _run_full_ceremony(context, name, ContractService._local_peer_did(context), "BDD Counterparty Signer")
     subject_did = context.pid_presentations[name]["subject_did"]
     context.requests_response = _apply_signature_with_ceremony_result(
         context, name, signer_did=subject_did, credential_type="AES"

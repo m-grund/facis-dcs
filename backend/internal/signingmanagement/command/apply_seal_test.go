@@ -25,7 +25,7 @@ func TestSealAgreementStampsPartyFunctions(t *testing.T) {
 	raw, err := datatype.NewJSON(doc)
 	require.NoError(t, err)
 
-	sealed, err := sealAgreementForSigning(raw, &db.Responsible{Creator: "did:web:origin"}, "did:web:signer")
+	sealed, err := sealAgreementForSigning(raw, &db.Responsible{Creator: "did:web:origin"}, "did:web:signer", "did:web:signer")
 	require.NoError(t, err)
 
 	var out map[string]any
@@ -34,12 +34,17 @@ func TestSealAgreementStampsPartyFunctions(t *testing.T) {
 	require.Equal(t, "odrl:Agreement", out["dcs:policies"].(map[string]any)["@type"])
 
 	functions := map[string]string{}
+	poa := map[string]string{}
 	for _, rawNode := range out["dcs:parties"].([]any) {
 		node := rawNode.(map[string]any)
 		if fn, ok := node["odrl:function"].(map[string]any); ok {
 			functions[node["@id"].(string)] = fn["@id"].(string)
 		}
+		if p, ok := node["dcs:hasPowerOfAttorney"].(map[string]any); ok {
+			poa[node["@id"].(string)] = p["@id"].(string)
+		}
 	}
 	require.Equal(t, "odrl:contractingParty", functions["did:web:origin"], "offeror is the contracting party")
 	require.Equal(t, "odrl:contractedParty", functions["did:web:signer"], "counterparty is the contracted party")
+	require.Equal(t, "did:web:signer", poa["did:web:signer"], "the signing party carries its Power of Attorney organization")
 }

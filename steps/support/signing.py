@@ -15,8 +15,6 @@ from __future__ import annotations
 import base64
 import os
 
-from dcs_wallet.remote_signer import sign_pdf
-
 from steps.support.api_client import post_json
 from steps.support.services.auth_service import AuthService
 
@@ -34,12 +32,15 @@ def wallet_sign(
 ):
     """Run prepare -> sign -> submit and return the final HTTP response.
 
-    signatory is the signer's name: it is the wallet key identity, the signing
-    certificate subject ("CN=DCS Signatory <signatory>"), and — for these tests
-    — the AcroForm field name (the ceremony placed the field under that name).
-    A precondition failure (no completed ceremony, contract not APPROVED) is
-    returned straight from /signature/prepare, so rejection scenarios still see
-    the prepare status.
+    signatory is the natural person who signs: the wallet key identity and the
+    signing certificate subject ("CN=DCS Signatory <signatory>"). The AES sole-
+    control gate derives the expected person from the ceremony's verified PID (its
+    given_name matches this name), not from the caller. It is NOT the signature
+    field: the field is the participating party's DCS instance DID
+    (dcs:signatoryName, see seedSignatureFields), so — unless a caller pins
+    field_name for a multi-signer contract — we sign whichever field the prepared
+    PDF carries (field=""). A precondition failure (no completed ceremony, contract
+    not APPROVED) is returned straight from /signature/prepare.
     """
     base = (base_url or context.base_url).rstrip("/")
     signer_headers = headers or AuthService.get_headers_for_roles(["Contract Signer"])
@@ -51,8 +52,11 @@ def wallet_sign(
     if prepare_resp.status_code != 200:
         return prepare_resp
 
-    field = field_name or signatory
+    field = field_name or ""
     dss_url = os.getenv("BDD_DSS_URL", "http://localhost:18099")
+    AuthService._ensure_dcs_wallet_importable()
+    from dcs_wallet.remote_signer import sign_pdf  # noqa: PLC0415
+
     signed_pdf = sign_pdf(
         base64.b64decode(prepare_resp.json()["document"]),
         user=signatory,
@@ -63,7 +67,6 @@ def wallet_sign(
 
     submit_body = dict(
         body,
-        expected_signatory=signatory,
         signed_pdf=base64.b64encode(signed_pdf).decode(),
         jades_signature="",
     )

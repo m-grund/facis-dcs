@@ -1,7 +1,6 @@
 package request
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -9,35 +8,55 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// DocumentDigest names one document the wallet is asked to sign: a human label
-// and the base64url hash of the to-be-signed bytes (OID4VP "Document Retrieval").
+// SHA256OID is the ETSI/NIST object identifier for SHA-256, the hashAlgorithmOID
+// the EUDI walletdriven-signer reference advertises for document digests.
+const SHA256OID = "2.16.840.1.101.3.4.2.1"
+
+// DocumentDigest names one document the wallet is asked to sign: the base64
+// (standard, not URL) hash of the to-be-signed bytes and a human label. The
+// field order and encoding mirror the EUDI reference (get_document_digest).
 type DocumentDigest struct {
-	Label string `json:"label"`
 	Hash  string `json:"hash"`
+	Label string `json:"label"`
 }
 
-// DocRetrievalParams are the OID4VP Document-Retrieval request-object parameters:
-// the wallet fetches the documents from Locations, drives its own SCA+QTSP, and
-// posts the signed documents back to ResponseURI. The DCS never signs.
+// DocumentLocationMethod is how the wallet retrieves the document. "public" is
+// an unauthenticated GET (the EUDI reference's only method).
+type DocumentLocationMethod struct {
+	Type string `json:"type"`
+}
+
+// DocumentLocation is where the wallet fetches one to-be-signed document from,
+// matching the EUDI reference (get_document_location): {uri, method:{type}}.
+type DocumentLocation struct {
+	URI    string                 `json:"uri"`
+	Method DocumentLocationMethod `json:"method"`
+}
+
+// DocRetrievalParams are the parameters of an OID4VP "Document Retrieval"
+// request object (EUDI walletdriven-signer). The wallet fetches the documents
+// from DocumentLocations, drives its own SCA+QTSP, and posts the signed
+// documents back to ResponseURI. The DCS never signs.
 type DocRetrievalParams struct {
-	ClientID        string
-	ResponseURI     string
-	Nonce           string
-	State           string
-	ExpiresAt       time.Time
-	DocumentDigests []DocumentDigest
-	// DocumentLocations are the URLs the wallet fetches the to-be-signed
-	// documents from (parallel to DocumentDigests).
-	DocumentLocations []string
-	// DCQLQuery requests the PoA/PID presentation the QTSP's SAM needs to
-	// authorize the signature (presented alongside the signing consent).
-	DCQLQuery any
+	ClientID    string
+	ResponseURI string
+	Nonce       string
+	ExpiresAt   time.Time
+	// SignatureQualifier is the eIDAS level requested (CSC/rQES vocabulary,
+	// e.g. "eu_eidas_aes" for an AES, "eu_eidas_qes" for a QES).
+	SignatureQualifier string
+	DocumentDigests    []DocumentDigest
+	DocumentLocations  []DocumentLocation
 }
 
-// BuildDocumentRetrievalJWT creates the signed request object a wallet consumes
-// to sign the DCS's prepared documents. client_id_scheme is x509_san_dns so a
-// production EUDI wallet can authenticate the request against the DCS's
-// DNS-bound certificate; a bespoke shape here would break that swap.
+// BuildDocumentRetrievalJWT creates the signed request object (JAR) a wallet
+// consumes to sign the DCS's prepared documents, matching the EUDI
+// walletdriven-signer reference's generate_request_object exactly so a real
+// EUDI wallet can consume it: response_type "sign_response",
+// client_id_scheme "x509_san_dns", response_mode "direct_post", and the
+// camelCase documentDigests/documentLocations/hashAlgorithmOID members. The
+// signer's x5c chain (bound to a DNS-named certificate) authenticates the
+// request against client_id.
 func BuildDocumentRetrievalJWT(signer Signer, params DocRetrievalParams) (string, error) {
 	if signer == nil {
 		return "", fmt.Errorf("request signer is not configured")
@@ -54,8 +73,12 @@ func BuildDocumentRetrievalJWT(signer Signer, params DocRetrievalParams) (string
 	if nonce == "" {
 		return "", fmt.Errorf("nonce is required")
 	}
+	qualifier := strings.TrimSpace(params.SignatureQualifier)
+	if qualifier == "" {
+		return "", fmt.Errorf("signatureQualifier is required")
+	}
 	if len(params.DocumentDigests) == 0 || len(params.DocumentDigests) != len(params.DocumentLocations) {
-		return "", fmt.Errorf("document_digests and document_locations must be non-empty and parallel")
+		return "", fmt.Errorf("documentDigests and documentLocations must be non-empty and parallel")
 	}
 	now := time.Now().UTC()
 	exp := params.ExpiresAt.UTC()
@@ -65,33 +88,26 @@ func BuildDocumentRetrievalJWT(signer Signer, params DocRetrievalParams) (string
 
 	digests := make([]any, 0, len(params.DocumentDigests))
 	for _, d := range params.DocumentDigests {
-		digests = append(digests, map[string]any{"label": d.Label, "hash": d.Hash})
+		digests = append(digests, map[string]any{"hash": d.Hash, "label": d.Label})
+	}
+	locations := make([]any, 0, len(params.DocumentLocations))
+	for _, l := range params.DocumentLocations {
+		locations = append(locations, map[string]any{"uri": l.URI, "method": map[string]any{"type": l.Method.Type}})
 	}
 
 	claims := jwt.MapClaims{
-		"iss":                clientID,
+		"response_type":      "sign_response",
 		"client_id":          clientID,
 		"client_id_scheme":   "x509_san_dns",
-		"response_type":      "vp_token",
 		"response_mode":      "direct_post",
 		"response_uri":       responseURI,
 		"nonce":              nonce,
-		"state":              strings.TrimSpace(params.State),
-		"document_digests":   digests,
-		"document_locations": params.DocumentLocations,
+		"signatureQualifier": qualifier,
+		"documentDigests":    digests,
+		"documentLocations":  locations,
+		"hashAlgorithmOID":   SHA256OID,
 		"iat":                now.Unix(),
 		"exp":                exp.Unix(),
-	}
-	if params.DCQLQuery != nil {
-		dcqlJSON, err := json.Marshal(params.DCQLQuery)
-		if err != nil {
-			return "", fmt.Errorf("marshal dcql_query: %w", err)
-		}
-		var dcql any
-		if err := json.Unmarshal(dcqlJSON, &dcql); err != nil {
-			return "", fmt.Errorf("decode dcql_query: %w", err)
-		}
-		claims["dcql_query"] = dcql
 	}
 
 	return signer.SignAuthorizationRequestJWT(claims)

@@ -122,6 +122,34 @@ var SMContractVerifyResponse = Type("SMContractVerifyResponse", func() {
 	Required("did", "match", "sig_count")
 })
 
+var SMProvenanceRequest = Type("SMProvenanceRequest", func() {
+	Description("Request for a contract's C2PA provenance chain")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Required("did")
+})
+
+var SMProvenanceEntry = Type("SMProvenanceEntry", func() {
+	Description("One C2PA manifest in the JUMBF store, with its dcs.lifecycle assertion")
+
+	Attribute("label", String, "The manifest's JUMBF label (its urn:c2pa: identifier)")
+	Attribute("lifecycle", MapOf(String, String), "The parsed dcs.lifecycle assertion (contract_id, status, actor, timestamp)")
+
+	Required("label")
+})
+
+var SMProvenanceResponse = Type("SMProvenanceResponse", func() {
+	Description("A contract's C2PA provenance chain, oldest manifest first")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("chain", ArrayOf(SMProvenanceEntry), "The manifest chain, oldest first")
+
+	Required("did", "chain")
+})
+
 var SMContractApplyResponse = Type("SMContractApplyResponse", func() {
 	Description("Result of a signature reaching SIGNED (the /signature/submit result)")
 
@@ -161,7 +189,6 @@ var SMSignatureSubmitRequest = Type("SMSignatureSubmitRequest", func() {
 	Attribute("signer_did", String, "DID of the signer")
 	Attribute("field_name", String, "For multi-signer contracts (DCS-FR-SM-07/-17): the declared signature field this signer covers.")
 	Attribute("credential_type", String, "Type of credential used (default: AES)")
-	Attribute("expected_signatory", String, "Identifier the signing certificate must carry; the sole-control check rejects a certificate that does not reference it (DCS-FR-SM-16)")
 	Attribute("signed_pdf", Bytes, "The signatory's PAdES-signed contract")
 	Attribute("jades_signature", String, "The signatory's JAdES over the machine-readable JSON-LD (DCS-FR-SM-02/-11); empty when only the PDF was signed")
 
@@ -355,6 +382,8 @@ var SMSignatureWebhookRequest = Type("SMSignatureWebhookRequest", func() {
 	Attribute("ceremony_id", String, "Identifier of the ceremony the presentation completes")
 	Attribute("vp_token", String, "The SD-JWT VC + KB-JWT compact PID presentation")
 	Attribute("pid_claims", Any, "The disclosed PID claims (sub, given_name, family_name)")
+	Attribute("poa_organization", String, "Organization from the Power of Attorney credential presented at signing (UC-14, FR-SM-03): the party the signatory is authorized to act for")
+	Attribute("poa_roles", Any, "Roles from the Power of Attorney credential presented at signing")
 
 	Required("ceremony_id", "vp_token")
 })
@@ -390,17 +419,6 @@ var SMSignatureRequestPublishResponse = Type("SMSignatureRequestPublishResponse"
 	Attribute("expires_at", String, "ISO-8601 timestamp when the signing request expires")
 
 	Required("ceremony_id", "client_id", "request_uri", "wallet_uri", "expires_at")
-})
-
-var SMSignatureRequestCallbackRequest = Type("SMSignatureRequestCallbackRequest", func() {
-	Description("The wallet's direct_post of the signed document to the request object's response_uri (ADR-12). The DCS validates the signature identifies the signatory (sole control) and finalizes the contract.")
-
-	Attribute("ceremony_id", String, "Identifier of the ceremony this signing request belongs to")
-	Attribute("state", String, "The request object's state echoed back by the wallet (the ceremony id)")
-	Attribute("signed_pdf", Bytes, "The signatory's PAdES-signed document, returned by the wallet")
-	Attribute("jades_signature", String, "The signatory's JAdES over the machine-readable JSON-LD (DCS-FR-SM-02/-11); empty when only the PDF was signed")
-
-	Required("ceremony_id", "signed_pdf")
 })
 
 var SMSignatureRequestCallbackResponse = Type("SMSignatureRequestCallbackResponse", func() {
@@ -496,6 +514,34 @@ var _ = Service("SignatureManagement", func() {
 
 		HTTP(func() {
 			POST("/signature/verify")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("provenance", func() {
+		Description("The C2PA provenance chain embedded in the signed/exported contract PDF (DCS-OR-C2PA-008): one entry per manifest in the JUMBF store, oldest first, with its dcs.lifecycle assertion. Powers the Secure Contract Viewer's provenance display.")
+		Meta("dcs:requirements", "DCS-OR-C2PA-008")
+		Meta("dcs:ui", "Secure Contract Viewer")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
+			Scope("Auditor")
+		})
+
+		Payload(SMProvenanceRequest)
+		Result(SMProvenanceResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/signature/provenance/{did}")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)
@@ -711,12 +757,15 @@ var _ = Service("SignatureManagement", func() {
 	})
 
 	Method("signatureRequestCallback", func() {
-		Description("accept the wallet's direct_post of the signed document at the request object's response_uri (ADR-12): validate it identifies the signatory (sole control) and finalize the contract, reusing the /signature/submit validate+finalize path. Authenticated by the unguessable ceremony id, not a JWT (the caller is the signatory's wallet).")
+		Description("accept the wallet's direct_post of the signed document at the request object's response_uri (ADR-12): validate it identifies the signatory (sole control) and finalize the contract, reusing the /signature/submit validate+finalize path. The wallet posts the EUDI walletdriven-signer form-urlencoded body (documentWithSignature[]/signatureObject[]/state/error), which the service parses off the raw request. Authenticated by the unguessable ceremony id, not a JWT (the caller is the signatory's wallet).")
 		Meta("dcs:requirements", "DCS-FR-SM-16", "DCS-FR-SM-18", "DCS-IR-SI-04")
 
 		NoSecurity()
 
-		Payload(SMSignatureRequestCallbackRequest)
+		Payload(func() {
+			Attribute("ceremony_id", String, "Identifier of the ceremony this signing request belongs to")
+			Required("ceremony_id")
+		})
 		Result(SMSignatureRequestCallbackResponse)
 
 		Error("bad_request", ErrorResult, "Bad request")
@@ -726,6 +775,7 @@ var _ = Service("SignatureManagement", func() {
 
 		HTTP(func() {
 			POST("/signature/request/{ceremony_id}/callback")
+			SkipRequestBodyEncodeDecode()
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("not_found", StatusNotFound)

@@ -264,6 +264,27 @@ func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemana
 	return &signaturemanagement.SMContractVerifyResponse{}, nil
 }
 
+func (s *signatureManagementsrvc) Provenance(ctx context.Context, req *signaturemanagement.SMProvenanceRequest) (res *signaturemanagement.SMProvenanceResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	handler := query.ProvenanceChainHandler{
+		DB:      s.DB,
+		CRepo:   s.CRepo,
+		PDFCore: s.PDFCore,
+	}
+	chain, err := handler.Handle(ctx, req.Did)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(err)
+	}
+
+	entries := make([]*signaturemanagement.SMProvenanceEntry, 0, len(chain))
+	for _, e := range chain {
+		entries = append(entries, &signaturemanagement.SMProvenanceEntry{Label: e.Label, Lifecycle: e.Lifecycle})
+	}
+	return &signaturemanagement.SMProvenanceResponse{Did: req.Did, Chain: entries}, nil
+}
+
 // newApplier assembles the signing command handler. Validator is wired from a
 // configured DSS (DSS_URL) so SubmitSignature can validate an externally-produced
 // signature and confirm it identifies the signatory (sole control, ADR-12).
@@ -337,10 +358,6 @@ func (s *signatureManagementsrvc) SubmitSignature(ctx context.Context, req *sign
 	if req.FieldName != nil {
 		fieldName = *req.FieldName
 	}
-	expectedSignatory := ""
-	if req.ExpectedSignatory != nil {
-		expectedSignatory = *req.ExpectedSignatory
-	}
 	jadesSignature := ""
 	if req.JadesSignature != nil {
 		jadesSignature = *req.JadesSignature
@@ -357,9 +374,8 @@ func (s *signatureManagementsrvc) SubmitSignature(ctx context.Context, req *sign
 			HolderDID:      middleware.GetHolderDID(ctx),
 			UserRoles:      middleware.GetUserRoles(ctx),
 		},
-		SignedPDF:         req.SignedPdf,
-		JAdESSignature:    jadesSignature,
-		ExpectedSignatory: expectedSignatory,
+		SignedPDF:      req.SignedPdf,
+		JAdESSignature: jadesSignature,
 	}); err != nil {
 		return nil, mapSignatureCommandError(err)
 	}
@@ -693,17 +709,25 @@ func (s *signatureManagementsrvc) CeremonyWebhook(ctx context.Context, req *sign
 	if req.WebhookSecret != nil {
 		secret = *req.WebhookSecret
 	}
+	poaOrganization := ""
+	if req.PoaOrganization != nil {
+		poaOrganization = *req.PoaOrganization
+	}
 	handler := command.WebhookHandler{DB: s.DB, CeremonyRepo: s.CeremonyRepo}
 	ceremony, err := handler.Handle(ctx, command.WebhookCmd{
-		Secret:     secret,
-		CeremonyID: req.CeremonyID,
-		VpToken:    req.VpToken,
-		PidClaims:  req.PidClaims,
+		Secret:          secret,
+		CeremonyID:      req.CeremonyID,
+		VpToken:         req.VpToken,
+		PidClaims:       req.PidClaims,
+		PoAOrganization: poaOrganization,
+		PoARoles:        req.PoaRoles,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, command.ErrWebhookUnauthorized):
 			return nil, signaturemanagement.MakeUnauthorized(err)
+		case errors.Is(err, command.ErrPoAUnauthorized):
+			return nil, signaturemanagement.MakeBadRequest(err)
 		case errors.Is(err, command.ErrCeremonyNotFound):
 			return nil, signaturemanagement.MakeNotFound(err)
 		default:

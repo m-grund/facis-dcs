@@ -94,18 +94,18 @@ var cryptoFailureSubIndications = map[string]bool{
 // a trust/POE gap (e.g. NO_CERTIFICATE_CHAIN_FOUND for a non-qualified CA) is
 // accepted, while a TOTAL-FAILED or any crypto/integrity failure is rejected.
 //
-// expectedSignatory is a stable token the QTSP encodes in the signing
-// certificate's subject; when set, the certificate MUST reference it, which is
-// what makes a shared DCS key structurally impossible to accept here.
-func (r *Report) AssertValidAES(expectedSignatory string) error {
+// AES (eIDAS Art. 26) requires a cryptographically sound signature over the
+// document by a signatory's certificate; it does NOT require the certificate to
+// carry any wallet-PID identifier — no such binding is standardised (the EUDI
+// reference QTSP only copies PID name attributes into the subject at enrolment).
+// The signatory's identity is established by the ceremony's verified PID and
+// recorded there; here we assert only that the signature is a valid AES.
+func (r *Report) AssertValidAES() error {
 	if strings.EqualFold(r.Indication, "TOTAL-FAILED") || cryptoFailureSubIndications[strings.ToUpper(strings.TrimSpace(r.SubIndication))] {
 		return fmt.Errorf("dss: signature failed validation: indication %s / %s", r.Indication, r.SubIndication)
 	}
 	if strings.TrimSpace(r.SignedBy) == "" {
 		return fmt.Errorf("dss: signature carries no signing certificate")
-	}
-	if expectedSignatory != "" && !strings.Contains(strings.ToLower(r.SignedBy), strings.ToLower(expectedSignatory)) {
-		return fmt.Errorf("dss: signer %q does not identify the ceremony signatory %q", r.SignedBy, expectedSignatory)
 	}
 	return nil
 }

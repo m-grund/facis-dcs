@@ -9,6 +9,7 @@ import TemplatePreview from '@/modules/template-repository/components/builder-ed
 import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
 import { ROUTES } from '@/router/router'
 import {
+  type ProvenanceEntry,
   type SignatureContract,
   type SignatureEnvelope,
   signatureManagementService,
@@ -16,8 +17,6 @@ import {
   type SignatureVerifyResult,
 } from '@/services/signature-management-service'
 
-// AcroForm field the ceremony binds to; placed by the PDF renderer (see the dashboard).
-const SIGNATURE_FIELD_NAME = 'Signature1'
 // QES is descoped (ADR-12); AES with PoA is the credential the wallet applies.
 const CREDENTIAL_TYPE = 'AES'
 
@@ -43,6 +42,7 @@ const loadError = ref<string | null>(null)
 const envelope = ref<SignatureEnvelope | undefined>()
 const verifyResult = ref<SignatureVerifyResult | undefined>()
 const validateResult = ref<SignatureValidateResult | undefined>()
+const provenanceChain = ref<ProvenanceEntry[]>([])
 
 // After prepare, the contract awaits the externally-signed upload; holds the
 // ceremony's signatory DID for the submit call and the to-be-signed PDF so the
@@ -81,6 +81,16 @@ function stepState(id: StepId): 'done' | 'active' | 'pending' {
 const signed = computed(() => envelope.value?.status === 'SIGNED')
 const executed = computed(() => done.value.validate && signed.value)
 
+// The signature field to sign is the participating party's slot (dcs:signatoryName
+// == the party's DCS instance DID), seeded on the contract at negotiation. The
+// ceremony binds to it and the wallet's Power of Attorney must authorize that party.
+const signatureFieldName = computed<string>(() => {
+  const cd = contract.value?.contract_data as Record<string, unknown> | undefined
+  const fields = cd?.['dcs:signatureFields'] as Record<string, unknown>[] | undefined
+  const name = fields?.[0]?.['dcs:signatoryName']
+  return typeof name === 'string' ? name : ''
+})
+
 onMounted(async () => {
   try {
     const detail = await signatureManagementService.retrieveById(did.value)
@@ -88,12 +98,33 @@ onMounted(async () => {
     envelope.value = detail.signature_envelope
     loadContractContent(detail.contract.contract_data)
     done.value.retrieve = true
+    await loadProvenance()
   } catch (e: unknown) {
     loadError.value = `Failed to retrieve the contract: ${message(e)}`
   } finally {
     loading.value = false
   }
 })
+
+// The C2PA provenance chain grows a manifest per lifecycle step and per applied
+// signature; an unsigned/never-exported contract simply has none yet.
+async function loadProvenance() {
+  provenanceChain.value = (await signatureManagementService.getProvenanceChain(did.value)).chain
+}
+
+// A dcs.lifecycle assertion labels each manifest; surface its human-facing bits.
+function provenanceStatus(entry: ProvenanceEntry): string {
+  return entry.lifecycle?.status ?? entry.lifecycle?.action ?? 'manifest'
+}
+function provenanceActor(entry: ProvenanceEntry): string {
+  return entry.lifecycle?.actor ?? entry.lifecycle?.signatory ?? entry.lifecycle?.contract_id ?? ''
+}
+function provenanceTime(entry: ProvenanceEntry): string {
+  const raw = entry.lifecycle?.effective_at ?? entry.lifecycle?.timestamp ?? ''
+  if (!raw) return ''
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? raw : parsed.toLocaleString()
+}
 
 function loadContractContent(contractData: unknown) {
   const cd = contractData == null ? null : preprocessContractData(contractData)
@@ -155,9 +186,13 @@ async function applySignature() {
   busy.value = true
   delete stepError.value.apply
   try {
-    const outcome = await ceremonyDialog.value?.reveal({ contractDid: did.value, fieldName: SIGNATURE_FIELD_NAME })
+    const outcome = await ceremonyDialog.value?.reveal({ contractDid: did.value, fieldName: signatureFieldName.value })
     if (!outcome || outcome.isCanceled || !outcome.data) return
-    const prepared = await signatureManagementService.prepareSignature(did.value, outcome.data.signerDid, CREDENTIAL_TYPE)
+    const prepared = await signatureManagementService.prepareSignature(
+      did.value,
+      outcome.data.signerDid,
+      CREDENTIAL_TYPE,
+    )
     preparedDocument.value = prepared
     downloadBlob(prepared, documentFilename.value)
     pendingSignerDid.value = outcome.data.signerDid
@@ -182,10 +217,10 @@ async function submitSigned(event: Event) {
       pendingSignerDid.value,
       CREDENTIAL_TYPE,
       file,
-      '',
     )
     pendingSignerDid.value = null
     done.value.submit = true
+    await loadProvenance()
   } catch (e: unknown) {
     stepError.value.submit = `The signed contract was rejected: ${message(e)}`
   } finally {
@@ -230,7 +265,7 @@ async function validate() {
         <div class="flex items-center gap-2 border-b border-base-content/10 px-4 py-2">
           <h3 class="text-sm font-semibold">Contract document</h3>
           <span class="badge badge-ghost badge-sm">{{ contract?.state }}</span>
-          <span v-if="signed" class="badge badge-success badge-sm">{{ envelope?.status }}</span>
+          <span v-if="signed" class="badge badge-sm badge-success">{{ envelope?.status }}</span>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto bg-base-200 p-4">
           <div class="card border border-base-300 bg-base-100 shadow-sm">
@@ -257,6 +292,37 @@ async function validate() {
                 Review the full clauses and machine-readable terms above before signing. The to-be-signed PDF with the
                 embedded PoA and signing summary is produced at the Apply Signature step.
               </p>
+            </div>
+          </div>
+
+          <!-- C2PA provenance: the tamper-evident manifest chain embedded in the PDF -->
+          <div
+            v-if="provenanceChain.length"
+            data-testid="provenance-chain"
+            class="card mt-4 border border-base-300 bg-base-100 shadow-sm"
+          >
+            <div class="card-body gap-3">
+              <div class="flex items-center gap-2">
+                <h4 class="text-sm font-bold">C2PA provenance chain</h4>
+                <span class="badge badge-ghost badge-sm">{{ provenanceChain.length }} manifest(s)</span>
+              </div>
+              <p class="text-xs text-base-content/50">
+                Each lifecycle step and applied signature seals a C2PA manifest into the document. This is the
+                tamper-evident provenance embedded in the PDF, oldest first.
+              </p>
+              <ol class="relative ml-1.5 border-l border-base-300">
+                <li v-for="entry in provenanceChain" :key="entry.label" class="mb-4 ml-4">
+                  <span class="absolute -left-[6.5px] mt-1 h-3 w-3 rounded-full border border-base-100 bg-primary" />
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="badge badge-outline badge-sm">{{ provenanceStatus(entry) }}</span>
+                    <span v-if="provenanceTime(entry)" class="text-xs text-base-content/50">
+                      {{ provenanceTime(entry) }}
+                    </span>
+                  </div>
+                  <div v-if="provenanceActor(entry)" class="mt-0.5 text-xs">{{ provenanceActor(entry) }}</div>
+                  <div class="font-mono text-[10px] break-all text-base-content/40">{{ entry.label }}</div>
+                </li>
+              </ol>
             </div>
           </div>
         </div>
@@ -288,7 +354,7 @@ async function validate() {
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
                 <h4 class="card-title text-sm">1 · Open contract</h4>
-                <span class="badge badge-success badge-sm">Opened</span>
+                <span class="badge badge-sm badge-success">Opened</span>
               </div>
               <p class="text-xs text-base-content/60">
                 Contract content loaded on the left for review. Version {{ contract?.contract_version ?? 1 }}.
@@ -304,13 +370,18 @@ async function validate() {
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
                 <h4 class="card-title text-sm">2 · Verify integrity &amp; envelope</h4>
-                <span v-if="done.verify" class="badge badge-success badge-sm">Verified</span>
+                <span v-if="done.verify" class="badge badge-sm badge-success">Verified</span>
               </div>
               <p class="text-xs text-base-content/60">
-                Confirm the contract content hash and required signing policies before signing.
+                pdf-core deterministically re-renders the PDF from the contract's embedded machine-readable payload and
+                compares it to the signed document: a match proves the human-readable PDF (and its rendered payload
+                hash) agrees with the machine-readable contract, and the C2PA manifest chain is intact.
               </p>
               <div v-if="verifyResult" class="text-xs" :class="verifyResult.match ? 'text-success' : 'text-error'">
-                Hash match: {{ verifyResult.match ? 'match ✓' : 'mismatch ✗' }} ({{ verifyResult.sig_count }} signature(s))
+                Human ↔ machine match: {{ verifyResult.match ? 'deterministic re-render matches ✓' : 'mismatch ✗' }} ({{
+                  verifyResult.sig_count
+                }}
+                signature(s))
               </div>
               <ul v-if="verifyResult?.findings?.length" class="list-disc pl-5 text-xs text-warning">
                 <li v-for="(f, i) in verifyResult.findings" :key="i">{{ f }}</li>
@@ -333,7 +404,7 @@ async function validate() {
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
                 <h4 class="card-title text-sm">3 · Verify your identity &amp; download the document to sign</h4>
-                <span v-if="done.apply" class="badge badge-success badge-sm">Downloaded</span>
+                <span v-if="done.apply" class="badge badge-sm badge-success">Downloaded</span>
               </div>
               <p class="text-xs text-base-content/60">
                 Present your PID in the wallet ceremony. The DCS then builds the to-be-signed PDF (with your Power of
@@ -355,7 +426,9 @@ async function validate() {
                 </button>
               </div>
               <div v-if="done.apply && !signed" class="mt-1 flex items-center gap-2 text-xs text-info">
-                <span>Document downloaded as “{{ documentFilename }}”. Sign it in your wallet, then upload it below.</span>
+                <span>
+                  Document downloaded as “{{ documentFilename }}”. Sign it in your wallet, then upload it below.
+                </span>
                 <button class="btn btn-ghost btn-xs" :disabled="!preparedDocument" @click="downloadAgain">
                   Download again
                 </button>
@@ -371,7 +444,7 @@ async function validate() {
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
                 <h4 class="card-title text-sm">4 · Upload the signed document</h4>
-                <span v-if="signed" class="badge badge-success badge-sm">Uploaded</span>
+                <span v-if="signed" class="badge badge-sm badge-success">Uploaded</span>
               </div>
               <p class="text-xs text-base-content/60">
                 Once you have signed the downloaded PDF, upload it here. The DCS validates that you alone controlled the
@@ -406,13 +479,15 @@ async function validate() {
             <div class="card-body gap-2 p-4">
               <div class="flex items-center justify-between">
                 <h4 class="card-title text-sm">5 · Validate applied signatures</h4>
-                <span v-if="done.validate" class="badge badge-success badge-sm">Validated</span>
+                <span v-if="done.validate" class="badge badge-sm badge-success">Validated</span>
               </div>
               <p class="text-xs text-base-content/60">Validate the applied signature(s) against trust policies.</p>
               <ul v-if="validateResult?.findings?.length" class="list-disc pl-5 text-xs text-warning">
                 <li v-for="(f, i) in validateResult.findings" :key="i">{{ f }}</li>
               </ul>
-              <p v-else-if="done.validate" class="text-xs text-success">Signature validation passed with no findings.</p>
+              <p v-else-if="done.validate" class="text-xs text-success">
+                Signature validation passed with no findings.
+              </p>
               <div v-if="stepError.validate" class="text-xs text-error">{{ stepError.validate }}</div>
               <div class="card-actions">
                 <button class="btn btn-sm btn-primary" :disabled="busy || !signed" @click="validate">

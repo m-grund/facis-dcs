@@ -23,6 +23,7 @@ localhost_resolver.install()
 
 import requests  # noqa: E402
 
+from steps.support.api_client import did_document_url  # noqa: E402
 from steps.support.services.auth_service import AuthService  # noqa: E402
 
 WEBHOOK_SECRET_HEADER = "X-EUDIPLO-Webhook-Secret"
@@ -66,6 +67,11 @@ def build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce
 def main() -> None:
     ceremony_id = sys.argv[1]
     base_url = os.environ["BDD_DCS_BASE_URL"].rstrip("/")
+    # The organization the wallet's Power of Attorney authorizes it to act for.
+    # One org runs one DCS, so that organization is the signing org's own DID,
+    # resolved from its did:web document — the same public DID trust anchor the
+    # testWallet self-issues under and every peer resolves against.
+    poa_organization = requests.get(did_document_url(base_url), timeout=30).json()["id"]
     given_name, family_name = "E2E Vertical Signer", "E2E-Testperson"
     presentation, subject_did = build_pid_presentation(
         given_name=given_name,
@@ -79,6 +85,7 @@ def main() -> None:
             "ceremony_id": ceremony_id,
             "vp_token": presentation,
             "pid_claims": {"sub": subject_did, "given_name": given_name, "family_name": family_name},
+            "poa_organization": poa_organization,
         },
         headers={WEBHOOK_SECRET_HEADER: os.getenv("BDD_EUDIPLO_WEBHOOK_SECRET", "bdd-eudiplo-webhook-secret")},
         timeout=60,

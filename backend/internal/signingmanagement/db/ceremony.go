@@ -31,6 +31,11 @@ type SignatureCeremony struct {
 	VpToken     *string    `db:"vp_token"`
 	PidClaims   []byte     `db:"pid_claims"`
 	KbSdHash    *string    `db:"kb_sd_hash"`
+	// The Power of Attorney presented at signing (UC-14, FR-SM-03): the verified
+	// organization the signatory is authorized to act for, and their roles. nil
+	// until the ceremony's PoA presentation is verified.
+	PoAOrganization *string `db:"poa_organization"`
+	PoARoles        []byte  `db:"poa_roles"`
 	CreatedAt   time.Time  `db:"created_at"`
 	VerifiedAt  *time.Time `db:"verified_at"`
 	ExpiresAt   time.Time  `db:"expires_at"`
@@ -67,7 +72,7 @@ type PreparedRequest struct {
 type CeremonyRepo interface {
 	CreateCeremony(ctx context.Context, tx *sqlx.Tx, c SignatureCeremony) error
 	GetCeremonyByID(ctx context.Context, tx *sqlx.Tx, id string) (*SignatureCeremony, error)
-	MarkCeremonyVerified(ctx context.Context, tx *sqlx.Tx, id, signerDID, vpToken string, pidClaims []byte, kbSdHash string) error
+	MarkCeremonyVerified(ctx context.Context, tx *sqlx.Tx, id, signerDID, vpToken string, pidClaims []byte, kbSdHash, poaOrganization string, poaRoles []byte) error
 	// StorePreparedRequest persists the published signing request (the
 	// to-be-signed PDF + digest + request object nonce/expiry + the publishing
 	// signer's context) on a verified ceremony (ADR-12 publish).

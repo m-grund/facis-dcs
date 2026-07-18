@@ -39,6 +39,16 @@ export interface SignatureVerifyResult {
   findings?: string[]
 }
 
+export interface ProvenanceEntry {
+  label: string
+  lifecycle?: Record<string, string>
+}
+
+export interface ProvenanceChainResult {
+  did: string
+  chain: ProvenanceEntry[]
+}
+
 export interface SignatureValidateResult {
   did: string
   findings?: string[]
@@ -160,7 +170,6 @@ export const signatureManagementService = {
     signerDid: string,
     credentialType: string,
     signedPdf: Blob,
-    expectedSignatory: string,
   ): Promise<SignatureEnvelope | undefined> {
     const buffer = await signedPdf.arrayBuffer()
     let binary = ''
@@ -171,11 +180,16 @@ export const signatureManagementService = {
       did,
       signer_did: signerDid,
       credential_type: credentialType,
-      expected_signatory: expectedSignatory,
       signed_pdf: btoa(binary),
       jades_signature: '',
     })
     return res.data.signature_envelope
+  },
+
+  // The C2PA provenance chain embedded in the signed/exported contract PDF:
+  // one entry per manifest (oldest first) with its dcs.lifecycle assertion.
+  async getProvenanceChain(did: string): Promise<ProvenanceChainResult> {
+    return http.get<ProvenanceChainResult>(`/signature/provenance/${encodeURIComponent(did)}`).then((res) => res.data)
   },
 
   async verifySignature(did: string): Promise<SignatureVerifyResult> {

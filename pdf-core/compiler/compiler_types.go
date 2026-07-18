@@ -144,7 +144,6 @@ type bmffBox struct {
 }
 
 type signingMaterial struct {
-	signer       Signer
 	certChainDER [][]byte
 }
 
@@ -160,13 +159,10 @@ const (
 
 const (
 	envOntologyBaseURL = "DCS_PDF_CORE_ONTOLOGY_BASE_URL"
-	// envSigningEndpoint is the backend's authenticated internal C2PA signing
-	// endpoint (POST /internal/c2pa/sign). pdf-core delegates every COSE
-	// signature to it (DCS-IR-HI-01).
-	envSigningEndpoint = "DCS_PDF_CORE_C2PA_SIGNING_ENDPOINT"
 	// envX5ChainPEM / envX5ChainPEMFile carry the dev CA leaf certificate whose
-	// public key matches the backend's dcs-c2pa token key. It is embedded in the
-	// COSE_Sign1 protected header as the RFC 9360 x5chain.
+	// public key matches the backend's dcs-c2pa token key. pdf-core embeds it in
+	// the COSE_Sign1 protected header as the RFC 9360 x5chain; it holds no private
+	// key — the DCS backend signs the Sig_structure and posts it back.
 	envX5ChainPEM     = "DCS_PDF_CORE_C2PA_X5CHAIN_PEM"
 	envX5ChainPEMFile = "DCS_PDF_CORE_C2PA_X5CHAIN_PEM_FILE"
 )

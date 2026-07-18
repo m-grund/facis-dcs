@@ -162,7 +162,7 @@ def _start_ceremony(context, name, field_name, headers):
     return resp
 
 
-def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_did, given_name, family_name, *, secret=None):
+def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_did, given_name, family_name, *, poa_organization=None, secret=None):
     payload = {
         "ceremony_id": ceremony_id,
         "vp_token": presentation,
@@ -172,6 +172,9 @@ def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_d
             "family_name": family_name,
         },
     }
+    if poa_organization is not None:
+        payload["poa_organization"] = poa_organization
+        payload["poa_roles"] = ["signatory"]
     header_value = _webhook_secret() if secret is None else secret
     headers = {"Content-Type": "application/json"}
     if header_value is not None:
@@ -179,11 +182,18 @@ def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_d
     return post_json(context, signature_request_webhook_url(context), payload, headers=headers)
 
 
-def _run_full_ceremony(context, name, field_name, signatory_name, holder_private=None):
+def _run_full_ceremony(context, name, field_name, signatory_name, holder_private=None, poa_organization=None):
     """Start a ceremony, complete it headlessly via the assumed webhook
     contract (see module docstring point 3), and stash the presentation +
     ceremony id on context for later PDF-embedding assertions.
+
+    field_name is the party the signatory signs as — the participating DCS
+    instance DID. poa_organization is the organization the signatory presents a
+    Power of Attorney for; it must equal field_name for the ceremony to verify
+    (UC-14), so it defaults to field_name.
     """
+    if poa_organization is None:
+        poa_organization = field_name
     signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
     start_resp = _start_ceremony(context, name, field_name, signer_h)
     assert start_resp.status_code == 200, (
@@ -200,7 +210,8 @@ def _run_full_ceremony(context, name, field_name, signatory_name, holder_private
         holder_private=holder_private,
     )
     webhook_resp = _complete_ceremony_via_webhook(
-        context, ceremony_id, presentation, subject_did, given_name, family_name
+        context, ceremony_id, presentation, subject_did, given_name, family_name,
+        poa_organization=poa_organization,
     )
     assert webhook_resp.status_code == 200, (
         f"POST /signature/request/webhook failed for ceremony '{ceremony_id}': "
@@ -232,10 +243,11 @@ def _apply_signature(context, name, *, signer_did, credential_type="AES", field_
     from steps.support.signing import wallet_sign  # noqa: PLC0415
 
     did, _ = ContractService._contract_data(context, name)
-    # The signatory name is the wallet key identity / certificate subject and,
-    # for these tests, the AcroForm field name (see _run_full_ceremony).
+    # The signatory name is the natural person (wallet key identity / certificate
+    # subject), taken from the ceremony's PID. It is distinct from the signature
+    # field, which names the party (instance DID) — passed separately as field_name.
     presentation = (getattr(context, "pid_presentations", {}) or {}).get(name) or {}
-    signatory = field_name or presentation.get("given_name") or name
+    signatory = presentation.get("given_name") or name
     return wallet_sign(
         context,
         did,
@@ -254,17 +266,19 @@ def _apply_signature(context, name, *, signer_did, credential_type="AES", field_
 
 @given('contract "{name}" is APPROVED and has completed a signing ceremony for signatory "{signatory_name}"')
 def step_given_approved_with_completed_ceremony(context, name, signatory_name):
-    ContractService._create_contract_in_draft_with_signature_field(context, name, signatory_name)
+    party_did = ContractService._local_peer_did(context)
+    ContractService._create_contract_in_draft(context, name)
     _advance_to_approved(context, name)
-    _run_full_ceremony(context, name, signatory_name, signatory_name)
+    _run_full_ceremony(context, name, field_name=party_did, signatory_name=signatory_name)
 
 
 @given('contract "{name}" has an AES-signed PDF via a completed ceremony for signatory "{signatory_name}"')
 def step_given_aes_signed_pdf_via_ceremony(context, name, signatory_name):
-    ContractService._create_contract_in_draft_with_signature_field(context, name, signatory_name)
+    party_did = ContractService._local_peer_did(context)
+    ContractService._create_contract_in_draft(context, name)
     _advance_to_approved(context, name)
 
-    ceremony_id, presentation, subject_did = _run_full_ceremony(context, name, signatory_name, signatory_name)
+    ceremony_id, presentation, subject_did = _run_full_ceremony(context, name, field_name=party_did, signatory_name=signatory_name)
 
     apply_resp = _apply_signature(context, name, signer_did=subject_did, credential_type="AES")
     assert apply_resp.status_code == 200, (
@@ -387,6 +401,7 @@ def step_when_start_ceremony_as_role(context, name, field_name, role):
             "subject_did": subject_did,
             "given_name": given_name,
             "family_name": family_name,
+            "field_name": field_name,
         }
 
 
@@ -411,6 +426,7 @@ def step_when_webhook_confirms_correct_secret(context, name):
         presentation_info["subject_did"],
         presentation_info["given_name"],
         presentation_info["family_name"],
+        poa_organization=presentation_info["field_name"],
     )
 
 
@@ -475,18 +491,19 @@ def _offset_covered(pdf_bytes: bytes, needle: bytes, ranges) -> bool:
     return (a0 <= pos < a1) or (b0 <= pos < b1)
 
 
-@then('the signed PDF for contract "{name}" contains a PAdES signature naming AcroForm field "{field_name}"')
-def step_then_pades_names_field(context, name, field_name):
+@then('the signed PDF for contract "{name}" contains a PAdES signature naming the signing party AcroForm field')
+def step_then_pades_names_field(context, name):
     pdf_bytes = _pdf_bytes_for(context, name)
+    field_name = ContractService._local_peer_did(context)
     needle_ascii = f"/T ({field_name})".encode()
     needle_ascii_nospace = f"/T({field_name})".encode()
     needle_utf16 = _utf16be(field_name.encode())
     assert (
         needle_ascii in pdf_bytes or needle_ascii_nospace in pdf_bytes or needle_utf16 in pdf_bytes
     ), (
-        f"Expected the signed PDF to name AcroForm field '/T' == '{field_name}' "
-        "(the signer signs an existing signature field by name: /T == signatoryName "
-        "from the JSON-LD, NOT title), found neither ASCII nor UTF-16BE form"
+        f"Expected the signed PDF to name AcroForm field '/T' == the party DID '{field_name}' "
+        "(the signer signs the seeded field: /T == signatoryName == the participating "
+        "instance DID), found neither ASCII nor UTF-16BE form"
     )
     assert b"/ByteRange" in pdf_bytes, (
         "Expected a /ByteRange entry (PAdES signature dictionary) in the signed PDF - none found"

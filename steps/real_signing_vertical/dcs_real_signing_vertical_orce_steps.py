@@ -244,9 +244,10 @@ def step_when_sign_after_tsa_restored(context, name, signatory_name):
 
 
 def _sign_contract_via_ceremony(context, name, signatory_name, *, tsa_down):
-    ContractService._create_contract_in_draft_with_signature_field(context, name, signatory_name)
+    party_did = ContractService._local_peer_did(context)
+    ContractService._create_contract_in_draft(context, name)
     _advance_to_approved(context, name)
-    _, _, subject_did = _run_full_ceremony(context, name, signatory_name, signatory_name)
+    _, _, subject_did = _run_full_ceremony(context, name, field_name=party_did, signatory_name=signatory_name)
 
     apply_resp = _apply_signature(context, name, signer_did=subject_did, credential_type="AES")
     if tsa_down:

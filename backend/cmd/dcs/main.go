@@ -26,7 +26,6 @@ import (
 	contractstoragearchive "digital-contracting-service/gen/contract_storage_archive"
 	contractworkflowengine "digital-contracting-service/gen/contract_workflow_engine"
 	dcstodcs "digital-contracting-service/gen/dcs_to_dcs"
-	internalsigning "digital-contracting-service/gen/internal_signing"
 	pdfgeneration "digital-contracting-service/gen/pdf_generation"
 	processauditandcompliance "digital-contracting-service/gen/process_audit_and_compliance"
 	semantichubgen "digital-contracting-service/gen/semantic_hub"
@@ -433,7 +432,8 @@ func main() {
 	vcSigner := provenance.NewHSMVCSigner(vcHSMSigner, vcKeyLabel)
 
 	// Sign COSE Sig_structure bytes for pdf-core's C2PA manifests with the HSM
-	// C2PA key, exposed via the authenticated InternalSigning endpoint.
+	// C2PA key. pdf-core prepares the Sig_structures; the DCS signs them in-process
+	// via the pdf-core client and posts them back for embedding (pdf-core is keyless).
 	c2paSigner, err := hsmClient.Signer(hsm.KeyLabelC2PA())
 	if err != nil {
 		log.Fatalf(ctx, err, "Could not load HSM C2PA signing key")
@@ -458,7 +458,9 @@ func main() {
 	if err := probeHTTP(pdfCoreURL + "/version"); err != nil {
 		log.Fatalf(ctx, err, "pdf-core not reachable at %s", pdfCoreURL)
 	}
-	pdfCoreClient := pdfcore.New(pdfCoreURL)
+	pdfCoreClient := pdfcore.New(pdfCoreURL, func(sigStructure []byte) ([]byte, error) {
+		return hsm.SignES256(c2paSigner, sigStructure)
+	})
 
 	smCRepo := smrepo.PostgresContractRepo{
 		IPFSClient: ipfsAPIClient,
@@ -483,7 +485,6 @@ func main() {
 		templateRepositorySvc           templaterepository.Service
 		didSrv                          didservice.Service
 		c2paSvc                         c2paservice.Service
-		internalSigningSvc              internalsigning.Service
 		semanticHubSvc                  semantichubgen.Service
 	)
 	{
@@ -503,7 +504,6 @@ func main() {
 		templateCatalogueIntegrationSvc = service.NewTemplateCatalogueIntegration(db, jwtAuth, templateCatalogueClient)
 		templateRepositorySvc = service.NewTemplateRepository(db, jwtAuth, &ctRepo, &ctRTRepo, &ctATRepo, templateCatalogueClient, auditTrailReader, vcSigner, issuerDID)
 		didSrv = didService
-		internalSigningSvc = service.NewInternalSigning(jwtAuth, c2paSigner)
 		semanticHubSvc = service.NewSemanticHub(db, jwtAuth)
 	}
 
@@ -579,7 +579,6 @@ func main() {
 		templateRepositoryEndpoints           *templaterepository.Endpoints
 		didEntpoints                          *didservice.Endpoints
 		c2paEndpoints                         *c2paservice.Endpoints
-		internalSigningEndpoints              *internalsigning.Endpoints
 		semanticHubEndpoints                  *semantichubgen.Endpoints
 	)
 	{
@@ -617,9 +616,6 @@ func main() {
 		c2paEndpoints = c2paservice.NewEndpoints(c2paSvc)
 		c2paEndpoints.Use(debug.LogPayloads())
 		c2paEndpoints.Use(log.Endpoint)
-		internalSigningEndpoints = internalsigning.NewEndpoints(internalSigningSvc)
-		internalSigningEndpoints.Use(debug.LogPayloads())
-		internalSigningEndpoints.Use(log.Endpoint)
 		semanticHubEndpoints = semantichubgen.NewEndpoints(semanticHubSvc)
 		semanticHubEndpoints.Use(debug.LogPayloads())
 		semanticHubEndpoints.Use(log.Endpoint)
@@ -665,7 +661,7 @@ func main() {
 			} else if u.Port() == "" {
 				u.Host = net.JoinHostPort(u.Host, "80")
 			}
-			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, internalSigningEndpoints, semanticHubEndpoints, webhookPlatform, &wg, errc, *dbgF)
+			handleHTTPServer(ctx, u, authEndpoints, contractStorageArchiveEndpoints, contractWorkflowEngineEndpoints, dcsToDcsEndpoints, pdfGenerationEndpoints, processAuditAndComplianceEndpoints, signatureManagementEndpoints, templateCatalogueIntegrationEndpoints, templateRepositoryEndpoints, didEntpoints, c2paEndpoints, semanticHubEndpoints, webhookPlatform, &wg, errc, *dbgF)
 		}
 
 	default:

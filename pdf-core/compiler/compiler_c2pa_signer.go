@@ -1,89 +1,78 @@
 package compiler
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
+	"sync"
 )
 
-// bearerTokenCtxKey carries the JWT the DCS backend forwarded with the render
-// request. pdf-core presents it when it calls the backend's internal C2PA
-// signing endpoint (DCS-IR-HI-01): pdf-core holds no key material and delegates
-// every signature to the backend's PKCS#11 token.
-type bearerTokenCtxKey struct{}
+// signerCtxKey carries the request-scoped Signer the compiler uses to obtain the
+// 64-byte ES256 signature for each COSE_Sign1 it emits. pdf-core holds no key
+// material: during the stateless "prepare" step the caller injects a
+// CapturingSigner, which records each Sig_structure and emits a zeroed
+// placeholder; the DCS backend then signs those Sig_structures with its own key
+// and posts them back for the "embed" step (InjectCOSESignatures).
+type signerCtxKey struct{}
 
-// WithBearerToken returns a context carrying the caller's JWT for the C2PA
-// signing callback.
-func WithBearerToken(ctx context.Context, token string) context.Context {
-	return context.WithValue(ctx, bearerTokenCtxKey{}, token)
+// WithSigner returns a context carrying the Signer the compiler must use for this
+// render. A compile that reaches a COSE signature without a Signer in context is
+// a programming error and fails loudly.
+func WithSigner(ctx context.Context, signer Signer) context.Context {
+	return context.WithValue(ctx, signerCtxKey{}, signer)
 }
 
-func bearerTokenFromContext(ctx context.Context) string {
-	if tok, ok := ctx.Value(bearerTokenCtxKey{}).(string); ok {
-		return tok
-	}
-	return ""
+func signerFromContext(ctx context.Context) (Signer, bool) {
+	signer, ok := ctx.Value(signerCtxKey{}).(Signer)
+	return signer, ok && signer != nil
 }
 
-// httpCallbackSigner signs COSE Sig_structure bytes by delegating to the DCS
-// backend's authenticated internal endpoint (POST /internal/c2pa/sign). The
-// endpoint signs with the PKCS#11 dcs-c2pa key and returns the raw 64-byte r||s
-// ES256 signature that COSE_Sign1 embeds directly.
-type httpCallbackSigner struct {
-	endpoint string
-	client   *http.Client
+// zeroedCOSESignature is the placeholder a CapturingSigner emits: a 64-byte run
+// the "embed" step later overwrites with the real ES256 r||s.
+var zeroedCOSESignature = make([]byte, 64)
+
+// CapturingSigner records every COSE Sig_structure the compiler asks it to sign
+// and returns a zeroed 64-byte placeholder in its place. After a compile, Captured
+// returns those Sig_structures in emission order — the exact bytes the DCS backend
+// signs with the dcs-c2pa key, and whose signatures InjectCOSESignatures then
+// splices back into the zeroed slots in the same order.
+type CapturingSigner struct {
+	mu       sync.Mutex
+	captured [][]byte
 }
 
-func newHTTPCallbackSigner(endpoint string) *httpCallbackSigner {
-	return &httpCallbackSigner{
-		endpoint: strings.TrimRight(endpoint, "/"),
-		client:   &http.Client{},
-	}
+// NewCapturingSigner returns a CapturingSigner ready to inject via WithSigner.
+func NewCapturingSigner() *CapturingSigner {
+	return &CapturingSigner{}
 }
 
-func (s *httpCallbackSigner) Sign(ctx context.Context, data []byte) ([]byte, error) {
-	body, err := json.Marshal(map[string]string{
-		"sig_structure": base64.StdEncoding.EncodeToString(data),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal c2pa sign request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("create c2pa sign request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	// The backend endpoint enforces JWTAuth; forward the caller's token when the
-	// render request carried one. When absent the endpoint answers 401 and Sign
-	// fails with a clear status error below.
-	if token := bearerTokenFromContext(ctx); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+func (c *CapturingSigner) Sign(_ context.Context, data []byte) ([]byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.captured = append(c.captured, append([]byte(nil), data...))
+	return append([]byte(nil), zeroedCOSESignature...), nil
+}
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("call c2pa signing endpoint: %w", err)
+// Captured returns the recorded Sig_structures in emission order.
+func (c *CapturingSigner) Captured() [][]byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([][]byte, len(c.captured))
+	copy(out, c.captured)
+	return out
+}
+
+// signClaimSigStructure builds the COSE Sig_structure over the protected headers
+// and detached claim payload and delegates it to the context's Signer.
+func signClaimSigStructure(ctx context.Context, protected []byte, claimPayload []byte) ([]byte, error) {
+	signer, ok := signerFromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("no C2PA signer in context: a compile that emits a COSE signature must run under WithSigner")
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("c2pa signing endpoint returned status %d", resp.StatusCode)
-	}
-	var result struct {
-		Signature string `json:"signature"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode c2pa sign response: %w", err)
-	}
-	sig, err := base64.StdEncoding.DecodeString(result.Signature)
-	if err != nil {
-		return nil, fmt.Errorf("decode c2pa signature base64: %w", err)
-	}
-	if len(sig) != 64 {
-		return nil, fmt.Errorf("c2pa signing endpoint returned %d-byte signature, want 64 (ES256 r||s)", len(sig))
-	}
-	return sig, nil
+	sigStructure := cborArray(
+		cborText("Signature1"),
+		cborBytes(protected),
+		cborBytes([]byte{}),
+		cborBytes(claimPayload),
+	)
+	return signer.Sign(ctx, sigStructure)
 }

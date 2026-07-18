@@ -74,37 +74,35 @@ func TestValidatePDFExtractsSignerIdentity(t *testing.T) {
 }
 
 func TestAssertValidAES(t *testing.T) {
-	// The sole-control proof: the signing cert must reference the ceremony's
-	// signatory. A shared/other-identity cert is rejected even when it passes.
-	passed := &Report{Indication: "TOTAL-PASSED", SignedBy: "CN=DCS Signatory johndoe"}
-	if err := passed.AssertValidAES("johndoe"); err != nil {
-		t.Fatalf("expected the signatory's own signature to be accepted: %v", err)
-	}
-	if err := passed.AssertValidAES("janedoe"); err == nil {
-		t.Fatal("expected rejection when the signer cert does not identify the signatory")
+	// A cryptographically sound signature with a signing certificate is a valid
+	// AES. Identifying the signatory is the ceremony PID's job, not a certificate
+	// subject match (eIDAS Art. 26 mandates no PID-to-cert binding).
+	passed := &Report{Indication: "TOTAL-PASSED", SignedBy: "CN=Jane Doe, SURNAME=Doe, GIVENNAME=Jane"}
+	if err := passed.AssertValidAES(); err != nil {
+		t.Fatalf("expected a valid AES to be accepted: %v", err)
 	}
 
 	// AES: a non-qualified CA yields INDETERMINATE/NO_CERTIFICATE_CHAIN_FOUND
 	// (a trust gap, not a crypto failure) and MUST still be accepted — qualified
 	// trust is a QES property, not required for AES.
-	nonQualified := &Report{Indication: "INDETERMINATE", SubIndication: "NO_CERTIFICATE_CHAIN_FOUND", SignedBy: "CN=DCS Signatory johndoe"}
-	if err := nonQualified.AssertValidAES("johndoe"); err != nil {
+	nonQualified := &Report{Indication: "INDETERMINATE", SubIndication: "NO_CERTIFICATE_CHAIN_FOUND", SignedBy: "CN=Jane Doe"}
+	if err := nonQualified.AssertValidAES(); err != nil {
 		t.Fatalf("expected a cryptographically-sound AES over a non-qualified CA to be accepted: %v", err)
 	}
 
 	failed := &Report{Indication: "TOTAL-FAILED", SubIndication: "HASH_FAILURE", SignedBy: "CN=x"}
-	if err := failed.AssertValidAES(""); err == nil {
+	if err := failed.AssertValidAES(); err == nil {
 		t.Fatal("expected a failed indication to be rejected")
 	}
 
 	// A crypto failure is rejected even when the top indication is INDETERMINATE.
 	cryptoBroken := &Report{Indication: "INDETERMINATE", SubIndication: "SIG_CRYPTO_FAILURE", SignedBy: "CN=x"}
-	if err := cryptoBroken.AssertValidAES(""); err == nil {
+	if err := cryptoBroken.AssertValidAES(); err == nil {
 		t.Fatal("expected a crypto failure to be rejected")
 	}
 
 	noCert := &Report{Indication: "TOTAL-PASSED"}
-	if err := noCert.AssertValidAES(""); err == nil {
+	if err := noCert.AssertValidAES(); err == nil {
 		t.Fatal("expected rejection when no signing certificate is present")
 	}
 }

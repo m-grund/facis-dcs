@@ -63,8 +63,8 @@ def step_then_publish_response_fields(context):
 
 
 @then(
-    "the published request object is a signed JAR carrying document_digests, "
-    "document_locations, response_uri, and a nonce"
+    "the published request object is a signed JAR carrying documentDigests, "
+    "documentLocations, response_uri, and a nonce"
 )
 def step_then_request_object_is_jar(context, name=None):
     # Resolve the one published contract in this scenario.
@@ -88,11 +88,15 @@ def step_then_request_object_is_jar(context, name=None):
     from dcs_wallet.oid4vp_signing import _decode_jwt_claims  # noqa: PLC0415
 
     claims = _decode_jwt_claims(compact)
-    assert claims.get("document_digests"), f"no document_digests in request object: {claims}"
-    assert claims["document_digests"][0].get("hash"), f"document digest has no hash: {claims}"
-    assert claims.get("document_locations"), f"no document_locations in request object: {claims}"
+    assert claims.get("documentDigests"), f"no documentDigests in request object: {claims}"
+    assert claims["documentDigests"][0].get("hash"), f"document digest has no hash: {claims}"
+    assert claims.get("documentLocations"), f"no documentLocations in request object: {claims}"
+    assert claims["documentLocations"][0].get("uri"), f"document location has no uri: {claims}"
+    assert claims["documentLocations"][0].get("method", {}).get("type"), f"document location has no method.type: {claims}"
     assert claims.get("response_uri"), f"no response_uri in request object: {claims}"
     assert claims.get("nonce"), f"no nonce in request object: {claims}"
+    assert claims.get("signatureQualifier"), f"no signatureQualifier in request object: {claims}"
+    assert claims.get("response_type") == "sign_response", f"request object must be a sign_response: {claims}"
     assert claims.get("client_id_scheme") == "x509_san_dns", (
         f"request object must use client_id_scheme x509_san_dns: {claims}"
     )
@@ -123,9 +127,10 @@ def step_then_callback_reports_signed(context, name):
     assert resp.get("status") == "SIGNED", f"expected callback status SIGNED, got: {resp}"
 
 
-@then('the signature view for contract "{name}" shows a "{status}" signature for field "{field}"')
-def step_then_view_single_signature(context, name, status, field):
+@then('the signature view for contract "{name}" shows a "{status}" signature for the signing party')
+def step_then_view_single_signature(context, name, status):
     did, _ = ContractService._contract_data(context, name)
+    field = ContractService._local_peer_did(context)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
     resp = _requests.get(
         signature_view_url(context),
@@ -136,7 +141,7 @@ def step_then_view_single_signature(context, name, status, field):
     assert resp.status_code == 200, f"signature view failed: {resp.status_code} {resp.text}"
     signatures = resp.json().get("signatures") or []
     match = [s for s in signatures if s.get("field_name") == field]
-    assert match, f"no signature covering field {field!r}, got: {signatures}"
+    assert match, f"no signature covering party field {field!r}, got: {signatures}"
     sig = match[0]
     assert sig.get("status") == status, f"expected {field!r} to be {status!r}, got: {sig.get('status')!r}"
     assert sig.get("signer_did"), f"expected a signer identity on {field!r}: {sig}"

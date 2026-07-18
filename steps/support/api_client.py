@@ -199,14 +199,6 @@ def signature_request_leaf_url(context, ceremony_id: str, leaf: str) -> str:
     return f"{context.base_url}/signature/request/{ceremony_id}/{leaf}"
 
 
-# Authenticated, non-public backend endpoint that signs a COSE
-# Sig_structure via hsm.Signer("dcs-c2pa") for pdf-core
-# (backend/design/internal_signing.go).
-
-def c2pa_internal_sign_url(context) -> str:
-    return f"{context.base_url}/internal/c2pa/sign"
-
-
 def template_create_url(context) -> str:
     return f"{context.base_url}/template/create"
 

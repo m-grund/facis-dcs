@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 )
@@ -25,12 +24,12 @@ import (
 func TestUpdatePDFWithManifestURLEmbedsXMPProvenance(t *testing.T) {
 	const manifestURL = "http://localhost:8991/api/c2pa/manifest/did:example:contract-42"
 
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF(base): %v", err)
 	}
 
-	updated, err := UpdatePDFWithOptions(context.Background(), original,
+	updated, err := UpdatePDFWithOptions(testSigningContext(), original,
 		[]byte(minimalPayloadAmended), nil, manifestURL, time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDFWithOptions: %v", err)
@@ -88,7 +87,7 @@ func TestUpdatePDFWithManifestURLEmbedsXMPProvenance(t *testing.T) {
 		t.Errorf("dcs.remote_manifests assertion does not contain the manifest URL %q", manifestURL)
 	}
 
-	if err := VerifyIncrementalUpdate(context.Background(), updated); err != nil {
+	if err := VerifyIncrementalUpdate(testSigningContext(), updated); err != nil {
 		t.Fatalf("VerifyIncrementalUpdate must still pass with the XMP provenance link embedded: %v", err)
 	}
 }
@@ -98,11 +97,11 @@ func TestUpdatePDFWithManifestURLEmbedsXMPProvenance(t *testing.T) {
 // remote_manifests claim field — matching pdf-core/features/manifest_url.feature's
 // "absent" scenario.
 func TestUpdatePDFWithoutManifestURLHasNoProvenanceLink(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF(base): %v", err)
 	}
-	updated, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended), time.Now())
+	updated, err := UpdatePDF(testSigningContext(), original, []byte(minimalPayloadAmended), time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
@@ -116,7 +115,7 @@ func TestUpdatePDFWithoutManifestURLHasNoProvenanceLink(t *testing.T) {
 	if bytes.Contains(store, []byte("remote_manifests")) {
 		t.Error("manifest store must not contain remote_manifests when no manifest URL is supplied")
 	}
-	if err := VerifyIncrementalUpdate(context.Background(), updated); err != nil {
+	if err := VerifyIncrementalUpdate(testSigningContext(), updated); err != nil {
 		t.Fatalf("VerifyIncrementalUpdate (no manifest url): %v", err)
 	}
 }

@@ -163,10 +163,6 @@ type SubmitSignatureCmd struct {
 	// JSON-LD (DCS-FR-SM-02/-11). Empty when only the PDF was signed (e.g. a
 	// desktop PAdES signer with no JAdES capability).
 	JAdESSignature string
-	// ExpectedSignatory is the identifier the signing certificate must carry
-	// (the QTSP binds it to the authenticated PID). The sole-control check
-	// rejects a certificate that does not reference it.
-	ExpectedSignatory string
 }
 
 // SubmitSignature accepts a signature the signatory produced externally (their
@@ -207,7 +203,11 @@ func (h *Applier) SubmitSignature(ctx context.Context, cmd SubmitSignatureCmd) e
 	if err != nil {
 		return fmt.Errorf("validate submitted signature: %w", err)
 	}
-	if err := report.AssertValidAES(cmd.ExpectedSignatory); err != nil {
+	// AES sole control: the signature must be a cryptographically valid AES. Who
+	// signed is established by the ceremony's verified PID (recorded on the
+	// ceremony), not by matching the certificate subject — no PID-to-certificate
+	// identifier binding is standardised, and AES (eIDAS Art. 26) requires none.
+	if err := report.AssertValidAES(); err != nil {
 		return fmt.Errorf("%w: %v", ErrSignatureInvalid, err)
 	}
 
@@ -371,7 +371,11 @@ func (h *Applier) prepare(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd) (*prep
 	// contract document BEFORE the content hash and PDF are computed so the
 	// signed artefact and the machine-readable document are the same bytes.
 	if signedCount == 0 {
-		sealed, err := sealAgreementForSigning(*data.ContractData, data.Responsible, cmd.SignerDID)
+		poaOrganization := ""
+		if ceremony.PoAOrganization != nil {
+			poaOrganization = *ceremony.PoAOrganization
+		}
+		sealed, err := sealAgreementForSigning(*data.ContractData, data.Responsible, cmd.SignerDID, poaOrganization)
 		if err != nil {
 			return nil, fmt.Errorf("seal agreement for signing: %w", err)
 		}
@@ -846,7 +850,7 @@ func stampLifecycleForSigning(
 // verified DID — with the signing identity recorded as dcs:hasSignatory.
 // Binding only happens while exactly one placeholder remains open, so an
 // undeclared originator role never gets mislabeled as the counterparty.
-func sealAgreementForSigning(raw datatype.JSON, responsible *db.Responsible, signerDID string) (datatype.JSON, error) {
+func sealAgreementForSigning(raw datatype.JSON, responsible *db.Responsible, signerDID, poaOrganization string) (datatype.JSON, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("decode contract data: %w", err)
@@ -871,6 +875,12 @@ func sealAgreementForSigning(raw datatype.JSON, responsible *db.Responsible, sig
 		if node := partyNodeByID(doc, counterparty); node != nil {
 			node["dcs:hasSignatory"] = map[string]any{"@id": signerDID}
 			node["odrl:function"] = map[string]any{"@id": "odrl:contractedParty"}
+			// The organization the signatory presented a Power of Attorney for at
+			// signing (UC-14, FR-SM-03); it travels with the contract to peers so a
+			// counterparty's authorization is auditable on every instance.
+			if poaOrganization != "" {
+				node["dcs:hasPowerOfAttorney"] = map[string]any{"@id": poaOrganization}
+			}
 		}
 	}
 

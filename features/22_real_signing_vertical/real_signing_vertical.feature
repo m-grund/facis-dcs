@@ -42,7 +42,7 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
   @DCS-OR-C2PA-002 @DCS-OR-C2PA-010
   Scenario: Applying a signature produces a PDF with a cryptographically valid PAdES signature in the named AcroForm field
     Given contract "RSV AcroForm Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerOne"
-    Then the signed PDF for contract "RSV AcroForm Contract" contains a PAdES signature naming AcroForm field "SignerOne"
+    Then the signed PDF for contract "RSV AcroForm Contract" contains a PAdES signature naming the signing party AcroForm field
     And the signed PDF for contract "RSV AcroForm Contract" has a structurally valid PAdES ByteRange
 
   @DCS-OR-C2PA-002 @DCS-OR-C2PA-010

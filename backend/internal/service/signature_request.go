@@ -28,6 +28,17 @@ import (
 // for a wallet to fetch, sign, and post the signed document back.
 const signingRequestTTL = 15 * time.Minute
 
+// signatureQualifierFor maps a DCS credential type to the CSC/rQES
+// signatureQualifier the wallet honours (the value the EUDI walletdriven-signer
+// advertises in the request object). QES is descoped (SRS §199); an unknown type
+// defaults to the AES qualifier.
+func signatureQualifierFor(credentialType string) string {
+	if strings.EqualFold(credentialType, "QES") {
+		return "eu_eidas_qes"
+	}
+	return "eu_eidas_aes"
+}
+
 // PublishSignatureRequest runs Applier.Prepare to produce the to-be-signed PDF
 // for a verified ceremony, stores it (so the wallet signs exactly the committed
 // bytes), and returns the OID4VP Document-Retrieval request as QR/deep-link data
@@ -139,16 +150,23 @@ func (s *signatureManagementsrvc) SignatureRequestObject(ctx context.Context, p 
 		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("decode prepared document digest: %w", decErr))
 	}
 
+	credentialType := "AES"
+	if ceremony.CredentialType != nil && *ceremony.CredentialType != "" {
+		credentialType = *ceremony.CredentialType
+	}
+
 	jwt, err := oid4vprequest.BuildDocumentRetrievalJWT(s.RequestSigner, oid4vprequest.DocRetrievalParams{
-		ClientID:    s.OID4VPClientID,
-		ResponseURI: s.signatureRequestURL(ceremony.ID, "callback"),
-		Nonce:       *ceremony.RequestNonce,
-		State:       ceremony.ID,
-		ExpiresAt:   *ceremony.RequestExpiresAt,
+		ClientID:           s.OID4VPClientID,
+		ResponseURI:        s.signatureRequestURL(ceremony.ID, "callback"),
+		Nonce:              *ceremony.RequestNonce,
+		ExpiresAt:          *ceremony.RequestExpiresAt,
+		SignatureQualifier: signatureQualifierFor(credentialType),
 		DocumentDigests: []oid4vprequest.DocumentDigest{
-			{Label: ceremony.FieldName, Hash: base64.RawURLEncoding.EncodeToString(digestBytes)},
+			{Label: ceremony.FieldName, Hash: base64.StdEncoding.EncodeToString(digestBytes)},
 		},
-		DocumentLocations: []string{s.signatureRequestURL(ceremony.ID, "document")},
+		DocumentLocations: []oid4vprequest.DocumentLocation{
+			{URI: s.signatureRequestURL(ceremony.ID, "document"), Method: oid4vprequest.DocumentLocationMethod{Type: "public"}},
+		},
 	})
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("build signing request object: %w", err))
@@ -175,31 +193,46 @@ func (s *signatureManagementsrvc) SignatureRequestDocument(ctx context.Context, 
 // sole-control gate then Applier.finalize. The publishing signer's participant
 // context, captured at publish, is replayed so the JWT-less callback attributes
 // the signature correctly. The published request is single-use.
-func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, req *signaturemanagement.SMSignatureRequestCallbackRequest) (res *signaturemanagement.SMSignatureRequestCallbackResponse, err error) {
+func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, p *signaturemanagement.SignatureRequestCallbackPayload, body io.ReadCloser) (res *signaturemanagement.SMSignatureRequestCallbackResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
-	ceremony, err := s.loadPublishedCeremony(ctx, req.CeremonyID)
+	form, err := parseDirectPostForm(body)
+	if err != nil {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("parse direct_post body: %w", err))
+	}
+	if walletErr := strings.TrimSpace(form.Get("error")); walletErr != "" {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("wallet reported a signing error: %s", walletErr))
+	}
+	signedDocs := formList(form, "documentWithSignature")
+	if len(signedDocs) == 0 {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("no documentWithSignature was posted"))
+	}
+	signedPDF, decErr := base64.StdEncoding.DecodeString(strings.TrimSpace(signedDocs[0]))
+	if decErr != nil {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("decode signed document: %w", decErr))
+	}
+	if state := strings.TrimSpace(form.Get("state")); state != "" && state != p.CeremonyID {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("callback state %q does not match ceremony %s", state, p.CeremonyID))
+	}
+
+	ceremony, err := s.loadPublishedCeremony(ctx, p.CeremonyID)
 	if err != nil {
 		return nil, err
 	}
 	if ceremony.ConsumedAt != nil {
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("ceremony %s signing request has already been consumed", req.CeremonyID))
-	}
-	if len(req.SignedPdf) == 0 {
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("no signed document was posted"))
-	}
-	if req.State != nil && strings.TrimSpace(*req.State) != "" && *req.State != ceremony.ID {
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("callback state %q does not match ceremony %s", *req.State, ceremony.ID))
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("ceremony %s signing request has already been consumed", p.CeremonyID))
 	}
 
 	credentialType := "AES"
 	if ceremony.CredentialType != nil && *ceremony.CredentialType != "" {
 		credentialType = *ceremony.CredentialType
 	}
+	// A detached JAdES over the machine-readable JSON-LD rides in the EUDI
+	// signatureObject[] list (the PAdES itself is enveloped in the PDF).
 	jades := ""
-	if req.JadesSignature != nil {
-		jades = *req.JadesSignature
+	if objects := formList(form, "signatureObject"); len(objects) > 0 {
+		jades = strings.TrimSpace(objects[0])
 	}
 	appliedBy := ""
 	if ceremony.PublishedBy != nil {
@@ -216,9 +249,9 @@ func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, 
 		}
 	}
 
-	// The AcroForm field is the signatory's declared identity (pdf-core /T ==
-	// signatoryName); the wallet's signing certificate must reference it, which is
-	// the sole-control proof AssertValidAES enforces.
+	// The signature field is the participating party (org DID); the natural person
+	// who signs is proved separately — AssertValidAES requires the wallet's cert to
+	// carry the person from the ceremony's verified PID, decoupled from the field.
 	applier := s.newApplier()
 	if err := applier.SubmitSignature(ctx, command.SubmitSignatureCmd{
 		ApplyCmd: command.ApplyCmd{
@@ -230,9 +263,8 @@ func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, 
 			HolderDID:      holderDID,
 			UserRoles:      roles,
 		},
-		SignedPDF:         req.SignedPdf,
-		JAdESSignature:    jades,
-		ExpectedSignatory: ceremony.FieldName,
+		SignedPDF:      signedPDF,
+		JAdESSignature: jades,
 	}); err != nil {
 		return nil, mapSignatureCommandError(err)
 	}
@@ -299,4 +331,35 @@ func (s *signatureManagementsrvc) loadPublishedCeremony(ctx context.Context, id 
 // URL on the public API base.
 func (s *signatureManagementsrvc) signatureRequestURL(ceremonyID, leaf string) string {
 	return strings.TrimRight(s.PublicAPIBase, "/") + "/signature/request/" + url.PathEscape(ceremonyID) + "/" + leaf
+}
+
+// directPostMaxBytes bounds the wallet's direct_post body; a signed contract PDF
+// with embedded evidence is a few MB.
+const directPostMaxBytes = 64 << 20
+
+// parseDirectPostForm reads and url-decodes the wallet's application/
+// x-www-form-urlencoded direct_post body (the EUDI walletdriven-signer response).
+func parseDirectPostForm(body io.ReadCloser) (url.Values, error) {
+	defer func() { _ = body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(body, directPostMaxBytes))
+	if err != nil {
+		return nil, err
+	}
+	return url.ParseQuery(string(raw))
+}
+
+// formList extracts a repeated form field the way the EUDI walletdriven-signer
+// relying party does (retrieve_list_values_from_form_urlencoded): indexed keys
+// (name[0], name[]) first, then repeated bare keys.
+func formList(form url.Values, name string) []string {
+	var indexed []string
+	for key, values := range form {
+		if strings.HasPrefix(key, name+"[") {
+			indexed = append(indexed, values...)
+		}
+	}
+	if len(indexed) > 0 {
+		return indexed
+	}
+	return form[name]
 }

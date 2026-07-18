@@ -162,7 +162,7 @@ function dssIndicator(indication: string | undefined): Indicator {
   }
 }
 
-const FAILURE_KEYWORDS = /(mismatch|drift detected|does not match|failed|could not|missing|no longer)/i
+const FAILURE_KEYWORDS = /(mismatch|drift detected|does not match|failed|could not|missing|no longer|power of attorney)/i
 
 function isFailureFinding(finding: string): boolean {
   return FAILURE_KEYWORDS.test(finding)

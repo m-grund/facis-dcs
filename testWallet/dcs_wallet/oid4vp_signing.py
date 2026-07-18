@@ -6,10 +6,11 @@ driver consumes the STANDARD OID4VP Document-Retrieval request object instead:
 given the QR (client_id + request_uri the DCS's publish step emits), it
 
     1. fetches the signed request object (JAR) from request_uri,
-    2. parses its claims (document_locations, response_uri, nonce, state),
-    3. fetches the to-be-signed document from document_locations,
+    2. parses its claims (documentDigests, documentLocations, response_uri, nonce),
+    3. fetches the to-be-signed document from documentLocations[].uri,
     4. signs it with the signatory's own key via the external SCA (an EU DSS),
-    5. posts the signed document back to response_uri (direct_post).
+    5. posts the signed document back to response_uri (direct_post,
+       form-urlencoded documentWithSignature[]).
 
 The DCS validates the returned signature identifies the signatory (sole control)
 and finalizes the contract. Nothing DCS-specific crosses the wallet boundary but
@@ -28,14 +29,14 @@ import base64
 import json
 import urllib.request
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from dcs_wallet.remote_signer import sign_pdf
 
 
 def _reorigin(url: str, origin_of: str) -> str:
     """Rewrite url to carry the scheme+host of origin_of. The publish step builds
-    request_uri, document_locations, and response_uri all from one public base, so
+    request_uri, documentLocations, and response_uri all from one public base, so
     they share an origin; pointing them at the origin the caller actually reached
     (the request_uri it was handed) keeps the document and callback reachable even
     when the DCS's advertised public host differs from the caller's route."""
@@ -76,14 +77,14 @@ def sign_via_document_retrieval(
     request_object = _get(request_uri, accept="application/oauth-authz-req+jwt").decode()
     claims = _decode_jwt_claims(request_object)
 
-    locations = claims.get("document_locations") or []
+    locations = claims.get("documentLocations") or []
     response_uri = claims.get("response_uri")
     if not locations:
-        raise RuntimeError("request object carries no document_locations")
+        raise RuntimeError("request object carries no documentLocations")
     if not response_uri:
         raise RuntimeError("request object carries no response_uri")
 
-    document_uri = _reorigin(locations[0], request_uri)
+    document_uri = _reorigin(locations[0]["uri"], request_uri)
     response_uri = _reorigin(response_uri, request_uri)
 
     to_be_signed = _get(document_uri, accept="application/pdf")
@@ -91,15 +92,17 @@ def sign_via_document_retrieval(
         to_be_signed, user=user, dss_url=dss_url, field=field, keys_dir=keys_dir
     )
 
-    body = json.dumps({
-        "state": claims.get("state", ""),
-        "signed_pdf": base64.b64encode(signed_pdf).decode(),
-        "jades_signature": "",
+    # The EUDI walletdriven-signer direct_post: an application/x-www-form-urlencoded
+    # body carrying the PAdES-signed document (enveloped in the PDF) in the
+    # documentWithSignature[] list. The ceremony identity is the response_uri path,
+    # so no state is echoed.
+    body = urlencode({
+        "documentWithSignature[0]": base64.b64encode(signed_pdf).decode(),
     }).encode()
     post = urllib.request.Request(
         response_uri,
         data=body,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
     )
     with urllib.request.urlopen(post, timeout=120) as resp:
         return json.loads(resp.read())

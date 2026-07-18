@@ -91,17 +91,6 @@ Feature: PKI consolidation - PKCS#11 + SoftHSM2, ECDSA P-256, trust anchors, rot
     Then the contract appears on instance B in state OFFERED within a few seconds
 
   @DCS-IR-HI-01
-  Scenario: The new authenticated C2PA-signing endpoint returns a well-formed ES256 signature
-    # POST /internal/c2pa/sign (backend/design/internal_signing.go) is
-    # authenticated and non-public; the load-bearing behavior under test is
-    # that it returns an ES256-shaped (64-byte r||s) signature over the
-    # submitted COSE Sig_structure bytes.
-    Given I am authenticated with roles: "Contract Signer"
-    When I request an ES256 C2PA signature for a COSE Sig_structure payload from the new internal signing endpoint
-    Then get http 200:Success code
-    And the returned signature is a well-formed 64-byte ES256 (r||s) signature
-
-  @DCS-IR-HI-01
   Scenario: A full PDF export's embedded C2PA manifest declares COSE alg ES256, not EdDSA
     Given I am authenticated with roles: "Contract Manager"
     And contract "PKI C2PA COSE Alg Contract" is in "Draft" status

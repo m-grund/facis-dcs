@@ -77,7 +77,6 @@ def sign_contract_via_dcs(
         "signer_did": signer_did,
         "field_name": field,
         "credential_type": credential_type,
-        "expected_signatory": user,
         "signed_pdf": base64.b64encode(signed_pdf).decode(),
         "jades_signature": "",
     })
