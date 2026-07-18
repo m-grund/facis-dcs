@@ -113,15 +113,27 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 		return c.fetchKuboFile(cid)
 	}
 
+	// Fast path: one tenant attempt, then the durable pinned Kubo copy. Both are
+	// written synchronously by CreateFile (copyToMFS), so the common case — the
+	// tenant document-manager dropped its DataIdentifier mapping under load —
+	// resolves in two quick calls. Doing the multi-second tenant retry first
+	// would compound over a long audit-chain walk into a request-deadline
+	// timeout (DCS-FR-CSA: the tamper-proof trail read must not 404 or hang on a
+	// link the tenant index transiently forgot; the Kubo copy is identical and
+	// the hash chain still verifies).
+	if body, status, err := c.getOnce(fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)); err == nil && status == http.StatusOK {
+		return decodeTenantBody(body)
+	}
+	if c.mfsBaseURL != "" {
+		if kubo, kerr := c.fetchKuboFile(cid); kerr == nil {
+			return kubo, nil
+		}
+	}
+
+	// Neither resolved on the first try — treat as genuine read-after-write lag
+	// and retry the tenant path with backoff, falling back to Kubo once more.
 	body, err := c.fetchTenantFileWithRetry(cid)
 	if err != nil {
-		// The tenant document-manager's DataIdentifier index can drop an entry
-		// under sustained write load ("DataIdentifier not found"), but every
-		// object CreateFile stores is also pinned in Kubo (copyToMFS). Fall back
-		// to that durable pinned copy so a lost tenant mapping never fails a
-		// read — critical for the tamper-proof audit trail (DCS-FR-CSA), whose
-		// chain walk must not 404 on a link the store transiently forgot. The
-		// content is identical (same CID) and the hash chain still verifies.
 		if c.mfsBaseURL != "" {
 			if kubo, kerr := c.fetchKuboFile(cid); kerr == nil {
 				return kubo, nil
@@ -129,7 +141,12 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 		}
 		return nil, err
 	}
+	return decodeTenantBody(body)
+}
 
+// decodeTenantBody unwraps a tenant-gateway response into an IPFSResult,
+// decoding the base64-in-JSON-string data payload the tenant store wraps.
+func decodeTenantBody(body []byte) (*IPFSResult, error) {
 	var result IPFSResult
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
