@@ -35,9 +35,9 @@ import (
 )
 
 // ErrCeremonyRequired is the typed precondition failure returned when a
-// signature is applied for a signer/contract that has no completed PID
+// signature is applied for a signer/contract that has no completed PoA
 // presentation ceremony (DCS-FR-SM-16, FR-SM-25, UC-04-02).
-var ErrCeremonyRequired = errors.New("a completed PID presentation ceremony is required before signing")
+var ErrCeremonyRequired = errors.New("a completed PoA presentation ceremony is required before signing")
 
 // ErrCeremoniesIncomplete is returned by the multi-signer flow's
 // all-ceremonies-before-first-signature gate (DCS-FR-SM-07/-17): every
@@ -45,7 +45,7 @@ var ErrCeremonyRequired = errors.New("a completed PID presentation ceremony is r
 // signature is applied, because every signer's evidence must be embedded
 // into the PDF before any PAdES signature freezes it (embedding an
 // attachment after a signature trips standards-compliant diff analysis).
-var ErrCeremoniesIncomplete = errors.New("all declared signature fields need a completed PID presentation ceremony before the first signature")
+var ErrCeremoniesIncomplete = errors.New("all declared signature fields need a completed PoA presentation ceremony before the first signature")
 
 // ErrUnknownSignatureField rejects a ceremony/signature for a field the
 // contract document does not declare.
@@ -94,7 +94,7 @@ type Applier struct {
 }
 
 // Handle applies a PAdES digital signature to a contract (DCS-FR-SM-16,
-// DCS-IR-SI-10). It first enforces the PID-presentation ceremony precondition
+// DCS-IR-SI-10). It first enforces the PoA-presentation ceremony precondition
 // (orthogonal to, and evaluated before, the APPROVED -> SIGNED state gate),
 // then embeds the presentation and a ContractSigningSummaryCredential into the
 // PDF and signs it (embed-first-sign-second), stores the signed artefact in
@@ -122,7 +122,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
 	}
 
-	// Ceremony precondition (DCS-FR-SM-16): a completed (verified) PID
+	// Ceremony precondition (DCS-FR-SM-16): a completed (verified) PoA
 	// presentation for this signer and contract must exist. Evaluated before
 	// the state-machine transition so a missing ceremony is reported as its own
 	// typed error rather than a state error.
@@ -290,7 +290,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	basePDFSum := sha256.Sum256(basePDF)
 	basePDFHash := hex.EncodeToString(basePDFSum[:])
 
-	// Issue the signing-summary credential carrying the verbatim PID
+	// Issue the signing-summary credential carrying the verbatim PoA
 	// presentation, then embed it and sign (embed-first-sign-second).
 	vpToken := ""
 	if ceremony.VpToken != nil {
@@ -314,7 +314,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 			PDFHash:              basePDFHash,
 			CredentialType:       cmd.CredentialType,
 			KBSDHash:             kbSDHash,
-			PIDPresentation:      vpToken,
+			PoAPresentation:      vpToken,
 			SignedAt:             signedAt,
 			SchemaVersion:        schemaVersion,
 			ValidationReportHash: validationReportHash,
@@ -357,7 +357,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 				PDFHash:              basePDFHash,
 				CredentialType:       credentialType,
 				KBSDHash:             fieldKB,
-				PIDPresentation:      fieldVP,
+				PoAPresentation:      fieldVP,
 				SignedAt:             signedAt,
 				SchemaVersion:        schemaVersion,
 				ValidationReportHash: validationReportHash,

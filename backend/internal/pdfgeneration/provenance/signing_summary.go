@@ -11,7 +11,7 @@ import (
 
 // SigningSummary carries the fields bound into a ContractSigningSummaryCredential
 // (DCS-FR-SM-08). It records who signed, through which ceremony, and the hashes
-// the PAdES signature covers, plus the verbatim PID presentation the signer's
+// the PAdES signature covers, plus the verbatim PoA presentation the signer's
 // wallet produced so a verifier can re-verify it from the PDF alone.
 type SigningSummary struct {
 	ContractID      string
@@ -21,8 +21,8 @@ type SigningSummary struct {
 	ContentHash     string // SHA-256 hex of the JSON-LD contract source
 	PDFHash         string // SHA-256 hex of the base PDF bytes bound by the signature
 	CredentialType  string // e.g. "AES"
-	KBSDHash        string // KB-JWT sd_hash of the presented PID
-	PIDPresentation string // verbatim SD-JWT VC + KB-JWT compact presentation
+	KBSDHash        string // KB-JWT sd_hash of the presented PoA
+	PoAPresentation string // verbatim SD-JWT VC + KB-JWT compact presentation
 	SignedAt        time.Time
 	// SchemaVersion/ValidationReportHash (Phase 4, ADR-9): the Semantic Hub
 	// SHACL shapes version this contract validated against at signing time,
@@ -38,7 +38,7 @@ type SigningSummary struct {
 
 // IssueSigningSummaryVC builds and signs a ContractSigningSummaryCredential over
 // the given summary, using the same VC signer as the lifecycle credentials. The
-// PID presentation is embedded verbatim as a credentialSubject field so that it
+// PoA presentation is embedded verbatim as a credentialSubject field so that it
 // survives into the signed PDF unchanged (DCS-FR-SM-08, UC-04-03).
 func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID string, s SigningSummary) (json.RawMessage, string, error) {
 	unsignedVC := VCBinding{
@@ -55,7 +55,7 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 				"pdf_hash":                         "dcs:pdfHash",
 				"credential_type":                  "dcs:credentialType",
 				"kb_sd_hash":                       "dcs:kbSdHash",
-				"pid_presentation":                 "dcs:pidPresentation",
+				"poa_presentation":                 "dcs:pidPresentation",
 				"signed_at": map[string]interface{}{
 					"@id":   "dcs:signedAt",
 					"@type": "http://www.w3.org/2001/XMLSchema#dateTime",
@@ -76,7 +76,7 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 			"pdf_hash":         s.PDFHash,
 			"credential_type":  s.CredentialType,
 			"kb_sd_hash":       s.KBSDHash,
-			"pid_presentation": s.PIDPresentation,
+			"poa_presentation": s.PoAPresentation,
 			"signed_at":        s.SignedAt.UTC().Format(time.RFC3339),
 		},
 	}

@@ -8,7 +8,7 @@ CREATE TABLE signature_ceremonies (
     nonce          VARCHAR(255) NOT NULL,
     signer_did     VARCHAR(255),
     vp_token       TEXT,
-    pid_claims     JSONB,
+    poa_claims     JSONB,
     kb_sd_hash     VARCHAR(255),
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     verified_at    TIMESTAMP,
