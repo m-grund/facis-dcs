@@ -351,7 +351,7 @@ async function validate() {
                   @click="applySignature"
                 >
                   <span v-if="busy && currentStep === 'apply'" class="loading loading-xs loading-spinner" />
-                  {{ done.apply ? 'Verify &amp; download again' : 'Verify identity &amp; download document to sign' }}
+                  {{ done.apply ? 'Verify & download again' : 'Verify identity & download document to sign' }}
                 </button>
               </div>
               <div v-if="done.apply && !signed" class="mt-1 flex items-center gap-2 text-xs text-info">

@@ -1,11 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
-import { E2E_API_BASE, E2E_DSS_URL, E2E_STATUSLIST_URL } from '../playwright.config'
 import { type DcsRole, expect, test } from './dcs-test'
+import { signApprovedContractViaViewer } from './lifecycle-helpers'
 
 /**
  * Full vertical: a component template with a semantic clause — human prose
@@ -15,10 +11,6 @@ import { type DcsRole, expect, test } from './dcs-test'
  * derivation, negotiation, review/approval, signing (the wallet leg arrives
  * over the wallet's own webhook channel), PDF/bundle export, and audit.
  */
-
-const here = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(here, '../../..')
-const python = process.env.E2E_BDD_PYTHON || path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
 
 type LoginAs = (role: DcsRole) => Promise<void>
 
@@ -323,46 +315,10 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await approved
   })
 
-  // ---- Stage 8: signing ceremony, wallet leg over its own channel ----
+  // ---- Stage 8: signing through the Secure Contract Viewer, wallet leg over
+  // its own channel (ADR-12) ----
   await test.step('sign contract', async () => {
-    await gotoAs(page, loginAs, 'Contract Signer', '/ui/signing')
-    const row = page.getByRole('row').filter({ hasText: contractDid })
-    await expect(row).toBeVisible()
-    await expect(row.getByText('UNSIGNED')).toBeVisible()
-
-    const ceremonyStarted = page.waitForResponse(
-      (r) => r.url().includes('/signature/request') && r.request().method() === 'POST' && r.ok(),
-    )
-    // Clicking Sign opens the ceremony dialog and, once the wallet presents its
-    // PID over the webhook, the view fetches the to-be-signed PDF
-    // (/signature/prepare) and downloads it (ADR-12: the DCS holds no key).
-    const preparedDownload = page.waitForEvent('download')
-    await row.getByRole('button', { name: 'Sign', exact: true }).click()
-    const ceremony = (await (await ceremonyStarted).json()) as { ceremony_id: string }
-    expect(ceremony.ceremony_id).toBeTruthy()
-
-    execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.ceremony_id], {
-      cwd: repoRoot,
-      env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: E2E_API_BASE },
-      stdio: 'pipe',
-    })
-
-    // The signatory signs the prepared PDF externally (test wallet drives the
-    // DSS SCA with its own key) and uploads it; the DCS validates and records it.
-    const preparedPath = (await (await preparedDownload).path())!
-    const signedPath = path.join(tmpdir(), `signed-${ceremony.ceremony_id}.pdf`)
-    execFileSync(python, [path.join(here, 'sign_prepared_pdf.py'), preparedPath, signedPath], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        DSS_URL: E2E_DSS_URL,
-        E2E_SIGNATORY: 'E2E Vertical Signer',
-      },
-      stdio: 'pipe',
-    })
-    await row.locator('input[type="file"]').setInputFiles(signedPath)
-
-    await expect(row.getByText('SIGNED', { exact: true })).toBeVisible({ timeout: 120_000 })
+    await signApprovedContractViaViewer(page, loginAs, contractDid)
   })
 
   // ---- Stage 9: Contract Manager exports PDF + evidence bundle ----
