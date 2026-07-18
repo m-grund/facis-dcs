@@ -26,8 +26,8 @@ and PID binding.
    POST /signature/request/webhook with a real, protocol-correct SD-JWT VC
    + KB-JWT presentation (built with the existing testWallet/dcs_wallet
    signing primitives - the same library AuthService already uses for the
-   OID4VP login flow, just with the PoA role-credential shape (vct
-   urn:dcs:poa:v1, organization/roles). The BDD
+   OID4VP login flow, just with PID-shaped claims (vct urn:eudi:pid:1,
+   given_name/family_name) instead of the role-credential shape). The BDD
    harness calls the webhook the way EUDIPLO itself would - a legitimate
    stand-in for a co-deployed EUDIPLO instance.
 
@@ -93,11 +93,11 @@ def _webhook_secret() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_poa_presentation(*, aud: str, nonce: str, holder_private=None, organization: str = "Acme Corp", roles=None):
-    """Build a holder-bound Proof-of-Authority SD-JWT VC + KB-JWT presentation
-    (vct urn:dcs:poa:v1) using the same testWallet/dcs_wallet primitives the
-    OID4VP login flow uses — the SAME PoA the signer authenticated with at
-    login authorizes the signature, so no separate PID is presented at signing.
+def _build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str, holder_private=None):
+    """Build a real, protocol-correct PID SD-JWT VC + KB-JWT presentation
+    using the same testWallet/dcs_wallet signing primitives already used by
+    AuthService for the DCS role-credential OID4VP login flow — just with
+    PID-shaped claims (vct urn:eudi:pid:1) instead of organization/roles.
     Returns (compact_presentation, issuer_jwt, disclosures, subject_did).
 
     holder_private lets a scenario present as a DIFFERENT natural person than
@@ -124,12 +124,12 @@ def _build_poa_presentation(*, aud: str, nonce: str, holder_private=None, organi
     visible_claims = {
         "iss": DEFAULT_ISSUER_DID,
         "sub": subject_did,
-        "vct": "urn:dcs:poa:v1",
+        "vct": "urn:eudi:pid:1",
         "iat": now - 3600,
         "exp": now + 3600,
         "cnf": {"jwk": cnf_jwk(holder_public)},
     }
-    selective_claims = {"organization": organization, "roles": roles or ["Contract Signer"]}
+    selective_claims = {"given_name": given_name, "family_name": family_name}
     issued = sign_credential_sd_jwt(
         visible_claims=visible_claims,
         selective_claims=selective_claims,
@@ -163,16 +163,14 @@ def _start_ceremony(context, name, field_name, headers):
     return resp
 
 
-def _complete_ceremony_via_webhook(
-    context, ceremony_id, presentation, subject_did, *, organization="Acme Corp", roles=None, secret=None
-):
+def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_did, given_name, family_name, *, secret=None):
     payload = {
         "ceremony_id": ceremony_id,
         "vp_token": presentation,
-        "poa_claims": {
+        "pid_claims": {
             "sub": subject_did,
-            "organization": organization,
-            "roles": roles or ["Contract Signer"],
+            "given_name": given_name,
+            "family_name": family_name,
         },
     }
     header_value = _webhook_secret() if secret is None else secret
@@ -197,12 +195,13 @@ def _run_full_ceremony(context, name, field_name, signatory_name, holder_private
     assert ceremony_id, f"/signature/request response has no ceremony_id: {start_resp.text}"
 
     nonce = str(uuid.uuid4())
-    presentation, issuer_jwt, disclosures, subject_did = _build_poa_presentation(
-        aud="dcs-signature-ceremony", nonce=nonce, organization=signatory_name,
+    given_name, family_name = signatory_name, "BDD-Testperson"
+    presentation, issuer_jwt, disclosures, subject_did = _build_pid_presentation(
+        given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce,
         holder_private=holder_private,
     )
     webhook_resp = _complete_ceremony_via_webhook(
-        context, ceremony_id, presentation, subject_did, organization=signatory_name
+        context, ceremony_id, presentation, subject_did, given_name, family_name
     )
     assert webhook_resp.status_code == 200, (
         f"POST /signature/request/webhook failed for ceremony '{ceremony_id}': "
@@ -211,13 +210,14 @@ def _run_full_ceremony(context, name, field_name, signatory_name, holder_private
 
     if not hasattr(context, "ceremony_ids"):
         context.ceremony_ids = {}
-    if not hasattr(context, "poa_presentations"):
-        context.poa_presentations = {}
+    if not hasattr(context, "pid_presentations"):
+        context.pid_presentations = {}
     context.ceremony_ids[name] = ceremony_id
-    context.poa_presentations[name] = {
+    context.pid_presentations[name] = {
         "presentation": presentation,
         "subject_did": subject_did,
-        "organization": signatory_name,
+        "given_name": given_name,
+        "family_name": family_name,
     }
     return ceremony_id, presentation, subject_did
 
@@ -311,7 +311,7 @@ def step_when_apply_with_explicit_fields(context, name, signer_did, credential_t
 
 @when('contract signer applies a signature to contract "{name}" using the ceremony\'s signer_did and credential_type "{credential_type}"')
 def step_when_apply_with_ceremony_signer_did(context, name, credential_type):
-    signer_did = context.poa_presentations[name]["subject_did"]
+    signer_did = context.pid_presentations[name]["subject_did"]
     context.ceremony_signer_did = signer_did
     context.requests_response = _apply_signature(
         context, name, signer_did=signer_did, credential_type=credential_type
@@ -328,7 +328,7 @@ def step_when_revoke_post_sign_update(context, name):
 
     did, _ = ContractService._contract_data(context, name)
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
-    presentation = getattr(context, "poa_presentations", {}).get(name, {})
+    presentation = getattr(context, "pid_presentations", {}).get(name, {})
     signer_did = presentation.get("subject_did")
     if not signer_did:
         # No ceremony ran in this scenario — resolve the actual signer from
@@ -360,21 +360,23 @@ def step_when_start_ceremony_as_role(context, name, field_name, role):
             context.ceremony_ids = {}
         context.ceremony_ids[name] = ceremony_id
 
-        # Build (but do not submit) the PoA presentation the webhook steps
+        # Build (but do not submit) the PID presentation the webhook steps
         # need — scenarios that start a ceremony via this low-level step
         # complete it separately via the webhook steps, which expect
-        # context.poa_presentations[name] to already be populated (same
+        # context.pid_presentations[name] to already be populated (same
         # contract as _run_full_ceremony, minus the webhook POST itself).
         nonce = str(uuid.uuid4())
-        presentation, _issuer_jwt, _disclosures, subject_did = _build_poa_presentation(
-            aud="dcs-signature-ceremony", nonce=nonce, organization=field_name
+        given_name, family_name = field_name, "BDD-Testperson"
+        presentation, _issuer_jwt, _disclosures, subject_did = _build_pid_presentation(
+            given_name=given_name, family_name=family_name, aud="dcs-signature-ceremony", nonce=nonce
         )
-        if not hasattr(context, "poa_presentations"):
-            context.poa_presentations = {}
-        context.poa_presentations[name] = {
+        if not hasattr(context, "pid_presentations"):
+            context.pid_presentations = {}
+        context.pid_presentations[name] = {
             "presentation": presentation,
             "subject_did": subject_did,
-            "organization": field_name,
+            "given_name": given_name,
+            "family_name": family_name,
         }
 
 
@@ -391,26 +393,28 @@ def step_when_poll_ceremony_status(context, name):
 @when('the EUDIPLO webhook confirms the presentation for contract "{name}" with the correct shared secret')
 def step_when_webhook_confirms_correct_secret(context, name):
     ceremony_id = context.ceremony_ids[name]
-    presentation_info = context.poa_presentations[name]
+    presentation_info = context.pid_presentations[name]
     context.requests_response = _complete_ceremony_via_webhook(
         context,
         ceremony_id,
         presentation_info["presentation"],
         presentation_info["subject_did"],
-        organization=presentation_info["organization"],
+        presentation_info["given_name"],
+        presentation_info["family_name"],
     )
 
 
 @when('a caller posts the EUDIPLO webhook for contract "{name}" with an incorrect shared secret')
 def step_when_webhook_wrong_secret(context, name):
     ceremony_id = context.ceremony_ids[name]
-    presentation_info = context.poa_presentations[name]
+    presentation_info = context.pid_presentations[name]
     context.requests_response = _complete_ceremony_via_webhook(
         context,
         ceremony_id,
         presentation_info["presentation"],
         presentation_info["subject_did"],
-        organization=presentation_info["organization"],
+        presentation_info["given_name"],
+        presentation_info["family_name"],
         secret="wrong-secret-value",
     )
 
@@ -563,7 +567,7 @@ def step_then_pades_still_valid_after_update(context, name):
 @then('the SD-JWT VC presentation for contract "{name}" is embedded verbatim inside the PAdES ByteRange')
 def step_then_presentation_embedded_verbatim_covered(context, name):
     pdf_bytes = _pdf_bytes_for(context, name)
-    presentation = context.poa_presentations[name]["presentation"]
+    presentation = context.pid_presentations[name]["presentation"]
     needle = presentation.encode("ascii")
     assert needle in pdf_bytes, (
         "Expected the exact, verbatim SD-JWT VC + KB-JWT compact presentation string to appear "
@@ -751,16 +755,16 @@ def step_then_webhook_rejected(context):
     )
 
 
-@then('the signature validation findings for contract "{name}" cross-check the embedded PoA evidence')
-def step_then_validate_crosschecks_poa_evidence(context, name):
+@then('the signature validation findings for contract "{name}" cross-check the embedded PID evidence')
+def step_then_validate_crosschecks_pid_evidence(context, name):
     resp = context.requests_response
     assert resp.status_code == 200, f"/signature/validate failed: {resp.status_code} {resp.text}"
     findings = resp.json().get("findings") or []
     body_text = " ".join(findings).lower()
-    failure_markers = ("poa verification failed", "pid verification failed", "kb-jwt invalid", "sd-jwt invalid", "evidence mismatch")
+    failure_markers = ("pid verification failed", "kb-jwt invalid", "sd-jwt invalid", "evidence mismatch")
     hit = [m for m in failure_markers if m in body_text]
     assert not hit, (
-        f"Expected the re-verified, embedded PoA presentation to cross-check successfully against "
+        f"Expected the re-verified, embedded PID presentation to cross-check successfully against "
         f"the signature record for contract '{name}', got findings "
         f"suggesting a mismatch ({hit}): {findings}"
     )
