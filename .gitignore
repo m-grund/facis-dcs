@@ -52,3 +52,4 @@ tests/bdd/.coverage.*
 .claude/*
 docs/anforderung.md
 /AGENTS.md
+testWallet/keys/signing/
