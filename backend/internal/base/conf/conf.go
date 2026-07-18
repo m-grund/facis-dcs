@@ -39,9 +39,19 @@ func DSSURL() string {
 
 // PAdESX5ChainPEM is the PAdES signer's certificate chain (leaf first) in PEM,
 // the same chain pdf-core embeds; the DSS backend needs it to name the signing
-// certificate in the rQES parameters.
+// certificate in the rQES parameters. Prefers DCS_PADES_X5CHAIN_PEM (inline
+// PEM); falls back to reading DCS_PADES_X5CHAIN_PEM_FILE (a mounted path,
+// mirroring pdf-core's DCS_PDF_CORE_PADES_X5CHAIN_PEM_FILE convention).
 func PAdESX5ChainPEM() string {
-	return os.Getenv("DCS_PADES_X5CHAIN_PEM")
+	if pem := os.Getenv("DCS_PADES_X5CHAIN_PEM"); pem != "" {
+		return pem
+	}
+	if path := os.Getenv("DCS_PADES_X5CHAIN_PEM_FILE"); path != "" {
+		if b, err := os.ReadFile(path); err == nil {
+			return string(b)
+		}
+	}
+	return ""
 }
 
 func HTTPClientTimeout() time.Duration {

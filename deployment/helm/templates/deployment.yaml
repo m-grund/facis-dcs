@@ -92,6 +92,12 @@ spec:
             {{- if .Values.dss.padesX5ChainPEM }}
             - name: DCS_PADES_X5CHAIN_PEM
               value: {{ .Values.dss.padesX5ChainPEM | quote }}
+            {{- else }}
+            # The PAdES x5chain the DSS names as the signing certificate is the
+            # SAME dynamically-provisioned chain pdf-core embeds (bound to the
+            # in-cluster HSM dcs-contract-pades key); mount it from that secret.
+            - name: DCS_PADES_X5CHAIN_PEM_FILE
+              value: /app/pades/pades-x5chain.pem
             {{- end }}
             {{- end }}{{- end }}
             {{- if and .Values.hydra.enabled .Values.hydra.clients }}
@@ -305,6 +311,11 @@ spec:
               mountPath: /etc/dcs/tsa-trust
               readOnly: true
           {{- end }}
+          {{- if and .Values.dss .Values.dss.enabled }}
+            - name: pades-x5chain
+              mountPath: /app/pades
+              readOnly: true
+          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -334,7 +345,7 @@ spec:
             limits:
               memory: 64Mi
         {{- end }}
-      {{- if or .Values.customCA.enabled .Values.volumes .Values.pkcs11.provisioning.enabled .Values.statusListLocalhostProxy.enabled .Values.identity.enabled .Values.signing.tsaTrustCertSecret }}
+      {{- if or .Values.customCA.enabled .Values.volumes .Values.pkcs11.provisioning.enabled .Values.statusListLocalhostProxy.enabled .Values.identity.enabled .Values.signing.tsaTrustCertSecret (and .Values.dss .Values.dss.enabled) }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
@@ -363,6 +374,14 @@ spec:
             items:
               - key: tsa-cert.pem
                 path: tsa-cert.pem
+      {{- end }}
+      {{- if and .Values.dss .Values.dss.enabled }}
+        - name: pades-x5chain
+          secret:
+            secretName: {{ include "digital-contracting-service.pdfCoreX5ChainSecretName" . | quote }}
+            items:
+              - key: {{ include "digital-contracting-service.pdfCorePadesX5ChainSecretKey" . | quote }}
+                path: pades-x5chain.pem
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

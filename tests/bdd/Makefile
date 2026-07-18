@@ -391,6 +391,31 @@ run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 run_bdd_audit_kind_ci: build_dcs_image build_pdf_core_image kind_deploy
 	@$(MAKE) run_bdd_audit_kind_once
 
+# The community-packaged EU DSS 6.2 demonstration webapp (visible-PAdES rQES).
+DSS_IMAGE ?= conectx/dss-demo:6.2.1
+
+# Pull (if absent) and load the DSS image into the kind cluster.
+kind_load_dss_image: kind_create
+	@docker image inspect "$(DSS_IMAGE)" >/dev/null 2>&1 || docker pull "$(DSS_IMAGE)"
+	@"$(KIND_BIN)" load docker-image "$(DSS_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
+
+# Deploy the single instance with the remote DSS signing backend
+# (DCS_SIGNER_BACKEND=dss + the dss subchart) and run the real signing vertical:
+# proves the ceremony produces a VISIBLE PAdES through a real EU DSS, not the
+# in-process pdf-core path (DCS-IR-SI-10).
+run_bdd_dss_kind_ci: build_dcs_image build_pdf_core_image kind_load_dss_image
+	@$(MAKE) kind_deploy KIND_HELM_SET='--set dss.enabled=true --set-string signerBackend=dss'
+	@echo "Waiting for the DSS webapp to become available..."
+	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout status deployment/"$(HELM_RELEASE)"-dss --timeout "$(HELM_TIMEOUT)" || true
+	@$(MAKE) run_bdd_dss_kind_once
+
+run_bdd_dss_kind_once:
+	@$(MAKE) run_bdd_helm \
+		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
+		HELM_RELEASE="$(HELM_RELEASE)" \
+		DCS_DEPLOYMENT_B="" \
+		FEATURES_PATH="features/22_real_signing_vertical/real_signing_vertical.feature"
+
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
