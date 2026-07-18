@@ -72,16 +72,34 @@ func (r *Report) Passed() bool {
 	return strings.EqualFold(r.Indication, "TOTAL-PASSED")
 }
 
+// cryptoFailureSubIndications are the ETSI EN 319 102-1 sub-indications that mean
+// the signature itself is broken — bad crypto, a mismatched hash, a malformed
+// container, or no signed data — as opposed to an incomplete trust chain or POE.
+var cryptoFailureSubIndications = map[string]bool{
+	"SIG_CRYPTO_FAILURE":    true,
+	"HASH_FAILURE":          true,
+	"FORMAT_FAILURE":        true,
+	"SIGNED_DATA_NOT_FOUND": true,
+}
+
 // AssertValidAES enforces the DCS's acceptance criteria for a wallet-produced
-// signature (DCS-FR-SM-16 integrity-upon-signing, DCS-FR-SM-18): the AdES
-// validation passed, a signing certificate is present, and — the sole-control
-// proof — that certificate identifies the ceremony's signatory. expectedSignatory
-// is a stable token the QTSP encodes in the signing certificate's subject (the
-// signatory's identifier); when set, the signer certificate MUST reference it,
-// which is what makes a shared DCS key structurally impossible to accept here.
+// Advanced Electronic Signature (eIDAS Art. 26, DCS-FR-SM-16/-18): the signature
+// is cryptographically sound, a signing certificate is present, and — the
+// sole-control proof — that certificate identifies the ceremony's signatory.
+//
+// It deliberately does NOT require DSS's TOTAL-PASSED. TOTAL-PASSED additionally
+// asserts the signing certificate chains to a QUALIFIED EU trust-list CA, which
+// is a QES property; AES needs only integrity and unique linkage to the
+// signatory (Art. 26 a/b/d). So an INDETERMINATE result whose sub-indication is
+// a trust/POE gap (e.g. NO_CERTIFICATE_CHAIN_FOUND for a non-qualified CA) is
+// accepted, while a TOTAL-FAILED or any crypto/integrity failure is rejected.
+//
+// expectedSignatory is a stable token the QTSP encodes in the signing
+// certificate's subject; when set, the certificate MUST reference it, which is
+// what makes a shared DCS key structurally impossible to accept here.
 func (r *Report) AssertValidAES(expectedSignatory string) error {
-	if !r.Passed() {
-		return fmt.Errorf("dss: signature not valid: indication %s / %s", r.Indication, r.SubIndication)
+	if strings.EqualFold(r.Indication, "TOTAL-FAILED") || cryptoFailureSubIndications[strings.ToUpper(strings.TrimSpace(r.SubIndication))] {
+		return fmt.Errorf("dss: signature failed validation: indication %s / %s", r.Indication, r.SubIndication)
 	}
 	if strings.TrimSpace(r.SignedBy) == "" {
 		return fmt.Errorf("dss: signature carries no signing certificate")

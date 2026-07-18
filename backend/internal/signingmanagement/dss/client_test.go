@@ -84,9 +84,23 @@ func TestAssertValidAES(t *testing.T) {
 		t.Fatal("expected rejection when the signer cert does not identify the signatory")
 	}
 
+	// AES: a non-qualified CA yields INDETERMINATE/NO_CERTIFICATE_CHAIN_FOUND
+	// (a trust gap, not a crypto failure) and MUST still be accepted — qualified
+	// trust is a QES property, not required for AES.
+	nonQualified := &Report{Indication: "INDETERMINATE", SubIndication: "NO_CERTIFICATE_CHAIN_FOUND", SignedBy: "CN=DCS Signatory johndoe"}
+	if err := nonQualified.AssertValidAES("johndoe"); err != nil {
+		t.Fatalf("expected a cryptographically-sound AES over a non-qualified CA to be accepted: %v", err)
+	}
+
 	failed := &Report{Indication: "TOTAL-FAILED", SubIndication: "HASH_FAILURE", SignedBy: "CN=x"}
 	if err := failed.AssertValidAES(""); err == nil {
 		t.Fatal("expected a failed indication to be rejected")
+	}
+
+	// A crypto failure is rejected even when the top indication is INDETERMINATE.
+	cryptoBroken := &Report{Indication: "INDETERMINATE", SubIndication: "SIG_CRYPTO_FAILURE", SignedBy: "CN=x"}
+	if err := cryptoBroken.AssertValidAES(""); err == nil {
+		t.Fatal("expected a crypto failure to be rejected")
 	}
 
 	noCert := &Report{Indication: "TOTAL-PASSED"}
