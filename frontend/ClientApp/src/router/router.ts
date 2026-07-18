@@ -33,6 +33,7 @@ import NegotiateContractView from '@/views/contract/NegotiateContractView.vue'
 import NewContractView from '@/views/contract/NewContractView.vue'
 import ReviewContractView from '@/views/contract/ReviewContractView.vue'
 import ViewContractView from '@/views/contract/ViewContractView.vue'
+import ComplianceViewerView from '@/views/compliance/ComplianceViewerView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import FrontPageView from '@/views/FrontPageView.vue'
 import SecureContractViewerView from '@/views/signing/SecureContractViewerView.vue'
@@ -78,6 +79,9 @@ const ROUTES = {
   SIGNING: {
     LIST: 'signing.list',
     VIEWER: 'signing.viewer',
+  },
+  COMPLIANCE: {
+    VIEWER: 'compliance.viewer',
   },
   SEMANTIC_HUB: {
     DASHBOARD: 'semantic_hub.dashboard',
@@ -397,6 +401,19 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       title: 'DCS - Secure Contract Viewer',
       roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER'],
+    },
+  },
+  {
+    path: '/compliance',
+    name: ROUTES.COMPLIANCE.VIEWER,
+    component: ComplianceViewerView,
+    meta: {
+      name: 'Compliance Viewer',
+      icon: CheckCircleIcon,
+      requiresAuth: true,
+      title: 'DCS - Signature Compliance Viewer',
+      order: 6,
+      roles: ['AUDITOR', 'COMPLIANCE_OFFICER', 'CONTRACT_MANAGER'],
     },
   },
   {
