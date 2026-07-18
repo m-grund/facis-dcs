@@ -85,15 +85,41 @@ export const signatureManagementService = {
     return http.get<CeremonyStatusResult>(`/signature/request/${ceremonyId}`).then((res) => res.data)
   },
 
-  async applySignature(did: string, signerDid: string, credentialType: string): Promise<SignatureEnvelope | undefined> {
-    return http
-      .post<{ did: string; signature_envelope?: SignatureEnvelope }>('/signature/apply', {
-        did,
-        signer_did: signerDid,
-        credential_type: credentialType,
-        updated_at: new Date().toISOString(),
-      })
-      .then((res) => res.data.signature_envelope)
+  // The DCS holds no signing key (ADR-12). Signing is two steps: prepare the
+  // to-be-signed PDF (PoA + summary embedded, signature field placed), which the
+  // signatory signs externally (their wallet/QTSP, or a desktop PAdES signer),
+  // then submit the signed PDF for validation and recording.
+  async prepareSignature(did: string, signerDid: string, credentialType: string): Promise<Blob> {
+    const res = await http.post<{ document: string }>('/signature/prepare', {
+      did,
+      signer_did: signerDid,
+      credential_type: credentialType,
+    })
+    const bytes = Uint8Array.from(atob(res.data.document), (c) => c.charCodeAt(0))
+    return new Blob([bytes], { type: 'application/pdf' })
+  },
+
+  async submitSignature(
+    did: string,
+    signerDid: string,
+    credentialType: string,
+    signedPdf: Blob,
+    expectedSignatory: string,
+  ): Promise<SignatureEnvelope | undefined> {
+    const buffer = await signedPdf.arrayBuffer()
+    let binary = ''
+    new Uint8Array(buffer).forEach((b) => {
+      binary += String.fromCharCode(b)
+    })
+    const res = await http.post<{ did: string; signature_envelope?: SignatureEnvelope }>('/signature/submit', {
+      did,
+      signer_did: signerDid,
+      credential_type: credentialType,
+      expected_signatory: expectedSignatory,
+      signed_pdf: btoa(binary),
+      jades_signature: '',
+    })
+    return res.data.signature_envelope
   },
 
   async verifySignature(did: string): Promise<SignatureVerifyResult> {

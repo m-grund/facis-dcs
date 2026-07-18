@@ -27,6 +27,9 @@ const { isSigner } = useContractPermissions()
 // Per-contract state: signing in progress, result envelope, verify result.
 const signing = ref<Record<string, boolean>>({})
 const envelopes = ref<Record<string, SignatureEnvelope | undefined>>({})
+// After prepare (step 1), the contract awaits the externally-signed upload
+// (step 2); remembers the ceremony's signer DID for submit.
+const pendingSign = ref<Record<string, { signerDid: string } | undefined>>({})
 const verifyResults = ref<Record<string, SignatureVerifyResult | undefined>>({})
 const validateResults = ref<Record<string, SignatureValidateResult | undefined>>({})
 const complianceResults = ref<Record<string, SignatureComplianceResult | undefined>>({})
@@ -95,6 +98,19 @@ onMounted(async () => {
   }
 })
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+// Step 1: run the PID presentation ceremony, then fetch the to-be-signed PDF
+// (PoA + summary embedded, signature field placed) and download it. The DCS
+// holds no signing key (ADR-12); the signatory signs this file externally with
+// their wallet/QTSP or a desktop PAdES signer, then uploads it (submitSigned).
 async function sign(contract: SignatureContract) {
   signing.value[contract.did] = true
   try {
@@ -105,12 +121,35 @@ async function sign(contract: SignatureContract) {
     if (!outcome || outcome.isCanceled || !outcome.data) {
       return
     }
-    const env = await signatureManagementService.applySignature(contract.did, outcome.data.signerDid, 'AES')
-    envelopes.value[contract.did] = env
+    const prepared = await signatureManagementService.prepareSignature(contract.did, outcome.data.signerDid, 'AES')
+    downloadBlob(prepared, `${contract.name ?? contract.did}-to-sign.pdf`)
+    pendingSign.value[contract.did] = { signerDid: outcome.data.signerDid }
   } catch (e: unknown) {
-    error.value = `Failed to sign contract ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
+    error.value = `Failed to prepare contract ${contract.did} for signing: ${e instanceof Error ? e.message : String(e)}`
   } finally {
     signing.value[contract.did] = false
+  }
+}
+
+// Step 2: upload the externally-signed PDF; the DCS validates it identifies the
+// signatory (sole control) and records it.
+async function submitSigned(contract: SignatureContract, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  const pending = pendingSign.value[contract.did]
+  if (!file || !pending) {
+    return
+  }
+  signing.value[contract.did] = true
+  try {
+    const env = await signatureManagementService.submitSignature(contract.did, pending.signerDid, 'AES', file, '')
+    envelopes.value[contract.did] = env
+    delete pendingSign.value[contract.did]
+  } catch (e: unknown) {
+    error.value = `Failed to submit the signed contract ${contract.did}: ${e instanceof Error ? e.message : String(e)}`
+  } finally {
+    signing.value[contract.did] = false
+    input.value = ''
   }
 }
 
@@ -214,8 +253,21 @@ async function compliance(contract: SignatureContract) {
                 @click="sign(contract)"
               >
                 <span v-if="signing[contract.did]" class="loading loading-xs loading-spinner" />
-                Sign
+                {{ pendingSign[contract.did] ? 'Re-prepare' : 'Sign' }}
               </button>
+              <label
+                v-if="pendingSign[contract.did]"
+                class="btn btn-sm btn-secondary"
+                :class="{ 'btn-disabled': signing[contract.did] }"
+              >
+                Upload signed
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  class="hidden"
+                  @change="submitSigned(contract, $event)"
+                />
+              </label>
               <button class="btn btn-outline btn-sm" :disabled="!isSigner" @click="verify(contract)">Verify</button>
               <button class="btn btn-outline btn-sm" :disabled="!isSigner" @click="validate(contract)">Validate</button>
               <button class="btn btn-outline btn-sm" :disabled="!isSigner" @click="compliance(contract)">
