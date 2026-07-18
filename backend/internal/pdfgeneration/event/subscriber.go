@@ -15,10 +15,12 @@ import (
 	cloudevent "github.com/cloudevents/sdk-go/v2/event"
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/ipfs"
 	cweeventtype "digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
+	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	tplevttype "digital-contracting-service/internal/templaterepository/datatype/eventtype"
@@ -82,6 +84,9 @@ type Subscriber struct {
 func (s *Subscriber) Start(subClient *event.CloudEventSubClient) error {
 	return subClient.Subscribe(func(evt cloudevent.Event) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		// The regenerator has no user JWT; present the in-cluster system
+		// credential so pdf-core can reach the internal signing primitives.
+		ctx = middleware.InjectBearerToken(ctx, conf.SystemToken())
 		defer cancel()
 		if err := s.handle(ctx, evt); err != nil {
 			log.Printf("pdfgeneration: failed to handle event %s/%s: %v", evt.Source(), evt.Type(), err)
@@ -145,10 +150,14 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 	payloadHashSum := sha256.Sum256(jsonldBytes)
 	currentPayloadHash := hex.EncodeToString(payloadHashSum[:])
 
-	// Map the raw CWE state to the SRS-defined C2PA vocabulary (DCS-OR-C2PA-003).
-	c2paState, err := provenance.MapCWEStateToC2PA(cweEvt.NewState)
+	// Map the contract's committed state to the SRS-defined C2PA vocabulary
+	// (DCS-OR-C2PA-003). The record's state is the source of truth: the genesis
+	// CreateEvent carries no new_state, and the event is emitted only after the
+	// transition commits, so the record always reflects the state the PDF must
+	// assert.
+	c2paState, err := provenance.MapCWEStateToC2PA(contract.State)
 	if err != nil {
-		return fmt.Errorf("map contract state %q to C2PA state: %w", cweEvt.NewState, err)
+		return fmt.Errorf("map contract state %q to C2PA state: %w", contract.State, err)
 	}
 
 	pdfState, err := s.CRepo.ReadPDFState(ctx, tx, cweEvt.DID)
@@ -214,7 +223,7 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return fmt.Errorf("commit pdf_ipfs_cid update for %s: %w", cweEvt.DID, err)
 	}
 
-	log.Printf("pdfgeneration: regenerated PDF for contract %s (state=%s, contentChanged=%t) → IPFS CID %s", cweEvt.DID, cweEvt.NewState, contentChanged, storeResult.Identifier.Value)
+	log.Printf("pdfgeneration: regenerated PDF for contract %s (state=%s, contentChanged=%t) → IPFS CID %s", cweEvt.DID, contract.State, contentChanged, storeResult.Identifier.Value)
 	return nil
 }
 
@@ -241,9 +250,11 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 		jsonldBytes = []byte(*tpl.TemplateData)
 	}
 
-	c2paState, err := provenance.MapCWEStateToC2PA(tplEvt.NewState)
+	// The template record's state is the source of truth (the genesis CreateEvent
+	// carries no new_state); the event is emitted only after the transition commits.
+	c2paState, err := provenance.MapCWEStateToC2PA(tpl.State)
 	if err != nil {
-		return fmt.Errorf("map template state %q to C2PA state: %w", tplEvt.NewState, err)
+		return fmt.Errorf("map template state %q to C2PA state: %w", tpl.State, err)
 	}
 
 	payloadHashSum := sha256.Sum256(jsonldBytes)
@@ -276,7 +287,7 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 		}
 	}
 
-	pdfBytes, err = s.appendOneTemplateManifest(ctx, tx, tplEvt.DID, tplEvt.NewState, jsonldBytes, pdfBytes, tplEvt.OccurredAt)
+	pdfBytes, err = s.appendOneTemplateManifest(ctx, tx, tplEvt.DID, tpl.State, jsonldBytes, pdfBytes, tplEvt.OccurredAt)
 	if err != nil {
 		return fmt.Errorf("append C2PA manifest for template %s: %w", tplEvt.DID, err)
 	}
@@ -286,7 +297,7 @@ func (s *Subscriber) appendTemplateC2PA(ctx context.Context, tplEvt minimalCWEEv
 		return fmt.Errorf("commit C2PA update for template %s: %w", tplEvt.DID, err)
 	}
 
-	log.Printf("pdfgeneration: regenerated PDF for template %s (state=%s, contentChanged=%t)", tplEvt.DID, tplEvt.NewState, contentChanged)
+	log.Printf("pdfgeneration: regenerated PDF for template %s (state=%s, contentChanged=%t)", tplEvt.DID, tpl.State, contentChanged)
 	return nil
 }
 
