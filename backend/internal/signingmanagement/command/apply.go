@@ -114,6 +114,17 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		}
 	}(tx)
 
+	// Serialize against the background PDF regenerator on the same per-contract
+	// key it uses (pdfgeneration/event). Without this, a genesis/lifecycle
+	// regeneration already in flight — holding this lock across its slow
+	// pdf-core render — commits its UpdatePDFState *after* SetSignedPDF below and
+	// overwrites the signed CID with an unsigned re-render, stripping the PAdES
+	// signature. Blocking here lets the regenerator finish first; the signed
+	// state we then write is frozen, so its later events short-circuit.
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", cmd.DID); err != nil {
+		return fmt.Errorf("acquire per-contract PDF regeneration lock for %s: %w", cmd.DID, err)
+	}
+
 	data, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not read contract %s: %w", cmd.DID, err)
