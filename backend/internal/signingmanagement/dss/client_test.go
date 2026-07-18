@@ -41,6 +41,60 @@ func TestValidatePDFParsesIndication(t *testing.T) {
 	}
 }
 
+func TestValidatePDFExtractsSignerIdentity(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"simpleReport": {
+				"signatureOrTimestampOrEvidenceRecord": [
+					{"Signature": {
+						"Indication": "TOTAL-PASSED",
+						"SignatureFormat": "PAdES-BASELINE-B",
+						"SignedBy": "CN=DCS Signatory johndoe,O=Test",
+						"SigningTime": "2026-07-18T10:00:00Z"
+					}}
+				]
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	report, err := New(srv.URL).ValidatePDF(context.Background(), []byte("%PDF fake"), "contract.pdf")
+	if err != nil {
+		t.Fatalf("ValidatePDF: %v", err)
+	}
+	if !report.Passed() {
+		t.Fatalf("expected TOTAL-PASSED, got %q", report.Indication)
+	}
+	if report.SignedBy != "CN=DCS Signatory johndoe,O=Test" {
+		t.Fatalf("unexpected SignedBy: %q", report.SignedBy)
+	}
+	if report.SignatureFormat != "PAdES-BASELINE-B" || report.SigningTime == "" {
+		t.Fatalf("unexpected format/time: %+v", report)
+	}
+}
+
+func TestAssertValidAES(t *testing.T) {
+	// The sole-control proof: the signing cert must reference the ceremony's
+	// signatory. A shared/other-identity cert is rejected even when it passes.
+	passed := &Report{Indication: "TOTAL-PASSED", SignedBy: "CN=DCS Signatory johndoe"}
+	if err := passed.AssertValidAES("johndoe"); err != nil {
+		t.Fatalf("expected the signatory's own signature to be accepted: %v", err)
+	}
+	if err := passed.AssertValidAES("janedoe"); err == nil {
+		t.Fatal("expected rejection when the signer cert does not identify the signatory")
+	}
+
+	failed := &Report{Indication: "TOTAL-FAILED", SubIndication: "HASH_FAILURE", SignedBy: "CN=x"}
+	if err := failed.AssertValidAES(""); err == nil {
+		t.Fatal("expected a failed indication to be rejected")
+	}
+
+	noCert := &Report{Indication: "TOTAL-PASSED"}
+	if err := noCert.AssertValidAES(""); err == nil {
+		t.Fatal("expected rejection when no signing certificate is present")
+	}
+}
+
 func TestValidatePDFHardFailsWhenUnreachable(t *testing.T) {
 	// A configured DSS that cannot be reached is an error, never a silent skip.
 	if _, err := New("http://127.0.0.1:1").ValidatePDF(context.Background(), []byte("x"), "x.pdf"); err == nil {

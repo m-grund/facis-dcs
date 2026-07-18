@@ -53,6 +53,43 @@ type Report struct {
 	// SubIndication qualifies non-passed indications
 	// (e.g. NO_CERTIFICATE_CHAIN_FOUND for a signer CA outside the EU LOTL).
 	SubIndication string
+	// SignedBy is the readable subject of the signing certificate the wallet
+	// used (DSS simpleReport SignedBy). It is the sole-control evidence: the
+	// DCS asserts this identifies the SIGNATORY, proving the signature was
+	// produced with the signatory's own key — never a DCS key (eIDAS Art. 26c,
+	// DCS-FR-SM-16 "secure key usage ... integrity validation upon signing").
+	SignedBy string
+	// SignatureFormat is the AdES format+level DSS recognized
+	// (e.g. PAdES-BASELINE-B), the level evidence for DCS-FR-SM-01/-02.
+	SignatureFormat string
+	// SigningTime is the claimed/qualified signing time (DCS-FR-SM-18 timestamp
+	// verification).
+	SigningTime string
+}
+
+// Passed reports whether the ETSI indication is TOTAL-PASSED.
+func (r *Report) Passed() bool {
+	return strings.EqualFold(r.Indication, "TOTAL-PASSED")
+}
+
+// AssertValidAES enforces the DCS's acceptance criteria for a wallet-produced
+// signature (DCS-FR-SM-16 integrity-upon-signing, DCS-FR-SM-18): the AdES
+// validation passed, a signing certificate is present, and — the sole-control
+// proof — that certificate identifies the ceremony's signatory. expectedSignatory
+// is a stable token the QTSP encodes in the signing certificate's subject (the
+// signatory's identifier); when set, the signer certificate MUST reference it,
+// which is what makes a shared DCS key structurally impossible to accept here.
+func (r *Report) AssertValidAES(expectedSignatory string) error {
+	if !r.Passed() {
+		return fmt.Errorf("dss: signature not valid: indication %s / %s", r.Indication, r.SubIndication)
+	}
+	if strings.TrimSpace(r.SignedBy) == "" {
+		return fmt.Errorf("dss: signature carries no signing certificate")
+	}
+	if expectedSignatory != "" && !strings.Contains(strings.ToLower(r.SignedBy), strings.ToLower(expectedSignatory)) {
+		return fmt.Errorf("dss: signer %q does not identify the ceremony signatory %q", r.SignedBy, expectedSignatory)
+	}
+	return nil
 }
 
 // ValidatePDF submits pdf to POST {base}/services/rest/validation/validateSignature
@@ -112,33 +149,50 @@ func parseReport(raw []byte) (*Report, error) {
 		return nil, fmt.Errorf("dss: parse validation response: %w", err)
 	}
 	report := &Report{}
-	findIndications(doc, report)
+	walkReport(doc, report)
 	if report.Indication == "" {
 		return nil, fmt.Errorf("dss: validation response carries no Indication")
 	}
 	return report, nil
 }
 
-func findIndications(node any, report *Report) {
+// walkReport pulls the first occurrence of each distilled field from a DSS
+// WSReportsDTO. The DTO layout differs across DSS versions (simpleReport
+// entries vs. XML-derived attribute casing), so the search walks the JSON
+// generically instead of pinning one version's schema.
+func walkReport(node any, report *Report) {
 	switch v := node.(type) {
 	case map[string]any:
 		for key, val := range v {
-			lower := strings.ToLower(key)
-			if s, ok := val.(string); ok {
-				if lower == "indication" && report.Indication == "" {
-					report.Indication = s
-				}
-				if lower == "subindication" && report.SubIndication == "" {
-					report.SubIndication = s
-				}
+			s, ok := val.(string)
+			if !ok {
+				continue
+			}
+			switch strings.ToLower(key) {
+			case "indication":
+				setFirst(&report.Indication, s)
+			case "subindication":
+				setFirst(&report.SubIndication, s)
+			case "signedby":
+				setFirst(&report.SignedBy, s)
+			case "signatureformat":
+				setFirst(&report.SignatureFormat, s)
+			case "signingtime":
+				setFirst(&report.SigningTime, s)
 			}
 		}
 		for _, val := range v {
-			findIndications(val, report)
+			walkReport(val, report)
 		}
 	case []any:
 		for _, item := range v {
-			findIndications(item, report)
+			walkReport(item, report)
 		}
+	}
+}
+
+func setFirst(dst *string, s string) {
+	if *dst == "" && s != "" {
+		*dst = s
 	}
 }
