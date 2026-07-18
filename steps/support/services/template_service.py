@@ -176,16 +176,30 @@ class TemplateService:
 
     @staticmethod
     def do_submit(context, did: str, updated_at: str) -> str:
-        """Submit template as Template Creator; return refreshed updated_at."""
+        """Submit template as Template Creator; return refreshed updated_at.
+
+        The genesis PDF render that create triggers is asynchronous and bumps
+        updated_at shortly after create, so the first submit can lose the
+        optimistic-lock race ("updated elsewhere"). Re-fetch the current
+        updated_at and retry on that conflict.
+        """
+        import time
+
         headers = AuthService.get_headers_for_roles(["Template Creator"])
-        resp = post_json(
-            context,
-            template_submit_url(context),
-            TemplateService.template_submit_payload(context, did, updated_at),
-            headers=headers,
-        )
+        for _ in range(6):
+            resp = post_json(
+                context,
+                template_submit_url(context),
+                TemplateService.template_submit_payload(context, did, updated_at),
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                return TemplateService.fetch_template(context, did, headers=headers).get("updated_at")
+            if "updated elsewhere" not in resp.text:
+                break
+            time.sleep(0.5)
+            updated_at = TemplateService.fetch_template(context, did, headers=headers).get("updated_at")
         assert resp.status_code == 200, f"Template submit failed: {resp.text}"
-        return TemplateService.fetch_template(context, did, headers=headers).get("updated_at")
 
     @staticmethod
     def do_verify(context, did: str, updated_at: str) -> str:
