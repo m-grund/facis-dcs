@@ -1,18 +1,19 @@
-// Package signer produces PAdES contract signatures (DCS-IR-SI-10,
-// DCS-FR-SM-16). The backend keeps all private-key material inside its PKCS#11
-// token (DCS-IR-HI-01); a ContractSigner never handles raw key material. It
-// hands a PDF to pdf-core, which builds the CMS to-be-signed bytes and calls
-// the backend's authenticated /internal/pades/sign endpoint for the ECDSA
-// operation.
+// Package signer produces the transitional DCS-side PAdES contract signature
+// (DCS-FR-SM-16). It hands a PDF to pdf-core, which builds the CMS to-be-signed
+// bytes and calls the backend's authenticated /internal/pades/sign endpoint for
+// the ECDSA operation with the PKCS#11 dcs-contract-pades key (DCS-IR-HI-01);
+// a ContractSigner never handles raw key material.
+//
+// This DCS-as-signatory path is being superseded by wallet-driven remote AES
+// (ADR-12): the signatory's own wallet/QTSP signs the prepared document and the
+// DCS only validates and records it (command.Prepare / command.SubmitSignature).
+// It remains until the signing UI and tests migrate to that flow.
 package signer
 
 import (
 	"context"
-	"crypto"
-	"fmt"
 
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
-	"digital-contracting-service/internal/signingmanagement/dss"
 )
 
 // ContractSigner embeds signing evidence into a PDF and applies a PAdES
@@ -34,24 +35,6 @@ type PDFCoreSigner struct {
 // NewPDFCoreSigner returns a ContractSigner backed by pdf-core.
 func NewPDFCoreSigner(pdfCore *pdfcore.Client) *PDFCoreSigner {
 	return &PDFCoreSigner{PDFCore: pdfCore}
-}
-
-// NewContractSigner selects the signing backend (DCS-IR-SI-10). "pdfcore"
-// (default) keeps the in-process PKCS#11 path unchanged; "dss" routes PAdES
-// through a remote EU DSS, the wallet-unlocked-QTSP production switch. The DSS
-// path still needs a DSS URL, the PAdES key's HSM signer, and its x5chain.
-func NewContractSigner(backend string, pdfCore *pdfcore.Client, dssURL string, padesSigner crypto.Signer, x5chainPEM, signatureLevel string) (ContractSigner, error) {
-	switch backend {
-	case "dss":
-		if dssURL == "" {
-			return nil, fmt.Errorf("signer backend %q requires DCS_DSS_URL", backend)
-		}
-		return NewDSSSigner(dss.New(dssURL), pdfCore, padesSigner, x5chainPEM, signatureLevel)
-	case "", "pdfcore":
-		return NewPDFCoreSigner(pdfCore), nil
-	default:
-		return nil, fmt.Errorf("unknown signer backend %q (want pdfcore or dss)", backend)
-	}
 }
 
 // SignPDF implements ContractSigner by calling pdf-core POST /sign.

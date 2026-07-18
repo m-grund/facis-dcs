@@ -79,26 +79,13 @@ spec:
           env:
             - name: DCS_SYSTEM_TOKEN
               value: {{ .Values.systemToken | default "dcs-dev-system-token" | quote }}
-            # Signing backend (DCS-IR-SI-10): "pdfcore" (default) keeps the
-            # in-process PKCS#11 PAdES path; "dss" routes through a remote EU
-            # DSS (the wallet-unlocked-QTSP prod switch). The DSS path also
-            # needs DCS_DSS_URL and the PAdES x5chain; both stay empty by
-            # default so this env block is inert until dss is activated.
-            - name: DCS_SIGNER_BACKEND
-              value: {{ .Values.signerBackend | default "pdfcore" | quote }}
             {{- if .Values.dss }}{{- if .Values.dss.enabled }}
-            - name: DCS_DSS_URL
+            # EU DSS for signature VALIDATION (DCS-FR-SM-18) and the
+            # wallet-driven /signature/submit acceptance path (ADR-12). The DCS
+            # validates a signature the SIGNATORY produced with their wallet/QTSP
+            # or a desktop PAdES signer; it holds no contract-signing key.
+            - name: DSS_URL
               value: {{ .Values.dss.url | default (printf "http://%s-dss:8080" .Release.Name) | quote }}
-            {{- if .Values.dss.padesX5ChainPEM }}
-            - name: DCS_PADES_X5CHAIN_PEM
-              value: {{ .Values.dss.padesX5ChainPEM | quote }}
-            {{- else }}
-            # The PAdES x5chain the DSS names as the signing certificate is the
-            # SAME dynamically-provisioned chain pdf-core embeds (bound to the
-            # in-cluster HSM dcs-contract-pades key); mount it from that secret.
-            - name: DCS_PADES_X5CHAIN_PEM_FILE
-              value: /app/pades/pades-x5chain.pem
-            {{- end }}
             {{- end }}{{- end }}
             {{- if and .Values.hydra.enabled .Values.hydra.clients }}
             {{- $hydraClient := index .Values.hydra.clients 0 }}
@@ -311,11 +298,6 @@ spec:
               mountPath: /etc/dcs/tsa-trust
               readOnly: true
           {{- end }}
-          {{- if and .Values.dss .Values.dss.enabled }}
-            - name: pades-x5chain
-              mountPath: /app/pades
-              readOnly: true
-          {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -374,14 +356,6 @@ spec:
             items:
               - key: tsa-cert.pem
                 path: tsa-cert.pem
-      {{- end }}
-      {{- if and .Values.dss .Values.dss.enabled }}
-        - name: pades-x5chain
-          secret:
-            secretName: {{ include "digital-contracting-service.pdfCoreX5ChainSecretName" . | quote }}
-            items:
-              - key: {{ include "digital-contracting-service.pdfCorePadesX5ChainSecretKey" . | quote }}
-                path: pades-x5chain.pem
       {{- end }}
       {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}

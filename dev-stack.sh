@@ -114,27 +114,22 @@ for i in $(seq 1 15); do
   sleep 1
 done
 
-# Optional: route contract signing through a real remote EU DSS (visible PAdES
-# via the CSC/rQES flow, DCS-IR-SI-10) instead of pdf-core's in-process PKCS#11
-# path — the wallet-unlocked-QTSP prod switch. Enable with DCS_DEV_DSS=1. The
-# DSS 6.2 demo webapp runs as a local container; the PAdES x5chain provisioned
-# above (bound to the HSM dcs-contract-pades key) is named as the DSS signing
-# certificate. The backend calls DSS lazily at signing time, so it need not be
-# ready at backend startup (it boots in ~90s).
+# Optional: run a local EU DSS for signature VALIDATION (DCS-FR-SM-18) and the
+# wallet-driven /signature/submit acceptance path (ADR-12). Enable with
+# DCS_DEV_DSS=1. The DSS validates a signature the SIGNATORY produced (with
+# their wallet/QTSP or a desktop PAdES signer); the DCS holds no signing key.
+# The DSS 6.2 demo webapp runs as a local container and boots in ~90s; the
+# backend calls it lazily at validation time, so it need not be ready at startup.
 if [ "${DCS_DEV_DSS:-0}" = "1" ]; then
   echo ""
-  echo "=== Enabling the DSS signing backend (DCS_DEV_DSS=1) ==="
+  echo "=== Starting a local EU DSS for signature validation (DCS_DEV_DSS=1) ==="
   docker rm -f dcs-dev-dss >/dev/null 2>&1 || true
   docker run -d --name dcs-dev-dss -p 18099:8080 \
     --entrypoint /dss/apache-tomcat-11.0.4/bin/catalina.sh \
     conectx/dss-demo:6.2.1 run >/dev/null
   echo "✓ DSS 6.2 demo webapp starting on http://localhost:18099 (boots in ~90s)"
-  {
-    echo "DCS_SIGNER_BACKEND=dss"
-    echo "DCS_DSS_URL=http://localhost:18099"
-    echo "DCS_PADES_X5CHAIN_PEM_FILE=$(readlink -f "$PDF_CORE_DIR/certs/dev/pades-x5chain-8991.pem")"
-  } >> backend/.env
-  echo "✓ backend .env wired for the DSS signing backend"
+  echo "DSS_URL=http://localhost:18099" >> backend/.env
+  echo "✓ backend .env wired for DSS signature validation"
 fi
 
 echo ""
