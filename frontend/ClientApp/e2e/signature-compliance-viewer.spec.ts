@@ -1,18 +1,17 @@
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
-import { type DcsRole, expect, seededFixtures, test } from './dcs-test'
-import { signApprovedContractViaViewer } from './lifecycle-helpers'
+import { type DcsRole, expect, test } from './dcs-test'
+import { buildApprovedContract, gotoAs, signApprovedContractViaViewer } from './lifecycle-helpers'
 
 /**
  * Signature Compliance Viewer (DCS-FR-SM-05/-07/-08, DCS-FR-SM-18/-21/-26).
  *
- * Drives the seeded draft contract to SIGNED through the real signing flow (the
- * wallet leg over the webhook + the external SCA sign, exactly as
- * full-vertical.spec.ts does), then opens the dedicated tabbed viewer and
- * exercises every tab — asserting the DSS-report + embedded-VC metadata this
- * feature surfaces (signer identity, signature level, timestamp, cryptographic
- * integrity, QES/AES + credential-status flags) actually renders, plus the
- * PDF + JSON report export.
+ * Derives a fresh contract, takes it to SIGNED through the real signing flow
+ * (the same lifecycle + wallet/SCA path full-vertical.spec.ts uses), then opens
+ * the dedicated tabbed viewer and exercises every tab — asserting the DSS-report
+ * + embedded-VC metadata this feature surfaces (signer identity, signature
+ * level, timestamp, cryptographic integrity, QES/AES + credential-status flags)
+ * actually renders, plus the PDF + JSON report export.
  *
  * NOTE: this asserts the enriched validate/compliance responses and the new
  * /signature/view fields — it must be run against a build carrying those
@@ -20,79 +19,6 @@ import { signApprovedContractViaViewer } from './lifecycle-helpers'
  */
 
 type LoginAs = (role: DcsRole) => Promise<void>
-
-/** Navigate with a freshly minted role session (Hydra rotates refresh tokens
- *  single-use, so each top-level navigation re-mints — mirrors full-vertical). */
-async function gotoAs(page: Page, loginAs: LoginAs, role: DcsRole, url: string): Promise<void> {
-  await loginAs(role)
-  await page.goto(url)
-}
-
-async function confirmModal(page: Page, buttonName: 'Submit' | 'Confirm'): Promise<void> {
-  const dialog = page.getByRole('dialog').filter({ hasText: 'Confirmation' })
-  await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: buttonName, exact: true }).click()
-}
-
-/** Drives the seeded DRAFT contract through NEGOTIATION → REVIEWED → APPROVED →
- *  SIGNED via the UI, and returns its DID. Reuses the seeded fixture and the
- *  Python wallet/SCA helpers rather than rebuilding templates from scratch. */
-async function signSeededContract(page: Page, loginAs: LoginAs): Promise<string> {
-  const { contractDid } = seededFixtures()
-
-  await test.step('submit contract into negotiation', async () => {
-    await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/edit/${contractDid}`)
-    await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeVisible()
-    // The submit trigger is the ParticipantSelectionDialog instance labeled "Create".
-    await page.getByRole('button', { name: 'Create', exact: true }).click()
-    const submitted = page.waitForResponse((r) => r.url().includes('/contract/submit') && r.request().method() === 'POST')
-    const dialog = page.getByRole('dialog').filter({ hasText: 'Contract Participants' })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Add local DID' }).click()
-    await expect(dialog.getByText(/^did:/).first()).toBeVisible()
-    await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
-    const resp = await submitted
-    expect(resp.ok(), `contract submit ${resp.status()}: ${await resp.text()}`).toBeTruthy()
-  })
-
-  await test.step('accept negotiation', async () => {
-    await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/negotiate/${contractDid}`)
-    const accepted = page.waitForResponse(
-      (r) => r.url().includes('/contract/submit') && r.request().method() === 'POST' && r.ok(),
-    )
-    await page.getByRole('button', { name: 'Submit', exact: true }).click()
-    await accepted
-  })
-
-  await test.step('review contract', async () => {
-    await gotoAs(page, loginAs, 'Contract Reviewer', `/ui/contracts/review/${contractDid}`)
-    const forwarded = page.waitForResponse(
-      (r) => r.url().includes('/contract/submit') && r.request().method() === 'POST' && r.ok(),
-    )
-    await page.getByRole('button', { name: 'Approve', exact: true }).click()
-    await confirmModal(page, 'Submit')
-    await forwarded
-  })
-
-  await test.step('approve contract', async () => {
-    await gotoAs(page, loginAs, 'Contract Approver', `/ui/contracts/approve/${contractDid}`)
-    const approved = page.waitForResponse(
-      (r) => r.url().includes('/contract/approve') && r.request().method() === 'POST' && r.ok(),
-    )
-    await page.getByRole('button', { name: 'Approve', exact: true }).click()
-    await confirmModal(page, 'Confirm')
-    await approved
-  })
-
-  // Sign through the Secure Contract Viewer (ADR-12); the compliance viewer only
-  // needs a SIGNED contract as its precondition — the signing UI itself is
-  // covered by full-vertical and secure-contract-viewer.
-  await test.step('sign contract', async () => {
-    await signApprovedContractViaViewer(page, loginAs, contractDid)
-  })
-
-  return contractDid
-}
 
 /** Opens the viewer for the given role and selects the contract in the list. */
 async function openViewer(page: Page, loginAs: LoginAs, role: DcsRole, contractDid: string): Promise<void> {
@@ -111,7 +37,11 @@ test('signature compliance viewer surfaces DSS + embedded-VC metadata', async ({
   test.setTimeout(600_000)
   page.setDefaultTimeout(15_000)
 
-  const contractDid = await signSeededContract(page, loginAs)
+  // Reach SIGNED via the same proven lifecycle the other specs use — derive a
+  // fresh APPROVED contract, then sign it through the Secure Contract Viewer
+  // (ADR-12). The compliance viewer's own tabs are what this spec asserts.
+  const contractDid = await buildApprovedContract(page, loginAs)
+  await signApprovedContractViaViewer(page, loginAs, contractDid)
 
   // ---- Contract Manager: Validation, Compliance Checks, export, Revocation ----
   await test.step('validation tab surfaces DSS report + cryptographic integrity', async () => {
