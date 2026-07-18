@@ -28,7 +28,7 @@ def main() -> None:
         Path(prepared_path).read_bytes(),
         user=os.environ["E2E_SIGNATORY"],
         dss_url=os.getenv("DSS_URL", "http://localhost:18099"),
-        field=os.environ["E2E_SIGN_FIELD"],
+        field=os.getenv("E2E_SIGN_FIELD", ""),
         keys_dir=AuthService.resolve_wallet_keys_dir(),
     )
     Path(out_path).write_bytes(signed)

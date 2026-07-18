@@ -357,7 +357,6 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
         ...process.env,
         DSS_URL: E2E_DSS_URL,
         E2E_SIGNATORY: 'E2E Vertical Signer',
-        E2E_SIGN_FIELD: 'Signature1',
       },
       stdio: 'pipe',
     })
