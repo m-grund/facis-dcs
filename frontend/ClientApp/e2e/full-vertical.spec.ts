@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
-import { E2E_API_BASE, E2E_STATUSLIST_URL } from '../playwright.config'
+import { E2E_API_BASE, E2E_DSS_URL, E2E_STATUSLIST_URL } from '../playwright.config'
 import { type DcsRole, expect, test } from './dcs-test'
 
 /**
@@ -333,17 +333,35 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     const ceremonyStarted = page.waitForResponse(
       (r) => r.url().includes('/signature/request') && r.request().method() === 'POST' && r.ok(),
     )
+    // Clicking Sign opens the ceremony dialog and, once the wallet presents its
+    // PID over the webhook, the view fetches the to-be-signed PDF
+    // (/signature/prepare) and downloads it (ADR-12: the DCS holds no key).
+    const preparedDownload = page.waitForEvent('download')
     await row.getByRole('button', { name: 'Sign', exact: true }).click()
     const ceremony = (await (await ceremonyStarted).json()) as { ceremony_id: string }
     expect(ceremony.ceremony_id).toBeTruthy()
 
-    // The wallet presents its PID over the webhook channel; the ceremony
-    // dialog's poll then sees "verified" and the view applies the signature.
     execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.ceremony_id], {
       cwd: repoRoot,
       env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: E2E_API_BASE },
       stdio: 'pipe',
     })
+
+    // The signatory signs the prepared PDF externally (test wallet drives the
+    // DSS SCA with its own key) and uploads it; the DCS validates and records it.
+    const preparedPath = (await (await preparedDownload).path())!
+    const signedPath = path.join(tmpdir(), `signed-${ceremony.ceremony_id}.pdf`)
+    execFileSync(python, [path.join(here, 'sign_prepared_pdf.py'), preparedPath, signedPath], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        DSS_URL: E2E_DSS_URL,
+        E2E_SIGNATORY: 'E2E Vertical Signer',
+        E2E_SIGN_FIELD: 'Signature1',
+      },
+      stdio: 'pipe',
+    })
+    await row.locator('input[type="file"]').setInputFiles(signedPath)
 
     await expect(row.getByText('SIGNED', { exact: true })).toBeVisible({ timeout: 120_000 })
   })

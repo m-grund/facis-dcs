@@ -31,6 +31,10 @@ export const E2E_API_BASE = process.env.E2E_DCS_API_BASE ?? 'http://localhost:18
  */
 export const E2E_STATUSLIST_URL = process.env.E2E_STATUSLIST_URL ?? 'http://localhost:18080/statuslist'
 
+// The EU DSS the test wallet drives as its external SCA to sign the prepared
+// contract PDF with the signatory's own key (ADR-12). The DCS holds no key.
+export const E2E_DSS_URL = process.env.E2E_DSS_URL ?? 'http://localhost:18099'
+
 /**
  * Instance B (dcs2) for the DCS-to-DCS scenarios: its own public origin is
  * dcs-b.localhost (values.bdd.yml), served in the browser by a second vite
