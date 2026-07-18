@@ -30,6 +30,7 @@ import (
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	"digital-contracting-service/internal/signingmanagement/db"
+	"digital-contracting-service/internal/signingmanagement/dss"
 	event2 "digital-contracting-service/internal/signingmanagement/event"
 	"digital-contracting-service/internal/signingmanagement/signer"
 
@@ -70,6 +71,14 @@ type ApplyCmd struct {
 	UserRoles      userrole.UserRoles
 }
 
+// SignatureValidator validates an externally-produced signature and reports the
+// signer identity, AdES level, and signing time (dss.Client satisfies it). The
+// DCS uses it to accept a signature the signatory produced — never one it made
+// itself — proving sole control (ADR-12, DCS-FR-SM-16/-18).
+type SignatureValidator interface {
+	ValidatePDF(ctx context.Context, pdf []byte, name string) (*dss.Report, error)
+}
+
 // Applier handles the ApplyCmd command.
 type Applier struct {
 	DB           *sqlx.DB
@@ -97,6 +106,10 @@ type Applier struct {
 	IPFSStorer    cwecommand.ArchiveSnapshotStorer
 	ArchiveNotary cwecommand.ArchiveNotary
 	ArchiveTSA    cwecommand.ArchiveTimestampIssuer
+	// Validator validates an externally-produced signature (the signatory's
+	// wallet/QTSP, or a desktop PAdES signer) before the DCS records it. Required
+	// by SubmitSignature; the transitional DCS-signing Handle path does not use it.
+	Validator SignatureValidator
 }
 
 // Handle applies a PAdES digital signature to a contract (DCS-FR-SM-16,
@@ -149,6 +162,130 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		vpToken:         prepared.vpToken,
 		kbSDHash:        prepared.kbSDHash,
 		signedAt:        prepared.signedAt,
+		contractVersion: prepared.contractVersion,
+	}); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// Prepare produces the to-be-signed PDF the signatory signs externally — with
+// their wallet/QTSP over OID4VP (ADR-12), or by downloading it and signing the
+// AcroForm field in a desktop signer such as Adobe Acrobat. It runs the
+// pre-signature preparation, embeds the signing-summary evidence inside the byte
+// range the external signature will cover (embed-then-sign, ADR-3), and returns
+// the unsigned PDF with the signature field placed. The sealed agreement is
+// persisted so the content the signatory signs is frozen. The DCS applies no
+// signature and holds no signing key.
+func (h *Applier) Prepare(ctx context.Context, cmd ApplyCmd) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := h.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	prepared, err := h.prepare(ctx, tx, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	toBeSigned := prepared.basePDF
+	if len(prepared.evidence) > 0 {
+		toBeSigned, err = h.PDFCore.EmbedEvidence(ctx, prepared.basePDF, prepared.evidence)
+		if err != nil {
+			return nil, fmt.Errorf("embed signing evidence: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit prepared signature: %w", err)
+	}
+	return toBeSigned, nil
+}
+
+// SubmitSignatureCmd carries an externally-produced signature over the prepared
+// document back to the DCS for validation and recording.
+type SubmitSignatureCmd struct {
+	ApplyCmd
+	// SignedPDF is the PAdES-signed contract the signatory produced.
+	SignedPDF []byte
+	// JAdESSignature is the signatory's signature over the machine-readable
+	// JSON-LD (DCS-FR-SM-02/-11). Empty when only the PDF was signed (e.g. a
+	// desktop PAdES signer with no JAdES capability).
+	JAdESSignature string
+	// ExpectedSignatory is the identifier the signing certificate must carry
+	// (the QTSP binds it to the authenticated PID). The sole-control check
+	// rejects a certificate that does not reference it.
+	ExpectedSignatory string
+}
+
+// SubmitSignature accepts a signature the signatory produced externally (their
+// wallet/QTSP, or a desktop PAdES signer) and finalizes the contract once the
+// signature validates and its certificate identifies the signatory (sole
+// control, ADR-12, DCS-FR-SM-16/-18). The DCS holds no signing key: it validates
+// and records what the signatory returned. This is the same acceptance path for
+// the wallet callback and for a downloaded-then-Adobe-signed re-upload — the DCS
+// is ignorant of how the signature was produced, only that it is the
+// signatory's.
+func (h *Applier) SubmitSignature(ctx context.Context, cmd SubmitSignatureCmd) error {
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	if h.Validator == nil {
+		return fmt.Errorf("a signature validator is required to accept an external signature")
+	}
+	if len(cmd.SignedPDF) == 0 {
+		return fmt.Errorf("no signed document was submitted")
+	}
+
+	tx, err := h.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}(tx)
+
+	prepared, err := h.prepare(ctx, tx, cmd.ApplyCmd)
+	if err != nil {
+		return err
+	}
+
+	report, err := h.Validator.ValidatePDF(ctx, cmd.SignedPDF, prepared.ceremony.FieldName)
+	if err != nil {
+		return fmt.Errorf("validate submitted signature: %w", err)
+	}
+	if err := report.AssertValidAES(cmd.ExpectedSignatory); err != nil {
+		return err
+	}
+
+	// The signing time is the signatory's, taken from the validated signature
+	// (DCS-FR-SM-18 timestamp) when present.
+	signedAt := prepared.signedAt
+	if t, perr := time.Parse(time.RFC3339, report.SigningTime); perr == nil {
+		signedAt = t.UTC()
+	}
+
+	if err := h.finalize(ctx, tx, cmd.ApplyCmd, finalizeInput{
+		ceremony:        prepared.ceremony,
+		signedPDF:       cmd.SignedPDF,
+		jadesSignature:  cmd.JAdESSignature,
+		contentHash:     prepared.contentHash,
+		rendererVersion: prepared.rendererVersion,
+		signedCount:     prepared.signedCount,
+		vpToken:         prepared.vpToken,
+		kbSDHash:        prepared.kbSDHash,
+		signedAt:        signedAt,
 		contractVersion: prepared.contractVersion,
 	}); err != nil {
 		return err
