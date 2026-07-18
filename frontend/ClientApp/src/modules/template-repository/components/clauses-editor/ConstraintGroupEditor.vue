@@ -26,7 +26,9 @@ defineProps<{
 const group = defineModel<GroupDraft>({ required: true })
 
 function addConstraint() {
-  group.value.children.push(newAtomic(ODRL_CONTEXT_OPERANDS[0]?.id ?? 'odrl:spatial', ODRL_OPERATORS[0]?.id ?? 'odrl:eq'))
+  group.value.children.push(
+    newAtomic(ODRL_CONTEXT_OPERANDS[0]?.id ?? 'odrl:spatial', ODRL_OPERATORS[0]?.id ?? 'odrl:eq'),
+  )
 }
 function addGroup() {
   group.value.children.push(newGroup())
@@ -60,7 +62,7 @@ function childGroup(child: ConstraintNodeDraft): GroupDraft {
 
     <template v-for="(child, i) in group.children" :key="i">
       <!-- A nested group: recurse into this same editor, indented. -->
-      <div v-if="isGroupDraft(child)" class="ml-3 space-y-1 rounded border border-base-300 border-dashed p-1">
+      <div v-if="isGroupDraft(child)" class="ml-3 space-y-1 rounded border border-dashed border-base-300 p-1">
         <div class="flex items-center justify-between">
           <span class="label-text text-2xs opacity-60">group</span>
           <button type="button" class="btn btn-ghost btn-xs" @click="removeChild(i)">✕</button>

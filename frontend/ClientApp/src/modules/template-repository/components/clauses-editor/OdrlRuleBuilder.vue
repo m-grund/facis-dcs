@@ -248,7 +248,7 @@ watch(rule, (value) => emit('update:modelValue', value))
           v-for="(consequence, ci) in duty.consequences"
           :key="ci"
           data-testid="odrl-consequence"
-          class="ml-3 space-y-1 rounded border border-warning/40 border-dashed p-1"
+          class="ml-3 space-y-1 rounded border border-dashed border-warning/40 p-1"
         >
           <div class="flex items-center gap-1">
             <span class="label-text text-2xs opacity-70">if unmet, must</span>
