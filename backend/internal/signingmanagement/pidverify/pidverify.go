@@ -1,12 +1,10 @@
-// Package poaverify re-verifies the holder-bound Proof-of-Authority (PoA) SD-JWT
-// VC + KB-JWT a signer presents for a signing ceremony (SRS "Signer
-// Authorization & PoA Credential Chain Verification", UC-04-02/03, UC-14). The
-// same PoA the signer authenticated with at login authorizes the signature:
-// being holder-bound (cnf.jwk signs the KB-JWT, and the credential subject is
-// the did:jwk of that holder key) it is traceable to the natural person, so no
-// separate PID presentation is taken at signing. Verify proves the presentation
-// is internally consistent and that the credential is a PoA.
-package poaverify
+// Package pidverify re-verifies a PID SD-JWT VC + KB-JWT presentation for a
+// signing ceremony (UC-04-02, UC-04-03). It proves the presentation is
+// internally consistent: the holder binding key (cnf.jwk) signs the KB-JWT, the
+// KB-JWT carries the correct sd_hash for the disclosed credential, its audience
+// is the ceremony audience, and the credential subject equals the did:jwk of the
+// holder key.
+package pidverify
 
 import (
 	"fmt"
@@ -14,16 +12,15 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"digital-contracting-service/internal/auth/oid4vp"
 	"digital-contracting-service/internal/auth/oid4vp/sdjwt"
 )
 
 // Audience is the fixed OID4VP audience/client_id bound into the KB-JWT of a
-// PoA presentation for a signing ceremony.
+// PID presentation for a signing ceremony.
 const Audience = "dcs-signature-ceremony"
 
-// Verify validates the presentation and returns the signer DID (the holder-bound
-// credential subject — the natural person) and the KB-JWT sd_hash.
+// Verify validates the presentation and returns the signer DID (credential
+// subject) and the KB-JWT sd_hash.
 func Verify(vpToken string) (signerDID, sdHash string, err error) {
 	presentation, err := sdjwt.ParsePresentation(vpToken)
 	if err != nil {
@@ -33,10 +30,6 @@ func Verify(vpToken string) (signerDID, sdHash string, err error) {
 	issuerClaims := jwt.MapClaims{}
 	if _, _, perr := jwt.NewParser().ParseUnverified(presentation.IssuerJWT, &issuerClaims); perr != nil {
 		return "", "", fmt.Errorf("parse issuer jwt: %w", perr)
-	}
-
-	if vct, _ := issuerClaims["vct"].(string); strings.TrimSpace(vct) != oid4vp.PoAVCT {
-		return "", "", fmt.Errorf("signing credential is not a PoA (vct %q, want %q)", vct, oid4vp.PoAVCT)
 	}
 
 	cnfJWK, err := sdjwt.CNFJWKFromClaims(issuerClaims)

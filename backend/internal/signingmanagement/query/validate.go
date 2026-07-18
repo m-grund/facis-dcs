@@ -21,7 +21,7 @@ import (
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
-	"digital-contracting-service/internal/signingmanagement/poaverify"
+	"digital-contracting-service/internal/signingmanagement/pidverify"
 )
 
 type ValidateQry struct {
@@ -66,7 +66,7 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 		return nil, fmt.Errorf("could not collect validation findings: %w", err)
 	}
 
-	findings = append(findings, h.crossCheckEmbeddedPoA(ctx, tx, cmd.DID)...)
+	findings = append(findings, h.crossCheckEmbeddedPID(ctx, tx, cmd.DID)...)
 	findings = append(findings, h.crossCheckSHACLDrift(ctx, tx, cmd.DID)...)
 
 	dssFindings, err := h.validateWithDSS(ctx, tx, cmd.DID)
@@ -125,13 +125,13 @@ func (h *Validator) validateWithDSS(ctx context.Context, tx *sqlx.Tx, did string
 	return []string{finding}, nil
 }
 
-// crossCheckEmbeddedPoA re-verifies the embedded PoA presentation against the
+// crossCheckEmbeddedPID re-verifies the embedded PID presentation against the
 // signature record (UC-04-03): it extracts the signing evidence from the
 // stored signed PDF, re-verifies the SD-JWT VC + KB-JWT, and confirms the
 // resolved signer DID matches the signature row. Absence of evidence (an
 // unsigned contract) yields no findings; any mismatch or verification
 // failure is reported as a finding so validate surfaces it.
-func (h *Validator) crossCheckEmbeddedPoA(ctx context.Context, tx *sqlx.Tx, did string) []string {
+func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did string) []string {
 	if h.PDFCore == nil {
 		return nil
 	}
@@ -143,7 +143,7 @@ func (h *Validator) crossCheckEmbeddedPoA(ctx context.Context, tx *sqlx.Tx, did 
 
 	evidence, found, err := h.PDFCore.ExtractEvidence(ctx, pdfBytes)
 	if err != nil {
-		return []string{fmt.Sprintf("Could not extract embedded PoA evidence: %v", err)}
+		return []string{fmt.Sprintf("Could not extract embedded PID evidence: %v", err)}
 	}
 	if !found || len(evidence) == 0 {
 		return nil
@@ -161,16 +161,16 @@ func (h *Validator) crossCheckEmbeddedPoA(ctx context.Context, tx *sqlx.Tx, did 
 
 	verifiedSigners := map[string]bool{}
 	for _, doc := range documents {
-		presentation, subject := signingSummaryPoAFields(doc)
+		presentation, subject := signingSummaryPIDFields(doc)
 		if presentation == "" {
-			return []string{"Embedded signing evidence is missing the PoA presentation"}
+			return []string{"Embedded signing evidence is missing the PID presentation"}
 		}
-		signerDID, _, err := poaverify.Verify(presentation)
+		signerDID, _, err := pidverify.Verify(presentation)
 		if err != nil {
-			return []string{fmt.Sprintf("PoA verification failed: %v", err)}
+			return []string{fmt.Sprintf("PID verification failed: %v", err)}
 		}
 		if subject != "" && subject != signerDID {
-			return []string{"Evidence mismatch: embedded PoA subject does not match the credential subject"}
+			return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
 		}
 		verifiedSigners[signerDID] = true
 	}
@@ -182,12 +182,12 @@ func (h *Validator) crossCheckEmbeddedPoA(ctx context.Context, tx *sqlx.Tx, did 
 				continue
 			}
 			if rec.SignerDID != "" && !verifiedSigners[rec.SignerDID] {
-				return []string{"Evidence mismatch: re-verified PoA signer does not match the signature record"}
+				return []string{"Evidence mismatch: re-verified PID signer does not match the signature record"}
 			}
 		}
 	}
 
-	return []string{"Embedded PoA presentation re-verified and cross-checked against the signature record"}
+	return []string{"Embedded PID presentation re-verified and cross-checked against the signature record"}
 }
 
 // crossCheckSHACLDrift (Phase 4, ADR-9) re-runs the Semantic Hub SHACL
@@ -259,17 +259,17 @@ func signingSummarySHACLHash(evidence []byte) string {
 	return vc.CredentialSubject.ValidationReportHash
 }
 
-// signingSummaryPoAFields extracts the verbatim PoA presentation and credential
+// signingSummaryPIDFields extracts the verbatim PID presentation and credential
 // subject from a ContractSigningSummaryCredential evidence document.
-func signingSummaryPoAFields(evidence []byte) (presentation, subject string) {
+func signingSummaryPIDFields(evidence []byte) (presentation, subject string) {
 	var vc struct {
 		CredentialSubject struct {
 			ID              string `json:"id"`
-			PoAPresentation string `json:"poa_presentation"`
+			PIDPresentation string `json:"pid_presentation"`
 		} `json:"credentialSubject"`
 	}
 	if err := json.Unmarshal(evidence, &vc); err != nil {
 		return "", ""
 	}
-	return vc.CredentialSubject.PoAPresentation, vc.CredentialSubject.ID
+	return vc.CredentialSubject.PIDPresentation, vc.CredentialSubject.ID
 }

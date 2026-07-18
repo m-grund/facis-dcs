@@ -576,7 +576,7 @@ func (s *signatureManagementsrvc) CeremonyWebhook(ctx context.Context, req *sign
 		Secret:     secret,
 		CeremonyID: req.CeremonyID,
 		VpToken:    req.VpToken,
-		PoaClaims:  req.PoaClaims,
+		PidClaims:  req.PidClaims,
 	})
 	if err != nil {
 		switch {
