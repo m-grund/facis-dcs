@@ -28,7 +28,11 @@ export interface DcsContractMetadata {
 
 export interface DcsPlaceholder {
   '@type': 'dcs:Placeholder'
+  /** Machine binding: the requirement field this slot fills. Never rendered in prose. */
   'dcs:bindsTo': JsonLdReference
+  /** Human representation shown in prose in place of the unfilled value — a
+   *  plain label the filler reads, never a raw IRI. */
+  'dcs:label': string
 }
 
 export type DcsContentSegment = string | DcsPlaceholder
