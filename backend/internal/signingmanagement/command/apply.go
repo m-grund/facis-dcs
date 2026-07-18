@@ -407,10 +407,52 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("JAdES sign: %w", err)
 	}
 
-	signedPDFSum := sha256.Sum256(signedPDF)
+	if err := h.finalize(ctx, tx, cmd, finalizeInput{
+		ceremony:        ceremony,
+		signedPDF:       signedPDF,
+		jadesSignature:  jadesSignature,
+		contentHash:     contentHash,
+		rendererVersion: rendererVersion,
+		signedCount:     signedCount,
+		vpToken:         vpToken,
+		kbSDHash:        kbSDHash,
+		signedAt:        signedAt,
+		contractVersion: data.ContractVersion,
+	}); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// finalizeInput carries the post-signature state the Finalizer persists: the
+// wallet-signed PDF, the JAdES over the machine-readable JSON-LD, and the
+// hashes/ceremony metadata bound into the signature record and archive entry.
+type finalizeInput struct {
+	ceremony        *db.SignatureCeremony
+	signedPDF       []byte
+	jadesSignature  string
+	contentHash     string
+	rendererVersion string
+	signedCount     int
+	vpToken         string
+	kbSDHash        string
+	signedAt        time.Time
+	contractVersion int
+}
+
+// finalize persists a completed signature: it stores the signed PDF in IPFS,
+// points the contract at it, records the signature (PAdES hash + JAdES),
+// transitions to SIGNED, and — on the first signature — archives the contract.
+// In the wallet-driven ceremony the signedPDF and jadesSignature originate from
+// the signatory's wallet/QTSP (the DCS holds no signing key); this is the
+// receive-and-record half the ceremony callback invokes after validating the
+// returned signature.
+func (h *Applier) finalize(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd, in finalizeInput) error {
+	signedPDFSum := sha256.Sum256(in.signedPDF)
 	signedPDFHash := hex.EncodeToString(signedPDFSum[:])
 
-	ipfsRes, err := h.IPFSClient.CreateFile(ctx, signedPDF)
+	ipfsRes, err := h.IPFSClient.CreateFile(ctx, in.signedPDF)
 	if err != nil {
 		return fmt.Errorf("store signed PDF in IPFS: %w", err)
 	}
@@ -426,12 +468,12 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("signed PDF CID %s not resolvable after store: %w", cid, err)
 	}
 
-	// contentHash (computed above from *data.ContractData) is the same payload
-	// hash exportcontract.go/verifycontract.go compare against, so recording it
-	// here means the first export/verify after signing sees a matching hash
-	// and serves the frozen signed PDF as-is instead of appending a
-	// post-signature revision.
-	if err := h.CRepo.SetSignedPDF(ctx, tx, cmd.DID, cid, rendererVersion, "active", contentHash); err != nil {
+	// contentHash (computed from *data.ContractData) is the same payload hash
+	// exportcontract.go/verifycontract.go compare against, so recording it here
+	// means the first export/verify after signing sees a matching hash and
+	// serves the frozen signed PDF as-is instead of appending a post-signature
+	// revision.
+	if err := h.CRepo.SetSignedPDF(ctx, tx, cmd.DID, cid, in.rendererVersion, "active", in.contentHash); err != nil {
 		return err
 	}
 
@@ -440,8 +482,8 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("could not resolve active key version: %w", err)
 	}
 
-	ceremonyID := ceremony.ID
-	fieldName := ceremony.FieldName
+	ceremonyID := in.ceremony.ID
+	fieldName := in.ceremony.FieldName
 	signature := db.ContractSignature{
 		ContractDID:    cmd.DID,
 		Status:         "SIGNED",
@@ -452,9 +494,9 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		IpfsCID:        &cid,
 		CeremonyID:     &ceremonyID,
 		PDFHash:        &signedPDFHash,
-		ContentHash:    &contentHash,
+		ContentHash:    &in.contentHash,
 		FieldName:      &fieldName,
-		JAdESSignature: &jadesSignature,
+		JAdESSignature: &in.jadesSignature,
 	}
 	if err := h.CRepo.CreateSignature(ctx, tx, signature); err != nil {
 		return fmt.Errorf("could not create signature: %w", err)
@@ -467,34 +509,34 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// The archive entry is created when the contract REACHES SIGNED (first
 	// signature); later multi-signer signatures update the stored artefact
 	// pointer above but never insert a second entry for the same version.
-	if signedCount == 0 {
+	if in.signedCount == 0 {
 		credentialHashes := map[string]string{}
-		if vpToken != "" {
-			sum := sha256.Sum256([]byte(vpToken))
+		if in.vpToken != "" {
+			sum := sha256.Sum256([]byte(in.vpToken))
 			credentialHashes["presentation"] = "sha256:" + hex.EncodeToString(sum[:])
 		}
-		if kbSDHash != "" {
-			credentialHashes["key_binding"] = "sha256:" + strings.TrimPrefix(kbSDHash, "sha256:")
+		if in.kbSDHash != "" {
+			credentialHashes["key_binding"] = "sha256:" + strings.TrimPrefix(in.kbSDHash, "sha256:")
 		}
-		if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy, cwecommand.ArchiveSigningEvidence{Signer: cmd.SignerDID, CredentialType: cmd.CredentialType, CeremonyID: ceremony.ID, Field: ceremony.FieldName, SignedAt: signedAt, PDFCID: cid, PDFHash: signedPDFHash, CredentialHashes: credentialHashes}); err != nil {
+		if err := h.archiveSignedContract(ctx, tx, cmd.DID, cmd.AppliedBy, cwecommand.ArchiveSigningEvidence{Signer: cmd.SignerDID, CredentialType: cmd.CredentialType, CeremonyID: in.ceremony.ID, Field: in.ceremony.FieldName, SignedAt: in.signedAt, PDFCID: cid, PDFHash: signedPDFHash, CredentialHashes: credentialHashes}); err != nil {
 			return err
 		}
 	}
 
 	evt := event2.ApplyEvent{
 		DID:             cmd.DID,
-		ContractVersion: data.ContractVersion,
+		ContractVersion: in.contractVersion,
 		HolderDID:       cmd.HolderDID,
 		UserRoles:       cmd.UserRoles,
 		CredentialType:  cmd.CredentialType,
 		AppliedBy:       cmd.AppliedBy,
-		OccurredAt:      signedAt,
+		OccurredAt:      in.signedAt,
 	}
 	if err := event.Create(ctx, tx, evt, componenttype.SignatureManagement); err != nil {
 		return fmt.Errorf("could not create event: %w", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // archiveSignedContract creates the archive entry for a contract that just
